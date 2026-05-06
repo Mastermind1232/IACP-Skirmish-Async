@@ -957,11 +957,15 @@ export async function recoverPhaseGate(game, gameId, ctx) {
       const handCh = await fetchGameChannel(client, handId);
       const label = (PHASE_GATE_LABELS[gate.phase] || 'Phase gate active')
         .replace('{round}', String(game.currentRound || 1));
-      const isReady = pn === 1 ? gate.p1Ready : gate.p2Ready;
-      const p1s = gate.p1Ready ? 'P1 ✅' : 'P1 ⏳';
-      const p2s = gate.p2Ready ? 'P2 ✅' : 'P2 ⏳';
+      // Sequential gate (destruct 2026-05-06): only the activePlayer
+      // can ack right now.
+      const _acked = gate.acked || {};
+      const isReady = Boolean(_acked[pn]);
+      const isActive = gate.activePlayer === pn;
+      const p1s = _acked[1] ? 'P1 ✅' : (gate.activePlayer === 1 ? 'P1 👈' : 'P1 ⏳');
+      const p2s = _acked[2] ? 'P2 ✅' : (gate.activePlayer === 2 ? 'P2 👈' : 'P2 ⏳');
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`phase_gate_ready_${gameId}`).setLabel('✅ Ready').setStyle(ButtonStyle.Success).setDisabled(isReady),
+        new ButtonBuilder().setCustomId(`phase_gate_ready_${gameId}`).setLabel('✅ Ready').setStyle(ButtonStyle.Success).setDisabled(isReady || !isActive),
         new ButtonBuilder().setCustomId(`phase_gate_unready_${gameId}`).setLabel('❌ Not Ready').setStyle(ButtonStyle.Danger).setDisabled(!isReady),
       );
       const newMsg = await handCh.send({

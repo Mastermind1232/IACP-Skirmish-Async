@@ -402,19 +402,19 @@ describe('B-CTIME-011: handleCombatGateReady rejects non-player interaction', ()
 
 describe('B-CTIME-012: combatGate shape invariants', () => {
   it('012a: freshly created gate has phase, p1Ready=false, p2Ready=false', () => {
-    // This mirrors what sendCombatGate creates (combat.js:75)
-    const gate = { phase: 'post_roll', p1Ready: false, p2Ready: false };
+    // This mirrors what sendCombatGate creates (sequential gate, attacker first)
+    const gate = { phase: 'post_roll', acked: {}, activePlayer: 1 };
 
     assert.strictEqual(gate.phase, 'post_roll', 'gate has phase');
-    assert.strictEqual(gate.p1Ready, false, 'p1Ready starts false');
-    assert.strictEqual(gate.p2Ready, false, 'p2Ready starts false');
+    assert.deepStrictEqual(gate.acked, {}, 'acked map starts empty');
+    assert.strictEqual(gate.activePlayer, 1, 'attacker (P1) is the initial activePlayer');
   });
 
   it('012b: valid combatGate phases cover the full pipeline', () => {
     const validPhases = ['post_roll', 'post_attacker_reroll', 'post_forced_reroll', 'post_defender_reroll', 'pre_resolve'];
     // These are the phases used in dispatchCombatGateAdvance switch statement
     for (const phase of validPhases) {
-      const gate = { phase, p1Ready: false, p2Ready: false };
+      const gate = { phase, acked: {}, activePlayer: 1 };
       assert.strictEqual(gate.phase, phase, `phase ${phase} accepted`);
     }
   });

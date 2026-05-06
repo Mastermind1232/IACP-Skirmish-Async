@@ -57,15 +57,15 @@ describe('PhaseGateReady command', () => {
     assert.equal(events.length, 0);
   });
 
-  it('events apply correctly through reducer', () => {
+  it('events apply correctly through reducer (sequential gate)', () => {
     let state = {
-      phaseGate: { phase: 'deployment', p1Ready: false, p2Ready: false },
+      phaseGate: { phase: 'deployment', acked: {}, activePlayer: 1 },
     };
     const cmd1 = createCommand('PhaseGateReady', 'gate-1', 'user1', { playerNum: 1 });
     const { events: events1 } = handlePhaseGateReady(state, cmd1);
     state = gameReducer(state, events1[0]);
-    assert.equal(state.phaseGate.p1Ready, true);
-    assert.equal(state.phaseGate.p2Ready, false);
+    assert.equal(state.phaseGate.acked[1], true);
+    assert.ok(!state.phaseGate.acked[2]);
 
     const cmd2 = createCommand('PhaseGateReady', 'gate-1', 'user2', { playerNum: 2 });
     const { events: events2 } = handlePhaseGateReady(state, cmd2);

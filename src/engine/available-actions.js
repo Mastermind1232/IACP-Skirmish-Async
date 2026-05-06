@@ -133,16 +133,19 @@ export function getAvailableActions(game, playerNum, deps = {}) {
 
 function getPhaseGateActions(game, playerNum) {
   const gate = game.phaseGate;
-  const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
+  // Sequential gate (destruct 2026-05-06): only the activePlayer can ack.
+  const _acked = gate.acked || {};
+  const isReady = Boolean(_acked[playerNum]);
+  const isActive = gate.activePlayer === playerNum;
   const actions = [];
 
-  if (!isReady) {
+  if (!isReady && isActive) {
     actions.push({
       type: ACTION_TYPES.PHASE_GATE_READY,
       customId: buildCustomId(ACTION_TYPES.PHASE_GATE_READY, { gameId: game.gameId, playerNum }),
       description: `Ready for ${gate.phase}`,
     });
-  } else {
+  } else if (isReady) {
     actions.push({
       type: ACTION_TYPES.PHASE_GATE_UNREADY,
       customId: buildCustomId(ACTION_TYPES.PHASE_GATE_UNREADY, { gameId: game.gameId, playerNum }),

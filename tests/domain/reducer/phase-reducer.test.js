@@ -67,18 +67,19 @@ describe('Phase Reducer', () => {
     }
   });
 
-  it('PhaseGate lifecycle: open → ready × 2 → cleared', () => {
-    let state = { phase: 'round_active' };
+  it('PhaseGate lifecycle: open → ready × 2 → cleared (sequential, init player first)', () => {
+    let state = { phase: 'round_active', player1Id: 'p1', player2Id: 'p2', initiativePlayerId: 'p1' };
     state = phaseReducerHandlers.PhaseGateOpened(state, { gateType: 'start_of_round' });
-    assert.deepEqual(state.phaseGate, { phase: 'start_of_round', p1Ready: false, p2Ready: false });
+    assert.deepEqual(state.phaseGate, { phase: 'start_of_round', acked: {}, activePlayer: 1 });
 
     state = phaseReducerHandlers.PhaseGatePlayerReady(state, { playerNum: 1 });
-    assert.equal(state.phaseGate.p1Ready, true);
-    assert.equal(state.phaseGate.p2Ready, false);
+    assert.equal(state.phaseGate.acked[1], true);
+    assert.ok(!state.phaseGate.acked[2]);
+    assert.equal(state.phaseGate.activePlayer, 2, 'activePlayer rotated to opponent');
 
     state = phaseReducerHandlers.PhaseGatePlayerReady(state, { playerNum: 2 });
-    assert.equal(state.phaseGate.p1Ready, true);
-    assert.equal(state.phaseGate.p2Ready, true);
+    assert.equal(state.phaseGate.acked[1], true);
+    assert.equal(state.phaseGate.acked[2], true);
 
     state = phaseReducerHandlers.PhaseGateCleared(state);
     assert.equal(state.phaseGate, undefined);

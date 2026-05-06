@@ -391,11 +391,16 @@ async function runOneGame(gameNum) {
     if (allActions.length === 0) {
       // Check if the game has a phase gate needing both players to ready
       if (g.phaseGate) {
+        // Sequential gate: submit each player's click; the active one
+        // is accepted, the other returns out-of-turn (harmless). After
+        // the active player acks, activePlayer rotates so the next
+        // iteration of the loop will accept the other.
         const gateCustomId = `phase_gate_ready_${g.gameId}`;
-        if (!g.phaseGate.p1Ready) {
+        const _acked = g.phaseGate.acked || {};
+        if (!_acked[1]) {
           try { await harness.submitAction(gateCustomId, g.player1Id); } catch {}
         }
-        if (!g.phaseGate.p2Ready) {
+        if (g.phaseGate && !((g.phaseGate.acked || {})[2])) {
           try { await harness.submitAction(gateCustomId, g.player2Id); } catch {}
         }
         continue;

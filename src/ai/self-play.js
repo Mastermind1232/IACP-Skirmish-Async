@@ -872,7 +872,7 @@ export async function runSelfPlayLoop(game, client, opts) {
             console.log(`[self-play] Resolving phase gate: ${gatePhaseName}`);
             for (const pn of [1, 2]) {
               if (!g.phaseGate) break;
-              const isReady = pn === 1 ? g.phaseGate.p1Ready : g.phaseGate.p2Ready;
+              const isReady = Boolean((g.phaseGate.acked || {})[pn]);
               if (isReady) continue;
               const userId = pn === 1 ? g.player1Id : g.player2Id;
               const gateInteraction = createLiveAiInteraction(gateCustomId, userId, g, client);

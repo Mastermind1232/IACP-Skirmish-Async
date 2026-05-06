@@ -135,23 +135,31 @@ export const phaseReducerHandlers = {
   },
 
   PhaseGateOpened(state, payload) {
+    // Sequential gate (destruct 2026-05-06): initiative player acks first,
+    // opponent second. activePlayer rotates after each ack.
+    const initPn = state?.initiativePlayerId === state?.player2Id ? 2 : 1;
     return {
       ...state,
       phaseGate: {
         phase: payload.gateType,
-        p1Ready: false,
-        p2Ready: false,
+        acked: {},
+        activePlayer: initPn,
       },
     };
   },
 
   PhaseGatePlayerReady(state, payload) {
-    const readyKey = payload.playerNum === 1 ? 'p1Ready' : 'p2Ready';
+    // Sequential gate: write to acked map and rotate activePlayer.
+    const prev = state.phaseGate || {};
+    const prevAcked = prev.acked || {};
+    const newAcked = { ...prevAcked, [payload.playerNum]: true };
+    const bothReady = Boolean(newAcked[1]) && Boolean(newAcked[2]);
     return {
       ...state,
       phaseGate: {
-        ...state.phaseGate,
-        [readyKey]: true,
+        ...prev,
+        acked: newAcked,
+        activePlayer: bothReady ? prev.activePlayer : (payload.playerNum === 1 ? 2 : 1),
       },
     };
   },

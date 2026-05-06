@@ -91,8 +91,9 @@ for (let iter = 0; iter < 5000; iter++) {
   if (all.length === 0) {
     if (g.phaseGate) {
       const gateCustomId = `phase_gate_ready_${g.gameId}`;
-      if (!g.phaseGate.p1Ready) try { await harness.submitAction(gateCustomId, g.player1Id); } catch {}
-      if (!g.phaseGate.p2Ready) try { await harness.submitAction(gateCustomId, g.player2Id); } catch {}
+      const _acked = g.phaseGate.acked || {};
+      if (!_acked[1]) try { await harness.submitAction(gateCustomId, g.player1Id); } catch {}
+      if (g.phaseGate && !((g.phaseGate.acked || {})[2])) try { await harness.submitAction(gateCustomId, g.player2Id); } catch {}
       continue;
     }
     consecutiveEmpty++;

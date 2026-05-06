@@ -33,10 +33,15 @@ function buildStatusLine(gate, game, viewerPn) {
   const p2Id = getPlayerId(game, 2);
   const p1Label = (!viewerPn || viewerPn === 1) ? (p1Id ? `<@${p1Id}>` : 'P1') : 'Opponent';
   const p2Label = (!viewerPn || viewerPn === 2) ? (p2Id ? `<@${p2Id}>` : 'P2') : 'Opponent';
-  const p1 = gate.p1Ready ? `${p1Label} ✅` : `${p1Label} ⏳`;
-  const p2 = gate.p2Ready ? `${p2Label} ✅` : `${p2Label} ⏳`;
-  const suffix = (gate.p1Ready && gate.p2Ready) ? ' — Advancing...' : '';
-  return `${p1} | ${p2}${suffix}`;
+  const acked = gate.acked || {};
+  const tag = (pn, label) => {
+    if (acked[pn]) return `${label} ✅`;
+    if (gate.activePlayer === pn) return `${label} 👈 your turn`;
+    return `${label} ⏳ waits`;
+  };
+  const bothReady = Boolean(acked[1]) && Boolean(acked[2]);
+  const suffix = bothReady ? ' — Advancing...' : '';
+  return `${tag(1, p1Label)} | ${tag(2, p2Label)}${suffix}`;
 }
 
 function buildGateLabel(phase, game) {
@@ -51,13 +56,18 @@ function buildGateContent(phase, gate, game, viewerPn) {
 }
 
 function buildGateButtons(gameId, playerNum, gate) {
-  const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
+  const acked = gate.acked || {};
+  const isReady = Boolean(acked[playerNum]);
+  // Sequential gate: ready button enabled only when it's this player's
+  // turn AND they haven't already acked. Unready stays available to the
+  // player whose ack is still in place.
+  const isActive = gate.activePlayer === playerNum;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`phase_gate_ready_${gameId}`)
       .setLabel('✅ Ready')
       .setStyle(ButtonStyle.Success)
-      .setDisabled(isReady),
+      .setDisabled(isReady || !isActive),
     new ButtonBuilder()
       .setCustomId(`phase_gate_unready_${gameId}`)
       .setLabel('❌ Not Ready')
@@ -69,7 +79,8 @@ function buildGateButtons(gameId, playerNum, gate) {
 function buildGatePayload(gameId, playerNum, gate, game) {
   // Pass playerNum as viewerPn so only the owning player is @-mentioned
   const content = buildGateContent(gate.phase, gate, game, playerNum);
-  const bothReady = gate.p1Ready && gate.p2Ready;
+  const acked = gate.acked || {};
+  const bothReady = Boolean(acked[1]) && Boolean(acked[2]);
   return {
     content,
     components: bothReady ? [] : [buildGateButtons(gameId, playerNum, gate)],
@@ -197,7 +208,18 @@ export async function handlePhaseGateReady(interaction, ctx) {
     }
   }
 
-  const { alreadyReady, bothReady, playerNum } = recordPhaseGateReady(game, userId);
+  const { alreadyReady, bothReady, outOfTurn, playerNum } = recordPhaseGateReady(game, userId);
+  if (outOfTurn) {
+    const _activePn = game.phaseGate?.activePlayer;
+    const _activeName = _activePn === 1 ? 'P1' : 'P2';
+    const _isInitiative = (_activePn === 1 ? game.player1Id : game.player2Id) === game.initiativePlayerId;
+    const _label = _isInitiative ? 'initiative player' : 'opponent';
+    await interaction.followUp({
+      content: `Sequential gate: waiting on the ${_label} (${_activeName}) to confirm first.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   if (alreadyReady) {
     await interaction.followUp({ content: "You're already marked as ready.", ephemeral: true }).catch(discordCatch);
     return;

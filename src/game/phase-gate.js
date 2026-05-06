@@ -21,66 +21,87 @@ export const PHASE_GATE_LABELS = {
 
 /**
  * Initialize a phase gate on the game object.
+ *
+ * Sequential gate (destruct 2026-05-06): the initiative player acks first,
+ * then the opponent. activePlayer rotates after each ack. Out-of-combat
+ * gates use this ordering; combat gates use attacker-then-defender (see
+ * combat.js sendCombatGate).
+ *
  * @param {object} game
  * @param {string} phase - One of the PHASE_GATE_LABELS keys
  */
 export function createPhaseGate(game, phase) {
+  const initPn = game.initiativePlayerId === game.player2Id ? 2 : 1;
   game.phaseGate = {
     phase,
-    p1Ready: false,
-    p2Ready: false,
+    acked: {},
+    activePlayer: initPn,
     p1MsgId: null,
     p2MsgId: null,
   };
 }
 
 /**
- * Mark a player as ready. Handles test game (P1 acts for both).
+ * Mark the active player as ready. Sequential gate: only the activePlayer
+ * may ack at any given time; clicks from the inactive player return
+ * `outOfTurn: true`. After ack, activePlayer rotates to the opponent.
+ *
  * @param {object} game
  * @param {string} userId
- * @returns {{ alreadyReady: boolean, bothReady: boolean, playerNum: number }}
+ * @returns {{ alreadyReady: boolean, bothReady: boolean, outOfTurn: boolean, playerNum: number }}
  */
 export function recordPhaseGateReady(game, userId) {
   const gate = game.phaseGate;
+  gate.acked = gate.acked || {};
   let playerNum = playerNumFromId(game, userId);
 
-  // Test game: P1 clicks for both — first click = P1, second = P2
+  // Test game: P1 acts for whoever is active right now.
   if (game.isTestGame && playerNum === 1) {
-    playerNum = gate.p1Ready ? 2 : 1;
+    playerNum = gate.activePlayer || 1;
   }
 
-  const key = playerNum === 1 ? 'p1Ready' : 'p2Ready';
-  if (gate[key]) {
-    return { alreadyReady: true, bothReady: false, playerNum };
+  if (playerNum !== gate.activePlayer) {
+    return { alreadyReady: false, bothReady: false, outOfTurn: true, playerNum };
+  }
+  if (gate.acked[playerNum]) {
+    return { alreadyReady: true, bothReady: false, outOfTurn: false, playerNum };
   }
 
-  gate[key] = true;
-  const bothReady = gate.p1Ready && gate.p2Ready;
-  return { alreadyReady: false, bothReady, playerNum };
+  gate.acked[playerNum] = true;
+  const bothReady = Boolean(gate.acked[1]) && Boolean(gate.acked[2]);
+  if (!bothReady) {
+    gate.activePlayer = playerNum === 1 ? 2 : 1;
+  }
+  return { alreadyReady: false, bothReady, outOfTurn: false, playerNum };
 }
 
 /**
- * Mark a player as unready. Handles test game (un-readies last readied).
+ * Mark a player as unready (revoke their previous ack). In sequential
+ * mode a player can only un-ack their own confirmation; activePlayer
+ * rolls back to whoever just unready'd so they get the prompt again.
+ *
  * @param {object} game
  * @param {string} userId
  * @returns {{ alreadyUnready: boolean, playerNum: number }}
  */
 export function recordPhaseGateUnready(game, userId) {
   const gate = game.phaseGate;
+  gate.acked = gate.acked || {};
   let playerNum = playerNumFromId(game, userId);
 
-  // Test game: P1 acts for both — un-ready the last one that was readied
+  // Test game: P1 acts for both — un-ready the most-recently readied player.
   if (game.isTestGame && playerNum === 1) {
-    if (gate.p2Ready) playerNum = 2;
+    if (gate.acked[2]) playerNum = 2;
     else playerNum = 1;
   }
 
-  const key = playerNum === 1 ? 'p1Ready' : 'p2Ready';
-  if (!gate[key]) {
+  if (!gate.acked[playerNum]) {
     return { alreadyUnready: true, playerNum };
   }
 
-  gate[key] = false;
+  gate.acked[playerNum] = false;
+  // Roll active back so the unready'd player can re-ack.
+  gate.activePlayer = playerNum;
   return { alreadyUnready: false, playerNum };
 }
 
@@ -197,12 +218,13 @@ function computeRoundActiveWaiting(game) {
  * @returns {{ waitType: string, description: string, playerNums: number[] }}
  */
 function getWaitingPlayersLegacy(game) {
-  // pendingCombat — combat sub-phase gate
+  // pendingCombat — combat sub-phase gate (sequential: only activePlayer waits)
   if (game.pendingCombat?.combatGate) {
     const gate = game.pendingCombat.combatGate;
-    const waiting = [];
-    if (!gate.p1Ready) waiting.push(1);
-    if (!gate.p2Ready) waiting.push(2);
+    const _acked = gate.acked || {};
+    const waiting = gate.activePlayer && !_acked[gate.activePlayer]
+      ? [gate.activePlayer]
+      : [];
     return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
   }
   // pendingCombat — modify-yn gate still pending. Session 11 migration:
@@ -296,15 +318,17 @@ function getWaitingPlayersLegacy(game) {
  * @returns {{ waitType: string, description: string, playerNums: number[] }}
  */
 export function getWaitingPlayers(game) {
-  // Phase gate always takes priority (blocks all other actions)
+  // Phase gate always takes priority (blocks all other actions).
+  // Sequential gate: only the activePlayer is currently waited on.
   if (game.phaseGate) {
     const gate = game.phaseGate;
-    const waiting = [];
-    if (!gate.p1Ready) waiting.push(1);
-    if (!gate.p2Ready) waiting.push(2);
+    const _acked = gate.acked || {};
+    const waiting = gate.activePlayer && !_acked[gate.activePlayer]
+      ? [gate.activePlayer]
+      : [];
     const label = (PHASE_GATE_LABELS[gate.phase] || 'Phase gate active')
       .replace('{round}', String(game.currentRound || 1));
-    return { waitType: 'phaseGate', description: label, playerNums: waiting.length ? waiting : [1, 2] };
+    return { waitType: 'phaseGate', description: label, playerNums: waiting };
   }
 
   // Legacy fallback for unmigrated games

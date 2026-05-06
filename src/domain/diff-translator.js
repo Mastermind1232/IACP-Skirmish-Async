@@ -32,10 +32,13 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
     emit('PhaseGateOpened', { gateType: set.phaseGate.phase });
   }
   if (set?.phaseGate && before?.phaseGate) {
-    if (set.phaseGate.p1Ready && !before.phaseGate.p1Ready) {
+    // Sequential gate uses acked map; emit on transitions there.
+    const _setPhAcked = set.phaseGate.acked || {};
+    const _beforePhAcked = before.phaseGate?.acked || {};
+    if (_setPhAcked[1] && !_beforePhAcked[1]) {
       emit('PhaseGatePlayerReady', { playerNum: 1 });
     }
-    if (set.phaseGate.p2Ready && !before.phaseGate.p2Ready) {
+    if (_setPhAcked[2] && !_beforePhAcked[2]) {
       emit('PhaseGatePlayerReady', { playerNum: 2 });
     }
   }

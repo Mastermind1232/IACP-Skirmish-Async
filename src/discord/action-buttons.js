@@ -190,14 +190,18 @@ export function describeContext(game, playerNum) {
   if (!game) return 'No game state.';
   if (game.ended) return 'Game over.';
 
-  // Phase gate
+  // Phase gate (sequential: only activePlayer can ack)
   if (game.phaseGate) {
     const gate = game.phaseGate;
-    const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
-    const otherReady = playerNum === 1 ? gate.p2Ready : gate.p1Ready;
-    if (isReady && !otherReady) return `Waiting for opponent to ready up for ${gate.phase}.`;
-    if (!isReady) return `Ready up for ${gate.phase}.`;
-    return `Both players ready for ${gate.phase}.`;
+    const acked = gate.acked || {};
+    const isReady = Boolean(acked[playerNum]);
+    const otherPn = playerNum === 1 ? 2 : 1;
+    const otherReady = Boolean(acked[otherPn]);
+    const isActive = gate.activePlayer === playerNum;
+    if (isReady && otherReady) return `Both players ready for ${gate.phase}.`;
+    if (isReady) return `Waiting for opponent to ready up for ${gate.phase}.`;
+    if (isActive) return `Ready up for ${gate.phase}.`;
+    return `Waiting for opponent to confirm ${gate.phase} first.`;
   }
 
   switch (game.phase) {

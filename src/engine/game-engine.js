@@ -83,9 +83,12 @@ function getWaitingPlayersFromGame(game) {
     // Dynamic import won't work synchronously, so use inline logic
     if (game.phaseGate) {
       const gate = game.phaseGate;
-      const waiting = [];
-      if (!gate.p1Ready) waiting.push(1);
-      if (!gate.p2Ready) waiting.push(2);
+      // Sequential gate (destruct 2026-05-06): only the activePlayer is
+      // currently waited on.
+      const _acked = gate.acked || {};
+      const waiting = gate.activePlayer && !_acked[gate.activePlayer]
+        ? [gate.activePlayer]
+        : [];
       return { waitType: 'phaseGate', description: `Phase gate: ${gate.phase}`, playerNums: waiting };
     }
 
