@@ -14,6 +14,17 @@ import { discordCatch as _discordCatchH } from '../error-handling.js';
  * Send a "you have N reaction card(s) playable now" notice to the player's
  * private Hand channel. Mirrors src/handlers/combat.js — combat thread is
  * shared, hand channel is private; opponent must not see card availability.
+ *
+ * Hidden-info audit (slice 6.13 ext / destruct 2026-05-05): this prompt is
+ * gated on count > 0 (player must actually have a relevant card). That's
+ * SAFE because the prompt goes to the player's PRIVATE hand channel — the
+ * opponent cannot observe its presence/absence. Combat-thread prompts
+ * elsewhere (sendModsYn, sendTokenWindow, sendRerollUI, sendCombatGate)
+ * are timing-driven and ALWAYS fire regardless of hand contents, so they're
+ * hidden-info safe too. Together this satisfies destruct's rule:
+ * "even if a player has no cards with on declare or modifier abilities, the
+ * opponent doesn't know that. Thus, each stage needs to ask anything for
+ * this stage, for each player, in order."
  */
 async function _sendPrivateReactionPrompt(client, game, playerNum, count, contextLabel) {
   if (!count || count <= 0) return;
