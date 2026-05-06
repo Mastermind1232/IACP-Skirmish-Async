@@ -256,15 +256,21 @@ function buildLoadoutCombat(game, dcMessageMeta, opts) {
 // ── PROBE-LOADOUT-05: Electro-pulse adjacency damage ──────────────────────────
 //
 // CRR (Electrohammer): "After you resolve an attack, each other figure
-// adjacent to the target suffers 1 Damage."
+// adjacent to the target space suffers 1 Damage."
 //
-// Every figure (friend or foe) within 1 space of the target loses 1 HP,
-// EXCEPT the target itself. Non-adjacent figures are untouched. The target
-// receives normal combat damage only — Electro-pulse is additive on adjacent
-// OTHER figures, not on the target.
+// Per destruct's 2026-05-06 ruling: "each other figure" excludes the
+// SOURCE (the PT carrying the Electrohammer), NOT the target. The target
+// itself is at distance 0 from its own space — it's "adjacent to" the
+// target space and qualifies for splash. Worked example destruct gave:
+// "Electro-pulse + AT-DP target — target itself takes 1 splash damage;
+// PT does NOT."
+//
+// So: every figure within 1 space of the target space (incl. distance 0)
+// takes 1 damage EXCEPT the source. The target receives both combat damage
+// AND the 1 splash. Non-adjacent figures are untouched.
 
 describe('PROBE-LOADOUT-05: electro_pulse — each other figure adjacent to target takes 1 damage', () => {
-  it('adjacent figures (attacker + P2 neighbor) lose 1 HP; non-adjacent untouched; target takes only combat damage', async () => {
+  it('source PT excluded; target takes combat + 1 splash; adjacent figures take 1 splash; non-adjacent untouched', async () => {
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'Stormtrooper (Elite)' }])
@@ -272,10 +278,10 @@ describe('PROBE-LOADOUT-05: electro_pulse — each other figure adjacent to targ
       .build();
 
     // Positions on mos-eisley-outskirts row 3 (fully open):
-    //   P1 attacker at c3 (adjacent to target d3) → 1 Electro-pulse damage
+    //   P1 attacker at c3 (SOURCE — excluded from splash)
     //   P1 fig at a3 (non-adjacent)               → unchanged
     //   P1 fig at g3 (non-adjacent)               → unchanged
-    //   P2 target at d3                           → 2 combat damage ONLY
+    //   P2 target at d3                           → 2 combat + 1 splash = 3 dmg
     //   P2 fig at e3 (adjacent to target d3)      → 1 Electro-pulse damage
     //   P2 fig at h3 (non-adjacent)               → unchanged
     game.figurePositions = {
@@ -312,9 +318,10 @@ describe('PROBE-LOADOUT-05: electro_pulse — each other figure adjacent to targ
     const p1HpAfter = (dcHealthState.get(p1MsgId) || []).map(([cur]) => cur);
     const p2HpAfter = (dcHealthState.get(p2MsgId) || []).map(([cur]) => cur);
 
-    // Attacker (P1 fig 0 at c3) is adjacent to target → 1 Electro-pulse damage.
-    assert.strictEqual(p1HpAfter[0], p1HpBefore[0] - 1,
-      `P1 attacker at c3 (adjacent to target) must lose 1 HP from Electro-pulse. ` +
+    // Attacker (P1 fig 0 at c3) is the SOURCE — excluded from splash per
+    // destruct's 2026-05-06 ruling on "each other figure."
+    assert.strictEqual(p1HpAfter[0], p1HpBefore[0],
+      `P1 attacker at c3 is the SOURCE (PT carrying Electrohammer) — must NOT take Electro-pulse. ` +
       `Before: ${p1HpBefore[0]}, after: ${p1HpAfter[0]}`);
     // P1 figs at a3 and g3 are not adjacent — untouched.
     assert.strictEqual(p1HpAfter[1], p1HpBefore[1],
@@ -323,10 +330,12 @@ describe('PROBE-LOADOUT-05: electro_pulse — each other figure adjacent to targ
     assert.strictEqual(p1HpAfter[2], p1HpBefore[2],
       `P1 fig at g3 (non-adjacent) must NOT take Electro-pulse damage. ` +
       `Before: ${p1HpBefore[2]}, after: ${p1HpAfter[2]}`);
-    // P2 target at d3: combat damage only (2 = 3 dmg - 1 block). Electro-pulse
-    // excludes the target itself ("each OTHER figure adjacent to the target").
-    assert.strictEqual(p2HpAfter[0], p2HpBefore[0] - 2,
-      `P2 target at d3 must take only 2 combat damage, NOT Electro-pulse on top. ` +
+    // P2 target at d3: combat damage (2 = 3 dmg - 1 block) PLUS 1 splash
+    // because the target is at distance 0 from the target space and "each
+    // other figure adjacent to the target space" includes it (excludes the
+    // SOURCE, not the target). Total = 3 HP lost.
+    assert.strictEqual(p2HpAfter[0], p2HpBefore[0] - 3,
+      `P2 target at d3 must take 2 combat + 1 Electro-pulse splash = 3 HP. ` +
       `Before: ${p2HpBefore[0]}, after: ${p2HpAfter[0]}`);
     // P2 fig 1 at e3 is adjacent to target → 1 Electro-pulse damage.
     assert.strictEqual(p2HpAfter[1], p2HpBefore[1] - 1,

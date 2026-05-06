@@ -1733,10 +1733,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _epLines = [];
         for (const [pNum, poses] of [[1, game.figurePositions?.[1] || {}], [2, game.figurePositions?.[2] || {}]]) {
           for (const [fk, pos] of Object.entries(poses)) {
-            // Exclude the target itself — figureKey alone isn't unique across
-            // players since the same dcName can appear on both sides.
-            if (pNum === defenderPlayerNum && fk === combat.target.figureKey) continue;
-            if (countGameSpaces(game, pos, _epTargetPos) !== 1) continue;
+            // Slice 6.11 fix (destruct 2026-05-06): "each other figure adjacent
+            // to the target space" excludes the SOURCE (the PT carrying the
+            // Electrohammer), NOT the target. The target itself IS adjacent
+            // to its own space (distance 0) and therefore takes 1 splash
+            // damage too. Previously we excluded the target, which silently
+            // dropped the destruct-canonical case ("target itself takes 1
+            // splash damage; PT does NOT").
+            if (pNum === attackerPlayerNum && fk === combat.attackerFigureKey) continue;
+            if (countGameSpaces(game, pos, _epTargetPos) > 1) continue;
             const _epFkDcName = dcNameFromFigureKey(fk);
             const _epMid = getDcMessageIds(game, pNum) || [];
             const _epDcL = getDcList(game, pNum);
