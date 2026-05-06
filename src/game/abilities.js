@@ -2127,31 +2127,20 @@ export function resolveAbility(abilityId, context) {
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
         const resultParts = [];
-        // Slice 6.13 ext: collect lethal hits for processFigureDefeat routing.
-        const _adjHostileDefeated = [];
+        // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
+        let _adjHadDefeats = false;
         if (hits > 0) {
           const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
           if (dcHealthState && targetMsgId) {
-            const healthState = dcHealthState.get(targetMsgId) || [];
             const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-            const entryHp = healthState[figIdx];
-            if (entryHp) {
-              const [cur, max] = entryHp;
-              const prevCur = cur ?? max;
-              const newCur = Math.max(0, prevCur - hits);
-              healthState[figIdx] = [newCur, max ?? newCur];
-              dcHealthState.set(targetMsgId, healthState);
-              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-              resultParts.push(`${hits} Damage (HP: ${prevCur} → ${newCur})`);
-              if (newCur <= 0 && prevCur > 0) {
-                _adjHostileDefeated.push({
-                  figureKey: targetFigureKey,
-                  defeatedPlayerNum: enemyPlayerNum,
-                  attackerPlayerNum: playerNum || 1,
-                  source: entry.label || 'adjacent-hostile damage',
-                });
-              }
+            const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, enemyPlayerNum, {
+              sourceLabel: entry.label || 'adjacent-hostile damage',
+              attackerPlayerNum: playerNum || 1,
+            });
+            if (dmgRes.maxHp > 0) {
+              resultParts.push(`${hits} Damage (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
+              if (dmgRes.wasDefeated) _adjHadDefeats = true;
             } else {
               resultParts.push(`apply ${hits} Damage manually`);
             }
@@ -2211,7 +2200,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
-          ...(_adjHostileDefeated.length > 0 ? { defeatedFigures: _adjHostileDefeated, refreshBoard: true } : {}),
+          ...(_adjHadDefeats ? { refreshBoard: true } : {}),
         };
         if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1 && game.pendingPowerTokenGrant) {
           _rodResult.requiresPowerTokenChoice = true;
