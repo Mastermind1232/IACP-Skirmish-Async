@@ -167,6 +167,11 @@ function determineActingPlayer(game) {
   if (game.pendingExtraProtection) return 'both';
   if (game.pendingSelfDestruct) return game.pendingSelfDestruct.defenderPlayerNum || 'both';
   if (game.pendingSelfDestructMove) return game.pendingSelfDestructMove.defenderPlayerNum || 'both';
+  if (game.pendingMoveInterrupts) {
+    // Move interrupts pause for the OPPONENT of the moving figure.
+    const _miOp = game.pendingMoveInterrupts.opportunities?.[game.pendingMoveInterrupts.opIndex];
+    return _miOp?.triggerPlayerNum || 'both';
+  }
   if (game.pendingExecutorInterrupt) return 'both';
 
   // Move in progress — keyed by moveKey, each entry has playerNum

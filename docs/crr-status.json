@@ -40,19 +40,19 @@
   "roundFlagsCompleteness": {
     "bucketSizes": {
       "ROUND_OBJECT_FLAGS": 99,
-      "ROUND_NULL_FLAGS": 119,
+      "ROUND_NULL_FLAGS": 120,
       "ROUND_ARRAY_FLAGS": 5,
       "ROUND_FALSE_FLAGS": 5,
       "ROUND_DELETE_FLAGS": 26
     },
-    "totalUniqueKeys": 254,
+    "totalUniqueKeys": 255,
     "baselineDuplicates": [],
     "baselineUnused": [
       "deviceRerollGranted",
       "drivenByHatredForceChoke",
       "pendingBELReorder"
     ],
-    "baselineTypeMismatchCount": 98
+    "baselineTypeMismatchCount": 99
   },
   "depBagParity": {
     "totalRequiredDepKeys": 237,
