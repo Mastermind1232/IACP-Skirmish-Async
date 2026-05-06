@@ -1525,6 +1525,14 @@
       "description": "While attacking, if the target is 5+ spaces away, reroll up to 2 attack dice.",
       "wiredStatus": "wired"
     },
+    "guerrilla_alliance_ranger_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "post-attack",
+      "label": "Guerrilla",
+      "description": "After you resolve an attack, if the defender was defeated, become Hidden.",
+      "wiredStatus": "wired"
+    },
     "Elusive": {
       "type": "ccEffect",
       "label": "While defending: choose 1 attack die to nullify, then 1 defense die is also nullified",

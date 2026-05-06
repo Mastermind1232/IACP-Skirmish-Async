@@ -1267,6 +1267,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
+        // Guerrilla (Alliance Ranger Elite): "After you resolve an attack,
+        // if the defender was defeated, become Hidden." Trigger on the
+        // attacker's specialAbilityIds. Apply Hide to the attacker.
+        // (destruct 2026-05-06 audit — was unimplemented.)
+        if (combat.attackerFigureKey) {
+          const _gAtkDcName = combat.attackerDcName;
+          const _gAtkEff = getDcEffects()?.[_gAtkDcName] || getDcEffects()?.[_gAtkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+          if ((_gAtkEff?.specialAbilityIds || []).includes('guerrilla_alliance_ranger_elite')) {
+            if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {
+              await logGameAction(game, client, `🌑 **Guerrilla** — **${_gAtkDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
+            }
+          }
+        }
         // Apex Predator: recover HP when a hostile within range is defeated this activation
         if (game.recoverOnHostileDefeat?.[attackerPlayerNum]) {
           const _apData = game.recoverOnHostileDefeat[attackerPlayerNum];
