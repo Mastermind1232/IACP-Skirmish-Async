@@ -223,9 +223,11 @@ export function suffersStrain(dcHealthState, game, msgId, figureIndex, amount, p
   const damageEquiv = Math.max(0, amount - prevented);
   if (damageEquiv === 0) {
     const cur = getDamageState(dcHealthState, msgId, figureIndex);
+    const curHp = cur ? Math.max(0, cur.health - cur.damage) : 0;
     return {
-      newHp: cur ? Math.max(0, cur.health - cur.damage) : 0,
-      prevHp: cur ? Math.max(0, cur.health - cur.damage) : 0,
+      newHp: curHp,
+      prevHp: curHp,
+      maxHp: cur ? cur.health : 0,
       wasDefeated: false,
       defeatRecord: null,
       prevented: amount,

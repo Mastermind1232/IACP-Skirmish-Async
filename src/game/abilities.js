@@ -1803,10 +1803,10 @@ export function resolveAbility(abilityId, context) {
         sourceLabel: `${entry.label || 'ability'} cost`,
         attackerPlayerNum: null, // self-inflicted
       });
-      if (sRes.maxHp == null && sRes.health == null) {
-        strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
-      } else {
+      if (sRes.maxHp > 0) {
         strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${sRes.prevHp} → ${sRes.newHp} HP).`;
+      } else {
+        strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
       }
     }
     // mpBonus alongside overrideAttackDice (Close and Personal: move + override attack)
@@ -2707,12 +2707,15 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const healthState = dcHealthState.get(msgId) || [];
     if (!healthState.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
-    const [cur, max] = healthState[0];
-    const prevCur = cur ?? max ?? 0;
-    const newCur = Math.max(0, prevCur - damage);
-    healthState[0] = [newCur, max ?? cur];
-    dcHealthState.set(msgId, healthState);
-    syncHealthStateToList(game, playerNum, msgId, healthState);
+    // Stimulants self-damage via unified suffersStrain helper. (Stimulants
+    // is technically self-damage, not strain — but routes through the same
+    // flow since both end up as damage in skirmish. If the prevention path
+    // shouldn't apply to direct self-damage, suffersStrain's caller can
+    // pass an opt to skip it; for now self-damage and strain coincide.)
+    const sRes = suffersStrain(dcHealthState, game, msgId, 0, damage, playerNum, {
+      sourceLabel: entry.label || 'self-damage',
+      attackerPlayerNum: null,
+    });
     if (mpBonus > 0) {
       addMovementPoints(game, msgId, mpBonus);
     }
@@ -2722,17 +2725,6 @@ export function resolveAbility(abilityId, context) {
         applyCondition(game, fk, 'Focus');
       }
     }
-    // Slice 6.13 ext: Stimulants-style self-damage. If the damage cost
-    // defeats the figure, fire processFigureDefeat. attackerPlayerNum:null
-    // marks self-inflicted (no VP awarded).
-    const _stimDefeated = (newCur <= 0 && prevCur > 0)
-      ? [{
-        figureKey: `${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] || '1'}-0`,
-        defeatedPlayerNum: playerNum,
-        attackerPlayerNum: null,
-        source: entry.label || 'self-damage',
-      }]
-      : [];
     const parts = [`Suffered ${damage} Damage.`];
     if (mpBonus > 0) parts.push(`Gained ${mpBonus} MP.`);
     if (doFocus) parts.push('Became Focused.');
@@ -2740,7 +2732,7 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: parts.join(' '),
       refreshDcEmbed: true,
-      ...(_stimDefeated.length > 0 ? { defeatedFigures: _stimDefeated, refreshBoard: true } : {}),
+      ...(sRes.wasDefeated ? { refreshBoard: true } : {}),
     };
   }
 
@@ -2783,20 +2775,19 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
 
     // Apply strain cost to activating figure (e.g. Fool Me Once costs 2 Strain)
+    // via unified suffersStrain helper.
     let strainNote = '';
     let refreshDcEmbed = false;
     if (entry.strainCostToSelf > 0 && dcMessageMeta && dcHealthState) {
       const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
       if (selfMsgId) {
         const selectedFig = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
-        const healthState = dcHealthState.get(selfMsgId) || [];
-        if (healthState[selectedFig]) {
-          const [cur, max] = healthState[selectedFig];
-          const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
-          healthState[selectedFig] = [newCur, max ?? newCur];
-          dcHealthState.set(selfMsgId, healthState);
-          syncHealthStateToList(game, playerNum, selfMsgId, healthState);
-          strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
+        const sRes = suffersStrain(dcHealthState, game, selfMsgId, selectedFig, entry.strainCostToSelf, playerNum, {
+          sourceLabel: `${entry.label || 'CC'} cost`,
+          attackerPlayerNum: null,
+        });
+        if (sRes.maxHp > 0) {
+          strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${sRes.prevHp} → ${sRes.newHp} HP).`;
           refreshDcEmbed = true;
         } else {
           strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
@@ -3838,28 +3829,18 @@ export function resolveAbility(abilityId, context) {
       const copiesInDiscard = discard.filter(c => c === context.cardName).length;
       n += copiesInDiscard;
     }
-    const [cur, max] = entry_;
-    const prevCur = cur ?? max ?? 0;
-    const newCur = Math.max(0, prevCur - n);
-    healthState[targetIdx] = [newCur, max];
-    dcHealthState.set(targetMsgId, healthState);
-    syncHealthStateToList(game, defenderPlayerNum, targetMsgId, healthState);
-    // Slice 6.13 ext: surface lethal Strain-as-damage hits to processFigureDefeat.
-    const _esDefeated = (newCur <= 0 && prevCur > 0)
-      ? [{
-        figureKey: targetFk,
-        defeatedPlayerNum: defenderPlayerNum,
-        attackerPlayerNum: playerNum,
-        source: entry.label || 'Strain damage',
-      }]
-      : [];
+    // defenderStrain via unified suffersStrain helper.
+    const sRes = suffersStrain(dcHealthState, game, targetMsgId, targetIdx, n, defenderPlayerNum, {
+      sourceLabel: entry.label || 'Strain damage',
+      attackerPlayerNum: playerNum,
+    });
     const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
     return {
       applied: true,
       logMessage: `Defender suffered ${n} Strain${bonusNote}.`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
-      ...(_esDefeated.length > 0 ? { defeatedFigures: _esDefeated, refreshBoard: true } : {}),
+      ...(sRes.wasDefeated ? { refreshBoard: true } : {}),
     };
   }
 
