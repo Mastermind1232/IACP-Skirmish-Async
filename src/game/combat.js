@@ -308,8 +308,15 @@ export function computeCombatResult(combat) {
   const pierceToUse = combat.defenderIgnorePierce ? 0 : Math.max(0, totalPierce - defReducePierce);
   // Cancel (Kuiil): remove N block results from defender's roll (applied before pierce)
   const surgeCancel = combat.surgeCancel || 0;
-  // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)
-  const cunningBonus = (combat.hasCunning) ? defRoll.evade : 0;
+  // Cunning: +1 Block per Evade while defending (Han Solo, Jyn Odan, Nexu).
+  // destruct 2026-05-06: "Cunning affects all evades regardless of source, not
+  // just rolled" — covers rolled evade (defRoll.evade), Distracting (C-3PO
+  // adjacency), evade-token spends, innate +Evade, round +Evade. All non-rolled
+  // sources fold into combat.bonusEvade upstream (combat-bridge sets roundEvade
+  // and Distracting via handlers/combat.js). Clamp at 0 so Harsh Environment's
+  // -1 evade can't make Cunning negative.
+  const cunningEvadeTotal = Math.max(0, defRoll.evade + (combat.bonusEvade || 0));
+  const cunningBonus = (combat.hasCunning) ? cunningEvadeTotal : 0;
   // Combat-pipeline rebuild (slice 6.15 + destruct 2026-05-06 ruling):
   // Overwhelming Impact's ignoreDefenseResultsNotOnDice flag drops anything
   // not physically on a defense die. That includes:
@@ -382,7 +389,7 @@ export function computeCombatResult(combat) {
   if (bonusAcc) details += ` | bonus: +${bonusAcc} acc`;
   if (bonusHits || perDefDieDamage) details += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
   if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) details += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
-  if (cunningBonus) details += ` | **Cunning**: +${cunningBonus} Block (from ${defRoll.evade} evade)`;
+  if (cunningBonus) details += ` | **Cunning**: +${cunningBonus} Block (from ${cunningEvadeTotal} evade)`;
   if (combat.ignoreDefenseResultsNotOnDice) details += ' | CC: ignore defense not on dice';
   if (evadeCancelled > 0) details += ` | Evade cancelled ${evadeCancelled} surge`;
   if (bonusEvade) details += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;

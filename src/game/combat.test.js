@@ -403,6 +403,51 @@ test('computeCombatResult Cunning adds evade as block', () => {
   assert.ok(r.resultText.includes('Cunning'));
 });
 
+test('computeCombatResult Cunning counts bonusEvade (Distracting / evade-token) sources', () => {
+  // Defender rolls 1 evade and gains 2 bonus evade (e.g. Distracting + token spend).
+  // destruct 2026-05-06: Cunning grants +1 Block per evade from ANY source.
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 1, evade: 1 },
+    hasCunning: true,
+    bonusEvade: 2,
+  });
+  // block = defRoll.block (1) + bonusBlock (0) + cunning ((1 rolled + 2 bonus) = 3) = 4
+  // damage = 5 - 4 = 1
+  assert.strictEqual(r.effectiveBlock, 4);
+  assert.strictEqual(r.damage, 1);
+  assert.ok(r.resultText.includes('Cunning'), 'result mentions Cunning');
+  assert.ok(r.resultText.includes('+3 Block'), 'cunning credits 3 block (1 rolled + 2 bonus)');
+});
+
+test('computeCombatResult Cunning floors at 0 when bonusEvade negative (Harsh Environment)', () => {
+  // Harsh Environment exterior: -1 bonusEvade. With 0 rolled evade, total goes
+  // to -1; clamp ensures Cunning contributes 0 block, not -1.
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    hasCunning: true,
+    bonusEvade: -1,
+  });
+  // block = 0 + cunning (clamped to 0) + bonusBlock (0) = 0; damage = 3
+  assert.strictEqual(r.effectiveBlock, 0);
+  assert.strictEqual(r.damage, 3);
+});
+
+test('computeCombatResult Cunning under Overwhelming Impact: dropped entirely', () => {
+  // OI's ignoreDefenseResultsNotOnDice flag drops the cunningBonus modifier.
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 1, evade: 2 },
+    hasCunning: true,
+    bonusEvade: 1,
+    ignoreDefenseResultsNotOnDice: true,
+  });
+  // Under OI: blockForCalc = defRoll.block only = 1. damage = 4 - 1 = 3.
+  assert.strictEqual(r.effectiveBlock, 1);
+  assert.strictEqual(r.damage, 3);
+});
+
 test('computeCombatResult bonusDamagePerDefenseDie multiplied by dice count', () => {
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 1, surge: 0 },
