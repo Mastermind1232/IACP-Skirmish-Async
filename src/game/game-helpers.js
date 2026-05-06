@@ -34,6 +34,7 @@ export function grantMovementBank(game, msgId, amount) {
  */
 export function grantPowerTokens(game, figureKey, tokenType, count, max) {
   if (!figureKey || count <= 0) return 0;
+  if (tokenType === 'Wild') { console.warn(`grantPowerTokens: Wild is a gain-time selector (CRR p.50), not a stored type — figureKey=${figureKey}`); return 0; }
   game.figurePowerTokens = game.figurePowerTokens || {};
   game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey] || [];
   const cap = max != null ? max : getMaxPowerTokens(figureKey);

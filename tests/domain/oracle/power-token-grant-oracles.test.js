@@ -65,7 +65,8 @@ describe('ORACLE-PTGRANT-003: grantPowerTokens uses grant-then-overflow (not ref
     const src = readSrc('src/game/game-helpers.js');
     const fnIdx = src.indexOf('export function grantPowerTokens');
     assert.ok(fnIdx > 0, 'grantPowerTokens found');
-    const fnBlock = src.slice(fnIdx, fnIdx + 600);
+    const fnEnd = src.indexOf('\nexport ', fnIdx + 1);
+    const fnBlock = src.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 1200);
     // Token push comes before overflow check
     const pushIdx = fnBlock.indexOf('.push(tokenType)');
     const overflowIdx = fnBlock.indexOf('overflow > 0');

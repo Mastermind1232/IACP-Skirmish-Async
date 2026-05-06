@@ -40,7 +40,15 @@
       "mcp__plugin_woz_code__Edit",
       "Bash(rm -rf ~/.claude/plugins/cache/wozcode-marketplace)",
       "Read(//Users/adammeehan/.claude/plugins/cache/**)",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "mcp__discord-mcp__get_thread",
+      "Bash(UPDATE_CRR_STATUS=1 npm test)",
+      "mcp__discord-mcp__view_channel_permissions",
+      "Bash(cat)",
+      "Bash(chmod +x /tmp/check_remap_reads.sh)",
+      "Bash(/tmp/check_remap_reads.sh)",
+      "mcp__plugin_claude-mem_mcp-search__smart_search",
+      "mcp__plugin_claude-mem_mcp-search__smart_outline"
     ]
   }
 }
