@@ -7121,6 +7121,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     attackerFigureKey: controlledFigureKey,
     attackerConds: game.figureConditions?.[controlledFigureKey] || [],
     defenderConds: game.figureConditions?.[target.figureKey] || [],
+    // Slice 8.4 follow-up: per-side condition-effects-suppression flags
+    // (YWNDM-on-Fifth-Brother). Mirrors primary attack init.
+    attackerCondEffectsSuppressed: areConditionEffectsSuppressed(game, controlledFigureKey),
+    defenderCondEffectsSuppressed: areConditionEffectsSuppressed(game, target.figureKey),
     target: { ...target },
     targetStats: {
       defense: targetStats?.defense || 'white',
