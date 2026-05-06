@@ -20,7 +20,47 @@ test('all classifications use valid steps and sides', () => {
 
 test('classificationCount is positive and stable', () => {
   // Sentinel — protects against accidental wholesale deletion of the registry.
-  assert.ok(classificationCount() >= 18, 'expected ≥18 classifications populated');
+  assert.ok(classificationCount() >= 27, 'expected ≥27 classifications populated');
+});
+
+// ── Session 4 additions ──────────────────────────────────────────────────────
+
+test('Hunter Protocol classified as Step 4 attacker (while-attacking)', () => {
+  const c = classifyCcStep('Hunter Protocol');
+  assert.equal(c.step, 'step4-attacker');
+  assert.equal(c.side, 'attacker');
+  assert.match(c.reason, /persists.*Step 5|surge|double-trigger/i);
+});
+
+test('Rapid Recalibration classified as Step 3 sub-window (rapidrecal)', () => {
+  const c = classifyCcStep('Rapid Recalibration');
+  assert.equal(c.step, 'step3-rapidrecal');
+  assert.equal(c.side, 'attacker');
+});
+
+test('Targeting Network classified as Step 3 attacker (reroll)', () => {
+  const c = classifyCcStep('Targeting Network');
+  assert.equal(c.step, 'step3-attacker');
+  assert.match(c.reason, /reroll/i);
+});
+
+test('There Is No Try classified as Step 3 (post-roll micro-window)', () => {
+  const c = classifyCcStep('There Is No Try');
+  assert.equal(c.step, 'step3-attacker');
+  assert.match(c.reason, /post-roll|after.*roll/i);
+});
+
+test('Lando Resourceful / Gambit / Shrewd Scoundrel classified as Step 3', () => {
+  for (const name of ['Resourceful', 'Gambit', 'Shrewd Scoundrel']) {
+    const c = classifyCcStep(name);
+    assert.equal(c.step, 'step3-attacker', `${name} must be step3`);
+  }
+});
+
+test('Saska Power Converter classified as Step 3 attacker (once per round)', () => {
+  const c = classifyCcStep('Saska Power Converter');
+  assert.equal(c.step, 'step3-attacker');
+  assert.match(c.reason, /once per round/i);
 });
 
 // ── classifyCcStep — destruct's audit walk-throughs ──────────────────────────
@@ -176,12 +216,13 @@ test('validateCcPlayAtStep on unknown CC: ok=false in strict mode', () => {
 
 // ── Migration-readiness check ─────────────────────────────────────────────────
 
-test('all attacker-side CCs in registry have step starting with step1+2-attacker, step3-attacker, step4-attacker, or step5/8', () => {
+test('all attacker-side CCs in registry have step in attacker sub-windows or shared steps', () => {
   for (const [name, c] of Object.entries(CC_STEP_CLASSIFICATIONS)) {
     if (c.side !== 'attacker') continue;
     const stepOk =
       c.step === 'step1+2-attacker' ||
       c.step === 'step3-attacker' ||
+      c.step === 'step3-rapidrecal' ||
       c.step === 'step4-attacker' ||
       c.step === 'step5' ||
       c.step === 'step8' ||

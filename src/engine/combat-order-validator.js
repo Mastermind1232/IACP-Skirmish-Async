@@ -117,6 +117,48 @@ export const CC_STEP_CLASSIFICATIONS = Object.freeze({
     side: 'defender',
     reason: 'literal "while defending" + result modifier (+1 Block or +1 Evade)',
   },
+  'Hunter Protocol': {
+    step: 'step4-attacker',
+    side: 'attacker',
+    reason: 'literal "while attacking" — declared at Step 4, effect persists into Step 5 surge spend (allows double-trigger of one surge ability)',
+  },
+
+  // ── Step 3 (rerolls + reroll-adjacent sub-windows) ──────────────────────
+  'Rapid Recalibration': {
+    step: 'step3-rapidrecal',
+    side: 'attacker',
+    reason: 'literal "while attacking, before the defender performs rerolls" — Step 3 sub-window between attacker rerolls and defender rerolls; turns 1 attack die to any side',
+  },
+  'Targeting Network': {
+    step: 'step3-attacker',
+    side: 'attacker',
+    reason: 'literal "while attacking to reroll 1 attack die" — Step 3 attacker rerolls. Discard-pile redraw-surge resolves at Step 5 immediate.',
+  },
+  'There Is No Try': {
+    step: 'step3-attacker',
+    side: 'either',
+    reason: 'literal "when a friendly REBEL FORCE USER within 4 spaces rolls any number of dice" — post-roll micro-window inside Step 3 (fires after any roll/reroll); turns one die to any side',
+  },
+  'Resourceful': {
+    step: 'step3-attacker',
+    side: 'either',
+    reason: 'Lando hero ability — literal "while attacking or defending, may reroll 1 die" — Step 3. (DC ability, not a CC; classified for completeness.)',
+  },
+  'Gambit': {
+    step: 'step3-attacker',
+    side: 'either',
+    reason: 'Lando hero ability — "before you reroll a die, may replace it with another die of same type" — Step 3 sub-window before Resourceful reroll',
+  },
+  'Shrewd Scoundrel': {
+    step: 'step3-attacker',
+    side: 'either',
+    reason: 'Lando hero ability — split pre/post around Resourceful reroll; guess fires before reroll, doubling fires after. Primary classification step3 (only with Resourceful active). Once per activation.',
+  },
+  'Saska Power Converter': {
+    step: 'step3-attacker',
+    side: 'attacker',
+    reason: 'Saska Device token effect — once per round, while a friendly figure with a Device token is attacking, may reroll 1 attack die with optional pre-reroll color swap. Step 3 sub-window before reroll.',
+  },
 
   // ── Step 7 interrupts (during damage application) ───────────────────────
   'Final Stand': {
