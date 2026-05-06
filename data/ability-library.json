@@ -5062,7 +5062,7 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "label": "Trained",
-      "description": "While attacking, you may suffer 1 Strain to reroll 1 attack die.",
+      "description": "While attacking, you may suffer 2 Damage to reroll 1 attack die.",
       "wiredStatus": "wired"
     },
     "trample_bantha": {
