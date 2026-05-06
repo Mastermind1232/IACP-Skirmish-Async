@@ -116,7 +116,15 @@ function clearCcCanceled(game, card) {
  * @param {Function} logGameAction
  * @param {Function} saveGames
  */
-async function promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames) {
+/**
+ * Optional `combatSnapshot` arg (slice 5.7 / #77 follow-up): a deep clone of
+ * `game.pendingCombat` taken BEFORE the CC's effects mutated combat state.
+ * If the opponent plays CD, handleCommDisruptionPlay restores from this
+ * snapshot to revert combat-flag mutations (Brace, Tools for the Job, Aim,
+ * etc.). Other game state (VP, drawn cards) is not snapshotted — those
+ * cost > 0 effects survive cancellation as a known gap.
+ */
+async function promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames, combatSnapshot) {
   // Don't prompt for Comm Disruption itself or Negation
   if (card === 'Comm Disruption' || card === 'Negation') return;
   const oppNum = opponentPlayerNum(playerNum);
@@ -146,7 +154,7 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
   try {
     const oppHandChannel = await fetchGameChannel(client, oppHandId);
     const oppId = getPlayerId(game, oppNum);
-    setPendingCommDisruptionPrompt(game, { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId });
+    setPendingCommDisruptionPrompt(game, { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId, combatSnapshot: combatSnapshot ?? null });
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -570,6 +578,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
   // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
   if (cost !== 0 && ctx.resolveAbility) {
+    // Slice #77 (destruct 2026-05-06): snapshot pendingCombat BEFORE
+    // resolveAbility mutates combat-flag state. If opponent CDs the play,
+    // handleCommDisruptionPlay restores from this snapshot — undoing
+    // Brace's added die, Tools for the Job's flag, Aim's bonus, etc.
+    // VP / drawn cards aren't snapshotted (known gap).
+    const _ccPreSnap = game.pendingCombat
+      ? JSON.parse(JSON.stringify(game.pendingCombat))
+      : null;
     const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, dcExhaustedState: ctx.dcExhaustedState, combat: game.combat || game.pendingCombat });
     if (result.requiresChoice && result.choiceOptions?.length > 0) {
       // Choice required: we must commit the play first, then send choice buttons.
@@ -602,8 +618,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       });
       const rows = chunkButtonsToRows(btns);
       await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
-      // C14: Comm Disruption — prompt opponent if they have it in hand
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
+      // combat snapshot so CD-cancel can revert combat-flag mutations.
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
       saveGames(game.gameId);
       return;
     }
@@ -653,8 +670,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const payload = { content: `${ccHeader}:\nChoose a row:`, components: ccRowBtns.slice(0, 5), fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await handChannel.send(payload).catch(discordCatch);
-      // C14: Comm Disruption — prompt opponent if they have it in hand
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
+      // combat snapshot so CD-cancel can revert combat-flag mutations.
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
       saveGames(game.gameId);
       return;
     }
@@ -729,8 +747,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
         game[wfKey].total = (game[wfKey].total || 0) + cost;
         await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
       }
-      // C14: Comm Disruption — prompt opponent if they have it in hand
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
+      // combat snapshot so CD-cancel can revert combat-flag mutations
+      // (Brace, Tools for the Job, Aim, etc.).
+      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
       saveGames(game.gameId);
       return;
     }
@@ -896,6 +916,15 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   // let-resolve, applyAbilityResult callers, "when discarded" hooks)
   // can skip ALL its effects per destruct 2026-05-05.
   markTopCcCanceled(game, playedCard);
+  // Slice #77: revert combat-flag mutations baked in by resolveAbility
+  // before the CD prompt opened. The snapshot was taken pre-resolve in
+  // handleCcConfirmPlay's cost > 0 path. Brace's added die, Tools for
+  // the Job's flag, Aim's bonus etc. live on pendingCombat — restoring
+  // the pre-resolve snapshot reverts them. VP / drawn-card mutations
+  // are NOT reverted (known gap).
+  if (pending.combatSnapshot && game.pendingCombat) {
+    game.pendingCombat = pending.combatSnapshot;
+  }
   // Dual-prompt race fix: a cost-0 CC can be targeted by both Negation
   // and Comm Disruption simultaneously. CD canceling means Negation must
   // not subsequently resolveAbility on let-resolve. Clear pendingNegation
