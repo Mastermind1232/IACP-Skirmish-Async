@@ -2044,7 +2044,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
   // (skipped if player spent a surge to prevent Bleed during the surge window)
   // I30 Fireproof: attacker with Flame Trooper cannot be Bleeding
-  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed && !combat.attackerFireproof) {
+  // Slice 8.4 follow-up: skip if condition effects are suppressed (YWNDM-on-Fifth-Brother)
+  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed && !combat.attackerFireproof
+      && !areConditionEffectsSuppressed(game, combat.attackerFigureKey)) {
     const bleedThread = await fetchCombatThread(client, combat.combatThreadId);
     await deps.sendBleedingPrompt(game, bleedThread, combat.attackerFigureKey, combat.attackerPlayerNum, combat.attackerDisplayName);
   }

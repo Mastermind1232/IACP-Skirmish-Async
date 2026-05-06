@@ -7,6 +7,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells, normalizeCoord, parseSizeString } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
+import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1052,9 +1053,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   // (Interactive massive-push prompts are posted directly from the init block
   // above via _dispatchNextMassivePush. No post-hoc branch needed here.)
   // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared)
+  // Slice 8.4 follow-up: skip if condition effects are suppressed (YWNDM-on-Fifth-Brother)
   if (moveState.pendingBleed && ctx.sendBleedingPrompt) {
     moveState.pendingBleed = false;
-    if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')) {
+    if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')
+        && !areConditionEffectsSuppressed(game, moveState.figureKey)) {
       await ctx.sendBleedingPrompt(game, interaction.channel, moveState.figureKey, moveState.playerNum, moveState.displayName);
     }
   }
