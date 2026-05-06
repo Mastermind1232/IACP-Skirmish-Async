@@ -1290,14 +1290,7 @@
       "effect": "Special Action: Choose 1 adjacent friendly figure. Ready that figure's Deployment card.",
       "abilityId": "New Orders"
     },
-    "No Cheating": {
-      "cost": 1,
-      "playableBy": "Asajj Ventress",
-      "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
-      "effect": "Use at the start of the activation of a hostile figure in your line of sight. During this round, that figure's attack becomes Melee, and when it declares an attack, it removes one attack die from its attack pool.",
-      "abilityId": "No Cheating"
-    },
-    "Of No Importance": {
+"Of No Importance": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "whenOneOfYourFiguresDefeated",

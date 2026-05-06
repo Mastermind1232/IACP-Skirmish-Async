@@ -949,44 +949,6 @@
         "Smuggler's Instincts"
       ]
     },
-    "Asajj Ventress": {
-      "abilityText": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
-      "keywords": [
-        "DARK DISCIPLE",
-        "FORCE USER",
-        "HUNTER",
-        "PROFESSIONAL"
-      ],
-      "subname": "DARK DISCIPLE",
-      "cost": 7,
-      "health": 12,
-      "speed": 5,
-      "figures": 1,
-      "attack": {
-        "dice": [
-          "yellow",
-          "yellow",
-          "yellow"
-        ],
-        "type": "range"
-      },
-      "defense": [
-        "white"
-      ],
-      "surgeAbilities": [
-        "evade",
-        "accuracy 2, damage 2",
-        "pierce 3"
-      ],
-      "specialAbilityIds": [
-        "nimble_asajj",
-        "consider_it_my_payment_asajj"
-      ],
-      "attachment": false,
-      "elite": true,
-      "unique": true,
-      "affiliation": "Scum"
-    },
     "AT-DP": {
       "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
       "keywords": [

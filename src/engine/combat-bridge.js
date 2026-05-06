@@ -848,8 +848,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Nimble (Asajj Ventress): after attack resolves, defender gains 2 MP per Block result
-      {
+      // Nimble (Asajj Ventress) — REMOVED 2026-05-06 (Asajj removed from game
+      // per destruct's 2026-05-05 ruling). Session 8.1-8.3 of combat-rebuild.
+      if (false) { // eslint-disable-line no-constant-condition
         const _nimDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _nimEff = getDcEffects()?.[_nimDcName];
         if ((_nimEff?.specialAbilityIds || []).includes('nimble_asajj') && combat.defenseRoll) {

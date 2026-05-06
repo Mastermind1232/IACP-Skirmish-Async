@@ -70,7 +70,8 @@ const BATCH = [
   ["DC-SPEC-COMMS-JAMMER-ISB", "comms_jammer_isb", "Comms Jammer", "passive-aura"],
   ["DC-SPEC-COMPOSITE-PLATING", "composite_plating", "Composite Plating", "passive-auto"],
   ["DC-SPEC-CONCLUSION", "conclusion", "Conclusion", "passive-auto"],
-  ["DC-SPEC-CONSIDER-IT-MY-PAYMENT-ASAJJ", "consider_it_my_payment_asajj", "Consider It My Payment", "passive-reactive"],
+  // 'consider_it_my_payment_asajj' removed 2026-05-06 — Asajj Ventress
+  // removed from game per destruct 2026-05-05; Session 8.1-8.3.
   ["DC-SPEC-CONTINUALLY-UNEXPECTED", "continually_unexpected", "Continually Unexpected", null],
   ["DC-SPEC-COORDINATED-HUNT-PURGE-COMMANDER", "coordinated_hunt_purge_commander", "Coordinated Hunt", "passive"],
   ["DC-SPEC-COORDINATED-RAID-ELITE", "coordinated_raid_elite", "Coordinated Raid", null],
@@ -218,7 +219,7 @@ const BATCH = [
   ["DC-SPEC-NEGOTIATE-HONDO", "negotiate_hondo", "Negotiate", "passive-reactive"],
   ["DC-SPEC-NEUROSTIM-HEMLOCK", "neurostim_hemlock", "Neurostim", null],
   ["DC-SPEC-NEUROTOXIN-HEMLOCK", "neurotoxin_hemlock", "Neurotoxin", null],
-  ["DC-SPEC-NIMBLE-ASAJJ", "nimble_asajj", "Nimble", "passive-reactive"],
+  // 'nimble_asajj' removed 2026-05-06 — Asajj Ventress removed from game.
   ["DC-SPEC-NON-COMBATANT-C3PO", "non_combatant_c3po", "Non-Combatant", "passive"],
   ["DC-SPEC-OFFICER-ORDER", "officer_order", "Order", "active"],
   ["DC-SPEC-ON-MY-MARK", "on_my_mark", "On My Mark", "active"],

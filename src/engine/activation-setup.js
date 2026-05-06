@@ -592,15 +592,9 @@ export async function finalizeActivation({
     await thread.send({ content: `🤝 **Squad Cohesion** — REBEL figures within 3 spaces may spend each other's power tokens.` }).catch(discordCatch);
   }
 
-  // D19. Consider It My Payment (Asajj)
-  if (_abilityIds.includes('consider_it_my_payment_asajj')) {
-    const oppNum = opponentPlayerNum(playerNum);
-    const oppOwnerId = game[`player${oppNum}Id`];
-    await logGameAction(game, client, `💳 **Consider It My Payment** — <@${oppOwnerId}>, reveal a Command Card from your hand.`, {
-      phase: 'ACTIVATION', icon: 'card',
-      allowedMentions: { users: [oppOwnerId] },
-    });
-  }
+  // D19. Consider It My Payment (Asajj Ventress) — REMOVED.
+  // Asajj Ventress was removed from the game per destruct 2026-05-05;
+  // Session 8.1-8.3 of the combat-rebuild plan.
 
   // D20. General's Orders (General Weiss): choose up to 2 friendlies, each gains 2 MP
   if (_abilityIds.includes('generals_orders_weiss')) {

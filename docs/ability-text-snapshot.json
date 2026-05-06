@@ -6,8 +6,8 @@
       "cc": "effect"
     },
     "counts": {
-      "dc": 239,
-      "cc": 293
+      "dc": 238,
+      "cc": 292
     }
   },
   "dc": {
@@ -24,7 +24,6 @@
     "Alliance Ranger (Regular)": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you reroll 1 attack die.",
     "Alliance Smuggler (Elite)": "Special Action (Improved Smuggler's Instincts): Perform an interact, then move up to 3 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
     "Alliance Smuggler (Regular)": "Special Action (Smuggler's Instincts): Perform an attack, then move up to 2 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
-    "Asajj Ventress": "Nimble: After an attack targeting you is resolved, gain 2 movement points for each of your Block results.\n\nConsider It My Payment: At the start of your activation, your opponent reveals a Command card from his hand. During this round, if the next Command card played by that player does not have the same name as the revealed card, that player discards a copy of the revealed card, or reveals a hand without any copies of that card.",
     "BD-1": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
     "BT-1": "Special Action (Missile Salvo): Perform up to 3 Ranged attacks with different targets using 1 blue, 1 red, or 1 yellow die. Limit once per die. Apply +3 accuracy to each of these attacks.\n\nAssassin: Before you declare an attack, become Focused.",
     "Bantha Rider": "Wild Beast: When you would perform an attack, you may perform a Special Action instead.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
@@ -429,7 +428,6 @@
     "Navigation Upgrade": "Special Action: Take 1 Strain. Place this card in your Play Area. (i.e. in your discord Player Area channel)\n----------------\nAttachment: Exhaust this card during a friendly DROID's activation. That figure gains 1 movement point.",
     "Negation": "Use after your opponent plays a Command card with a cost of 0. Discard that card and cancel its effects.",
     "New Orders": "Special Action: Choose 1 adjacent friendly figure. Ready that figure's Deployment card.",
-    "No Cheating": "Use at the start of the activation of a hostile figure in your line of sight. During this round, that figure's attack becomes Melee, and when it declares an attack, it removes one attack die from its attack pool.",
     "Of No Importance": "Use when one of your non-unique figures is defeated. That figure is worth 4 fewer VPs, to a minimum of 0.",
     "Officer's Training": "Use while attacking to reroll 1 attack die. Then, if you are a LEADER, draw 1 Command card.",
     "On a Mission": "Special Action: Move up to 5 spaces. Each time you enter a space containing a SMALL figure, you may push that figure 1 space.",

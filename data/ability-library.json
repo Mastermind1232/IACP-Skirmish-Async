@@ -877,14 +877,6 @@
       "description": "After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.",
       "wiredStatus": "wired"
     },
-    "consider_it_my_payment_asajj": {
-      "type": "dcSpecial",
-      "category": "passive-reactive",
-      "trigger": "activation-start",
-      "label": "Consider It My Payment",
-      "description": "At the start of your activation, your opponent reveals a CC from their hand.",
-      "wiredStatus": "wired"
-    },
     "continually_unexpected": {
       "type": "dcSpecial",
       "label": "Continually Unexpected",
@@ -3279,22 +3271,6 @@
       "type": "ccEffect",
       "label": "Choose 1 adjacent friendly figure; ready that figure's Deployment card",
       "readyAdjacentFriendlyDeploymentCard": true,
-      "wiredStatus": "wired"
-    },
-    "nimble_asajj": {
-      "type": "dcSpecial",
-      "category": "passive-reactive",
-      "label": "Nimble",
-      "description": "After an attack targeting you resolves, you gain 2 movement points for each Block result.",
-      "wiredStatus": "wired"
-    },
-    "No Cheating": {
-      "type": "ccEffect",
-      "label": "At start of hostile activation in LOS: that figure's attack becomes Melee, remove 1 attack die this round",
-      "roundDebuffNextHostileActivation": {
-        "melee": true,
-        "removeAttackDie": 1
-      },
       "wiredStatus": "wired"
     },
     "non_combatant_c3po": {
