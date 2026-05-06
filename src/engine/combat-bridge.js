@@ -1030,39 +1030,49 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // through applyDamageWithDefeatCheck which consults isCannotBeDefeated
       // and suppresses defeat directly. Both code paths reach the same
       // outcome: 5th Brother does not defeat while YWNDM is active.
+      // Slice 5 fix (destruct 2026-05-06): heal-to-1 is wrong because future
+      // heal of N would put figure at 1+N HP (off-by-one too generous —
+      // destruct's example: "Second Chance figure heals → has 3 HP not 2").
+      // Per CRR + destruct: damage caps at health, defeat suppressed. cur
+      // stays at 0; future heals reduce damage from health → cur = heal
+      // amount. Set _defeatSuppressed flag so downstream interrupts skip.
+      let _defeatSuppressed = false;
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         if (_ywndmDcName?.toLowerCase().includes('fifth')) {
-          const { newHp: _ywndmNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
-          newCur = _ywndmNew;
-          // Do NOT null the flag here — effect persists until a hostile is defeated
-          await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! HP restored to 1.`, { phase: 'ROUND', icon: 'card' });
+          _defeatSuppressed = true;
+          combat._defeatSuppressed = true;
+          // Do NOT null the flag here — YWNDM persists until a hostile is defeated.
+          await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother cannot be defeated! Damage capped at health.`, { phase: 'ROUND', icon: 'card' });
         }
       }
-      // Second Chance: CC attachment — before defeated, recover 2 Damage and discard the card
-      if (newCur <= 0 && game.secondChanceDcMsgId?.[targetMsgId] === defenderPlayerNum) {
+      // Second Chance: CC attachment — before defeated, recover 2 Damage and discard the card.
+      // SC's "recover 2 Damage" is correct as-is; future heals add normally.
+      // Skipped if YWNDM/SbR already suppressed the defeat (no point burning SC).
+      if (newCur <= 0 && !_defeatSuppressed && game.secondChanceDcMsgId?.[targetMsgId] === defenderPlayerNum) {
         const { newHp: _scNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 2, defenderPlayerNum);
         newCur = _scNew;
         delete game.secondChanceDcMsgId[targetMsgId];
         await logGameAction(game, client, `**Second Chance** triggered! Recovered 2 Damage (HP \u2192 ${newCur}). Card discarded.`, { phase: 'ROUND', icon: 'card' });
       }
-      // Sustained by Rage (Maul): cannot be defeated if has not activated this round — set HP to 1
+      // Sustained by Rage (Krrsantan): cannot be defeated if has not
+      // activated this round. Slice 5 fix: same heal-to-1 → suppress flip.
       let _sbrImmune = false;
-      if (newCur <= 0) {
+      if (newCur <= 0 && !_defeatSuppressed) {
         const _sbrDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _sbrEff = getDcEffects()?.[_sbrDcName];
         if ((_sbrEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
           const _sbrActivatedIndices = getActivatedDcIndices(game, defenderPlayerNum) || [];
           if (idx >= 0 && !_sbrActivatedIndices.includes(idx)) {
             _sbrImmune = true;
-            const { newHp: _sbrNew } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
-            newCur = _sbrNew;
-            await logGameAction(game, client, `**Sustained by Rage** — **${_sbrDcName}** cannot be defeated (has not activated this round)! HP set to 1.`, { phase: 'ROUND', icon: 'card' });
+            _defeatSuppressed = true;
+            combat._defeatSuppressed = true;
+            await logGameAction(game, client, `**Sustained by Rage** — **${_sbrDcName}** cannot be defeated (has not activated this round)! Damage capped at health.`, { phase: 'ROUND', icon: 'card' });
           }
         }
       }
       // Self-Destruct Protocol: pre-defeat interrupt — prompt owner to use ability before defeat
-      if (newCur <= 0 && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
+      if (newCur <= 0 && !_defeatSuppressed && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
         const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _sdpEff2 = getDcEffects()?.[_sdpDcName2];
         if ((_sdpEff2?.specialAbilityIds || []).includes('self_destruct_protocol')) {
@@ -1079,8 +1089,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           return;
         }
       }
-      // Parting Shot (Greedo, Hired Gun): pre-defeat interrupt — may perform an attack before being defeated
-      if (newCur <= 0 && !_sbrImmune && !game.partingShotTriggered?.[targetMsgId]) {
+      // Parting Shot (Greedo, Hired Gun): pre-defeat interrupt — may perform an attack before being defeated.
+      // Skipped if defeat is suppressed (YWNDM/SbR active — figure isn't actually being defeated).
+      if (newCur <= 0 && !_sbrImmune && !_defeatSuppressed && !game.partingShotTriggered?.[targetMsgId]) {
         const _psDcName = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _psEff = getDcEffects()?.[_psDcName];
         const _psSIds = _psEff?.specialAbilityIds || [];
@@ -1109,7 +1120,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
-      if (newCur <= 0 && !_sbrImmune && !game.lastResortTriggered?.[targetMsgId]) {
+      if (newCur <= 0 && !_sbrImmune && !_defeatSuppressed && !game.lastResortTriggered?.[targetMsgId]) {
         const _lrUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
         if (cardNameIncludes(_lrUpgrades, 'Last Resort')) {
           game.lastResortTriggered = game.lastResortTriggered || {};
@@ -1127,7 +1138,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
       // Executor (Royal Guard Champion): when a friendly figure is defeated within 3 spaces,
       // RGC may interrupt to move 2 spaces + perform a free attack. Limit once per round.
-      if (newCur <= 0 && !_sbrImmune && !game.executorTriggered?.[targetMsgId]) {
+      if (newCur <= 0 && !_sbrImmune && !_defeatSuppressed && !game.executorTriggered?.[targetMsgId]) {
         const _exDefeatedPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
         if (_exDefeatedPos && game.selectedMap?.id) {
           const _exFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
@@ -1164,7 +1175,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      if (newCur <= 0 && !_sbrImmune && !(game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum && ((idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey))?.toLowerCase().includes('fifth')))) {
+      if (newCur <= 0 && !_defeatSuppressed) {
         // PRE-DEFEAT: Combat-specific context for CC timing validation (Of No Importance, etc.)
         game.lastDefeatInfo = { playerNum: defenderPlayerNum, figureKey: combat.target.figureKey, dcName: targetDcName };
         // CANONICAL DEFEAT CORE — handles: position removal, conditions, device tokens,
