@@ -110,3 +110,66 @@ export function healHpDistributed(dcHealthState, game, msgId, totalAmount, playe
   }
   return { totalRecovered: totalAmount - remaining, perFigure };
 }
+
+/**
+ * Apply damage to a figure and surface a defeat record if lethal.
+ *
+ * Per destruct's 2026-05-06 audit: "any time a figure suffers damage you
+ * should check for defeat." Wraps reduceHp with a defeatedFigures-shaped
+ * record output so the caller can append it to result.defeatedFigures and
+ * the apply-ability-result.js consumer routes through processFigureDefeat
+ * — firing VP, position cleanup, when-defeated reaction prompts, passive
+ * redraws, etc.
+ *
+ * Use this helper for ANY direct damage application (AOEs, mission rules,
+ * CC effects, ability self-damage, conditional damage). Standard combat
+ * damage already routes through computeCombatResult → applyDamageAndFinishCombat
+ * which calls processFigureDefeat itself.
+ *
+ * @param {Map} dcHealthState
+ * @param {object} game
+ * @param {string} msgId
+ * @param {number} figureIndex
+ * @param {number} damage
+ * @param {number} playerNum - the figure's owning player
+ * @param {object} opts
+ * @param {string} [opts.sourceLabel='']        - e.g. "Wrist Flamethrower", "Bleed"
+ * @param {number|null} [opts.attackerPlayerNum=null] - player who caused damage (for VP); null = neutral / self-inflicted
+ * @returns {{ newHp: number, prevHp: number, wasDefeated: boolean, defeatRecord: object | null }}
+ */
+export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureIndex, damage, playerNum, opts = {}) {
+  const { sourceLabel = '', attackerPlayerNum = null } = opts;
+  const result = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
+  const defeatRecord = result.wasDefeated && result.prevHp > 0
+    ? {
+      figureKey: _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum),
+      defeatedPlayerNum: playerNum,
+      attackerPlayerNum: attackerPlayerNum ?? (playerNum === 1 ? 2 : 1),
+      source: sourceLabel,
+    }
+    : null;
+  return { ...result, defeatRecord };
+}
+
+/**
+ * Resolve a figureKey from (msgId, figureIndex). Internal helper for
+ * applyDamageWithDefeatCheck.
+ */
+function _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum) {
+  const ids = playerNum === 1 ? (game.p1DcMessageIds || []) : (game.p2DcMessageIds || []);
+  const list = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const idx = ids.indexOf(msgId);
+  if (idx < 0) return null;
+  const dc = list[idx];
+  if (!dc) return null;
+  const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+  // Try to find the matching figure key. Look up via figurePositions; if not
+  // found (rare), fall back to the constructed shape "{dcName}-{dgIndex}-{figureIndex}".
+  const positions = game.figurePositions?.[playerNum] || {};
+  for (const fk of Object.keys(positions)) {
+    const m = fk.match(/^(.+)-(\d+)-(\d+)$/);
+    if (!m) continue;
+    if (m[1] === dcName && parseInt(m[3], 10) === figureIndex) return fk;
+  }
+  return `${dcName}-1-${figureIndex}`;
+}
