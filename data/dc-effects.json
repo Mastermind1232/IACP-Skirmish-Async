@@ -1073,6 +1073,12 @@
       "cost": 9,
       "health": 21,
       "speed": 5,
+      "specials": [
+        "Trample"
+      ],
+      "specialCosts": [
+        1
+      ],
       "passives": [
         "Wild Beast"
       ],
