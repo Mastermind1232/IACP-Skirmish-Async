@@ -22,18 +22,21 @@
 
 /**
  * Parse one passive token into structured deltas.
- * Returns an object like { damage, surge, block, evade } where each key
- * is the additive bonus this token contributes.
+ * Returns an object like { damage, surge, block, evade, accuracy, pierce, blast }
+ * where each key is the additive bonus this token contributes.
+ *
+ * Scope-expanded 2026-05-06 per destruct: now covers +Accuracy, Pierce,
+ * and Blast in addition to the original +dmg/+surge/+block/+evade.
  */
 function parseToken(token) {
-  const out = { damage: 0, surge: 0, block: 0, evade: 0 };
+  const out = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
   if (!token || typeof token !== 'string') return out;
   const t = token.trim().toLowerCase();
   if (!t) return out;
   // "+N word" or "word N" — match either order
-  let m = t.match(/^\+?(\d+)\s*(damage|hit|hits|surge|block|evade)$/);
+  let m = t.match(/^\+?(\d+)\s*(damage|hit|hits|surge|block|evade|accuracy|pierce|blast|cleave)$/);
   if (!m) {
-    m = t.match(/^(damage|hit|hits|surge|block|evade)\s*(\d+)$/);
+    m = t.match(/^(damage|hit|hits|surge|block|evade|accuracy|pierce|blast|cleave)\s*(\d+)$/);
     if (m) m = [m[0], m[2], m[1]];
   }
   if (!m) return out;
@@ -43,6 +46,10 @@ function parseToken(token) {
   else if (word === 'surge') out.surge += n;
   else if (word === 'block') out.block += n;
   else if (word === 'evade') out.evade += n;
+  else if (word === 'accuracy') out.accuracy += n;
+  else if (word === 'pierce') out.pierce += n;
+  else if (word === 'blast') out.blast += n;
+  // 'cleave' kept in regex for future-proofing; unused fields stay 0.
   return out;
 }
 
@@ -54,7 +61,7 @@ function parseToken(token) {
  * @returns {{ damage: number, surge: number, block: number, evade: number }}
  */
 export function parseInnatePassives(passives) {
-  const total = { damage: 0, surge: 0, block: 0, evade: 0 };
+  const total = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
   if (!Array.isArray(passives)) return total;
   for (const raw of passives) {
     if (!raw || typeof raw !== 'string') continue;
@@ -65,6 +72,9 @@ export function parseInnatePassives(passives) {
       total.surge += tok.surge;
       total.block += tok.block;
       total.evade += tok.evade;
+      total.accuracy += tok.accuracy;
+      total.pierce += tok.pierce;
+      total.blast += tok.blast;
     }
   }
   return total;
@@ -76,9 +86,12 @@ export function parseInnatePassives(passives) {
  */
 export function applyInnateAttackerPassives(combat, dcEffect) {
   if (!combat || !dcEffect) return;
-  const { damage, surge } = parseInnatePassives(dcEffect.passives);
+  const { damage, surge, accuracy, pierce, blast } = parseInnatePassives(dcEffect.passives);
   if (damage > 0) combat.bonusHits = (combat.bonusHits || 0) + damage;
   if (surge > 0) combat.bonusSurge = (combat.bonusSurge || 0) + surge;
+  if (accuracy > 0) combat.bonusAccuracy = (combat.bonusAccuracy || 0) + accuracy;
+  if (pierce > 0) combat.bonusPierce = (combat.bonusPierce || 0) + pierce;
+  if (blast > 0) combat.bonusBlast = (combat.bonusBlast || 0) + blast;
 }
 
 /**

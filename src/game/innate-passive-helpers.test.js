@@ -7,10 +7,12 @@ import {
   applyInnateDefenderPassives,
 } from './innate-passive-helpers.js';
 
+const ZERO = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
+
 test('parseInnatePassives: empty / null', () => {
-  assert.deepEqual(parseInnatePassives(null), { damage: 0, surge: 0, block: 0, evade: 0 });
-  assert.deepEqual(parseInnatePassives([]), { damage: 0, surge: 0, block: 0, evade: 0 });
-  assert.deepEqual(parseInnatePassives(undefined), { damage: 0, surge: 0, block: 0, evade: 0 });
+  assert.deepEqual(parseInnatePassives(null), ZERO);
+  assert.deepEqual(parseInnatePassives([]), ZERO);
+  assert.deepEqual(parseInnatePassives(undefined), ZERO);
 });
 
 test('parseInnatePassives: "+1 Damage" form', () => {
@@ -45,9 +47,16 @@ test('parseInnatePassives: comma-separated multi-bonus string', () => {
   assert.equal(r.surge, 0);
 });
 
-test('parseInnatePassives: ignores +Accuracy and Pierce (out of scope)', () => {
+test('parseInnatePassives: +Accuracy / Pierce / Blast (scope-expanded 2026-05-06)', () => {
   const r = parseInnatePassives(['+2 Accuracy', 'Pierce 1', 'Pierce 3']);
-  assert.deepEqual(r, { damage: 0, surge: 0, block: 0, evade: 0 });
+  assert.equal(r.accuracy, 2);
+  assert.equal(r.pierce, 4); // 1 + 3
+  assert.equal(r.blast, 0);
+  // Original four still 0
+  assert.equal(r.damage, 0);
+  assert.equal(r.surge, 0);
+  assert.equal(r.block, 0);
+  assert.equal(r.evade, 0);
 });
 
 test('parseInnatePassives: multi-entry array sums correctly', () => {
@@ -60,22 +69,33 @@ test('parseInnatePassives: multi-entry array sums correctly', () => {
 test('parseInnatePassives: known DC values', () => {
   // Luke Jedi Knight: ['+1 Hit', '+1 Evade']
   const luke = parseInnatePassives(['+1 Hit', '+1 Evade']);
-  assert.deepEqual(luke, { damage: 1, surge: 0, block: 0, evade: 1 });
+  assert.deepEqual(luke, { ...ZERO, damage: 1, evade: 1 });
 
   // R2-D2: ['+2 Accuracy', '+1 Surge']
   const r2 = parseInnatePassives(['+2 Accuracy', '+1 Surge']);
-  assert.deepEqual(r2, { damage: 0, surge: 1, block: 0, evade: 0 });
+  assert.deepEqual(r2, { ...ZERO, surge: 1, accuracy: 2 });
 
   // Wampa Elite: ['+2 Hit']
   const wampa = parseInnatePassives(['+2 Hit']);
-  assert.deepEqual(wampa, { damage: 2, surge: 0, block: 0, evade: 0 });
+  assert.deepEqual(wampa, { ...ZERO, damage: 2 });
+
+  // Emperor Palpatine: ['Pierce 3']
+  const emp = parseInnatePassives(['Pierce 3']);
+  assert.deepEqual(emp, { ...ZERO, pierce: 3 });
+
+  // AT-DP: ['Block 1', '+3 Accuracy']
+  const atdp = parseInnatePassives(['Block 1', '+3 Accuracy']);
+  assert.deepEqual(atdp, { ...ZERO, block: 1, accuracy: 3 });
 });
 
-test('applyInnateAttackerPassives: mutates combat.bonusHits and bonusSurge', () => {
+test('applyInnateAttackerPassives: mutates bonusHits / bonusSurge / bonusAccuracy / bonusPierce / bonusBlast', () => {
   const combat = {};
-  applyInnateAttackerPassives(combat, { passives: ['+1 Hit', '+1 Surge'] });
+  applyInnateAttackerPassives(combat, { passives: ['+1 Hit', '+1 Surge', '+2 Accuracy', 'Pierce 1', '+1 Blast'] });
   assert.equal(combat.bonusHits, 1);
   assert.equal(combat.bonusSurge, 1);
+  assert.equal(combat.bonusAccuracy, 2);
+  assert.equal(combat.bonusPierce, 1);
+  assert.equal(combat.bonusBlast, 1);
 });
 
 test('applyInnateAttackerPassives: stacks with existing bonus', () => {
