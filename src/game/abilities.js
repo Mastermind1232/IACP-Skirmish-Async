@@ -1819,16 +1819,29 @@ export function resolveAbility(abilityId, context) {
     };
     // strainCostToSelf (Brutal Cleave): reduce activating figure's HP by strain amount
     let strainNote = '';
+    // Slice 6.13 ext: track self-defeat from strain (rare).
+    const _bcsDefeated = [];
     if (entry.strainCostToSelf > 0 && dcHealthState) {
       const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const healthState = dcHealthState.get(msgId) || [];
       if (healthState[selectedFig]) {
         const [cur, max] = healthState[selectedFig];
-        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
+        const prevCur = cur ?? max;
+        const newCur = Math.max(0, prevCur - entry.strainCostToSelf);
         healthState[selectedFig] = [newCur, max ?? newCur];
         dcHealthState.set(msgId, healthState);
         syncHealthStateToList(game, playerNum, msgId, healthState);
-        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} → ${newCur} HP).`;
+        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${prevCur} → ${newCur} HP).`;
+        if (newCur <= 0 && prevCur > 0 && meta?.dcName) {
+          const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+          const dgIdx = dgM ? dgM[1] : '1';
+          _bcsDefeated.push({
+            figureKey: `${meta.dcName}-${dgIdx}-${selectedFig}`,
+            defeatedPlayerNum: playerNum,
+            attackerPlayerNum: null,
+            source: `${entry.label || 'ability'} strain cost`,
+          });
+        }
       } else {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
       }
@@ -1846,6 +1859,7 @@ export function resolveAbility(abilityId, context) {
       refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0,
       activeMsgId: msgId,
       logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
+      ...(_bcsDefeated.length > 0 ? { defeatedFigures: _bcsDefeated, refreshBoard: true } : {}),
     };
   }
 
