@@ -1426,6 +1426,23 @@ export async function handleActPassive(interaction, ctx) {
       // Mark Slam as used this activation
       game.wookieeAvengerSlamUsed = game.wookieeAvengerSlamUsed || {};
       game.wookieeAvengerSlamUsed[msgId] = true;
+      // CRR: "A figure can perform each special action ability only once
+      // per activation." WA's free Slam IS the Special Action — consuming
+      // it consumes Chewie's once-per-activation right to use Slam. Push
+      // Slam's specialIdx into actionsData.specialsUsed so the dc_special_
+      // button click handler at dc-play-area.js:1318 correctly refuses a
+      // second (paid) Slam in the same activation.
+      const _waActData = game.dcActionsData?.[msgId];
+      if (_waActData) {
+        const _waDcSpecials = (getDcEffects()?.[meta.dcName]?.specials) || [];
+        const _waSlamIdx = _waDcSpecials.indexOf('Slam');
+        if (_waSlamIdx >= 0) {
+          _waActData.specialsUsed = _waActData.specialsUsed || [];
+          if (!_waActData.specialsUsed.includes(_waSlamIdx)) {
+            _waActData.specialsUsed.push(_waSlamIdx);
+          }
+        }
+      }
       // Track as special action for CC purposes (To the Limit, All in a Day's Work)
       game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
       game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
