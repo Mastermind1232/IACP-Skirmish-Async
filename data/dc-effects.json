@@ -5805,7 +5805,7 @@
         "Charged Shot"
       ],
       "specialCosts": [
-        2,
+        1,
         1
       ],
       "attack": {
@@ -5850,7 +5850,7 @@
         "Charged Shot"
       ],
       "specialCosts": [
-        2,
+        1,
         1
       ],
       "attack": {
