@@ -3912,16 +3912,27 @@ export function resolveAbility(abilityId, context) {
       n += copiesInDiscard;
     }
     const [cur, max] = entry_;
-    const newCur = Math.max(0, (cur ?? max ?? 0) - n);
+    const prevCur = cur ?? max ?? 0;
+    const newCur = Math.max(0, prevCur - n);
     healthState[targetIdx] = [newCur, max];
     dcHealthState.set(targetMsgId, healthState);
     syncHealthStateToList(game, defenderPlayerNum, targetMsgId, healthState);
+    // Slice 6.13 ext: surface lethal Strain-as-damage hits to processFigureDefeat.
+    const _esDefeated = (newCur <= 0 && prevCur > 0)
+      ? [{
+        figureKey: targetFk,
+        defeatedPlayerNum: defenderPlayerNum,
+        attackerPlayerNum: playerNum,
+        source: entry.label || 'Strain damage',
+      }]
+      : [];
     const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
     return {
       applied: true,
       logMessage: `Defender suffered ${n} Strain${bonusNote}.`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
+      ...(_esDefeated.length > 0 ? { defeatedFigures: _esDefeated, refreshBoard: true } : {}),
     };
   }
 
