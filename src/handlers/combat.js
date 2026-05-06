@@ -4519,7 +4519,10 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
     for (const p of parts(passive)) {
       const blk  = p.match(/^(?:block\s+(\d+)|\+(\d+)\s+block)$/i); if (blk) { combat.bonusBlock = (combat.bonusBlock || 0) + parseInt(blk[1] ?? blk[2], 10); continue; }
       const evd  = p.match(/^\+(\d+)\s+evade$/);      if (evd)    { combat.bonusEvade     = (combat.bonusEvade     || 0) + parseInt(evd[1],    10); continue; }
-      if (p === 'professional') { combat.defenderRerollDiceMax = (combat.defenderRerollDiceMax || 0) + 1; continue; }
+      // Professional is "While attacking, reroll 1 attack die" — attack-only.
+      // Removed defender-side branch 2026-05-06 per destruct's clarification:
+      // it incorrectly granted defense rerolls to figures (Royal Guard etc.)
+      // who only get the bonus while attacking.
     }
   }
 }
