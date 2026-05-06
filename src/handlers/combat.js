@@ -5,6 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentB
 import { COLORS } from '../discord/colors.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingUnhingedStrain, clearPendingUnhingedStrain } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
+import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
@@ -4429,15 +4430,20 @@ export async function handlePreReroll(interaction, ctx) {
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
     await thread.send(`**Resourceful** — +1 defense reroll.${gambitNote}`);
   } else if (choice === 'trained_yes') {
-    const dcHS = ctx.dcHealthState;
-    const atkMsgId = combat.attackerMsgId;
-    if (atkMsgId && dcHS) {
-      const figIdx = combat.attackerFigureIndex ?? 0;
-      reduceHp(dcHS, game, atkMsgId, figIdx, 1, combat.attackerPlayerNum);
-    }
-    combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+    // Trained Rancor: "While attacking, you may suffer 1 Strain to reroll
+    // 1 attack die." Strain routed through the new applyStrain handler so
+    // the player gets the deck-discard option (+ Paz exception, UD pre-
+    // prompt). Reroll is granted in the followup AFTER strain resolves.
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Trained** — Suffered 1 Strain. +1 attack reroll.`);
+    await applyStrain(game, ctx, {
+      figureKey: combat.attackerFigureKey,
+      controllerPlayerNum: combat.attackerPlayerNum,
+      amount: 1,
+      source: 'Trained',
+      followup: { type: 'trained_grant_reroll', payload: { gameId: game.gameId } },
+    });
+    saveGames(game.gameId);
+    return;
   } else if (choice === 'trained_no') {
     combat.pendingPreRerolls.shift();
     await thread.send(`**Trained** — Skipped.`);
@@ -4452,6 +4458,19 @@ export async function handlePreReroll(interaction, ctx) {
     combat.pendingPreRerolls.shift();
   }
 
+  await _advancePreRerollChain(game, ctx, combat, thread);
+}
+
+/**
+ * Advance the pre-reroll queue: if more pre-roll abilities remain prompt
+ * the next one; otherwise transition into the actual reroll window
+ * (attacker → forced → defender → proceedAfterRerolls).
+ *
+ * Extracted so strain followups (Trained Rancor) can re-enter the
+ * post-choice flow after the strain prompt resolves async.
+ */
+async function _advancePreRerollChain(game, ctx, combat, thread) {
+  const { saveGames } = ctx;
   // Check if more pre-rerolls remain
   if ((combat.pendingPreRerolls || []).length > 0) {
     combat.rerollPhase = 'attacker';
@@ -4484,6 +4503,20 @@ export async function handlePreReroll(interaction, ctx) {
   await proceedAfterRerolls(thread, game, combat, ctx);
   saveGames(game.gameId);
 }
+
+// Strain followup: Trained Rancor "suffer 1 strain to reroll 1 attack die".
+// After applyStrain resolves the player's choice (damage / deck-discard /
+// Paz-return), grant the +1 attack reroll and continue the pre-reroll
+// chain (handlePreReroll's tail logic, extracted to _advancePreRerollChain).
+registerStrainFollowup('trained_grant_reroll', async (game, ctx, _payload) => {
+  const combat = game.pendingCombat;
+  if (!combat) return;
+  const thread = await fetchCombatThread(ctx.client, combat.combatThreadId);
+  if (!thread) return;
+  combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+  await thread.send('**Trained** — +1 attack reroll granted.').catch(discordCatch);
+  await _advancePreRerollChain(game, ctx, combat, thread);
+});
 
 // Delegate to src/game/spatial.js (canonical implementation)
 const isWithinSpaces = _isWithinSpaces;

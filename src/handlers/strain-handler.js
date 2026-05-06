@@ -165,10 +165,27 @@ async function _completeStrainEvent(game, ctx, ev) {
   ctx.saveGames?.(game.gameId);
 }
 
+// ─── Followup registry ────────────────────────────────────────────────────
+//
+// Consumers that need to resume a flow after a strain event resolves
+// register a named followup handler at module-load time. Handler
+// signature: async (game, ctx, payload) => void.
+//
+// applyStrain's caller passes followup: { type, payload } and the
+// dispatcher looks up the registered handler by `type` and invokes
+// it once all strain units have resolved.
+
+const _strainFollowupHandlers = new Map();
+
+export function registerStrainFollowup(type, handler) {
+  if (typeof type !== 'string' || !type) throw new Error('registerStrainFollowup: type must be a non-empty string');
+  if (typeof handler !== 'function') throw new Error('registerStrainFollowup: handler must be a function');
+  _strainFollowupHandlers.set(type, handler);
+}
+
 async function _runStrainFollowup(game, ctx, followup) {
   if (!followup) return;
-  const handlers = ctx.strainFollowupHandlers || {};
-  const handler = handlers[followup.type];
+  const handler = _strainFollowupHandlers.get(followup.type);
   if (typeof handler === 'function') {
     await handler(game, ctx, followup.payload || {});
   }
