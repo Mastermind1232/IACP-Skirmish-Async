@@ -75,6 +75,7 @@ import {
   handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
+  handlePounceSkipPush,
   handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,
@@ -361,6 +362,7 @@ register('dc_cc_special_', handleDcCcSpecial, 'dcPlayArea');
 register('dc_cc_eoa_', handleDcCcEndOfActivation, 'dcPlayArea');
 register('dc_cc_double_', handleDcCcDoubleAction, 'dcPlayArea');
 register('pounce_space_', handlePounceSpacePick, 'dcPlayArea');
+register('pounce_skip_push_', handlePounceSkipPush, 'dcPlayArea');
 register('rush_push_fig_', handleRushPushFig, 'dcPlayArea');
 register('rush_push_space_', handleRushPushSpace, 'dcPlayArea');
 register('rush_push_skip_', handleRushPushSkip, 'dcPlayArea');
@@ -674,6 +676,7 @@ export {
   handleDcCcDoubleAction,
   handleDcAction,
   handlePounceSpacePick,
+  handlePounceSkipPush,
   handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,

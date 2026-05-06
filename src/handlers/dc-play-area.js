@@ -2114,7 +2114,18 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         headerText: spacePickLabel,
       };
       const { rows: pounceRowBtns } = buildRowPickerButtons(resolveResult.validSpaces, `space_row_${pounceContextKey}_`);
-      const payload = { content: `${spacePickLabel}\nChoose a row:`, components: pounceRowBtns.slice(0, 5), ephemeral: false, fetchReply: true };
+      // destruct 2026-05-06: when the resolveResult flags allowSkipPush
+      // (Slam / Smash / Ram per "you MAY push"), append a separate Skip-push
+      // button row so the player can decline the push entirely.
+      const _allComponents = pounceRowBtns.slice(0, 4);
+      if (resolveResult.allowSkipPush) {
+        const _skipBtn = new ButtonBuilder()
+          .setCustomId(`pounce_skip_push_${game.gameId}_${msgId}_${figureIndex}`)
+          .setLabel('Skip push')
+          .setStyle(ButtonStyle.Secondary);
+        _allComponents.push(new ActionRowBuilder().addComponents(_skipBtn));
+      }
+      const payload = { content: `${spacePickLabel}\nChoose a row:`, components: _allComponents.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
       saveGames(game.gameId);
@@ -2567,6 +2578,45 @@ export async function handlePounceSpacePick(interaction, ctx) {
     }).catch(discordCatch);
   } else {
     await interaction.message.edit({ content: `${abilityId === 'pounce' ? 'Pounce' : 'Ability'} failed: ${result.manualMessage}`, components: [] }).catch(discordCatch);
+  }
+  saveGames(game.gameId);
+}
+
+/**
+ * Slam / Smash / Ram skip-push handler — destruct 2026-05-06 auto-pick rule.
+ * Card text says "you MAY push" (push optional). Player can decline the
+ * push entirely after the die has been rolled and damage applied.
+ *
+ * customId format: pounce_skip_push_<gameId>_<msgId>_<figIdx>
+ */
+export async function handlePounceSkipPush(interaction, ctx) {
+  const m = interaction.customId.match(/^pounce_skip_push_([^_]+)_([^_]+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid skip-push button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, msgId, figureIndexStr] = m;
+  const { getGame, logGameAction, client, saveGames } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  cleanupSpacePick(game, `${gameId}_${msgId}_${figureIndexStr}`);
+  const pending = game.pendingPounceSpaceChoice?.[msgId];
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending push to skip.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { playerNum } = pending;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can skip the push.')) return;
+  // Damage was already applied during the rollOneDie phase 2 (when the die
+  // was rolled). Skipping just declines the optional push and finalizes.
+  delete game.pendingPounceSpaceChoice[msgId];
+  if (Object.keys(game.pendingPounceSpaceChoice || {}).length === 0) delete game.pendingPounceSpaceChoice;
+  await interaction.message.edit({
+    content: `${interaction.message.content}\n\n✅ **Push declined** — ${pending.targetFigureKey ? `target stays in place` : `no push`}.`,
+    components: [],
+  }).catch(discordCatch);
+  if (logGameAction) {
+    await logGameAction(game, client, `Push declined (optional per card text "you may push").`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   }
   saveGames(game.gameId);
 }

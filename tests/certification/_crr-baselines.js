@@ -51,7 +51,7 @@ export const DD_BASELINE = {
   dcName_equality: 57,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 90,
+  cardNameIncludes: 91,
 };
 export const DD_BASELINE_TOTAL = Object.values(DD_BASELINE).reduce((a, b) => a + b, 0);
 

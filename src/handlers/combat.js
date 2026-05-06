@@ -2265,11 +2265,21 @@ export async function handleAttackTarget(interaction, ctx) {
         await thread.send(`**Sentinel** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
         sentinelApplied = true;
       }
-      // Protector (Chewbacca): works for ALL friendly defenders (no GUARDIAN restriction)
+      // Protector (Chewbacca): works for ALL friendly defenders (no GUARDIAN restriction).
+      // Wookiee Avenger replaces Protector — the upgraded card lists WA in its
+      // specials slot instead of Protector. Skip Protector when WA is attached
+      // to this Chewbacca's DC (parallel to DBH stripping Brutality).
       if (!sentinelApplied && fkAbilityIds.includes('protector')) {
-        game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-        await thread.send(`**Protector** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
-        sentinelApplied = true;
+        const _protMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
+        const _protAtts = _protMsgId
+          ? (game.p1DcAttachments?.[_protMsgId] || game.p2DcAttachments?.[_protMsgId] || [])
+          : [];
+        const _protReplaced = cardNameIncludes(_protAtts, 'Wookiee Avenger');
+        if (!_protReplaced) {
+          game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
+          await thread.send(`**Protector** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
+          sentinelApplied = true;
+        }
       }
     }
   }

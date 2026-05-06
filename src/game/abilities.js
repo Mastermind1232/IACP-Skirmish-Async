@@ -2185,7 +2185,12 @@ export function resolveAbility(abilityId, context) {
                     requiresSpaceChoice: true,
                     validSpaces: validPushSpaces,
                     targetFigureKey,
-                    spaceChoiceLabel: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}. Push **${targetName}** to which adjacent space?`,
+                    // destruct 2026-05-06 auto-pick rule: card text says "you
+                    // MAY push" — push is OPTIONAL, the player can decline.
+                    // Adding allowSkipPush=true tells the dc-play-area UI to
+                    // append a "Skip push" button alongside the space picker.
+                    allowSkipPush: true,
+                    spaceChoiceLabel: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}. Push **${targetName}** to which adjacent space? (or **Skip push**)`,
                   };
                 }
               }
