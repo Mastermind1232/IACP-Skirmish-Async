@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
-import { reduceHp, healHp } from './damage-helpers.js';
+import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -2392,54 +2392,37 @@ export function resolveAbility(abilityId, context) {
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const spaceUpper = String(chosenSpace).toUpperCase();
         const resultParts = [];
-        // Slice 6.13 + destruct 2026-05-06 audit: collect lethal hits so the
-        // caller can route them through processFigureDefeat. Previously the
-        // spaceWithin handler decremented HP directly, so figures killed by
-        // Wrist Flamethrower / Captain Terro Flamethrower / Gar Saxon /
-        // Din / Sorin Shock Grenade / Drokkatta Parting Gift / Sabine
-        // Parting Gift / Tauntaun Headbutt did NOT fire defeat triggers
-        // (no VP, no position cleanup, no when-defeated reaction prompts).
-        const _spaceWithinDefeated = [];
+        // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck — it
+        // auto-queues lethal hits onto game._pendingFigureDefeats, drained
+        // by apply-ability-result.js post-resolve. No manual defeatedFigures
+        // plumbing needed.
+        let _hadDefeats = false;
         if (hits > 0) {
           const boardState = getBoardStateForMovement(game, null);
           const adj = boardState?.mapSpaces?.adjacency?.[spaceUpper.toLowerCase()] || [];
           const affectedSpaces = new Set([spaceUpper.toLowerCase(), ...adj.map((s) => String(s).toLowerCase())]);
           const affected = [];
+          // Per CRR + destruct 2026-05-05 "each other figure" excludes the
+          // SOURCE (the activating figure). Wrist Flamethrower / Flamethrower /
+          // Shock Grenade / Parting Gift / Tauntaun Headbutt all use this rule.
+          const _selfAttackerPN = _rollOneDieSelfFigureKey
+            ? (Object.entries(game.figurePositions?.[1] || {}).some(([k]) => k === _rollOneDieSelfFigureKey) ? 1 : 2)
+            : null;
           for (const pn of [1, 2]) {
             for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
               if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
-              // Combat-pipeline rebuild (slice 6.11): per CRR + destruct
-              // 2026-05-05 "each other figure" excludes the SOURCE (the
-              // figure whose ability this is). Wrist Flamethrower (Boba),
-              // Flamethrower (Captain Terro, Gar Saxon, Din), Shock Grenade
-              // (General Sorin), Parting Gift, etc. all use this pattern.
-              // Without this guard the source figure damages itself.
               if (_rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               if (dcHealthState && figMsgId) {
-                const healthState = dcHealthState.get(figMsgId) || [];
                 const fkMatch = fk.match(/-(\d+)-(\d+)$/);
                 const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-                const entryHp = healthState[figIdx];
-                if (entryHp) {
-                  const [cur, max] = entryHp;
-                  const prevCur = cur ?? max;
-                  const newCur = Math.max(0, prevCur - hits);
-                  healthState[figIdx] = [newCur, max ?? newCur];
-                  dcHealthState.set(figMsgId, healthState);
-                  syncHealthStateToList(game, pn, figMsgId, healthState);
-                  affected.push(`${dcNameFromFigureKey(fk)} -${hits}HP (→${newCur})`);
-                  // Lethal? collect for centralized defeat handling.
-                  if (newCur <= 0 && prevCur > 0) {
-                    _spaceWithinDefeated.push({
-                      figureKey: fk,
-                      defeatedPlayerNum: pn,
-                      attackerPlayerNum: _rollOneDieSelfFigureKey
-                        ? (Object.entries(game.figurePositions?.[1] || {}).some(([k]) => k === _rollOneDieSelfFigureKey) ? 1 : 2)
-                        : (pn === 1 ? 2 : 1),
-                      source: entry.label || 'AOE',
-                    });
-                  }
+                const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, figIdx, hits, pn, {
+                  sourceLabel: entry.label || 'AOE',
+                  attackerPlayerNum: _selfAttackerPN ?? (pn === 1 ? 2 : 1),
+                });
+                if (dmgRes.maxHp > 0) {
+                  affected.push(`${dcNameFromFigureKey(fk)} -${hits}HP (→${dmgRes.newHp})`);
+                  if (dmgRes.wasDefeated) _hadDefeats = true;
                 } else {
                   affected.push(`${dcNameFromFigureKey(fk)} (-${hits}HP, apply manually)`);
                 }
@@ -2454,7 +2437,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** — Space **${spaceUpper}** targeted. Rolled 1 ${entry.rollOneDie} die: **${diceResult}**. ${resultParts.join('. ') || 'No effect.'}`,
           refreshDcEmbed: hits > 0,
-          ...(_spaceWithinDefeated.length > 0 ? { defeatedFigures: _spaceWithinDefeated, refreshBoard: true } : {}),
+          ...(_hadDefeats ? { refreshBoard: true } : {}),
         };
       }
       // Phase 1: enumerate valid spaces within N
