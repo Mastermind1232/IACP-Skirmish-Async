@@ -1590,8 +1590,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }).catch(discordCatch);
       return;
     }
-    // EE-3 Carbine (Boba Fett): spend 2 MP to change one attack die to red (limit once per attack)
+    // EE-3 Carbine (Boba Fett): spend 2 MP to change one attack die to red.
+    // Card text: "Limit once per attack" — must be eligible on EVERY attack
+    // Boba performs in his activation, not just the first one. Clear any
+    // 'decided' sentinel from the previous attack so this attack's prompt
+    // can fire fresh.
     const hasEe3Carbine = atkSpecialIds.includes('ee3_carbine');
+    if (hasEe3Carbine && game.pendingEe3Carbine?.[msgId] === 'decided') {
+      delete game.pendingEe3Carbine[msgId];
+    }
     if (hasEe3Carbine && !game.pendingEe3Carbine?.[msgId]) {
       const mpRemaining = game.movementBank?.[msgId]?.remaining ?? 0;
       if (mpRemaining >= 2) {
