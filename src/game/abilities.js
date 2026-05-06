@@ -2510,6 +2510,8 @@ export function resolveAbility(abilityId, context) {
       const adj = entry.fixedAreaTargetOnly ? [] : (boardState?.mapSpaces?.adjacency?.[spaceNorm] || []);
       const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
       const results = [];
+      // Slice 6.13 ext: fixedAreaDamage AOE — collect lethal hits.
+      const _fadDefeated = [];
       for (const pn of [1, 2]) {
         for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
           if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
@@ -2524,12 +2526,21 @@ export function resolveAbility(abilityId, context) {
               const hp = hs[figIdx];
               if (hp) {
                 const [cur, max] = hp;
-                const newCur = Math.max(0, (cur ?? max) - totalPerFig);
+                const prevCur = cur ?? max;
+                const newCur = Math.max(0, prevCur - totalPerFig);
                 hs[figIdx] = [newCur, max ?? newCur];
                 dcHealthState.set(figMsgId, hs);
                 syncHealthStateToList(game, pn, figMsgId, hs);
                 const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
-                parts.push(`${dmgLabel} (HP: ${cur ?? max}→${newCur})`);
+                parts.push(`${dmgLabel} (HP: ${prevCur}→${newCur})`);
+                if (newCur <= 0 && prevCur > 0) {
+                  _fadDefeated.push({
+                    figureKey: fk,
+                    defeatedPlayerNum: pn,
+                    attackerPlayerNum: playerNum || (pn === 1 ? 2 : 1),
+                    source: entry.label || 'fixedArea damage',
+                  });
+                }
               } else {
                 parts.push(`apply ${totalPerFig} damage manually`);
               }
@@ -2586,7 +2597,8 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         logMessage: `**${entry.label}** — Space **${spaceUpper}**. ${results.length ? results.join('; ') : 'No figures affected.'}`,
         refreshDcEmbed: results.length > 0,
-        refreshBoard: !!entry.placesRubble,
+        refreshBoard: !!entry.placesRubble || _fadDefeated.length > 0,
+        ...(_fadDefeated.length > 0 ? { defeatedFigures: _fadDefeated } : {}),
       };
     }
     // Phase 1: pick a space within range
