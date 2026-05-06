@@ -154,12 +154,18 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     applyDamageAndFinishCombat: _applyDamageAndFinishCombat,
     discordCatch,
   } = deps;
-  // Combat-pipeline rebuild (slice 3.7): rolls completed → reroll/modifier/
-  // damage flow runs collapsed inside this function for now. Mark the entry
-  // step explicitly so combat-order telemetry can flag any CC played past
-  // this point as out-of-window. Sub-step transitions across reroll/modifier/
-  // surge/damage handlers land in subsequent slices.
+  // Combat-pipeline rebuild (slice 3.7-3.8): rolls completed before this fn,
+  // reroll + modifier + surge phases happened in handlers. By the time
+  // resolveCombatAfterRolls runs, currentStep should already be 'zillo-window'
+  // (set in pre_resolve dispatch). Walk through the final engine-driven steps:
+  // zillo-window → step6 → step7 → step8 → resolved. The step6/step7/step8
+  // transitions are coarse — actual damage calc and post-attack effects span
+  // step7+step8. Telemetry reads these as the high-water-mark step.
   if (combat.currentStep === 'roll') combat.currentStep = 'step3-attacker';
+  if (combat.currentStep === 'step5') combat.currentStep = 'zillo-window';
+  // Engine advances zillo-window → step6 (accuracy) → step7 (damage). Marked
+  // here at function entry; finer-grained transitions are slice 6+ work.
+  if (combat.currentStep === 'zillo-window') combat.currentStep = 'step6';
 
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
   const pending = game.nextAttacksBonusHits?.[combat.attackerPlayerNum];
@@ -276,7 +282,14 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
       return;
     }
   }
+  // Combat-pipeline rebuild (slice 3.7-3.8): we're about to apply damage and
+  // run after-attack-resolves effects. Advance currentStep through step7
+  // (damage) and step8 (after attack resolves). _applyDamageAndFinishCombat
+  // does both internally; marking at-entry gives the telemetry a useful
+  // high-water-mark even if finer transitions land later.
+  if (combat.currentStep === 'step6') combat.currentStep = 'step7';
   await _applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+  if (combat.currentStep === 'step7') combat.currentStep = 'step8';
 }
 
 /**

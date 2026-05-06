@@ -417,20 +417,28 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'post_roll': {
-      // Proceed to reroll phases
+      // Proceed to reroll phases.
+      // Combat-pipeline rebuild (slice 3.7-3.8): advance currentStep from 'roll'
+      // to the appropriate sub-window. The 'roll' state means dice just hit the
+      // table; the next sub-window is whichever reroll path applies, or step4
+      // if no rerolls at all.
       const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
       if ((combat.attackerRerollsRemaining || 0) > 0) {
         combat.rerollPhase = 'attacker';
+        combat.currentStep = 'step3-attacker';
         await sendRerollUI(thread, game, combat, 'attacker');
       } else if (hasForcedRerolls) {
         combat.rerollPhase = 'forced';
+        combat.currentStep = 'step3-rapidrecal';
         await sendRerollUI(thread, game, combat, 'forced');
       } else if ((combat.defenderRerollsRemaining || 0) > 0) {
         combat.rerollPhase = 'defender';
+        combat.currentStep = 'step3-defender';
         await sendRerollUI(thread, game, combat, 'defender');
       } else {
         // No rerolls at all — proceed to modifications
         combat.rerollPhase = null;
+        combat.currentStep = 'step4-attacker';
         await proceedAfterRerolls(thread, game, combat, ctx);
       }
       break;
@@ -441,6 +449,7 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
       const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
       if (hasForcedRerolls) {
         combat.rerollPhase = 'forced';
+        combat.currentStep = 'step3-rapidrecal';
         await sendRerollUI(thread, game, combat, 'forced');
       } else {
         // Demoralizing Monologue is now wired via the forced-reroll queue (per
@@ -448,9 +457,11 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
         // chooses, controller forces). Old flag-based path removed.
         if ((combat.defenderRerollsRemaining || 0) > 0) {
           combat.rerollPhase = 'defender';
+          combat.currentStep = 'step3-defender';
           await sendRerollUI(thread, game, combat, 'defender');
         } else {
           combat.rerollPhase = null;
+          combat.currentStep = 'step4-attacker';
           await proceedAfterRerolls(thread, game, combat, ctx);
         }
       }
@@ -461,9 +472,11 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
       // Forced done → defender rerolls
       if ((combat.defenderRerollsRemaining || 0) > 0) {
         combat.rerollPhase = 'defender';
+        combat.currentStep = 'step3-defender';
         await sendRerollUI(thread, game, combat, 'defender');
       } else {
         combat.rerollPhase = null;
+        combat.currentStep = 'step4-attacker';
         await proceedAfterRerolls(thread, game, combat, ctx);
       }
       break;
@@ -471,10 +484,13 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
 
     case 'post_defender_reroll': {
       combat.rerollPhase = null;
+      combat.currentStep = 'step4-attacker';
       // Per Destruct: sequential per-player "Apply modifiers? Y/N" before
       // advancing to surge (CRR step 4: Apply Modifiers, then step 5: Surge).
       // Attacker prompts first, then defender. Skips for self-play.
       if (game.selfPlay) {
+        // Self-play skips both modifier sub-windows; jump currentStep to step5.
+        combat.currentStep = 'step5';
         await proceedAfterRerolls(thread, game, combat, ctx);
         break;
       }
@@ -483,6 +499,12 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'pre_resolve': {
+      // Combat-pipeline rebuild (slice 3.7-3.8): pre_resolve dispatch happens
+      // after surge spending is done. Mark currentStep = 'zillo-window' so the
+      // unique special-case Zillo exhaust prompt window has a clean step. Then
+      // the resolveCombatAfterRolls flow walks through step6/step7/step8 to
+      // resolved (mostly engine-driven from this point).
+      if (combat.currentStep === 'step5') combat.currentStep = 'zillo-window';
       const { resolveCombatAfterRolls } = ctx;
       if (resolveCombatAfterRolls) {
         await resolveCombatAfterRolls(game, combat, ctx.client);
@@ -4960,9 +4982,13 @@ export async function handleCombatModsYn(interaction, ctx) {
     return;
   }
   // 'no' or 'continue' — advance.
+  // Combat-pipeline rebuild (slice 3.7-3.8): step4 transitions. Attacker done with
+  // modifiers → defender's modifier sub-window opens. Defender done → step 5.
   if (isAtk) {
+    combat.currentStep = 'step4-defender';
     await sendModsYn(thread, game, combat, 'defender');
   } else {
+    combat.currentStep = 'step5';
     await proceedAfterRerolls(thread, game, combat, ctx);
   }
   saveGames(game.gameId);
