@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
-import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
+import { reduceHp, healHp, applyDamageWithDefeatCheck, suffersStrain } from './damage-helpers.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -1793,33 +1793,20 @@ export function resolveAbility(abilityId, context) {
       mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
       blockSurgeAbilities: entry.blockSurgeAbilities || false,
     };
-    // strainCostToSelf (Brutal Cleave): reduce activating figure's HP by strain amount
+    // strainCostToSelf (Brutal Cleave): figure pays N Strain to activate
+    // ability. Uses unified suffersStrain helper — auto-routes through
+    // strain-prevention path (when wired) + auto-fires defeat if lethal.
     let strainNote = '';
-    // Slice 6.13 ext: track self-defeat from strain (rare).
-    const _bcsDefeated = [];
     if (entry.strainCostToSelf > 0 && dcHealthState) {
       const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const healthState = dcHealthState.get(msgId) || [];
-      if (healthState[selectedFig]) {
-        const [cur, max] = healthState[selectedFig];
-        const prevCur = cur ?? max;
-        const newCur = Math.max(0, prevCur - entry.strainCostToSelf);
-        healthState[selectedFig] = [newCur, max ?? newCur];
-        dcHealthState.set(msgId, healthState);
-        syncHealthStateToList(game, playerNum, msgId, healthState);
-        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${prevCur} → ${newCur} HP).`;
-        if (newCur <= 0 && prevCur > 0 && meta?.dcName) {
-          const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-          const dgIdx = dgM ? dgM[1] : '1';
-          _bcsDefeated.push({
-            figureKey: `${meta.dcName}-${dgIdx}-${selectedFig}`,
-            defeatedPlayerNum: playerNum,
-            attackerPlayerNum: null,
-            source: `${entry.label || 'ability'} strain cost`,
-          });
-        }
-      } else {
+      const sRes = suffersStrain(dcHealthState, game, msgId, selectedFig, entry.strainCostToSelf, playerNum, {
+        sourceLabel: `${entry.label || 'ability'} cost`,
+        attackerPlayerNum: null, // self-inflicted
+      });
+      if (sRes.maxHp == null && sRes.health == null) {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
+      } else {
+        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${sRes.prevHp} → ${sRes.newHp} HP).`;
       }
     }
     // mpBonus alongside overrideAttackDice (Close and Personal: move + override attack)
@@ -1835,7 +1822,6 @@ export function resolveAbility(abilityId, context) {
       refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0,
       activeMsgId: msgId,
       logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
-      ...(_bcsDefeated.length > 0 ? { defeatedFigures: _bcsDefeated, refreshBoard: true } : {}),
     };
   }
 
