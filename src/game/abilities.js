@@ -2037,6 +2037,8 @@ export function resolveAbility(abilityId, context) {
           const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
           const enemyPN = opponentPlayerNum(playerNum || 1);
           const parts = [];
+          // Slice 6.13 ext: Trample-style multi-target handler — collect lethal hits.
+          const _trampleDefeated = [];
           for (const tFk of targets) {
             const tName = dcNameFromFigureKey(tFk);
             const subParts = [];
@@ -2049,11 +2051,20 @@ export function resolveAbility(abilityId, context) {
                 const hpE = hs[fIdx];
                 if (hpE) {
                   const [cur, max] = hpE;
-                  const newCur = Math.max(0, (cur ?? max) - hits);
+                  const prevCur = cur ?? max;
+                  const newCur = Math.max(0, prevCur - hits);
                   hs[fIdx] = [newCur, max ?? newCur];
                   dcHealthState.set(tMsgId, hs);
                   syncHealthStateToList(game, enemyPN, tMsgId, hs);
-                  subParts.push(`${hits} Dmg (HP: ${cur ?? max}→${newCur})`);
+                  subParts.push(`${hits} Dmg (HP: ${prevCur}→${newCur})`);
+                  if (newCur <= 0 && prevCur > 0) {
+                    _trampleDefeated.push({
+                      figureKey: tFk,
+                      defeatedPlayerNum: enemyPN,
+                      attackerPlayerNum: playerNum || 1,
+                      source: entry.label || 'Trample',
+                    });
+                  }
                 }
               }
             }
@@ -2064,7 +2075,12 @@ export function resolveAbility(abilityId, context) {
             }
             parts.push(`**${tName}**: ${subParts.length ? subParts.join(', ') : 'unaffected'}`);
           }
-          return { applied: true, logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. ${parts.join('; ')}.`, refreshDcEmbed: true };
+          return {
+            applied: true,
+            logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. ${parts.join('; ')}.`,
+            refreshDcEmbed: true,
+            ...(_trampleDefeated.length > 0 ? { defeatedFigures: _trampleDefeated, refreshBoard: true } : {}),
+          };
         };
         // Phase 2+: accumulate sequential picks (only when > maxTargets adjacent)
         if (targetFigureKey && pendingMT) {
