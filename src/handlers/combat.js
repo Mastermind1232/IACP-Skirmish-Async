@@ -102,7 +102,6 @@ import {
   hasCunningAbility,
   applyCunningFlag,
 } from '../game/cunning-helpers.js';
-import { applyInnateAttackerPassives, applyInnateDefenderPassives } from '../game/innate-passive-helpers.js';
 import {
   hasKtpEliteAbility,
   hasKtpRegularAbility,
@@ -1955,15 +1954,6 @@ export async function handleAttackTarget(interaction, ctx) {
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
   const atkSpecialIds = atkEff?.specialAbilityIds || [];
   const defSpecialIds = defEff?.specialAbilityIds || [];
-
-  // Innate passive bonuses (destruct 2026-05-06): cards with printed +Damage,
-  // +Surge (attacker) and +Block, +Evade (defender) passives apply on every
-  // attack/defense as modifiers. Routed through bonusHits/bonusSurge/bonusBlock/
-  // bonusEvade so OI's "ignore non-die bonuses" gate at game/combat.js:322
-  // correctly drops bonusBlock + bonusEvade. Keeps the existing bonus-routing
-  // shape; just makes the printed-on-card values actually fire.
-  applyInnateAttackerPassives(game.pendingCombat, atkEff);
-  if (!target.isNpc) applyInnateDefenderPassives(game.pendingCombat, defEff);
 
   // Health state for HP-conditional abilities (Full of Rage, Fury)
   const atkHpArr = dcHealthState?.get(msgId) || [];

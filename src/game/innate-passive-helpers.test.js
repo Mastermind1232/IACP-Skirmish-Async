@@ -7,7 +7,7 @@ import {
   applyInnateDefenderPassives,
 } from './innate-passive-helpers.js';
 
-const ZERO = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
+const ZERO = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0, cleave: 0 };
 
 test('parseInnatePassives: empty / null', () => {
   assert.deepEqual(parseInnatePassives(null), ZERO);

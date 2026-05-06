@@ -29,7 +29,7 @@
  * and Blast in addition to the original +dmg/+surge/+block/+evade.
  */
 function parseToken(token) {
-  const out = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
+  const out = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0, cleave: 0 };
   if (!token || typeof token !== 'string') return out;
   const t = token.trim().toLowerCase();
   if (!t) return out;
@@ -49,7 +49,7 @@ function parseToken(token) {
   else if (word === 'accuracy') out.accuracy += n;
   else if (word === 'pierce') out.pierce += n;
   else if (word === 'blast') out.blast += n;
-  // 'cleave' kept in regex for future-proofing; unused fields stay 0.
+  else if (word === 'cleave') out.cleave += n;
   return out;
 }
 
@@ -61,7 +61,7 @@ function parseToken(token) {
  * @returns {{ damage: number, surge: number, block: number, evade: number }}
  */
 export function parseInnatePassives(passives) {
-  const total = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0 };
+  const total = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0, cleave: 0 };
   if (!Array.isArray(passives)) return total;
   for (const raw of passives) {
     if (!raw || typeof raw !== 'string') continue;
@@ -75,6 +75,7 @@ export function parseInnatePassives(passives) {
       total.accuracy += tok.accuracy;
       total.pierce += tok.pierce;
       total.blast += tok.blast;
+      total.cleave += tok.cleave;
     }
   }
   return total;
@@ -86,12 +87,13 @@ export function parseInnatePassives(passives) {
  */
 export function applyInnateAttackerPassives(combat, dcEffect) {
   if (!combat || !dcEffect) return;
-  const { damage, surge, accuracy, pierce, blast } = parseInnatePassives(dcEffect.passives);
+  const { damage, surge, accuracy, pierce, blast, cleave } = parseInnatePassives(dcEffect.passives);
   if (damage > 0) combat.bonusHits = (combat.bonusHits || 0) + damage;
   if (surge > 0) combat.bonusSurge = (combat.bonusSurge || 0) + surge;
   if (accuracy > 0) combat.bonusAccuracy = (combat.bonusAccuracy || 0) + accuracy;
   if (pierce > 0) combat.bonusPierce = (combat.bonusPierce || 0) + pierce;
   if (blast > 0) combat.bonusBlast = (combat.bonusBlast || 0) + blast;
+  if (cleave > 0) combat.bonusCleave = (combat.bonusCleave || 0) + cleave;
 }
 
 /**
