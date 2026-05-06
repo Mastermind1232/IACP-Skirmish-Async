@@ -1237,6 +1237,69 @@ async function buildAndSendAttackTargets(
   }).catch(discordCatch);
 }
 
+/**
+ * Heroic Attack (Jedi Luke) — sibling Primary/blue Attack button that costs
+ * no action and is gated once-per-activation. Pre-sets:
+ *   - game.heroicUsedThisActivation[msgId] = true (used flag — disables the
+ *     button on subsequent renders)
+ *   - game.freeAttackBonusPending[msgId] = true (zero-action cost on the
+ *     follow-up Attack consumption)
+ * then rewrites the customId to the standard `dc_attack_…` form and
+ * re-dispatches into handleDcAction. The follow-up flow then runs identically
+ * to a normal Attack click except the action cost is waived.
+ *
+ * destruct 2026-05-06: "Heroic is a blue button, no action cost. Usable
+ * once per activation."
+ */
+export async function handleDcHeroicAttack(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcEffects } = ctx;
+  const m = interaction.customId.match(/^dc_heroic_attack_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid Heroic button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  // Verify Heroic is on this DC (defense in depth — UI shouldn't render the
+  // button otherwise, but guard against stale messages or replay).
+  const eff = getDcEffects()[meta.dcName] || getDcEffects()[(meta.dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  if (!(eff?.specialAbilityIds || []).includes('heroic')) {
+    await interaction.followUp({ content: 'This figure does not have Heroic.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Once-per-activation gate.
+  if (game.heroicUsedThisActivation?.[msgId]) {
+    await interaction.followUp({ content: '**Heroic** has already been used this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Mark used + grant the zero-action follow-up Attack.
+  game.heroicUsedThisActivation = game.heroicUsedThisActivation || {};
+  game.heroicUsedThisActivation[msgId] = true;
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[msgId] = true;
+
+  // Rewrite customId and forward to the standard Attack handler. Discord.js
+  // ButtonInteraction has a writable customId via configurable property; if
+  // the property happens to be read-only on a future version, defineProperty
+  // will succeed since the underlying field is plain.
+  const _newId = `dc_attack_${msgId}_f${figureIndexStr}`;
+  try {
+    Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
+  } catch {
+    interaction.customId = _newId;
+  }
+  return handleDcAction(interaction, ctx, 'dc_attack_');
+}
+
 export async function handleDcAction(interaction, ctx, buttonKey) {
   const {
     getGame,

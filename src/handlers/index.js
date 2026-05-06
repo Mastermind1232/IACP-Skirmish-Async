@@ -74,6 +74,7 @@ import {
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
   handleDcAction,
+  handleDcHeroicAttack,
   handlePounceSpacePick,
   handlePounceSkipPush,
   handleDcAbilityChoice,
@@ -377,6 +378,7 @@ register('bomb_drop_space_', handleBombDropSpacePick, 'dcPlayArea');
 register('dc_spend_mp_', (i, ctx) => handleDcAction(i, ctx, 'dc_spend_mp_'), 'dcPlayArea');
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea');
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
+register('dc_heroic_attack_', handleDcHeroicAttack, 'dcPlayArea');
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dcPlayArea');
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'), 'dcPlayArea');
 register('dc_ability_choice_', handleDcAbilityChoice, 'dcPlayArea');
@@ -677,6 +679,7 @@ export {
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
   handleDcAction,
+  handleDcHeroicAttack,
   handlePounceSpacePick,
   handlePounceSkipPush,
   handleDcAbilityChoice,

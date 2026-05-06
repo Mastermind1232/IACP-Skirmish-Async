@@ -440,7 +440,11 @@ export function getDcStats(dcName) {
       'relentless_trandoshan_elite','relentless_trandoshan_reg','relentless_ig88','fifth_brother_relentless',
       'lasat_honor_guard','shock_and_awe','flawless_execution','expertise','regenerate_bossk',
       'sidestep_nexu_elite','sidestep_nexu_reg','ee3_carbine',
-      'guerrilla_alliance_ranger_elite','guerrilla_alliance_ranger_reg']);
+      'guerrilla_alliance_ranger_elite','guerrilla_alliance_ranger_reg',
+      // Heroic surfaces as a sibling Attack button (Primary/blue, no action cost)
+      // alongside the regular Attack button, NOT as a separate Special Action.
+      // (destruct 2026-05-06.) Filtered out here so it doesn't double up.
+      'heroic']);
     let specials = eff.specials;
     let specialIds = [];
     if (!specials && eff.specialAbilityIds?.length) {
@@ -484,6 +488,11 @@ export function getDcStats(dcName) {
       defense: eff.defense ?? null,
       specials: specials || [],
       specialIds,
+      // Unfiltered specialAbilityIds — useful for renderers that need to know
+      // about passive-auto / filtered-out slugs (e.g. Heroic surfaces as a
+      // sibling Attack button, not a Special Action button, but the renderer
+      // still needs to detect 'heroic' to add the second button).
+      rawSpecialIds: eff.specialAbilityIds || [],
       specialCosts: eff.specialCosts?.length ? eff.specialCosts : (eff._specialActionCosts || []),
       specialMpCosts: eff._specialMpCosts || [],
       passives: eff.passives || [],

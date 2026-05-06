@@ -953,6 +953,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // Non-Combatant: DCs with no attack dice cannot attack
   const hasAttack = (stats.attack?.dice?.length ?? 0) > 0;
 
+  // Heroic (Jedi Luke): "Once during your activation, you may perform an
+  // attack without spending an action." Surfaces as a sibling Primary/blue
+  // Attack button alongside the regular Attack — NOT as a Special Action.
+  // (destruct 2026-05-06.) Disabled when used this activation OR Stunned.
+  const _hasHeroic = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('heroic');
+  const _heroicUsed = !!game?.heroicUsedThisActivation?.[msgId];
+  const _showHeroic = _hasHeroic && hasAttack && !_heroicUsed;
+
   const rows = [];
 
   if (figures > 1) {
@@ -974,6 +982,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
         ];
         if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct));
+        if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
         comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
         rows.push(new ActionRowBuilder().addComponents(...comps));
       }
@@ -1008,6 +1017,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
       ];
       if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct));
+      if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
       comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
       rows.push(new ActionRowBuilder().addComponents(...comps));
     }
