@@ -183,7 +183,11 @@ export function parseSurgeEffect(key) {
   if (k === 'stalk_prey') { out.surgeStalkPrey = true; return out; }
   if (k === 'deadly_spin') { out.surgeCancelDodge = true; out.cleave = 3; return out; }
   if (k === 'deadly') { out.surgeCancelDodge = true; return out; }
-  if (k === 'shrapnel') { out.blast = 2; return out; }
+  // Shrapnel (Drokkatta): card text "Choose one: This attack gains Blast 1,
+  // or after this attack resolves, each figure and object within 2 spaces
+  // of the target space suffers 1 Damage." Auto-applies Blast 1 today; the
+  // "or splash" alternate is a player choice not yet wired (TODO).
+  if (k === 'shrapnel') { out.blast = 1; return out; }
   if (k === 'critical_hit') { out.pierce = 2; out.surgeCriticalHit = true; return out; }
   if (k === 'suppression') { out.surgeSuppressionStrain = true; return out; }
   // Self-condition surges: attacker gains condition (not applied to target)

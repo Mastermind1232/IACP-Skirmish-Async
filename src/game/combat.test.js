@@ -479,9 +479,12 @@ test('parseSurgeEffect deadly_spin returns cleave 3 + cancel dodge', () => {
   assert.strictEqual(r.surgeCancelDodge, true);
 });
 
-test('parseSurgeEffect shrapnel returns blast 2', () => {
+test('parseSurgeEffect shrapnel returns blast 1', () => {
+  // Drokkatta card text: "Shrapnel: Choose one: This attack gains Blast 1,
+  // or ..." — Blast 1 (was incorrectly Blast 2 prior to 2026-05-06 audit).
+  // The "or splash" alternate is a player choice not yet wired.
   const r = parseSurgeEffect('shrapnel');
-  assert.strictEqual(r.blast, 2);
+  assert.strictEqual(r.blast, 1);
 });
 
 // --- getInnateRerolls ---
