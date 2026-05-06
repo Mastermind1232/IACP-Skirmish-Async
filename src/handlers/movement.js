@@ -1139,9 +1139,11 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         const dpDcName = dcNameFromFigureKey(fk);
         const dpEff = dpEffects?.[dpDcName];
         if (!(dpEff?.specialAbilityIds || []).includes('deference_protocol')) continue;
-        // Check adjacency
+        // Check adjacency. CRR p.21 COMPANIONS: same-space figures count
+        // as adjacent — so a LEADER moving INTO KX's own space also
+        // qualifies as "entering an adjacent space."
         const adjSpaces = dpMapId ? (getMapData(dpMapId)?.adjacency?.[pos] || []) : [];
-        if (!adjSpaces.includes(newTopLeft)) continue;
+        if (!adjSpaces.includes(newTopLeft) && pos !== newTopLeft) continue;
         // Once per round check
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         const dpKey = `deference_protocol_${fk}`;
@@ -1170,8 +1172,9 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         const csDcName = dcNameFromFigureKey(fk);
         const csEff = csEffects?.[csDcName];
         if (!(csEff?.specialAbilityIds || []).includes('cassian_said_i_had_to')) continue;
+        // CRR p.21 COMPANIONS: same-space figures count as adjacent.
         const csAdjSpaces = csMapId ? (getMapData(csMapId)?.adjacency?.[pos] || []) : [];
-        if (!csAdjSpaces.includes(newTopLeft)) continue;
+        if (!csAdjSpaces.includes(newTopLeft) && pos !== newTopLeft) continue;
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         const csKey = `cassian_said_i_had_to_${fk}`;
         if (game.roundFigureAbilityUsed[csKey]) continue;

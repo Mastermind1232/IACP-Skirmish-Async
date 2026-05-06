@@ -3161,14 +3161,20 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
-    // Cower (C-3PO, Imperial Officer Regular): +1 def reroll if adjacent to a friendly figure
+    // Cower (C-3PO, Imperial Officer Regular): +1 def reroll if adjacent to a friendly figure.
+    // CRR p.21 COMPANIONS: "A companion is adjacent to each figure and
+    // object in its space" — same-space figures count as adjacent. We
+    // therefore include same-space (distance 0) AND map-adjacent
+    // (distance 1) cells.
     const cowerIds = ['cower_c3po', 'cower_imperial_officer_reg'];
     if (defSIds.some(id => cowerIds.includes(id))) {
       const defFigsC = game.figurePositions?.[defenderPlayerNum] || {};
       const mapSpC = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const defPosC = combat.target?.coord;
       if (defPosC && mapSpC) {
-        const adjToDefC = new Set((mapSpC.adjacency?.[String(defPosC).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+        const _defPosLower = String(defPosC).toLowerCase();
+        const adjToDefC = new Set((mapSpC.adjacency?.[_defPosLower] || []).map(s => String(s).toLowerCase()));
+        adjToDefC.add(_defPosLower); // CRR companion-same-space rule
         for (const [fk, pos] of Object.entries(defFigsC)) {
           if (fk === combat.target?.figureKey) continue;
           if (adjToDefC.has(String(pos).toLowerCase())) {
@@ -3185,7 +3191,10 @@ export async function handleCombatRoll(interaction, ctx) {
       const stMap = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
       const stPos = stFigs[combat.attackerFigureKey];
       if (stPos && stMap) {
-        const stAdj = new Set((stMap.adjacency?.[String(stPos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+        const _stPosLower = String(stPos).toLowerCase();
+        const stAdj = new Set((stMap.adjacency?.[_stPosLower] || []).map(s => String(s).toLowerCase()));
+        // CRR p.21 COMPANIONS: same-space figures count as adjacent.
+        stAdj.add(_stPosLower);
         for (const [fk, pos] of Object.entries(stFigs)) {
           if (fk === combat.attackerFigureKey) continue;
           if (!stAdj.has(String(pos).toLowerCase())) continue;
