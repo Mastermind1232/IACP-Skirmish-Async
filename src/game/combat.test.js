@@ -491,3 +491,42 @@ test('getInnateRerolls returns zeros for unknown DC', () => {
   assert.strictEqual(r.attackReroll, 0);
   assert.strictEqual(r.defenseReroll, 0);
 });
+
+// ── Innate-passive integration: bonusBlock from passive 'Block 1' lands on
+// defense calc, OI gate drops it. (destruct 2026-05-06 priority 1)
+test('innate passive Block 1: applied via bonusBlock, dropped under OI', () => {
+  // Without OI: bonusBlock counts toward effective block.
+  const noOi = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+    bonusBlock: 1, // simulating passive 'Block 1' from Boba/AT-DP/etc.
+  });
+  // damage = 5 - (1 + 1) = 3
+  assert.strictEqual(noOi.damage, 3);
+  assert.strictEqual(noOi.effectiveBlock, 2);
+
+  // With OI: bonusBlock dropped, only rolled block counts.
+  const oi = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 1, evade: 0 },
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+    bonusBlock: 1,
+    ignoreDefenseResultsNotOnDice: true, // OI active
+  });
+  // damage = 5 - 1 = 4 (passive Block 1 dropped)
+  assert.strictEqual(oi.damage, 4);
+  assert.strictEqual(oi.effectiveBlock, 1);
+});
+
+test('innate passive +1 Hit: bonusHits added to damage', () => {
+  // Wampa (E) "+2 Hit", Luke JK / Greedo / Maul / Junk Droid "+1 Hit",
+  // etc. — applied via bonusHits.
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+    bonusHits: 1, // simulating innate +1 Damage
+  });
+  assert.strictEqual(r.damage, 4); // 3 + 1
+});
