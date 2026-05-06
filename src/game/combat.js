@@ -306,17 +306,21 @@ export function computeCombatResult(combat) {
   const surgeCancel = combat.surgeCancel || 0;
   // Cunning: +1 Block per rolled Evade result while defending (Han Solo, Jyn Odan, Nexu)
   const cunningBonus = (combat.hasCunning) ? defRoll.evade : 0;
-  // Combat-pipeline rebuild (slice 6.15): Overwhelming Impact's
-  // ignoreDefenseResultsNotOnDice flag drops `bonusBlock` (token spends,
-  // innate flat +Block, CC-discard +Block from Zillo, surge-Block, mission
-  // rules like Harsh Environment, Mobile +Block, Personal Combat Shield)
-  // and keeps rolled-die block + Cunning. Cunning is computed from rolled
-  // evade results and is treated as on-die origin — destruct 2026-05-05
-  // ruling pending. Brace for Impact is NOT in this branch: it adds a die
-  // to defenseBonusDice which gets rolled into defRoll.block — correctly
-  // surviving OI as on-die. Knowledge and Defense behaves the same way.
+  // Combat-pipeline rebuild (slice 6.15 + destruct 2026-05-06 ruling):
+  // Overwhelming Impact's ignoreDefenseResultsNotOnDice flag drops anything
+  // not physically on a defense die. That includes:
+  //   - bonusBlock: token spends, innate flat +Block, CC-discard +Block
+  //     (Zillo), surge-Block, mission rules (Harsh Environment, Mobile),
+  //     Personal Combat Shield, etc.
+  //   - cunningBonus: Cunning's "+1 Block per rolled Evade" is a derived
+  //     modifier off the rolled evades, NOT a result on the die itself.
+  //     Per destruct 2026-05-06: "OI would ignore the additional block
+  //     provided by Cunning. That is a modifier."
+  // KEPT under OI: rolled-die block (defRoll.block). Brace for Impact and
+  // Knowledge and Defense add dice to the pool that get rolled into
+  // defRoll.block, so they survive OI as on-die.
   const blockForCalc = combat.ignoreDefenseResultsNotOnDice
-    ? (defRoll.block + cunningBonus)
+    ? defRoll.block
     : (defRoll.block + bonusBlock + cunningBonus);
   let effectiveBlock = Math.max(0, blockForCalc - surgeCancel - pierceToUse);
   // Weakened on defender: -1 from their block result
