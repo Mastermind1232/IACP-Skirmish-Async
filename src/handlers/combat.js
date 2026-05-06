@@ -3718,13 +3718,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
         return;
       }
       if (pr.type === 'trained') {
-        // Card text (Rancor): "While attacking, you may suffer 2 Damage to
-        // reroll 1 attack die." Cost is 2 Damage (not 1 Strain).
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_yes`).setLabel('Suffer 2 Damage, +1 ATK reroll').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_yes`).setLabel('Suffer 1 Strain, +1 ATK reroll').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_no`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         );
-        await thread.send({ content: `**Trained** — <@${playerId}> suffer 2 Damage to reroll 1 attack die?`, components: [row] });
+        await thread.send({ content: `**Trained** — <@${playerId}> suffer 1 Strain to reroll 1 attack die?`, components: [row] });
         return;
       }
       // Unknown type — skip it
@@ -4372,17 +4370,15 @@ export async function handlePreReroll(interaction, ctx) {
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
     await thread.send(`**Resourceful** — +1 defense reroll.${gambitNote}`);
   } else if (choice === 'trained_yes') {
-    // Card text (Rancor): "suffer 2 Damage to reroll 1 attack die" — cost
-    // is 2 Damage tokens, not 1 Strain. Apply 2 damage directly.
     const dcHS = ctx.dcHealthState;
     const atkMsgId = combat.attackerMsgId;
     if (atkMsgId && dcHS) {
       const figIdx = combat.attackerFigureIndex ?? 0;
-      reduceHp(dcHS, game, atkMsgId, figIdx, 2, combat.attackerPlayerNum);
+      reduceHp(dcHS, game, atkMsgId, figIdx, 1, combat.attackerPlayerNum);
     }
     combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Trained** — Suffered 2 Damage. +1 attack reroll.`);
+    await thread.send(`**Trained** — Suffered 1 Strain. +1 attack reroll.`);
   } else if (choice === 'trained_no') {
     combat.pendingPreRerolls.shift();
     await thread.send(`**Trained** — Skipped.`);
