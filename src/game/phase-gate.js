@@ -100,12 +100,13 @@ export function clearPhaseGate(game) {
  * @returns {{ waitType: string, description: string, playerNums: number[] }}
  */
 function computeRoundActiveWaiting(game) {
-  // pendingCombat — combat sub-phase gate (both must confirm)
+  // pendingCombat — combat sub-phase gate (sequential: only activePlayer waits)
   if (game.pendingCombat?.combatGate) {
     const gate = game.pendingCombat.combatGate;
-    const waiting = [];
-    if (!gate.p1Ready) waiting.push(1);
-    if (!gate.p2Ready) waiting.push(2);
+    const _acked = gate.acked || {};
+    const waiting = gate.activePlayer && !_acked[gate.activePlayer]
+      ? [gate.activePlayer]
+      : [];
     return { waitType: 'combatGate', description: `Combat gate: ${gate.phase}`, playerNums: waiting };
   }
 

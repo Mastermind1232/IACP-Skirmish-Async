@@ -315,11 +315,14 @@ export async function sendCombatGate(thread, game, combat, subPhase, ctx) {
     return;
   }
 
-  const label = COMBAT_GATE_LABELS[subPhase] || 'Combat checkpoint — both players confirm to proceed.';
-  combat.combatGate = { phase: subPhase, p1Ready: false, p2Ready: false };
-
+  const label = COMBAT_GATE_LABELS[subPhase] || 'Combat checkpoint — confirm to proceed.';
+  // Sequential gate (destruct 2026-05-06): attacker acks first, then
+  // defender. activePlayer rotates after each ack; only the activePlayer
+  // can click. acked map tracks who has confirmed at this gate.
   const atkPn = combat.attackerPlayerNum || 1;
   const defPn = opponentPlayerNum(atkPn);
+  combat.combatGate = { phase: subPhase, acked: {}, activePlayer: atkPn };
+
   const atkId = getPlayerId(game, atkPn);
   const defId = getPlayerId(game, defPn);
 
@@ -334,12 +337,12 @@ export async function sendCombatGate(thread, game, combat, subPhase, ctx) {
   const defName = getPlayerDisplayName(game, defPn, ctx?.client);
   const atkLabel = atkId ? `<@${atkId}> **${atkName}**` : `**${atkName}**`;
   const defLabel = defId ? `<@${defId}> **${defName}**` : `**${defName}**`;
-  const content = `🔔 ${label}\n${atkLabel} (ATK) ⏳ | ${defLabel} (DEF) ⏳\nBoth players: click **Ready** when done with reactions. Play Command Cards from your Hand first.`;
+  const content = `🔔 ${label}\n${atkLabel} (ATK) 👈 your turn | ${defLabel} (DEF) ⏳ waits\n**${atkName}**: click **Ready** after playing Command Cards / reactions. Defender will get the prompt next.`;
 
   await withDiscordRetry(() => thread.send({
     content,
     components: [row],
-    allowedMentions: { users: [atkId, defId].filter(Boolean) },
+    allowedMentions: { users: [atkId].filter(Boolean) },
   }));
 }
 
@@ -368,19 +371,27 @@ export async function handleCombatGateReady(interaction, ctx) {
     return;
   }
 
-  // Test game: P1 acts for both — first click = P1, second = P2
+  // Sequential gate (destruct 2026-05-06): only the activePlayer can ack.
+  // Test game: P1 acts for both — clicker is whoever is currently active.
+  gate.acked = gate.acked || {};
   let effectivePn = isP1 ? 1 : 2;
   if (game.isTestGame && isP1) {
-    effectivePn = gate.p1Ready ? 2 : 1;
+    effectivePn = gate.activePlayer || 1;
   }
 
-  if (effectivePn === 1) {
-    if (gate.p1Ready) { await interaction.followUp({ content: "You're already ready.", ephemeral: true }).catch(discordCatch); return; }
-    gate.p1Ready = true;
-  } else {
-    if (gate.p2Ready) { await interaction.followUp({ content: "You're already ready.", ephemeral: true }).catch(discordCatch); return; }
-    gate.p2Ready = true;
+  if (effectivePn !== gate.activePlayer) {
+    const _whose = gate.activePlayer === (combat.attackerPlayerNum || 1) ? 'attacker' : 'defender';
+    await interaction.followUp({
+      content: `Sequential gate: waiting on the ${_whose} (P${gate.activePlayer}) to ack first.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
   }
+  if (gate.acked[effectivePn]) {
+    await interaction.followUp({ content: "You're already ready.", ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  gate.acked[effectivePn] = true;
 
   const label = COMBAT_GATE_LABELS[gate.phase] || 'Combat checkpoint';
   const atkPn = combat.attackerPlayerNum || 1;
@@ -391,12 +402,20 @@ export async function handleCombatGateReady(interaction, ctx) {
   const defName = getPlayerDisplayName(game, defPn, interaction.client);
   const atkLabel = atkId ? `<@${atkId}> **${atkName}**` : `**${atkName}**`;
   const defLabel = defId ? `<@${defId}> **${defName}**` : `**${defName}**`;
-  const atkStatus = (atkPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
-  const defStatus = (defPn === 1 ? gate.p1Ready : gate.p2Ready) ? '✅' : '⏳';
+  const atkStatus = gate.acked[atkPn] ? '✅' : (gate.activePlayer === atkPn ? '👈 your turn' : '⏳');
+  const defStatus = gate.acked[defPn] ? '✅' : (gate.activePlayer === defPn ? '👈 your turn' : '⏳');
 
-  if (!gate.p1Ready || !gate.p2Ready) {
-    const content = `🔔 ${label}\n${atkLabel} (ATK) ${atkStatus} | ${defLabel} (DEF) ${defStatus}\nBoth players: click **Ready** when done with reactions.`;
-    await interaction.message.edit({ content, components: interaction.message.components }).catch(discordCatch);
+  // Both acked? advance. Otherwise rotate activePlayer to the opponent.
+  const bothAcked = gate.acked[atkPn] && gate.acked[defPn];
+  if (!bothAcked) {
+    gate.activePlayer = effectivePn === atkPn ? defPn : atkPn;
+    const _nextName = gate.activePlayer === atkPn ? atkName : defName;
+    const content = `🔔 ${label}\n${atkLabel} (ATK) ${atkStatus} | ${defLabel} (DEF) ${defStatus}\n**${_nextName}**: click **Ready** to confirm.`;
+    await interaction.message.edit({
+      content,
+      components: interaction.message.components,
+      allowedMentions: { users: [gate.activePlayer === 1 ? game.player1Id : game.player2Id].filter(Boolean) },
+    }).catch(discordCatch);
     saveGames(game.gameId);
     return;
   }

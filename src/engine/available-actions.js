@@ -1068,11 +1068,14 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
-  // Combat sub-phase gate — both players must confirm between combat steps
+  // Combat sub-phase gate — sequential (destruct 2026-05-06): only the
+  // activePlayer can ack. Surface the action exclusively to them.
   if (combat.combatGate) {
     const gate = combat.combatGate;
-    const isReady = playerNum === 1 ? gate.p1Ready : gate.p2Ready;
-    if (!isReady) {
+    const _acked = gate.acked || {};
+    const _isAcked = Boolean(_acked[playerNum]);
+    const _isActive = gate.activePlayer === playerNum;
+    if (!_isAcked && _isActive) {
       actions.push({
         type: ACTION_TYPES.COMBAT_GATE,
         customId: buildCustomId(ACTION_TYPES.COMBAT_GATE, { gameId }),

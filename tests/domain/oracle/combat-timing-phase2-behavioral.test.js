@@ -283,8 +283,9 @@ describe('B-CTIME2-005: handleCombatReroll — attacker "done" sets combatGate',
     assert.ok(combat.combatGate, 'combatGate created');
     assert.strictEqual(combat.combatGate.phase, 'post_attacker_reroll',
       'combatGate.phase = post_attacker_reroll');
-    assert.strictEqual(combat.combatGate.p1Ready, false, 'p1Ready initialized false');
-    assert.strictEqual(combat.combatGate.p2Ready, false, 'p2Ready initialized false');
+    // Sequential gate: acked map empty, attacker is the active player.
+    assert.deepStrictEqual(combat.combatGate.acked, {}, 'acked map empty');
+    assert.strictEqual(combat.combatGate.activePlayer, 1, 'activePlayer = attacker (P1)');
     // rerollsRemaining unchanged (done doesn't consume a reroll)
     assert.strictEqual(combat.attackerRerollsRemaining, 2,
       'attackerRerollsRemaining unchanged — "done" doesn\'t spend a reroll');

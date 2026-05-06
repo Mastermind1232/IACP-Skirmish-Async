@@ -261,12 +261,13 @@ describe('B-CTIME-006: handleNegationLetResolve rejects when no pendingNegation'
 // ── B-CTIME-007: Combat Gate — P1 ready, gate still open ─────────────────
 
 describe('B-CTIME-007: handleCombatGateReady tracks P1 ready, gate stays open', () => {
-  it('007: P1 clicks ready → p1Ready=true, p2Ready still false, gate survives', async () => {
+  it('007: attacker (P1) clicks ready → acked[1]=true, activePlayer rotates to defender (P2), gate survives', async () => {
     const game = makeGame({
       pendingCombat: {
         attackerPlayerNum: 1,
         defenderPlayerNum: 2,
-        combatGate: { phase: 'post_roll', p1Ready: false, p2Ready: false },
+        // Sequential gate: attacker is the active player first.
+        combatGate: { phase: 'post_roll', acked: {}, activePlayer: 1 },
       },
     });
 
@@ -276,8 +277,9 @@ describe('B-CTIME-007: handleCombatGateReady tracks P1 ready, gate stays open', 
 
     const gate = game.pendingCombat.combatGate;
     assert.ok(gate, 'combatGate still present (not yet advanced)');
-    assert.strictEqual(gate.p1Ready, true, 'p1Ready = true');
-    assert.strictEqual(gate.p2Ready, false, 'p2Ready still false');
+    assert.strictEqual(gate.acked[1], true, 'attacker acked = true');
+    assert.ok(!gate.acked[2], 'defender NOT yet acked');
+    assert.strictEqual(gate.activePlayer, 2, 'activePlayer rotated to defender');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });
@@ -285,12 +287,13 @@ describe('B-CTIME-007: handleCombatGateReady tracks P1 ready, gate stays open', 
 // ── B-CTIME-008: Combat Gate — both ready, gate deleted ──────────────────
 
 describe('B-CTIME-008: handleCombatGateReady advances when both ready', () => {
-  it('008: P2 clicks ready after P1 → combatGate deleted, saveGames called', async () => {
+  it('008: defender (P2) clicks ready after attacker → combatGate deleted, saveGames called', async () => {
     const game = makeGame({
       pendingCombat: {
         attackerPlayerNum: 1,
         defenderPlayerNum: 2,
-        combatGate: { phase: 'post_roll', p1Ready: true, p2Ready: false },
+        // Sequential gate: attacker already acked, defender now active.
+        combatGate: { phase: 'post_roll', acked: { 1: true }, activePlayer: 2 },
         // No combatThreadId → fetchCombatThread returns null → exits early after gate delete
       },
     });
@@ -308,13 +311,14 @@ describe('B-CTIME-008: handleCombatGateReady advances when both ready', () => {
 
 // ── B-CTIME-009: Combat Gate — double press rejected ─────────────────────
 
-describe('B-CTIME-009: handleCombatGateReady rejects double press', () => {
-  it('009: P1 already ready, clicks again → ephemeral rejection', async () => {
+describe('B-CTIME-009: handleCombatGateReady rejects out-of-turn click', () => {
+  it('009: P1 acked, defender now active — P1 clicks again → ephemeral "waiting on defender"', async () => {
     const game = makeGame({
       pendingCombat: {
         attackerPlayerNum: 1,
         defenderPlayerNum: 2,
-        combatGate: { phase: 'post_roll', p1Ready: true, p2Ready: false },
+        // Sequential gate: attacker already acked, activePlayer is defender.
+        combatGate: { phase: 'post_roll', acked: { 1: true }, activePlayer: 2 },
       },
     });
 
@@ -323,13 +327,14 @@ describe('B-CTIME-009: handleCombatGateReady rejects double press', () => {
     await handleCombatGateReady(interaction, ctx);
 
     const msg = interaction._followUpCalls.find(m =>
-      m.ephemeral && m.content?.includes('already ready'));
-    assert.ok(msg, 'ephemeral "already ready" rejection sent');
+      m.ephemeral && (m.content?.includes('Sequential gate') || m.content?.includes('waiting on')));
+    assert.ok(msg, 'ephemeral out-of-turn rejection sent');
 
     // Gate unchanged
     assert.ok(game.pendingCombat.combatGate, 'combatGate still present');
-    assert.strictEqual(game.pendingCombat.combatGate.p1Ready, true, 'p1Ready unchanged');
-    assert.strictEqual(game.pendingCombat.combatGate.p2Ready, false, 'p2Ready unchanged');
+    assert.strictEqual(game.pendingCombat.combatGate.acked[1], true, 'attacker still acked');
+    assert.ok(!game.pendingCombat.combatGate.acked[2], 'defender still NOT acked');
+    assert.strictEqual(game.pendingCombat.combatGate.activePlayer, 2, 'activePlayer unchanged');
   });
 });
 
