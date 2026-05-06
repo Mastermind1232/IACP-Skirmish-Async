@@ -478,6 +478,11 @@ export function resolveAbility(abilityId, context) {
       const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
       const parts = [];
       const totalDmg = damage + strain;
+      // Slice 6.13 ext + destruct 2026-05-06: any damage application must
+      // route lethal hits through processFigureDefeat. Collect into
+      // _thfDefeated; surface as result.defeatedFigures for the
+      // apply-ability-result.js consumer.
+      const _thfDefeated = [];
       if (totalDmg > 0 && dcHealthState && targetMsgId) {
         const healthState = dcHealthState.get(targetMsgId) || [];
         const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
@@ -485,12 +490,21 @@ export function resolveAbility(abilityId, context) {
         const entryHp = healthState[figIdx];
         if (entryHp) {
           const [cur, max] = entryHp;
-          const newCur = Math.max(0, (cur ?? max) - totalDmg);
+          const prevCur = cur ?? max;
+          const newCur = Math.max(0, prevCur - totalDmg);
           healthState[figIdx] = [newCur, max ?? newCur];
           dcHealthState.set(targetMsgId, healthState);
           syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
           const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
-          parts.push(`suffered ${dmgStr} (HP: ${cur ?? max} → ${newCur})`);
+          parts.push(`suffered ${dmgStr} (HP: ${prevCur} → ${newCur})`);
+          if (newCur <= 0 && prevCur > 0) {
+            _thfDefeated.push({
+              figureKey: targetFigureKey,
+              defeatedPlayerNum: enemyPlayerNum,
+              attackerPlayerNum: playerNum,
+              source: entry.label || 'Force ability',
+            });
+          }
         } else {
           parts.push(`(HP not tracked — apply ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''} manually)`);
         }
@@ -520,11 +534,20 @@ export function resolveAbility(abilityId, context) {
               const adjEntry = adjHs[adjFigIdx];
               if (adjEntry) {
                 const [aCur, aMax] = adjEntry;
-                const aNew = Math.max(0, (aCur ?? aMax) - splashDamage);
+                const aPrev = aCur ?? aMax;
+                const aNew = Math.max(0, aPrev - splashDamage);
                 adjHs[adjFigIdx] = [aNew, aMax ?? aNew];
                 dcHealthState.set(adjMsgId, adjHs);
                 syncHealthStateToList(game, adjPnum, adjMsgId, adjHs);
-                splashParts.push(`**${adjName}** ${splashDamage} Damage (${aCur ?? aMax}→${aNew})`);
+                splashParts.push(`**${adjName}** ${splashDamage} Damage (${aPrev}→${aNew})`);
+                if (aNew <= 0 && aPrev > 0) {
+                  _thfDefeated.push({
+                    figureKey: adjFk,
+                    defeatedPlayerNum: adjPnum,
+                    attackerPlayerNum: playerNum,
+                    source: `${entry.label || 'Force ability'} (splash)`,
+                  });
+                }
               } else {
                 splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
               }
@@ -551,7 +574,13 @@ export function resolveAbility(abilityId, context) {
           selfCondLog = ` You became **${entry.selfCondition}ed**.`;
         }
       }
-      return { applied: true, freeAction: !!entry.freeAction, logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}${selfCondLog}`, refreshDcEmbed: true };
+      return {
+        applied: true,
+        freeAction: !!entry.freeAction,
+        logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}${selfCondLog}`,
+        refreshDcEmbed: true,
+        ...(_thfDefeated.length > 0 ? { defeatedFigures: _thfDefeated, refreshBoard: true } : {}),
+      };
     }
     // First call: enumerate valid enemy targets with range/LOS filter
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
