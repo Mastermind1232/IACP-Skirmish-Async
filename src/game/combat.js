@@ -323,8 +323,11 @@ export function computeCombatResult(combat) {
     ? defRoll.block
     : (defRoll.block + bonusBlock + cunningBonus);
   let effectiveBlock = Math.max(0, blockForCalc - surgeCancel - pierceToUse);
-  // Weakened on defender: -1 from their block result
-  const defenderWeakened = combat.defenderConds?.includes('Weaken');
+  // Weakened on defender: -1 from their block result.
+  // Slice 8.4 follow-up: skip if defender's condition effects are suppressed
+  // (YWNDM-on-Fifth-Brother — Weaken still placed but inert).
+  const defenderWeakened = combat.defenderConds?.includes('Weaken')
+    && !combat.defenderCondEffectsSuppressed;
   if (defenderWeakened) {
     effectiveBlock = Math.max(0, effectiveBlock - 1);
   }
@@ -339,8 +342,10 @@ export function computeCombatResult(combat) {
   const attackerHidden = !!combat.attackerConds?.includes('Hide');
   const hiddenDmgBonus = attackerHidden ? 1 : 0;
   let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage + hiddenDmgBonus - effectiveBlock) : 0;
-  // Weakened on attacker: -1 to their final damage output
-  const attackerWeakened = combat.attackerConds?.includes('Weaken');
+  // Weakened on attacker: -1 to their final damage output.
+  // Slice 8.4 follow-up: skip if attacker's condition effects are suppressed.
+  const attackerWeakened = combat.attackerConds?.includes('Weaken')
+    && !combat.attackerCondEffectsSuppressed;
   if (attackerWeakened && damage > 0) {
     damage = Math.max(0, damage - 1);
   }

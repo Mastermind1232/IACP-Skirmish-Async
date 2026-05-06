@@ -7,6 +7,7 @@ import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendi
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
@@ -1335,6 +1336,11 @@ export async function handleAttackTarget(interaction, ctx) {
   const attackerFigureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const attackerConds = game.figureConditions?.[attackerFigureKey] || [];
   const defenderConds = game.figureConditions?.[target.figureKey] || [];
+  // Slice 8.4 follow-up: capture per-side condition-effects-suppression flags
+  // at combat init so computeCombatResult can skip Weaken/Stun/etc. modifiers
+  // when the figure's effects are inert (YWNDM-on-Fifth-Brother).
+  const _attackerCondEffectsSuppressed = areConditionEffectsSuppressed(game, attackerFigureKey);
+  const _defenderCondEffectsSuppressed = areConditionEffectsSuppressed(game, target.figureKey);
   // Focus: attacker gains 1 green die on their next attack; consumed after attacking
   if (attackerConds.includes('Focus')) {
     attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
@@ -1466,6 +1472,11 @@ export async function handleAttackTarget(interaction, ctx) {
     // points are wired in subsequent slices. Read by combat-order-validator
     // and the orchestrator's snapshot adapter.
     currentStep: 'step1+2-attacker',
+    // Slice 8.4 follow-up: per-side condition-effect-suppression flags
+    // (YWNDM-on-Fifth-Brother). Used by computeCombatResult to skip Weaken
+    // penalties when the figure's condition effects are inert.
+    attackerCondEffectsSuppressed: _attackerCondEffectsSuppressed,
+    defenderCondEffectsSuppressed: _defenderCondEffectsSuppressed,
     attackRoll: null,
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
