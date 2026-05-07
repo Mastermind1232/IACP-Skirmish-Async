@@ -158,6 +158,37 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
   const meta = deps.dcMessageMeta.get(msgId);
   const displayName = meta?.displayName || meta?.dcName || '';
 
+  // Per destruct 2026-05-07: each figure has individual EoA. When a
+  // figure auto-locks (perFigureRemaining hits 0 via
+  // consumeActionForCurrentFigure), this is the natural fan-out point
+  // to fire that figure's EoA effects. handleDcEndFigure (manual
+  // forfeit) fires its own EoA and sets figureEoaFired before this
+  // runs, so this loop is a no-op in that path.
+  if (data.figureLocked && meta) {
+    data.figureEoaFired = data.figureEoaFired || {};
+    for (const figIdxStr of Object.keys(data.figureLocked)) {
+      const figIdx = parseInt(figIdxStr, 10);
+      if (!data.figureLocked[figIdx]) continue;
+      if (data.figureEoaFired[figIdx]) continue;
+      try {
+        const { applyEndOfActivationEffects } = await import('./activation-effects.js');
+        const { applied: _figEoa } = applyEndOfActivationEffects(game, {
+          dcName: meta.dcName,
+          playerNum: meta.playerNum,
+          displayName,
+          msgId,
+          figureIndex: figIdx,
+        });
+        if (Array.isArray(_figEoa) && deps.logGameAction) {
+          for (const eff of _figEoa) {
+            await deps.logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' }).catch(() => {});
+          }
+        }
+      } catch { /* non-fatal */ }
+      data.figureEoaFired[figIdx] = true;
+    }
+  }
+
   if (data?.messageId) {
     try {
       const thread = await fetchGameChannel(client, data.threadId);

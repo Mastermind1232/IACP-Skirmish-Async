@@ -1415,6 +1415,30 @@ export async function handleDcEndFigure(interaction, ctx) {
   actionsData.figureLocked = actionsData.figureLocked || {};
   actionsData.figureLocked[figIdx] = true;
   actionsData.selectedFigure = null;
+  // Per destruct 2026-05-07: each figure has individual EoA. Fire EoA
+  // for the just-locked figure scoped to that figureIndex (single-
+  // figure groups continue to fire group-wide EoA via
+  // handleDcEndActivation; multi-figure groups fire here per figure
+  // and skip the whole-group EoA at the end).
+  actionsData.figureEoaFired = actionsData.figureEoaFired || {};
+  if (!actionsData.figureEoaFired[figIdx]) {
+    try {
+      const { applyEndOfActivationEffects } = await import('../engine/activation-effects.js');
+      const { applied: _figEoa } = applyEndOfActivationEffects(game, {
+        dcName: meta.dcName,
+        playerNum: meta.playerNum,
+        displayName: meta.displayName || meta.dcName,
+        msgId,
+        figureIndex: figIdx,
+      });
+      if (Array.isArray(_figEoa) && ctx.logGameAction) {
+        for (const eff of _figEoa) {
+          await ctx.logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' }).catch(() => {});
+        }
+      }
+    } catch { /* non-fatal */ }
+    actionsData.figureEoaFired[figIdx] = true;
+  }
   await interaction.deferUpdate().catch(discordCatch);
   await updateDcActionsMessage(game, msgId, client);
   if (ctx.saveGames) ctx.saveGames(game.gameId);

@@ -771,15 +771,37 @@ export async function handleDcEndActivation(interaction, ctx) {
   }
   cleanupActivation(game, msgId, meta.playerNum, figureKeys);
   // Weakened discard + Stun persistence now handled by applyEndOfActivationEffects().
-  // End-of-activation deterministic effects (shared with headless)
-  const { applied: _endEffects } = applyEndOfActivationEffects(game, {
-    dcName: meta.dcName,
-    playerNum: meta.playerNum,
-    displayName,
-    msgId,
-  });
-  for (const eff of _endEffects) {
-    await logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' });
+  // End-of-activation deterministic effects (shared with headless).
+  // Per destruct 2026-05-07: each figure has individual EoA, fired when
+  // that figure locks (auto via 0-actions or manual via End Figure
+  // button). Per-figure EoA is dispatched in updateDcActionsMessage and
+  // handleDcEndFigure; figureEoaFired marks the figures that have
+  // already fired. This whole-group call now SKIPS those figures and
+  // runs only for figures whose EoA hasn't fired yet (e.g. activation
+  // ending while a figure still has actions remaining — End Activation
+  // button before per-figure lock).
+  const _ad = game.dcActionsData?.[msgId];
+  const _figCount = endEff?.figures || 1;
+  const _eoaFired = _ad?.figureEoaFired || {};
+  for (let _eoaFi = 0; _eoaFi < _figCount; _eoaFi++) {
+    if (_eoaFired[_eoaFi]) continue;
+    const { applied: _endEffects } = applyEndOfActivationEffects(game, {
+      dcName: meta.dcName,
+      playerNum: meta.playerNum,
+      displayName,
+      msgId,
+      // Multi-figure groups: pass figureIndex to scope to one figure.
+      // Single-figure groups: omit figureIndex to use legacy whole-group
+      // logic (no behavior change vs pre-2026-05-07).
+      ...(_figCount > 1 ? { figureIndex: _eoaFi } : {}),
+    });
+    for (const eff of _endEffects) {
+      await logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' });
+    }
+    if (_ad) {
+      _ad.figureEoaFired = _ad.figureEoaFired || {};
+      _ad.figureEoaFired[_eoaFi] = true;
+    }
   }
 
   // Sustained by Rage (Maul / Krrsantan): "If you have not resolved an

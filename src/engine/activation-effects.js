@@ -103,12 +103,20 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
  * @param {string} opts.msgId - DC message ID
  * @returns {{ applied: Array<{ effect: string, message: string }> }}
  */
-export function applyEndOfActivationEffects(game, { dcName, playerNum, displayName, msgId }) {
+export function applyEndOfActivationEffects(game, { dcName, playerNum, displayName, msgId, figureIndex }) {
   const applied = [];
   const dcEff = getDcEffects()?.[dcName];
   const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const prefix = `${dcName}-${dgIndex}-`;
-  const figureKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => k.startsWith(prefix));
+  let figureKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => k.startsWith(prefix));
+  // Per destruct 2026-05-07: each figure of a multi-figure group has
+  // individual EoA. When figureIndex is supplied, narrow the figureKeys
+  // loop to the single locking figure. When omitted (single-figure
+  // group end-of-activation), the loop runs over all figures (legacy
+  // behavior).
+  if (typeof figureIndex === 'number' && figureIndex >= 0) {
+    figureKeys = figureKeys.filter(k => k === `${dcName}-${dgIndex}-${figureIndex}`);
+  }
 
   // Weakened auto-discards at end of activation (CRR-WKN-002: WEAKENED L2772-2775).
   // Disarm permanent Weakened lock (filterCondition) keeps the condition through the filter.
