@@ -569,26 +569,10 @@ export async function finalizeActivation({
     }
   }
 
-  // D21. Long-Laid Plans (Thrawn): distribute N power tokens (N = round#) among friendlies within 3
-  if (_abilityIds.includes('long_laid_plans_thrawn')) {
-    const roundNum = game.currentRound || 1;
-    const _llpDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const _llpSelfFk = `${dcName}-${_llpDgIndex}-0`;
-    const _llpSelfPos = game.figurePositions?.[playerNum]?.[_llpSelfFk];
-    const _llpFriendlies = _llpSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
-      .filter(([fk, fp]) => fp && countGameSpaces(game, _llpSelfPos, fp) <= 3) : [];
-    if (_llpFriendlies.length > 0 && roundNum > 0) {
-      setPendingTokenDistribution(game, { gameId, msgId, playerNum, remaining: roundNum, ability: 'longlaid', tokenTypes: ['Damage', 'Block', 'Surge', 'Evade'] });
-      const _llpLabels = figureChoiceLabels(_llpFriendlies.map(([fk]) => fk));
-      const btns = _llpFriendlies.map(([fk], i) =>
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk}`).setLabel(_llpLabels[i]).setStyle(ButtonStyle.Primary)
-      );
-      btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🧠 **Long-Laid Plans** — Distribute **${roundNum} power token${roundNum > 1 ? 's' : ''}** among friendly figures within 3 spaces. Pick a figure (${roundNum} remaining):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
-    } else {
-      await thread.send({ content: `🧠 **Long-Laid Plans** — No friendly figures within 3 spaces (or round 0).` }).catch(discordCatch);
-    }
-  }
+  // D21. Long-Laid Plans — migrated to SoA orchestrator (destruct
+  // 2026-05-07). Distribute N DIFFERENT power tokens (max 1 of each
+  // type) where N = round number capped at 4. Multi-step descriptor
+  // in soa-orchestrator.js.
 
   // D22. Strategize (Thrawn): look at top CC of each deck, may discard one
   if (_abilityIds.includes('strategize_thrawn')) {

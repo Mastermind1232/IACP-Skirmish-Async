@@ -334,6 +334,36 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'long_laid_plans') {
+    // Multi-step: handleSoaPick posts the FIRST figure×type prompt;
+    // handleSoaFire grants 1 token and re-prompts with reduced types
+    // until remainingCount === 0 or no types left.
+    const candidates = desc.extras?.candidates || [];
+    const used = desc.extras?.usedTypes || [];
+    const remainingTypes = ['damage', 'block', 'surge', 'evade'].filter((t) => !used.includes(t));
+    if (candidates.length === 0 || remainingTypes.length === 0) {
+      await interaction.followUp({ content: 'No eligible friendlies or token types remaining.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = [];
+    for (const fk of candidates) {
+      const name = dcNameFromFigureKey(fk);
+      for (const t of remainingTypes) {
+        buttons.push(new ButtonBuilder()
+          .setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${t}`)
+          .setLabel(`${name}: ${t.charAt(0).toUpperCase() + t.slice(1)}`)
+          .setStyle(t === 'damage' ? ButtonStyle.Danger : ButtonStyle.Primary));
+      }
+    }
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip remaining').setStyle(ButtonStyle.Secondary));
+    const llpRows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      llpRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F9E0} **Long-Laid Plans** — **${displayName}** distributes **${desc.extras?.remainingCount ?? 1}** Power Tokens (each a different type) among friendlies within 3:`,
+      components: llpRows.slice(0, 5),
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'arms_distribution') {
     // Flat (figure × type) sub-prompt. choiceKey: `${figureKey}|damage`
     // or `${figureKey}|block`. Skip button trails.
@@ -1002,6 +1032,58 @@ export async function handleSoaFire(interaction, ctx) {
         }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
       }
+    }
+
+  // --- Long-Laid Plans (Thrawn) ---
+  // Multi-step: each click grants 1 token of the chosen type to the
+  // chosen figure, marks the type as used, and re-prompts with
+  // remaining types until count === 0 or no types left. Returns early
+  // (skips consumeDescriptor) when re-prompting; consumes when done.
+  } else if (desc.subPromptKey === 'long_laid_plans') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F9E0} **Long-Laid Plans** — Skipped remaining.`, components: [] }).catch(discordCatch);
+    } else {
+      const _llpSplit = choiceKey.indexOf('|');
+      if (_llpSplit < 0) {
+        await interaction.followUp({ content: `Malformed Long-Laid Plans choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetFk = choiceKey.slice(0, _llpSplit);
+      const tokenTypeLower = choiceKey.slice(_llpSplit + 1);
+      const tokenType = tokenTypeLower.charAt(0).toUpperCase() + tokenTypeLower.slice(1);
+      grantPowerTokens(game, targetFk, tokenType, 1);
+      desc.extras.usedTypes = desc.extras.usedTypes || [];
+      desc.extras.usedTypes.push(tokenTypeLower);
+      desc.extras.remainingCount = (desc.extras.remainingCount || 1) - 1;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const remainingTypes = ['damage', 'block', 'surge', 'evade'].filter((t) => !desc.extras.usedTypes.includes(t));
+      if (logGameAction) await logGameAction(game, client, `\u{1F9E0} **Long-Laid Plans** — ${targetDcName} +1 ${tokenType} Token (${desc.extras.remainingCount} left).`, { phase: 'ROUND', icon: 'card' });
+      if (desc.extras.remainingCount > 0 && remainingTypes.length > 0) {
+        // Re-prompt with reduced types; do NOT consume.
+        const candidates = desc.extras.candidates || [];
+        const buttons = [];
+        for (const fk of candidates) {
+          const name = dcNameFromFigureKey(fk);
+          for (const t of remainingTypes) {
+            buttons.push(new ButtonBuilder()
+              .setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${t}`)
+              .setLabel(`${name}: ${t.charAt(0).toUpperCase() + t.slice(1)}`)
+              .setStyle(t === 'damage' ? ButtonStyle.Danger : ButtonStyle.Primary));
+          }
+        }
+        buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip remaining').setStyle(ButtonStyle.Secondary));
+        const llpRows = [];
+        for (let i = 0; i < buttons.length; i += 5) {
+          llpRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+        }
+        await interaction.message.edit({
+          content: `\u{1F9E0} **Long-Laid Plans** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribute **${desc.extras.remainingCount}** more (different type):`,
+          components: llpRows.slice(0, 5),
+        }).catch(discordCatch);
+        saveGames(game.gameId);
+        return;
+      }
+      await interaction.message.edit({ content: `\u{1F9E0} **Long-Laid Plans** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribution complete.`, components: [] }).catch(discordCatch);
     }
 
   // --- Arms Distribution (Ko-Tun) — SoA portion ---

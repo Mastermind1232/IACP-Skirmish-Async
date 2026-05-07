@@ -496,6 +496,40 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Long-Laid Plans (Thrawn): SoA player-driven trigger. Per destruct
+  // 2026-05-07: distribute N DIFFERENT power tokens (max 1 of each
+  // type) among friendly figures within 3 of Thrawn, where N = current
+  // round number, capped at 4 (the number of distinct token types:
+  // Damage, Block, Surge, Evade). Multi-step sub-prompt: each click
+  // grants 1 token and re-prompts with the remaining types until done.
+  if (_abilityIds.includes('long_laid_plans_thrawn') && game) {
+    const _llpRound = Math.max(1, game.currentRound || 1);
+    const _llpDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _llpSelfFk = `${dcName}-${_llpDgIdx}-0`;
+    const _llpSelfPos = game.figurePositions?.[playerNum]?.[_llpSelfFk];
+    if (_llpSelfPos) {
+      const _llpFriendlies = Object.entries(game.figurePositions?.[playerNum] || {})
+        .filter(([fk, fp]) => fp && countGameSpaces(game, _llpSelfPos, fp) <= 3)
+        .map(([fk]) => fk);
+      if (_llpFriendlies.length > 0) {
+        descriptors.push({
+          id: `long_laid_plans:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Long-Laid Plans',
+          subPromptKey: 'long_laid_plans',
+          extras: {
+            dcName,
+            candidates: _llpFriendlies,
+            selfFigureKey: _llpSelfFk,
+            usedTypes: [],
+            remainingCount: Math.min(_llpRound, 4),
+          },
+        });
+      }
+    }
+  }
+
   // Arms Distribution (Ko-Tun) — SoA portion. Per destruct 2026-05-07:
   // total payout is 1 Power Token at deploy + 1 at SoA (NOT 2 at SoA).
   // The deploy-time token is handled at deployment; this descriptor only
