@@ -420,7 +420,10 @@ export async function finalizeActivation({
   // 'awr'). Range still uses awrRange() to honor the Advanced Com
   // Systems extension to 3 spaces.
 
-  // D10. Durasteel Fist (Dark Trooper Mk III): choose adjacent figure, roll 1 green die
+  // D10. Durasteel Fist (Dark Trooper Mk III): NOT SoA per destruct
+  // 2026-05-07 — ability fires anytime during activation. Same pattern
+  // as Nemik's / Spectre Cell — button is posted at activation start
+  // for visibility but stays clickable throughout the activation.
   if (_abilityIds.includes('durasteel_fist_dark_trooper') && !game.roundFigureAbilityUsed?.[`${dcName}_durasteel_fist_${msgId}`]) {
     const _dfDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _dfActData = game.dcActionsData?.[msgId];
@@ -447,7 +450,7 @@ export async function finalizeActivation({
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_${fk}`).setLabel(_dfLabels[i]).setStyle(ButtonStyle.Danger)
         );
         _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🤜 **Durasteel Fist** — Choose an adjacent figure to target (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(discordCatch);
+        await thread.send({ content: `🤜 **Durasteel Fist** — At any point during this activation, you may target an adjacent figure (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(discordCatch);
       } else {
         await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(discordCatch);
       }
@@ -456,7 +459,8 @@ export async function finalizeActivation({
 
   // D11. Comms Jammer — now handled by applyStartOfActivationEffects()
 
-  // D12. Unstable Devices (Saska Teft): friendly in LOS gains 1 Device token
+  // D12. Unstable Devices (Saska Teft): NOT SoA per destruct 2026-05-07
+  // — fires anytime during activation. Same pattern as Nemik's.
   if (_abilityIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[msgId]) {
     const _udMapSpaces = getMapDataFn(game.selectedMap?.id);
     const _udDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -478,13 +482,13 @@ export async function finalizeActivation({
       const f = _udFriendlies[0];
       const confirmBtn = new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_${f.figureKey}`).setLabel(`Grant to ${f.dcName}`).setStyle(ButtonStyle.Primary);
       const skipBtn = new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary);
-      await thread.send({ content: `🔧 **Unstable Devices** — Grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(discordCatch);
+      await thread.send({ content: `🔧 **Unstable Devices** — At any point during this activation, grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(discordCatch);
     } else if (_udFriendlies.length > 1) {
       const btns = _udFriendlies.slice(0, 4).map(f =>
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_${f.figureKey}`).setLabel(f.dcName).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🔧 **Unstable Devices** — Choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(discordCatch);
+      await thread.send({ content: `🔧 **Unstable Devices** — At any point during this activation, choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(discordCatch);
     } else {
       await thread.send({ content: `🔧 **Unstable Devices** — No friendly figures in line of sight.` }).catch(discordCatch);
     }
@@ -500,22 +504,22 @@ export async function finalizeActivation({
     await thread.send({ content: `🪂 **Airborne Commander** — Mobile figures within 4 spaces may use Gar Saxon's surge abilities.` }).catch(discordCatch);
   }
 
-  // D15. Droid Kit (Iden Versio): Dio in same space → gain 1 Power Token
+  // D15. Droid Kit (Iden Versio): NOT SoA per destruct 2026-05-07 —
+  // fires anytime during activation. Per destruct: Dio in same space →
+  // gain a **Damage** token only (NOT all 4 token types — the previous
+  // 4-button picker was a bug). Single Apply / Skip prompt.
   if (dcName === 'Iden Versio') {
     const _dkDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _dkSelfFk = `${dcName}-${_dkDgIndex}-0`;
     const _dkResult = detectDroidKitTrigger(game, playerNum, _dkSelfFk);
     if (_dkResult.applicable) {
       const dkRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_damage`).setLabel('Damage Token').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_block`).setLabel('Block Token').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_damage`).setLabel('Apply (Gain 1 Damage Token)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `🤖 **Droid Kit** — **Dio** is in **${displayName}**'s space. Gain 1 Power Token:`, components: [dkRow] }).catch(discordCatch);
+      await thread.send({ content: `🤖 **Droid Kit** — At any point during this activation, while **Dio** is in **${displayName}**'s space, you may gain **1 Damage Token**:`, components: [dkRow] }).catch(discordCatch);
     } else {
-      await thread.send({ content: `🤖 **Droid Kit** — ${_dkResult.reason}; no Power Token gained.` }).catch(discordCatch);
+      await thread.send({ content: `🤖 **Droid Kit** — ${_dkResult.reason}; no Damage Token available.` }).catch(discordCatch);
     }
   }
 
