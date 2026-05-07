@@ -9,7 +9,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-import { getHandChannelId, getPlayerId as _getPlayerIdHelper } from '../game/player-helpers.js';
+import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList } from '../game/player-helpers.js';
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 /**
@@ -347,11 +347,22 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
         if (_loadoutCard?.passive === 'Reach') _loadoutHasReach = true;
       }
     }
+    // Fury of Kashyyyk: friendly WOOKIEES gain Reach. Per destruct
+    // 2026-05-07. Detect via attacker's WOOKIEE keyword + presence of
+    // the [Fury of Kashyyyk] attachment in the attacker's team's dcList.
+    let _furyKashyyykReach = false;
+    if (_atkKws.includes('WOOKIEE')) {
+      const _fokDcList = getDcList(game, combat.attackerPlayerNum) || [];
+      if (_fokDcList.some((dc) => dc?.dcName === '[Fury of Kashyyyk]')) {
+        _furyKashyyykReach = true;
+      }
+    }
     _attackerHasReach =
       _atkKws.includes('REACH') ||
       _atkPassives.includes('REACH') ||
       !!game.nextAttackReach?.[combat.attackerPlayerNum] ||
-      _loadoutHasReach;
+      _loadoutHasReach ||
+      _furyKashyyykReach;
   }
   const targets = [];
   if (!combat.isRanged && !_attackerHasReach) {

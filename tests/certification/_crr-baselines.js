@@ -48,7 +48,7 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // ACS card text — they're DC-ability ACS gaps that the previous audit
 // missed.
 export const DD_BASELINE = {
-  dcName_equality: 57,
+  dcName_equality: 58,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 93,
@@ -56,6 +56,12 @@ export const DD_BASELINE = {
 // 2026-05-07: cardNameIncludes 92→93. Slice 8c added a Clan of Two
 // `cardNameIncludes(_coTAtts, 'Clan of Two')` check at host activation
 // END to post the teleport prompt for The Child.
+// 2026-05-07: dcName_equality 57→58. Per destruct, Fury of Kashyyyk
+// "Friendly WOOKIEES gain Reach" must propagate to Cleave eligibility,
+// not just attack-target eligibility. Engine combat-bridge.js Cleave
+// path now checks `dc?.dcName === '[Fury of Kashyyyk]'` mirroring the
+// existing available-actions check. Same justification as 2026-04-17:
+// no specialAbilityIds pointer exists for DC-attachment lookups.
 export const DD_BASELINE_TOTAL = Object.values(DD_BASELINE).reduce((a, b) => a + b, 0);
 
 // ── Round-flags completeness ────────────────────────────────────────────────
