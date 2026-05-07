@@ -23,6 +23,7 @@ import { applyStartOfActivationEffects } from '../../../src/engine/activation-ef
 import { cleanupActivation } from '../../../src/game/activation-state.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { handleDcAction } from '../../../src/handlers/dc-play-area.js';
+import { enumerateActivatorSoaDescriptors } from '../../../src/game/soa-orchestrator.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -39,10 +40,14 @@ function makeGame(overrides = {}) {
   };
 }
 
-// ── B-DC-001: Mounted (Captain Terro) ───────────────────────────────────────────
+// ── B-DC-001: Mounted (Captain Terro) — orchestrator-driven ─────────────────────
+// Per destruct 2026-05-07: Mounted is no longer auto-fired by
+// applyStartOfActivationEffects. The SoA orchestrator
+// (enumerateActivatorSoaDescriptors) returns a Mounted descriptor that the
+// player triggers via the chooser → soa_fire path.
 
-describe('B-DC-001: applyStartOfActivationEffects — Mounted', () => {
-  it('grants 3 MP to movementBank for Captain Terro', () => {
+describe('B-DC-001: SoA orchestrator — Mounted descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-grants 3 MP for Captain Terro', () => {
     const game = makeGame();
     const msgId = 'msg_terro';
     const result = applyStartOfActivationEffects(game, {
@@ -51,23 +56,35 @@ describe('B-DC-001: applyStartOfActivationEffects — Mounted', () => {
       displayName: 'Captain Terro [DG 1]',
       msgId,
     });
-    assert.ok(result.applied.some(e => e.effect === 'Mounted'));
-    assert.ok(game.movementBank?.[msgId], 'movementBank should be set');
-    assert.equal(game.movementBank[msgId].total, 3);
-    assert.equal(game.movementBank[msgId].remaining, 3);
+    assert.ok(!result.applied.some(e => e.effect === 'Mounted'),
+      'Mounted is no longer in the applied[] list — it became a SoA descriptor');
+    assert.equal(game.movementBank?.[msgId], undefined,
+      'movementBank should NOT be auto-set by applyStartOfActivationEffects anymore');
   });
 
-  it('does not grant Mounted MP for unrelated DC', () => {
+  it('enumerateActivatorSoaDescriptors returns a Mounted descriptor for Captain Terro', () => {
     const game = makeGame();
-    const msgId = 'msg_trooper';
-    const result = applyStartOfActivationEffects(game, {
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Captain Terro',
+      playerNum: 1,
+      msgId: 'msg_terro',
+    });
+    const mounted = descriptors.find(d => d.subPromptKey === 'mounted');
+    assert.ok(mounted, 'Mounted descriptor must be enumerated');
+    assert.equal(mounted.ownerPlayerNum, 1);
+    assert.equal(mounted.sourceLabel, 'Mounted');
+    assert.equal(mounted.sourceMsgId, 'msg_terro');
+  });
+
+  it('does not enumerate Mounted descriptor for unrelated DC', () => {
+    const game = makeGame();
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
       dcName: 'Stormtrooper',
       playerNum: 1,
-      displayName: 'Stormtrooper [DG 1]',
-      msgId,
+      msgId: 'msg_trooper',
     });
-    assert.ok(!result.applied.some(e => e.effect === 'Mounted'));
-    assert.equal(game.movementBank?.[msgId], undefined);
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'mounted'),
+      'Stormtrooper has no Mounted ability');
   });
 
   it('does not mutate unrelated game state', () => {
@@ -82,15 +99,23 @@ describe('B-DC-001: applyStartOfActivationEffects — Mounted', () => {
       displayName: 'Captain Terro [DG 1]',
       msgId: 'msg_terro',
     });
+    enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Captain Terro',
+      playerNum: 1,
+      msgId: 'msg_terro',
+    });
     assert.deepStrictEqual(game.figurePositions[1], posBefore);
     assert.deepStrictEqual(game.figureConditions, condsBefore);
   });
 });
 
-// ── B-DC-002: Comms Jammer (ISB Infiltrator Elite) ──────────────────────────────
+// ── B-DC-002: Comms Jammer (ISB Infiltrator Elite) — orchestrator-driven ────────
+// Per destruct 2026-05-07: Comms Jammer is no longer auto-fired. The
+// orchestrator returns a comms_jammer descriptor that the activator
+// triggers via soa_fire_*_apply, which sets commsJammerActivePlayerNum.
 
-describe('B-DC-002: applyStartOfActivationEffects — Comms Jammer + cleanup', () => {
-  it('sets commsJammerActivePlayerNum on activation', () => {
+describe('B-DC-002: SoA orchestrator — Comms Jammer descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-sets commsJammerActivePlayerNum', () => {
     const game = makeGame();
     const result = applyStartOfActivationEffects(game, {
       dcName: 'ISB Infiltrator (Elite)',
@@ -98,27 +123,30 @@ describe('B-DC-002: applyStartOfActivationEffects — Comms Jammer + cleanup', (
       displayName: 'ISB Infiltrator (Elite) [DG 1]',
       msgId: 'msg_isb',
     });
-    assert.ok(result.applied.some(e => e.effect === 'Comms Jammer'));
-    assert.equal(game.commsJammerActivePlayerNum, 1);
+    assert.ok(!result.applied.some(e => e.effect === 'Comms Jammer'),
+      'Comms Jammer no longer auto-fires');
+    assert.equal(game.commsJammerActivePlayerNum, undefined,
+      'flag must NOT be set by applyStartOfActivationEffects anymore');
   });
 
-  it('cleanupActivation removes commsJammerActivePlayerNum', () => {
+  it('enumerateActivatorSoaDescriptors returns a comms_jammer descriptor', () => {
+    const game = makeGame();
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'ISB Infiltrator (Elite)',
+      playerNum: 1,
+      msgId: 'msg_isb',
+    });
+    const cj = descriptors.find(d => d.subPromptKey === 'comms_jammer');
+    assert.ok(cj, 'comms_jammer descriptor must be enumerated');
+    assert.equal(cj.ownerPlayerNum, 1);
+    assert.equal(cj.sourceLabel, 'Comms Jammer');
+  });
+
+  it('cleanupActivation removes commsJammerActivePlayerNum (when set by fire path)', () => {
+    // Simulate the fire-path having set the flag (handleSoaFire 'apply' branch).
     const game = makeGame({ commsJammerActivePlayerNum: 1 });
     cleanupActivation(game, 'msg_isb', 1, ['ISB Infiltrator (Elite)-1-0']);
     assert.equal(game.commsJammerActivePlayerNum, undefined);
-  });
-
-  it('commsJammerActivePlayerNum does not survive activation cleanup', () => {
-    const game = makeGame();
-    applyStartOfActivationEffects(game, {
-      dcName: 'ISB Infiltrator (Elite)',
-      playerNum: 2,
-      displayName: 'ISB Infiltrator (Elite) [DG 1]',
-      msgId: 'msg_isb2',
-    });
-    assert.equal(game.commsJammerActivePlayerNum, 2, 'should be set after activation');
-    cleanupActivation(game, 'msg_isb2', 2, ['ISB Infiltrator (Elite)-1-0']);
-    assert.equal(game.commsJammerActivePlayerNum, undefined, 'should be cleared after cleanup');
   });
 });
 

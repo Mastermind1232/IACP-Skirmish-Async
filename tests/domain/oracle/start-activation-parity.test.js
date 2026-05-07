@@ -21,166 +21,129 @@ function readSrc(relPath) {
 // BEHAVIORAL TESTS — applyStartOfActivationEffects()
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-STARTACT-001: Mounted grants 3 MP at start of activation', () => {
-  it('grants 3 MP to Captain Terro via specialAbilityIds', async () => {
+// Per destruct 2026-05-07 (slice 3): Mounted / Comms Jammer / Focused on
+// the Kill / Hunger Regular are no longer auto-fired by
+// applyStartOfActivationEffects — they are descriptors enumerated by the
+// SoA orchestrator and triggered manually via the chooser. The legacy
+// "auto-grant" assertions were rewritten as "applyStartOfActivationEffects
+// does NOT auto-grant" + "enumerateActivatorSoaDescriptors returns the
+// matching descriptor" pairs.
+
+describe('B-STARTACT-001: Mounted is enumerated as a SoA descriptor (not auto-fired)', () => {
+  it('applyStartOfActivationEffects no longer auto-grants 3 MP for Captain Terro', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = { movementBank: {} };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Captain Terro',
-      playerNum: 1,
-      displayName: 'Captain Terro',
-      msgId: 'terro-msg-1',
+      dcName: 'Captain Terro', playerNum: 1, displayName: 'Captain Terro', msgId: 'terro-msg-1',
     });
-    const mountedEffects = applied.filter(e => e.effect === 'Mounted');
-    assert.strictEqual(mountedEffects.length, 1, 'Mounted fired for Captain Terro');
-    assert.strictEqual(game.movementBank['terro-msg-1']?.total, 3, 'Movement bank has 3 MP');
+    assert.strictEqual(applied.filter(e => e.effect === 'Mounted').length, 0);
+    assert.strictEqual(game.movementBank['terro-msg-1'], undefined);
   });
 
-  it('grants 3 MP to Kuiil via specialAbilityIds', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('enumerateActivatorSoaDescriptors returns a Mounted descriptor for Captain Terro', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = { movementBank: {} };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Kuiil',
-      playerNum: 2,
-      displayName: 'Kuiil',
-      msgId: 'kuiil-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Captain Terro', playerNum: 1, msgId: 'terro-msg-1',
     });
-    const mountedEffects = applied.filter(e => e.effect === 'Mounted');
-    assert.strictEqual(mountedEffects.length, 1, 'Mounted fired for Kuiil');
-    assert.strictEqual(game.movementBank['kuiil-msg-1']?.total, 3, 'Movement bank has 3 MP');
+    const m = descriptors.find(d => d.subPromptKey === 'mounted');
+    assert.ok(m, 'Mounted descriptor enumerated');
+    assert.strictEqual(m.ownerPlayerNum, 1);
+    assert.strictEqual(m.sourceMsgId, 'terro-msg-1');
   });
 
-  it('does not grant Mounted MP to non-mounted DC', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = { movementBank: {} };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg-1',
+  it('enumerateActivatorSoaDescriptors returns a Mounted descriptor for Kuiil', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {};
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Kuiil', playerNum: 2, msgId: 'kuiil-msg-1',
     });
-    const mountedEffects = applied.filter(e => e.effect === 'Mounted');
-    assert.strictEqual(mountedEffects.length, 0, 'Mounted did not fire for Stormtrooper');
+    assert.ok(descriptors.some(d => d.subPromptKey === 'mounted'),
+      'Mounted descriptor enumerated for Kuiil');
   });
 
-  it('adds 3 MP to existing movement bank (from pendingMpBonus)', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    // Simulate headless: movementBank already initialized with 2 MP from pendingMpBonus
-    const game = {
-      movementBank: { 'terro-msg-1': { total: 2, remaining: 2 } },
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Captain Terro',
-      playerNum: 1,
-      displayName: 'Captain Terro',
-      msgId: 'terro-msg-1',
+  it('does not enumerate Mounted for unrelated DC', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {};
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Mounted').length, 1);
-    assert.strictEqual(game.movementBank['terro-msg-1']?.total, 5,
-      'Movement bank has 2 + 3 = 5 MP');
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'mounted'));
   });
 });
 
-describe('B-STARTACT-002: Comms Jammer sets opponent CC lock', () => {
-  it('sets commsJammerActivePlayerNum for ISB Infiltrator Elite', async () => {
+describe('B-STARTACT-002: Comms Jammer is enumerated (not auto-fired)', () => {
+  it('applyStartOfActivationEffects no longer auto-sets commsJammerActivePlayerNum', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {};
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'ISB Infiltrator (Elite)',
-      playerNum: 2,
-      displayName: 'ISB Infiltrator (Elite)',
-      msgId: 'isb-msg-1',
-    });
-    const cjEffects = applied.filter(e => e.effect === 'Comms Jammer');
-    assert.strictEqual(cjEffects.length, 1, 'Comms Jammer fired');
-    assert.strictEqual(game.commsJammerActivePlayerNum, 2,
-      'commsJammerActivePlayerNum set to activating player');
-    assert.ok(cjEffects[0].message.includes('P1'),
-      'Message mentions opponent player number');
-  });
-
-  it('does not set Comms Jammer for non-ISB DC', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {};
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg-1',
+      dcName: 'ISB Infiltrator (Elite)', playerNum: 2, displayName: 'ISB Infiltrator (Elite)', msgId: 'isb-msg-1',
     });
     assert.strictEqual(applied.filter(e => e.effect === 'Comms Jammer').length, 0);
-    assert.strictEqual(game.commsJammerActivePlayerNum, undefined,
-      'commsJammerActivePlayerNum not set');
+    assert.strictEqual(game.commsJammerActivePlayerNum, undefined);
+  });
+
+  it('enumerateActivatorSoaDescriptors returns a comms_jammer descriptor', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {};
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'ISB Infiltrator (Elite)', playerNum: 2, msgId: 'isb-msg-1',
+    });
+    assert.ok(descriptors.some(d => d.subPromptKey === 'comms_jammer'));
   });
 });
 
-describe('B-STARTACT-003: Focused on the Kill grants 2 MP via attachment', () => {
-  it('grants 2 MP when DC has Focused on the Kill attachment', async () => {
+describe('B-STARTACT-003: Focused on the Kill is enumerated (not auto-fired)', () => {
+  it('applyStartOfActivationEffects no longer auto-grants 2 MP from FotK attachment', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       movementBank: {},
       p1DcAttachments: { 'ig88-msg-1': ['Focused on the Kill'] },
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'IG-88',
-      playerNum: 1,
-      displayName: 'IG-88',
-      msgId: 'ig88-msg-1',
-    });
-    const fotkEffects = applied.filter(e => e.effect === 'Focused on the Kill');
-    assert.strictEqual(fotkEffects.length, 1, 'Focused on the Kill fired');
-    assert.strictEqual(game.movementBank['ig88-msg-1']?.total, 2, 'Movement bank has 2 MP');
-  });
-
-  it('does not grant MP when DC has no attachments', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = { movementBank: {} };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'IG-88',
-      playerNum: 1,
-      displayName: 'IG-88',
-      msgId: 'ig88-msg-1',
+      dcName: 'IG-88', playerNum: 1, displayName: 'IG-88', msgId: 'ig88-msg-1',
     });
     assert.strictEqual(applied.filter(e => e.effect === 'Focused on the Kill').length, 0);
   });
 
-  it('reads p2DcAttachments when DC belongs to player 2', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('enumerateActivatorSoaDescriptors returns a fotk descriptor (p1DcAttachments)', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
+      figurePositions: { 1: {}, 2: {} },
+      p1DcAttachments: { 'ig88-msg-1': ['Focused on the Kill'] },
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'IG-88', playerNum: 1, msgId: 'ig88-msg-1',
+    });
+    assert.ok(descriptors.some(d => d.subPromptKey === 'fotk'));
+  });
+
+  it('enumerateActivatorSoaDescriptors returns a fotk descriptor (p2DcAttachments)', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: {}, 2: {} },
       p2DcAttachments: { 'ig88-msg-2': ['Focused on the Kill', 'Some Other Card'] },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'IG-88',
-      playerNum: 2,
-      displayName: 'IG-88',
-      msgId: 'ig88-msg-2',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'IG-88', playerNum: 2, msgId: 'ig88-msg-2',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Focused on the Kill').length, 1,
-      'Focused on the Kill found in p2DcAttachments');
-    assert.strictEqual(game.movementBank['ig88-msg-2']?.total, 2);
+    assert.ok(descriptors.some(d => d.subPromptKey === 'fotk'));
   });
 });
 
-describe('B-STARTACT-004: Multiple effects can fire for same DC', () => {
-  it('Mounted + Focused on the Kill stack (grants 3 + 2 = 5 MP)', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+describe('B-STARTACT-004: Multiple SoA descriptors can co-exist for one activation', () => {
+  it('Mounted + FotK both enumerated for Captain Terro with FotK attachment', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
+      figurePositions: { 1: {}, 2: {} },
       p1DcAttachments: { 'terro-msg-1': ['Focused on the Kill'] },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Captain Terro',
-      playerNum: 1,
-      displayName: 'Captain Terro',
-      msgId: 'terro-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Captain Terro', playerNum: 1, msgId: 'terro-msg-1',
     });
-    const mounted = applied.filter(e => e.effect === 'Mounted');
-    const fotk = applied.filter(e => e.effect === 'Focused on the Kill');
-    assert.strictEqual(mounted.length, 1, 'Mounted fired');
-    assert.strictEqual(fotk.length, 1, 'Focused on the Kill fired');
-    assert.strictEqual(game.movementBank['terro-msg-1']?.total, 5,
-      'Movement bank has 3 + 2 = 5 MP');
+    const ids = descriptors.map(d => d.subPromptKey);
+    assert.ok(ids.includes('mounted'), 'Mounted enumerated');
+    assert.ok(ids.includes('fotk'), 'FotK enumerated');
   });
 });
 
@@ -345,8 +308,11 @@ describe('B-STARTACT-007: Multiple Phase 2a+2b effects stack correctly', () => {
     assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 1, 'Into the Fray fires');
   });
 
-  it('Into the Fray + Focused on the Kill stack for Baze with attachment', async () => {
+  it('Into the Fray (still auto) + FotK (now SoA descriptor) for Baze with attachment', async () => {
+    // Slice 3 migration: Into the Fray remains auto-fire (not yet migrated);
+    // FotK is now a SoA descriptor (not auto-granted). Verify the split.
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
       movementBank: {},
       figurePositions: { 1: { 'Baze Malbus-1-0': 'c1' }, 2: {} },
@@ -356,12 +322,17 @@ describe('B-STARTACT-007: Multiple Phase 2a+2b effects stack correctly', () => {
     const { applied } = applyStartOfActivationEffects(game, {
       dcName: 'Baze Malbus', playerNum: 1, displayName: 'Baze Malbus', msgId: 'baze-msg-1',
     });
-    const itf = applied.filter(e => e.effect === 'Into the Fray');
-    const fotk = applied.filter(e => e.effect === 'Focused on the Kill');
-    assert.strictEqual(itf.length, 1, 'Into the Fray fired');
-    assert.strictEqual(fotk.length, 1, 'Focused on the Kill fired');
-    assert.strictEqual(game.movementBank['baze-msg-1']?.total, 3,
-      'Movement bank has 1 (ItF) + 2 (FotK) = 3 MP');
+    assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 1,
+      'Into the Fray still auto-fires (migration deferred to slice 4)');
+    assert.strictEqual(applied.filter(e => e.effect === 'Focused on the Kill').length, 0,
+      'FotK is no longer auto-fired');
+    assert.strictEqual(game.movementBank['baze-msg-1']?.total, 1,
+      'Movement bank has 1 MP from Into the Fray only (FotK is descriptor-driven)');
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Baze Malbus', playerNum: 1, msgId: 'baze-msg-1',
+    });
+    assert.ok(descriptors.some(d => d.subPromptKey === 'fotk'),
+      'FotK descriptor enumerated');
   });
 });
 
@@ -450,112 +421,69 @@ describe('B-STARTACT-008: Beast Tamer exhausts and grants Speed MP for CREATURE'
   });
 });
 
-describe('B-STARTACT-009: Hunger Regular grants 2 MP when no hostile nearby', () => {
-  it('grants 2 MP when no hostile within 3 spaces', async () => {
+describe('B-STARTACT-009: Hunger Regular is enumerated (not auto-fired)', () => {
+  it('applyStartOfActivationEffects no longer auto-grants 2 MP for Wampa', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       movementBank: {},
-      figurePositions: {
-        1: { 'Wampa-1-0': 'a1' },
-        2: { 'Rebel-1-0': 'z9' }, // far away
-      },
+      figurePositions: { 1: { 'Wampa-1-0': 'a1' }, 2: { 'Rebel-1-0': 'z9' } },
       selectedMap: { id: 'test-map' },
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Wampa',
-      playerNum: 1,
-      displayName: 'Wampa',
-      msgId: 'wampa-msg-1',
-    });
-    const hungerEffects = applied.filter(e => e.effect === 'Hunger');
-    assert.strictEqual(hungerEffects.length, 1, 'Hunger fired');
-    // countGameSpaces returns Infinity when map data is unavailable → no hostile "within 3"
-    // so the Wampa gains 2 MP
-    assert.ok(hungerEffects[0].message.includes('2 MP'), 'Message mentions 2 MP gain');
-    assert.strictEqual(game.movementBank['wampa-msg-1']?.total, 2, 'Movement bank has 2 MP');
-  });
-
-  it('does not grant MP when hostile is within 3 spaces (map available)', async () => {
-    // Without real map adjacency data, countGameSpaces returns Infinity (no hostile nearby).
-    // This test verifies the "hostile nearby" branch by checking the message content
-    // when the effect reports no MP grant.
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Wampa-1-0': 'a1' },
-        2: {},
-      },
-      selectedMap: { id: 'nonexistent-map' },
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Wampa',
-      playerNum: 1,
-      displayName: 'Wampa',
-      msgId: 'wampa-msg-2',
-    });
-    const hungerEffects = applied.filter(e => e.effect === 'Hunger');
-    assert.strictEqual(hungerEffects.length, 1, 'Hunger always fires for Wampa');
-    // With no enemies at all, grants 2 MP
-    assert.ok(hungerEffects[0].message.includes('2 MP'), 'Gains MP when no enemies exist');
-  });
-
-  it('does not fire for Wampa Elite', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Wampa (Elite)-1-0': 'a1' },
-        2: {},
-      },
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Wampa (Elite)',
-      playerNum: 1,
-      displayName: 'Wampa (Elite)',
-      msgId: 'wampa-elite-msg-1',
-    });
-    assert.strictEqual(applied.filter(e => e.effect === 'Hunger').length, 0,
-      'Hunger Regular did not fire for Wampa (Elite)');
-  });
-
-  it('does not fire for non-Wampa DC', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = { movementBank: {}, figurePositions: { 1: {}, 2: {} } };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg-1',
+      dcName: 'Wampa', playerNum: 1, displayName: 'Wampa', msgId: 'wampa-msg-1',
     });
     assert.strictEqual(applied.filter(e => e.effect === 'Hunger').length, 0);
+    assert.strictEqual(game.movementBank['wampa-msg-1'], undefined);
+  });
+
+  it('enumerateActivatorSoaDescriptors returns hunger_regular when no hostile within 3', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Wampa-1-0': 'a1' }, 2: { 'Rebel-1-0': 'z9' } },
+      selectedMap: { id: 'test-map' },
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Wampa', playerNum: 1, msgId: 'wampa-msg-1',
+    });
+    assert.ok(descriptors.some(d => d.subPromptKey === 'hunger_regular'));
+  });
+
+  it('does not enumerate hunger_regular for Wampa Elite (different ability path)', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Wampa (Elite)-1-0': 'a1' }, 2: {} },
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Wampa (Elite)', playerNum: 1, msgId: 'wampa-elite-msg-1',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'hunger_regular'),
+      'Wampa Elite uses hunger_elite, not hunger_regular');
+  });
+
+  it('does not enumerate hunger_regular for non-Wampa DC', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg-1',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'hunger_regular'));
   });
 });
 
-describe('B-STARTACT-010: Phase 2c headless integration — multiple effects stack', () => {
-  it('Hunger Regular + Focused on the Kill stack for Wampa with attachment', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+describe('B-STARTACT-010: Slice-3 migration — Hunger Regular + FotK both as descriptors', () => {
+  it('both descriptors enumerated for Wampa with FotK attachment', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Wampa-1-0': 'a1' },
-        2: {},
-      },
+      figurePositions: { 1: { 'Wampa-1-0': 'a1' }, 2: {} },
       p1DcAttachments: { 'wampa-msg-1': ['Focused on the Kill'] },
       selectedMap: { id: 'test-map' },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Wampa',
-      playerNum: 1,
-      displayName: 'Wampa',
-      msgId: 'wampa-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Wampa', playerNum: 1, msgId: 'wampa-msg-1',
     });
-    const hunger = applied.filter(e => e.effect === 'Hunger');
-    const fotk = applied.filter(e => e.effect === 'Focused on the Kill');
-    assert.strictEqual(hunger.length, 1, 'Hunger fired');
-    assert.strictEqual(fotk.length, 1, 'Focused on the Kill fired');
-    assert.strictEqual(game.movementBank['wampa-msg-1']?.total, 4,
-      'Movement bank has 2 (Hunger) + 2 (FotK) = 4 MP');
+    const ids = descriptors.map(d => d.subPromptKey);
+    assert.ok(ids.includes('hunger_regular'), 'hunger_regular enumerated');
+    assert.ok(ids.includes('fotk'), 'fotk enumerated');
   });
 });
 

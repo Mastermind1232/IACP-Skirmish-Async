@@ -28,6 +28,7 @@
 import { opponentPlayerNum } from './player-helpers.js';
 import { getDcEffects } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
+import { cardNameIncludes } from './card-names.js';
 
 /**
  * Enumerate Start-of-Activation descriptors for an activating DC. Returns
@@ -110,6 +111,69 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         });
       }
     }
+  }
+
+  // Mounted (Captain Terro / Kuiil / Dewback): grant 3 MP. Per destruct
+  // 2026-05-07 even auto grants must be player-driven (timing matters).
+  const _abilityIds = eff?.specialAbilityIds || [];
+  if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || (eff?.passives || []).includes('Mounted')) {
+    descriptors.push({
+      id: `mounted:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Mounted',
+      subPromptKey: 'mounted',
+      extras: { dcName },
+    });
+  }
+
+  // Hunger Regular (Wampa): if no hostile within 3 spaces, gain 2 MP.
+  // Trigger only enumerates when the precondition is met.
+  if (dcName === 'Wampa' && game) {
+    const _hrDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _hrFk = `Wampa-${_hrDgIdx}-0`;
+    const _hrPos = game.figurePositions?.[playerNum]?.[_hrFk];
+    if (_hrPos) {
+      const _hrEnemyNum = opponentPlayerNum(playerNum);
+      const _hrHostiles = Object.values(game.figurePositions?.[_hrEnemyNum] || {});
+      const _hrAnyClose = _hrHostiles.some((hp) => hp && countGameSpaces(game, _hrPos, hp) <= 3);
+      if (!_hrAnyClose) {
+        descriptors.push({
+          id: `hunger_regular:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Hunger',
+          subPromptKey: 'hunger_regular',
+          extras: { dcName },
+        });
+      }
+    }
+  }
+
+  // Focused on the Kill (Skirmish Upgrade): +2 MP at start.
+  const _fotkAtts = game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || [];
+  if (_fotkAtts.length && cardNameIncludes(_fotkAtts, 'Focused on the Kill')) {
+    descriptors.push({
+      id: `fotk:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Focused on the Kill',
+      subPromptKey: 'fotk',
+      extras: { dcName },
+    });
+  }
+
+  // Comms Jammer (ISB Infiltrator Elite): opponent cannot play CC during
+  // this activation. Player-driven so the activator can choose timing.
+  if (_abilityIds.includes('comms_jammer_isb')) {
+    descriptors.push({
+      id: `comms_jammer:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Comms Jammer',
+      subPromptKey: 'comms_jammer',
+      extras: { dcName },
+    });
   }
 
   // Tactical Movement (Fenn Signis): pick a friendly figure within 3 → that

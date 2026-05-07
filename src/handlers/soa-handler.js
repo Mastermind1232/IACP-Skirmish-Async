@@ -19,7 +19,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
 import { healHp } from '../game/damage-helpers.js';
-import { ccDeckKey, ccHandKey } from '../game/player-helpers.js';
+import { ccDeckKey, ccHandKey, opponentPlayerNum } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 /**
@@ -102,6 +102,42 @@ export async function handleSoaPick(interaction, ctx) {
     );
     await interaction.message.channel.send({
       content: `\u{1F43B} **Hunger** — **${displayName}** gains **3 MP**. Choose a token:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'mounted') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Gain 3 MP)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F40E} **Mounted** — **${displayName}** may gain **3 MP** at start of activation:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'hunger_regular') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Gain 2 MP)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F43B} **Hunger** — **${displayName}** may gain **2 MP** (no hostile within 3 spaces):`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'fotk') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Gain 2 MP)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F3AF} **Focused on the Kill** — **${displayName}** may gain **2 MP**:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'comms_jammer') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Lock opponent CCs)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F4F6} **Comms Jammer** — **${displayName}** may prevent opponent from playing Command Cards during this activation:`,
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tac_move') {
@@ -230,6 +266,59 @@ export async function handleSoaFire(interaction, ctx) {
       if (logGameAction) await logGameAction(game, client, `\u{1F43B} **Hunger** — ${displayName} gained 3 MP and 1 Evade Token.`, { phase: 'ROUND', icon: 'card' });
     } else {
       await interaction.followUp({ content: `Unknown Hunger choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Mounted (Captain Terro / Kuiil / Dewback) ---
+  } else if (desc.subPromptKey === 'mounted') {
+    if (choiceKey === 'apply') {
+      grantMovementBank(game, desc.sourceMsgId, 3);
+      await interaction.message.edit({ content: `\u{1F40E} **Mounted** — **${displayName}** gained **3 MP**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F40E} **Mounted** — ${displayName} gained 3 MP.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F40E} **Mounted** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Mounted choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Hunger Regular (Wampa) ---
+  } else if (desc.subPromptKey === 'hunger_regular') {
+    if (choiceKey === 'apply') {
+      grantMovementBank(game, desc.sourceMsgId, 2);
+      await interaction.message.edit({ content: `\u{1F43B} **Hunger** — **${displayName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F43B} **Hunger** — ${displayName} gained 2 MP.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F43B} **Hunger** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Hunger choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Focused on the Kill (Skirmish Upgrade) ---
+  } else if (desc.subPromptKey === 'fotk') {
+    if (choiceKey === 'apply') {
+      grantMovementBank(game, desc.sourceMsgId, 2);
+      await interaction.message.edit({ content: `\u{1F3AF} **Focused on the Kill** — **${displayName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Focused on the Kill** — ${displayName} gained 2 MP.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3AF} **Focused on the Kill** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown FotK choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Comms Jammer (ISB Infiltrator Elite) ---
+  } else if (desc.subPromptKey === 'comms_jammer') {
+    if (choiceKey === 'apply') {
+      game.commsJammerActivePlayerNum = ownerPlayerNum;
+      const oppNum = opponentPlayerNum(ownerPlayerNum);
+      await interaction.message.edit({ content: `\u{1F4F6} **Comms Jammer** — Opponent (P${oppNum}) cannot play Command Cards during this activation.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F4F6} **Comms Jammer** — opponent CCs locked.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F4F6} **Comms Jammer** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Comms Jammer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 

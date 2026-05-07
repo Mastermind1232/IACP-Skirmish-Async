@@ -34,32 +34,11 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   const dcEff = getDcEffects()?.[dcName];
   const abilityIds = dcEff?.specialAbilityIds || [];
 
-  // Mounted (Captain Terro, Kuiil, Dewback): gain 3 MP
-  if (abilityIds.includes('mounted_terro') || abilityIds.includes('mounted_kuiil') || abilityIds.includes('mounted_dewback') || (dcEff?.passives || []).includes('Mounted')) {
-    grantMovementBank(game, msgId, 3);
-    applied.push({ effect: 'Mounted', message: `**Mounted** — **${displayName}** gains **3 movement points** at the start of activation.` });
-  }
-
-  // Hunger Regular (Wampa only): if no hostile within 3 spaces, gain 2 MP.
-  // NOTE: Wampa Elite Hunger remains inline in activation-setup.js — it has a choice branch
-  // (Block or Evade token) that cannot be expressed in the deterministic shared helper.
-  if (dcName === 'Wampa') {
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const figureKey = `Wampa-${dgIndex}-0`;
-    const pos = game.figurePositions?.[playerNum]?.[figureKey];
-    let hostileNearby = false;
-    if (pos) {
-      const enemyNum = opponentPlayerNum(playerNum);
-      const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
-      hostileNearby = hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= 3);
-    }
-    if (!hostileNearby && pos) {
-      grantMovementBank(game, msgId, 2);
-      applied.push({ effect: 'Hunger', message: `**Hunger** — **${displayName}** gains **2 MP** (no hostile within 3 spaces).` });
-    } else {
-      applied.push({ effect: 'Hunger', message: `**Hunger** — Hostile figure within 3 spaces; **${displayName}** does not gain MP.` });
-    }
-  }
+  // Mounted / Hunger Regular: migrated to SoA orchestrator (slice 3 —
+  // destruct 2026-05-07 "do not make any effects auto, let players pick to
+  // trigger each one"). See src/game/soa-orchestrator.js
+  // enumerateActivatorSoaDescriptors. Auto-fire branches removed; the
+  // chooser at activation start covers both.
 
   // Madness (Taron Malicos): if ≤2 CC in hand, suffer 1 Strain and become Focused
   if (dcName === 'Taron Malicos') {
@@ -101,18 +80,11 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
     applied.push({ effect: 'Into the Fray', message: `**Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` });
   }
 
-  // Comms Jammer (ISB Infiltrator Elite): opponent cannot play CC during this activation
-  if (abilityIds.includes('comms_jammer_isb')) {
-    game.commsJammerActivePlayerNum = playerNum;
-    applied.push({ effect: 'Comms Jammer', message: `**Comms Jammer** — Opponent (P${opponentPlayerNum(playerNum)}) cannot play Command Cards during this activation.` });
-  }
-
-  // Focused on the Kill (Skirmish Upgrade attachment): +2 MP
+  // Comms Jammer / Focused on the Kill: migrated to SoA orchestrator
+  // (slice 3 — destruct 2026-05-07). See enumerateActivatorSoaDescriptors.
+  // attachments still needed downstream for Beast Tamer (which remains
+  // inline pending slice 4).
   const attachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-  if (attachments.length && cardNameIncludes(attachments, 'Focused on the Kill')) {
-    grantMovementBank(game, msgId, 2);
-    applied.push({ effect: 'Focused on the Kill', message: `**Focused on the Kill** — **${dcName}** gains **2 MP** at start of activation.` });
-  }
 
   // Beast Tamer (Skirmish Upgrade attachment): exhaust → grant Speed as MP, set interact override for Non-Sentient
   if (attachments.length && cardNameIncludes(attachments, 'Beast Tamer')) {
