@@ -329,7 +329,8 @@ export const CARD_OVERRIDES = {
   'Marked Territory': { p1Army: [{ dcName: 'Rancor', count: 1 }] },
   'Master Operative': { p1Army: [{ dcName: 'Verena Talos', count: 1 }] },
   'Negation': { p1Army: [{ dcName: 'Darth Vader', count: 1 }] },
-  'No Cheating': { p1Army: [{ dcName: 'Asajj Ventress', count: 1 }] },
+  // 'No Cheating' (Asajj-only CC) removed 2026-05-07 with Asajj Ventress per
+  // destruct 2026-05-05; Session 8.3 of combat-rebuild plan.
   'Of No Importance': { p1Army: [{ dcName: 'Darth Vader', count: 1 }] },
   'Overcharged Weapons': { p1Army: [{ dcName: 'AT-DP', count: 1 }] },
   'Pack Alpha': { p1Army: [{ dcName: 'Rancor', count: 1 }] },

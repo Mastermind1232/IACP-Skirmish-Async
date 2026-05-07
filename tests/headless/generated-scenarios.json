@@ -3462,25 +3462,6 @@
       }
     },
     {
-      "ccName": "No Cheating",
-      "scenarioType": "activation",
-      "timing": "atStartOfActivationOfHostileFigureInYourLineOfSight",
-      "requiredDc": "Asajj Ventress",
-      "config": {
-        "mapId": "mos-eisley-outskirts",
-        "p1Army": [
-          "Asajj Ventress"
-        ],
-        "p2Army": [
-          "Stormtrooper (Elite)"
-        ],
-        "p1CcHand": [
-          "No Cheating"
-        ],
-        "p2CcHand": []
-      }
-    },
-    {
       "ccName": "Of No Importance",
       "scenarioType": "activation",
       "timing": "whenOneOfYourFiguresDefeated",
