@@ -1271,6 +1271,22 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               // Move card to game box
               game.gameBox = game.gameBox || [];
               game.gameBox.push('You Will Not Deny Me');
+              // Per destruct 2026-05-07: when YWNDM falls off, if Fifth
+              // Brother is still at 0 HP, he is immediately defeated.
+              // The heal-by-2 above usually brings him to 2 HP; this
+              // check is defensive for any other fall-off path.
+              const _ywndmFifthHs = dcHealthState?.get(_fifthMsgId);
+              const _ywndmEntry = Array.isArray(_ywndmFifthHs) ? _ywndmFifthHs[0] : null;
+              const _ywndmCur = Array.isArray(_ywndmEntry) ? (_ywndmEntry[0] ?? _ywndmEntry[1] ?? 0) : 0;
+              if (_ywndmCur <= 0 && deps && deps.processFigureDefeat) {
+                await logGameAction(game, client, `\u{1F480} **You Will Not Deny Me** \u2014 fell off while **Fifth Brother** is at **0 HP**; defeated.`, { phase: 'ROUND', icon: 'attack' });
+                await deps.processFigureDefeat(game, {
+                  defeatedPlayerNum: _ywndmData.playerNum,
+                  figureKey: _fifthKey,
+                  attackerPlayerNum: attackerPlayerNum != null ? attackerPlayerNum : (_ywndmData.playerNum === 1 ? 2 : 1),
+                  source: 'You Will Not Deny Me (fell off)',
+                });
+              }
             }
           }
         }

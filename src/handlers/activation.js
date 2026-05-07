@@ -782,6 +782,37 @@ export async function handleDcEndActivation(interaction, ctx) {
     await logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' });
   }
 
+  // Sustained by Rage (Maul / Krrsantan): "If you have not resolved an
+  // activation this round, you cannot be defeated." Per destruct
+  // 2026-05-07: when the SbR figure resolves an activation, the
+  // protection ends — if at 0 HP, immediately defeated. The
+  // already-activated check on activatedDcIndices runs AFTER this
+  // handler so we use the per-msgId activation-just-finished signal.
+  {
+    const _sbrEff = getDcEffects()?.[meta.dcName];
+    if ((_sbrEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+      const _sbrHs = ctx.dcHealthState?.get(msgId);
+      if (Array.isArray(_sbrHs)) {
+        for (let _fi = 0; _fi < _sbrHs.length; _fi++) {
+          const _sbrEntry = _sbrHs[_fi];
+          if (!Array.isArray(_sbrEntry)) continue;
+          const [_sbrCur, _sbrMax] = _sbrEntry;
+          if ((_sbrCur ?? _sbrMax ?? 1) > 0) continue;
+          const _sbrFk = `${meta.dcName}-${dgIndex}-${_fi}`;
+          await logGameAction(game, client, `💀 **Sustained by Rage** ends — **${meta.dcName}** is at **0 HP** after activation; defeated.`, { phase: 'ROUND', icon: 'attack' });
+          if (ctx.processFigureDefeat) {
+            await ctx.processFigureDefeat(game, {
+              defeatedPlayerNum: meta.playerNum,
+              figureKey: _sbrFk,
+              attackerPlayerNum: meta.playerNum,
+              source: 'Sustained by Rage (activation resolved)',
+            });
+          }
+        }
+      }
+    }
+  }
+
   // Update DC card (stays exhausted)
   await updateDcCardMessage(client, game, msgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Activation:' });
 
