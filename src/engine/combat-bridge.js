@@ -1375,6 +1375,29 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 if (_applyCondition(game, rgFk, 'Focus')) {
                   const vLabel = rgDcName === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
                   await logGameAction(game, client, `\u2694\uFE0F **${vLabel}** — **${rgDcName}** becomes **Focused** (adjacent friendly defeated).`, { phase: 'ROUND', icon: 'card' });
+                  // Forward Vengeance (Elite only): may also move 1 space.
+                  // Per destruct 2026-05-07. Grant 1 MP to the RG Elite's
+                  // bank and post a granted_move button so the player can
+                  // optionally spend it.
+                  if (rgDcName === 'Royal Guard (Elite)' && deps?.findDcMessageIdForFigure && deps?.ButtonBuilder && deps?.ButtonStyle && deps?.ActionRowBuilder) {
+                    try {
+                      const _fvMsgId = deps.findDcMessageIdForFigure(game.gameId, defenderPlayerNum, rgFk);
+                      if (_fvMsgId) {
+                        const { grantMovementBank: _grantMv } = await import('../game/game-helpers.js');
+                        _grantMv(game, _fvMsgId, 1);
+                        const _fvFkMatch = String(rgFk).match(/-(\d+)-(\d+)$/);
+                        const _fvFigIdx = _fvFkMatch ? _fvFkMatch[2] : '0';
+                        const _fvBtn = new deps.ButtonBuilder()
+                          .setCustomId(`granted_move_${game.gameId}_${_fvMsgId}_f${_fvFigIdx}`)
+                          .setLabel(`Forward Vengeance Move (${rgDcName})`)
+                          .setStyle(deps.ButtonStyle.Primary);
+                        await thread.send({
+                          content: `\u2694\uFE0F **Forward Vengeance** \u2014 **${rgDcName}** may move **1 space**:`,
+                          components: [new deps.ActionRowBuilder().addComponents(_fvBtn)],
+                        }).catch(() => {});
+                      }
+                    } catch {}
+                  }
                 }
               }
             }
