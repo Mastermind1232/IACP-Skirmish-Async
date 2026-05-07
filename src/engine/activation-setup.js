@@ -395,70 +395,10 @@ export async function finalizeActivation({
 
   // D3. Madness — now handled by applyStartOfActivationEffects()
 
-  // D4. Responsive (Shyla Varad): choose 1 MP or recover 1 Damage
-  if (dcName === 'Shyla Varad') {
-    const respRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_responsive_heal`).setLabel('Recover 1 Damage').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send({ content: `🏃 **Responsive** — **${displayName}**: Choose one:`, components: [respRow] }).catch(discordCatch);
-  }
-
-  // D5. Fulcrum (Agent Kallus): each player may draw 1 CC
-  if (dcName === 'Agent Kallus') {
-    const fulcrumRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_fulcrum_use`).setLabel('Use Fulcrum').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_fulcrum_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send({ content: `🕵️ **Fulcrum** — **${displayName}**: Each player may draw 1 Command card. Use Fulcrum?`, components: [fulcrumRow] }).catch(discordCatch);
-  }
-
-  // D6. Hunger — Wampa Regular now handled by applyStartOfActivationEffects().
-  // Wampa Elite Hunger remains inline: it has a choice branch (Block or Evade token)
-  // that cannot be expressed in the deterministic shared helper. This split is intentional.
-  if (dcName === 'Wampa (Elite)') {
-    const _hungerEliteCheck = () => {
-      const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const figureKey = `Wampa (Elite)-${dgIndex}-0`;
-      const pos = game.figurePositions?.[playerNum]?.[figureKey];
-      if (!pos) return false;
-      const enemyNum = opponentPlayerNum(playerNum);
-      const hostilePos = Object.values(game.figurePositions?.[enemyNum] || {});
-      return !hostilePos.some(hp => hp && countGameSpaces(game, pos, hp) <= 2);
-    };
-    if (_hungerEliteCheck()) {
-      grantMovementBank(game, msgId, 3);
-      const hungerRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_block`).setLabel('Block Token').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_hunger_evade`).setLabel('Evade Token').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `🐻 **Hunger** — **${displayName}** gains **3 MP** (no hostile within 2 spaces). Choose a token:`, components: [hungerRow] }).catch(discordCatch);
-    } else {
-      await thread.send({ content: `🐻 **Hunger** — Hostile figure within 2 spaces; **${displayName}** does not gain MP or tokens.` }).catch(discordCatch);
-    }
-  }
-
-  // D7. Tactical Movement (Fenn Signis): choose a friendly within 3 → gains 2 MP
-  if (dcName === 'Fenn Signis') {
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const selfFk = `${dcName}-${dgIndex}-0`;
-    const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
-    if (selfPos) {
-      const friendlyFigs = Object.entries(game.figurePositions?.[playerNum] || {})
-        .filter(([fk, fp]) => fp && countGameSpaces(game, selfPos, fp) <= 3);
-      if (friendlyFigs.length > 0) {
-        const btns = friendlyFigs.slice(0, 4).map(([fk]) => {
-          const label = dcNameFromFigureKey(fk);
-          return new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tacmove_${fk}`).setLabel(label).setStyle(ButtonStyle.Primary);
-        });
-        btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tacmove_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const tmRow = new ActionRowBuilder().addComponents(btns);
-        await thread.send({ content: `🎯 **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP**:`, components: [tmRow] }).catch(discordCatch);
-      } else {
-        await thread.send({ content: `🎯 **Tactical Movement** — No friendly figures within 3 spaces.` }).catch(discordCatch);
-      }
-    }
-  }
+  // D4-D7. Responsive / Fulcrum / Hunger Elite / Tactical Movement now flow
+  // through the SoA orchestrator (slice 2 — see soa-orchestrator.js
+  // enumerateActivatorSoaDescriptors). The chooser prompt posted above
+  // covers them; click → sub-prompt → fire → consume.
 
   // D8. Into the Fray — now handled by applyStartOfActivationEffects()
   // (overflow UI handled after the shared function call above)

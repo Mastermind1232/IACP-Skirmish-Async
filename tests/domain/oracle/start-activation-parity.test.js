@@ -712,14 +712,24 @@ describe('ORACLE-STARTACT-008: Phase 2c extracted effects no longer inline', () 
       'D6 must not have inline 2 MP grant for Regular Wampa');
   });
 
-  it('D6 Wampa Elite Hunger remains inline (intentional — choice branch)', () => {
-    const src = readSrc('src/engine/activation-setup.js');
-    const sectionD = src.slice(src.indexOf('[D] START-OF-ACTIVATION PASSIVES'));
-    const d6Region = sectionD.slice(sectionD.indexOf('D6.'), sectionD.indexOf('D7.'));
-    assert.ok(d6Region.includes("Wampa (Elite)"),
-      'D6 must still contain Wampa Elite Hunger inline');
-    assert.ok(d6Region.includes('hunger_block'),
-      'D6 must still contain choice buttons for Wampa Elite');
+  it('D6 Wampa Elite Hunger migrated to SoA orchestrator (slice 2 — destruct 2026-05-07)', () => {
+    // Wampa Elite Hunger was previously inline because of its choice branch
+    // (Block or Evade token after gaining 3 MP). The SoA orchestrator
+    // (slice 2) handles per-trigger choice branches via subPromptKey,
+    // so the inline block was removed and the descriptor moved to
+    // soa-orchestrator.js enumerateActivatorSoaDescriptors. This test now
+    // pins the new architecture: NO inline `Wampa (Elite)` block in D4-D7
+    // section, AND a hunger_elite descriptor exists in the orchestrator.
+    const setupSrc = readSrc('src/engine/activation-setup.js');
+    const sectionD = setupSrc.slice(setupSrc.indexOf('[D] START-OF-ACTIVATION PASSIVES'));
+    const d4to7Region = sectionD.slice(sectionD.indexOf('D4'), sectionD.indexOf('D8.'));
+    assert.ok(!d4to7Region.includes('hunger_block'),
+      'D4-D7 must not contain inline `hunger_block` button (migrated to SoA orchestrator)');
+    const orchestratorSrc = readSrc('src/game/soa-orchestrator.js');
+    assert.ok(orchestratorSrc.includes("'Wampa (Elite)'"),
+      'soa-orchestrator must enumerate a Wampa (Elite) descriptor');
+    assert.ok(orchestratorSrc.includes("subPromptKey: 'hunger_elite'"),
+      'soa-orchestrator must use the hunger_elite subPromptKey');
   });
 
   it('Beast Tamer is no longer inline in D35', () => {

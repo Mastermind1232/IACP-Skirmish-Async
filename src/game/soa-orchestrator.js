@@ -27,6 +27,7 @@
 
 import { opponentPlayerNum } from './player-helpers.js';
 import { getDcEffects } from '../data-loader.js';
+import { countGameSpaces } from './board-helpers.js';
 
 /**
  * Enumerate Start-of-Activation descriptors for an activating DC. Returns
@@ -61,6 +62,78 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
       subPromptKey: 'vigor',
       extras: { dcName },
     });
+  }
+
+  // Responsive (Shyla Varad): SoA choice — gain 1 MP or recover 1 Damage.
+  if (dcName === 'Shyla Varad') {
+    descriptors.push({
+      id: `responsive:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Responsive',
+      subPromptKey: 'responsive',
+      extras: { dcName },
+    });
+  }
+
+  // Fulcrum (Agent Kallus): SoA y/n — both players draw 1 CC if used.
+  if (dcName === 'Agent Kallus') {
+    descriptors.push({
+      id: `fulcrum:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Fulcrum',
+      subPromptKey: 'fulcrum',
+      extras: { dcName },
+    });
+  }
+
+  // Hunger (Wampa Elite): SoA choice — gain 3 MP + Block Token OR 3 MP +
+  // Evade Token, but only if no hostile within 2 spaces. When a hostile IS
+  // within 2 the trigger doesn't enter the bucket at all.
+  if (dcName === 'Wampa (Elite)' && game) {
+    const _heDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _heFk = `Wampa (Elite)-${_heDgIdx}-0`;
+    const _hePos = game.figurePositions?.[playerNum]?.[_heFk];
+    if (_hePos) {
+      const _heEnemyNum = opponentPlayerNum(playerNum);
+      const _heHostiles = Object.values(game.figurePositions?.[_heEnemyNum] || {});
+      const _heAnyClose = _heHostiles.some((hp) => hp && countGameSpaces(game, _hePos, hp) <= 2);
+      if (!_heAnyClose) {
+        descriptors.push({
+          id: `hunger_elite:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Hunger',
+          subPromptKey: 'hunger_elite',
+          extras: { dcName, figureKey: _heFk },
+        });
+      }
+    }
+  }
+
+  // Tactical Movement (Fenn Signis): pick a friendly figure within 3 → that
+  // figure gains 2 MP. Trigger only enters the bucket when at least one
+  // eligible friendly exists.
+  if (dcName === 'Fenn Signis' && game) {
+    const _tmDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _tmSelfFk = `${dcName}-${_tmDgIdx}-0`;
+    const _tmSelfPos = game.figurePositions?.[playerNum]?.[_tmSelfFk];
+    if (_tmSelfPos) {
+      const _tmCandidates = Object.entries(game.figurePositions?.[playerNum] || {})
+        .filter(([fk, fp]) => fp && countGameSpaces(game, _tmSelfPos, fp) <= 3)
+        .map(([fk]) => fk);
+      if (_tmCandidates.length > 0) {
+        descriptors.push({
+          id: `tac_move:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Tactical Movement',
+          subPromptKey: 'tac_move',
+          extras: { dcName, candidates: _tmCandidates.slice(0, 4) },
+        });
+      }
+    }
   }
 
   return descriptors;
