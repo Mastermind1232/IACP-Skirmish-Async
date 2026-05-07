@@ -315,7 +315,13 @@ export function computeCombatResult(combat) {
   // sources fold into combat.bonusEvade upstream (combat-bridge sets roundEvade
   // and Distracting via handlers/combat.js). Clamp at 0 so Harsh Environment's
   // -1 evade can't make Cunning negative.
-  const cunningEvadeTotal = Math.max(0, defRoll.evade + (combat.bonusEvade || 0));
+  //
+  // destruct 2026-05-07: Weakened on the defender reduces Evade results by 1.
+  // That penalty flows into Cunning's evade total too — a Weakened figure
+  // with Cunning credits one fewer block per evade than the raw count.
+  const _cunningWeakenPenalty = (combat.defenderConds?.includes('Weaken')
+    && !combat.defenderCondEffectsSuppressed) ? 1 : 0;
+  const cunningEvadeTotal = Math.max(0, defRoll.evade + (combat.bonusEvade || 0) - _cunningWeakenPenalty);
   const cunningBonus = (combat.hasCunning) ? cunningEvadeTotal : 0;
   // Combat-pipeline rebuild (slice 6.15 + destruct 2026-05-06 ruling):
   // Overwhelming Impact's ignoreDefenseResultsNotOnDice flag drops anything

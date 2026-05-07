@@ -70,6 +70,7 @@ import {
   handleDcDeplete,
   handleDcRename,
   handleDcRemoveStun,
+  handleDcRemoveBleed,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,
@@ -362,6 +363,7 @@ register('dc_toggle_', handleDcToggle, 'dcPlayArea');
 register('dc_deplete_', handleDcDeplete, 'dcPlayArea');
 register('dc_rename_', handleDcRename, 'dcPlayArea');
 register('dc_remove_stun_', handleDcRemoveStun, 'dcPlayArea');
+register('dc_remove_bleed_', handleDcRemoveBleed, 'dcPlayArea');
 register('dc_cc_special_', handleDcCcSpecial, 'dcPlayArea');
 register('dc_cc_eoa_', handleDcCcEndOfActivation, 'dcPlayArea');
 register('dc_cc_double_', handleDcCcDoubleAction, 'dcPlayArea');
@@ -686,6 +688,7 @@ export {
   handleDcDeplete,
   handleDcRename,
   handleDcRemoveStun,
+  handleDcRemoveBleed,
   handleDcCcSpecial,
   handleDcCcEndOfActivation,
   handleDcCcDoubleAction,

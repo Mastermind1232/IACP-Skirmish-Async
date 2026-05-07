@@ -941,14 +941,21 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;
 
-  // Stun: check if the active figure is Stunned — if so, disable all action buttons
+  // Stun: per IACP, Stun prevents Move and Attack actions only — does NOT
+  // block Interact or non-attack Special Actions (destruct 2026-05-07).
   const checkFigIdx = figures === 1 ? 0 : (selectedFigure ?? null);
   const isStunned = checkFigIdx != null && !!(game?.figureConditions?.[`${dcName}-${dgIndex}-${checkFigIdx}`] || []).includes('Stun');
-  const noAct = noActions || isStunned;
+  const isBleeding = checkFigIdx != null && !!(game?.figureConditions?.[`${dcName}-${dgIndex}-${checkFigIdx}`] || []).includes('Bleed');
+  // noAct = "any action" gate — used for Interact + non-attack Specials.
+  // Stun does NOT block these (destruct 2026-05-07 audit). Move/Attack
+  // gates are computed separately (noMove/noAttack below).
+  const noAct = noActions;
+  const noAttack = noActions || isStunned;
 
   // To the Limit (C75): extra action cannot be a Move
   const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
-  const noMove = noAct || toTheLimitActive;
+  // Move blocked by Stun + To-the-Limit + no-actions.
+  const noMove = noActions || isStunned || toTheLimitActive;
 
   // Non-Combatant: DCs with no attack dice cannot attack
   const hasAttack = (stats.attack?.dice?.length ?? 0) > 0;
@@ -969,22 +976,23 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       const _selNick = game?.figureNicknames?.[`${dcName}-${dgIndex}-${selectedFigure}`];
       const suffix = _selNick ? ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]} (${_selNick})` : ` ${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
       const moveLbl = toTheLimitActive ? `Move${suffix} (blocked)` : `Move${suffix}`;
-      if (isStunned) {
-        const comps = [
-          new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f${selectedFigure}`).setLabel(`Remove Stun${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions),
-          new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(true),
-        ];
-        if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(true));
-        comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(true));
-        rows.push(new ActionRowBuilder().addComponents(...comps));
-      } else {
-        const comps = [
-          new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
-        ];
-        if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAct));
-        if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
-        comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
-        rows.push(new ActionRowBuilder().addComponents(...comps));
+      // Single unified branch — Stun blocks Move/Attack only; Interact +
+      // Specials remain usable (destruct 2026-05-07).
+      const comps = [
+        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f${selectedFigure}`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
+      ];
+      if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAttack));
+      if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
+      rows.push(new ActionRowBuilder().addComponents(...comps));
+      // Condition-discard row: Remove Stun + Remove Bleed (1 action each)
+      // when applicable. Surface as a separate row so the action row stays
+      // tight at 4 buttons (Move/Attack/Heroic/Interact).
+      if (isStunned || isBleeding) {
+        const condBtns = [];
+        if (isStunned) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f${selectedFigure}`).setLabel(`Remove Stun${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions));
+        if (isBleeding) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_bleed_${msgId}_f${selectedFigure}`).setLabel(`Remove Bleed${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions));
+        if (condBtns.length) rows.push(new ActionRowBuilder().addComponents(...condBtns));
       }
     } else {
       // No figure selected yet: show dropdown only
@@ -1003,23 +1011,20 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   } else {
     const moveLbl = toTheLimitActive ? 'Move (blocked)' : 'Move';
-    if (isStunned) {
-      // Stunned: show Remove Stun button (costs 1 action) + disabled Move/Attack
-      const comps = [
-        new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f0`).setLabel('Remove Stun (1 Action)').setStyle(ButtonStyle.Danger).setDisabled(noActions),
-        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel('Move').setStyle(ButtonStyle.Success).setDisabled(true),
-      ];
-      if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(true));
-      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(true));
-      rows.push(new ActionRowBuilder().addComponents(...comps));
-    } else {
-      const comps = [
-        new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
-      ];
-      if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAct));
-      if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
-      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
-      rows.push(new ActionRowBuilder().addComponents(...comps));
+    // Single unified branch — Stun blocks Move/Attack only; Interact +
+    // Specials remain usable (destruct 2026-05-07).
+    const comps = [
+      new ButtonBuilder().setCustomId(`dc_move_${msgId}_f0`).setLabel(moveLbl).setStyle(ButtonStyle.Success).setDisabled(noMove),
+    ];
+    if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAttack));
+    if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+    comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
+    rows.push(new ActionRowBuilder().addComponents(...comps));
+    if (isStunned || isBleeding) {
+      const condBtns = [];
+      if (isStunned) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f0`).setLabel('Remove Stun (1 Action)').setStyle(ButtonStyle.Danger).setDisabled(noActions));
+      if (isBleeding) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_bleed_${msgId}_f0`).setLabel('Remove Bleed (1 Action)').setStyle(ButtonStyle.Danger).setDisabled(noActions));
+      if (condBtns.length) rows.push(new ActionRowBuilder().addComponents(...condBtns));
     }
   }
 
@@ -1058,11 +1063,16 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       }
       const bankMp = game?.movementBank?.[msgId]?.remaining ?? 0;
       const mpDisabled = mpCost > 0 && bankMp < mpCost;
+      // destruct 2026-05-07: Stun does NOT block Special Actions in
+      // general — only Move + Attack. Stunned figures can still use
+      // non-attack specials. Attack-specials that grant freeAttackBonus
+      // will be refused at the dc_attack guard if the player tries to
+      // launch the attack itself.
       return new ButtonBuilder()
         .setCustomId(`dc_special_${idx}_${msgId}`)
         .setLabel(label)
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(isStunned || alreadyUsed || isVfFocusUsed || (mpCost > 0 ? mpDisabled : (actionsRemaining ?? 2) < cost));
+        .setDisabled(alreadyUsed || isVfFocusUsed || (mpCost > 0 ? mpDisabled : (actionsRemaining ?? 2) < cost));
     });
     // Split into multiple rows if > 5 specials
     for (let i = 0; i < specialBtns.length; i += 5) {
@@ -1089,12 +1099,15 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     const playableCcDouble = getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName);
     const ccDoubles = playableCcDouble.slice(0, 5);
     if (ccDoubles.length > 0) {
+      // destruct 2026-05-07: Stun does NOT block Double-Action CC plays in
+      // general (Stun is Move/Attack only). Attack-Double-Actions still
+      // refuse via the dc_attack guard if the player tries to launch.
       const ccDoubleBtns = ccDoubles.map((ccName, idx) =>
         new ButtonBuilder()
           .setCustomId(`dc_cc_double_${msgId}_${idx}`)
           .setLabel(_truncLabel('CC (2 Actions): ', ccName))
           .setStyle(ButtonStyle.Secondary)
-          .setDisabled(isStunned || (actionsRemaining ?? 2) < 2)
+          .setDisabled((actionsRemaining ?? 2) < 2)
       );
       rows.push(new ActionRowBuilder().addComponents(...ccDoubleBtns));
     }

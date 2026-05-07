@@ -416,6 +416,68 @@ export async function handleDcRemoveStun(interaction, ctx) {
 }
 
 /**
+ * Discard a Bleed condition for 1 action — destruct 2026-05-07: parallel
+ * to dc_remove_stun_. customId format: dc_remove_bleed_{msgId}_f{figureIndex}.
+ * Per IACP "Recover" rule: spend 1 action to discard a Bleed condition.
+ * The action itself does NOT trigger post-action Bleed strain (the very
+ * Bleed condition is being removed by the action — there's nothing left
+ * to fire).
+ */
+export async function handleDcRemoveBleed(interaction, ctx) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    dcMessageMeta,
+    DC_ACTIONS_PER_ACTIVATION,
+    updateDcActionsMessage,
+    logGameAction,
+    saveGames,
+    client,
+  } = ctx;
+  const m = interaction.customId.match(/^dc_remove_bleed_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid remove-bleed button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const msgId = m[1];
+  const figureIndex = parseInt(m[2], 10);
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
+
+  const actionsData = game.dcActionsData?.[msgId];
+  const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+  if (actionsRemaining <= 0) {
+    await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const conds = game.figureConditions?.[figureKey] || [];
+  if (!conds.includes('Bleed')) {
+    await interaction.followUp({ content: 'This figure is not Bleeding.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  filterCondition(game, figureKey, 'Bleed');
+  actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+
+  const displayName = meta.displayName || meta.dcName;
+  await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Bleeding**.`, { phase: 'ACTIVATION', icon: 'condition' });
+  await updateDcActionsMessage(interaction, game, msgId, meta);
+  // No triggerBleedAfterAction here — the Bleed was just discarded by
+  // this very action.
+  saveGames(game.gameId);
+}
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx
  */
