@@ -334,6 +334,29 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'arms_distribution') {
+    // Flat (figure × type) sub-prompt. choiceKey: `${figureKey}|damage`
+    // or `${figureKey}|block`. Skip button trails.
+    const candidates = desc.extras?.candidates || [];
+    if (candidates.length === 0) {
+      await interaction.followUp({ content: 'No eligible friendlies within 3 spaces.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = [];
+    for (const fk of candidates) {
+      const name = dcNameFromFigureKey(fk);
+      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|damage`).setLabel(`${name}: Damage`).setStyle(ButtonStyle.Danger));
+      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|block`).setLabel(`${name}: Block`).setStyle(ButtonStyle.Primary));
+    }
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const adRows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      adRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F3AF} **Arms Distribution** — **${displayName}** picks a friendly figure within 3 to gain **1 Power Token** (Damage or Block):`,
+      components: adRows.slice(0, 5),
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'force_vision') {
     // Owner is the opponent (Kanan's enemy). List the opponent's
     // currently-ready groups (recomputed at fire time). Choosing one
@@ -979,6 +1002,26 @@ export async function handleSoaFire(interaction, ctx) {
         }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
       }
+    }
+
+  // --- Arms Distribution (Ko-Tun) — SoA portion ---
+  // choiceKey is `${figureKey}|damage` or `${figureKey}|block`, or 'skip'.
+  // Grants 1 Damage or Block token to the chosen friendly.
+  } else if (desc.subPromptKey === 'arms_distribution') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3AF} **Arms Distribution** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const _adSplit = choiceKey.indexOf('|');
+      if (_adSplit < 0) {
+        await interaction.followUp({ content: `Malformed Arms Distribution choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetFk = choiceKey.slice(0, _adSplit);
+      const tokenType = choiceKey.slice(_adSplit + 1) === 'damage' ? 'Damage' : 'Block';
+      grantPowerTokens(game, targetFk, tokenType, 1);
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      await interaction.message.edit({ content: `\u{1F3AF} **Arms Distribution** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Arms Distribution** — ${targetDcName} +1 ${tokenType} Token.`, { phase: 'ROUND', icon: 'card' });
     }
 
   // --- Force Vision (Kanan Jarrus) ---

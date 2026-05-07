@@ -496,6 +496,32 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Arms Distribution (Ko-Tun) — SoA portion. Per destruct 2026-05-07:
+  // total payout is 1 Power Token at deploy + 1 at SoA (NOT 2 at SoA).
+  // The deploy-time token is handled at deployment; this descriptor only
+  // covers the SoA grant. Owner = activator. Choose a friendly within 3
+  // spaces to receive 1 Damage or Block Power Token.
+  if (_abilityIds.includes('arms_distribution_kotun') && game) {
+    const _adDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _adSelfFk = `${dcName}-${_adDgIdx}-0`;
+    const _adSelfPos = game.figurePositions?.[playerNum]?.[_adSelfFk];
+    if (_adSelfPos) {
+      const _adFriendlies = Object.entries(game.figurePositions?.[playerNum] || {})
+        .filter(([fk, fp]) => fp && countGameSpaces(game, _adSelfPos, fp) <= 3)
+        .map(([fk]) => fk);
+      if (_adFriendlies.length > 0) {
+        descriptors.push({
+          id: `arms_distribution:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Arms Distribution',
+          subPromptKey: 'arms_distribution',
+          extras: { dcName, candidates: _adFriendlies, selfFigureKey: _adSelfFk },
+        });
+      }
+    }
+  }
+
   // Force Vision (Kanan Jarrus): SoA opponent-trigger. Card text: "At
   // the start of your activation, your opponent chooses one of their
   // ready groups. They must activate that group next, if possible."

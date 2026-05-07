@@ -618,26 +618,10 @@ export async function finalizeActivation({
   // forceVisionPending is no longer used; pendingSoaResolution itself
   // gates the activation flow.
 
-  // D25. Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
-  if (_abilityIds.includes('arms_distribution_kotun')) {
-    const _adDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const _adSelfFk = `${dcName}-${_adDgIndex}-0`;
-    const _adSelfPos = game.figurePositions?.[playerNum]?.[_adSelfFk];
-    const _adFriendlies = _adSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
-      .filter(([fk, fp]) => fp && countGameSpaces(game, _adSelfPos, fp) <= 3) : [];
-    if (_adFriendlies.length > 0) {
-      setPendingTokenDistribution(game, { gameId, msgId, playerNum, remaining: 2, ability: 'armsdist', tokenTypes: ['Damage', 'Block'] });
-      const _adSlice = _adFriendlies.slice(0, 4);
-      const _adLabels = figureChoiceLabels(_adSlice.map(([fk]) => fk));
-      const btns = _adSlice.map(([fk], i) =>
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk}`).setLabel(_adLabels[i]).setStyle(ButtonStyle.Primary)
-      );
-      btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🎯 **Arms Distribution** — Distribute **2 power tokens** (Hit or Block) among friendly figures within 3 spaces. Pick a figure (2 remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-    } else {
-      await thread.send({ content: `🎯 **Arms Distribution** — No friendly figures within 3 spaces.` }).catch(discordCatch);
-    }
-  }
+  // D25. Arms Distribution (Ko-Tun) — SoA portion migrated to orchestrator
+  // (destruct 2026-05-07). Total payout is 1 Power Token at deploy +
+  // 1 at SoA (NOT 2 at SoA). Deploy-time portion is handled separately;
+  // SoA descriptor enumerated in soa-orchestrator.js.
 
   // D26. Trust Goes Both Ways — migrated to SoA orchestrator (destruct
   // 2026-05-07). Descriptor enumerated in soa-orchestrator.js
