@@ -1522,6 +1522,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
+  // Companion-first gate (per destruct 2026-05-07): when companion was
+  // chosen to activate before the host, the host's actions are refused
+  // until the companion's full activation completes. The flag is set to
+  // 'before' at SoA pick and flipped to 'completed' when the companion's
+  // End Activation handler fires (handleDcEndActivation finds matching
+  // hosts via getCompanionForDc and updates the flag).
+  if (game.companionActivatedBefore?.[msgId] === 'before') {
+    await interaction.followUp({
+      content: '\u{23F3} **Companion must complete its activation first.** You chose for the companion to activate before this figure — finish the companion\'s 2 actions and end its activation, then return here.',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   // Resolve attachment-injected special action names and costs
   const _baseSpecialCount = (getDcStats(meta.dcName).specials || []).length;
   let _effectiveActionCost = 1;

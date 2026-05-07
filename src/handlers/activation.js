@@ -734,6 +734,23 @@ export async function handleDcEndActivation(interaction, ctx) {
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[msgId] = true;
 
+  // Companion-first gate clearance (destruct 2026-05-07 (c)): if the
+  // ending DC is itself a companion that was chosen to go BEFORE its
+  // host, flip the host's companionActivatedBefore flag from 'before'
+  // to 'completed' so the host's action gate releases.
+  if (game.companionActivatedBefore) {
+    for (const _hostMsgId of Object.keys(game.companionActivatedBefore)) {
+      if (game.companionActivatedBefore[_hostMsgId] !== 'before') continue;
+      const _hostMeta = dcMessageMeta?.get(_hostMsgId);
+      if (!_hostMeta) continue;
+      const _hostAtts = game.p1DcAttachments?.[_hostMsgId] || game.p2DcAttachments?.[_hostMsgId] || [];
+      const _hostCompanion = getCompanionForDc(_hostMeta.dcName, _hostAtts);
+      if (_hostCompanion?.companionName === meta.dcName) {
+        game.companionActivatedBefore[_hostMsgId] = 'completed';
+      }
+    }
+  }
+
   // Clean up activation state
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData?.threadId) {
