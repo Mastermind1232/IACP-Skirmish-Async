@@ -46,8 +46,11 @@ describe('PROBE-PD-ATK-021: evade cancels surge 1:1 at end of Step 4, before Ste
   });
 
   it('021c: source — rawSurge includes bonuses; evade cancellation happens AFTER all surge bonuses accumulate', () => {
+    // Updated 2026-05-07: Weakened condition penalty (-1 surge) is applied
+    // inline in rawSurge computation. The regex tolerates the
+    // `- _weakenSurgePenalty` term and the surrounding Math.max(0, ...) clamp.
     assert.match(H_CB_SRC,
-      /const rawSurge = roll\.surge \+ surgeBonus \+ \(combat\.tokenSurgeBonus \|\| 0\);[\s\S]*?const evadeCancelled = Math\.min\(rawSurge, totalEvade\);/,
+      /const rawSurge = Math\.max\(0, roll\.surge \+ surgeBonus \+ \(combat\.tokenSurgeBonus \|\| 0\)[\s\S]*?\)[\s\S]*?const evadeCancelled = Math\.min\(rawSurge, totalEvade\);/,
       'rawSurge (post-bonus) must be computed before evade cancels — CRR-ATK-021');
   });
 

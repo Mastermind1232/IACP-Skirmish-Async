@@ -132,23 +132,29 @@ describe('ORACLE-COMBAT-002: Zero Damage Foundation (Condition Gating Prerequisi
   });
 });
 
-// ── ORACLE-COMBAT-003: Weakened Modifier Ordering ───────────────────────────
+// ── ORACLE-COMBAT-003: Weakened Modifier (canonical card behavior) ─────────
 //
-// Rules:
-//   Defender Weakened: "While defending, apply -1 to your block results."
-//   Applied AFTER pierce. (src/game/combat.js:255-258)
+// Canonical Weakened condition card (vassal_extracted/images/conditions/
+// Condition card--Weakened.jpg) — destruct 2026-05-07 confirmation:
 //
-//   Attacker Weakened: "While attacking, apply -1 to your damage results."
-//   Applied AFTER block subtraction, only when damage > 0. (src/game/combat.js:263-265)
+//   While attacking, apply -1 [Surge] to the attack results.
+//   While defending, apply -1 [Evade] to the defense results.
+//   Discard this condition at the end of your activation.
 //
-// The ordering matters: defender-weaken reduces effective block (pre-damage calc),
-// attacker-weaken reduces final damage (post-damage calc).
+// Implementation split:
+//   - Surge/Evade penalties: handlers/combat.js handleCombatSurge applies
+//     them to rawSurge / totalEvade BEFORE the evade-cancels-surge calc.
+//   - computeCombatResult only surfaces the flag in resultText for log
+//     readability; it does NOT modify damage or block (the prior incorrect
+//     impl was reverted 2026-05-07).
+//
+// These oracle cases verify computeCombatResult does NOT modify damage
+// or block based on Weakened — that's now handlers/combat.js's job.
 
-describe('ORACLE-COMBAT-003: Weakened Modifier Ordering', () => {
-  it('003a: defender weakened — reduces effective block after pierce', () => {
-    // 2 dmg vs 3 block, pierce 1, defender weakened
-    // effectiveBlock = max(0, 3 - 0 - 1) = 2, then -1 weaken = max(0, 1) = 1
-    // damage = max(0, 2 - 1) = 1
+describe('ORACLE-COMBAT-003: Weakened (no damage/block modification in computeCombatResult)', () => {
+  it('003a: defender weakened — block is NOT reduced by Weakened (only by pierce)', () => {
+    // 2 dmg vs 3 block, pierce 1; effectiveBlock = max(0, 3 - 1) = 2 (Weaken
+    // does not reduce block any further). damage = max(0, 2 - 2) = 0.
     const result = computeCombatResult({
       attackRoll:  { acc: 0, dmg: 2, surge: 0 },
       defenseRoll: { block: 3, evade: 0, dodge: false },
@@ -156,37 +162,23 @@ describe('ORACLE-COMBAT-003: Weakened Modifier Ordering', () => {
       defenderConds: ['Weaken'],
     });
     assert.equal(result.hit, true);
-    assert.equal(result.effectiveBlock, 1);
-    assert.equal(result.damage, 1);
+    assert.equal(result.effectiveBlock, 2);
+    assert.equal(result.damage, 0);
   });
 
-  it('003b: attacker weakened — reduces damage after block subtraction', () => {
-    // 3 dmg vs 1 block, attacker weakened
-    // damage = max(0, 3 - 1) = 2, then -1 weaken = max(0, 1) = 1
+  it('003b: attacker weakened — final damage is NOT reduced in computeCombatResult', () => {
+    // 3 dmg vs 1 block; damage = max(0, 3 - 1) = 2. No Weaken-from-attacker
+    // reduction here — the surge-side penalty is applied upstream.
     const result = computeCombatResult({
       attackRoll:  { acc: 0, dmg: 3, surge: 0 },
       defenseRoll: { block: 1, evade: 0, dodge: false },
       attackerConds: ['Weaken'],
     });
     assert.equal(result.hit, true);
-    assert.equal(result.damage, 1);
+    assert.equal(result.damage, 2);
   });
 
-  it('003c: attacker weakened can reduce damage to 0', () => {
-    // 2 dmg vs 1 block, attacker weakened
-    // damage = max(0, 2 - 1) = 1, then -1 weaken = max(0, 0) = 0
-    const result = computeCombatResult({
-      attackRoll:  { acc: 0, dmg: 2, surge: 0 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
-      attackerConds: ['Weaken'],
-    });
-    assert.equal(result.hit, true);
-    assert.equal(result.damage, 0);
-  });
-
-  it('003d: attacker weakened does NOT apply when damage already 0', () => {
-    // 1 dmg vs 3 block, attacker weakened
-    // damage = max(0, 1 - 3) = 0, weaken guard (damage > 0) fails → stays 0
+  it('003c: attacker weakened — damage already 0 stays at 0 (block too high)', () => {
     const result = computeCombatResult({
       attackRoll:  { acc: 0, dmg: 1, surge: 0 },
       defenseRoll: { block: 3, evade: 0, dodge: false },
@@ -196,10 +188,8 @@ describe('ORACLE-COMBAT-003: Weakened Modifier Ordering', () => {
     assert.equal(result.damage, 0);
   });
 
-  it('003e: both weakened — defender weaken then attacker weaken in sequence', () => {
-    // 3 dmg vs 2 block, both weakened
-    // effectiveBlock = max(0, 2 - 0 - 0) = 2, then -1 defender weaken = max(0, 1) = 1
-    // damage = max(0, 3 - 1) = 2, then -1 attacker weaken = max(0, 1) = 1
+  it('003d: both weakened — neither modifier touches damage or effective block', () => {
+    // 3 dmg vs 2 block, both weakened. effectiveBlock = 2, damage = 1.
     const result = computeCombatResult({
       attackRoll:  { acc: 0, dmg: 3, surge: 0 },
       defenseRoll: { block: 2, evade: 0, dodge: false },
@@ -207,7 +197,7 @@ describe('ORACLE-COMBAT-003: Weakened Modifier Ordering', () => {
       defenderConds: ['Weaken'],
     });
     assert.equal(result.hit, true);
-    assert.equal(result.effectiveBlock, 1);
+    assert.equal(result.effectiveBlock, 2);
     assert.equal(result.damage, 1);
   });
 });

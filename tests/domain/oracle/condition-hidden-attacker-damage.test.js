@@ -95,17 +95,18 @@ describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Damage', () => {
     assert.equal(r.damage, 1, '2 + 1 Hidden = 3, minus 2 block = 1');
   });
 
-  it('behavior — Hidden + Weakened attacker: Hidden adds +1 dmg, Weakened removes -1 dmg afterwards', () => {
-    // Weakened applies after Hidden in the current implementation order.
-    // Combined effect: +1 (Hidden) -1 (Weakened) = net +0. Verifies the
-    // two condition modifiers compose correctly.
+  it('behavior — Hidden + Weakened attacker: Hidden adds +1 dmg; Weakened reduces SURGE upstream (no longer touches damage)', () => {
+    // 2026-05-07 update: Weakened reduces SURGE (canonical card), not
+    // damage. computeCombatResult only applies the Hidden +1 damage.
+    // The Weaken-on-surge penalty lives in handlers/combat.js's
+    // handleCombatSurge — it doesn't affect this pure compute.
     const c = makeCombat({
       attackRoll: { acc: 5, dmg: 2, surge: 0 },
       defenseRoll: { block: 0, evade: 0, dodge: false },
       attackerConds: ['Hide', 'Weaken'],
     });
     const r = computeCombatResult(c);
-    assert.equal(r.damage, 2, 'Hidden +1 then Weakened -1 = net 2 damage');
+    assert.equal(r.damage, 3, 'Hidden +1 damage applies; Weaken does not subtract here (it would have subtracted 1 surge upstream).');
   });
 
   it('behavior — miss (no accuracy) → Hidden bonus does not produce damage', () => {

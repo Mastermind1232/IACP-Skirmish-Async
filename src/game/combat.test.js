@@ -300,27 +300,37 @@ test('computeCombatResult Hidden on defender reduces accuracy by 2', () => {
   assert.ok(r.resultText.includes('Hidden'));
 });
 
-test('computeCombatResult Weakened on defender reduces block by 1', () => {
+test('computeCombatResult Weakened on defender — flag detected, evade penalty applied upstream', () => {
+  // destruct 2026-05-07: Weakened reduces SURGE (attacker) and EVADE
+  // (defender) by 1, NOT damage and block. The Surge/Evade penalties are
+  // applied upstream in handlers/combat.js handleCombatSurge before the
+  // evade-cancels-surge calc; computeCombatResult only surfaces the flag
+  // in resultText. Block reduction is no longer part of Weakened.
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 5, surge: 0 },
     defenseRoll: { block: 3, evade: 0 },
     defenderConds: ['Weaken'],
   });
-  // effectiveBlock = max(0, 3 - 1) = 2; damage = 5 - 2 = 3
+  // No block reduction — effectiveBlock matches the rolled block. Damage =
+  // max(0, 5 - 3) = 2. The "Weakened (defender -1 evade)" detail line
+  // only fires when the attacker had non-zero surge+evade interaction
+  // (handlers/combat.js applies the penalty there).
   assert.strictEqual(r.hit, true);
-  assert.strictEqual(r.effectiveBlock, 2);
-  assert.strictEqual(r.damage, 3);
+  assert.strictEqual(r.effectiveBlock, 3);
+  assert.strictEqual(r.damage, 2);
   assert.ok(r.resultText.includes('Weakened'));
 });
 
-test('computeCombatResult Weakened on attacker reduces damage by 1', () => {
+test('computeCombatResult Weakened on attacker — flag detected, surge penalty applied upstream', () => {
+  // Same architectural change — see test above.
   const r = computeCombatResult({
     attackRoll: { acc: 2, dmg: 3, surge: 0 },
     defenseRoll: { block: 1, evade: 0 },
     attackerConds: ['Weaken'],
   });
-  // damage = 3 - 1 block = 2, then -1 weaken = 1
-  assert.strictEqual(r.damage, 1);
+  // No damage reduction in computeCombatResult — that lived in the OLD
+  // (wrong) Weaken impl. damage = max(0, 3 - 1) = 2.
+  assert.strictEqual(r.damage, 2);
   assert.ok(r.resultText.includes('Weakened'));
 });
 
@@ -330,7 +340,8 @@ test('computeCombatResult Weakened attacker with 0 damage stays at 0', () => {
     defenseRoll: { block: 1, evade: 0 },
     attackerConds: ['Weaken'],
   });
-  // damage = 1 - 1 = 0, weaken doesn't apply below 0
+  // damage = 1 - 1 = 0; Weakened doesn't reduce further (penalty is on
+  // surge upstream, not on damage).
   assert.strictEqual(r.damage, 0);
 });
 

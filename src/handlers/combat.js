@@ -5823,13 +5823,23 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // Fury (Wookiee Warriors): +1 surge if 5+ damage (set at attack declare time)
   const furyBonus = combat.furyBonus || 0;
   const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + furyBonus;
-  const rawSurge = roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0);
+  // Weakened on attacker: -1 to Surge results (canonical Weakened condition
+  // card — destruct 2026-05-07: "Weakened affects surges and evades.")
+  // Skipped if condition effects are suppressed (YWNDM-on-Fifth-Brother).
+  const _attackerWeakened = combat.attackerConds?.includes('Weaken')
+    && !combat.attackerCondEffectsSuppressed;
+  const _weakenSurgePenalty = _attackerWeakened ? 1 : 0;
+  const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty);
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   // Overwhelming Impact (destruct 2026-05-06): "OI ignores non-die bonuses."
   // Passive +Evade and round-of-defense +Evade aren't on the rolled die, so
   // they're dropped under OI. Mirror of the bonusBlock gate at game/combat.js:322.
   const _evadeNonDieDropped = !!combat.ignoreDefenseResultsNotOnDice;
-  const totalEvade = defRoll.evade + (_evadeNonDieDropped ? 0 : ((combat.bonusEvade || 0) + roundEvade));
+  // Weakened on defender: -1 to Evade results.
+  const _defenderWeakened = combat.defenderConds?.includes('Weaken')
+    && !combat.defenderCondEffectsSuppressed;
+  const _weakenEvadePenalty = _defenderWeakened ? 1 : 0;
+  const totalEvade = Math.max(0, defRoll.evade + (_evadeNonDieDropped ? 0 : ((combat.bonusEvade || 0) + roundEvade)) - _weakenEvadePenalty);
   const evadeCancelled = Math.min(rawSurge, totalEvade);
   const totalSurge = rawSurge - evadeCancelled;
   combat.evadeCancelledSurge = evadeCancelled;
