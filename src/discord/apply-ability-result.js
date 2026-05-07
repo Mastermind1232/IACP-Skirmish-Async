@@ -196,6 +196,42 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Granted attack button (Emperor / Executive Order / Battlefield Leadership / Order Hit) ---
+  // Per destruct 2026-05-07: granted attacks fire IMMEDIATELY in the source's
+  // activation thread; clicking spawns a new combat thread for the grantee.
+  // Source's activation pauses until grantee combat resolves. The button
+  // wraps the existing dc_attack_ flow and the underlying pendingX state
+  // (pendingEmperorInterrupt / pendingExecutiveOrder / etc.) is what marks
+  // the attack as free in combat.js. See handleGrantedAttack.
+  if (result.applied && result.grantedAttackButton) {
+    const { granteeMsgId, granteeFigureKey, granteeName, sourceLabel } = result.grantedAttackButton;
+    if (granteeMsgId && granteeFigureKey && msgId) {
+      try {
+        const _gabModule = await import('discord.js');
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = _gabModule;
+        const _gabFkMatch = String(granteeFigureKey).match(/-(\d+)-(\d+)$/);
+        const _gabFigIdx = _gabFkMatch ? _gabFkMatch[2] : '0';
+        const _gabBtn = new ButtonBuilder()
+          .setCustomId(`granted_attack_${game.gameId}_${granteeMsgId}_f${_gabFigIdx}`)
+          .setLabel(`Declare Attack (${granteeName || 'grantee'})`)
+          .setStyle(ButtonStyle.Primary);
+        const _gabRow = new ActionRowBuilder().addComponents(_gabBtn);
+        const data = game.dcActionsData?.[msgId];
+        if (data?.threadId) {
+          const thread = await fetchGameChannel(client, data.threadId);
+          if (thread) {
+            await withDiscordRetry(() => thread.send({
+              content: enforceContentLimit(`\u{2694}\u{FE0F} **${sourceLabel || 'Granted Attack'}** — click below to declare the granted attack with **${granteeName || 'the grantee'}**. A new combat thread will open.`),
+              components: [_gabRow],
+            })).catch(discordCatch);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to post granted-attack button:', err);
+      }
+    }
+  }
+
   // --- Post condition card images to game log ---
   if (result.applied && result.conditionCardsToPost?.length && getConditionCardPath && logGameAction) {
     const seen = new Set();

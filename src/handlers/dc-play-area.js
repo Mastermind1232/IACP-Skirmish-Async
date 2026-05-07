@@ -1375,6 +1375,46 @@ export async function handleDcHeroicAttack(interaction, ctx) {
   return handleDcAction(interaction, ctx, 'dc_attack_');
 }
 
+/**
+ * Granted-attack button (Emperor / Executive Order / Battlefield Leadership /
+ * Order Hit). Posted in the SOURCE's activation thread by apply-ability-result
+ * after the source ability resolves and a grantee is chosen.
+ *
+ * Per destruct 2026-05-07: granted attacks fire IMMEDIATELY during the source's
+ * activation (not stored for the grantee's next activation). Click → spawns a
+ * new combat thread for the grantee, source pauses until grantee combat
+ * resolves. The underlying pendingX state set by the source ability
+ * (pendingEmperorInterrupt / pendingExecutiveOrder / pendingBattlefieldLeadership /
+ * freeAttackBonusPending for Order Hit) is what marks the attack as free in
+ * combat.js — this handler just re-points the interaction at the grantee's
+ * standard Attack button so the same code path runs.
+ *
+ * customId format: `granted_attack_${gameId}_${granteeMsgId}_f${figureIndex}`
+ */
+export async function handleGrantedAttack(interaction, ctx) {
+  const m = interaction.customId.match(/^granted_attack_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid granted-attack button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Customid embeds gameId then granteeMsgId; extract granteeMsgId by
+  // splitting the suffix on the first `_` (gameIds don't contain `_`).
+  const [, suffix, figureIndexStr] = m;
+  const _gaUnderscore = suffix.indexOf('_');
+  if (_gaUnderscore < 0) {
+    await interaction.followUp({ content: 'Invalid granted-attack button (malformed id).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const granteeMsgId = suffix.slice(_gaUnderscore + 1);
+  const _newId = `dc_attack_${granteeMsgId}_f${figureIndexStr}`;
+  try {
+    Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
+  } catch {
+    interaction.customId = _newId;
+  }
+  return handleDcAction(interaction, ctx, 'dc_attack_');
+}
+
 export async function handleDcAction(interaction, ctx, buttonKey) {
   const {
     getGame,

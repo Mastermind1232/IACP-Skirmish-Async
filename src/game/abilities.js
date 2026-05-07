@@ -760,7 +760,11 @@ export function resolveAbility(abilityId, context) {
         setPendingBattlefieldLeadership(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Battlefield Leadership** — **${chosenName}** may interrupt to move up to 1 space and perform a free attack (no action cost). Use their **Attack** button.` };
+      return {
+        applied: true,
+        logMessage: `**Battlefield Leadership** — **${chosenName}** may interrupt to move up to 1 space and perform a free attack (no action cost).`,
+        grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Battlefield Leadership' } : null,
+      };
     }
     // Phase 1: enumerate friendly figures within 3 spaces (not Leia herself)
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -792,7 +796,13 @@ export function resolveAbility(abilityId, context) {
         setPendingEmperorInterrupt(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Emperor** — **${chosenName}** may interrupt to perform a free attack (no action cost). Use their **Attack** button.` };
+      // destruct 2026-05-07: granted attack fires IMMEDIATELY in source's
+      // activation thread; click spawns a new combat thread for the grantee.
+      return {
+        applied: true,
+        logMessage: `**Emperor** — **${chosenName}** may interrupt to perform a free attack (no action cost).`,
+        grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Emperor' } : null,
+      };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -999,7 +1009,11 @@ export function resolveAbility(abilityId, context) {
         setPendingExecutiveOrder(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move or attack (no action cost). Use their **Move** or **Attack** button.` };
+      return {
+        applied: true,
+        logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move or attack (no action cost).`,
+        grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Executive Order' } : null,
+      };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -1623,6 +1637,7 @@ export function resolveAbility(abilityId, context) {
             logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
             refreshDcEmbed: true,
             refreshDcEmbedMsgIds: [tgtMsgId],
+            grantedAttackButton: { granteeMsgId: tgtMsgId, granteeFigureKey: targetFigureKey, granteeName: dcName, sourceLabel: entry.label || 'Order Hit' },
           };
         }
       }
