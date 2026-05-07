@@ -34,6 +34,37 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   const dcEff = getDcEffects()?.[dcName];
   const abilityIds = dcEff?.specialAbilityIds || [];
 
+  // Scrap Battalion (Ugnaught Tinkerer Reg + Elite): auto-readies the
+  // Junk Droid at the start of each Ugnaught's activation. Per destruct
+  // 2026-05-07: this is one of the few SoA effects that fires
+  // automatically — the Junk-Droid ready/exhaust state is the gate that
+  // enables effective multiple Junk Droid activations per round when
+  // combined with Spot Weld's place-and-ready mechanic.
+  if (abilityIds.includes('scrap_battalion_ugnaught') ||
+      abilityIds.includes('scrap_battalion_ugnaught_elite') ||
+      (dcEff?.abilityText || '').includes('Scrap Battalion')) {
+    const _sbDcList = getDcList(game, playerNum) || [];
+    const _sbDcMsgIds = getDcMessageIds(game, playerNum) || [];
+    for (let _sbI = 0; _sbI < _sbDcList.length; _sbI++) {
+      if ((_sbDcList[_sbI]?.dcName || _sbDcList[_sbI]) === 'Junk Droid') {
+        const _sbJdMsgId = _sbDcMsgIds[_sbI];
+        if (_sbJdMsgId) {
+          // Record the ready intent. The actual dcExhaustedState Map
+          // lives in ctx — applyStartOfActivationEffects is shared with
+          // headless and doesn't have direct access; the Discord caller
+          // flips the Map after this returns. Idempotent if JD is
+          // already ready (set(false) is a no-op).
+          game._scrapBattalionReadyJd = game._scrapBattalionReadyJd || [];
+          if (!game._scrapBattalionReadyJd.includes(_sbJdMsgId)) {
+            game._scrapBattalionReadyJd.push(_sbJdMsgId);
+          }
+          applied.push({ effect: 'Scrap Battalion', message: `\u{1F527} **Scrap Battalion** — **Junk Droid** is readied at the start of **${displayName}**'s activation.` });
+        }
+        break;
+      }
+    }
+  }
+
   // Mounted / Hunger Regular: migrated to SoA orchestrator (slice 3 —
   // destruct 2026-05-07 "do not make any effects auto, let players pick to
   // trigger each one"). See src/game/soa-orchestrator.js

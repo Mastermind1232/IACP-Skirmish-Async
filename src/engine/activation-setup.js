@@ -49,15 +49,18 @@ export function getCompanionForDc(dcName, attachments) {
     const companionName = dcData.companion;
     const companionStats = eff[companionName];
     if (!companionStats) return null;
-    // FIXME (companion-rules-rebuild): Junk Droid is a hybrid that activates as part of the
-    // host's group via Scrap Battalion (Ugnaught Tinkerer), with its own ready/exhaust state
-    // and an Overclock interrupt path on Elite. Standard companion rule per CRR (and destruct
-    // 2026-05-05) is "activates at start OR end of host's activation, player choice" — Junk
-    // Droid breaks that mold. This `isCoActivation` shim hardcodes the special case; revisit
-    // when wiring the new companion model so the rule has one clean path with this carveout
-    // explicitly documented in code, not a stringly-named branch.
-    const isCoActivation = companionName === 'Junk Droid';
-    return { companionName, companionStats, isCoActivation };
+    // Per destruct 2026-05-07: Junk Droid follows the standard companion
+    // first/second rule like every other companion. The earlier
+    // `isCoActivation` carveout was wrong — it treated Junk Droid as a
+    // tightly-integrated co-activation that bypassed the prompt, but the
+    // canonical rule (CRR + destruct) is "activates at start OR end of
+    // host's activation, player choice." Junk Droid's special feature is
+    // separate: Scrap Battalion auto-readies the Junk Droid at the start
+    // of each Ugnaught's activation, enabling effective multiple
+    // activations per round when paired with Spot Weld's place-and-ready.
+    // That auto-ready is handled in applyStartOfActivationEffects, not
+    // here.
+    return { companionName, companionStats, isCoActivation: false };
   }
   if (attachments?.length) {
     for (const attName of attachments) {
@@ -358,6 +361,15 @@ export async function finalizeActivation({
   const { applied: _startEffects } = applyStartOfActivationEffects(game, { dcName, playerNum, displayName, msgId, dcHealthState });
   for (const eff of _startEffects) {
     await thread.send({ content: eff.message }).catch(discordCatch);
+  }
+  // Scrap Battalion (Ugnaught Tinkerer) auto-readied the Junk Droid —
+  // applyStartOfActivationEffects records the intent on
+  // game._scrapBattalionReadyJd; flip dcExhaustedState here.
+  if (game._scrapBattalionReadyJd?.length && dcExhaustedState) {
+    for (const _jdMsgId of game._scrapBattalionReadyJd) {
+      dcExhaustedState.set(_jdMsgId, false);
+    }
+    delete game._scrapBattalionReadyJd;
   }
   // Into the Fray may cause power token overflow — handle Discord UI
   if (game.pendingPowerTokenOverflow?.length > 0) {
