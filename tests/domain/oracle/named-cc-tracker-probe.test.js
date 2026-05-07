@@ -95,3 +95,32 @@ test('mark: no-op for unknown timing string', () => {
   // No bucket → field not even initialized
   assert.equal(game.namedCcsPlayedPerTiming, undefined);
 });
+
+// ── Escalating Hostility canonical case (destruct 2026-05-07) ──────────────
+// "A timing instance is basically 'on the same trigger'. You can't play
+// multiple copies of Escalating Hostility after the same attack. But if I
+// attack once, and attack again, I could play Escalating Hostility each
+// time." The 'attack' bucket is per-attack-instance — cleared in
+// resolvePendingCombat when the pending attack resolves — so a fresh
+// attack opens a fresh bucket.
+
+test('Escalating Hostility: blocked if played twice on the same attack', () => {
+  const game = {};
+  markNamedCcPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack');
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack'), true,
+    'cannot play 2 copies on same attack trigger');
+});
+
+test('Escalating Hostility: legal again on a separate attack', () => {
+  const game = {};
+  markNamedCcPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack');
+  // Simulate pendingCombat resolving — clearNamedCcBucket('attack') fires
+  // in resolvePendingCombat. Per-attack bucket starts fresh.
+  clearNamedCcBucket(game, 'attack');
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack'), false,
+    'second attack: fresh trigger instance, EH playable again');
+  // Player plays EH on attack #2.
+  markNamedCcPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack');
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Escalating Hostility', 'afterResolvingAttack'), true,
+    'on attack #2 a second copy is again blocked within that attack');
+});
