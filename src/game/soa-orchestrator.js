@@ -25,10 +25,11 @@
  * State persists on game.pendingSoaResolution across Discord round-trips.
  */
 
-import { opponentPlayerNum } from './player-helpers.js';
+import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds } from './player-helpers.js';
 import { getDcEffects } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
 
 /**
  * Enumerate Start-of-Activation descriptors for an activating DC. Returns
@@ -174,6 +175,106 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
       subPromptKey: 'comms_jammer',
       extras: { dcName },
     });
+  }
+
+  // Madness (Taron Malicos): suffer 1 Strain + become Focused if hand ≤ 2.
+  // Per destruct 2026-05-07: hand count is re-checked at FIRE time (player
+  // can play another SoR CC first to change the count). Enumerator only
+  // checks the dcName predicate; the precondition (hand ≤ 2) is verified
+  // when the player clicks Apply. If the count is >2 at fire time, the
+  // trigger is a no-op (logged).
+  if (dcName === 'Taron Malicos') {
+    descriptors.push({
+      id: `madness:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Madness',
+      subPromptKey: 'madness',
+      extras: { dcName },
+    });
+  }
+
+  // Into the Fray (Baze Malbus): +1 MP + 1 Surge Token per hostile with LOS.
+  // Surge count is computed at FIRE time so the player can choose timing
+  // relative to other SoA effects (e.g. opponent moves a figure first).
+  if (dcName === 'Baze Malbus') {
+    descriptors.push({
+      id: `into_the_fray:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Into the Fray',
+      subPromptKey: 'into_the_fray',
+      extras: { dcName },
+    });
+  }
+
+  // Beast Tamer (Skirmish Upgrade): exhaust at start of any one CREATURE's
+  // activation. Per destruct 2026-05-07: player chooses to exhaust EITHER
+  // for Speed MP OR for Interact Override (Non-Sentient only). Both
+  // options exhaust the upgrade. Trigger only enumerates if Beast Tamer
+  // is attached and not already exhausted, AND the activating DC has the
+  // CREATURE keyword.
+  if (_fotkAtts.length && cardNameIncludes(_fotkAtts, 'Beast Tamer')) {
+    const _btKws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (_btKws.includes('CREATURE')) {
+      const _btExhausted = game?.exhaustedSkirmishUpgrades?.[msgId] || [];
+      if (!cardNameIncludes(_btExhausted, 'Beast Tamer')) {
+        const _btIsNonSentient = (eff?.abilityText || '').includes('Non-Sentient');
+        descriptors.push({
+          id: `beast_tamer:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Beast Tamer',
+          subPromptKey: 'beast_tamer',
+          extras: { dcName, isNonSentient: _btIsNonSentient },
+        });
+      }
+    }
+  }
+
+  // I Make the Rules Now (Cad Bane): per destruct 2026-05-07, fires at
+  // start of ANY HUNTER's activation within 4 spaces of Cad Bane —
+  // FRIENDLY OR ENEMY. Cad Bane's player owns the trigger; granting MP to
+  // an opposing HUNTER is a real strategic choice, so the descriptor must
+  // appear in Cad Bane's player's bucket regardless of activator team.
+  // One descriptor per (Cad Bane × HUNTER) pairing; Cad Bane's own
+  // activation does NOT trigger his own ability.
+  if (game) {
+    for (const cadPn of [1, 2]) {
+      const _imrnDcList = getDcList(game, cadPn) || [];
+      const _imrnDcMsgIds = getDcMessageIds(game, cadPn) || [];
+      for (let _ii = 0; _ii < _imrnDcList.length; _ii++) {
+        const _cad = _imrnDcList[_ii];
+        if (!_cad?.dcName) continue;
+        const _cadEff = getDcEffects()?.[_cad.dcName];
+        if (!(_cadEff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
+        if (_cad.dcName === dcName && cadPn === playerNum) continue;
+        const _cadDgIdx = (_cad.displayName || _cad.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _cadFk = `${_cad.dcName}-${_cadDgIdx}-0`;
+        const _cadPos = game.figurePositions?.[cadPn]?.[_cadFk];
+        if (!_cadPos) continue;
+        const _cadMsgId = _imrnDcMsgIds[_ii];
+        if (!_cadMsgId) continue;
+        // Activating DC must have HUNTER keyword (either team).
+        const _actEff = getDcEffects()?.[dcName];
+        const _actKws = (_actEff?.keywords || []).map((k) => String(k).toUpperCase());
+        if (!_actKws.includes('HUNTER')) continue;
+        // Verify activating figure is within 4 spaces of Cad Bane.
+        const _actDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _actFk = `${dcName}-${_actDgIdx}-0`;
+        const _actPos = game.figurePositions?.[playerNum]?.[_actFk];
+        if (!_actPos) continue;
+        if (countGameSpaces(game, _cadPos, _actPos) > 4) continue;
+        descriptors.push({
+          id: `imrn:${_cadMsgId}->${msgId}`,
+          ownerPlayerNum: cadPn,
+          sourceMsgId: _cadMsgId,
+          sourceLabel: 'I Make the Rules Now',
+          subPromptKey: 'imrn',
+          extras: { dcName: _cad.dcName, granteeMsgId: msgId, granteeName: dcName, granteePlayerNum: playerNum },
+        });
+      }
+    }
   }
 
   // Tactical Movement (Fenn Signis): pick a friendly figure within 3 → that

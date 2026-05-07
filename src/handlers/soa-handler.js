@@ -18,9 +18,12 @@ import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
-import { healHp } from '../game/damage-helpers.js';
-import { ccDeckKey, ccHandKey, opponentPlayerNum } from '../game/player-helpers.js';
-import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { healHp, reduceHp } from '../game/damage-helpers.js';
+import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
+import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
+import { applyCondition } from '../game/conditions.js';
+import { getDcEffects, getDcStats, getMapData, getFigureSize } from '../data-loader.js';
+import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
 
 /**
  * Re-post the bucket's chooser prompt after a trigger fires (or none yet
@@ -138,6 +141,47 @@ export async function handleSoaPick(interaction, ctx) {
     );
     await interaction.message.channel.send({
       content: `\u{1F4F6} **Comms Jammer** — **${displayName}** may prevent opponent from playing Command Cards during this activation:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'madness') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Strain + Focus, if hand ≤ 2)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F4A2} **Madness** — **${displayName}**: if you have ≤2 Command Cards in hand at fire time, suffer **1 Strain** and become **Focused**:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'into_the_fray') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (+1 MP, +Surge per LOS)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F525} **Into the Fray** — **${displayName}**: gain **1 MP** and **1 Surge Token** per hostile figure with LOS:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'beast_tamer') {
+    const buttons = [
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_mp`).setLabel('Exhaust → gain Speed MP').setStyle(ButtonStyle.Primary),
+    ];
+    if (desc.extras?.isNonSentient) {
+      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_override`).setLabel('Exhaust → Interact Override').setStyle(ButtonStyle.Primary));
+    }
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const row = new ActionRowBuilder().addComponents(buttons);
+    await interaction.message.channel.send({
+      content: `\u{1F436} **Beast Tamer** — **${displayName}**: exhaust the upgrade for one effect:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'imrn') {
+    const granteeName = desc.extras?.granteeName || 'HUNTER';
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel(`Apply (+1 MP to ${granteeName})`).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane** may grant **${granteeName}** (HUNTER within 4) **1 MP**:`,
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tac_move') {
@@ -319,6 +363,109 @@ export async function handleSoaFire(interaction, ctx) {
       await interaction.message.edit({ content: `\u{1F4F6} **Comms Jammer** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       await interaction.followUp({ content: `Unknown Comms Jammer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Madness (Taron Malicos) ---
+  // Hand count is re-checked at fire time per destruct 2026-05-07 (the
+  // player can play another SoR CC first to change the count).
+  } else if (desc.subPromptKey === 'madness') {
+    if (choiceKey === 'apply') {
+      const hand = getCcHand(game, ownerPlayerNum) || [];
+      if (hand.length <= 2) {
+        const figureKeys = Object.keys(game.figurePositions?.[ownerPlayerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
+        for (const fk of figureKeys) {
+          applyCondition(game, fk, 'Focus');
+          if (dcHealthState) {
+            const fkIdx = parseFigureKey(fk).figureIndex;
+            reduceHp(dcHealthState, game, desc.sourceMsgId, fkIdx, 1, ownerPlayerNum);
+          }
+        }
+        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** suffered **1 Strain** and became **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F4A2} **Madness** — ${displayName} suffered 1 strain + Focus.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Hand size is ${hand.length} (>2); no effect.`, components: [] }).catch(discordCatch);
+      }
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Madness choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Into the Fray (Baze Malbus) ---
+  } else if (desc.subPromptKey === 'into_the_fray') {
+    if (choiceKey === 'apply') {
+      grantMovementBank(game, desc.sourceMsgId, 1);
+      const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const selfFk = `Baze Malbus-${dgIndex}-0`;
+      const ms = getMapData(game.selectedMap?.id);
+      const selfPos = game.figurePositions?.[ownerPlayerNum]?.[selfFk];
+      let surgeCount = 0;
+      if (selfPos && ms) {
+        const enemyNum = opponentPlayerNum(ownerPlayerNum);
+        const allFootprints = getAllFigureFootprints(game, getFigureSize);
+        const selfFp = getFigureFootprint(game, ownerPlayerNum, selfFk, getFigureSize);
+        for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+          const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
+          if (!eFp.length) continue;
+          if (hasFigureLineOfSight(selfFp, eFp, ms, allFootprints)) surgeCount++;
+        }
+      }
+      if (surgeCount > 0) grantPowerTokens(game, selfFk, 'Surge', surgeCount);
+      await interaction.message.edit({ content: `\u{1F525} **Into the Fray** — **${displayName}** gained **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F525} **Into the Fray** — ${displayName} +1 MP, +${surgeCount} Surge.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F525} **Into the Fray** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown ItF choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Beast Tamer (Skirmish Upgrade) ---
+  // Per destruct 2026-05-07: exhaust for EITHER Speed MP OR Interact Override
+  // (Non-Sentient only). Both options exhaust the upgrade.
+  } else if (desc.subPromptKey === 'beast_tamer') {
+    const _markExhausted = () => {
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[desc.sourceMsgId] = game.exhaustedSkirmishUpgrades[desc.sourceMsgId] || [];
+      game.exhaustedSkirmishUpgrades[desc.sourceMsgId].push('Beast Tamer');
+    };
+    if (choiceKey === 'mp') {
+      _markExhausted();
+      const speed = getDcStats(desc.extras?.dcName || meta?.dcName)?.speed ?? 0;
+      if (speed > 0) grantMovementBank(game, desc.sourceMsgId, speed);
+      await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — **${displayName}** exhausted for **${speed} MP** (Speed).`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F436} **Beast Tamer** — ${displayName} +${speed} MP.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'override') {
+      _markExhausted();
+      game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
+      game.beastTamerInteractOverride[desc.sourceMsgId] = true;
+      await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — **${displayName}** exhausted for **Interact Override** (Non-Sentient).`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F436} **Beast Tamer** — ${displayName} can interact (Non-Sentient override).`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Beast Tamer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- I Make the Rules Now (Cad Bane) ---
+  } else if (desc.subPromptKey === 'imrn') {
+    if (choiceKey === 'apply') {
+      const granteeMsgId = desc.extras?.granteeMsgId;
+      const granteeName = desc.extras?.granteeName || 'HUNTER';
+      if (granteeMsgId) {
+        grantMovementBank(game, granteeMsgId, 1);
+        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — **${granteeName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${granteeName} +1 MP.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — grantee msgId missing; resolve manually.`, components: [] }).catch(discordCatch);
+      }
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown IMTRN choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 

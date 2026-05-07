@@ -151,8 +151,8 @@ describe('B-STARTACT-004: Multiple SoA descriptors can co-exist for one activati
 // BEHAVIORAL TESTS — Phase 2b: Madness, Into the Fray
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-STARTACT-005: Madness applies Focus + Strain when CC hand ≤ 2', () => {
-  it('applies Focus and suffers 1 Strain when hand has 0 CC cards', async () => {
+describe('B-STARTACT-005: Madness is enumerated as a SoA descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-fires Madness', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const dcHealthState = new Map();
     dcHealthState.set('tm-msg-1', { 0: [8, 8] });
@@ -162,80 +162,36 @@ describe('B-STARTACT-005: Madness applies Focus + Strain when CC hand ≤ 2', ()
       player1CcHand: [],
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Taron Malicos',
-      playerNum: 1,
-      displayName: 'Taron Malicos',
-      msgId: 'tm-msg-1',
-      dcHealthState,
+      dcName: 'Taron Malicos', playerNum: 1, displayName: 'Taron Malicos', msgId: 'tm-msg-1', dcHealthState,
     });
-    const madnessEffects = applied.filter(e => e.effect === 'Madness');
-    assert.strictEqual(madnessEffects.length, 1, 'Madness fired');
-    assert.ok(game.figureConditions['Taron Malicos-1-0']?.includes('Focus'),
-      'Taron Malicos became Focused');
-    assert.deepStrictEqual(dcHealthState.get('tm-msg-1')[0], [7, 8],
-      'HP reduced by 1 Strain (8 → 7)');
-  });
-
-  it('applies Focus and suffers 1 Strain when hand has 2 CC cards', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const dcHealthState = new Map();
-    dcHealthState.set('tm-msg-1', { 0: [6, 8] });
-    const game = {
-      figurePositions: { 1: { 'Taron Malicos-1-0': 'd4' } },
-      figureConditions: {},
-      player1CcHand: ['card-a', 'card-b'],
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Taron Malicos',
-      playerNum: 1,
-      displayName: 'Taron Malicos',
-      msgId: 'tm-msg-1',
-      dcHealthState,
-    });
-    assert.strictEqual(applied.filter(e => e.effect === 'Madness').length, 1, 'Madness fired at exactly 2 CC');
-    assert.deepStrictEqual(dcHealthState.get('tm-msg-1')[0], [5, 8], 'HP reduced by 1');
-  });
-
-  it('does NOT fire when hand has 3 or more CC cards', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      figurePositions: { 1: { 'Taron Malicos-1-0': 'd4' } },
-      figureConditions: {},
-      player1CcHand: ['card-a', 'card-b', 'card-c'],
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Taron Malicos',
-      playerNum: 1,
-      displayName: 'Taron Malicos',
-      msgId: 'tm-msg-1',
-    });
-    assert.strictEqual(applied.filter(e => e.effect === 'Madness').length, 0, 'Madness did not fire');
+    assert.strictEqual(applied.filter(e => e.effect === 'Madness').length, 0,
+      'Madness no longer auto-fires (slice 4 — destruct 2026-05-07)');
     assert.strictEqual(game.figureConditions['Taron Malicos-1-0'], undefined,
-      'No Focus applied');
+      'no auto Focus applied');
   });
 
-  it('works without dcHealthState (headless graceful path)', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      figurePositions: { 2: { 'Taron Malicos-1-0': 'e5' } },
-      figureConditions: {},
-      player2CcHand: ['card-a'],
-    };
-    // No dcHealthState passed — should still apply Focus without crashing
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Taron Malicos',
-      playerNum: 2,
-      displayName: 'Taron Malicos',
-      msgId: 'tm-msg-2',
+  it('enumerateActivatorSoaDescriptors returns a madness descriptor for Taron Malicos', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Taron Malicos', playerNum: 1, msgId: 'tm-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Madness').length, 1, 'Madness fired');
-    assert.ok(game.figureConditions['Taron Malicos-1-0']?.includes('Focus'),
-      'Focus applied even without dcHealthState');
+    assert.ok(descriptors.some(d => d.subPromptKey === 'madness'),
+      'madness descriptor enumerated');
+  });
+
+  it('does not enumerate madness for non-Taron DC', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'madness'));
   });
 });
 
-describe('B-STARTACT-006: Into the Fray grants 1 MP and Surge Tokens per hostile with LOS', () => {
-  it('grants 1 MP even with no hostile figures', async () => {
+describe('B-STARTACT-006: Into the Fray is enumerated as a SoA descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-fires Into the Fray', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       figurePositions: { 1: { 'Baze Malbus-1-0': 'a3' }, 2: {} },
@@ -243,74 +199,43 @@ describe('B-STARTACT-006: Into the Fray grants 1 MP and Surge Tokens per hostile
       movementBank: {},
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Baze Malbus',
-      playerNum: 1,
-      displayName: 'Baze Malbus',
-      msgId: 'baze-msg-1',
-    });
-    const itfEffects = applied.filter(e => e.effect === 'Into the Fray');
-    assert.strictEqual(itfEffects.length, 1, 'Into the Fray always fires for Baze');
-    assert.strictEqual(game.movementBank['baze-msg-1']?.total, 1, 'Movement bank has 1 MP');
-    assert.ok(itfEffects[0].message.includes('0 Surge Token'), 'Message shows 0 surge tokens');
-  });
-
-  it('does not fire for non-Baze DC', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      figurePositions: { 1: {} },
-      movementBank: {},
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg-1',
+      dcName: 'Baze Malbus', playerNum: 1, displayName: 'Baze Malbus', msgId: 'baze-msg-1',
     });
     assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 0);
+    assert.strictEqual(game.movementBank['baze-msg-1'], undefined);
   });
 
-  it('message reflects surge count correctly', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    // Without map data, surgeCount will be 0 — but the effect still fires with 1 MP
-    const game = {
-      figurePositions: {
-        1: { 'Baze Malbus-1-0': 'a3' },
-        2: { 'Rebel-1-0': 'a4', 'Rebel-1-1': 'b2' },
-      },
-      figurePowerTokens: {},
-      movementBank: {},
-      selectedMap: { id: 'nonexistent-map' },
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Baze Malbus',
-      playerNum: 1,
-      displayName: 'Baze Malbus',
-      msgId: 'baze-msg-2',
+  it('enumerateActivatorSoaDescriptors returns into_the_fray descriptor for Baze', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Baze Malbus', playerNum: 1, msgId: 'baze-msg-1',
     });
-    const itfEffects = applied.filter(e => e.effect === 'Into the Fray');
-    assert.strictEqual(itfEffects.length, 1);
-    // Without valid map data, LOS can't be checked, so 0 surge tokens
-    assert.ok(itfEffects[0].message.includes('0 Surge Token'),
-      'Without map data, no surges granted');
-    assert.strictEqual(game.movementBank['baze-msg-2']?.total, 1, 'Still gets 1 MP');
+    assert.ok(descriptors.some(d => d.subPromptKey === 'into_the_fray'));
+  });
+
+  it('does not enumerate into_the_fray for non-Baze DC', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'into_the_fray'));
   });
 });
 
-describe('B-STARTACT-007: Multiple Phase 2a+2b effects stack correctly', () => {
-  it('Mounted + Into the Fray should not both fire (different DCs)', async () => {
-    // Sanity: Mounted is for Terro/Kuiil/Dewback, Into the Fray is for Baze only
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = { movementBank: {}, figurePositions: { 1: { 'Baze Malbus-1-0': 'c1' }, 2: {} }, figurePowerTokens: {} };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Baze Malbus', playerNum: 1, displayName: 'Baze Malbus', msgId: 'baze-msg-1',
+describe('B-STARTACT-007: Slice-4 — Into the Fray + FotK both descriptors', () => {
+  it('Mounted + Into the Fray are different descriptor keys (different DCs)', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = { figurePositions: { 1: {}, 2: {} } };
+    const baze = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Baze Malbus', playerNum: 1, msgId: 'baze-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Mounted').length, 0, 'Baze is not Mounted');
-    assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 1, 'Into the Fray fires');
+    assert.ok(!baze.some(d => d.subPromptKey === 'mounted'), 'Baze is not Mounted');
+    assert.ok(baze.some(d => d.subPromptKey === 'into_the_fray'), 'Into the Fray enumerated');
   });
 
-  it('Into the Fray (still auto) + FotK (now SoA descriptor) for Baze with attachment', async () => {
-    // Slice 3 migration: Into the Fray remains auto-fire (not yet migrated);
-    // FotK is now a SoA descriptor (not auto-granted). Verify the split.
+  it('Into the Fray + FotK both enumerated for Baze with attachment', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
@@ -322,17 +247,16 @@ describe('B-STARTACT-007: Multiple Phase 2a+2b effects stack correctly', () => {
     const { applied } = applyStartOfActivationEffects(game, {
       dcName: 'Baze Malbus', playerNum: 1, displayName: 'Baze Malbus', msgId: 'baze-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 1,
-      'Into the Fray still auto-fires (migration deferred to slice 4)');
+    assert.strictEqual(applied.filter(e => e.effect === 'Into the Fray').length, 0,
+      'Into the Fray no longer auto-fires (slice 4)');
     assert.strictEqual(applied.filter(e => e.effect === 'Focused on the Kill').length, 0,
-      'FotK is no longer auto-fired');
-    assert.strictEqual(game.movementBank['baze-msg-1']?.total, 1,
-      'Movement bank has 1 MP from Into the Fray only (FotK is descriptor-driven)');
+      'FotK no longer auto-fires (slice 3)');
     const descriptors = enumerateActivatorSoaDescriptors(game, {
       dcName: 'Baze Malbus', playerNum: 1, msgId: 'baze-msg-1',
     });
-    assert.ok(descriptors.some(d => d.subPromptKey === 'fotk'),
-      'FotK descriptor enumerated');
+    const ids = descriptors.map(d => d.subPromptKey);
+    assert.ok(ids.includes('into_the_fray'), 'into_the_fray enumerated');
+    assert.ok(ids.includes('fotk'), 'fotk enumerated');
   });
 });
 
@@ -340,84 +264,74 @@ describe('B-STARTACT-007: Multiple Phase 2a+2b effects stack correctly', () => {
 // BEHAVIORAL TESTS — Phase 2c: Beast Tamer, Hunger Regular
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-STARTACT-008: Beast Tamer exhausts and grants Speed MP for CREATURE', () => {
-  it('grants Speed MP and exhausts Beast Tamer for a CREATURE DC', async () => {
+describe('B-STARTACT-008: Beast Tamer is enumerated as a SoA descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-fires Beast Tamer', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       movementBank: {},
       p1DcAttachments: { 'bantha-msg-1': ['Beast Tamer'] },
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Bantha Rider',
-      playerNum: 1,
-      displayName: 'Bantha Rider',
-      msgId: 'bantha-msg-1',
+      dcName: 'Bantha Rider', playerNum: 1, displayName: 'Bantha Rider', msgId: 'bantha-msg-1',
     });
-    const btEffects = applied.filter(e => e.effect === 'Beast Tamer');
-    assert.strictEqual(btEffects.length, 1, 'Beast Tamer fired for Bantha Rider (CREATURE)');
-    assert.ok(btEffects[0].message.includes('5 MP'), 'Message mentions 5 MP (Bantha Rider speed)');
-    assert.ok(game.exhaustedSkirmishUpgrades?.['bantha-msg-1']?.includes('Beast Tamer'),
-      'Beast Tamer is exhausted');
-    assert.strictEqual(game.movementBank['bantha-msg-1']?.total, 5,
-      'Movement bank has 5 MP (Bantha Rider speed)');
-    // Bantha Rider is NOT Non-Sentient — no interact override
-    assert.strictEqual(game.beastTamerInteractOverride?.['bantha-msg-1'], undefined,
-      'No interact override for Bantha Rider (not Non-Sentient)');
+    assert.strictEqual(applied.filter(e => e.effect === 'Beast Tamer').length, 0);
+    assert.strictEqual(game.movementBank['bantha-msg-1'], undefined);
+    assert.strictEqual(game.exhaustedSkirmishUpgrades?.['bantha-msg-1'], undefined);
   });
 
-  it('does not fire when Beast Tamer is already exhausted', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('enumerateActivatorSoaDescriptors returns beast_tamer descriptor for CREATURE', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
+      figurePositions: { 1: {}, 2: {} },
+      p1DcAttachments: { 'bantha-msg-1': ['Beast Tamer'] },
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Bantha Rider', playerNum: 1, msgId: 'bantha-msg-1',
+    });
+    const bt = descriptors.find(d => d.subPromptKey === 'beast_tamer');
+    assert.ok(bt, 'beast_tamer descriptor enumerated for Bantha Rider (CREATURE)');
+    assert.strictEqual(bt.extras?.isNonSentient, false,
+      'Bantha Rider is not Non-Sentient');
+  });
+
+  it('does not enumerate beast_tamer when already exhausted', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: {}, 2: {} },
       p1DcAttachments: { 'bantha-msg-1': ['Beast Tamer'] },
       exhaustedSkirmishUpgrades: { 'bantha-msg-1': ['Beast Tamer'] },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Bantha Rider',
-      playerNum: 1,
-      displayName: 'Bantha Rider',
-      msgId: 'bantha-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Bantha Rider', playerNum: 1, msgId: 'bantha-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Beast Tamer').length, 0,
-      'Beast Tamer did not fire (already exhausted)');
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'beast_tamer'));
   });
 
-  it('does not fire for non-CREATURE DC with Beast Tamer attachment', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('does not enumerate beast_tamer for non-CREATURE DC', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
+      figurePositions: { 1: {}, 2: {} },
       p1DcAttachments: { 'trooper-msg-1': ['Beast Tamer'] },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'trooper-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'trooper-msg-1',
     });
-    assert.strictEqual(applied.filter(e => e.effect === 'Beast Tamer').length, 0,
-      'Beast Tamer did not fire (not a CREATURE)');
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'beast_tamer'));
   });
 
-  it('sets interact override for Non-Sentient creatures', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    // Nexu (Elite) is CREATURE + Non-Sentient, speed 6
+  it('isNonSentient flag set for Non-Sentient creatures', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
+      figurePositions: { 1: {}, 2: {} },
       p2DcAttachments: { 'nexu-msg-1': ['Beast Tamer'] },
     };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Nexu (Elite)',
-      playerNum: 2,
-      displayName: 'Nexu (Elite)',
-      msgId: 'nexu-msg-1',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Nexu (Elite)', playerNum: 2, msgId: 'nexu-msg-1',
     });
-    const btEffects = applied.filter(e => e.effect === 'Beast Tamer');
-    assert.strictEqual(btEffects.length, 1, 'Beast Tamer fired for Nexu (Elite)');
-    assert.ok(btEffects[0].message.includes('6 MP'), 'Message mentions 6 MP (Nexu Elite speed)');
-    assert.ok(btEffects[0].message.includes('can interact'),
-      'Message mentions interact override for Non-Sentient');
-    assert.strictEqual(game.beastTamerInteractOverride?.['nexu-msg-1'], true,
-      'Interact override set for Non-Sentient creature');
+    const bt = descriptors.find(d => d.subPromptKey === 'beast_tamer');
+    assert.ok(bt, 'beast_tamer enumerated for Nexu Elite');
+    assert.strictEqual(bt.extras?.isNonSentient, true,
+      'Nexu Elite is Non-Sentient → flag enables override sub-prompt button');
   });
 });
 
@@ -677,49 +591,12 @@ describe('ORACLE-STARTACT-008: Phase 2c extracted effects no longer inline', () 
 // BEHAVIORAL TESTS — Phase 2d: I Make the Rules Now
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-STARTACT-011: I Make the Rules Now grants 1 MP to HUNTER within 4 of Cad Bane', () => {
-  it('grants 1 MP to friendly HUNTER within 4 spaces of Cad Bane', async () => {
+describe('B-STARTACT-011: I Make the Rules Now is enumerated as a SoA descriptor', () => {
+  it('applyStartOfActivationEffects no longer auto-fires IMTRN', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       movementBank: {},
-      figurePositions: {
-        1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' },
-        2: {},
-      },
-      selectedMap: { id: 'mos-eisley-outskirts' },
-      p1DcList: [
-        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
-        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
-        { dcName: 'Bossk', displayName: 'Bossk' },
-      ],
-      p1DcMessageIds: ['st-msg', 'cad-msg', 'bossk-msg'],
-      p2DcList: [],
-      p2DcMessageIds: [],
-    };
-    // Activating DC is Stormtrooper (not Cad Bane)
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg',
-    });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    // Cad Bane is also HUNTER so he self-grants; Bossk also qualifies
-    assert.strictEqual(imrn.length, 2, 'I Make the Rules Now fired for Cad Bane (self) + Bossk');
-    assert.ok(imrn.some(e => e.message.includes('Bossk')), 'Message names Bossk');
-    assert.strictEqual(game.movementBank['bossk-msg']?.total, 1,
-      'Bossk movement bank has 1 MP from I Make the Rules Now');
-  });
-
-  it('does not grant MP to HUNTER beyond 4 spaces', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a6' },
-        2: {},
-      },
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' }, 2: {} },
       p1DcList: [
         { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
         { dcName: 'Cad Bane', displayName: 'Cad Bane' },
@@ -730,58 +607,16 @@ describe('B-STARTACT-011: I Make the Rules Now grants 1 MP to HUNTER within 4 of
       p2DcMessageIds: [],
     };
     const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg',
+      dcName: 'Stormtrooper', playerNum: 1, displayName: 'Stormtrooper', msgId: 'st-msg',
     });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    // Cad Bane self-grants (0 spaces from himself), but Bossk at a6 (5 spaces) is out of range
-    assert.ok(!imrn.some(e => e.message.includes('Bossk')),
-      'Bossk (beyond 4 spaces) must not appear in I Make the Rules Now effects');
-    assert.strictEqual(game.movementBank['bossk-msg'], undefined,
-      'Bossk has no movement bank');
+    assert.strictEqual(applied.filter(e => e.effect === 'I Make the Rules Now').length, 0);
+    assert.strictEqual(game.movementBank['bossk-msg'], undefined);
   });
 
-  it('does not grant MP to non-HUNTER DC within 4 spaces', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('enumerateActivatorSoaDescriptors returns IMTRN descriptor for friendly HUNTER activation within 4 of Cad Bane', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Cad Bane-1-0': 'a1', 'Stormtrooper-1-0': 'a3' },
-        2: {},
-      },
-      selectedMap: { id: 'mos-eisley-outskirts' },
-      p1DcList: [
-        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
-        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
-      ],
-      p1DcMessageIds: ['st-msg', 'cad-msg'],
-      p2DcList: [],
-      p2DcMessageIds: [],
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg',
-    });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    // Cad Bane self-grants (he is HUNTER) but Stormtrooper must not receive MP
-    assert.ok(!imrn.some(e => e.message.includes('Stormtrooper')),
-      'Stormtrooper (non-HUNTER) must not appear in I Make the Rules Now effects');
-    assert.strictEqual(game.movementBank['st-msg'], undefined,
-      'Stormtrooper has no movement bank from I Make the Rules Now');
-  });
-
-  it('does NOT trigger when Cad Bane himself is the activating DC', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' },
-        2: {},
-      },
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' }, 2: {} },
       selectedMap: { id: 'mos-eisley-outskirts' },
       p1DcList: [
         { dcName: 'Cad Bane', displayName: 'Cad Bane' },
@@ -791,80 +626,87 @@ describe('B-STARTACT-011: I Make the Rules Now grants 1 MP to HUNTER within 4 of
       p2DcList: [],
       p2DcMessageIds: [],
     };
-    // Activating DC IS Cad Bane
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Cad Bane',
-      playerNum: 1,
-      displayName: 'Cad Bane',
-      msgId: 'cad-msg',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
     });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    assert.strictEqual(imrn.length, 0,
-      'I Make the Rules Now does not fire when Cad Bane is the activating DC');
+    const imrn = descriptors.find(d => d.subPromptKey === 'imrn');
+    assert.ok(imrn, 'IMTRN descriptor enumerated for Bossk activation');
+    assert.strictEqual(imrn.ownerPlayerNum, 1, 'owner is Cad Bane\'s player');
+    assert.strictEqual(imrn.extras?.granteeMsgId, 'bossk-msg');
   });
 
-  it('Cad Bane himself is HUNTER and grants himself 1 MP when another DC activates', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('does not enumerate IMTRN beyond 4 spaces from Cad Bane', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Cad Bane-1-0': 'a1', 'Stormtrooper-1-0': 'b2' },
-        2: {},
-      },
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a6' }, 2: {} },
       p1DcList: [
-        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
-        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
-      ],
-      p1DcMessageIds: ['st-msg', 'cad-msg'],
-      p2DcList: [],
-      p2DcMessageIds: [],
-    };
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg',
-    });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    // Cad Bane is HUNTER and is at a1, within 4 of himself (0 spaces)
-    assert.strictEqual(imrn.length, 1, 'Cad Bane grants himself 1 MP (he is HUNTER)');
-    assert.ok(imrn[0].message.includes('Cad Bane'), 'Message names Cad Bane');
-    assert.strictEqual(game.movementBank['cad-msg']?.total, 1,
-      'Cad Bane movement bank has 1 MP');
-  });
-});
-
-describe('B-STARTACT-012: I Make the Rules Now cross-player', () => {
-  it('triggers for opponent Cad Bane when your DC activates', async () => {
-    const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      movementBank: {},
-      figurePositions: {
-        1: { 'Stormtrooper-1-0': 'a3' },
-        2: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a4' },
-      },
-      selectedMap: { id: 'mos-eisley-outskirts' },
-      p1DcList: [{ dcName: 'Stormtrooper', displayName: 'Stormtrooper' }],
-      p1DcMessageIds: ['st-msg'],
-      p2DcList: [
         { dcName: 'Cad Bane', displayName: 'Cad Bane' },
         { dcName: 'Bossk', displayName: 'Bossk' },
       ],
-      p2DcMessageIds: ['cad-msg-p2', 'bossk-msg-p2'],
+      p1DcMessageIds: ['cad-msg', 'bossk-msg'],
     };
-    // P1's Stormtrooper activates → P2's Cad Bane triggers for P2's Bossk
-    const { applied } = applyStartOfActivationEffects(game, {
-      dcName: 'Stormtrooper',
-      playerNum: 1,
-      displayName: 'Stormtrooper',
-      msgId: 'st-msg',
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
     });
-    const imrn = applied.filter(e => e.effect === 'I Make the Rules Now');
-    assert.ok(imrn.length >= 1, 'I Make the Rules Now fired for P2 Bossk');
-    assert.ok(imrn.some(e => e.message.includes('Bossk')), 'Message names Bossk');
-    assert.strictEqual(game.movementBank['bossk-msg-p2']?.total, 1,
-      'P2 Bossk movement bank has 1 MP');
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'imrn'),
+      'Bossk at a6 (5 spaces) is out of IMTRN range');
+  });
+
+  it('does not enumerate IMTRN for non-HUNTER activator', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Stormtrooper-1-0': 'a3' }, 2: {} },
+      p1DcList: [
+        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
+        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
+      ],
+      p1DcMessageIds: ['cad-msg', 'st-msg'],
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'imrn'),
+      'Stormtrooper is not HUNTER → no IMTRN');
+  });
+
+  it('does not enumerate IMTRN when Cad Bane himself is activating', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1' }, 2: {} },
+      p1DcList: [{ dcName: 'Cad Bane', displayName: 'Cad Bane' }],
+      p1DcMessageIds: ['cad-msg'],
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Cad Bane', playerNum: 1, msgId: 'cad-msg',
+    });
+    assert.ok(!descriptors.some(d => d.subPromptKey === 'imrn'),
+      'Cad Bane\'s own activation does not trigger his own IMTRN');
+  });
+});
+
+describe('B-STARTACT-012: I Make the Rules Now triggers for either team (destruct 2026-05-07)', () => {
+  it('opponent Cad Bane gets a descriptor when YOUR HUNTER activates within 4', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    // P2's Cad Bane is at a1; P1's Bossk activates at a4 (3 spaces away).
+    // Per destruct: IMTRN fires on EITHER team's HUNTER activation. P2 gets
+    // the choice of whether to grant their opponent's Bossk +1 MP.
+    const game = {
+      figurePositions: { 1: { 'Bossk-1-0': 'a4' }, 2: { 'Cad Bane-1-0': 'a1' } },
+      selectedMap: { id: 'mos-eisley-outskirts' },
+      p1DcList: [{ dcName: 'Bossk', displayName: 'Bossk' }],
+      p1DcMessageIds: ['bossk-msg'],
+      p2DcList: [{ dcName: 'Cad Bane', displayName: 'Cad Bane' }],
+      p2DcMessageIds: ['cad-msg-p2'],
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
+    });
+    const imrn = descriptors.find(d => d.subPromptKey === 'imrn');
+    assert.ok(imrn, 'IMTRN descriptor enumerated for cross-team Cad Bane');
+    assert.strictEqual(imrn.ownerPlayerNum, 2,
+      'owner is P2 (Cad Bane\'s team), not P1 (activator\'s team)');
+    assert.strictEqual(imrn.extras?.granteeMsgId, 'bossk-msg');
+    assert.strictEqual(imrn.extras?.granteePlayerNum, 1);
   });
 });
 

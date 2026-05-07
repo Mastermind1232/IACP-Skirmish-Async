@@ -40,45 +40,11 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   // enumerateActivatorSoaDescriptors. Auto-fire branches removed; the
   // chooser at activation start covers both.
 
-  // Madness (Taron Malicos): if ≤2 CC in hand, suffer 1 Strain and become Focused
-  if (dcName === 'Taron Malicos') {
-    const hand = getCcHand(game, playerNum) || [];
-    if (hand.length <= 2) {
-      const figureKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
-      for (const fk of figureKeys) {
-        applyCondition(game, fk, 'Focus');
-        if (dcHealthState) {
-          const fkIdx = parseFigureKey(fk).figureIndex;
-          reduceHp(dcHealthState, game, msgId, fkIdx, 1, playerNum);
-        }
-      }
-      applied.push({ effect: 'Madness', message: `**Madness** — **${displayName}** has ${hand.length} CC card${hand.length !== 1 ? 's' : ''} in hand (≤2). Suffered **1 Strain** and became **Focused**.` });
-    }
-  }
-
-  // Into the Fray (Baze Malbus): gain 1 MP and 1 Surge Token per hostile with LOS
-  if (dcName === 'Baze Malbus') {
-    grantMovementBank(game, msgId, 1);
-    const ms = getMapData(game.selectedMap?.id);
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const selfFk = `Baze Malbus-${dgIndex}-0`;
-    const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
-    let surgeCount = 0;
-    if (selfPos && ms) {
-      const enemyNum = opponentPlayerNum(playerNum);
-      const allFootprints = getAllFigureFootprints(game, getFigureSize);
-      const selfFp = getFigureFootprint(game, playerNum, selfFk, getFigureSize);
-      for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
-        if (!eFp.length) continue;
-        if (hasFigureLineOfSight(selfFp, eFp, ms, allFootprints)) surgeCount++;
-      }
-    }
-    if (surgeCount > 0) {
-      grantPowerTokens(game, selfFk, 'Surge', surgeCount);
-    }
-    applied.push({ effect: 'Into the Fray', message: `**Into the Fray** — **${displayName}** gains **1 MP** and **${surgeCount} Surge Token${surgeCount !== 1 ? 's' : ''}** (${surgeCount} hostile${surgeCount !== 1 ? 's' : ''} with LOS).` });
-  }
+  // Madness / Into the Fray: migrated to SoA orchestrator (slice 4 —
+  // destruct 2026-05-07 "even auto effects matter for timing"). See
+  // src/game/soa-orchestrator.js. Madness re-checks hand size at fire
+  // time so the player can play another SoR CC first to change the
+  // count. Into the Fray's surge count recomputes at fire time.
 
   // Comms Jammer / Focused on the Kill: migrated to SoA orchestrator
   // (slice 3 — destruct 2026-05-07). See enumerateActivatorSoaDescriptors.
@@ -86,64 +52,10 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
   // inline pending slice 4).
   const attachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
 
-  // Beast Tamer (Skirmish Upgrade attachment): exhaust → grant Speed as MP, set interact override for Non-Sentient
-  if (attachments.length && cardNameIncludes(attachments, 'Beast Tamer')) {
-    const btKws = (dcEff?.keywords || []).map(k => String(k).toUpperCase());
-    if (btKws.includes('CREATURE')) {
-      const btExhausted = game.exhaustedSkirmishUpgrades?.[msgId] || [];
-      if (!cardNameIncludes(btExhausted, 'Beast Tamer')) {
-        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-        game.exhaustedSkirmishUpgrades[msgId] = game.exhaustedSkirmishUpgrades[msgId] || [];
-        game.exhaustedSkirmishUpgrades[msgId].push('Beast Tamer');
-        const btSpeed = getDcStats(dcName)?.speed ?? 0;
-        if (btSpeed > 0) {
-          grantMovementBank(game, msgId, btSpeed);
-        }
-        const btIsNonSentient = (dcEff?.abilityText || '').includes('Non-Sentient');
-        if (btIsNonSentient) {
-          game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
-          game.beastTamerInteractOverride[msgId] = true;
-        }
-        applied.push({
-          effect: 'Beast Tamer',
-          message: `**Beast Tamer** — **${displayName}** gains **${btSpeed} MP** (Speed)${btIsNonSentient ? ' and **can interact** this activation (Non-Sentient override)' : ''}.`,
-        });
-      }
-    }
-  }
-
-  // I Make the Rules Now (Cad Bane): each friendly HUNTER within 4 of Cad Bane gains 1 MP
-  for (const pn of [1, 2]) {
-    const imrnDcList = getDcList(game, pn) || [];
-    const imrnDcMsgIds = getDcMessageIds(game, pn) || [];
-    for (let di = 0; di < imrnDcList.length; di++) {
-      const dc = imrnDcList[di];
-      if (!dc?.dcName) continue;
-      const eff = getDcEffects()?.[dc.dcName];
-      if (!(eff?.specialAbilityIds || []).includes('i_make_the_rules_cad_bane')) continue;
-      // Skip if Cad Bane IS the activating DC (his own activation doesn't trigger this)
-      if (dc.dcName === dcName && pn === playerNum) continue;
-      const cadDgIdx = (dc.displayName || dc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const cadFk = `${dc.dcName}-${cadDgIdx}-0`;
-      const cadPos = game.figurePositions?.[pn]?.[cadFk];
-      if (!cadPos) continue;
-      const friendlyFigs = game.figurePositions?.[pn] || {};
-      for (const [fk, fp] of Object.entries(friendlyFigs)) {
-        if (!fp) continue;
-        const fDcName = dcNameFromFigureKey(fk);
-        const fEff = getDcEffects()?.[fDcName];
-        if (!(fEff?.keywords || []).some(k => String(k).toUpperCase() === 'HUNTER')) continue;
-        if (countGameSpaces(game, cadPos, fp) > 4) continue;
-        // Find msgId for this HUNTER DC via parallel dcList/dcMsgIds arrays
-        for (let j = 0; j < imrnDcList.length; j++) {
-          if (imrnDcList[j]?.dcName !== fDcName) continue;
-          grantMovementBank(game, imrnDcMsgIds[j], 1);
-          applied.push({ effect: 'I Make the Rules Now', message: `**I Make the Rules Now** — **${fDcName}** (HUNTER within 4 of Cad Bane) gains **1 MP**.` });
-          break;
-        }
-      }
-    }
-  }
+  // Beast Tamer / I Make the Rules Now: migrated to SoA orchestrator
+  // (slice 4 — destruct 2026-05-07 "even auto effects matter for timing,
+  // and BT can be exhausted for either MP or interact override").
+  // IMTRN now triggers on EITHER team's HUNTER activation per destruct.
 
   return { applied };
 }
