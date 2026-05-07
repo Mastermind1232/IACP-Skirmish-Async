@@ -5371,9 +5371,13 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
     const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
+      // Per destruct 2026-05-07: "Icon refers to damage or surge symbols
+      // and does not count accuracy numbers." A face showing 1 damage OR
+      // 1 surge with NO other icons (and any accuracy) qualifies as a
+      // single attack icon. Accuracy is excluded from the icon count.
       const eligibleIdxs = combat.attackDiceResults
         .map((d, i) => ({ d, i }))
-        .filter(({ d }) => (d.acc || 0) + (d.dmg || 0) + (d.surge || 0) === 1)
+        .filter(({ d }) => ((d.dmg || 0) + (d.surge || 0)) === 1)
         .map(({ i }) => i);
       if (eligibleIdxs.length > 0) {
         combat.lasatHonorGuardPhase = true;
