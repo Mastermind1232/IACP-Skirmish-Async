@@ -1095,31 +1095,11 @@ export async function finalizeActivation({
   // act_passive_*_voracious_* buttons that had no handler — broken
   // before this slice; orchestrator path is the canonical wiring now.
 
-  // D44. Companion activation ordering (before/after)
-  {
-    const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    const _compInfo = getCompanionForDc(dcName, _compAttachments);
-    if (_compInfo && !_compInfo.isCoActivation) {
-      game.companionActivatedBefore = game.companionActivatedBefore || {};
-      if (!game.companionActivatedBefore[msgId]) {
-        const _compRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`act_passive_${gameId}_${msgId}_companionbefore_activate`)
-            .setLabel(`Activate ${_compInfo.companionName} Now (Before)`)
-            .setStyle(ButtonStyle.Success),
-          new ButtonBuilder()
-            .setCustomId(`act_passive_${gameId}_${msgId}_companionafter_skip`)
-            .setLabel(`Skip (Activate ${_compInfo.companionName} After)`)
-            .setStyle(ButtonStyle.Secondary),
-        );
-        const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);
-        await thread.send({
-          content: `🐾 **Companion: ${_compInfo.companionName}** — Activates at the start or end of **${displayName}**'s activation.\n${_compSummary}\n\nActivate the companion now (before ${dcName}) or after?`,
-          components: [_compRow],
-        }).catch(discordCatch);
-      }
-    }
-  }
+  // D44. Companion activation ordering: migrated to SoA orchestrator
+  // (slice 8c — destruct 2026-05-07). See soa-orchestrator.js
+  // (subPromptKey 'companion_order'). Old act_passive_*_companionbefore_*
+  // / _companionafter_* buttons no longer posted; their handlers in
+  // activation.js are dead-but-harmless until cleanup.
 
   // ═══════════════════════════════════════════════════════════════════════════
   // [E] POST-PASSIVE EFFECTS — logging, interrupts, post-activation triggers

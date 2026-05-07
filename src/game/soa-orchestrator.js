@@ -116,6 +116,41 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Companion activation order (Clan of Two / Junk Droid / direct
+  // companions): per destruct 2026-05-07 the companion activates at the
+  // START or END of the host's activation, player choice. Companion
+  // completes its full activation (2 actions) before the other goes.
+  // Owner = activating player; descriptor enumerated only when the
+  // activator HAS a companion that hasn't been ordered yet this
+  // activation (companionActivatedBefore[msgId] absent).
+  if (game) {
+    const _cmpAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    // Inline import avoids circular dep on activation-setup.js. Use the
+    // raw shape: dcEff.companion (string) OR an attachment with
+    // attData.companion. isCoActivation is always false post-2026-05-07.
+    let _cmpName = null;
+    if (typeof eff?.companion === 'string') _cmpName = eff.companion;
+    else if (_cmpAttachments.length) {
+      for (const _attName of _cmpAttachments) {
+        const _attData = getDcEffects()?.[_attName] || getDcEffects()?.[`[${_attName}]`];
+        if (_attData && typeof _attData.companion === 'string') {
+          _cmpName = _attData.companion;
+          break;
+        }
+      }
+    }
+    if (_cmpName && !game.companionActivatedBefore?.[msgId]) {
+      descriptors.push({
+        id: `companion_order:${msgId}`,
+        ownerPlayerNum: playerNum,
+        sourceMsgId: msgId,
+        sourceLabel: `Companion Order (${_cmpName})`,
+        subPromptKey: 'companion_order',
+        extras: { dcName, companionName: _cmpName },
+      });
+    }
+  }
+
   // Mounted (Captain Terro / Kuiil / Dewback): grant 3 MP. Per destruct
   // 2026-05-07 even auto grants must be player-driven (timing matters).
   const _abilityIds = eff?.specialAbilityIds || [];

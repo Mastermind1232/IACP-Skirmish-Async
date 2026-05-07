@@ -184,6 +184,17 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F52B} **Hair Trigger** — **Jyn Odan** may interrupt to perform a free attack against **${targetName}**:`,
       components: [row],
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'companion_order') {
+    const cmpName = desc.extras?.companionName || 'companion';
+    const hostName = desc.extras?.dcName || displayName;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_first`).setLabel(`${cmpName} first`).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_second`).setLabel(`${hostName} first`).setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F43E} **Companion order** — Does **${cmpName}** activate FIRST (full activation, then ${hostName}) or SECOND (after ${hostName} completes)?`,
+      components: [row],
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'awr') {
     // Flat (figure × type) sub-prompt — one button per pair so the
     // entire choice fits in one click. choiceKey format:
@@ -584,6 +595,27 @@ export async function handleSoaFire(interaction, ctx) {
       await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       await interaction.followUp({ content: `Unknown Beast Tamer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Companion order (host activation companion: first or second) ---
+  // Sets game.companionActivatedBefore[hostMsgId] which is read by the
+  // existing inline activation logic to gate "before vs after" host
+  // activation. Per destruct 2026-05-07: companion's full activation
+  // (2 actions) must complete before the other goes — that gate is a
+  // separate item (audit (c) follow-up).
+  } else if (desc.subPromptKey === 'companion_order') {
+    game.companionActivatedBefore = game.companionActivatedBefore || {};
+    if (choiceKey === 'first') {
+      game.companionActivatedBefore[desc.sourceMsgId] = 'before';
+      await interaction.message.edit({ content: `\u{1F43E} **Companion order** — **${desc.extras?.companionName}** activates FIRST. Complete its full activation before ${desc.extras?.dcName}.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F43E} **Companion order** — ${desc.extras?.companionName} first.`, { phase: 'ROUND', icon: 'card' });
+    } else if (choiceKey === 'second') {
+      game.companionActivatedBefore[desc.sourceMsgId] = 'after';
+      await interaction.message.edit({ content: `\u{1F43E} **Companion order** — **${desc.extras?.dcName}** activates first; **${desc.extras?.companionName}** activates after.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F43E} **Companion order** — ${desc.extras?.dcName} first, ${desc.extras?.companionName} after.`, { phase: 'ROUND', icon: 'card' });
+    } else {
+      await interaction.followUp({ content: `Unknown companion order choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 
