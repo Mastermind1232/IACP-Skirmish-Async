@@ -553,6 +553,21 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+2 VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
           await checkWinConditions(game, client);
         }
+        // Per destruct 2026-05-07: NPC FIGURES (Thug, Krykna) get
+        // conditions like normal figures (CRR p.13 — only OBJECTS skip
+        // conditions). Apply both BENEFICIAL (attacker-side) and HARMFUL
+        // (target = NPC) conditions, gated on damage>0 same as normal
+        // figure path. NPC condition state lives on
+        // game.figureConditions keyed by the NPC figureKey
+        // (npc_thug_N / npc_krykna_N).
+        if (!npc.defeated) {
+          const _npcConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+          for (const _nc of _npcConds) {
+            const _isHarmful = HARMFUL_CONDITIONS.includes(_nc);
+            const _recipientKey = _isHarmful ? combat.target.figureKey : combat.attackerFigureKey;
+            if (_recipientKey) _applyCondition(game, _recipientKey, _nc);
+          }
+        }
       }
     }
     await thread.send({ content: resultText || '(No effect)', components: [] });
