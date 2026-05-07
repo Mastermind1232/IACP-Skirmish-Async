@@ -257,6 +257,12 @@ export async function finalizeActivation({
     total: _b12Total,
     perFigureRemaining: _b12PerFig,
     figureLocked: {},
+    // Per destruct 2026-05-07: each figure has individual SoA + EoA
+    // checks. For 1-figure groups, fired at group-start / group-end.
+    // For multi-figure groups, deferred per-figure: SoA on first figure
+    // selection, EoA when each figure locks.
+    figureSoaFired: {},
+    figureEoaFired: {},
     messageId: null,
     threadId: thread.id,
     specialsUsed: [],
@@ -401,8 +407,14 @@ export async function finalizeActivation({
   // first; if init-player has no triggers, non-init's bucket is presented.
   // Activation-end is gated by isActivationActionInProgress while
   // pendingSoaResolution exists for this msgId.
-  {
-    const _soaDesc = enumerateActivatorSoaDescriptors(game, { dcName, playerNum, msgId });
+  //
+  // Per destruct 2026-05-07: each figure has individual SoA checks. For
+  // 1-figure groups, SoA fires here at activation start (figure 0 is the
+  // implicit activator). For multi-figure groups, SoA is DEFERRED to
+  // per-figure-select (see index.js dc_fig_select_ handler) so each
+  // figure's own SoA pass fires when that figure begins acting.
+  if (_b12FigCount === 1) {
+    const _soaDesc = enumerateActivatorSoaDescriptors(game, { dcName, playerNum, msgId, figureIndex: 0 });
     if (_soaDesc.length > 0) {
       const initPN = (game.initiative ?? game.firstPlayer ?? playerNum);
       const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: playerNum, activatorMsgId: msgId });
@@ -421,6 +433,9 @@ export async function finalizeActivation({
         }
       }
     }
+    // Mark figure 0 SoA as fired so per-figure paths (defense in depth)
+    // don't re-fire it.
+    game.dcActionsData[msgId].figureSoaFired[0] = true;
   }
 
   // D3. Madness — now handled by applyStartOfActivationEffects()

@@ -49,6 +49,12 @@ import { awrRange, enumerateAwrTargets } from './awr-helpers.js';
  */
 export function enumerateActivatorSoaDescriptors(game, opts) {
   const { dcName, playerNum, msgId } = opts || {};
+  // Per destruct 2026-05-07: each figure of a multi-figure group has
+  // individual SoA. Caller passes figureIndex when firing per-figure;
+  // descriptors that reference the activating figure key swap their
+  // hardcoded `-0` for `-${figureIndex}`. For single-figure groups
+  // figureIndex=0 either explicitly or by default.
+  const figureIndex = (typeof opts?.figureIndex === 'number' && opts.figureIndex >= 0) ? opts.figureIndex : 0;
   if (!dcName || !playerNum || !msgId) return [];
   const eff = getDcEffects()?.[dcName];
   const descriptors = [];
@@ -370,9 +376,13 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
       const _jynFk = `Jyn Odan-${_jynDgIdx}-0`;
       const _jynPos = game.figurePositions?.[_enemyPn]?.[_jynFk];
       if (!_jynPos) continue;
-      // Activator's figure key (per-figure trigger).
+      // Activator's figure key (per-figure trigger). Per destruct
+      // 2026-05-07: Hair Trigger checks happen per individual activating
+      // figure, not just figure 0 of multi-figure groups. Use the
+      // figureIndex passed by the caller (defaults to 0 for single-
+      // figure groups).
       const _actDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const _actFk = `${dcName}-${_actDgIdx}-0`;
+      const _actFk = `${dcName}-${_actDgIdx}-${figureIndex}`;
       const _actPos = game.figurePositions?.[playerNum]?.[_actFk];
       if (!_actPos) continue;
       // Terrain-only LOS: pass empty figureBlockingCoords. If terrain
@@ -384,12 +394,14 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
       if (!_jynFp.length || !_actFp.length) continue;
       if (!hasFigureLineOfSight(_jynFp, _actFp, _ms, [])) continue;
       descriptors.push({
-        id: `hair_trigger:${_jynMsgId}->${msgId}`,
+        // Per-figure ID so multiple figures of the same group don't
+        // dedupe. Multi-figure groups produce one descriptor per figure.
+        id: `hair_trigger:${_jynMsgId}->${msgId}:f${figureIndex}`,
         ownerPlayerNum: _enemyPn,
         sourceMsgId: _jynMsgId,
         sourceLabel: 'Hair Trigger',
         subPromptKey: 'hair_trigger',
-        extras: { dcName: 'Jyn Odan', jynFigureKey: _jynFk, targetFigureKey: _actFk, targetMsgId: msgId, targetPlayerNum: playerNum },
+        extras: { dcName: 'Jyn Odan', jynFigureKey: _jynFk, targetFigureKey: _actFk, targetMsgId: msgId, targetPlayerNum: playerNum, activatingFigureIndex: figureIndex },
       });
     }
   }
@@ -513,33 +525,26 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     const _cpActEff = getDcEffects()?.[dcName];
     if (_cpYoda && _cpActEff?.affiliation === 'Rebel') {
       const dgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const figures = _cpActEff?.figures ?? 1;
+      // Per destruct 2026-05-07: Calming Presence is a per-figure check.
+      // For multi-figure groups, fire once per figure; the descriptor
+      // considers ONLY the activating figure's harmful conditions, not
+      // the whole group's. figureIndex is supplied by the caller.
+      const _cpFk = `${dcName}-${dgIdx}-${figureIndex}`;
+      const _cpConds = game.figureConditions?.[_cpFk] || [];
       const _cpPairs = [];
-      for (let fi = 0; fi < figures; fi++) {
-        const fk = `${dcName}-${dgIdx}-${fi}`;
-        const conds = game.figureConditions?.[fk] || [];
-        for (const c of conds) {
-          if (!['Stun', 'Bleed', 'Weaken'].includes(c)) continue;
-          if (c === 'Weaken' && game.disarmPermanentWeakened?.[fk]) continue;
-          _cpPairs.push({ fk, condition: c, figIndex: fi });
-        }
+      for (const c of _cpConds) {
+        if (!['Stun', 'Bleed', 'Weaken'].includes(c)) continue;
+        if (c === 'Weaken' && game.disarmPermanentWeakened?.[_cpFk]) continue;
+        _cpPairs.push({ fk: _cpFk, condition: c, figIndex: figureIndex });
       }
-      // Dedup so a duplicated condition doesn't appear twice.
-      const _cpSeen = new Set();
-      const _cpUnique = _cpPairs.filter((p) => {
-        const k = `${p.fk}|${p.condition}`;
-        if (_cpSeen.has(k)) return false;
-        _cpSeen.add(k);
-        return true;
-      });
-      if (_cpUnique.length > 0) {
+      if (_cpPairs.length > 0) {
         descriptors.push({
-          id: `calming_presence:${msgId}`,
+          id: `calming_presence:${msgId}:f${figureIndex}`,
           ownerPlayerNum: playerNum,
           sourceMsgId: msgId,
           sourceLabel: 'Calming Presence',
           subPromptKey: 'calming_presence',
-          extras: { dcName, yodaDcName: _cpYoda.dcName, harmfulPairs: _cpUnique, multiFigure: figures > 1 },
+          extras: { dcName, yodaDcName: _cpYoda.dcName, harmfulPairs: _cpPairs, activatingFigureIndex: figureIndex },
         });
       }
     }

@@ -4528,6 +4528,52 @@ client.on('interactionCreate', async (interaction) => {
       game.dcActionsData = game.dcActionsData || {};
       game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
       game.dcActionsData[msgId].selectedFigure = selectedFigure;
+      // Per destruct 2026-05-07: each figure has individual SoA. For
+      // multi-figure groups, SoA fires here when each figure is first
+      // selected (deferred from group-activation-start). The
+      // figureSoaFired flag prevents re-fire if the player selects the
+      // same figure twice (Phase 2 prevents return-to-locked anyway).
+      const _ad = game.dcActionsData[msgId];
+      _ad.figureSoaFired = _ad.figureSoaFired || {};
+      if (!_ad.figureSoaFired[selectedFigure]) {
+        try {
+          const { enumerateActivatorSoaDescriptors, startSoaResolution, describeChooserPrompt } = await import('./src/game/soa-orchestrator.js');
+          const _soaDesc = enumerateActivatorSoaDescriptors(game, {
+            dcName: meta.dcName,
+            playerNum: meta.playerNum,
+            msgId,
+            figureIndex: selectedFigure,
+          });
+          if (_soaDesc.length > 0) {
+            const initPN = (game.initiative ?? game.firstPlayer ?? meta.playerNum);
+            const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: meta.playerNum, activatorMsgId: msgId });
+            if (_started) {
+              const _soaShape = describeChooserPrompt(game.pendingSoaResolution, game.gameId);
+              if (_soaShape) {
+                const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = await import('discord.js');
+                const _soaButtons = _soaShape.choices.map((c) => {
+                  const style = c.descId === '__skip_all__' ? ButtonStyle.Secondary : ButtonStyle.Primary;
+                  return new ButtonBuilder().setCustomId(c.customId).setLabel(c.label).setStyle(style);
+                });
+                const _soaRow = new ActionRowBuilder().addComponents(_soaButtons);
+                const _threadId = _ad.threadId;
+                if (_threadId) {
+                  try {
+                    const _thread = await interaction.client.channels.fetch(_threadId);
+                    if (_thread) {
+                      await _thread.send({
+                        content: `\u{2728} **Start-of-Activation** (figure ${selectedFigure + 1}) — Player ${_soaShape.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
+                        components: [_soaRow],
+                      }).catch(discordCatch);
+                    }
+                  } catch { /* non-fatal */ }
+                }
+              }
+            }
+          }
+        } catch (_e) { /* non-fatal: SoA prompt failure leaves figure usable */ }
+        _ad.figureSoaFired[selectedFigure] = true;
+      }
       saveGames(game.gameId);
       await updateDcActionsMessage(game, msgId, interaction.client);
       return;
