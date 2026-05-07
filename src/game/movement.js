@@ -1,6 +1,51 @@
 /**
  * Movement logic: board state, profile, cache, reachable spaces, path cost. No Discord.
  */
+
+/**
+ * Build the set of cells "edge or corner adjacent to a wall" for use by
+ * Wall Run (Cal Kestis). A wall is an impassable edge between two
+ * 4-adjacent cells; the cells on either side are edge-adjacent, and the
+ * 4 cells at the wall's two endpoints are corner-adjacent (perpendicular
+ * to the wall axis). Per destruct 2026-05-07: "Wall Run means 8-direction
+ * adjacency as always in this game."
+ *
+ * @param {Array<Array<string>>} impassableEdges - [[a,b], ...] from mapSpaces
+ * @returns {Set<string>} normalized coords of wall-adjacent cells
+ */
+function buildWallAdjacentSet(impassableEdges) {
+  const result = new Set();
+  for (const edge of (impassableEdges || [])) {
+    if (!Array.isArray(edge) || edge.length < 2) continue;
+    const aRaw = edge[0], bRaw = edge[1];
+    if (!aRaw || !bRaw) continue;
+    const a = normalizeCoord(aRaw);
+    const b = normalizeCoord(bRaw);
+    result.add(a);
+    result.add(b);
+    const pA = parseCoord(a);
+    const pB = parseCoord(b);
+    if (pA.col < 0 || pA.row < 0 || pB.col < 0 || pB.row < 0) continue;
+    const dc = pB.col - pA.col;
+    const dr = pB.row - pA.row;
+    if (dc !== 0 && dr === 0) {
+      // Horizontal pair → vertical wall between them; corners share row±1
+      for (const off of [-1, 1]) {
+        result.add(colRowToCoord(pA.col, pA.row + off));
+        result.add(colRowToCoord(pB.col, pB.row + off));
+      }
+    } else if (dc === 0 && dr !== 0) {
+      // Vertical pair → horizontal wall between them; corners share col±1
+      for (const off of [-1, 1]) {
+        result.add(colRowToCoord(pA.col + off, pA.row));
+        result.add(colRowToCoord(pB.col + off, pB.row));
+      }
+    }
+    // Diagonal walls (rare in IA): edge-only treatment.
+  }
+  result.delete('');
+  return result;
+}
 import {
   parseCoord,
   normalizeCoord,
@@ -368,7 +413,10 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
       }
     }
   }
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet, massiveOccupiedSet };
+  // Wall Run (Cal Kestis): cells edge/corner-adjacent to any impassable wall.
+  // Consumed by evaluateMovementStep when profile.wallRunActive is set.
+  const wallAdjacentSet = buildWallAdjacentSet(effectiveImpassable);
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet, massiveOccupiedSet, wallAdjacentSet };
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
@@ -422,6 +470,10 @@ export function getMovementProfile(dcName, figureKey, game) {
       break;
     }
   }
+  // Wall Run (Cal Kestis): per-figure flag set by ability handler at activation.
+  // Cleared when activation ends. Activates a per-step terrain-cost waiver
+  // for cells edge/corner-adjacent to a wall (board.wallAdjacentSet).
+  const wallRunActive = !!(figureKey && game?.figureWallRunActive?.[figureKey]);
   return {
     size: storedSize,
     cols,
@@ -436,6 +488,7 @@ export function getMovementProfile(dcName, figureKey, game) {
     ignoreFigureCost: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     canEndOnOccupied: isMassive,
     treatBlockingAsDifficult: hasMortarHaul,
+    wallRunActive,
     keywords,
   };
 }
@@ -468,6 +521,7 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
     occupiedSet: new Set((occupiedSet || []).map((s) => normalizeCoord(s))),
     movementBlockingSet,
     spacesSet,
+    wallAdjacentSet: buildWallAdjacentSet(effectiveImpassable),
   };
   if (hostileOccupiedSet != null) {
     board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
@@ -614,8 +668,18 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   const enteringBlockingCells = !profile.ignoreBlocking ? entering.filter((cell) => board.blockingSet.has(cell)) : [];
   // Mortar Trooper Haul: blocking/impassable become difficult instead of impassable
   if (enteringBlockingCells.length > 0 && !profile.treatBlockingAsDifficult) return null;
+  // Wall Run (Cal Kestis): waive difficult-terrain MP cost for cells edge or
+  // corner adjacent to a wall. Per destruct 2026-05-07: Wall Run uses 8-direction
+  // wall adjacency. wallAdjacentSet is precomputed in board state from the
+  // map's impassableEdges. The waiver applies only when the figure's profile
+  // has wallRunActive (set by the Wall Run ability handler at activation).
+  const wallRunWaivesDifficult =
+    profile.wallRunActive &&
+    board.wallAdjacentSet &&
+    entering.every((cell) => board.wallAdjacentSet.has(cell));
   const enteringDifficult =
     !profile.ignoreDifficult &&
+    !wallRunWaivesDifficult &&
     (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult') || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0));
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
   const enteringHostile = board.hostileOccupiedSet

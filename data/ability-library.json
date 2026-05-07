@@ -5249,6 +5249,7 @@
       "description": "Move a number of spaces up to your Speed. During this movement, you may ignore terrain in spaces that share an edge or corner with a wall.",
       "oncePer": null,
       "freeMoveEqualToSpeed": true,
+      "wallRun": true,
       "wiredStatus": "wired"
     },
     "wanton_destruction_saw": {

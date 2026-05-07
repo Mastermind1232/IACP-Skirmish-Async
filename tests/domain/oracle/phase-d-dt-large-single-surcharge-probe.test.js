@@ -34,8 +34,12 @@ describe('PROBE-PD-DT-005: large figures pay +1 MP for entering DT regardless of
   });
 
   it('005b: source — `enteringDifficult` is a single boolean via Array.some, not a count', () => {
+    // Allow optional gate lines (e.g. !wallRunWaivesDifficult) to appear
+    // between !profile.ignoreDifficult and the entering.some(...) check.
+    // The invariant is: the boolean is computed via Array.some over entering
+    // cells, not a per-cell counter; additional && gates are permitted.
     assert.match(MV_SRC,
-      /const enteringDifficult =\s*\n\s*!profile\.ignoreDifficult &&\s*\n\s*\(entering\.some\(\(cell\) => \(board\.terrain\[cell\] \|\| 'normal'\) === 'difficult'\)/,
+      /const enteringDifficult =\s*\n\s*!profile\.ignoreDifficult &&[\s\S]{0,200}?\(entering\.some\(\(cell\) => \(board\.terrain\[cell\] \|\| 'normal'\) === 'difficult'\)/,
       'enteringDifficult must be a boolean (some), not a per-cell counter — CRR-DT-005');
   });
 

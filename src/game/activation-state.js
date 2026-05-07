@@ -103,6 +103,7 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'activationStartPositions',
   'overdriveUsedThisActivation',
   'massiveMovementLocked',
+  'figureWallRunActive',
 ];
 
 /**

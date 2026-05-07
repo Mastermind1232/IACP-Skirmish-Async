@@ -1986,7 +1986,7 @@ export function resolveAbility(abilityId, context) {
 
   // dcSpecial: freeMoveEqualToSpeed (Wall Run, Charge) — gain free MP equal to DC's Speed
   if (entry.type === 'dcSpecial' && entry.freeMoveEqualToSpeed) {
-    const { game, msgId, meta } = context;
+    const { game, msgId, meta, playerNum } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const dcStats = getStatsForDc(meta.dcName);
     const speed = typeof dcStats?.speed === 'number' ? dcStats.speed : 4;
@@ -1996,8 +1996,20 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
     }
+    // Wall Run: tag the activating figure so movement.js waives difficult-
+    // terrain MP cost in cells edge/corner-adjacent to a wall. Cleared at
+    // activation end via clearActivationDcEffects.
+    if (entry.wallRun) {
+      const _wrActions = game.dcActionsData?.[msgId];
+      const _wrSelFig = _wrActions?.selectedFigure ?? 0;
+      const _wrDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _wrDgI = _wrDgM ? _wrDgM[1] : '1';
+      const _wrFk = `${meta.dcName}-${_wrDgI}-${_wrSelFig}`;
+      game.figureWallRunActive = game.figureWallRunActive || {};
+      game.figureWallRunActive[_wrFk] = true;
+    }
     const label = entry.label || 'Wall Run';
-    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain adjacent to walls during this movement.';
+    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain in cells edge or corner adjacent to a wall during this movement.';
     return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
