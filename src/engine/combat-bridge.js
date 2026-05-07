@@ -815,7 +815,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       // Leg Hydraulics (Tress Hacnua): handled via specialAbilityIds check below (not passives) to avoid double-granting
-      // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens (max 3 total)
+      // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens. Cap is 3.
+      // Always grants the full 2 — if Migs is at 2 tokens, the standard
+      // pendingPowerTokenOverflow path prompts the player to discard 1 by type.
       {
         const _llAtkEff = getDcEffects()?.[combat.attackerDcName];
         if ((_llAtkEff?.passives || []).includes('Locked and Loaded')) {
@@ -824,19 +826,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             game.figurePowerTokens = game.figurePowerTokens || {};
             game.figurePowerTokens[_llFk] = game.figurePowerTokens[_llFk] || [];
             const _llCurrent = game.figurePowerTokens[_llFk].length;
-            const _llGain = Math.min(2, 3 - _llCurrent);
-            if (_llGain > 0) {
-              game.pendingPowerTokenGrant = { grants: [{ figureKey: _llFk, figName: combat.attackerDcName, count: _llGain }], channelId: combat.combatThreadId, playerNum: attackerPlayerNum };
-              const _llBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
-                new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
-              );
-              await thread.send({
-                content: `\u{1F52B} **Locked and Loaded** — **${combat.attackerDcName}** gains ${_llGain} Power Token${_llGain > 1 ? 's' : ''} (${_llCurrent} \u2192 ${_llCurrent + _llGain}, max 3). Choose type:`,
-                components: [new ActionRowBuilder().addComponents(_llBtns)],
-              }).catch(discordCatch);
-            } else {
-              await logGameAction(game, client, `\u{1F52B} **Locked and Loaded** — **${combat.attackerDcName}** already at max 3 Power Tokens; no tokens gained.`, { phase: 'ROUND', icon: 'attack' });
-            }
+            // Always grant 2 — overflow handled downstream via pendingPowerTokenOverflow.
+            // Capping at "fill to 3" lost the player's choice over which existing token type to keep.
+            game.pendingPowerTokenGrant = { grants: [{ figureKey: _llFk, figName: combat.attackerDcName, count: 2 }], channelId: combat.combatThreadId, playerNum: attackerPlayerNum };
+            const _llBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
+              new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
+            );
+            await thread.send({
+              content: `\u{1F52B} **Locked and Loaded** — **${combat.attackerDcName}** gains 2 Power Tokens (${_llCurrent} \u2192 ${_llCurrent + 2}, max 3 — overflow will prompt for discard). Choose token type:`,
+              components: [new ActionRowBuilder().addComponents(_llBtns)],
+            }).catch(discordCatch);
           }
         }
       }
