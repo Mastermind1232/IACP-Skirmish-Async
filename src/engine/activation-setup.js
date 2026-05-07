@@ -1021,7 +1021,9 @@ export async function finalizeActivation({
   // 2026-05-07). Friendly-only trigger; descriptor in activator's
   // bucket. See soa-orchestrator.js enumerateActivatorSoaDescriptors.
 
-  // D41. Nemik's Manifesto: exhaust → suffer 2 Strain, gain 1 MP
+  // D41. Nemik's Manifesto: NOT SoA per destruct 2026-05-07 — exhaust
+  // anytime during activation. Button is posted at activation start for
+  // visibility but stays clickable throughout the activation.
   {
     const _nmDcList = getDcList(game, playerNum) || [];
     const _nmDcMsgIds = getDcMessageIds(game, playerNum) || [];
@@ -1037,12 +1039,16 @@ export async function finalizeActivation({
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_nemik_use_${_nmMsgId}`).setLabel("Use Nemik's Manifesto (+1 MP, -2 Strain)").setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_nemik_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         );
-        await thread.send({ content: `📜 **Nemik's Manifesto** — Exhaust to grant **${displayName}** +1 MP (suffers 2 Strain)?`, components: [nmRow] }).catch(discordCatch);
+        await thread.send({ content: `📜 **Nemik's Manifesto** — At any point during this activation, you may exhaust to grant **${displayName}** +1 MP (suffers 2 Strain).`, components: [nmRow] }).catch(discordCatch);
       }
     }
   }
 
-  // D42. [Spectre Cell]: exhaust → +2 MP, may interrupt attack
+  // D42. [Spectre Cell]: NOT SoA per destruct 2026-05-07 — exhaust
+  // anytime during activation. Button posted at activation start for
+  // visibility but stays clickable throughout. The chosen friendly's
+  // interrupt attack uses the granted_attack_* primitive (see
+  // sc_fig_pick handler in src/handlers/activation.js).
   {
     const _scDcList = getDcList(game, playerNum) || [];
     const _scDcMsgIds = getDcMessageIds(game, playerNum) || [];
@@ -1062,7 +1068,7 @@ export async function finalizeActivation({
             new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_spectrecell_use`).setLabel('Use Spectre Cell (+2 MP + interrupt attack)').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_spectrecell_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
           );
-          await thread.send({ content: `**[Spectre Cell]** — Exhaust to choose another friendly figure: +2 MP and may interrupt to perform an attack.`, components: [scRow] }).catch(discordCatch);
+          await thread.send({ content: `**[Spectre Cell]** — At any point during this activation, exhaust to choose another friendly figure: +2 MP and may interrupt to perform an attack.`, components: [scRow] }).catch(discordCatch);
         }
       }
     }

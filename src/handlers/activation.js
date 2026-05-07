@@ -1049,6 +1049,8 @@ export async function handleActPassive(interaction, ctx) {
       await logGameAction?.(game, client, `**Calming Presence** (Yoda) — Removed ${condName} from ${condFkName}; ${displayName} suffered 1 Strain.`, { phase: 'ACTIVATION', icon: 'condition' });
     }
   // --- Nemik's Manifesto: exhaust for +1 MP, -2 Strain ---
+  // Per destruct 2026-05-07: strain routes through applyStrain so the
+  // canonical strain subroutine fires (UD prompt, Fireproof, Headhunter).
   } else if (ability === 'nemik') {
     if (choice === 'skip') {
       await interaction.message.edit({ content: `📜 **Nemik's Manifesto** — Skipped.`, components: [] }).catch(discordCatch);
@@ -1058,16 +1060,20 @@ export async function handleActPassive(interaction, ctx) {
       // Exhaust the card
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
       game.exhaustedSkirmishUpgrades[nmMsgId] = [...(game.exhaustedSkirmishUpgrades[nmMsgId] || []), "Nemik's Manifesto"];
-      // Grant 1 MP
+      // Grant 1 MP to the activating figure's bank
       grantMovementBank(game, msgId, 1);
-      // Apply 2 Strain to the activating figure
+      await interaction.message.edit({ content: `📜 **Nemik's Manifesto** — **${displayName}** gained **1 MP**. Now suffering **2 Strain**...`, components: [] }).catch(discordCatch);
+      await logGameAction?.(game, client, `**Nemik's Manifesto** — ${displayName} gained 1 MP. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });
+      // Strain via the player-choice subroutine (UD prompt, Fireproof, Headhunter, etc.)
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const fk = `${meta.dcName}-${dgIndex}-0`;
-      const figMatch = fk.match(/-(\d+)$/);
-      const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-      reduceHp(dcHealthState, game, msgId, figIdx, 2, meta.playerNum);
-      await interaction.message.edit({ content: `📜 **Nemik's Manifesto** — **${displayName}** gained **1 MP** and suffered **2 Strain**. (Exhausted)`, components: [] }).catch(discordCatch);
-      await logGameAction?.(game, client, `**Nemik's Manifesto** — ${displayName} gained 1 MP, suffered 2 Strain. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });
+      const { applyStrain } = await import('./strain-handler.js');
+      await applyStrain(game, ctx, {
+        figureKey: fk,
+        controllerPlayerNum: meta.playerNum,
+        amount: 2,
+        source: "Nemik's Manifesto",
+      });
     }
   // --- Unshakable: discard harmful condition from cost≥9 figure, suffer 1 Strain, exhaust ---
   } else if (ability === 'unshakable') {
