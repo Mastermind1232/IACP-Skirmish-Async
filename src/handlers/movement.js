@@ -2,6 +2,7 @@
  * Movement handlers: move_mp_, move_adjust_mp_, move_pick_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { applyStrain } from './strain-handler.js';
 import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
@@ -1052,13 +1053,22 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   }
   // (Interactive massive-push prompts are posted directly from the init block
   // above via _dispatchNextMassivePush. No post-hoc branch needed here.)
-  // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared)
-  // Slice 8.4 follow-up: skip if condition effects are suppressed (YWNDM-on-Fifth-Brother)
-  if (moveState.pendingBleed && ctx.sendBleedingPrompt) {
+  // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared).
+  // destruct 2026-05-06: routed through applyStrain for unified per-strain
+  // choice prompt + UD pre-prompt. Skip if condition effects are suppressed
+  // (YWNDM-on-Fifth-Brother).
+  // TODO slice 9: move-action Bleed should fire when MP gained (action
+  // resolves) — BEFORE any space is moved — not after first space.
+  if (moveState.pendingBleed && applyStrain) {
     moveState.pendingBleed = false;
     if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')
         && !areConditionEffectsSuppressed(game, moveState.figureKey)) {
-      await ctx.sendBleedingPrompt(game, interaction.channel, moveState.figureKey, moveState.playerNum, moveState.displayName);
+      await applyStrain(game, ctx, {
+        figureKey: moveState.figureKey,
+        controllerPlayerNum: moveState.playerNum,
+        amount: 1,
+        source: 'Bleeding',
+      });
     }
   }
   // Rush (Onar): after all movement MP exhausted, offer push on adjacent SMALL hostile

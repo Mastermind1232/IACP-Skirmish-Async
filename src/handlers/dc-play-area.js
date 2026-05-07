@@ -2,6 +2,7 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
+import { applyStrain } from './strain-handler.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
@@ -844,14 +845,22 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       gameLogMessageId: logMsg?.id,
     });
   }
-  // Bleeding: trigger after action-consuming CC plays (Special Action or Double Action)
-  if ((timingLabel === 'Special Action' || timingLabel === 'Double Action') && ctx.sendBleedingPrompt) {
+  // Bleeding: trigger after action-consuming CC plays (Special Action or Double Action).
+  // destruct 2026-05-06: Bleed strain routes through applyStrain so the player
+  // gets the per-strain choice (damage / discard top of deck / Paz return) +
+  // Under Duress pre-prompt to opponent fires regardless of strain source.
+  if ((timingLabel === 'Special Action' || timingLabel === 'Double Action')) {
     const actionsData = game.dcActionsData?.[msgId];
     const selectedFigure = actionsData?.selectedFigure ?? 0;
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
     if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
-      await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, meta.displayName || meta.dcName);
+      await applyStrain(game, ctx, {
+        figureKey,
+        controllerPlayerNum: meta.playerNum,
+        amount: 1,
+        source: 'Bleeding',
+      });
     }
   }
   saveGames(game.gameId);
@@ -2352,13 +2361,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
     await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
   }
-  // Bleeding: trigger after DC Special action resolves
-  if (buttonKey === 'dc_special_' && ctx.sendBleedingPrompt) {
+  // Bleeding: trigger after DC Special action resolves. Routed through
+  // applyStrain (destruct 2026-05-06) for unified strain choice prompt.
+  if (buttonKey === 'dc_special_') {
     const selectedFigure = actionsData?.selectedFigure ?? 0;
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
     if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
-      await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, meta.playerNum, displayName);
+      await applyStrain(game, ctx, {
+        figureKey,
+        controllerPlayerNum: meta.playerNum,
+        amount: 1,
+        source: 'Bleeding',
+      });
     }
   }
   saveGames(game.gameId);
