@@ -9326,13 +9326,28 @@ export function resolveAbility(abilityId, context) {
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const fk = figureKeys[0];
     if (!chosenSpace) {
-      // First call: compute valid empty spaces within pounceRange (path through open spaces, ignore occupancy for traversal)
+      // First call: enumerate empty spaces within pounceRange using the IACP
+      // "counting spaces" rule (per destruct 2026-05-07): impassable terrain
+      // does NOT block counting. We use chebyshev distance on (col, row) over
+      // every map cell — equivalent to 8-direction BFS through the grid
+      // ignoring all walls. Landing space must still be a valid map cell and
+      // unoccupied. Path-traversal (getReachableSpaces) was wrong because it
+      // respected the impassable-edge graph.
       const pos = game.figurePositions?.[playerNum]?.[fk];
       if (!pos) return { applied: false, manualMessage: 'Figure has no position (deploy first).' };
       const boardState = getBoardStateForMovement(game, fk);
       if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Map data missing.' };
-      // Travel path ignores other figures (place effect); collect all occupied spaces as blocked destinations only
-      const allReachable = getReachableSpaces(pos, entry.pounceRange, boardState.mapSpaces, []);
+      const _plOrigin = parseCoord(pos);
+      const _plMaxDist = entry.pounceRange;
+      const _plMapKeys = Object.keys(boardState.mapSpaces.adjacency || {});
+      const _plReachable = [];
+      for (const _plK of _plMapKeys) {
+        const _plP = parseCoord(_plK);
+        if (_plP.col < 0 || _plP.row < 0) continue;
+        const _plCheb = Math.max(Math.abs(_plP.col - _plOrigin.col), Math.abs(_plP.row - _plOrigin.row));
+        if (_plCheb > 0 && _plCheb <= _plMaxDist) _plReachable.push(_plK);
+      }
+      const allReachable = _plReachable;
       const occupied = new Set();
       for (const pNum of [1, 2]) {
         for (const coord of Object.values(game.figurePositions?.[pNum] || {})) {
