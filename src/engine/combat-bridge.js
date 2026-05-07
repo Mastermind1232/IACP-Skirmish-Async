@@ -1420,7 +1420,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         // This is the Way (The Armorer): when attacker defeats defender, attacker gains 1 Block Token
-        {
+        // Per destruct 2026-05-07: skip when noFriendliesActive (Lure / False Orders).
+        if (!combat.noFriendliesActive) {
           const _armorerOnBoard = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('The Armorer-'));
           if (_armorerOnBoard) {
             const _armorerGranted = grantPowerTokens(game, combat.attackerFigureKey, 'Block', 1, 2);

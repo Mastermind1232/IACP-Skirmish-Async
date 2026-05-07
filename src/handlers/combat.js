@@ -1906,7 +1906,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
-  {
+  // Per destruct 2026-05-07: skip during Lure / False Orders attacks ("no figures friendly").
+  if (!game.pendingCombat?.noFriendliesActive) {
     const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
     if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
       const _fokKwMap = getDcKeywordsGlobal(game);
@@ -2266,7 +2267,9 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Sentinel / Protector: scan defender's friendlies for adjacent-to-target, +1 Block. Limit 1 per attack.
-  if (mapSpaces && targetCoord && !target.isNpc) {
+  // Per destruct 2026-05-07: "No figures are considered friendly during" Lure / False Orders attacks.
+  // Sentinel/Protector are friendly-gated defender-side reactions — skip entirely when noFriendliesActive.
+  if (mapSpaces && targetCoord && !target.isNpc && !game.pendingCombat?.noFriendliesActive) {
     const adjToTargetSP = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
     adjToTargetSP.add(targetCoord);
     const defFigPos = game.figurePositions?.[defenderPlayerNum] || {};
@@ -3286,12 +3289,15 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
     // Coordinated Hunt (Purge Commander Elite): +1 atk reroll for self or HUNTER with PC in LOS. Limit 1 per attack.
+    // Self-branch (attacker IS the PC) fires regardless — the figure uses its own ability.
+    // Other-friendly-with-PC-in-LOS branch is friendly-gated; skip during Lure/False Orders
+    // (destruct 2026-05-07: no figures friendly during this attack).
     {
       let _chApplied = false;
       if (atkSIds.includes('coordinated_hunt_purge_commander')) {
         atkSpecialReroll += 1; _chApplied = true;
       }
-      if (!_chApplied) {
+      if (!_chApplied && !combat.noFriendliesActive) {
         const atkKwsCH = (atkEffR?.keywords || []).map(k => String(k).toUpperCase());
         if (atkKwsCH.includes('HUNTER')) {
           const chFigs = game.figurePositions?.[attackerPlayerNum] || {};
@@ -7411,6 +7417,13 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     falseOrdersControllerPlayerNum: controllerPlayerNum,
     isLure: !!fo.isLure,
     lurePostAttackStrain: fo.postAttackStrain || 0,
+    // Per destruct 2026-05-07: "No figures are considered friendly during
+    // this attack" (Lure of the Dark Side / False Orders). All
+    // attacker-side AND defender-side "friendly" gates (Sentinel,
+    // Protector, Get Behind Me, Fury of Kashyyyk Pierce, This is the
+    // Way, Coordinated Hunt, etc.) consult this flag and treat all
+    // figures as non-friendly when set.
+    noFriendliesActive: true,
   };
   const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];

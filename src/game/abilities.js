@@ -3276,6 +3276,13 @@ export function resolveAbility(abilityId, context) {
     if (!combat || !combat.target) {
       return { applied: true, logMessage: `${mpNote} No active combat found — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
     }
+    // Per destruct 2026-05-07: "No figures are considered friendly during"
+    // Lure / False Orders attacks. Bodyguard and Get Behind Me are
+    // friendly-gated swap effects ("a friendly figure is being attacked")
+    // — they cannot fire when there are no friendlies.
+    if (combat.noFriendliesActive) {
+      return { applied: false, manualMessage: `${cardLabel} cannot fire: no figures are considered friendly during a Lure/False Orders attack.` };
+    }
     const defenderPlayerNum = combat.defenderPlayerNum;
     // Card is played by the defender's side (the player whose friendly is being attacked)
     if (playerNum !== defenderPlayerNum) {
