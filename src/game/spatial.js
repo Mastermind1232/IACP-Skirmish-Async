@@ -299,6 +299,18 @@ export function getAllFigureFootprints(game, getFigureSize) {
       for (const c of getFigureFootprint(game, pn, fk, getFigureSize)) set.add(c);
     }
   }
+  // Per destruct 2026-05-07: neutral figures (Thugs, Krykna) DO block
+  // line of sight. Add their 1x1 footprints to the blocking set so LOS
+  // through their space is correctly blocked. Defeated NPCs are
+  // excluded (no longer on the board). Crates remain LOS-transparent
+  // per destruct ("objects do not block movement or LoS").
+  for (const npcArr of [game?.npcKrykna, game?.npcThugs]) {
+    if (!Array.isArray(npcArr)) continue;
+    for (const npc of npcArr) {
+      if (!npc || npc.defeated || !npc.coord) continue;
+      set.add(String(npc.coord).toLowerCase());
+    }
+  }
   return set;
 }
 
