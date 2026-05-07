@@ -659,6 +659,40 @@ export async function handleDcSwitchFig(interaction, ctx) {
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx
  */
+/**
+ * Clan of Two teleport (handler for clan_of_two_teleport_<gameId>_<hostMsgId>_<space>).
+ * Pushes The Child to the chosen space (host's space or an adjacent space).
+ * Per destruct 2026-05-07: teleport fires at host's END regardless of
+ * companion-first / host-first order; this handler is invoked by clicking
+ * the teleport button posted in handleDcEndActivation.
+ */
+export async function handleClanOfTwoTeleport(interaction, ctx) {
+  const { getGame, dcMessageMeta, saveGames, logGameAction, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const suffix = parseCustomId(interaction.customId, 'clan_of_two_teleport_');
+  const parts = suffix.split('_');
+  if (parts.length < 3) { await interaction.followUp({ content: 'Invalid teleport.', ephemeral: true }).catch(discordCatch); return; }
+  const gameId = parts[0];
+  const space = parts[parts.length - 1];
+  const hostMsgId = parts.slice(1, -1).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta?.get(hostMsgId);
+  if (!meta) { await interaction.followUp({ content: 'Host DC no longer tracked.', ephemeral: true }).catch(discordCatch); return; }
+  const ownerId = getPlayerId(game, meta.playerNum);
+  if (interaction.user.id !== ownerId) { await interaction.followUp({ content: 'Only the host\'s owner may teleport The Child.', ephemeral: true }).catch(discordCatch); return; }
+  let childFk = null;
+  for (const fk of Object.keys(game.figurePositions?.[meta.playerNum] || {})) {
+    if (fk.startsWith('The Child-')) { childFk = fk; break; }
+  }
+  if (!childFk) { await interaction.followUp({ content: 'The Child is not on the board.', ephemeral: true }).catch(discordCatch); return; }
+  const result = pushFigure(game, meta.playerNum, childFk, space);
+  if (!result) { await interaction.followUp({ content: 'Could not teleport The Child.', ephemeral: true }).catch(discordCatch); return; }
+  await interaction.message.edit({ content: `\u{1F4AB} **Clan of Two** — **The Child** teleported from ${result.prevPos.toUpperCase()} to **${space.toUpperCase()}**.`, components: [] }).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `\u{1F4AB} **Clan of Two** — Child teleported to ${space.toUpperCase()}.`, { phase: 'ROUND', icon: 'card' });
+  saveGames(game.gameId);
+}
+
 export async function handleDcEndActivation(interaction, ctx) {
   const {
     getGame,
@@ -752,6 +786,45 @@ export async function handleDcEndActivation(interaction, ctx) {
     // Clean up companion tracking for this activation
     if (game.companionActivatedBefore?.[msgId]) {
       delete game.companionActivatedBefore[msgId];
+    }
+  }
+
+  // --- Clan of Two: teleport The Child to host space or adjacent (host END) ---
+  // Per destruct 2026-05-07: regardless of order (Child-first or Host-first),
+  // The Child teleports at the host's END to host's space or adjacent. Post a
+  // button row letting the player pick the destination; click pushes the Child.
+  {
+    const _coTAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    if (cardNameIncludes(_coTAtts, 'Clan of Two')) {
+      const _hostDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _hostFk = `${meta.dcName}-${_hostDgIdx}-0`;
+      const _hostPos = game.figurePositions?.[meta.playerNum]?.[_hostFk];
+      // Find The Child's current figure key (it's a single-figure companion).
+      let _childFk = null;
+      for (const fk of Object.keys(game.figurePositions?.[meta.playerNum] || {})) {
+        if (fk.startsWith('The Child-')) { _childFk = fk; break; }
+      }
+      if (_hostPos && _childFk) {
+        const _ms = ctx.getMapData?.(game.selectedMap?.id);
+        const _adj = (_ms?.adjacency?.[String(_hostPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+        // Filter to unoccupied destination spaces (Child can land on host's
+        // space if host is small AND companion can stack — for IA the Child
+        // is a companion that shares squares OK, so include host space).
+        const _candidates = [String(_hostPos).toLowerCase(), ..._adj];
+        const _btns = _candidates.slice(0, 4).map((sp) =>
+          new ButtonBuilder()
+            .setCustomId(`clan_of_two_teleport_${gameId}_${msgId}_${sp}`)
+            .setLabel(`Teleport to ${sp.toUpperCase()}`)
+            .setStyle(ButtonStyle.Primary)
+        );
+        if (_btns.length > 0) {
+          await logGameAction(game, client, `\u{1F4AB} **Clan of Two** — Teleport **The Child** to **${meta.dcName}**'s space or adjacent (Child currently at ${String(_childFk).toUpperCase()} → ${String(game.figurePositions?.[meta.playerNum]?.[_childFk] || '?').toUpperCase()}):`, {
+            phase: 'ACTIVATION',
+            icon: 'activate',
+            components: [new ActionRowBuilder().addComponents(_btns)],
+          });
+        }
+      }
     }
   }
 

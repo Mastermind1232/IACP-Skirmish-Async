@@ -51,8 +51,11 @@ export const DD_BASELINE = {
   dcName_equality: 57,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 92,
+  cardNameIncludes: 93,
 };
+// 2026-05-07: cardNameIncludes 92→93. Slice 8c added a Clan of Two
+// `cardNameIncludes(_coTAtts, 'Clan of Two')` check at host activation
+// END to post the teleport prompt for The Child.
 export const DD_BASELINE_TOTAL = Object.values(DD_BASELINE).reduce((a, b) => a + b, 0);
 
 // ── Round-flags completeness ────────────────────────────────────────────────
