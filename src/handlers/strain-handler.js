@@ -88,36 +88,43 @@ export async function applyStrain(game, ctx, opts) {
   }
 
   // ── Headhunter (attachment): when a hostile figure suffers Strain during
-  //    the Headhunter owner's activation, exhaust to reduce strain by 1
-  //    and force the controller to discard a random CC from hand (or +1
-  //    damage if hand is empty).
+  //    the activation of the FIGURE THE HEADHUNTER IS ATTACHED TO, exhaust
+  //    to reduce strain by 1 and force the controller to discard a random
+  //    CC from hand (or +1 damage if hand is empty).
+  //
+  // destruct 2026-05-06: Headhunter fires only during the activation of
+  // the figure it is attached to — not just any opponent figure being
+  // active. Check `dcActionsData[hhMid]?.threadId` per-msgId, not "any
+  // opponent in activation."
   const _hhOwnerPN = controllerPN === 1 ? 2 : 1;
   const _hhOwnerMsgIds = getDcMessageIds(game, _hhOwnerPN) || [];
   const _hhOwnerAtts = getDcAttachments(game, _hhOwnerPN) || {};
-  const _hhInActivation = _hhOwnerMsgIds.some((mid) => game.dcActionsData?.[mid]?.threadId);
   let _hhExtraDamage = 0;
-  if (_hhInActivation && amount > 0) {
+  if (amount > 0) {
     for (const _hhMid of _hhOwnerMsgIds) {
       const _hhAtts = _hhOwnerAtts[_hhMid] || [];
       const _hhExh = game.exhaustedSkirmishUpgrades?.[_hhMid] || [];
-      if (_hhAtts.includes('Headhunter') && !_hhExh.includes('Headhunter')) {
-        amount = Math.max(0, amount - 1);
-        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-        game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
-        const _hhHandKey = ccHandKey(controllerPN);
-        const _hhHand = game[_hhHandKey] || [];
-        if (_hhHand.length > 0) {
-          const _hhRand = Math.floor(Math.random() * _hhHand.length);
-          const _hhDiscarded = _hhHand.splice(_hhRand, 1)[0];
-          const _hhDiscardKey = ccDiscardKey(controllerPN);
-          game[_hhDiscardKey] = (game[_hhDiscardKey] || []).concat(_hhDiscarded);
-          await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller discards **${_hhDiscarded}** from hand.`, { phase: 'ROUND', icon: 'card' });
-        } else {
-          _hhExtraDamage = 1;
-          await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller has no CCs in hand → suffers 1 Damage instead.`, { phase: 'ROUND', icon: 'card' });
-        }
-        break; // only one Headhunter per strain event
+      if (!_hhAtts.includes('Headhunter') || _hhExh.includes('Headhunter')) continue;
+      // Per-attachment activation gate: the host DC (the one Headhunter is
+      // attached to) must be the one currently in activation. dcActionsData
+      // keyed by msgId tracks the active activation thread.
+      if (!game.dcActionsData?.[_hhMid]?.threadId) continue;
+      amount = Math.max(0, amount - 1);
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
+      const _hhHandKey = ccHandKey(controllerPN);
+      const _hhHand = game[_hhHandKey] || [];
+      if (_hhHand.length > 0) {
+        const _hhRand = Math.floor(Math.random() * _hhHand.length);
+        const _hhDiscarded = _hhHand.splice(_hhRand, 1)[0];
+        const _hhDiscardKey = ccDiscardKey(controllerPN);
+        game[_hhDiscardKey] = (game[_hhDiscardKey] || []).concat(_hhDiscarded);
+        await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller discards **${_hhDiscarded}** from hand.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        _hhExtraDamage = 1;
+        await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller has no CCs in hand → suffers 1 Damage instead.`, { phase: 'ROUND', icon: 'card' });
       }
+      break; // only one Headhunter per strain event
     }
   }
   // Apply Headhunter's "no CCs → 1 damage" immediately (this is direct
