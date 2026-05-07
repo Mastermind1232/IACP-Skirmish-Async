@@ -105,15 +105,21 @@ export async function handleSoaPick(interaction, ctx) {
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tac_move') {
+    // destruct 2026-05-07: show ALL eligible figures (no cap). Discord
+    // ActionRow caps at 5 buttons; chunk into multiple rows. Reserve the
+    // last slot of the final row for the Skip button.
     const candidates = desc.extras?.candidates || [];
-    const buttons = candidates.slice(0, 4).map((fk) =>
+    const allButtons = candidates.map((fk) =>
       new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
     );
-    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const row = new ActionRowBuilder().addComponents(buttons);
+    allButtons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < allButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(allButtons.slice(i, i + 5)));
+    }
     await interaction.message.channel.send({
-      content: `\u{1F3AF} **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP**:`,
-      components: [row],
+      content: `\u{1F3AF} **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP** (must be used immediately if not Fenn himself):`,
+      components: rows,
     }).catch(discordCatch);
   } else {
     await interaction.followUp({ content: `Unknown SoA sub-prompt: ${desc.subPromptKey}`, ephemeral: true }).catch(discordCatch);
@@ -228,13 +234,19 @@ export async function handleSoaFire(interaction, ctx) {
     }
 
   // --- Tactical Movement (Fenn Signis) ---
+  // destruct 2026-05-07: if the chosen figure is Fenn himself the 2 MP go
+  // into Fenn's activation bank as a normal SoA grant. If the chosen figure
+  // is ANY OTHER friendly the 2 MP must be used IMMEDIATELY via interrupt
+  // (it is not that figure's activation). Post a granted-move button so
+  // the player can spend the 2 MP right now via the chosen figure's
+  // standard Move flow.
   } else if (desc.subPromptKey === 'tac_move') {
     if (choiceKey === 'skip') {
       await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
-      // choiceKey is a figureKey; locate its msgId and add 2 MP to that bank.
       const targetFk = choiceKey;
       const targetDcName = dcNameFromFigureKey(targetFk);
+      const sourceFk = desc.extras?.sourceFigureKey;
       let targetMsgId = null;
       if (dcMessageMeta) {
         for (const [mId, mMeta] of dcMessageMeta) {
@@ -245,12 +257,33 @@ export async function handleSoaFire(interaction, ctx) {
           }
         }
       }
-      if (targetMsgId) {
+      if (!targetMsgId) {
+        await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
+      } else if (targetFk === sourceFk) {
+        // Self-target: 2 MP goes into the activator's own bank.
         grantMovementBank(game, targetMsgId, 2);
-        await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
+        await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gained **2 MP** (added to activation bank).`, components: [] }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP.`, { phase: 'ROUND', icon: 'card' });
       } else {
-        await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
+        // Other-figure: interrupt-move. Grant 2 MP to that figure's bank
+        // and post a Move button in the source's activation thread that
+        // opens the chosen figure's standard Move flow. The MP is intended
+        // to be used IMMEDIATELY — any leftover after the interrupt move
+        // remains in the bank but should not be carried forward (manual
+        // policing for now; auto-clear is a later slice).
+        grantMovementBank(game, targetMsgId, 2);
+        const _fkMatch = String(targetFk).match(/-(\d+)-(\d+)$/);
+        const _figIdx = _fkMatch ? _fkMatch[2] : '0';
+        const _moveBtn = new ButtonBuilder()
+          .setCustomId(`granted_move_${gameId}_${targetMsgId}_f${_figIdx}`)
+          .setLabel(`Interrupt Move (${targetDcName})`)
+          .setStyle(ButtonStyle.Primary);
+        const _moveRow = new ActionRowBuilder().addComponents(_moveBtn);
+        await interaction.message.edit({
+          content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gains **2 MP** and must use them immediately. Click below to perform the interrupt move.`,
+          components: [_moveRow],
+        }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
       }
     }
 

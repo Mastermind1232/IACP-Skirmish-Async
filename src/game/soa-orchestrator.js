@@ -130,7 +130,10 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           sourceMsgId: msgId,
           sourceLabel: 'Tactical Movement',
           subPromptKey: 'tac_move',
-          extras: { dcName, candidates: _tmCandidates.slice(0, 4) },
+          // destruct 2026-05-07: show ALL eligible figures (no cap of 4).
+          // Discord caps a single ActionRow at 5 buttons, but multiple rows
+          // can be chunked at the handler. Pass the full list down.
+          extras: { dcName, candidates: _tmCandidates, sourceFigureKey: _tmSelfFk },
         });
       }
     }

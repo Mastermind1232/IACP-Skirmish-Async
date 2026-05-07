@@ -1376,6 +1376,41 @@ export async function handleDcHeroicAttack(interaction, ctx) {
 }
 
 /**
+ * Granted-move button (Tactical Movement when target ≠ activator, and any
+ * future ability that grants out-of-activation MP requiring immediate use).
+ *
+ * Per destruct 2026-05-07: when Tactical Movement targets a friendly that is
+ * not Fenn, the 2 MP must be used IMMEDIATELY via interrupt (it is not that
+ * figure's activation). The chosen figure's player clicks this button → the
+ * standard Move flow opens for the chosen figure with their (already-granted)
+ * 2 MP available in the bank. Any leftover MP after the move is the player's
+ * responsibility to police; auto-clear is a follow-up slice.
+ *
+ * customId format: `granted_move_${gameId}_${granteeMsgId}_f${figureIndex}`
+ */
+export async function handleGrantedMove(interaction, ctx) {
+  const m = interaction.customId.match(/^granted_move_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid granted-move button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, suffix, figureIndexStr] = m;
+  const _gmUnderscore = suffix.indexOf('_');
+  if (_gmUnderscore < 0) {
+    await interaction.followUp({ content: 'Invalid granted-move button (malformed id).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const granteeMsgId = suffix.slice(_gmUnderscore + 1);
+  const _newId = `dc_move_${granteeMsgId}_f${figureIndexStr}`;
+  try {
+    Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
+  } catch {
+    interaction.customId = _newId;
+  }
+  return handleDcAction(interaction, ctx, 'dc_move_');
+}
+
+/**
  * Granted-attack button (Emperor / Executive Order / Battlefield Leadership /
  * Order Hit). Posted in the SOURCE's activation thread by apply-ability-result
  * after the source ability resolves and a grantee is chosen.

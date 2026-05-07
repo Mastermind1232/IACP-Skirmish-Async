@@ -77,6 +77,7 @@ import {
   handleDcAction,
   handleDcHeroicAttack,
   handleGrantedAttack,
+  handleGrantedMove,
   handlePounceSpacePick,
   handlePounceSkipPush,
   handleDcAbilityChoice,
@@ -387,6 +388,7 @@ register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
 register('dc_heroic_attack_', handleDcHeroicAttack, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
+register('granted_move_', handleGrantedMove, 'dcPlayArea');
 register('soa_pick_', handleSoaPick, 'dcPlayArea');
 register('soa_fire_', handleSoaFire, 'dcPlayArea');
 register('soa_skip_all_', handleSoaSkipAll, 'dcPlayArea');
@@ -701,6 +703,7 @@ export {
   handleDcAction,
   handleDcHeroicAttack,
   handleGrantedAttack,
+  handleGrantedMove,
   handlePounceSpacePick,
   handlePounceSkipPush,
   handleDcAbilityChoice,
