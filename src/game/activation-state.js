@@ -325,6 +325,7 @@ const ROUND_OBJECT_FLAGS = [
   'executorTriggered',
   'pendingSoaResolution',
   'voraciousUsed',
+  'jynHairTriggerUsed',
 ];
 
 const ROUND_NULL_FLAGS = [

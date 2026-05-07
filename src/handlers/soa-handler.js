@@ -174,6 +174,48 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F436} **Beast Tamer** — **${displayName}**: exhaust the upgrade for one effect:`,
       components: [row],
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'hair_trigger') {
+    const targetName = dcNameFromFigureKey(desc.extras?.targetFigureKey || '');
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel(`Apply (Free attack vs ${targetName})`).setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F52B} **Hair Trigger** — **Jyn Odan** may interrupt to perform a free attack against **${targetName}**:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'unshakable') {
+    // Sub-prompt: list eligible cost-≥9 friendly figures with a HARMFUL
+    // condition. Recomputed at fire time.
+    const ownerPn = bucket.ownerPlayerNum;
+    const _usAllFigPos = game.figurePositions?.[ownerPn] || {};
+    const dcEff = getDcEffects() || {};
+    const _usCandidates = [];
+    for (const [fk, fp] of Object.entries(_usAllFigPos)) {
+      if (!fp) continue;
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkCost = dcEff[fkDcName]?.cost ?? 0;
+      if (fkCost < 9) continue;
+      const conds = game.figureConditions?.[fk] || [];
+      const harmful = conds.filter((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
+      if (harmful.length > 0) _usCandidates.push({ fk, harmful });
+    }
+    if (_usCandidates.length === 0) {
+      await interaction.followUp({ content: 'No eligible figures.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _usCandidates.map(({ fk, harmful }) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(`${dcNameFromFigureKey(fk)}: ${harmful.join(', ')}`.slice(0, 80)).setStyle(ButtonStyle.Primary)
+    );
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F6E1}\u{FE0F} **Unshakable** — Choose a figure (cost ≥ 9) to discard 1 HARMFUL condition (suffers 1 Strain):`,
+      components: rows,
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'voracious') {
     // Sub-prompt: list eligible friendly non-companion figures within 2
     // spaces of Rancor as sacrifice targets. Recomputed at fire time so
@@ -508,6 +550,87 @@ export async function handleSoaFire(interaction, ctx) {
       await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       await interaction.followUp({ content: `Unknown Beast Tamer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- Unshakable (Skirmish Upgrade) ---
+  // Sub-prompt yields chosen figureKey or 'skip'. Apply: discard 1
+  // HARMFUL condition from the chosen figure, suffer 1 Strain, exhaust
+  // the Unshakable upgrade.
+  } else if (desc.subPromptKey === 'unshakable') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choiceKey;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const conds = game.figureConditions?.[targetFk] || [];
+      // Discard the FIRST harmful condition.
+      const harmful = conds.find((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
+      if (harmful) {
+        const { filterCondition } = await import('../game/conditions.js');
+        filterCondition(game, targetFk, harmful);
+      }
+      // Apply 1 Strain to the target's HP.
+      const targetFkParsed = String(targetFk).match(/-(\d+)-(\d+)$/);
+      const targetFigIdx = targetFkParsed ? parseInt(targetFkParsed[2], 10) : 0;
+      let targetMsgId = null;
+      if (dcMessageMeta) {
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== gameId) continue;
+          if (mMeta.dcName === targetDcName && mMeta.playerNum === ownerPlayerNum) {
+            targetMsgId = mId;
+            break;
+          }
+        }
+      }
+      if (dcHealthState && targetMsgId) {
+        const { reduceHp } = await import('../game/damage-helpers.js');
+        reduceHp(dcHealthState, game, targetMsgId, targetFigIdx, 1, ownerPlayerNum);
+      }
+      // Exhaust Unshakable.
+      const usMsgId = desc.extras?.unshakableMsgId || desc.sourceMsgId;
+      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+      game.exhaustedSkirmishUpgrades[usMsgId] = game.exhaustedSkirmishUpgrades[usMsgId] || [];
+      if (!game.exhaustedSkirmishUpgrades[usMsgId].includes('Unshakable')) {
+        game.exhaustedSkirmishUpgrades[usMsgId].push('Unshakable');
+      }
+      await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — **${targetDcName}** discarded **${harmful || 'a HARMFUL condition'}** and suffered **1 Strain**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F6E1}\u{FE0F} **Unshakable** — ${targetDcName} -${harmful} +1 strain.`, { phase: 'ROUND', icon: 'card' });
+    }
+
+  // --- Hair Trigger (Jyn Odan) ---
+  // Apply: post a granted_attack_* button for Jyn to perform a free
+  // interrupt attack against the activator. Reuses the existing
+  // granted-attack primitive (rewrites to dc_attack_*, freeAttackBonusPending
+  // makes it free, forcedAttackTarget restricts the target). Marks
+  // game.jynHairTriggerUsed[jynMsgId] for once-per-round limit.
+  } else if (desc.subPromptKey === 'hair_trigger') {
+    if (choiceKey === 'apply') {
+      const jynMsgId = desc.sourceMsgId;
+      const jynFk = desc.extras?.jynFigureKey;
+      const targetFk = desc.extras?.targetFigureKey;
+      game.jynHairTriggerUsed = game.jynHairTriggerUsed || {};
+      game.jynHairTriggerUsed[jynMsgId] = true;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[jynMsgId] = true;
+      game.forcedAttackTarget = game.forcedAttackTarget || {};
+      game.forcedAttackTarget[jynMsgId] = targetFk;
+      const _jynFkMatch = String(jynFk || '').match(/-(\d+)-(\d+)$/);
+      const _jynFigIdx = _jynFkMatch ? _jynFkMatch[2] : '0';
+      const _haBtn = new ButtonBuilder()
+        .setCustomId(`granted_attack_${gameId}_${jynMsgId}_f${_jynFigIdx}`)
+        .setLabel(`Declare Hair Trigger Attack (Jyn Odan)`)
+        .setStyle(ButtonStyle.Danger);
+      const _haRow = new ActionRowBuilder().addComponents(_haBtn);
+      await interaction.message.edit({
+        content: `\u{1F52B} **Hair Trigger** — **Jyn Odan** must perform her free attack now. Click below to declare.`,
+        components: [_haRow],
+      }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F52B} **Hair Trigger** — Jyn Odan interrupt-attack triggered.`, { phase: 'ROUND', icon: 'attack' });
+    } else if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F52B} **Hair Trigger** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      await interaction.followUp({ content: `Unknown Hair Trigger choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 

@@ -1045,46 +1045,9 @@ export async function finalizeActivation({
     }
   }
 
-  // D40. Unshakable: exhaust at start of activation → cost≥9 figure discards 1 harmful
-  {
-    const _usDcList = getDcList(game, playerNum) || [];
-    const _usDcMsgIds = getDcMessageIds(game, playerNum) || [];
-    let _usMsgId = null;
-    for (let _usI = 0; _usI < _usDcList.length; _usI++) {
-      if ((_usDcList[_usI]?.dcName || _usDcList[_usI]) === '[Unshakable]') { _usMsgId = _usDcMsgIds[_usI] || null; break; }
-    }
-    if (_usMsgId) {
-      const _usExh = game.exhaustedSkirmishUpgrades?.[_usMsgId] || [];
-      const _usDepleted = (game[`p${playerNum}DepletedDcMessageIds`] || []).includes(_usMsgId);
-      if (!cardNameIncludes(_usExh, 'Unshakable') && !_usDepleted) {
-        const _usAllFigPos = game.figurePositions?.[playerNum] || {};
-        const _usCandidates = [];
-        for (const [fk, pos] of Object.entries(_usAllFigPos)) {
-          if (!pos) continue;
-          const fkDcName = dcNameFromFigureKey(fk);
-          const fkCost = _getDcStats(fkDcName)?.cost ?? 0;
-          if (fkCost < 9) continue;
-          const conds = game.figureConditions?.[fk] || [];
-          const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
-          if (harmful.length > 0) _usCandidates.push({ fk, dcName: fkDcName, harmful });
-        }
-        if (_usCandidates.length > 0) {
-          const btns = _usCandidates.slice(0, 4).map(({ fk, dcName: dName, harmful }) => {
-            const label = `${dName}: ${harmful.join(', ')}`;
-            return new ButtonBuilder()
-              .setCustomId(`act_passive_${gameId}_${msgId}_unshakable_${fk}`)
-              .setLabel(truncateLabel(label))
-              .setStyle(ButtonStyle.Primary);
-          });
-          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unshakable_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await thread.send({
-            content: `**Unshakable** — Choose a figure (cost ≥ 9) to discard 1 harmful condition (suffers 1 Strain):`,
-            components: [new ActionRowBuilder().addComponents(btns)],
-          }).catch(discordCatch);
-        }
-      }
-    }
-  }
+  // D40. Unshakable: migrated to SoA orchestrator (slice 6 — destruct
+  // 2026-05-07). Friendly-only trigger; descriptor in activator's
+  // bucket. See soa-orchestrator.js enumerateActivatorSoaDescriptors.
 
   // D41. Nemik's Manifesto: exhaust → suffer 2 Strain, gain 1 MP
   {

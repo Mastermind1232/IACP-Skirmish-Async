@@ -26,10 +26,11 @@
  */
 
 import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds } from './player-helpers.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getMapData, getFigureSize } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { hasFigureLineOfSight, getFigureFootprint } from './spatial.js';
 
 /**
  * Enumerate Start-of-Activation descriptors for an activating DC. Returns
@@ -229,6 +230,103 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           extras: { dcName, isNonSentient: _btIsNonSentient },
         });
       }
+    }
+  }
+
+  // Unshakable (neutral 1pt skirmish upgrade): per destruct 2026-05-07
+  // friendly-only SoA trigger. Card text: "Exhaust this card at the
+  // start of one of your activations and choose 1 of your figures with
+  // a figure cost of 9 or greater. That figure discards 1 HARMFUL
+  // condition and suffers 1 Strain." Owner = activating player. Trigger
+  // only enumerates if the player owns Unshakable, it's not exhausted,
+  // and at least one cost-≥9 friendly has a HARMFUL condition.
+  if (game) {
+    const _usDcList = getDcList(game, playerNum) || [];
+    const _usDcMsgIds = getDcMessageIds(game, playerNum) || [];
+    let _usMsgId = null;
+    for (let _ui = 0; _ui < _usDcList.length; _ui++) {
+      if ((_usDcList[_ui]?.dcName || _usDcList[_ui]) === '[Unshakable]') {
+        _usMsgId = _usDcMsgIds[_ui] || null;
+        break;
+      }
+    }
+    if (_usMsgId) {
+      const _usExh = game.exhaustedSkirmishUpgrades?.[_usMsgId] || [];
+      const _usDepleted = (game[`p${playerNum}DepletedDcMessageIds`] || []).includes(_usMsgId);
+      if (!cardNameIncludes(_usExh, 'Unshakable') && !_usDepleted) {
+        const _usAllFigPos = game.figurePositions?.[playerNum] || {};
+        let _usAnyEligible = false;
+        const _usEffMap = getDcEffects() || {};
+        for (const [fk, pos] of Object.entries(_usAllFigPos)) {
+          if (!pos) continue;
+          const fkDcName = dcNameFromFigureKey(fk);
+          const fkCost = _usEffMap[fkDcName]?.cost ?? 0;
+          if (fkCost < 9) continue;
+          const conds = game.figureConditions?.[fk] || [];
+          const harmful = conds.filter((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
+          if (harmful.length > 0) { _usAnyEligible = true; break; }
+        }
+        if (_usAnyEligible) {
+          descriptors.push({
+            id: `unshakable:${_usMsgId}`,
+            ownerPlayerNum: playerNum,
+            sourceMsgId: _usMsgId,
+            sourceLabel: 'Unshakable',
+            subPromptKey: 'unshakable',
+            extras: { unshakableMsgId: _usMsgId },
+          });
+        }
+      }
+    }
+  }
+
+  // Hair Trigger (Jyn Odan): per destruct 2026-05-07 — opponent trigger
+  // when a HOSTILE figure activates within Jyn's reach (LOS check). Card
+  // text: "At the start of a hostile figure's activation, you may
+  // interrupt to perform an attack that targets that figure. Limit once
+  // per round."
+  // Per-figure LOS info-leak rule:
+  //   - terrain-only LOS check (figures don't block) — uses empty
+  //     figureBlockingCoords
+  //   - if terrain blocks, don't enumerate (no card can fix)
+  //   - if terrain clear (figures may or may not block), enumerate so
+  //     Jyn's player isn't forced to reveal whether she has Marksman
+  // Once-per-round limit via game.jynHairTriggerUsed[jynMsgId].
+  if (game) {
+    const _enemyPn = opponentPlayerNum(playerNum);
+    const _jynDcList = getDcList(game, _enemyPn) || [];
+    const _jynDcMsgIds = getDcMessageIds(game, _enemyPn) || [];
+    for (let _ji = 0; _ji < _jynDcList.length; _ji++) {
+      const _jyn = _jynDcList[_ji];
+      if (!_jyn?.dcName || _jyn.dcName !== 'Jyn Odan') continue;
+      const _jynMsgId = _jynDcMsgIds[_ji];
+      if (!_jynMsgId) continue;
+      if (game.jynHairTriggerUsed?.[_jynMsgId]) continue;
+      const _jynDgIdx = (_jyn.displayName || _jyn.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _jynFk = `Jyn Odan-${_jynDgIdx}-0`;
+      const _jynPos = game.figurePositions?.[_enemyPn]?.[_jynFk];
+      if (!_jynPos) continue;
+      // Activator's figure key (per-figure trigger).
+      const _actDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _actFk = `${dcName}-${_actDgIdx}-0`;
+      const _actPos = game.figurePositions?.[playerNum]?.[_actFk];
+      if (!_actPos) continue;
+      // Terrain-only LOS: pass empty figureBlockingCoords. If terrain
+      // blocks, skip — no card can fix terrain.
+      const _ms = getMapData(game.selectedMap?.id);
+      if (!_ms) continue;
+      const _jynFp = getFigureFootprint(game, _enemyPn, _jynFk, getFigureSize);
+      const _actFp = getFigureFootprint(game, playerNum, _actFk, getFigureSize);
+      if (!_jynFp.length || !_actFp.length) continue;
+      if (!hasFigureLineOfSight(_jynFp, _actFp, _ms, [])) continue;
+      descriptors.push({
+        id: `hair_trigger:${_jynMsgId}->${msgId}`,
+        ownerPlayerNum: _enemyPn,
+        sourceMsgId: _jynMsgId,
+        sourceLabel: 'Hair Trigger',
+        subPromptKey: 'hair_trigger',
+        extras: { dcName: 'Jyn Odan', jynFigureKey: _jynFk, targetFigureKey: _actFk, targetMsgId: msgId, targetPlayerNum: playerNum },
+      });
     }
   }
 
