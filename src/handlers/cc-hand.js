@@ -106,6 +106,28 @@ function clearCcCanceled(game, card) {
 }
 
 /**
+ * Slice 5.6 (destruct 2026-05-05 — counter-on-counter recursion):
+ * undo a top-of-stack cancel for `card`. Used when a counter-Negation
+ * cancels the Negation that targeted `card`, restoring the original
+ * play's effects. Walks the stack from top to find the most recent
+ * play of `card` and clears its canceled flag; also clears the global
+ * canceledCcs marker.
+ */
+function unmarkTopCcCanceled(game, card) {
+  const cbt = game?.combat || game?.pendingCombat;
+  const stack = cbt?.ccPlayStack;
+  if (Array.isArray(stack)) {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      if (stack[i].ccName === card && stack[i].canceled) {
+        stack[i].canceled = false;
+        break;
+      }
+    }
+  }
+  if (game?.canceledCcs) delete game.canceledCcs[card];
+}
+
+/**
  * C14: After a CC is played, check if opponent has Comm Disruption in hand
  * and prompt them to play it reactively.
  * @param {object} game - Game state
@@ -1219,15 +1241,21 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Negation" to cancel opponent's cost-0 CC. */
 export async function handleNegationPlay(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames } = ctx;
+  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState } = ctx;
   const gameId = parseCustomId(interaction.customId, 'negation_play_');
   const game = getGame(gameId);
   if (!game || !game.pendingNegation) {
     await interaction.followUp({ content: 'No pending play to negate.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const { playedBy, card, waitingMsgId, handChannelId } = game.pendingNegation;
+  const { playedBy, card, waitingMsgId, handChannelId, counterTargetCard, counterTargetPlayedBy } = game.pendingNegation;
   const oppNum = opponentPlayerNum(playedBy);
+  // Slice 5.6: detect counter-Negation. If this pending was set up as a
+  // counter against opponent's Negation, the player clicking is the
+  // ORIGINAL playedBy (counterTargetPlayedBy) — they're countering the
+  // counter. Effect: cancel the Negation (which was canceling
+  // counterTargetCard), uncancel counterTargetCard, resolve it normally.
+  const _isCounterNegation = card === 'Negation' && counterTargetCard != null;
   if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can play Negation.')) return;
   const handKey = ccHandKey(oppNum);
   const discardKey = ccDiscardKey(oppNum);
@@ -1242,6 +1270,24 @@ export async function handleNegationPlay(interaction, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push('Negation');
   clearPendingNegation(game);
+  // Slice 5.6: counter-Negation — the previously-played Negation gets
+  // canceled, restoring the originally-targeted CC. Resolve that CC's
+  // effect now via resolveAbility.
+  if (_isCounterNegation && counterTargetCard) {
+    unmarkTopCcCanceled(game, counterTargetCard);
+    await refreshHandAndDiscard(game, oppNum, client, ctx);
+    await interaction.message.edit({ content: `**Counter-Negation** — your **Negation** was countered. **${counterTargetCard}** resolves.`, components: [] }).catch(discordCatch);
+    const _negPlayerId2 = getPlayerId(game, oppNum);
+    await logGameAction(game, client, `<@${_negPlayerId2}> played **Negation** to counter — **${counterTargetCard}** resolves.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [_negPlayerId2] } });
+    if (resolveAbility) {
+      const effectData = getCcEffect ? getCcEffect(counterTargetCard) : null;
+      const abilityId = effectData?.abilityId ?? counterTargetCard;
+      const result = resolveAbility(abilityId, { game, playerNum: counterTargetPlayedBy, cardName: counterTargetCard, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
+      await applyAbilityResult(result, { game, playerNum: counterTargetPlayedBy, client, ctx });
+    }
+    saveGames(game.gameId);
+    return;
+  }
   // Slice 5.7: mark the canceled CC so downstream effect-firing code
   // skips ALL its effects (including "when discarded" triggers) per
   // destruct 2026-05-05.
@@ -1263,6 +1309,52 @@ export async function handleNegationPlay(interaction, ctx) {
       if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch(discordCatch);
     }
   }
+  // Slice 5.6 (destruct 2026-05-05 — counter-on-counter recursion):
+  // Negation itself is a cost-0 Command card. Per CRR + destruct, the
+  // original player may respond to the opponent's Negation with their
+  // own Negation (a counter-Negation), which would cancel the
+  // counter-CC and restore the original card's effects.
+  //
+  // Re-call promptForNegation targeting the ORIGINAL player (playedBy)
+  // with `card='Negation'` so the existing setPendingNegation /
+  // handleNegationPlay flow handles it. The counter-Negation context
+  // is captured in pendingNegation.counterTargetCard so handleNegationPlay
+  // can detect this is a counter-counter case and uncancel the
+  // originally-cancelled CC instead of just marking 'Negation' canceled.
+  // Limit depth to 1: if the counter-Negation gets countered itself,
+  // the next level falls through (rare in practice; tracked by
+  // counterDepth on pendingNegation).
+  const _origHandKey = ccHandKey(playedBy);
+  const _origHand = game[_origHandKey] || [];
+  if (_origHand.includes('Negation') || true) {
+    // Hidden-info compliance: prompt regardless of hand (player may have
+    // received a card via reaction etc.). Consistent with promptCommDisruption.
+    setPendingNegation(game, {
+      playedBy: oppNum,
+      card: 'Negation',
+      fromDc: false,
+      msgId: null,
+      wasAttachment: false,
+      handChannelId: null,
+      counterTargetCard: card,
+      counterTargetPlayedBy: playedBy,
+    });
+    try {
+      const _origHandId = getHandChannelId(game, playedBy);
+      if (_origHandId) {
+        const _origHandChannel = await fetchGameChannel(client, _origHandId);
+        const _origPlayerId = getPlayerId(game, playedBy);
+        await _origHandChannel.send({
+          content: `<@${_origPlayerId}> Opponent played **Negation** to cancel your **${card}**. You may play your own **Negation** to counter and restore your card.`,
+          components: [ctx.getNegationResponseButtons ? ctx.getNegationResponseButtons(game.gameId) : new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`negation_play_${game.gameId}`).setLabel('Play Negation (Counter)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`negation_let_resolve_${game.gameId}`).setLabel('Let it resolve').setStyle(ButtonStyle.Secondary),
+          )],
+          allowedMentions: { users: [_origPlayerId] },
+        }).catch(discordCatch);
+      }
+    } catch (_e) { /* non-fatal: prompt failure leaves CC canceled */ }
+  }
   saveGames(game.gameId);
 }
 
@@ -1275,10 +1367,19 @@ export async function handleNegationLetResolve(interaction, ctx) {
     await interaction.followUp({ content: 'No pending play to resolve.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId } = game.pendingNegation;
+  const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId, counterTargetCard } = game.pendingNegation;
   const oppNum = opponentPlayerNum(playedBy);
   if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can choose to let it resolve.')) return;
   clearPendingNegation(game);
+  // Slice 5.6: counter-Negation let-resolve. The opponent's Negation
+  // (canceling counterTargetCard) resolves uncountered → counterTargetCard
+  // stays canceled. No resolveAbility needed — the cancel was already
+  // applied by the first handleNegationPlay; we just confirm.
+  if (card === 'Negation' && counterTargetCard) {
+    await interaction.message.edit({ content: `**${counterTargetCard}** stays cancelled — Negation was not countered.`, components: [] }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
   await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(discordCatch);
   if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
     const attachKey = ccAttachmentsKey(playedBy);

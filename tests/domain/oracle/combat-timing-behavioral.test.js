@@ -144,9 +144,17 @@ describe('B-CTIME-001: handleNegationPlay removes card, cleans pendingNegation',
     assert.ok(game.player2CcDiscard.includes('Negation'),
       'Negation added to discard pile');
 
-    // pendingNegation cleaned up
-    assert.strictEqual(game.pendingNegation, undefined,
-      'pendingNegation deleted (not null — fully removed)');
+    // Slice 5.6 (destruct 2026-05-05 — counter-Negation recursion):
+    // After Negation cancels the originally-played CC, a counter-Negation
+    // prompt is opened for the original player. pendingNegation is
+    // re-populated with `card: 'Negation', counterTargetCard: <orig>`
+    // so handleNegationPlay can detect counter-Negation on next click.
+    // Hidden-info compliance: prompt fires regardless of hand contents.
+    assert.ok(game.pendingNegation, 'pendingNegation re-populated for counter-Negation prompt');
+    assert.strictEqual(game.pendingNegation.card, 'Negation',
+      'pendingNegation tracks the counter-Negation prompt (card="Negation")');
+    assert.strictEqual(game.pendingNegation.counterTargetCard, 'Take Initiative',
+      'counterTargetCard pins the originally-cancelled CC');
 
     // Game saved
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
@@ -469,8 +477,15 @@ describe('B-CTIME-014: Full Negation lifecycle — set → play → consumed', (
     await handleNegationPlay(
       mockInteraction('negation_play_42', 'player2'), ctx);
 
-    assert.strictEqual(game.pendingNegation, undefined,
-      'Phase 3: pendingNegation deleted — lifecycle complete');
+    // Slice 5.6 (counter-Negation recursion): pendingNegation is
+    // re-populated for the counter-Negation prompt, not fully deleted.
+    // Lifecycle now: set → first Negation play → re-set for counter
+    // prompt. Full delete only happens when counter prompt resolves.
+    assert.ok(game.pendingNegation, 'Phase 3: pendingNegation re-populated for counter prompt');
+    assert.strictEqual(game.pendingNegation.card, 'Negation',
+      'Phase 3: pendingNegation tracks counter-Negation');
+    assert.strictEqual(game.pendingNegation.counterTargetCard, 'Take Initiative',
+      'Phase 3: counterTargetCard pins original CC');
     assert.ok(!game.player2CcHand.includes('Negation'),
       'Negation removed from hand');
     assert.ok(game.player2CcDiscard.includes('Negation'),
