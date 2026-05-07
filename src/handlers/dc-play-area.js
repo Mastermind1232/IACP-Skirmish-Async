@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain } from './strain-handler.js';
+import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
@@ -1548,8 +1549,24 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         startCoord: pos,
         pendingMp: null,
         distanceMessageId: null,
-        pendingBleed: (game.figureConditions?.[figureKey] || []).includes('Bleed'),
+        // pendingBleed retired (slice 9): Bleed strain on a Move action fires
+        // when the action RESOLVES — destruct 2026-05-06: "for a move action
+        // the action is considered resolved once MP are gained and before
+        // they are spent." MP are granted by reaching this code path, so
+        // strain fires now (before the first cell pick).
       };
+      // Bleed strain: fire immediately on Move action declaration, before any
+      // MP are spent. Routed through applyStrain for the unified per-strain
+      // choice prompt.
+      if ((game.figureConditions?.[figureKey] || []).includes('Bleed')
+          && !areConditionEffectsSuppressed(game, figureKey)) {
+        await applyStrain(game, ctx, {
+          figureKey,
+          controllerPlayerNum: playerNum,
+          amount: 1,
+          source: 'Bleeding',
+        });
+      }
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
       const labelMap = {};

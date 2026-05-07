@@ -1053,23 +1053,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   }
   // (Interactive massive-push prompts are posted directly from the init block
   // above via _dispatchNextMassivePush. No post-hoc branch needed here.)
-  // Bleeding: trigger once after first space moved (pendingBleed set when Move action declared).
-  // destruct 2026-05-06: routed through applyStrain for unified per-strain
-  // choice prompt + UD pre-prompt. Skip if condition effects are suppressed
-  // (YWNDM-on-Fifth-Brother).
-  // TODO slice 9: move-action Bleed should fire when MP gained (action
-  // resolves) — BEFORE any space is moved — not after first space.
-  if (moveState.pendingBleed && applyStrain) {
-    moveState.pendingBleed = false;
-    if ((game.figureConditions?.[moveState.figureKey] || []).includes('Bleed')
-        && !areConditionEffectsSuppressed(game, moveState.figureKey)) {
-      await applyStrain(game, ctx, {
-        figureKey: moveState.figureKey,
-        controllerPlayerNum: moveState.playerNum,
-        amount: 1,
-        source: 'Bleeding',
-      });
-    }
+  // Bleed strain on Move action: timing fix (slice 9, destruct 2026-05-06).
+  // Move-action Bleed now fires at action-declare time (when MP is granted)
+  // via dc-play-area.js's Move handler — BEFORE any cell is picked. The old
+  // post-first-space pendingBleed flag is retired; this block is a no-op
+  // legacy guard for any in-flight game state still carrying the flag.
+  if (moveState.pendingBleed) {
+    moveState.pendingBleed = false; // discard legacy flag without firing
   }
   // Rush (Onar): after all movement MP exhausted, offer push on adjacent SMALL hostile
   if (newMp <= 0 && game.rushPending?.[msgId]) {
