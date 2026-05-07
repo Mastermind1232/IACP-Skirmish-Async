@@ -1780,17 +1780,53 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // Spot Weld (Ugnaught): Place a Junk Droid companion in an adjacent space
+  // Spot Weld (Ugnaught): Place the Junk Droid companion in a space
+  // adjacent to this figure. Per destruct 2026-05-07: if a friendly Junk
+  // Droid already exists on the board, remove it from the map before
+  // placing the new one. The new JD enters READY (un-exhausted), which
+  // is what enables an effective second JD activation when paired with
+  // Scrap Battalion's auto-ready at start of each Ugnaught activation.
   if (entry.type === 'dcSpecial' && entry.spotWeldCompanionPlace) {
     const { game, msgId, playerNum } = context;
     if (game && msgId) {
-      // Mark that Spot Weld is pending — the companion needs to be placed
       game.spotWeldPending = game.spotWeldPending || {};
       game.spotWeldPending[msgId] = true;
+      // Find the Junk Droid DC slot for this player. If a JD figure is
+      // already deployed, remove it from figurePositions so the new
+      // placement starts fresh. The JD's dcExhaustedState should be
+      // flipped to false (READY) at deployment time — handled by the
+      // companion-deploy path in post-deploy.js when the player places
+      // the new JD via its deploy button.
+      const _swDcList = (playerNum === 1 ? game.p1DcList : game.p2DcList) || [];
+      const _swDcMsgIds = (playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
+      let _swJdMsgId = null;
+      for (let _swI = 0; _swI < _swDcList.length; _swI++) {
+        if ((_swDcList[_swI]?.dcName || _swDcList[_swI]) === 'Junk Droid') {
+          _swJdMsgId = _swDcMsgIds[_swI];
+          break;
+        }
+      }
+      if (_swJdMsgId) {
+        // Remove any existing Junk Droid figure positions so the new
+        // placement starts clean. The deploy/place path will set the
+        // new position.
+        const _swPoses = game.figurePositions?.[playerNum] || {};
+        for (const fk of Object.keys(_swPoses)) {
+          if (fk.startsWith('Junk Droid-')) {
+            delete _swPoses[fk];
+          }
+        }
+        // Mark JD as ready so it can activate this round.
+        game._spotWeldReadyJd = game._spotWeldReadyJd || [];
+        if (!game._spotWeldReadyJd.includes(_swJdMsgId)) {
+          game._spotWeldReadyJd.push(_swJdMsgId);
+        }
+      }
     }
     return {
       applied: true,
-      logMessage: '**Spot Weld** — Place your **Junk Droid** companion in a space **adjacent to this figure**. Deploy the Junk Droid using its deploy button if not yet on the board, or move it to an adjacent space.',
+      logMessage: '**Spot Weld** — Place your **Junk Droid** companion in a space adjacent to this figure. (If a JD was already on the board, it has been removed; the new placement enters READY for this round.)',
+      refreshBoard: true,
     };
   }
 
