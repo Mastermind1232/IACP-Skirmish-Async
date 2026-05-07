@@ -6,6 +6,7 @@ import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
+import { isNamedCcAlreadyPlayed } from './named-cc-tracker.js';
 
 /**
  * Derive current CC play context from game state.
@@ -95,6 +96,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   // Per-phase named CC limits (G37/C21, C25)
   if (cardName === 'Jundland Terror' && game?.jundlandTerrorPlayedThisEor) return false;
   if (cardName === 'Reinforcements' && game?.reinforcementsPlayedThisSor) return false;
+  // Generic "one copy of named CC per timing instance" — destruct
+  // 2026-05-07. Generalizes the two ad-hoc flags above to ALL named CCs
+  // for tracked timing buckets (sor / eor / status / activation / attack).
+  // Aphra Excavation: if she already played this card this SOR, the
+  // retrieved copy can't be replayed.
+  if (isNamedCcAlreadyPlayed(game, playerNum, cardName, timing)) return false;
 
   // C1: Assassinate mutual-exclude — no other CCs during this attack
   const _cbt = game?.pendingCombat || game?.combat;

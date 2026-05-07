@@ -98,5 +98,11 @@ export function resolvePendingCombat(game) {
   // If no outer was restored, leave the field present-but-null so existing
   // consumers/tests can do `assert.strictEqual(game.pendingCombat, null)`.
   if (!restored) game.pendingCombat = null;
+  // Per destruct 2026-05-07: clear the per-attack named-CC bucket so the
+  // next attack starts fresh on "one copy per attack" tally. Skip if a
+  // nested combat was restored — the outer attack's tally must persist.
+  if (!restored && game.namedCcsPlayedPerTiming?.attack) {
+    delete game.namedCcsPlayedPerTiming.attack;
+  }
   return restored;
 }

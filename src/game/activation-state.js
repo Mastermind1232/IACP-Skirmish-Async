@@ -171,6 +171,13 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
       if (mk.startsWith(prefix)) delete game.moveInProgress[mk];
     }
   }
+  // Per destruct 2026-05-07: clear the per-activation named-CC bucket so
+  // a new activation starts with a fresh set. Each activation is its own
+  // timing instance for "duringActivation" / "startofactivation" /
+  // "endofactivation" CCs.
+  if (game.namedCcsPlayedPerTiming?.activation) {
+    delete game.namedCcsPlayedPerTiming.activation;
+  }
 }
 
 /**
@@ -221,6 +228,11 @@ export function isActivationActionInProgress(game, msgId) {
  */
 const ROUND_OBJECT_FLAGS = [
   'roundDefenseBonusBlock',
+  // Generic named-CC per-timing-instance tracker (destruct 2026-05-07).
+  // Reset to {} at round start so SOR/EOR/status buckets clear naturally;
+  // 'activation' bucket clears explicitly in cleanupActivation; 'attack'
+  // bucket clears when pendingCombat resolves (resolvePendingCombat).
+  'namedCcsPlayedPerTiming',
   'roundDefenseBonusEvade',
   'roundDefenseAccuracyPenalty',
   'roundMobileDefenseBonusBlock',

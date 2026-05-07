@@ -485,6 +485,21 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // Negation/CD/recursive counters can resolve against it. Combat-scoped
   // for now; non-combat CC counter-window deferred.
   recordCcOnCombatStack(game, playerNum, card);
+  // Per destruct 2026-05-07: "Only one copy of a named Command Card can
+  // be played per timing instance." Mark this card as played in the
+  // current timing bucket so isCcPlayableNow rejects subsequent copies
+  // (covers Aphra Excavation rule + future cards). Generalizes the
+  // ad-hoc Jundland Terror / Reinforcements gates above. Only tracked
+  // timings (sor / eor / status / activation / attack) participate;
+  // event-bound interrupts (PB, etc.) are gated elsewhere.
+  {
+    const _markEffect = getCcEffect ? getCcEffect(card) : null;
+    const _markTiming = _markEffect?.timing;
+    if (_markTiming) {
+      const { markNamedCcPlayed } = await import('../game/named-cc-tracker.js');
+      markNamedCcPlayed(game, playerNum, card, _markTiming);
+    }
+  }
   // Combat-order telemetry (slice 4.13, soft-warn mode): classify the CC
   // against the canonical CRR step it should fire at per destruct's
   // 2026-05-05 audit, and log a mismatch when pendingCombat.currentStep
