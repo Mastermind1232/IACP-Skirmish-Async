@@ -614,8 +614,10 @@ export function resolveAbility(abilityId, context) {
     // is set (Force Lightning per destruct 2026-05-07).
     const _thfCandidates = [...Object.entries(enemyPositions)];
     if (_thfAllowFriendly) {
+      // Per destruct 2026-05-07: "force lightning hits self if adjacent" — primary
+      // includes the activating figure too (range/LOS still apply; self trivially
+      // satisfies both).
       for (const [fk, coord] of Object.entries(friendlyPositions)) {
-        if (fk === attackerKey) continue; // self-damage from primary not implied by destruct's clarification
         _thfCandidates.push([fk, coord]);
       }
     }
@@ -2250,6 +2252,7 @@ export function resolveAbility(abilityId, context) {
         }
         const _rodResult = {
           applied: true,
+          freeAction: !!entry.freeAction,
           logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
           ...(_adjHadDefeats ? { refreshBoard: true } : {}),

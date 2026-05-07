@@ -1509,7 +1509,8 @@
       "wiredStatus": "wired",
       "rollOneDie": "blue",
       "rollOneDieTarget": "adjacentHostile",
-      "rollOneDieSurgeCondition": "Stun"
+      "rollOneDieSurgeCondition": "Stun",
+      "freeAction": true
     },
     "Element of Surprise": {
       "type": "ccEffect",

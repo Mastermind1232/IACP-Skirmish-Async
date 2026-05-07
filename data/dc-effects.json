@@ -2747,8 +2747,7 @@
       "health": 14,
       "speed": 4,
       "passives": [
-        "Cleave 1",
-        "Relentless Pursuit"
+        "Cleave 1"
       ],
       "figures": 1,
       "attack": {

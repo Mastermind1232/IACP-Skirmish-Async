@@ -157,7 +157,7 @@ describe('B-SPLASH-001: Force Lightning Phase 1 — target enumeration', () => {
       'adjacent enemy included as valid target');
   });
 
-  it('001b: excludes out-of-range figures', () => {
+  it('001b: excludes out-of-range figures (but allows self per destruct 2026-05-07)', () => {
     const { context } = buildForceLightningContext({
       attackerPos: 'a1',
       enemyPositions: { 'Darth Vader-1-0': 'h8' },
@@ -165,8 +165,12 @@ describe('B-SPLASH-001: Force Lightning Phase 1 — target enumeration', () => {
     const result = resolveAbility('force_lightning', context);
 
     assert.strictEqual(result.applied, false);
-    assert.ok(!result.requiresChoice, 'no requiresChoice when no valid targets');
-    assert.ok(result.manualMessage, 'manual message for no targets');
+    assert.strictEqual(result.requiresChoice, true,
+      'Palp himself is always within range; allowFriendly returns him as a valid target');
+    assert.ok(!result.targetFigureKeys.includes('Darth Vader-1-0'),
+      'out-of-range enemy still excluded');
+    assert.ok(result.targetFigureKeys.includes('Emperor Palpatine-1-0'),
+      'self-target valid per destruct 2026-05-07: "force lightning hits self if adjacent"');
   });
 
   it('001c: Phase 1 does not mutate game state', () => {
@@ -291,7 +295,12 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
 // ── B-SPLASH-003: Force Lightning rejection + invariants ────────────────────────
 
 describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
-  it('003a: no valid targets returns applied:false', () => {
+  it('003a: with allowFriendly, self is always a valid target (per destruct 2026-05-07)', () => {
+    // Force Lightning's allowFriendly opt-in (set on its library entry) means
+    // Palp himself is always a valid primary target — he trivially satisfies
+    // range (0) and LOS (own space). The "no valid targets" path is therefore
+    // unreachable for force_lightning specifically. This test pins that
+    // behavior so future regressions don't accidentally re-add a self-skip.
     const { context } = buildForceLightningContext({
       attackerPos: 'a1',
       enemyPositions: {},
@@ -299,7 +308,9 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
     const result = resolveAbility('force_lightning', context);
 
     assert.strictEqual(result.applied, false);
-    assert.ok(result.manualMessage, 'rejection message present');
+    assert.strictEqual(result.requiresChoice, true);
+    assert.deepStrictEqual(result.targetFigureKeys, ['Emperor Palpatine-1-0'],
+      'self-only when no enemies on the board');
   });
 
   it('003b: primary target Weaken does not splash to adjacent', () => {
