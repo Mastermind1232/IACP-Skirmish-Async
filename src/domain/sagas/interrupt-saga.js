@@ -10,7 +10,7 @@ export const INTERRUPT_CONFIG = {
   bombardmentSorin: { pendingField: 'pendingBombardmentSorin', handlerPrefix: 'bombardment_sorin_' },
   firingSquad: { pendingField: 'pendingFiringSquad', handlerPrefix: 'firing_squad_' },
   coordinatedRaid: { pendingField: 'pendingCoordinatedRaid', handlerPrefix: 'coordinated_raid_' },
-  awr: { pendingField: 'pendingAwr', handlerPrefix: 'awr_' },
+  // awr removed 2026-05-07 — AWR migrated to SoA orchestrator (slice 8a).
   thereIsNoTry: { pendingField: 'pendingThereIsNoTry', handlerPrefix: 'there_is_no_try_' },
   hunterProtocol: { pendingField: 'pendingHunterProtocol', handlerPrefix: 'hunter_protocol_' },
   selfDestruct: { pendingField: 'pendingSelfDestruct', handlerPrefix: 'self_destruct_protocol_' },

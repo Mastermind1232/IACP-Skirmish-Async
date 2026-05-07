@@ -1002,34 +1002,11 @@ export async function handleActPassive(interaction, ctx) {
   // the SoA orchestrator (soa-handler.js soa_pick_ / soa_fire_ / soa_skip_all_).
   // The matching `act_passive_*_<vigor|responsive|fulcrum|hunger|tacmove>_*`
   // buttons are no longer posted by activation-setup.js.
-  if (ability === 'awr') {
-    if (choice === 'skip') {
-      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — Skipped.`, components: [] }).catch(discordCatch);
-      delete game.pendingAwr;
-    } else {
-      // choice is the figureKey of the target — now offer Hit or Surge token choice
-      game.pendingAwr = game.pendingAwr || {};
-      game.pendingAwr.targetFk = choice;
-      const targetDcName = dcNameFromFigureKey(choice);
-      const tokenRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_damage`).setLabel('Damage Token').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awrtoken_surge`).setLabel('Surge Token').setStyle(ButtonStyle.Primary),
-      );
-      await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}**: Choose token type:`, components: [tokenRow] }).catch(discordCatch);
-    }
-  } else if (ability === 'awrtoken') {
-    const targetFk = game.pendingAwr?.targetFk;
-    if (!targetFk) return;
-    const targetDcName = dcNameFromFigureKey(targetFk);
-    const tokenType = choice === 'damage' ? 'Damage' : 'Surge';
-    grantPowerTokens(game, targetFk, tokenType, 1);
-    delete game.pendingAwr;
-    await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
-    await logGameAction(game, client, `🔬 **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, { phase: 'ACTIVATION', icon: 'card' });
-    if (game.pendingPowerTokenOverflow?.length > 0) {
-      await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
-    }
-  } else if (ability === 'openminded') {
+  // awr / awrtoken branches removed in slice 8a (2026-05-07) — AWR
+  // migrated to the SoA orchestrator (subPromptKey 'awr'). The
+  // act_passive_*_awr_* / act_passive_*_awrtoken_* buttons are no
+  // longer posted.
+  if (ability === 'openminded') {
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const fk = `${meta.dcName}-${dgIndex}-0`;
     if (choice === 'mp') {

@@ -184,6 +184,34 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F52B} **Hair Trigger** — **Jyn Odan** may interrupt to perform a free attack against **${targetName}**:`,
       components: [row],
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'awr') {
+    // Flat (figure × type) sub-prompt — one button per pair so the
+    // entire choice fits in one click. choiceKey format:
+    // `${figureKey}|damage` or `${figureKey}|surge`. Skip button trails.
+    const ownerPn = bucket.ownerPlayerNum;
+    const selfFk = desc.extras?.selfFigureKey;
+    const range = desc.extras?.range || 2;
+    const { enumerateAwrTargets } = await import('../game/awr-helpers.js');
+    const targets = enumerateAwrTargets(game, ownerPn, selfFk, range).map(([fk]) => fk);
+    if (targets.length === 0) {
+      await interaction.followUp({ content: 'No eligible friendlies in range.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = [];
+    for (const fk of targets) {
+      const name = dcNameFromFigureKey(fk);
+      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|damage`).setLabel(`${name}: Damage`).setStyle(ButtonStyle.Danger));
+      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|surge`).setLabel(`${name}: Surge`).setStyle(ButtonStyle.Primary));
+    }
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F52C} **Advanced Weapons Research** — Pick a friendly within ${range} spaces and a token type:`,
+      components: rows,
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'unshakable') {
     // Sub-prompt: one button per (figure × HARMFUL condition) pair so
     // the player picks which condition to discard explicitly. Per
@@ -557,6 +585,26 @@ export async function handleSoaFire(interaction, ctx) {
     } else {
       await interaction.followUp({ content: `Unknown Beast Tamer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
+    }
+
+  // --- Advanced Weapons Research (Director Krennic) ---
+  // choiceKey is `${figureKey}|damage` or `${figureKey}|surge`, or 'skip'.
+  // Apply: grant 1 Damage or Surge token to the chosen friendly.
+  } else if (desc.subPromptKey === 'awr') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F52C} **Advanced Weapons Research** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const _splitIdx = choiceKey.indexOf('|');
+      if (_splitIdx < 0) {
+        await interaction.followUp({ content: `Malformed AWR choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetFk = choiceKey.slice(0, _splitIdx);
+      const tokenType = choiceKey.slice(_splitIdx + 1) === 'damage' ? 'Damage' : 'Surge';
+      grantPowerTokens(game, targetFk, tokenType, 1);
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      await interaction.message.edit({ content: `\u{1F52C} **Advanced Weapons Research** — **${targetDcName}** gained **1 ${tokenType} Token**.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F52C} **Advanced Weapons Research** — ${targetDcName} +1 ${tokenType} Token.`, { phase: 'ROUND', icon: 'card' });
     }
 
   // --- Unshakable (Skirmish Upgrade) ---

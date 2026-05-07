@@ -403,38 +403,10 @@ export async function finalizeActivation({
   // D8. Into the Fray — now handled by applyStartOfActivationEffects()
   // (overflow UI handled after the shared function call above)
 
-  // D9. Advanced Weapons Research (Director Krennic): friendly within range gains token
-  if (dcName === 'Director Krennic') {
-    try {
-      const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const selfFk = `Director Krennic-${dgIndex}-0`;
-      const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
-      if (selfPos) {
-        const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-        const _awrRange = awrRange(_awrAtts);
-        const friendlyFigs = enumerateAwrTargets(game, playerNum, selfFk, _awrRange);
-        if (friendlyFigs.length > 0) {
-          const _awrSlice = friendlyFigs.slice(0, 4);
-          const _awrLabels = figureChoiceLabels(_awrSlice.map(([fk]) => fk));
-          const btns = _awrSlice.map(([fk], i) =>
-            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awr_${fk}`).setLabel(_awrLabels[i]).setStyle(ButtonStyle.Primary)
-          );
-          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_awr_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          const awrRow = new ActionRowBuilder().addComponents(btns);
-          game.pendingAwr = { gameId, msgId, playerNum };
-          await thread.send({ content: `🔬 **Advanced Weapons Research** — Choose a friendly figure within ${_awrRange} spaces to grant a **Damage Token** or **Surge Token**:`, components: [awrRow] });
-        } else {
-          await thread.send({ content: `🔬 **Advanced Weapons Research** — No friendly figures within ${_awrRange} spaces.` });
-        }
-      } else {
-        console.error(`[AWR] Krennic selfPos is null — figurePositions[${playerNum}] keys:`, Object.keys(game.figurePositions?.[playerNum] || {}));
-        await thread.send({ content: `⚠️ **Advanced Weapons Research** — Could not locate Krennic's position (key: \`Director Krennic-${(displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1'}-0\`). Available: ${Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => k.startsWith('Director Krennic')).join(', ') || 'none'}` }).catch(discordCatch);
-      }
-    } catch (err) {
-      console.error('[AWR] Failed to send Advanced Weapons Research prompt:', err);
-      await thread.send({ content: `⚠️ **Advanced Weapons Research** — Error: ${err.message}` }).catch(discordCatch);
-    }
-  }
+  // D9. Advanced Weapons Research: migrated to SoA orchestrator (slice
+  // 8a — destruct 2026-05-07). See soa-orchestrator.js (subPromptKey
+  // 'awr'). Range still uses awrRange() to honor the Advanced Com
+  // Systems extension to 3 spaces.
 
   // D10. Durasteel Fist (Dark Trooper Mk III): choose adjacent figure, roll 1 green die
   if (_abilityIds.includes('durasteel_fist_dark_trooper') && !game.roundFigureAbilityUsed?.[`${dcName}_durasteel_fist_${msgId}`]) {

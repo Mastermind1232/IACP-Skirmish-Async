@@ -31,6 +31,7 @@ import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { hasFigureLineOfSight, getFigureFootprint } from './spatial.js';
+import { awrRange, enumerateAwrTargets } from './awr-helpers.js';
 
 /**
  * Enumerate Start-of-Activation descriptors for an activating DC. Returns
@@ -228,6 +229,34 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           sourceLabel: 'Beast Tamer',
           subPromptKey: 'beast_tamer',
           extras: { dcName, isNonSentient: _btIsNonSentient },
+        });
+      }
+    }
+  }
+
+  // Advanced Weapons Research (Director Krennic): per destruct 2026-05-07
+  // — IS SoA per card text. "At the start of your activation, a friendly
+  // figure within 2 spaces may gain 1 Hit Token or 1 Surge Token." Range
+  // extends to 3 with the Advanced Com Systems attachment (handled by
+  // awrRange helper). Owner = Krennic's player (the activator). Sub-
+  // prompt enumerates eligible friendlies at fire time, then a second
+  // prompt picks Damage or Surge token.
+  if (dcName === 'Director Krennic' && game) {
+    const _awrDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _awrSelfFk = `Director Krennic-${_awrDgIdx}-0`;
+    const _awrSelfPos = game.figurePositions?.[playerNum]?.[_awrSelfFk];
+    if (_awrSelfPos) {
+      const _awrAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _awrRangeVal = awrRange(_awrAtts);
+      const _awrTargets = enumerateAwrTargets(game, playerNum, _awrSelfFk, _awrRangeVal);
+      if (_awrTargets.length > 0) {
+        descriptors.push({
+          id: `awr:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Advanced Weapons Research',
+          subPromptKey: 'awr',
+          extras: { dcName, range: _awrRangeVal, selfFigureKey: _awrSelfFk },
         });
       }
     }

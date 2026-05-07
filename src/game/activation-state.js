@@ -360,7 +360,7 @@ const ROUND_NULL_FLAGS = [
   'pendingFiringSquad',
   'pendingCoordinatedRaid',
   'pendingFieldTactics',
-  'pendingAwr',
+  // pendingAwr removed 2026-05-07 — AWR migrated to SoA orchestrator (slice 8a).
   'sonOfSkywalkerActive',
   'dataTheftStolenCard',
   'conditionalFocusIfDamagedGte',
