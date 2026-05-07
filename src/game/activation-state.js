@@ -308,7 +308,8 @@ const ROUND_OBJECT_FLAGS = [
   // ROUND_OBJECT_FLAGS resets to {} which matches the defensive
   // `game.X = game.X || {}` guard pattern at all call sites.
   'pendingEe3Carbine',
-  'pendingVoracious',
+  // pendingVoracious removed 2026-05-07 — Voracious migrated to SoA
+  // orchestrator (slice 6); replaced by game.voraciousUsed.
   'massiveMovementLocked',
   'disarmPermanentWeakened',
   'adrenalineBonuses',
@@ -323,6 +324,7 @@ const ROUND_OBJECT_FLAGS = [
   'forceSlowSkipActivation',
   'executorTriggered',
   'pendingSoaResolution',
+  'voraciousUsed',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -398,10 +400,10 @@ const ROUND_NULL_FLAGS = [
   'pendingCommDisruptionPrompt',
   'pendingCoverFire',
   'pendingStrainChoice',
-  // pendingVoracious moved to ROUND_OBJECT_FLAGS 2026-05-05 — used as
-  // game.pendingVoracious[rMsgId] = { ... }, so its conceptual home is
-  // the object-shaped reset list. No behavior change (callers guard
-  // with `game.X = game.X || {}` defensively).
+  // pendingVoracious historical note (2026-05-05): was used as an
+  // msgId-keyed map, so registered in ROUND_OBJECT_FLAGS. Replaced by
+  // voraciousUsed in slice 6 (2026-05-07) when Voracious migrated to
+  // the SoA orchestrator.
   'pendingAssassinsBlade',
   'pendingPunishingStrike',
   'pendingConspire',

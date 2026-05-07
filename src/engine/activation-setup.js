@@ -1133,85 +1133,14 @@ export async function finalizeActivation({
     }
   }
 
-  // D43. Voracious (Rancor): adjacent activation → free melee attack
-  for (const rancorPn of [1, 2]) {
-    const rDcList = getDcList(game, rancorPn) || [];
-    const rDcMsgIds = getDcMessageIds(game, rancorPn) || [];
-    for (let ri = 0; ri < rDcList.length; ri++) {
-      const rDc = rDcList[ri];
-      if (!rDc?.dcName) continue;
-      const rEff = getDcEffects()?.[rDc.dcName];
-      if (!(rEff?.specialAbilityIds || []).includes('voracious_rancor')) continue;
-      if (rDc.dcName === dcName && rancorPn === playerNum) continue;
-      const rMsgId = rDcMsgIds[ri];
-      if (!rMsgId) continue;
-      const rDgIdx = (rDc.displayName || rDc.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const rFk = `${rDc.dcName}-${rDgIdx}-0`;
-      const rPos = game.figurePositions?.[rancorPn]?.[rFk];
-      if (!rPos) continue;
-      const rSize = game.figureOrientations?.[rFk] || getFigureSize(rDc.dcName) || '2x3';
-      const rCells = getFootprintCells(rPos, rSize);
-      const actDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const actStats = getDcStatsFn(dcName);
-      const actFigCount = actStats?.figures ?? 1;
-      let anyAdjacent = false;
-      const adjacentActFks = [];
-      for (let fi = 0; fi < actFigCount; fi++) {
-        const actFk = `${dcName}-${actDgIdx}-${fi}`;
-        const actPos = game.figurePositions?.[playerNum]?.[actFk];
-        if (!actPos) continue;
-        const actSize = game.figureOrientations?.[actFk] || getFigureSize(dcName) || '1x1';
-        const actCells = getFootprintCells(actPos, actSize);
-        let isAdj = false;
-        for (const rc of rCells) {
-          for (const ac of actCells) {
-            if (countGameSpaces(game, rc, ac) === 1) { isAdj = true; break; }
-          }
-          if (isAdj) break;
-        }
-        if (isAdj) {
-          anyAdjacent = true;
-          adjacentActFks.push(actFk);
-        }
-      }
-      if (anyAdjacent && adjacentActFks.length > 0) {
-        const rDisplayName = rDc.displayName || rDc.dcName;
-        const rancorOwner = rancorPn === playerNum ? 'friendly' : 'hostile';
-        game.pendingVoracious = game.pendingVoracious || {};
-        game.pendingVoracious[rMsgId] = {
-          rancorMsgId: rMsgId,
-          rancorDcName: rDc.dcName,
-          rancorPlayerNum: rancorPn,
-          rancorFigureKey: rFk,
-          rancorDisplayName: rDisplayName,
-          targetFigureKeys: adjacentActFks,
-          targetPlayerNum: playerNum,
-          targetDcName: dcName,
-          activatingMsgId: msgId,
-        };
-        const vorBtns = [];
-        for (const tFk of adjacentActFks.slice(0, 4)) {
-          const tLabel = actFigCount > 1 ? `Attack ${dcNameFromFigureKey(tFk)}` : `Attack ${dcName}`;
-          vorBtns.push(
-            new ButtonBuilder()
-              .setCustomId(`act_passive_${gameId}_${msgId}_voracious_${rMsgId}_${tFk}`)
-              .setLabel(tLabel)
-              .setStyle(ButtonStyle.Danger)
-          );
-        }
-        vorBtns.push(
-          new ButtonBuilder()
-            .setCustomId(`act_passive_${gameId}_${msgId}_voracious_${rMsgId}_skip`)
-            .setLabel('Skip')
-            .setStyle(ButtonStyle.Secondary)
-        );
-        await thread.send({
-          content: `**Voracious** — **${rDisplayName}** (${rancorOwner}, P${rancorPn}) is adjacent to the activating figure. The Rancor may perform a free melee attack:`,
-          components: [new ActionRowBuilder().addComponents(vorBtns)],
-        }).catch(discordCatch);
-      }
-    }
-  }
+  // D43. Voracious (Rancor): migrated to SoA orchestrator (slice 6 —
+  // destruct 2026-05-07). See soa-orchestrator.js
+  // enumerateActivatorSoaDescriptors / soa-handler.js voracious sub-
+  // prompt + fire path. Once-per-round limit tracked via
+  // game.voraciousUsed (cleared at round start via ROUND_OBJECT_FLAGS).
+  // The previous inline auto-prompt set up pendingVoracious + posted
+  // act_passive_*_voracious_* buttons that had no handler — broken
+  // before this slice; orchestrator path is the canonical wiring now.
 
   // D44. Companion activation ordering (before/after)
   {

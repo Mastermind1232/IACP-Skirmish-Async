@@ -232,6 +232,55 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Voracious (Rancor): per destruct 2026-05-07 — opponent trigger.
+  // Fires on any other figure's activation (Rancor's own activation does
+  // NOT trigger). Rancor's player may defeat a friendly non-companion
+  // figure within 2 spaces of Rancor to recover 2 Damage and ready
+  // Rancor's DC. Limit once per round (tracked via game.voraciousUsed).
+  // ONE descriptor per Rancor; sub-prompt enumerates eligible sacrifice
+  // targets at fire time.
+  if (game) {
+    for (const rPn of [1, 2]) {
+      const _vrDcList = getDcList(game, rPn) || [];
+      const _vrDcMsgIds = getDcMessageIds(game, rPn) || [];
+      for (let _ri = 0; _ri < _vrDcList.length; _ri++) {
+        const _r = _vrDcList[_ri];
+        if (!_r?.dcName) continue;
+        const _rEff = getDcEffects()?.[_r.dcName];
+        if (!(_rEff?.specialAbilityIds || []).includes('voracious_rancor')) continue;
+        // Rancor's own activation does not trigger his own ability.
+        if (_r.dcName === dcName && rPn === playerNum) continue;
+        const _rMsgId = _vrDcMsgIds[_ri];
+        if (!_rMsgId) continue;
+        const _rDgIdx = (_r.displayName || _r.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _rFk = `${_r.dcName}-${_rDgIdx}-0`;
+        const _rPos = game.figurePositions?.[rPn]?.[_rFk];
+        if (!_rPos) continue;
+        // Limit once per round.
+        if (game.voraciousUsed?.[_rMsgId]) continue;
+        // Pre-check: at least one eligible friendly non-companion figure
+        // within 2 spaces of Rancor must exist.
+        const _friendlyPos = game.figurePositions?.[rPn] || {};
+        let _anyTarget = false;
+        for (const [_fk, _fp] of Object.entries(_friendlyPos)) {
+          if (!_fp || _fk === _rFk) continue;
+          if (countGameSpaces(game, _rPos, _fp) > 2) continue;
+          _anyTarget = true;
+          break;
+        }
+        if (!_anyTarget) continue;
+        descriptors.push({
+          id: `voracious:${_rMsgId}->${msgId}`,
+          ownerPlayerNum: rPn,
+          sourceMsgId: _rMsgId,
+          sourceLabel: 'Voracious',
+          subPromptKey: 'voracious',
+          extras: { dcName: _r.dcName, rancorFigureKey: _rFk, rancorPlayerNum: rPn, activatorMsgId: msgId },
+        });
+      }
+    }
+  }
+
   // I Make the Rules Now (Cad Bane): per destruct 2026-05-07 (corrected
   // twice): Fires at start of ANY OTHER figure's activation (any team,
   // any trait — Cad Bane's own activation does NOT trigger). Grants 1 MP

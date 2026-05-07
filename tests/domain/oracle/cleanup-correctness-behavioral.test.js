@@ -127,13 +127,15 @@ describe('B-CLEANUP-003: Movement/activation pendings in ROUND_NULL_FLAGS', () =
     }
   });
 
-  // pendingEe3Carbine + pendingVoracious — msgId-keyed objects, in ROUND_OBJECT_FLAGS.
-  it('003b: pendingEe3Carbine + pendingVoracious are in ROUND_OBJECT_FLAGS (msgId-keyed)', async () => {
+  // pendingEe3Carbine + voraciousUsed — msgId-keyed objects, in ROUND_OBJECT_FLAGS.
+  // (pendingVoracious removed 2026-05-07 when Voracious migrated to the SoA
+  // orchestrator — replaced by voraciousUsed which tracks once-per-round usage.)
+  it('003b: pendingEe3Carbine + voraciousUsed are in ROUND_OBJECT_FLAGS (msgId-keyed)', async () => {
     const { ROUND_OBJECT_FLAGS } = await import('../../../src/game/activation-state.js');
     assert.ok(ROUND_OBJECT_FLAGS.includes('pendingEe3Carbine'),
       'pendingEe3Carbine must be in ROUND_OBJECT_FLAGS — used as msgId-keyed map');
-    assert.ok(ROUND_OBJECT_FLAGS.includes('pendingVoracious'),
-      'pendingVoracious must be in ROUND_OBJECT_FLAGS — used as msgId-keyed map');
+    assert.ok(ROUND_OBJECT_FLAGS.includes('voraciousUsed'),
+      'voraciousUsed must be in ROUND_OBJECT_FLAGS — replaces pendingVoracious post-orchestrator-migration');
   });
 });
 

@@ -16,7 +16,7 @@ export const INTERRUPT_CONFIG = {
   selfDestruct: { pendingField: 'pendingSelfDestruct', handlerPrefix: 'self_destruct_protocol_' },
   rushPush: { pendingField: 'pendingRushPush', handlerPrefix: 'rush_push_' },
   coverFire: { pendingField: 'pendingCoverFire', handlerPrefix: 'cover_fire_' },
-  voracious: { pendingField: 'pendingVoracious', handlerPrefix: 'voracious_' },
+  // voracious removed 2026-05-07 — Voracious migrated to SoA orchestrator (slice 6).
   assassinsBlade: { pendingField: 'pendingAssassinsBlade', handlerPrefix: 'assassins_blade_' },
   punishingStrike: { pendingField: 'pendingPunishingStrike', handlerPrefix: 'punishing_strike_' },
   conspire: { pendingField: 'pendingConspire', handlerPrefix: 'conspire_' },

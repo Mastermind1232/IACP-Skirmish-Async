@@ -174,6 +174,39 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F436} **Beast Tamer** — **${displayName}**: exhaust the upgrade for one effect:`,
       components: [row],
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'voracious') {
+    // Sub-prompt: list eligible friendly non-companion figures within 2
+    // spaces of Rancor as sacrifice targets. Recomputed at fire time so
+    // positions/membership are fresh.
+    const rPn = desc.extras?.rancorPlayerNum;
+    const rFk = desc.extras?.rancorFigureKey;
+    const rPos = game.figurePositions?.[rPn]?.[rFk];
+    const _vrEligible = [];
+    if (rPn && rPos) {
+      const friendlyPos = game.figurePositions?.[rPn] || {};
+      const { countGameSpaces } = await import('../game/board-helpers.js');
+      for (const [fk, fp] of Object.entries(friendlyPos)) {
+        if (!fp || fk === rFk) continue;
+        if (countGameSpaces(game, rPos, fp) > 2) continue;
+        _vrEligible.push(fk);
+      }
+    }
+    if (_vrEligible.length === 0) {
+      await interaction.followUp({ content: 'No eligible sacrifice targets within 2 spaces.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _vrEligible.map((fk) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(`Sacrifice ${dcNameFromFigureKey(fk)}`).setStyle(ButtonStyle.Danger)
+    );
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F432} **Voracious** — **Rancor** may defeat a friendly non-companion figure within 2 spaces to recover **2 Damage** and ready his card. Choose a target:`,
+      components: rows,
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'imrn') {
     // Recompute eligible HUNTERs at fire time (positions/membership may
     // have shifted between enumerate and pick). Sub-prompt lists every
@@ -476,6 +509,57 @@ export async function handleSoaFire(interaction, ctx) {
     } else {
       await interaction.followUp({ content: `Unknown Beast Tamer choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
+    }
+
+  // --- Voracious (Rancor) ---
+  // Sub-prompt yields a friendly figureKey to sacrifice or 'skip'. On
+  // sacrifice: defeat the chosen friendly, recover 2 HP on Rancor, ready
+  // Rancor's DC, mark game.voraciousUsed[rancorMsgId] for once-per-round.
+  } else if (desc.subPromptKey === 'voracious') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F432} **Voracious** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choiceKey;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const rancorMsgId = desc.sourceMsgId;
+      const rancorPn = desc.extras?.rancorPlayerNum;
+      const rancorFk = desc.extras?.rancorFigureKey;
+      // Mark once-per-round
+      game.voraciousUsed = game.voraciousUsed || {};
+      game.voraciousUsed[rancorMsgId] = true;
+      // Recover 2 HP on Rancor
+      if (dcHealthState && rancorPn) {
+        const rFkParsed = rancorFk?.match(/-(\d+)-(\d+)$/);
+        const rFigIdx = rFkParsed ? parseInt(rFkParsed[2], 10) : 0;
+        healHp(dcHealthState, game, rancorMsgId, rFigIdx, 2, rancorPn);
+      }
+      // Ready Rancor's DC (un-exhaust)
+      if (ctx.dcExhaustedState) {
+        ctx.dcExhaustedState.set(rancorMsgId, false);
+      }
+      // Defeat the chosen friendly via processFigureDefeat
+      const targetFkParsed = String(targetFk).match(/-(\d+)-(\d+)$/);
+      const targetFigIdx = targetFkParsed ? parseInt(targetFkParsed[2], 10) : 0;
+      let targetMsgId = null;
+      if (dcMessageMeta && rancorPn) {
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== gameId) continue;
+          if (mMeta.dcName === targetDcName && mMeta.playerNum === rancorPn) {
+            targetMsgId = mId;
+            break;
+          }
+        }
+      }
+      if (ctx.processFigureDefeat && rancorPn) {
+        await ctx.processFigureDefeat(game, {
+          defeatedPlayerNum: rancorPn,
+          figureKey: targetFk,
+          attackerPlayerNum: rancorPn,  // self-inflicted (no VP)
+          source: 'Voracious',
+        });
+      }
+      await interaction.message.edit({ content: `\u{1F432} **Voracious** — **${targetDcName}** sacrificed; **Rancor** recovered **2 Damage** and readied his card.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F432} **Voracious** — Rancor sacrificed ${targetDcName} → +2 HP, readied DC.`, { phase: 'ROUND', icon: 'card' });
     }
 
   // --- I Make the Rules Now (Cad Bane) ---
