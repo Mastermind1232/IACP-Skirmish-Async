@@ -185,27 +185,33 @@ export async function handleSoaPick(interaction, ctx) {
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'unshakable') {
-    // Sub-prompt: list eligible cost-≥9 friendly figures with a HARMFUL
-    // condition. Recomputed at fire time.
+    // Sub-prompt: one button per (figure × HARMFUL condition) pair so
+    // the player picks which condition to discard explicitly. Per
+    // destruct 2026-05-07: "player should choose which condition to
+    // discard". choiceKey format: `${fk}|${condition}` (pipe-separated;
+    // figureKeys don't contain `|`).
     const ownerPn = bucket.ownerPlayerNum;
     const _usAllFigPos = game.figurePositions?.[ownerPn] || {};
     const dcEff = getDcEffects() || {};
-    const _usCandidates = [];
+    const _usPairs = [];
     for (const [fk, fp] of Object.entries(_usAllFigPos)) {
       if (!fp) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkCost = dcEff[fkDcName]?.cost ?? 0;
       if (fkCost < 9) continue;
       const conds = game.figureConditions?.[fk] || [];
-      const harmful = conds.filter((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
-      if (harmful.length > 0) _usCandidates.push({ fk, harmful });
+      for (const c of conds) {
+        if (!['Stun', 'Bleed', 'Weaken'].includes(c)) continue;
+        if (c === 'Weaken' && game.disarmPermanentWeakened?.[fk]) continue;
+        _usPairs.push({ fk, condition: c });
+      }
     }
-    if (_usCandidates.length === 0) {
-      await interaction.followUp({ content: 'No eligible figures.', ephemeral: true }).catch(discordCatch);
+    if (_usPairs.length === 0) {
+      await interaction.followUp({ content: 'No eligible figures with HARMFUL conditions.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const buttons = _usCandidates.map(({ fk, harmful }) =>
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(`${dcNameFromFigureKey(fk)}: ${harmful.join(', ')}`.slice(0, 80)).setStyle(ButtonStyle.Primary)
+    const buttons = _usPairs.map(({ fk, condition }) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${condition}`).setLabel(`${dcNameFromFigureKey(fk)}: ${condition}`.slice(0, 80)).setStyle(ButtonStyle.Primary)
     );
     buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
     const rows = [];
@@ -213,7 +219,7 @@ export async function handleSoaPick(interaction, ctx) {
       rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
     }
     await interaction.message.channel.send({
-      content: `\u{1F6E1}\u{FE0F} **Unshakable** — Choose a figure (cost ≥ 9) to discard 1 HARMFUL condition (suffers 1 Strain):`,
+      content: `\u{1F6E1}\u{FE0F} **Unshakable** — Choose a (figure, condition) pair to discard (figure suffers 1 Strain):`,
       components: rows,
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'voracious') {
@@ -554,39 +560,30 @@ export async function handleSoaFire(interaction, ctx) {
     }
 
   // --- Unshakable (Skirmish Upgrade) ---
-  // Sub-prompt yields chosen figureKey or 'skip'. Apply: discard 1
-  // HARMFUL condition from the chosen figure, suffer 1 Strain, exhaust
-  // the Unshakable upgrade.
+  // Per destruct 2026-05-07 corrections: player picks which HARMFUL
+  // condition to discard (sub-prompt enumerates pairs, choiceKey is
+  // `${fk}|${condition}`); strain routes through applyStrain so the
+  // standard player-choice strain subroutine fires (Under Duress prompt,
+  // Fireproof, Headhunter, etc.).
   } else if (desc.subPromptKey === 'unshakable') {
     if (choiceKey === 'skip') {
       await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
-      const targetFk = choiceKey;
+      const _splitIdx = choiceKey.indexOf('|');
+      if (_splitIdx < 0) {
+        await interaction.followUp({ content: `Malformed Unshakable choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetFk = choiceKey.slice(0, _splitIdx);
+      const chosenCond = choiceKey.slice(_splitIdx + 1);
       const targetDcName = dcNameFromFigureKey(targetFk);
       const conds = game.figureConditions?.[targetFk] || [];
-      // Discard the FIRST harmful condition.
-      const harmful = conds.find((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
-      if (harmful) {
-        const { filterCondition } = await import('../game/conditions.js');
-        filterCondition(game, targetFk, harmful);
+      if (!conds.includes(chosenCond)) {
+        await interaction.followUp({ content: `${targetDcName} no longer has ${chosenCond}; resolve manually.`, ephemeral: true }).catch(discordCatch);
+        return;
       }
-      // Apply 1 Strain to the target's HP.
-      const targetFkParsed = String(targetFk).match(/-(\d+)-(\d+)$/);
-      const targetFigIdx = targetFkParsed ? parseInt(targetFkParsed[2], 10) : 0;
-      let targetMsgId = null;
-      if (dcMessageMeta) {
-        for (const [mId, mMeta] of dcMessageMeta) {
-          if (mMeta.gameId !== gameId) continue;
-          if (mMeta.dcName === targetDcName && mMeta.playerNum === ownerPlayerNum) {
-            targetMsgId = mId;
-            break;
-          }
-        }
-      }
-      if (dcHealthState && targetMsgId) {
-        const { reduceHp } = await import('../game/damage-helpers.js');
-        reduceHp(dcHealthState, game, targetMsgId, targetFigIdx, 1, ownerPlayerNum);
-      }
+      const { filterCondition } = await import('../game/conditions.js');
+      filterCondition(game, targetFk, chosenCond);
       // Exhaust Unshakable.
       const usMsgId = desc.extras?.unshakableMsgId || desc.sourceMsgId;
       game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
@@ -594,8 +591,18 @@ export async function handleSoaFire(interaction, ctx) {
       if (!game.exhaustedSkirmishUpgrades[usMsgId].includes('Unshakable')) {
         game.exhaustedSkirmishUpgrades[usMsgId].push('Unshakable');
       }
-      await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — **${targetDcName}** discarded **${harmful || 'a HARMFUL condition'}** and suffered **1 Strain**.`, components: [] }).catch(discordCatch);
-      if (logGameAction) await logGameAction(game, client, `\u{1F6E1}\u{FE0F} **Unshakable** — ${targetDcName} -${harmful} +1 strain.`, { phase: 'ROUND', icon: 'card' });
+      await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — **${targetDcName}** discarded **${chosenCond}**. Now suffering **1 Strain**...`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F6E1}\u{FE0F} **Unshakable** — ${targetDcName} -${chosenCond}, +1 strain.`, { phase: 'ROUND', icon: 'card' });
+      // Strain via the player-choice subroutine (UD prompt, Fireproof,
+      // Headhunter, etc.). Controller is the figure's owner = bucket
+      // owner (Unshakable is friendly trigger).
+      const { applyStrain } = await import('./strain-handler.js');
+      await applyStrain(game, ctx, {
+        figureKey: targetFk,
+        controllerPlayerNum: ownerPlayerNum,
+        amount: 1,
+        source: 'Unshakable',
+      });
     }
 
   // --- Hair Trigger (Jyn Odan) ---
