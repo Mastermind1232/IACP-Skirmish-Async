@@ -55,9 +55,12 @@ describe('PROBE-PD-ACT-004: special action icon cost semantics (1♦ vs 2♦)', 
   });
 
   it('004e: action deduction uses _effectiveActionCost for dc_special_, else 1', () => {
+    // Refactored 2026-05-07: per destruct multi-figure activation fix, the
+    // group-wide remaining decrement now also tracks per-figure budgets via
+    // consumeActionForCurrentFigure. Pin the helper call shape.
     assert.match(DCPA_SRC,
-      /const actionCost = buttonKey === 'dc_special_' \? _effectiveActionCost : 1;\s*\n\s*actionsData\.remaining = Math\.max\(0, actionsData\.remaining - actionCost\);/,
-      'deduction must subtract the declared cost in one step (treated as one ability) — CRR-ACT-004');
+      /const actionCost = buttonKey === 'dc_special_' \? _effectiveActionCost : 1;\s*\n\s*consumeActionForCurrentFigure\(actionsData, actionCost\);/,
+      'deduction must subtract the declared cost in one step via consumeActionForCurrentFigure — CRR-ACT-004');
   });
 
   it('004f: reducer DcActionPerformed subtracts payload.actionCost (default 1)', () => {

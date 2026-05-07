@@ -181,6 +181,37 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
 }
 
 /**
+ * Per destruct 2026-05-07: multi-figure groups give each figure 2 actions
+ * individually. When an action consumes from `actionsData`, we must
+ * decrement BOTH the group-wide `remaining` AND the per-figure budget
+ * `perFigureRemaining[figIdx]`. When a figure's budget hits 0, lock the
+ * figure (figureLocked[figIdx] = true) so it cannot act again — IACP
+ * rule "each figure must complete all of their actions before the next
+ * figure begins" is enforced by preventing return to a locked figure.
+ *
+ * Use this helper at every action-consumption site that previously did
+ * `actionsData.remaining = Math.max(0, actionsData.remaining - 1)`.
+ *
+ * @param {object} actionsData  - game.dcActionsData[msgId]
+ * @param {number} cost          - 1 for normal action, 2 for Double Action
+ * @returns {void}
+ */
+export function consumeActionForCurrentFigure(actionsData, cost = 1) {
+  if (!actionsData || cost <= 0) return;
+  actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - cost);
+  const figIdx = actionsData.selectedFigure ?? 0;
+  if (actionsData.perFigureRemaining) {
+    const cur = actionsData.perFigureRemaining[figIdx] ?? 0;
+    const next = Math.max(0, cur - cost);
+    actionsData.perFigureRemaining[figIdx] = next;
+    if (next === 0) {
+      actionsData.figureLocked = actionsData.figureLocked || {};
+      actionsData.figureLocked[figIdx] = true;
+    }
+  }
+}
+
+/**
  * True iff a click-time-decremented action is still mid-resolution for this DC.
  * Action costs are committed when the button is pressed (Move/Special/etc.),
  * but the resolution can take multiple Discord interactions (move grid, target

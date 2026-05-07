@@ -33,7 +33,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
-import { cleanupActivation } from '../game/activation-state.js';
+import { cleanupActivation, consumeActionForCurrentFigure } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
@@ -409,7 +409,7 @@ export async function handleDcRemoveStun(interaction, ctx) {
 
   // Remove Stun and spend 1 action
   filterCondition(game, figureKey, 'Stun');
-  actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+  consumeActionForCurrentFigure(actionsData, 1);
 
   const displayName = meta.displayName || meta.dcName;
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Stunned**.`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -475,7 +475,7 @@ export async function handleDcRemoveBleed(interaction, ctx) {
   }
 
   filterCondition(game, figureKey, 'Bleed');
-  actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+  consumeActionForCurrentFigure(actionsData, 1);
 
   const displayName = meta.displayName || meta.dcName;
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Bleeding**.`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -2088,7 +2088,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
-      actionsData.remaining = Math.max(0, actionsData.remaining - actionCost);
+      consumeActionForCurrentFigure(actionsData, actionCost);
       await updateDcActionsMessage(game, msgId, client);
     }
   }
@@ -2759,7 +2759,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     // Deduct action
     const actionsData = game.dcActionsData?.[msgId];
     if (actionsData) {
-      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      consumeActionForCurrentFigure(actionsData, 1);
       await updateDcActionsMessage(game, msgId, client);
     }
     const moveBtn = new ButtonBuilder()
@@ -2783,7 +2783,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
-    actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+    consumeActionForCurrentFigure(actionsData, 1);
     await updateDcActionsMessage(game, msgId, client);
   }
   if (resolveResult.freeAction && actionsData) {

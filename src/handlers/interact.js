@@ -3,6 +3,7 @@
  */
 import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { triggerBleedAfterAction } from './strain-handler.js';
+import { consumeActionForCurrentFigure } from '../game/activation-state.js';
 import { isDcCompanion } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
@@ -101,7 +102,7 @@ export async function handleInteractChoice(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  actionsData.remaining = Math.max(0, previousRemaining - 1);
+  consumeActionForCurrentFigure(actionsData, 1);
   await updateDcActionsMessage(game, msgId, interaction.client);
 
   const stats = getDcStats(meta.dcName);

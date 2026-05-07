@@ -241,11 +241,29 @@ export async function finalizeActivation({
   }
 
   // B12. Init dcActionsData
+  // Per destruct 2026-05-07: multi-figure groups give each figure 2 actions
+  // individually (NOT 2 total for the group). For a 2-figure group, the
+  // total budget is 4 actions (2 per figure). Track per-figure remaining
+  // counts so each figure must complete its own 2 actions before another
+  // figure can act.
+  const _b12Eff = getDcEffects()[dcName] || getDcEffects()[(dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const _b12FigCount = Math.max(1, _b12Eff?.figures ?? 1);
+  const _b12Total = _b12FigCount * DC_ACTIONS_PER_ACTIVATION;
+  const _b12PerFig = {};
+  for (let _i = 0; _i < _b12FigCount; _i++) _b12PerFig[_i] = DC_ACTIONS_PER_ACTIVATION;
   game.dcActionsData = game.dcActionsData || {};
-  game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
+  game.dcActionsData[msgId] = {
+    remaining: _b12Total,
+    total: _b12Total,
+    perFigureRemaining: _b12PerFig,
+    figureLocked: {},
+    messageId: null,
+    threadId: thread.id,
+    specialsUsed: [],
+  };
 
   // B13. Send thread ping (actions buttons + minimap)
-  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
+  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(_b12Total, _b12Total)}`;
   const actMinimap = await getActivationMinimapAttachment(game, msgId);
   const actionsPayload = sanitizeMentions({
     content: pingContent,

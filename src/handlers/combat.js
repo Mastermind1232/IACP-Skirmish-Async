@@ -6,6 +6,7 @@ import { COLORS } from '../discord/colors.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingUnhingedStrain, clearPendingUnhingedStrain } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
+import { consumeActionForCurrentFigure } from '../game/activation-state.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
@@ -1282,7 +1283,7 @@ export async function handleAttackTarget(interaction, ctx) {
     } else if (isFieldTacticsFreeAttack) {
       clearPendingFieldTactics(game);
     } else {
-      actionsData.remaining = Math.max(0, actionsData.remaining - 1);
+      consumeActionForCurrentFigure(actionsData, 1);
       await updateDcActionsMessage(game, msgId, interaction.client);
     }
   }

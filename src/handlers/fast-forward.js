@@ -246,10 +246,25 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
 
   game.movementBank = game.movementBank || {};
   game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+  // Per destruct 2026-05-07: multi-figure groups get figures*2 actions
+  // (each figure individually has 2 actions). See activation-setup.js B12.
+  const _ffEff = getDcEffects()[dcName] || getDcEffects()[(dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const _ffFigCount = Math.max(1, _ffEff?.figures ?? 1);
+  const _ffTotal = _ffFigCount * DC_ACTIONS_PER_ACTIVATION;
+  const _ffPerFig = {};
+  for (let _i = 0; _i < _ffFigCount; _i++) _ffPerFig[_i] = DC_ACTIONS_PER_ACTIVATION;
   game.dcActionsData = game.dcActionsData || {};
-  game.dcActionsData[msgId] = { remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION, messageId: null, threadId: thread.id, specialsUsed: [] };
+  game.dcActionsData[msgId] = {
+    remaining: _ffTotal,
+    total: _ffTotal,
+    perFigureRemaining: _ffPerFig,
+    figureLocked: {},
+    messageId: null,
+    threadId: thread.id,
+    specialsUsed: [],
+  };
 
-  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
+  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(_ffTotal, _ffTotal)}`;
   const actMinimap = getActivationMinimapAttachment ? await getActivationMinimapAttachment(game, msgId) : null;
   const actionsPayload = {
     content: pingContent,
