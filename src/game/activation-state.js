@@ -315,6 +315,7 @@ const ROUND_OBJECT_FLAGS = [
   'moveInProgress',
   'forceSlowSkipActivation',
   'executorTriggered',
+  'pendingSoaResolution',
 ];
 
 const ROUND_NULL_FLAGS = [
