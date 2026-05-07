@@ -30,6 +30,7 @@ import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from '../discord/power-token-prompts.js';
 import { applyStartOfActivationEffects } from './activation-effects.js';
 import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspire, setPendingStillFaster } from '../game/interrupts.js';
+import { enumerateActivatorSoaDescriptors, startSoaResolution, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { join } from 'path';
 
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
@@ -363,13 +364,33 @@ export async function finalizeActivation({
     await sendPowerTokenOverflowUI(game, gameId, thread, playerNum, saveGames);
   }
 
-  // D2. Vigor (Ahsoka Tano, Fifth Brother): choose 2 MP or 1 Block Token
-  if (dcName === 'Ahsoka Tano' || dcName === 'Fifth Brother') {
-    const vigorRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_vigor_mp`).setLabel('Gain 2 MP').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_vigor_block`).setLabel('Gain 1 Block Token').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send({ content: `✨ **Vigor** — **${displayName}**: Choose one:`, components: [vigorRow] }).catch(discordCatch);
+  // D2. Vigor: routed through the SoA orchestrator (per destruct 2026-05-07).
+  // The chooser prompt below is posted only when there are pending SoA
+  // descriptors; today this slice migrates Vigor as the canary, future slices
+  // migrate the rest of the inline prompts in this file. Init-player goes
+  // first; if init-player has no triggers, non-init's bucket is presented.
+  // Activation-end is gated by isActivationActionInProgress while
+  // pendingSoaResolution exists for this msgId.
+  {
+    const _soaDesc = enumerateActivatorSoaDescriptors(game, { dcName, playerNum, msgId });
+    if (_soaDesc.length > 0) {
+      const initPN = (game.initiative ?? game.firstPlayer ?? playerNum);
+      const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: playerNum, activatorMsgId: msgId });
+      if (_started) {
+        const _soaShape = describeChooserPrompt(game.pendingSoaResolution, gameId);
+        if (_soaShape) {
+          const _soaButtons = _soaShape.choices.map((c) => {
+            const style = c.descId === '__skip_all__' ? ButtonStyle.Secondary : ButtonStyle.Primary;
+            return new ButtonBuilder().setCustomId(c.customId).setLabel(c.label).setStyle(style);
+          });
+          const _soaRow = new ActionRowBuilder().addComponents(_soaButtons);
+          await thread.send({
+            content: `\u{2728} **Start-of-Activation** — Player ${_soaShape.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
+            components: [_soaRow],
+          }).catch(discordCatch);
+        }
+      }
+    }
   }
 
   // D3. Madness — now handled by applyStartOfActivationEffects()

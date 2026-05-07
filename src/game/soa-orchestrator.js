@@ -26,6 +26,45 @@
  */
 
 import { opponentPlayerNum } from './player-helpers.js';
+import { getDcEffects } from '../data-loader.js';
+
+/**
+ * Enumerate Start-of-Activation descriptors for an activating DC. Returns
+ * a (possibly empty) array of descriptor objects, each shaped:
+ *   {
+ *     id: string,             // unique within the bucket walk
+ *     ownerPlayerNum: 1|2,    // who decides whether to fire it
+ *     sourceMsgId: string,    // the DC msgId that hosts the effect
+ *     sourceLabel: string,    // human-readable, used as the chooser button
+ *     subPromptKey: string,   // identifies the sub-prompt path on click
+ *     extras: object,         // descriptor-specific data needed at fire time
+ *   }
+ *
+ * Slice 1 (this commit): Vigor only. Subsequent slices migrate the rest.
+ */
+export function enumerateActivatorSoaDescriptors(game, opts) {
+  const { dcName, playerNum, msgId } = opts || {};
+  if (!dcName || !playerNum || !msgId) return [];
+  const eff = getDcEffects()?.[dcName];
+  const descriptors = [];
+
+  // Vigor (Ahsoka Tano, Fifth Brother): SoA choice — gain 2 MP or 1 Block Token.
+  // Detected by name match (Vigor isn't in specialAbilityIds today; activation-
+  // setup.js used the same name predicate). The descriptor's owner is the
+  // ACTIVATING player.
+  if (dcName === 'Ahsoka Tano' || dcName === 'Fifth Brother') {
+    descriptors.push({
+      id: `vigor:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Vigor',
+      subPromptKey: 'vigor',
+      extras: { dcName },
+    });
+  }
+
+  return descriptors;
+}
 
 /**
  * Build the SoA chooser button row for a bucket.

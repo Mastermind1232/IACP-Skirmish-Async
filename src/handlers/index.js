@@ -99,6 +99,7 @@ import {
   handleOrbitalBombardmentSpacePick,
   handleBombDropSpacePick,
 } from './dc-play-area.js';
+import { handleSoaPick, handleSoaFire, handleSoaSkipAll } from './soa-handler.js';
 import {
   handleSquadModal,
   handleDeployModal,
@@ -386,6 +387,9 @@ register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
 register('dc_heroic_attack_', handleDcHeroicAttack, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
+register('soa_pick_', handleSoaPick, 'dcPlayArea');
+register('soa_fire_', handleSoaFire, 'dcPlayArea');
+register('soa_skip_all_', handleSoaSkipAll, 'dcPlayArea');
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dcPlayArea');
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'), 'dcPlayArea');
 register('dc_ability_choice_', handleDcAbilityChoice, 'dcPlayArea');

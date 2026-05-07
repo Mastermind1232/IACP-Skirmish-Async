@@ -204,6 +204,13 @@ export function isActivationActionInProgress(game, msgId) {
       if (k.includes(msgId)) return true;
     }
   }
+  // SoA orchestrator: while a chooser bucket is open, the activation has not
+  // finished its start-of-activation phase. Block "End Activation" so the
+  // player can't dismiss the activation with SoA decisions still pending.
+  if (game.pendingSoaResolution) {
+    const ctx = game.pendingSoaResolution.activationContext;
+    if (ctx?.activatorMsgId === msgId) return true;
+  }
   return false;
 }
 
