@@ -25,7 +25,7 @@
  * State persists on game.pendingSoaResolution across Discord round-trips.
  */
 
-import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds } from './player-helpers.js';
+import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds, ccDeckKey } from './player-helpers.js';
 import { getDcEffects, getMapData, getFigureSize } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
@@ -493,6 +493,26 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           extras: { dcName: _cad.dcName, cadFigureKey: _cadFk, cadPlayerNum: cadPn, activatorMsgId: msgId },
         });
       }
+    }
+  }
+
+  // Wisdom (Yoda): SoA player-driven trigger. Card text "At the start of
+  // your activation, draw 1 CC then return 1 CC from your hand to the
+  // bottom of your deck." Owner = activator. Enumerated only if Yoda's
+  // CC deck has at least 1 card to draw. Returning a card is the second
+  // step of the sub-prompt; if hand becomes empty post-draw the player
+  // returns the just-drawn card.
+  if (_abilityIds.includes('wisdom_yoda') && game) {
+    const _wDeck = game[ccDeckKey(playerNum)] || [];
+    if (_wDeck.length > 0) {
+      descriptors.push({
+        id: `wisdom:${msgId}`,
+        ownerPlayerNum: playerNum,
+        sourceMsgId: msgId,
+        sourceLabel: 'Wisdom',
+        subPromptKey: 'wisdom',
+        extras: { dcName },
+      });
     }
   }
 

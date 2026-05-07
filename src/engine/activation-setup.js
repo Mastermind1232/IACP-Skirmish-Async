@@ -607,29 +607,9 @@ export async function finalizeActivation({
     }).catch(discordCatch);
   }
 
-  // D23. Wisdom (Yoda): draw 1 CC, return 1 to bottom of deck
-  if (_abilityIds.includes('wisdom_yoda')) {
-    const deckKey = ccDeckKey(playerNum);
-    const handKey = ccHandKey(playerNum);
-    const deck = game[deckKey] || [];
-    if (deck.length > 0) {
-      const card = deck.shift();
-      game[handKey] = [...(game[handKey] || []), card];
-      const hand = game[handKey] || [];
-      const uniqueCards = [...new Set(hand)];
-      if (uniqueCards.length > 0) {
-        const btns = uniqueCards.map((c, ci) =>
-          new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wisdom_${ci}`).setLabel(c.length > 70 ? c.slice(0, 67) + '...' : c).setStyle(ButtonStyle.Secondary)
-        );
-        const rows = chunkButtonsToRows(btns);
-        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC. Choose a card from your hand to return to the bottom of your deck:`, components: rows }).catch(discordCatch);
-      } else {
-        await thread.send({ content: `🧘 **Wisdom** — Drew 1 CC but hand is empty (cannot return).` }).catch(discordCatch);
-      }
-    } else {
-      await thread.send({ content: `🧘 **Wisdom** — Deck is empty; cannot draw.` }).catch(discordCatch);
-    }
-  }
+  // D23. Wisdom — migrated to SoA orchestrator (destruct 2026-05-07).
+  // handleSoaPick draws into hand and posts the return-card picker;
+  // handleSoaFire completes the swap.
 
   // D24. Force Vision (Kanan): opponent chooses ready group, must activate next
   if (_abilityIds.includes('force_vision_kanan')) {

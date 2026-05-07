@@ -334,6 +334,37 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'wisdom') {
+    // handleSoaPick draws 1 CC into Yoda's hand, then posts a picker for
+    // which card to return to the bottom of the deck. handleSoaFire
+    // receives the chosen card index and completes the swap.
+    const ownerPn = bucket.ownerPlayerNum;
+    const _wDeckKey = ccDeckKey(ownerPn);
+    const _wHandKey = ccHandKey(ownerPn);
+    const _wDeck = game[_wDeckKey] || [];
+    if (_wDeck.length === 0) {
+      await interaction.followUp({ content: 'Command deck is empty; cannot draw.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const _wDrawn = _wDeck.shift();
+    game[_wDeckKey] = _wDeck;
+    game[_wHandKey] = [...(game[_wHandKey] || []), _wDrawn];
+    const _wHand = game[_wHandKey] || [];
+    const _wUnique = [...new Set(_wHand)];
+    const _wButtons = _wUnique.map((c, ci) =>
+      new ButtonBuilder()
+        .setCustomId(`soa_fire_${gameId}_${desc.id}_${ci}`)
+        .setLabel(c.length > 70 ? c.slice(0, 67) + '...' : c)
+        .setStyle(ButtonStyle.Secondary)
+    );
+    const _wRows = [];
+    for (let i = 0; i < _wButtons.length; i += 5) {
+      _wRows.push(new ActionRowBuilder().addComponents(_wButtons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F9D8} **Wisdom** — Drew **${_wDrawn}**. Choose a card from your hand to return to the **bottom** of your deck:`,
+      components: _wRows.slice(0, 5),
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'trust_both_ways') {
     const ownerPn = bucket.ownerPlayerNum;
     const selfFk = desc.extras?.selfFigureKey;
@@ -914,6 +945,35 @@ export async function handleSoaFire(interaction, ctx) {
         }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
       }
+    }
+
+  // --- Wisdom (Yoda) ---
+  // choiceKey is the card index in the unique-hand list (the picker
+  // posted at handleSoaPick time). Remove that card from hand and push
+  // to the bottom of the deck. Hand state already includes the card
+  // drawn during handleSoaPick.
+  } else if (desc.subPromptKey === 'wisdom') {
+    const _wDeckKey = ccDeckKey(ownerPlayerNum);
+    const _wHandKey = ccHandKey(ownerPlayerNum);
+    const _wHand = game[_wHandKey] || [];
+    const _wUnique = [...new Set(_wHand)];
+    const cardIndex = parseInt(choiceKey, 10);
+    if (Number.isFinite(cardIndex) && cardIndex >= 0 && cardIndex < _wUnique.length) {
+      const cardName = _wUnique[cardIndex];
+      const _wIdx = _wHand.indexOf(cardName);
+      if (_wIdx >= 0) {
+        _wHand.splice(_wIdx, 1);
+        game[_wHandKey] = _wHand;
+        game[_wDeckKey] = game[_wDeckKey] || [];
+        game[_wDeckKey].push(cardName);
+        await interaction.message.edit({ content: `\u{1F9D8} **Wisdom** — Returned **${cardName}** to the bottom of the deck.`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F9D8} **Wisdom** — Yoda drew 1 CC, returned ${cardName} to bottom.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        await interaction.message.edit({ content: `\u{1F9D8} **Wisdom** — Card no longer in hand.`, components: [] }).catch(discordCatch);
+      }
+    } else {
+      await interaction.followUp({ content: `Invalid Wisdom choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
     }
 
   // --- Trust Goes Both Ways (Jyn Erso) ---
