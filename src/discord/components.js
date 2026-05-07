@@ -967,6 +967,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _hasHeroic = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('heroic');
   const _heroicUsed = !!game?.heroicUsedThisActivation?.[msgId];
   const _showHeroic = _hasHeroic && hasAttack && !_heroicUsed;
+  // Bo-Rifle Staff Strike (Zeb Orrelios): parallel blue free-attack button.
+  // Per destruct 2026-05-07. Once per activation; free action; replaces
+  // attack dice with [Red, Red] melee. Surfaces same way as Heroic.
+  const _hasBoRifleStaff = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('bo_rifle_staff_strike');
+  const _boRifleUsed = !!game?.boRifleStaffUsedThisActivation?.[msgId];
+  const _showBoRifleStaff = _hasBoRifleStaff && hasAttack && !_boRifleUsed;
 
   const rows = [];
 
@@ -983,6 +989,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       ];
       if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAttack));
       if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+      if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f${selectedFigure}`).setLabel(`Bo-Rifle Strike (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
       comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
       rows.push(new ActionRowBuilder().addComponents(...comps));
       // Condition-discard row: Remove Stun + Remove Bleed (1 action each)
@@ -1018,6 +1025,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     ];
     if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAttack));
     if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+    if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f0`).setLabel('Bo-Rifle Strike (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
     comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
     rows.push(new ActionRowBuilder().addComponents(...comps));
     if (isStunned || isBleeding) {

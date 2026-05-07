@@ -1376,6 +1376,57 @@ export async function handleDcHeroicAttack(interaction, ctx) {
 }
 
 /**
+ * Bo-Rifle Staff Strike (Zeb Orrelios) — sibling Primary/blue Attack button.
+ * Per destruct 2026-05-07: parity with Luke Heroic. Free attack (no action),
+ * once per activation, dice replaced with [Red, Red] melee.
+ *
+ * Sets:
+ *   - game.boRifleStaffUsedThisActivation[msgId] = true (gate)
+ *   - game.freeAttackBonusPending[msgId] = true (zero-action follow-up)
+ *   - game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red','red'], pierce: 0, bonusAccuracy: 0 }
+ * Then rewrites customId to dc_attack_ and forwards to handleDcAction.
+ */
+export async function handleDcBoRifleAttack(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcEffects } = ctx;
+  const m = interaction.customId.match(/^dc_bo_rifle_attack_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid Bo-Rifle button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const eff = getDcEffects()[meta.dcName] || getDcEffects()[(meta.dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  if (!(eff?.specialAbilityIds || []).includes('bo_rifle_staff_strike')) {
+    await interaction.followUp({ content: 'This figure does not have Bo-Rifle Staff Strike.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (game.boRifleStaffUsedThisActivation?.[msgId]) {
+    await interaction.followUp({ content: '**Bo-Rifle Staff Strike** has already been used this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  game.boRifleStaffUsedThisActivation = game.boRifleStaffUsedThisActivation || {};
+  game.boRifleStaffUsedThisActivation[msgId] = true;
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[msgId] = true;
+  game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+  game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red', 'red'], pierce: 0, bonusAccuracy: 0 };
+  const _newId = `dc_attack_${msgId}_f${figureIndexStr}`;
+  try {
+    Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
+  } catch {
+    interaction.customId = _newId;
+  }
+  return handleDcAction(interaction, ctx, 'dc_attack_');
+}
+
+/**
  * Granted-move button (Tactical Movement when target ≠ activator, and any
  * future ability that grants out-of-activation MP requiring immediate use).
  *
