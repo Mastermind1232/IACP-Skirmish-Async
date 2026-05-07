@@ -1376,6 +1376,51 @@ export async function handleDcHeroicAttack(interaction, ctx) {
 }
 
 /**
+ * End Figure: voluntarily forfeit the current figure's remaining
+ * actions and lock it so the next figure of a multi-figure group can
+ * begin. Per destruct 2026-05-07: "complete one figure before the
+ * other" — once a figure ends its turn it cannot return.
+ *
+ * customId: `dc_end_figure_<msgId>_f<figureIndex>`
+ */
+export async function handleDcEndFigure(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, updateDcActionsMessage, client } = ctx;
+  const m = interaction.customId.match(/^dc_end_figure_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid End Figure button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const figIdx = parseInt(figureIndexStr, 10);
+  const actionsData = game.dcActionsData?.[msgId];
+  if (!actionsData) {
+    await interaction.followUp({ content: 'No active activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Forfeit this figure's remaining actions: zero its budget, decrement
+  // the group total by the same amount, lock the figure, clear selection.
+  const _forfeit = (actionsData.perFigureRemaining?.[figIdx] ?? 0);
+  if (_forfeit > 0) {
+    actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - _forfeit);
+    if (actionsData.perFigureRemaining) actionsData.perFigureRemaining[figIdx] = 0;
+  }
+  actionsData.figureLocked = actionsData.figureLocked || {};
+  actionsData.figureLocked[figIdx] = true;
+  actionsData.selectedFigure = null;
+  await interaction.deferUpdate().catch(discordCatch);
+  await updateDcActionsMessage(game, msgId, client);
+  if (ctx.saveGames) ctx.saveGames(game.gameId);
+}
+
+/**
  * Bo-Rifle Staff Strike (Zeb Orrelios) — sibling Primary/blue Attack button.
  * Per destruct 2026-05-07: parity with Luke Heroic. Free attack (no action),
  * once per activation, dice replaced with [Red, Red] melee.

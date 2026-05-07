@@ -77,6 +77,7 @@ import {
   handleDcAction,
   handleDcHeroicAttack,
   handleDcBoRifleAttack,
+  handleDcEndFigure,
   handleGrantedAttack,
   handleGrantedMove,
   handlePounceSpacePick,
@@ -389,6 +390,8 @@ register('dc_spend_mp_', (i, ctx) => handleDcAction(i, ctx, 'dc_spend_mp_'), 'dc
 register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea');
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
 register('dc_heroic_attack_', handleDcHeroicAttack, 'dcPlayArea');
+register('dc_bo_rifle_attack_', handleDcBoRifleAttack, 'dcPlayArea');
+register('dc_end_figure_', handleDcEndFigure, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
 register('granted_move_', handleGrantedMove, 'dcPlayArea');
 register('soa_pick_', handleSoaPick, 'dcPlayArea');
@@ -705,6 +708,7 @@ export {
   handleDcAction,
   handleDcHeroicAttack,
   handleDcBoRifleAttack,
+  handleDcEndFigure,
   handleGrantedAttack,
   handleGrantedMove,
   handlePounceSpacePick,

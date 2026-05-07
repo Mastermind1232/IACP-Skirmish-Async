@@ -207,6 +207,12 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1) {
     if (next === 0) {
       actionsData.figureLocked = actionsData.figureLocked || {};
       actionsData.figureLocked[figIdx] = true;
+      // Per destruct 2026-05-07: figure done → force re-pick from
+      // dropdown for next figure. Clear selectedFigure so the action-
+      // button row is replaced with the figure-select dropdown next
+      // render. Locked figures are filtered out of the dropdown
+      // automatically (components.js).
+      actionsData.selectedFigure = null;
     }
   }
 }

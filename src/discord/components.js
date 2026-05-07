@@ -940,6 +940,15 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;
+  // Phase 2 (destruct 2026-05-07): per-figure budget. When the currently-
+  // selected figure has used all its 2 actions, action buttons disable;
+  // figureLocked[figIdx] prevents return to a finished figure (the
+  // dropdown filter below excludes locked figures).
+  const _perFigRem = actionsData.perFigureRemaining || null;
+  const _figLocked = actionsData.figureLocked || {};
+  const _curFigOutOfActions = (selectedFigure != null && _perFigRem)
+    ? ((_perFigRem[selectedFigure] ?? 0) <= 0)
+    : false;
 
   // Stun: per IACP, Stun prevents Move and Attack actions only — does NOT
   // block Interact or non-attack Special Actions (destruct 2026-05-07).
@@ -949,13 +958,15 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // noAct = "any action" gate — used for Interact + non-attack Specials.
   // Stun does NOT block these (destruct 2026-05-07 audit). Move/Attack
   // gates are computed separately (noMove/noAttack below).
-  const noAct = noActions;
-  const noAttack = noActions || isStunned;
+  // Phase 2 (destruct 2026-05-07): also gate when the current figure has
+  // used all its per-figure actions (must switch via dropdown).
+  const noAct = noActions || _curFigOutOfActions;
+  const noAttack = noActions || isStunned || _curFigOutOfActions;
 
   // To the Limit (C75): extra action cannot be a Move
   const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
   // Move blocked by Stun + To-the-Limit + no-actions.
-  const noMove = noActions || isStunned || toTheLimitActive;
+  const noMove = noActions || isStunned || toTheLimitActive || _curFigOutOfActions;
 
   // Non-Combatant: DCs with no attack dice cannot attack
   const hasAttack = (stats.attack?.dice?.length ?? 0) > 0;
@@ -1001,20 +1012,44 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         if (isBleeding) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_bleed_${msgId}_f${selectedFigure}`).setLabel(`Remove Bleed${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions));
         if (condBtns.length) rows.push(new ActionRowBuilder().addComponents(...condBtns));
       }
+      // Phase 2 (destruct 2026-05-07): "End Figure" button lets the
+      // active player voluntarily forfeit their current figure's remaining
+      // actions and lock that figure so the next figure can begin. Only
+      // shown when there's at least one OTHER unlocked figure to pick.
+      const _hasOtherUnlocked = (() => {
+        for (let f = 0; f < figures; f++) {
+          if (f === selectedFigure) continue;
+          if (!_figLocked[f]) return true;
+        }
+        return false;
+      })();
+      if (_hasOtherUnlocked) {
+        const endFigBtn = new ButtonBuilder()
+          .setCustomId(`dc_end_figure_${msgId}_f${selectedFigure}`)
+          .setLabel(`End Figure${suffix}`)
+          .setStyle(ButtonStyle.Secondary);
+        rows.push(new ActionRowBuilder().addComponents(endFigBtn));
+      }
     } else {
       // No figure selected yet: show dropdown only
+      // Phase 2 (destruct 2026-05-07): exclude locked figures (figures
+      // that have already finished their 2 actions). IACP "complete one
+      // figure before another" — once locked, can't return.
       const options = [];
       for (let f = 0; f < figures; f++) {
+        if (_figLocked[f]) continue;
         const fk = `${dcName}-${dgIndex}-${f}`;
         const nick = game?.figureNicknames?.[fk];
         const label = nick ? `Figure ${dgIndex}${FIGURE_LETTERS[f]} (${nick})` : `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
         options.push({ label: label.slice(0, 100), value: String(f), default: false });
       }
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId(`dc_fig_select_${msgId}`)
-        .setPlaceholder('Select a figure to act with…')
-        .addOptions(options);
-      rows.push(new ActionRowBuilder().addComponents(selectMenu));
+      if (options.length > 0) {
+        const selectMenu = new StringSelectMenuBuilder()
+          .setCustomId(`dc_fig_select_${msgId}`)
+          .setPlaceholder('Select a figure to act with…')
+          .addOptions(options);
+        rows.push(new ActionRowBuilder().addComponents(selectMenu));
+      }
     }
   } else {
     const moveLbl = toTheLimitActive ? 'Move (blocked)' : 'Move';
