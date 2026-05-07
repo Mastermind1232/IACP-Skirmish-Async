@@ -4,7 +4,7 @@
  */
 
 import { processFigureDefeat } from './defeat-handler.js';
-import { applyStrain as _applyStrain } from '../handlers/strain-handler.js';
+import { applyStrain as _applyStrain, triggerBleedAfterAction as _triggerBleedAfterAction } from '../handlers/strain-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -2100,20 +2100,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   // Bleed: attacker prompted to take 1 damage or prevent by discarding CC after Attack action
   // (skipped if player spent a surge to prevent Bleed during the surge window)
-  // I30 Fireproof: attacker with Flame Trooper cannot be Bleeding
-  // Slice 8.4 follow-up: skip if condition effects are suppressed (YWNDM-on-Fifth-Brother)
-  // destruct 2026-05-06: Bleed strain now routes through applyStrain for
-  // unified per-strain choice prompt + UD pre-prompt. Construct an applyStrain
-  // ctx from the combat-bridge deps + client (deps separates client out).
-  if (combat.attackerConds?.includes('Bleed') && !combat.surgePreventBleed && !combat.attackerFireproof
-      && !areConditionEffectsSuppressed(game, combat.attackerFigureKey)
-      && _applyStrain) {
-    await _applyStrain(game, { ...deps, client, processFigureDefeat }, {
-      figureKey: combat.attackerFigureKey,
-      controllerPlayerNum: combat.attackerPlayerNum,
-      amount: 1,
-      source: 'Bleeding',
-    });
+  // Post-attack Bleed strain (centralized via triggerBleedAfterAction —
+  // destruct 2026-05-07). Honors surgePreventBleed + attackerFireproof
+  // gates that are specific to attack flow; the helper handles
+  // areConditionEffectsSuppressed internally.
+  if (!combat.surgePreventBleed && !combat.attackerFireproof && _triggerBleedAfterAction) {
+    await _triggerBleedAfterAction(game, { ...deps, client, processFigureDefeat },
+      combat.attackerFigureKey, combat.attackerPlayerNum);
   }
   // Deflection: after attack resolves, attacker suffers N damage
   // unconditional = always fires after attack; conditional (legacy) = only if defender took 0 damage

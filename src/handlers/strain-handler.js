@@ -43,6 +43,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDcMessageIds, getDcAttachments, getCcHand, ccHandKey, ccDiscardKey, getPlayerId } from '../game/player-helpers.js';
+import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import {
   STRAIN_OPTIONS,
   resolveSingleStrainChoice,
@@ -51,6 +52,45 @@ import {
 } from '../game/strain-resolver.js';
 
 const STRAIN_DC_PAZ = 'Paz Vizsla';
+
+/**
+ * Centralized post-action Bleed strain trigger.
+ *
+ * destruct 2026-05-07: "to fix the bleed issue, there should be a central
+ * check, after any action is resolved, if the figure is bleeding to suffer
+ * a strain." This helper is the single point all action-resolution sites
+ * call into. Action sites that need to wire it:
+ *   - Move (after MP grant — slice 9 timing)
+ *   - Attack (after attack resolves)
+ *   - Special Action / Double Action (CC plays + DC specials)
+ *   - Interact
+ *   - Stun-discard (recover Stun via 1 action)
+ *   - Any future action.
+ *
+ * Skips when condition effects are suppressed (YWNDM-on-Fifth-Brother)
+ * and when Fireproof (Flame Trooper attachment) gates the figure.
+ *
+ * No-op if the figure isn't Bleeding.
+ *
+ * @param {object} game
+ * @param {object} ctx
+ * @param {string} figureKey
+ * @param {number} controllerPlayerNum
+ */
+export async function triggerBleedAfterAction(game, ctx, figureKey, controllerPlayerNum) {
+  if (!figureKey || !controllerPlayerNum) return;
+  const conds = game.figureConditions?.[figureKey] || [];
+  if (!conds.includes('Bleed')) return;
+  // Honor condition-effects-suppressed (YWNDM/Fifth Brother). The
+  // applyStrain pipeline also checks Fireproof internally.
+  if (areConditionEffectsSuppressed(game, figureKey)) return;
+  await applyStrain(game, ctx, {
+    figureKey,
+    controllerPlayerNum,
+    amount: 1,
+    source: 'Bleeding',
+  });
+}
 
 /**
  * Public entry: queue a strain event and start the prompt cascade.

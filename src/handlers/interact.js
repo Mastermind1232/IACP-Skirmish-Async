@@ -2,6 +2,7 @@
  * Interact handlers: interact_cancel_, interact_choice_
  */
 import { getPlayerId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { triggerBleedAfterAction } from './strain-handler.js';
 import { isDcCompanion } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
@@ -174,10 +175,9 @@ export async function handleInteractChoice(interaction, ctx) {
       gameLogMessageId: logMsg?.id,
     });
   }
-  // Bleeding: trigger after Interact action resolves
-  if ((game.figureConditions?.[figureKey] || []).includes('Bleed') && ctx.sendBleedingPrompt) {
-    await ctx.sendBleedingPrompt(game, interaction.channel, figureKey, playerNum, displayName);
-  }
+  // Post-action Bleed strain (Interact resolves): centralized via
+  // triggerBleedAfterAction (destruct 2026-05-07).
+  await triggerBleedAfterAction(game, ctx, figureKey, playerNum);
   // Curious (Loth-cat E/R): after interact, suffer 1 Strain (= 1 HP damage)
   if (ctx.getDcEffects) {
     const _curEff = ctx.getDcEffects()?.[meta.dcName];

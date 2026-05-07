@@ -2,7 +2,7 @@
  * DC Play Area handlers: dc_activate_, dc_unactivate_, dc_toggle_, dc_deplete_, dc_cc_special_, dc_move_/dc_attack_/dc_interact_/dc_special_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
-import { applyStrain } from './strain-handler.js';
+import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -407,6 +407,11 @@ export async function handleDcRemoveStun(interaction, ctx) {
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Stunned**.`, { phase: 'ACTIVATION', icon: 'condition' });
 
   await updateDcActionsMessage(interaction, game, msgId, meta);
+  // Post-action Bleed strain: Stun-discard IS an action, so Bleed strain
+  // fires after it resolves (destruct 2026-05-07). If the figure was
+  // both Stunned AND Bleeding and chose to discard Stun, they still
+  // suffer the Bleed strain afterward.
+  await triggerBleedAfterAction(game, ctx, figureKey, meta.playerNum);
   saveGames(game.gameId);
 }
 
@@ -846,23 +851,13 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       gameLogMessageId: logMsg?.id,
     });
   }
-  // Bleeding: trigger after action-consuming CC plays (Special Action or Double Action).
-  // destruct 2026-05-06: Bleed strain routes through applyStrain so the player
-  // gets the per-strain choice (damage / discard top of deck / Paz return) +
-  // Under Duress pre-prompt to opponent fires regardless of strain source.
-  if ((timingLabel === 'Special Action' || timingLabel === 'Double Action')) {
+  // Post-action Bleed strain (CC plays): centralized via triggerBleedAfterAction.
+  if (timingLabel === 'Special Action' || timingLabel === 'Double Action') {
     const actionsData = game.dcActionsData?.[msgId];
     const selectedFigure = actionsData?.selectedFigure ?? 0;
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
-    if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
-      await applyStrain(game, ctx, {
-        figureKey,
-        controllerPlayerNum: meta.playerNum,
-        amount: 1,
-        source: 'Bleeding',
-      });
-    }
+    await triggerBleedAfterAction(game, ctx, figureKey, meta.playerNum);
   }
   saveGames(game.gameId);
 }
@@ -1555,18 +1550,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         // they are spent." MP are granted by reaching this code path, so
         // strain fires now (before the first cell pick).
       };
-      // Bleed strain: fire immediately on Move action declaration, before any
-      // MP are spent. Routed through applyStrain for the unified per-strain
-      // choice prompt.
-      if ((game.figureConditions?.[figureKey] || []).includes('Bleed')
-          && !areConditionEffectsSuppressed(game, figureKey)) {
-        await applyStrain(game, ctx, {
-          figureKey,
-          controllerPlayerNum: playerNum,
-          amount: 1,
-          source: 'Bleeding',
-        });
-      }
+      // Bleed strain: fire immediately on Move action declaration, before
+      // any MP are spent (slice 9 timing). Routed through the central
+      // triggerBleedAfterAction so all action sites share one code path.
+      await triggerBleedAfterAction(game, ctx, figureKey, playerNum);
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
       const labelMap = {};
@@ -2378,20 +2365,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
     await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
   }
-  // Bleeding: trigger after DC Special action resolves. Routed through
-  // applyStrain (destruct 2026-05-06) for unified strain choice prompt.
+  // Post-action Bleed strain (DC Special resolves): centralized via
+  // triggerBleedAfterAction.
   if (buttonKey === 'dc_special_') {
     const selectedFigure = actionsData?.selectedFigure ?? 0;
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
-    if ((game.figureConditions?.[figureKey] || []).includes('Bleed')) {
-      await applyStrain(game, ctx, {
-        figureKey,
-        controllerPlayerNum: meta.playerNum,
-        amount: 1,
-        source: 'Bleeding',
-      });
-    }
+    await triggerBleedAfterAction(game, ctx, figureKey, meta.playerNum);
   }
   saveGames(game.gameId);
 }
