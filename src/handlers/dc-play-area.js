@@ -157,23 +157,31 @@ export async function handleDcActivate(interaction, ctx) {
       game.forceVisionNextActivation = null;
     }
   }
-  // Force Slow: if any figure of this DC is flagged to skip activation, block it
-  if (game.forceSlowSkipActivation) {
+  // Force Slow: per destruct 2026-05-07, "next activation opportunity" means
+  // the player's NEXT activation click cannot land on the chosen DC. The
+  // restriction is satisfied as soon as the player clicks any OTHER group:
+  //   - Click on chosen group → refuse the click (do NOT consume a slot)
+  //   - Click on a different group → allow + clear all of this player's
+  //     forceSlowSkipActivation flags (the "next" click happened, was not
+  //     the chosen group, restriction discharged)
+  if (game.forceSlowSkipActivation && Object.keys(game.forceSlowSkipActivation).length > 0) {
     const _fsFigPos = game.figurePositions?.[playerNum] || {};
+    let _fsBlockedThisClick = false;
     for (const fk of Object.keys(_fsFigPos)) {
       if (!fk.startsWith(dcName + '-') || !_fsFigPos[fk]) continue;
       if (game.forceSlowSkipActivation[fk]) {
-        delete game.forceSlowSkipActivation[fk];
-        if (Object.keys(game.forceSlowSkipActivation).length === 0) delete game.forceSlowSkipActivation;
-        await interaction.followUp({ content: `🐌 **Force Slow** — **${displayName}** must skip this activation.`, ephemeral: true }).catch(discordCatch);
-        // Mark this DC as exhausted (skip activation counts as its activation)
-        const activatedKey = `p${playerNum}ActivatedDcIndices`;
-        game[activatedKey] = game[activatedKey] || [];
-        if (!game[activatedKey].includes(dcIndex)) game[activatedKey].push(dcIndex);
-        recomputeActivationCounts(game, playerNum);
-        saveGames(game.gameId);
+        _fsBlockedThisClick = true;
+        await interaction.followUp({ content: `🐌 **Force Slow** — **${displayName}** cannot be your next activation. Activate a different group first.`, ephemeral: true }).catch(discordCatch);
         return;
       }
+    }
+    if (!_fsBlockedThisClick) {
+      // First non-chosen activation by this player — clear ALL of their flags
+      let _fsCleared = false;
+      for (const fk of Object.keys(game.forceSlowSkipActivation)) {
+        if (_fsFigPos[fk]) { delete game.forceSlowSkipActivation[fk]; _fsCleared = true; }
+      }
+      if (_fsCleared && Object.keys(game.forceSlowSkipActivation).length === 0) delete game.forceSlowSkipActivation;
     }
   }
   // Companion host defeated: companion cannot activate if its host group has left play (rules: COMPANIONS L919-920)

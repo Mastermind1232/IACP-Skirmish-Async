@@ -2392,13 +2392,17 @@ export function resolveAbility(abilityId, context) {
           // Per CRR + destruct 2026-05-05 "each other figure" excludes the
           // SOURCE (the activating figure). Wrist Flamethrower / Flamethrower /
           // Shock Grenade / Parting Gift / Tauntaun Headbutt all use this rule.
+          // EXCEPTION: Mortar Launcher (AT-RT) — card text says "each figure
+          // on or adjacent" (no "other"); per destruct 2026-05-07 the AT-RT
+          // takes splash too if it picks an adjacent space. Such abilities
+          // set entry.includeSelf=true.
           const _selfAttackerPN = _rollOneDieSelfFigureKey
             ? (Object.entries(game.figurePositions?.[1] || {}).some(([k]) => k === _rollOneDieSelfFigureKey) ? 1 : 2)
             : null;
           for (const pn of [1, 2]) {
             for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
               if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
-              if (_rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
+              if (!entry.includeSelf && _rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               if (dcHealthState && figMsgId) {
                 const fkMatch = fk.match(/-(\d+)-(\d+)$/);

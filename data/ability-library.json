@@ -3168,7 +3168,8 @@
       "rollOneDie": "red",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
-      "freeMoveBonus": 2
+      "freeMoveBonus": 2,
+      "includeSelf": true
     },
     "mounted_dewback": {
       "type": "dcSpecial",
