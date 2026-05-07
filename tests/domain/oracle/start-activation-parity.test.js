@@ -591,7 +591,7 @@ describe('ORACLE-STARTACT-008: Phase 2c extracted effects no longer inline', () 
 // BEHAVIORAL TESTS — Phase 2d: I Make the Rules Now
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-STARTACT-011: I Make the Rules Now is enumerated as a SoA descriptor', () => {
+describe('B-STARTACT-011: IMTRN — fires on ANY non-Cad-Bane activation, grants per friendly HUNTER (destruct 2026-05-07)', () => {
   it('applyStartOfActivationEffects no longer auto-fires IMTRN', async () => {
     const { applyStartOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
@@ -613,7 +613,55 @@ describe('B-STARTACT-011: I Make the Rules Now is enumerated as a SoA descriptor
     assert.strictEqual(game.movementBank['bossk-msg'], undefined);
   });
 
-  it('enumerateActivatorSoaDescriptors returns IMTRN descriptor for friendly HUNTER activation within 4 of Cad Bane', async () => {
+  it('non-HUNTER activator (Stormtrooper) still triggers IMTRN — single descriptor per Cad Bane', async () => {
+    // Per destruct correction (2nd): IMTRN fires on ANY non-Cad-Bane
+    // activation. ONE descriptor per Cad Bane; the sub-prompt asks Cad
+    // Bane's player which HUNTER (within 4) to grant 1 MP to — Cad Bane
+    // himself counts as an eligible HUNTER.
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3', 'Stormtrooper-1-0': 'b2' }, 2: {} },
+      selectedMap: { id: 'mos-eisley-outskirts' },
+      p1DcList: [
+        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
+        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
+        { dcName: 'Bossk', displayName: 'Bossk' },
+      ],
+      p1DcMessageIds: ['st-msg', 'cad-msg', 'bossk-msg'],
+      p2DcList: [],
+      p2DcMessageIds: [],
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
+    });
+    const imrnDescs = descriptors.filter(d => d.subPromptKey === 'imrn');
+    assert.strictEqual(imrnDescs.length, 1, 'exactly ONE IMTRN descriptor per Cad Bane');
+    assert.strictEqual(imrnDescs[0].extras?.cadFigureKey, 'Cad Bane-1-0');
+    assert.strictEqual(imrnDescs[0].ownerPlayerNum, 1);
+    assert.strictEqual(imrnDescs[0].extras?.activatorMsgId, 'st-msg');
+  });
+
+  it('does not enumerate IMTRN when no friendly HUNTER is within 4 of Cad Bane', async () => {
+    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
+    const game = {
+      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Stormtrooper-1-0': 'b2' }, 2: {} },
+      selectedMap: { id: 'mos-eisley-outskirts' },
+      p1DcList: [
+        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
+        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
+      ],
+      p1DcMessageIds: ['st-msg', 'cad-msg'],
+    };
+    const descriptors = enumerateActivatorSoaDescriptors(game, {
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
+    });
+    // Cad Bane himself is HUNTER and within 0 of himself → still eligible.
+    const imrnDescs = descriptors.filter(d => d.subPromptKey === 'imrn');
+    assert.strictEqual(imrnDescs.length, 1,
+      'Cad Bane self-eligibility means descriptor still enumerated');
+  });
+
+  it('does not enumerate IMTRN when Cad Bane himself is activating', async () => {
     const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
       figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' }, 2: {} },
@@ -623,58 +671,6 @@ describe('B-STARTACT-011: I Make the Rules Now is enumerated as a SoA descriptor
         { dcName: 'Bossk', displayName: 'Bossk' },
       ],
       p1DcMessageIds: ['cad-msg', 'bossk-msg'],
-      p2DcList: [],
-      p2DcMessageIds: [],
-    };
-    const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
-    });
-    const imrn = descriptors.find(d => d.subPromptKey === 'imrn');
-    assert.ok(imrn, 'IMTRN descriptor enumerated for Bossk activation');
-    assert.strictEqual(imrn.ownerPlayerNum, 1, 'owner is Cad Bane\'s player');
-    assert.strictEqual(imrn.extras?.granteeMsgId, 'bossk-msg');
-  });
-
-  it('does not enumerate IMTRN beyond 4 spaces from Cad Bane', async () => {
-    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
-    const game = {
-      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a6' }, 2: {} },
-      p1DcList: [
-        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
-        { dcName: 'Bossk', displayName: 'Bossk' },
-      ],
-      p1DcMessageIds: ['cad-msg', 'bossk-msg'],
-    };
-    const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
-    });
-    assert.ok(!descriptors.some(d => d.subPromptKey === 'imrn'),
-      'Bossk at a6 (5 spaces) is out of IMTRN range');
-  });
-
-  it('does not enumerate IMTRN for non-HUNTER activator', async () => {
-    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
-    const game = {
-      figurePositions: { 1: { 'Cad Bane-1-0': 'a1', 'Stormtrooper-1-0': 'a3' }, 2: {} },
-      p1DcList: [
-        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
-        { dcName: 'Stormtrooper', displayName: 'Stormtrooper' },
-      ],
-      p1DcMessageIds: ['cad-msg', 'st-msg'],
-    };
-    const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
-    });
-    assert.ok(!descriptors.some(d => d.subPromptKey === 'imrn'),
-      'Stormtrooper is not HUNTER → no IMTRN');
-  });
-
-  it('does not enumerate IMTRN when Cad Bane himself is activating', async () => {
-    const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
-    const game = {
-      figurePositions: { 1: { 'Cad Bane-1-0': 'a1' }, 2: {} },
-      p1DcList: [{ dcName: 'Cad Bane', displayName: 'Cad Bane' }],
-      p1DcMessageIds: ['cad-msg'],
     };
     const descriptors = enumerateActivatorSoaDescriptors(game, {
       dcName: 'Cad Bane', playerNum: 1, msgId: 'cad-msg',
@@ -684,29 +680,28 @@ describe('B-STARTACT-011: I Make the Rules Now is enumerated as a SoA descriptor
   });
 });
 
-describe('B-STARTACT-012: I Make the Rules Now triggers for either team (destruct 2026-05-07)', () => {
-  it('opponent Cad Bane gets a descriptor when YOUR HUNTER activates within 4', async () => {
+describe('B-STARTACT-012: IMTRN — opponent activation triggers single descriptor for Cad Bane\'s player', () => {
+  it('P1 Stormtrooper activates → P2 Cad Bane gets ONE descriptor (sub-prompt picks the HUNTER)', async () => {
     const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
-    // P2's Cad Bane is at a1; P1's Bossk activates at a4 (3 spaces away).
-    // Per destruct: IMTRN fires on EITHER team's HUNTER activation. P2 gets
-    // the choice of whether to grant their opponent's Bossk +1 MP.
     const game = {
-      figurePositions: { 1: { 'Bossk-1-0': 'a4' }, 2: { 'Cad Bane-1-0': 'a1' } },
+      figurePositions: { 1: { 'Stormtrooper-1-0': 'b2' }, 2: { 'Cad Bane-1-0': 'a1', 'Bossk-1-0': 'a3' } },
       selectedMap: { id: 'mos-eisley-outskirts' },
-      p1DcList: [{ dcName: 'Bossk', displayName: 'Bossk' }],
-      p1DcMessageIds: ['bossk-msg'],
-      p2DcList: [{ dcName: 'Cad Bane', displayName: 'Cad Bane' }],
-      p2DcMessageIds: ['cad-msg-p2'],
+      p1DcList: [{ dcName: 'Stormtrooper', displayName: 'Stormtrooper' }],
+      p1DcMessageIds: ['st-msg'],
+      p2DcList: [
+        { dcName: 'Cad Bane', displayName: 'Cad Bane' },
+        { dcName: 'Bossk', displayName: 'Bossk' },
+      ],
+      p2DcMessageIds: ['cad-msg-p2', 'bossk-msg-p2'],
     };
     const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Bossk', playerNum: 1, msgId: 'bossk-msg',
+      dcName: 'Stormtrooper', playerNum: 1, msgId: 'st-msg',
     });
-    const imrn = descriptors.find(d => d.subPromptKey === 'imrn');
-    assert.ok(imrn, 'IMTRN descriptor enumerated for cross-team Cad Bane');
-    assert.strictEqual(imrn.ownerPlayerNum, 2,
-      'owner is P2 (Cad Bane\'s team), not P1 (activator\'s team)');
-    assert.strictEqual(imrn.extras?.granteeMsgId, 'bossk-msg');
-    assert.strictEqual(imrn.extras?.granteePlayerNum, 1);
+    const imrnDescs = descriptors.filter(d => d.subPromptKey === 'imrn');
+    assert.strictEqual(imrnDescs.length, 1, 'exactly ONE descriptor per Cad Bane (regardless of HUNTER count)');
+    assert.strictEqual(imrnDescs[0].ownerPlayerNum, 2, 'owner is P2 (Cad Bane\'s team)');
+    assert.strictEqual(imrnDescs[0].extras?.cadPlayerNum, 2);
+    assert.strictEqual(imrnDescs[0].extras?.activatorMsgId, 'st-msg');
   });
 });
 

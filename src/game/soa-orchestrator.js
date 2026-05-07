@@ -232,13 +232,15 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
-  // I Make the Rules Now (Cad Bane): per destruct 2026-05-07, fires at
-  // start of ANY HUNTER's activation within 4 spaces of Cad Bane —
-  // FRIENDLY OR ENEMY. Cad Bane's player owns the trigger; granting MP to
-  // an opposing HUNTER is a real strategic choice, so the descriptor must
-  // appear in Cad Bane's player's bucket regardless of activator team.
-  // One descriptor per (Cad Bane × HUNTER) pairing; Cad Bane's own
-  // activation does NOT trigger his own ability.
+  // I Make the Rules Now (Cad Bane): per destruct 2026-05-07 (corrected
+  // twice): Fires at start of ANY OTHER figure's activation (any team,
+  // any trait — Cad Bane's own activation does NOT trigger). Grants 1 MP
+  // to ONE chosen friendly HUNTER (Cad Bane's team) within 4 spaces of
+  // Cad Bane — including Cad Bane himself (he is HUNTER). ONE descriptor
+  // per Cad Bane; the sub-prompt asks Cad Bane's player which HUNTER to
+  // grant. Owner = Cad Bane's player (independent of activator). The
+  // sub-prompt enumerates eligible HUNTERs at fire time so the candidate
+  // list is fresh.
   if (game) {
     for (const cadPn of [1, 2]) {
       const _imrnDcList = getDcList(game, cadPn) || [];
@@ -255,23 +257,29 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         if (!_cadPos) continue;
         const _cadMsgId = _imrnDcMsgIds[_ii];
         if (!_cadMsgId) continue;
-        // Activating DC must have HUNTER keyword (either team).
-        const _actEff = getDcEffects()?.[dcName];
-        const _actKws = (_actEff?.keywords || []).map((k) => String(k).toUpperCase());
-        if (!_actKws.includes('HUNTER')) continue;
-        // Verify activating figure is within 4 spaces of Cad Bane.
-        const _actDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-        const _actFk = `${dcName}-${_actDgIdx}-0`;
-        const _actPos = game.figurePositions?.[playerNum]?.[_actFk];
-        if (!_actPos) continue;
-        if (countGameSpaces(game, _cadPos, _actPos) > 4) continue;
+        // Pre-check: at least one eligible friendly HUNTER must exist
+        // within 4 spaces, otherwise the descriptor never enters the
+        // bucket. The full candidate list is recomputed at fire time.
+        const _friendlyPos = game.figurePositions?.[cadPn] || {};
+        let _anyHunter = false;
+        for (const [_huntFk, _huntPos] of Object.entries(_friendlyPos)) {
+          if (!_huntPos) continue;
+          const _huntDcName = dcNameFromFigureKey(_huntFk);
+          const _huntEff = getDcEffects()?.[_huntDcName];
+          const _huntKws = (_huntEff?.keywords || []).map((k) => String(k).toUpperCase());
+          if (!_huntKws.includes('HUNTER')) continue;
+          if (countGameSpaces(game, _cadPos, _huntPos) > 4) continue;
+          _anyHunter = true;
+          break;
+        }
+        if (!_anyHunter) continue;
         descriptors.push({
           id: `imrn:${_cadMsgId}->${msgId}`,
           ownerPlayerNum: cadPn,
           sourceMsgId: _cadMsgId,
           sourceLabel: 'I Make the Rules Now',
           subPromptKey: 'imrn',
-          extras: { dcName: _cad.dcName, granteeMsgId: msgId, granteeName: dcName, granteePlayerNum: playerNum },
+          extras: { dcName: _cad.dcName, cadFigureKey: _cadFk, cadPlayerNum: cadPn, activatorMsgId: msgId },
         });
       }
     }

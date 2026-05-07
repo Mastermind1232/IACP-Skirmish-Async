@@ -175,14 +175,42 @@ export async function handleSoaPick(interaction, ctx) {
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'imrn') {
-    const granteeName = desc.extras?.granteeName || 'HUNTER';
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel(`Apply (+1 MP to ${granteeName})`).setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    // Recompute eligible HUNTERs at fire time (positions/membership may
+    // have shifted between enumerate and pick). Sub-prompt lists every
+    // friendly HUNTER within 4 of Cad Bane — including Cad Bane himself.
+    const cadPn = desc.extras?.cadPlayerNum;
+    const cadFk = desc.extras?.cadFigureKey;
+    const cadPos = game.figurePositions?.[cadPn]?.[cadFk];
+    const _imrnEligible = [];
+    if (cadPn && cadPos) {
+      const friendlyPos = game.figurePositions?.[cadPn] || {};
+      const dcEff = getDcEffects() || {};
+      for (const [fk, fp] of Object.entries(friendlyPos)) {
+        if (!fp) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = dcEff[fkDcName];
+        const fkKws = (fkEff?.keywords || []).map((k) => String(k).toUpperCase());
+        if (!fkKws.includes('HUNTER')) continue;
+        const { countGameSpaces } = await import('../game/board-helpers.js');
+        if (countGameSpaces(game, cadPos, fp) > 4) continue;
+        _imrnEligible.push(fk);
+      }
+    }
+    if (_imrnEligible.length === 0) {
+      await interaction.followUp({ content: 'No eligible HUNTERs within 4 spaces of Cad Bane.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _imrnEligible.map((fk) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
     );
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
     await interaction.message.channel.send({
-      content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane** may grant **${granteeName}** (HUNTER within 4) **1 MP**:`,
-      components: [row],
+      content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
+      components: rows,
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tac_move') {
     // destruct 2026-05-07: show ALL eligible figures (no cap). Discord
@@ -451,22 +479,51 @@ export async function handleSoaFire(interaction, ctx) {
     }
 
   // --- I Make the Rules Now (Cad Bane) ---
+  // Sub-prompt yields the chosen HUNTER's figureKey (or 'skip'). Grant 1
+  // MP to that HUNTER's bank. If the chosen HUNTER is the activator, the
+  // MP goes into the activation bank normally; if NOT the activator, the
+  // MP must be used immediately via the interrupt-move pattern (same as
+  // Tactical Movement when target ≠ Fenn).
   } else if (desc.subPromptKey === 'imrn') {
-    if (choiceKey === 'apply') {
-      const granteeMsgId = desc.extras?.granteeMsgId;
-      const granteeName = desc.extras?.granteeName || 'HUNTER';
-      if (granteeMsgId) {
-        grantMovementBank(game, granteeMsgId, 1);
-        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — **${granteeName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
-        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${granteeName} +1 MP.`, { phase: 'ROUND', icon: 'card' });
-      } else {
-        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — grantee msgId missing; resolve manually.`, components: [] }).catch(discordCatch);
-      }
-    } else if (choiceKey === 'skip') {
+    if (choiceKey === 'skip') {
       await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
-      await interaction.followUp({ content: `Unknown IMTRN choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
-      return;
+      const targetFk = choiceKey;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const cadPn = desc.extras?.cadPlayerNum;
+      // Find target's msgId on Cad Bane's team.
+      let targetMsgId = null;
+      if (dcMessageMeta && cadPn) {
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== gameId) continue;
+          if (mMeta.dcName === targetDcName && mMeta.playerNum === cadPn) {
+            targetMsgId = mId;
+            break;
+          }
+        }
+      }
+      const activatorMsgId = desc.extras?.activatorMsgId;
+      if (!targetMsgId) {
+        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
+      } else if (targetMsgId === activatorMsgId) {
+        grantMovementBank(game, targetMsgId, 1);
+        await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — **${targetDcName}** gained **1 MP** (added to activation bank).`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${targetDcName} +1 MP.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        grantMovementBank(game, targetMsgId, 1);
+        const _fkMatch = String(targetFk).match(/-(\d+)-(\d+)$/);
+        const _figIdx = _fkMatch ? _fkMatch[2] : '0';
+        const _moveBtn = new ButtonBuilder()
+          .setCustomId(`granted_move_${gameId}_${targetMsgId}_f${_figIdx}`)
+          .setLabel(`Interrupt Move (${targetDcName})`)
+          .setStyle(ButtonStyle.Primary);
+        const _moveRow = new ActionRowBuilder().addComponents(_moveBtn);
+        await interaction.message.edit({
+          content: `\u{1F3AF} **I Make the Rules Now** — **${targetDcName}** gains **1 MP** and must use it immediately. Click below to perform the interrupt move.`,
+          components: [_moveRow],
+        }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${targetDcName} +1 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
+      }
     }
 
   // --- Tactical Movement (Fenn Signis) ---

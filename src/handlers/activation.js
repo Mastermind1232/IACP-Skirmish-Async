@@ -997,79 +997,12 @@ export async function handleActPassive(interaction, ctx) {
   // Remove buttons from message
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  if (ability === 'vigor') {
-    if (choice === 'mp') {
-      grantMovementBank(game, msgId, 2);
-      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
-    } else if (choice === 'block') {
-      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const fk = `${meta.dcName}-${dgIndex}-0`;
-      grantPowerTokens(game, fk, 'Block', 1);
-      await interaction.message.edit({ content: `✨ **Vigor** — **${displayName}** gained **1 Block Token**.`, components: [] }).catch(discordCatch);
-      if (game.pendingPowerTokenOverflow?.length > 0) {
-        await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
-      }
-    }
-  } else if (ability === 'responsive') {
-    if (choice === 'mp') {
-      grantMovementBank(game, msgId, 1);
-      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** gained **1 MP**.`, components: [] }).catch(discordCatch);
-    } else if (choice === 'heal') {
-      healHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
-      await interaction.message.edit({ content: `🏃 **Responsive** — **${displayName}** recovered **1 Damage**.`, components: [] }).catch(discordCatch);
-    }
-  } else if (ability === 'fulcrum') {
-    if (choice === 'use') {
-      const _fParts = [];
-      for (const pn of [1, 2]) {
-        const deckKey = ccDeckKey(pn);
-        const handKey = ccHandKey(pn);
-        const deck = game[deckKey] || [];
-        if (deck.length > 0) {
-          const card = deck.shift();
-          game[handKey] = [...(game[handKey] || []), card];
-          _fParts.push(`P${pn} drew 1 CC`);
-        } else {
-          _fParts.push(`P${pn} deck empty`);
-        }
-      }
-      await interaction.message.edit({ content: `🕵️ **Fulcrum** — Each player draws 1 Command card. (${_fParts.join(', ')})`, components: [] }).catch(discordCatch);
-    } else {
-      await interaction.message.edit({ content: `🕵️ **Fulcrum** — Skipped.`, components: [] }).catch(discordCatch);
-    }
-  } else if (ability === 'hunger') {
-    const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const fk = `${meta.dcName}-${dgIndex}-0`;
-    if (choice === 'block') {
-      grantPowerTokens(game, fk, 'Block', 1);
-      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Block Token**.`, components: [] }).catch(discordCatch);
-    } else if (choice === 'evade') {
-      grantPowerTokens(game, fk, 'Evade', 1);
-      await interaction.message.edit({ content: `🐻 **Hunger** — **${displayName}** gained 3 MP and **1 Evade Token**.`, components: [] }).catch(discordCatch);
-    }
-    if (game.pendingPowerTokenOverflow?.length > 0) {
-      await sendPowerTokenOverflowUI(game, gameId, interaction.channel, meta.playerNum, saveGames);
-    }
-  } else if (ability === 'tacmove') {
-    if (choice === 'skip') {
-      await interaction.message.edit({ content: `🎯 **Tactical Movement** — Skipped.`, components: [] }).catch(discordCatch);
-    } else {
-      // choice is the figureKey of the target
-      const targetFk = choice;
-      const targetDcName = dcNameFromFigureKey(targetFk);
-      // Find the target's msgId to add MP to their movement bank
-      let targetMsgId = null;
-      for (const [mId, mMeta] of dcMessageMeta) {
-        if (mMeta.gameId !== gameId) continue;
-        if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
-          targetMsgId = mId;
-          break;
-        }
-      }
-      grantMovementBank(game, targetMsgId, 2);
-      await interaction.message.edit({ content: `🎯 **Tactical Movement** — **${targetDcName}** gained **2 MP**.`, components: [] }).catch(discordCatch);
-    }
-  } else if (ability === 'awr') {
+  // Slice 5 cleanup (destruct 2026-05-07): vigor / responsive / fulcrum /
+  // hunger / tacmove branches removed — all five abilities now flow through
+  // the SoA orchestrator (soa-handler.js soa_pick_ / soa_fire_ / soa_skip_all_).
+  // The matching `act_passive_*_<vigor|responsive|fulcrum|hunger|tacmove>_*`
+  // buttons are no longer posted by activation-setup.js.
+  if (ability === 'awr') {
     if (choice === 'skip') {
       await interaction.message.edit({ content: `🔬 **Advanced Weapons Research** — Skipped.`, components: [] }).catch(discordCatch);
       delete game.pendingAwr;
