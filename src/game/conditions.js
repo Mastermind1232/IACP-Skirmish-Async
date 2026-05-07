@@ -98,13 +98,37 @@ export function isCannotBeDefeated(game, figureKey, msgId = null) {
   }
   // Second Chance is keyed per msgId.
   if (msgId && game.secondChanceDcMsgId?.[msgId]) return true;
-  // Sustained by Rage (Krrsantan): requires "no activation resolved this round."
-  // The activation-state check is complex (read the figure's DC ability + the
-  // current round's activation history). Existing call sites at
-  // engine/combat-bridge.js:1015+ check it inline; not yet generalized here.
-  // Future: hoist that check into this helper too. For now, callers that need
-  // SbR coverage check independently.
+  // Sustained by Rage (Krrsantan, Maul): "If you have not resolved an
+  // activation this round, you cannot be defeated." Per destruct
+  // 2026-05-07. Hoisted from combat-bridge.js inline check so direct-
+  // damage paths (Bleed end-of-action, Blast splash, mission rules,
+  // self-damage abilities) also honor the protection — not just the
+  // primary attack-resolution path.
+  try {
+    const dcName = dcNameFromFigureKey(figureKey);
+    const eff = dcName ? _getSbrDcEff(dcName) : null;
+    if ((eff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+      const pn = _findFigureOwner(game, figureKey);
+      if (pn) {
+        const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+        const idx = Array.isArray(dcList) ? dcList.findIndex((dc) => dc?.dcName === dcName) : -1;
+        const activatedIdxs = (pn === 1 ? game.p1ActivatedDcIndices : game.p2ActivatedDcIndices) || [];
+        if (idx >= 0 && !activatedIdxs.includes(idx)) return true;
+      }
+    }
+  } catch { /* defensive: fall through to false */ }
   return false;
+}
+
+function _getSbrDcEff(dcName) {
+  return getDcEffects()?.[dcName] || null;
+}
+
+function _findFigureOwner(game, figureKey) {
+  for (const pn of [1, 2]) {
+    if (game.figurePositions?.[pn]?.[figureKey] != null) return pn;
+  }
+  return null;
 }
 
 /**
