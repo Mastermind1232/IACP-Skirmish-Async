@@ -4702,7 +4702,7 @@
       "keywords": [
         "LEADER"
       ],
-      "cost": 8,
+      "cost": 6,
       "health": 10,
       "speed": 4,
       "passives": [

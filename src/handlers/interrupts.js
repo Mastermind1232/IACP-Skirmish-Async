@@ -492,9 +492,13 @@ export async function handleYHSIW(interaction, ctx) {
       // Add to Gideon
       grantPowerTokens(game, gideonFk, token, 1);
     } else {
-      // Condition token: remove from target, apply to Gideon
+      // Condition token: per destruct 2026-05-07, if Gideon already
+      // has the condition the target just loses it (no double-apply).
+      // If Gideon does not have it yet, transfer = target loses it +
+      // Gideon gains it.
       filterCondition(game, targetFk, token);
-      applyCondition(game, gideonFk, token);
+      const _gConds = game.figureConditions?.[gideonFk] || [];
+      if (!_gConds.includes(token)) applyCondition(game, gideonFk, token);
     }
     const targetName = dcNameFromFigureKey(targetFk);
     await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** transfers **${token}** to **Moff Gideon**.`, { phase: 'ROUND', icon: 'card' });
