@@ -2070,7 +2070,8 @@
         "applyCondition": "Weaken",
         "range": 4,
         "requiresLos": true,
-        "splashDamage": 1
+        "splashDamage": 1,
+        "allowFriendly": true
       },
       "wiredStatus": "wired"
     },

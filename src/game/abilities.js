@@ -489,9 +489,16 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.logMessage || `Resolve ${entry.label} manually.` };
     const enemyPlayerNum = opponentPlayerNum(playerNum);
     const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
+    // allowFriendly: per destruct 2026-05-07 some "targetHostileFigure" cards
+    // (Force Lightning) actually allow friendly primary targets too. The
+    // misnomer is preserved for compat — opt-in with allowFriendly=true.
+    const _thfAllowFriendly = !!entry.targetHostileFigure.allowFriendly;
+    const friendlyPositions = _thfAllowFriendly ? (game.figurePositions?.[playerNum] || {}) : {};
     // Second call: apply effect to the chosen figure
     if (choiceIndex != null && targetFigureKey) {
-      const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+      // Resolve target's owner (friendly or enemy) for HP application
+      const _thfTargetOwner = enemyPositions[targetFigureKey] ? enemyPlayerNum : (friendlyPositions[targetFigureKey] ? playerNum : enemyPlayerNum);
+      const targetMsgId = findMsgIdForFigureKey(game, _thfTargetOwner, targetFigureKey, dcMessageMeta);
       const parts = [];
       const totalDmg = damage + strain;
       // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck — auto-
@@ -500,7 +507,7 @@ export function resolveAbility(abilityId, context) {
       if (totalDmg > 0 && dcHealthState && targetMsgId) {
         const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, totalDmg, enemyPlayerNum, {
+        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, totalDmg, _thfTargetOwner, {
           sourceLabel: entry.label || 'Force ability',
           attackerPlayerNum: playerNum,
         });
@@ -603,7 +610,16 @@ export function resolveAbility(abilityId, context) {
       _tgtTokenPositions = mapTokens?.[_thfTgtTokenType + 's'] || [];
     }
     const validTargets = [];
-    for (const [fk, coord] of Object.entries(enemyPositions)) {
+    // Build candidate pool: enemies always; friendlies too when allowFriendly
+    // is set (Force Lightning per destruct 2026-05-07).
+    const _thfCandidates = [...Object.entries(enemyPositions)];
+    if (_thfAllowFriendly) {
+      for (const [fk, coord] of Object.entries(friendlyPositions)) {
+        if (fk === attackerKey) continue; // self-damage from primary not implied by destruct's clarification
+        _thfCandidates.push([fk, coord]);
+      }
+    }
+    for (const [fk, coord] of _thfCandidates) {
       if (!coord) continue;
       if (attackerPos && maxRange < 999) {
         const dist = countGameSpaces(game, attackerPos, coord);
@@ -901,7 +917,10 @@ export function resolveAbility(abilityId, context) {
       }
       return temptResult;
     }
-    // Enumerate all figures (friendly + hostile) within 4 spaces except self
+    // Enumerate all figures (friendly + hostile) within 4 spaces, INCLUDING
+    // Palpatine himself. Per destruct 2026-05-07: "Any figure does not mean
+    // any other than self." Tempt's wording is "a figure of your choice" —
+    // that includes the activating figure.
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
@@ -909,7 +928,7 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const pn of [playerNum, enemyNum]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (fk === activatingKey || !pos) continue;
+        if (!pos) continue;
         if (countGameSpaces(game, activatingPos, pos) > 4) continue;
         validTargets.push(fk);
       }
