@@ -19,7 +19,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
 import { healHp, reduceHp } from '../game/damage-helpers.js';
-import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
+import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand, getDcList } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { applyCondition } from '../game/conditions.js';
 import { getDcEffects, getDcStats, getMapData, getFigureSize } from '../data-loader.js';
@@ -333,6 +333,40 @@ export async function handleSoaPick(interaction, ctx) {
     await interaction.message.channel.send({
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'force_vision') {
+    // Owner is the opponent (Kanan's enemy). List the opponent's
+    // currently-ready groups (recomputed at fire time). Choosing one
+    // sets game.forceVisionNextActivation so the chosen group must be
+    // activated next.
+    const ownerPn = bucket.ownerPlayerNum;
+    const _fvDcList = getDcList(game, ownerPn) || [];
+    const { getActivatedDcIndices } = await import('../game/player-helpers.js');
+    const _fvActivated = getActivatedDcIndices(game, ownerPn) || [];
+    const _fvReady = [];
+    for (let i = 0; i < _fvDcList.length; i++) {
+      if (_fvActivated.includes(i)) continue;
+      const dc = _fvDcList[i];
+      if (!dc?.dcName) continue;
+      const figs = game.figurePositions?.[ownerPn] || {};
+      const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
+      if (!alive) continue;
+      _fvReady.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
+    }
+    if (_fvReady.length === 0) {
+      await interaction.followUp({ content: 'No ready groups to choose.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _fvReady.slice(0, 20).map((rg) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${rg.index}`).setLabel(String(rg.displayName).slice(0, 80)).setStyle(ButtonStyle.Primary)
+    );
+    const rows = [];
+    for (let i = 0; i < buttons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F441}\u{FE0F} **Force Vision** — Choose one of your ready groups; you **must** activate it next, if possible:`,
+      components: rows.slice(0, 5),
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'wisdom') {
     // handleSoaPick draws 1 CC into Yoda's hand, then posts a picker for
@@ -946,6 +980,26 @@ export async function handleSoaFire(interaction, ctx) {
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
       }
     }
+
+  // --- Force Vision (Kanan Jarrus) ---
+  // choiceKey is the chosen DC index in the opponent's dcList. Set
+  // game.forceVisionNextActivation so the lock fires when the opponent
+  // next activates a group.
+  } else if (desc.subPromptKey === 'force_vision') {
+    const dcIndex = parseInt(choiceKey, 10);
+    const _fvDcList = getDcList(game, ownerPlayerNum) || [];
+    const _fvDc = Number.isFinite(dcIndex) ? _fvDcList[dcIndex] : null;
+    if (!_fvDc) {
+      await interaction.followUp({ content: `Invalid Force Vision choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const _fvDispName = _fvDc.displayName || _fvDc.dcName;
+    game.forceVisionNextActivation = { playerNum: ownerPlayerNum, dcName: _fvDc.dcName };
+    await interaction.message.edit({
+      content: `\u{1F441}\u{FE0F} **Force Vision** — **${_fvDispName}** must be activated next by Player ${ownerPlayerNum}, if possible.`,
+      components: [],
+    }).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, `\u{1F441}\u{FE0F} **Force Vision** — ${_fvDispName} forced next for Player ${ownerPlayerNum}.`, { phase: 'ROUND', icon: 'activate' });
 
   // --- Wisdom (Yoda) ---
   // choiceKey is the card index in the unique-hand list (the picker

@@ -611,51 +611,12 @@ export async function finalizeActivation({
   // handleSoaPick draws into hand and posts the return-card picker;
   // handleSoaFire completes the swap.
 
-  // D24. Force Vision (Kanan): opponent chooses ready group, must activate next
-  if (_abilityIds.includes('force_vision_kanan')) {
-    const _fvOppNum = opponentPlayerNum(playerNum);
-    const _fvOppOwnerId = getPlayerId(game, _fvOppNum);
-    const _fvOppDcList = getDcList(game, _fvOppNum) || [];
-    const _fvOppActivated = getActivatedDcIndices(game, _fvOppNum) || [];
-    const _fvReadyGroups = [];
-    for (let i = 0; i < _fvOppDcList.length; i++) {
-      if (_fvOppActivated.includes(i)) continue;
-      const dc = _fvOppDcList[i];
-      const figs = game.figurePositions?.[_fvOppNum] || {};
-      const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
-      if (!alive) continue;
-      _fvReadyGroups.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
-    }
-    if (_fvReadyGroups.length > 0) {
-      game.forceVisionPending = _fvOppNum;
-      const _fvRows = [];
-      const _fvBtns = [];
-      for (const rg of _fvReadyGroups.slice(0, 20)) {
-        _fvBtns.push(
-          new ButtonBuilder()
-            .setCustomId(`fv_pick_${gameId}_${_fvOppNum}_${rg.index}`)
-            .setLabel(truncateLabel(rg.displayName))
-            .setStyle(ButtonStyle.Primary)
-        );
-        if (_fvBtns.length === 5) {
-          _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns.splice(0)));
-        }
-      }
-      if (_fvBtns.length > 0) _fvRows.push(new ActionRowBuilder().addComponents(..._fvBtns));
-      try {
-        const _fvGeneralCh = await fetchGameChannel(client, game.generalId);
-        await _fvGeneralCh.send({
-          content: `👁️ **Force Vision** — <@${_fvOppOwnerId}>, **Kanan Jarrus** is activating! Choose one of your ready groups — you **must** activate it next, if possible:`,
-          components: _fvRows.slice(0, 5),
-          allowedMentions: { users: [_fvOppOwnerId] },
-        });
-      } catch (_fvErr) {
-        console.error('Force Vision prompt error:', _fvErr);
-      }
-    } else {
-      await thread.send({ content: `👁️ **Force Vision** — Opponent has no ready groups to choose from.` }).catch(discordCatch);
-    }
-  }
+  // D24. Force Vision — migrated to SoA orchestrator (destruct
+  // 2026-05-07). Opponent-trigger; descriptor enumerated in
+  // soa-orchestrator.js for the opponent's bucket. handleSoaPick lists
+  // ready groups; handleSoaFire sets forceVisionNextActivation.
+  // forceVisionPending is no longer used; pendingSoaResolution itself
+  // gates the activation flow.
 
   // D25. Arms Distribution (Ko-Tun): distribute 2 power tokens among friendlies within 3
   if (_abilityIds.includes('arms_distribution_kotun')) {

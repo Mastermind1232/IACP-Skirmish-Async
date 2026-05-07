@@ -25,7 +25,7 @@
  * State persists on game.pendingSoaResolution across Discord round-trips.
  */
 
-import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds, ccDeckKey } from './player-helpers.js';
+import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds, ccDeckKey, getActivatedDcIndices } from './player-helpers.js';
 import { getDcEffects, getMapData, getFigureSize } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
@@ -493,6 +493,41 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           extras: { dcName: _cad.dcName, cadFigureKey: _cadFk, cadPlayerNum: cadPn, activatorMsgId: msgId },
         });
       }
+    }
+  }
+
+  // Force Vision (Kanan Jarrus): SoA opponent-trigger. Card text: "At
+  // the start of your activation, your opponent chooses one of their
+  // ready groups. They must activate that group next, if possible."
+  // Owner = opponent (the player making the choice). Enumerates only
+  // when the opponent has at least one ready group with living figures.
+  // The fire path sets game.forceVisionNextActivation which gates the
+  // next activation; pendingSoaResolution itself blocks the activator
+  // from continuing until the opponent picks (no separate
+  // forceVisionPending flag needed).
+  if (_abilityIds.includes('force_vision_kanan') && game) {
+    const _fvOppNum = opponentPlayerNum(playerNum);
+    const _fvOppDcList = getDcList(game, _fvOppNum) || [];
+    const _fvOppActivated = getActivatedDcIndices(game, _fvOppNum) || [];
+    const _fvReadyGroups = [];
+    for (let i = 0; i < _fvOppDcList.length; i++) {
+      if (_fvOppActivated.includes(i)) continue;
+      const dc = _fvOppDcList[i];
+      if (!dc?.dcName) continue;
+      const figs = game.figurePositions?.[_fvOppNum] || {};
+      const alive = Object.entries(figs).some(([fk, pos]) => fk.startsWith(dc.dcName + '-') && pos);
+      if (!alive) continue;
+      _fvReadyGroups.push({ index: i, dcName: dc.dcName, displayName: dc.displayName || dc.dcName });
+    }
+    if (_fvReadyGroups.length > 0) {
+      descriptors.push({
+        id: `force_vision:${msgId}`,
+        ownerPlayerNum: _fvOppNum,
+        sourceMsgId: msgId,
+        sourceLabel: 'Force Vision',
+        subPromptKey: 'force_vision',
+        extras: { dcName, readyGroups: _fvReadyGroups, oppPlayerNum: _fvOppNum },
+      });
     }
   }
 
