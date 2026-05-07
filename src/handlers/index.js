@@ -295,10 +295,11 @@ register('zillo_pierce_use_', handleZilloPierceCancel, 'combat');
 register('zillo_pierce_skip_', handleZilloPierceCancel, 'combat');
 register('demoralizing_reveal_use_', handleDemoralizingMonologueReveal, 'combat');
 register('demoralizing_reveal_skip_', handleDemoralizingMonologueReveal, 'combat');
-register('strain_choice_alldmg_', handleStrainChoice, 'combat');
-register('strain_choice_discard_', handleStrainChoice, 'combat');
-register('ud_deplete_use_', handleUnderDuress, 'combat');
-register('ud_deplete_skip_', handleUnderDuress, 'combat');
+// Legacy strain prompt handlers (strain_choice_alldmg_, strain_choice_discard_,
+// ud_deplete_use_, ud_deplete_skip_) retired in slice 8 of the strain
+// migration (destruct 2026-05-06). All voluntary strain now routes through
+// applyStrain → strain_resolve_*. The legacy functions remain in
+// handlers/combat.js for any in-flight save state but are unreachable.
 
 // --- Activation ---
 register('act_passive_', handleActPassive, 'activation');
