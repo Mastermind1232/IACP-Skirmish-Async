@@ -39,16 +39,16 @@ test('timingToBucket: returns null for un-tracked event timings', () => {
 
 test('mark + isAlreadyPlayed: same player same card same timing → true', () => {
   const game = {};
-  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Take Cover', 'startOfRound'), false);
-  markNamedCcPlayed(game, 1, 'Take Cover', 'startOfRound');
-  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Take Cover', 'startOfRound'), true);
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Fuel Upgrade', 'startOfRound'), false);
+  markNamedCcPlayed(game, 1, 'Fuel Upgrade', 'startOfRound');
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Fuel Upgrade', 'startOfRound'), true);
 });
 
 test('mark: per-player isolation', () => {
   const game = {};
-  markNamedCcPlayed(game, 1, 'Take Cover', 'startOfRound');
+  markNamedCcPlayed(game, 1, 'Fuel Upgrade', 'startOfRound');
   // P2 hasn't played it → still legal
-  assert.equal(isNamedCcAlreadyPlayed(game, 2, 'Take Cover', 'startOfRound'), false);
+  assert.equal(isNamedCcAlreadyPlayed(game, 2, 'Fuel Upgrade', 'startOfRound'), false);
 });
 
 test('mark: per-bucket isolation', () => {
@@ -62,11 +62,11 @@ test('mark: per-bucket isolation', () => {
 
 test('clearNamedCcBucket: resets only the named bucket', () => {
   const game = {};
-  markNamedCcPlayed(game, 1, 'Take Cover', 'startOfRound');
+  markNamedCcPlayed(game, 1, 'Fuel Upgrade', 'startOfRound');
   markNamedCcPlayed(game, 1, 'Brace', 'duringAttack');
   clearNamedCcBucket(game, 'sor');
   // SOR cleared
-  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Take Cover', 'startOfRound'), false);
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Fuel Upgrade', 'startOfRound'), false);
   // attack bucket survives
   assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Brace', 'duringAttack'), true);
 });
@@ -74,10 +74,10 @@ test('clearNamedCcBucket: resets only the named bucket', () => {
 test('Aphra Excavation rule: replay of same-SOR card blocked', () => {
   // Aphra's player plays Take Cover at SOR.
   const game = {};
-  markNamedCcPlayed(game, 1, 'Take Cover', 'startOfRound');
+  markNamedCcPlayed(game, 1, 'Fuel Upgrade', 'startOfRound');
   // Aphra retrieves Take Cover from discard via Excavation.
   // Now the player tries to play Take Cover again this SOR — must reject.
-  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Take Cover', 'startOfRound'), true,
+  assert.equal(isNamedCcAlreadyPlayed(game, 1, 'Fuel Upgrade', 'startOfRound'), true,
     'Aphra cannot replay a card she just played this SOR');
 });
 
