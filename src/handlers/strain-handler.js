@@ -303,11 +303,13 @@ export async function handleStrainUdDeplete(interaction, ctx) {
   const ev = game.pendingStrainEvent;
   const oppPN = ev.originalControllerPN === 1 ? 2 : 1;
   if (!await requirePlayer(interaction, game, interaction.user.id, oppPN, canActAsPlayer, 'Only the UD-controller may deplete.')) return;
-  // Mark UD depleted.
-  game.depletedSkirmishUpgrades = game.depletedSkirmishUpgrades || {};
+  // Mark UD depleted. Under Duress is a standalone Skirmish Upgrade DC, so
+  // its deplete state lives in p[1|2]DepletedDcMessageIds (NOT in the
+  // attachment-deplete map).
   if (ev.udMsgId) {
-    const cur = game.depletedSkirmishUpgrades[ev.udMsgId] || [];
-    if (!cur.includes('Under Duress')) game.depletedSkirmishUpgrades[ev.udMsgId] = [...cur, 'Under Duress'];
+    const depKey = oppPN === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
+    if (!Array.isArray(game[depKey])) game[depKey] = [];
+    if (!game[depKey].includes(ev.udMsgId)) game[depKey].push(ev.udMsgId);
   }
   ev.controllerPN = oppPN;
   ev.costMultiplier = 2;

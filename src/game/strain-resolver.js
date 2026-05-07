@@ -32,7 +32,7 @@
  */
 
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { getCcHand, getCcDiscard, getDcAttachments, ccHandKey, ccDiscardKey } from './player-helpers.js';
+import { getCcHand, getCcDiscard, getDcAttachments, getDcList, getDcMessageIds, ccHandKey, ccDiscardKey } from './player-helpers.js';
 
 export const STRAIN_OPTIONS = Object.freeze({
   TAKE_DAMAGE: 'damage',
@@ -52,20 +52,34 @@ export function pazReturnAvailable(game, playerNum, figureKey) {
 }
 
 /**
- * Returns the array of opponent msgIds whose Under Duress attachment
- * is currently in play and not yet depleted. Empty array means no
- * UD-deplete prompt is needed for this strain event.
+ * Returns the array of opponent msgIds whose Under Duress card is in
+ * the army list and not yet depleted. Empty array means the UD-deplete
+ * prompt does NOT fire for this strain event — destruct 2026-05-06: only
+ * prompt for UD if the opponent has UD in list.
+ *
+ * Under Duress is a standalone Skirmish Upgrade DC (`[Under Duress]`,
+ * attachment: false in dc-effects.json) — NOT an attachment to another
+ * DC. So we scan the opponent's DC list, not attachments.
  */
 export function findUnderDuressDepleters(game, strainedPlayerNum) {
   const opponentPN = strainedPlayerNum === 1 ? 2 : 1;
-  const oppAtts = getDcAttachments(game, opponentPN) || {};
-  const depleted = game.depletedSkirmishUpgrades || {};
+  const dcList = getDcList(game, opponentPN) || [];
+  const msgIds = getDcMessageIds(game, opponentPN) || [];
+  const depletedIds = opponentPN === 1
+    ? (game.p1DepletedDcMessageIds || [])
+    : (game.p2DepletedDcMessageIds || []);
   const out = [];
-  for (const [msgId, atts] of Object.entries(oppAtts)) {
-    if (!Array.isArray(atts)) continue;
-    if (!atts.some((a) => /^under\s*duress$/i.test(String(a)))) continue;
-    const dep = depleted[msgId] || [];
-    if (dep.includes('Under Duress')) continue;
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    // Match `[Under Duress]` (the bracketed standalone-SU form) and any
+    // alias variant case-insensitively. The canonical card key is
+    // `[Under Duress]`.
+    if (!/^\[?\s*under\s*duress\s*\]?$/i.test(String(dcName).trim())) continue;
+    const msgId = msgIds[i];
+    if (!msgId) continue;
+    if (depletedIds.includes(msgId)) continue;
     out.push(msgId);
   }
   return out;

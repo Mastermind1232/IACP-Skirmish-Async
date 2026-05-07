@@ -108,24 +108,42 @@ test('pazReturnAvailable: false for Paz with empty discard', () => {
   assert.equal(pazReturnAvailable(g, 1, 'Paz Vizsla-1-0'), false);
 });
 
-test('findUnderDuressDepleters: empty when no opponent has UD', () => {
+test('findUnderDuressDepleters: empty when opponent army has no UD', () => {
+  const g = makeGame({
+    p2DcList: [{ dcName: 'Stormtrooper' }, { dcName: 'IG-88' }],
+    p2DcMessageIds: ['m1', 'm2'],
+  });
+  assert.deepEqual(findUnderDuressDepleters(g, 1), []);
+});
+
+test('findUnderDuressDepleters: empty if game has no army at all', () => {
   const g = makeGame();
   assert.deepEqual(findUnderDuressDepleters(g, 1), []);
 });
 
-test('findUnderDuressDepleters: returns msgIds with UD attached + not depleted', () => {
+test('findUnderDuressDepleters: returns msgIds where opponent has [Under Duress] in army + not depleted', () => {
   const g = makeGame({
-    p2DcAttachments: { 'm1': ['Under Duress'], 'm2': ['Targeting Computer'] },
-    depletedSkirmishUpgrades: {},
+    p2DcList: [{ dcName: 'Stormtrooper' }, { dcName: '[Under Duress]' }],
+    p2DcMessageIds: ['m1', 'm2'],
+    p2DepletedDcMessageIds: [],
   });
   const out = findUnderDuressDepleters(g, 1);
-  assert.deepEqual(out, ['m1']);
+  assert.deepEqual(out, ['m2']);
 });
 
 test('findUnderDuressDepleters: skips already-depleted UD', () => {
   const g = makeGame({
-    p2DcAttachments: { 'm1': ['Under Duress'] },
-    depletedSkirmishUpgrades: { 'm1': ['Under Duress'] },
+    p2DcList: [{ dcName: '[Under Duress]' }],
+    p2DcMessageIds: ['m1'],
+    p2DepletedDcMessageIds: ['m1'],
   });
   assert.deepEqual(findUnderDuressDepleters(g, 1), []);
+});
+
+test('findUnderDuressDepleters: matches case-insensitively + with/without brackets', () => {
+  const g = makeGame({
+    p2DcList: [{ dcName: 'Under Duress' }],  // unbracketed alias
+    p2DcMessageIds: ['m1'],
+  });
+  assert.deepEqual(findUnderDuressDepleters(g, 1), ['m1']);
 });
