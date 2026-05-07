@@ -352,15 +352,13 @@ export function computeCombatResult(combat) {
     && !combat.defenderCondEffectsSuppressed;
   const defenseDiceCount = combat.defenseDiceCount ?? 1;
   const perDefDieDamage = (combat.bonusDamagePerDefenseDie || 0) * defenseDiceCount;
-  // Hidden on attacker: +1 Damage to attack results.
-  // Per the canonical IACP Hidden condition card: "While attacking,
-  // apply +1 [Damage] to the attack results." (Verified against
-  // vassal_extracted/images/conditions/Condition card--Hidden.jpg.)
-  // CRR p.34 paraphrases this as "+1 while attacking" without naming
-  // the symbol; the card image is authoritative. Audit 2026-05-05.
+  // Hidden on attacker: +1 SURGE to attack results (destruct 2026-05-07
+  // correction — earlier audit misread the canonical card icon as Damage,
+  // but it's the Surge icon. The Surge bonus is applied UPSTREAM in
+  // handlers/combat.js handleCombatSurge alongside Weakened's surge
+  // penalty. computeCombatResult only surfaces the flag here.)
   const attackerHidden = !!combat.attackerConds?.includes('Hide');
-  const hiddenDmgBonus = attackerHidden ? 1 : 0;
-  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage + hiddenDmgBonus - effectiveBlock) : 0;
+  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
   if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
   if (combat.attackResultReplaceWithStun && damage > 0) {
@@ -407,7 +405,7 @@ export function computeCombatResult(combat) {
   if (attackerWeakened) details += ` | **Weakened** (attacker -1 surge)`;
   if (defenderWeakened) details += ` | **Weakened** (defender -1 evade)`;
   if (defenderHidden) details += ` | **Hidden** (defender -2 accuracy)`;
-  if (attackerHidden) details += ` | **Hidden** (attacker +1 damage)`;
+  if (attackerHidden) details += ` | **Hidden** (attacker +1 surge)`;
   if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
   if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly Spin**: Dodge cancelled`;
   let resultText = `${headline}\n${details}`;

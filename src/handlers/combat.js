@@ -5829,7 +5829,13 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const _attackerWeakened = combat.attackerConds?.includes('Weaken')
     && !combat.attackerCondEffectsSuppressed;
   const _weakenSurgePenalty = _attackerWeakened ? 1 : 0;
-  const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty);
+  // Hidden on attacker: +1 to Surge results (destruct 2026-05-07 correction
+  // — earlier audit misread the canonical card icon as Damage; it's Surge).
+  // Skipped if condition effects are suppressed.
+  const _attackerHiddenSurge = combat.attackerConds?.includes('Hide')
+    && !combat.attackerCondEffectsSuppressed;
+  const _hiddenSurgeBonus = _attackerHiddenSurge ? 1 : 0;
+  const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty + _hiddenSurgeBonus);
   const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
   // Overwhelming Impact (destruct 2026-05-06): "OI ignores non-die bonuses."
   // Passive +Evade and round-of-defense +Evade aren't on the rolled die, so
@@ -6130,12 +6136,16 @@ export async function handleCombatSurge(interaction, ctx) {
           await thread.send('**Bargain** — No VP available to spend; ability has no effect.').catch(discordCatch);
         }
       }
-      // Self-condition surges: apply condition to attacker's own figure
+      // Self-condition surges: defer application until AFTER the post-attack
+      // Focus/Hidden discard step (combat-bridge.js:1626-1630). destruct
+      // 2026-05-07: "hidden is discarded, and then reacquired. Technically
+      // the player could choose either order, but the only logical one is
+      // to gain it after discarding." Same logic applies to Focus.
       if (mod.surgeSelfFocus && combat.attackerFigureKey) {
-        applyCondition(game, combat.attackerFigureKey, 'Focus');
+        combat.deferredSurgeFocus = true;
       }
       if (mod.surgeSelfHide && combat.attackerFigureKey) {
-        applyCondition(game, combat.attackerFigureKey, 'Hide');
+        combat.deferredSurgeHide = true;
       }
       // Power token grants to attacker's figurePowerTokens
       if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {

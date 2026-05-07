@@ -1,20 +1,23 @@
 /**
- * CRR-COND-HIDDEN: a Hidden attacker applies +1 Damage to the attack
+ * CRR-COND-HIDDEN: a Hidden attacker applies +1 SURGE to the attack
  * results.
  *
  * Source: canonical IACP Hidden condition card —
  *   "While defending, apply -2 Accuracy to the attack results.
- *    While attacking, apply +1 [Damage] to the attack results.
+ *    While attacking, apply +1 [Surge] to the attack results.
  *    After you resolve an attack, you must discard this condition."
- *   (verified against vassal_extracted/images/conditions/Condition card--Hidden.jpg)
+ *   (verified against vassal_extracted/images/conditions/Condition card--Hidden.jpg
+ *    + destruct 2026-05-07 confirmation: "hidden applies +1 surge, not +1 damage")
  *
- * IACP CRR p.34 paraphrases this as "+1 while attacking" without naming
- * the symbol; the card image is authoritative.
+ * Implementation split (post 2026-05-07 fix):
+ *   - +1 SURGE bonus is applied UPSTREAM in handlers/combat.js
+ *     handleCombatSurge alongside Weakened's surge penalty (rawSurge calc).
+ *   - computeCombatResult only surfaces the flag in resultText for log
+ *     readability; it does NOT modify damage based on Hidden.
  *
- * Pre-fix audit 2026-05-05: handlers/combat.js incorrectly applied +1
- * Surge for Hidden attackers (commented "Hidden on attacker: +1 surge").
- * Fixed by adding +1 Damage in computeCombatResult and removing the
- * wrong +1 Surge line.
+ * Earlier audit (2026-05-05) misread the card's symbol as Damage and
+ * wrongly applied +1 Damage in computeCombatResult; that path was
+ * removed when destruct corrected the canonical reading.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -40,30 +43,27 @@ function makeCombat(overrides = {}) {
   };
 }
 
-describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Damage', () => {
-  it('source — computeCombatResult adds +1 Damage when attacker has Hide', () => {
+describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Surge', () => {
+  it('source — handlers/combat.js applies +1 Surge bonus when attacker has Hide', () => {
+    assert.match(HCOMBAT_SRC,
+      /_attackerHiddenSurge\s*=\s*combat\.attackerConds\?\.includes\(['"]Hide['"]\)/,
+      'handlers/combat.js must derive a Hidden-surge flag from attackerConds.Hide — CRR-COND-HIDDEN');
+    assert.match(HCOMBAT_SRC,
+      /_hiddenSurgeBonus\s*=\s*_attackerHiddenSurge\s*\?\s*1\s*:\s*0/,
+      'handlers/combat.js must compute _hiddenSurgeBonus = 1 when Hide is set — CRR-COND-HIDDEN');
+  });
+
+  it('source — computeCombatResult does NOT apply +1 Damage from Hidden anymore', () => {
     const body = COMBAT_SRC.match(/export function computeCombatResult\([\s\S]*?\n\}/);
     assert.ok(body, 'computeCombatResult body locatable');
-    assert.match(body[0], /attackerConds\?\.includes\(['"]Hide['"]\)/,
-      'must check attackerConds for Hide — CRR-COND-HIDDEN');
-    assert.match(body[0], /hiddenDmgBonus/,
-      'must apply hiddenDmgBonus into damage calc — CRR-COND-HIDDEN');
+    assert.doesNotMatch(body[0], /hiddenDmgBonus\s*=\s*attackerHidden/,
+      'computeCombatResult must not derive hiddenDmgBonus from attackerHidden — that was the wrong reading; Hidden is +1 surge upstream now');
   });
 
-  it('source — handlers/combat.js no longer treats Hidden attacker as a +1 Surge bonus (was wrong)', () => {
-    // The pre-fix code had `// Hidden on attacker: +1 surge` followed by
-    // `const hiddenSurgeBonus = combat.attackerConds?.includes('Hide') ? 1 : 0;`
-    // which was a misread of the CRR paraphrase. The card grants +1
-    // Damage, not +1 Surge — pinned removed here.
-    assert.doesNotMatch(HCOMBAT_SRC,
-      /Hidden on attacker: \+1 surge/,
-      'handlers/combat.js must not say "Hidden on attacker: +1 surge" — that interpretation is wrong per the canonical Hidden card');
-    assert.doesNotMatch(HCOMBAT_SRC,
-      /const hiddenSurgeBonus = combat\.attackerConds\?\.includes\(['"]Hide['"]\)/,
-      'handlers/combat.js must not derive hiddenSurgeBonus from attackerConds.Hide — CRR-COND-HIDDEN');
-  });
-
-  it('behavior — Hidden attacker hitting for 2 dmg deals 3 (2 + 1 Hidden bonus)', () => {
+  it('behavior — Hidden attacker hitting for 2 dmg (no surge interaction) deals 2 (no Damage bonus from Hidden)', () => {
+    // computeCombatResult is the pure-compute layer. Hidden's surge bonus
+    // is upstream of this — when called directly without surge-spend
+    // routing, Hidden doesn't change the damage formula.
     const c = makeCombat({
       attackRoll: { acc: 5, dmg: 2, surge: 0 },
       defenseRoll: { block: 0, evade: 0, dodge: false },
@@ -71,7 +71,7 @@ describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Damage', () => {
     });
     const r = computeCombatResult(c);
     assert.equal(r.hit, true, 'must hit (no dodge, no accuracy issue)');
-    assert.equal(r.damage, 3, '2 attack dmg + 1 Hidden bonus = 3 damage');
+    assert.equal(r.damage, 2, 'computeCombatResult does not add +1 from Hidden directly — surge bonus is upstream');
   });
 
   it('behavior — non-Hidden attacker hitting for 2 dmg deals 2 (no bonus)', () => {
@@ -84,32 +84,22 @@ describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Damage', () => {
     assert.equal(r.damage, 2, 'no Hidden = no bonus');
   });
 
-  it('behavior — Hidden bonus stacks BEFORE block (block can still reduce 3 → 1)', () => {
+  it('behavior — Hidden attacker pre-applied surgeDamage routes through normal block reduction (3 → 1)', () => {
+    // Simulates the upstream-applied Hidden surge bonus having already
+    // been spent on +1 damage via the surge-spend path (surgeDamage=1).
+    // Damage calc: dmg(2) + surgeD(1) - block(2) = 1.
     const c = makeCombat({
       attackRoll: { acc: 5, dmg: 2, surge: 0 },
       defenseRoll: { block: 2, evade: 0, dodge: false },
+      surgeDamage: 1,
       attackerConds: ['Hide'],
     });
     const r = computeCombatResult(c);
     assert.equal(r.hit, true);
-    assert.equal(r.damage, 1, '2 + 1 Hidden = 3, minus 2 block = 1');
+    assert.equal(r.damage, 1, 'pre-applied surge-damage from Hidden bonus survives block reduction');
   });
 
-  it('behavior — Hidden + Weakened attacker: Hidden adds +1 dmg; Weakened reduces SURGE upstream (no longer touches damage)', () => {
-    // 2026-05-07 update: Weakened reduces SURGE (canonical card), not
-    // damage. computeCombatResult only applies the Hidden +1 damage.
-    // The Weaken-on-surge penalty lives in handlers/combat.js's
-    // handleCombatSurge — it doesn't affect this pure compute.
-    const c = makeCombat({
-      attackRoll: { acc: 5, dmg: 2, surge: 0 },
-      defenseRoll: { block: 0, evade: 0, dodge: false },
-      attackerConds: ['Hide', 'Weaken'],
-    });
-    const r = computeCombatResult(c);
-    assert.equal(r.damage, 3, 'Hidden +1 damage applies; Weaken does not subtract here (it would have subtracted 1 surge upstream).');
-  });
-
-  it('behavior — miss (no accuracy) → Hidden bonus does not produce damage', () => {
+  it('behavior — miss (no accuracy) → Hidden does not produce damage', () => {
     const c = makeCombat({
       attackRoll: { acc: 0, dmg: 2, surge: 0 },
       defenseRoll: { block: 0, evade: 0, dodge: false },
@@ -118,7 +108,7 @@ describe('CRR-COND-HIDDEN: Hidden attacker applies +1 Damage', () => {
       distanceToTarget: 3,
     });
     const r = computeCombatResult(c);
-    assert.equal(r.hit, false, 'miss on accuracy');
-    assert.equal(r.damage, 0, 'miss → 0 damage even with Hidden bonus');
+    assert.equal(r.hit, false);
+    assert.equal(r.damage, 0);
   });
 });

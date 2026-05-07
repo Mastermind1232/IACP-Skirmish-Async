@@ -1620,7 +1620,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
     healHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.surgeRecover || 0, combat.attackerPlayerNum);
   }
-  // Discard consumed conditions post-combat
+  // Discard consumed conditions post-combat. Then re-apply any conditions
+  // granted via surge: focus / surge: hide AFTER the discard, per destruct
+  // 2026-05-07 ("hidden is discarded, and then reacquired"). Same logic
+  // applies to Focus.
   if (combat.attackerFigureKey) {
     const _hadFocus = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Focus');
     filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
@@ -1628,6 +1631,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const _atkHidden = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Hide');
     filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
     if (_atkHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.attackerDcName}** \u2014 resolved an attack.`, { phase: 'ROUND', icon: 'attack' });
+    // Re-apply deferred surge conditions AFTER the discard (so the figure
+    // ends the attack with the surge-granted condition rather than having
+    // it stripped by the unconditional discard).
+    if (combat.deferredSurgeFocus) {
+      _applyCondition(game, combat.attackerFigureKey, 'Focus');
+      await logGameAction(game, client, `\u{1F3AF} **Focus** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      combat.deferredSurgeFocus = false;
+    }
+    if (combat.deferredSurgeHide) {
+      _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      combat.deferredSurgeHide = false;
+    }
   }
   if (combat.target?.figureKey) {
     const _defHidden = (game.figureConditions?.[combat.target.figureKey] || []).includes('Hide');
