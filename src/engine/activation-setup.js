@@ -863,45 +863,11 @@ export async function finalizeActivation({
 
   // D38. I Make the Rules Now — now handled by applyStartOfActivationEffects()
 
-  // D39. Calming Presence (Yoda): when friendly REBEL activates, remove 1 harmful condition
-  if (playerNum) {
-    const _cpDcList = getDcList(game, playerNum) || [];
-    for (const dc of _cpDcList) {
-      if (!dc?.dcName) continue;
-      const eff = getDcEffects()?.[dc.dcName];
-      if (!(eff?.specialAbilityIds || []).includes('calming_presence_yoda')) continue;
-      if (dc.dcName === dcName) continue;
-      const activatingEff = getDcEffects()?.[dcName];
-      if (activatingEff?.affiliation !== 'Rebel') continue;
-      const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const figures = activatingEff?.figures ?? 1;
-      const _cpHarmfulEntries = [];
-      for (let fi = 0; fi < figures; fi++) {
-        const fk = `${dcName}-${dgIdx}-${fi}`;
-        const conds = game.figureConditions?.[fk] || [];
-        const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));
-        for (const h of harmful) {
-          _cpHarmfulEntries.push({ fk, condition: h, figIndex: fi });
-        }
-      }
-      if (_cpHarmfulEntries.length > 0) {
-        const seen = new Set();
-        const unique = _cpHarmfulEntries.filter(e => {
-          const key = `${e.fk}_${e.condition}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        const btns = unique.slice(0, 4).map(({ fk, condition }) => {
-          const label = figures > 1 ? `${dcNameFromFigureKey(fk)}: ${condition}` : condition;
-          return new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_calmpres_${fk}_${condition}`).setLabel(label).setStyle(ButtonStyle.Primary);
-        });
-        btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_calmpres_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🧘 **Calming Presence** (Yoda) — **${dcName}** is a REBEL figure. Remove 1 harmful condition (the activating figure suffers 1 Strain):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-      }
-      break;
-    }
-  }
+  // D39. Calming Presence — migrated to SoA orchestrator (destruct
+  // 2026-05-07). Owner = Yoda's player (the activator's team).
+  // Trigger fires at the activating figure's start, NOT Yoda's. Max 1
+  // HARMFUL condition discarded; activating figure suffers 1 Strain.
+  // Descriptor in soa-orchestrator.js enumerateActivatorSoaDescriptors.
 
   // D40. Unshakable: migrated to SoA orchestrator (slice 6 — destruct
   // 2026-05-07). Friendly-only trigger; descriptor in activator's

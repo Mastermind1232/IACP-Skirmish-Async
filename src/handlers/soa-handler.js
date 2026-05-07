@@ -334,6 +334,45 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'calming_presence') {
+    // Recompute pairs at fire time so positions/conditions are fresh.
+    const ownerPn = bucket.ownerPlayerNum;
+    const actDcName = desc.extras?.dcName;
+    const actEff = getDcEffects()?.[actDcName];
+    const meta2 = dcMessageMeta?.get(desc.sourceMsgId);
+    const dgIdx2 = (meta2?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const figures = actEff?.figures ?? 1;
+    const pairs = [];
+    for (let fi = 0; fi < figures; fi++) {
+      const fk = `${actDcName}-${dgIdx2}-${fi}`;
+      const conds = game.figureConditions?.[fk] || [];
+      for (const c of conds) {
+        if (!['Stun', 'Bleed', 'Weaken'].includes(c)) continue;
+        if (c === 'Weaken' && game.disarmPermanentWeakened?.[fk]) continue;
+        pairs.push({ fk, condition: c });
+      }
+    }
+    const seen = new Set();
+    const unique = pairs.filter((p) => {
+      const k = `${p.fk}|${p.condition}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (unique.length === 0) {
+      await interaction.followUp({ content: 'No harmful conditions on activator figures.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = unique.slice(0, 4).map(({ fk, condition }) => {
+      const label = (figures > 1) ? `${dcNameFromFigureKey(fk)}: ${condition}` : condition;
+      return new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${condition}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Primary);
+    });
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const cpRow = new ActionRowBuilder().addComponents(buttons);
+    await interaction.message.channel.send({
+      content: `\u{1F9D8} **Calming Presence** (Yoda) — **${displayName}** is a REBEL figure. Remove 1 HARMFUL condition (the activating figure suffers 1 Strain):`,
+      components: [cpRow],
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'long_laid_plans') {
     // Multi-step: handleSoaPick posts the FIRST figure×type prompt;
     // handleSoaFire grants 1 token and re-prompts with reduced types
@@ -1031,6 +1070,43 @@ export async function handleSoaFire(interaction, ctx) {
           components: [_moveRow],
         }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
+
+  // --- Calming Presence (Yoda) ---
+  // choiceKey is `${fk}|${condition}` or 'skip'. Remove the chosen
+  // condition; activating figure suffers 1 Strain through applyStrain
+  // (player-choice subroutine for Under Duress / Fireproof / Headhunter
+  // interactions).
+  } else if (desc.subPromptKey === 'calming_presence') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F9D8} **Calming Presence** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const _cpSplit = choiceKey.indexOf('|');
+      if (_cpSplit < 0) {
+        await interaction.followUp({ content: `Malformed Calming Presence choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetFk = choiceKey.slice(0, _cpSplit);
+      const condName = choiceKey.slice(_cpSplit + 1);
+      const conds = game.figureConditions?.[targetFk] || [];
+      if (!conds.includes(condName)) {
+        await interaction.message.edit({ content: `\u{1F9D8} **Calming Presence** — **${dcNameFromFigureKey(targetFk)}** no longer has ${condName}.`, components: [] }).catch(discordCatch);
+      } else {
+        const { filterCondition } = await import('../game/conditions.js');
+        filterCondition(game, targetFk, condName);
+        const targetDcName = dcNameFromFigureKey(targetFk);
+        await interaction.message.edit({ content: `\u{1F9D8} **Calming Presence** — Removed **${condName}** from **${targetDcName}**. **${displayName}** suffers **1 Strain**...`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F9D8} **Calming Presence** — Removed ${condName} from ${targetDcName}; ${displayName} suffered 1 Strain.`, { phase: 'ROUND', icon: 'condition' });
+        // Strain on activating figure (lead figure of the activation).
+        const actLeadFk = `${desc.extras?.dcName}-${(meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1'}-0`;
+        const { applyStrain } = await import('./strain-handler.js');
+        await applyStrain(game, ctx, {
+          figureKey: actLeadFk,
+          controllerPlayerNum: ownerPlayerNum,
+          amount: 1,
+          source: 'Calming Presence',
+        });
       }
     }
 

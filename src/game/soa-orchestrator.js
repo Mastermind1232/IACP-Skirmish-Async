@@ -496,6 +496,55 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Calming Presence (Yoda): SoA player-driven trigger fired at the
+  // start of a friendly REBEL's activation (NOT Yoda's own activation).
+  // Owner = Yoda's player (= activator's player, since Yoda must be a
+  // teammate). Per destruct 2026-05-07: max 1 harmful condition is
+  // discarded from the activating figure(s); the activating figure
+  // suffers 1 Strain. Trigger only enumerates if Yoda is on the team
+  // and at least one HARMFUL condition exists on activator's figures.
+  if (game) {
+    const _cpDcList = getDcList(game, playerNum) || [];
+    const _cpYoda = _cpDcList.find((dc) => {
+      if (!dc?.dcName || dc.dcName === dcName) return false;
+      const eff = getDcEffects()?.[dc.dcName];
+      return (eff?.specialAbilityIds || []).includes('calming_presence_yoda');
+    });
+    const _cpActEff = getDcEffects()?.[dcName];
+    if (_cpYoda && _cpActEff?.affiliation === 'Rebel') {
+      const dgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const figures = _cpActEff?.figures ?? 1;
+      const _cpPairs = [];
+      for (let fi = 0; fi < figures; fi++) {
+        const fk = `${dcName}-${dgIdx}-${fi}`;
+        const conds = game.figureConditions?.[fk] || [];
+        for (const c of conds) {
+          if (!['Stun', 'Bleed', 'Weaken'].includes(c)) continue;
+          if (c === 'Weaken' && game.disarmPermanentWeakened?.[fk]) continue;
+          _cpPairs.push({ fk, condition: c, figIndex: fi });
+        }
+      }
+      // Dedup so a duplicated condition doesn't appear twice.
+      const _cpSeen = new Set();
+      const _cpUnique = _cpPairs.filter((p) => {
+        const k = `${p.fk}|${p.condition}`;
+        if (_cpSeen.has(k)) return false;
+        _cpSeen.add(k);
+        return true;
+      });
+      if (_cpUnique.length > 0) {
+        descriptors.push({
+          id: `calming_presence:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Calming Presence',
+          subPromptKey: 'calming_presence',
+          extras: { dcName, yodaDcName: _cpYoda.dcName, harmfulPairs: _cpUnique, multiFigure: figures > 1 },
+        });
+      }
+    }
+  }
+
   // Long-Laid Plans (Thrawn): SoA player-driven trigger. Per destruct
   // 2026-05-07: distribute N DIFFERENT power tokens (max 1 of each
   // type) among friendly figures within 3 of Thrawn, where N = current
