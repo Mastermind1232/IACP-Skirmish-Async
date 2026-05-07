@@ -24,6 +24,8 @@ import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { applyCondition } from '../game/conditions.js';
 import { getDcEffects, getDcStats, getMapData, getFigureSize } from '../data-loader.js';
 import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
+import { updateDcCardMessage } from '../engine/message-updaters.js';
+import { getDcMessageIds } from '../game/player-helpers.js';
 
 /**
  * Re-post the bucket's chooser prompt after a trigger fires (or none yet
@@ -331,6 +333,46 @@ export async function handleSoaPick(interaction, ctx) {
     await interaction.message.channel.send({
       content: `\u{1F3AF} **I Make the Rules Now** — **Cad Bane**: choose a friendly HUNTER within 4 to gain **1 MP** (must be used immediately if not the activator):`,
       components: rows,
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'trust_both_ways') {
+    const ownerPn = bucket.ownerPlayerNum;
+    const selfFk = desc.extras?.selfFigureKey;
+    const selfPos = game.figurePositions?.[ownerPn]?.[selfFk];
+    const { countGameSpaces } = await import('../game/board-helpers.js');
+    const _tgbwAdj = selfPos ? Object.entries(game.figurePositions?.[ownerPn] || {})
+      .filter(([fk, fp]) => fk !== selfFk && fp && countGameSpaces(game, selfPos, fp) <= 1)
+      .map(([fk]) => fk) : [];
+    if (_tgbwAdj.length === 0) {
+      await interaction.followUp({ content: 'No adjacent friendly figures.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _tgbwAdj.slice(0, 4).map((fk) =>
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary)
+    );
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const row = new ActionRowBuilder().addComponents(buttons);
+    await interaction.message.channel.send({
+      content: `\u{1F91D} **Trust Goes Both Ways** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'imperial_citadel') {
+    const _icTokens = game.imperialCitadelTokens || {};
+    const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
+    if (_icAvailable.length === 0) {
+      await interaction.followUp({ content: 'No tokens available at the Imperial Citadel.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const buttons = _icAvailable.slice(0, 4).map(([type, count]) =>
+      new ButtonBuilder()
+        .setCustomId(`soa_fire_${gameId}_${desc.id}_${type}`)
+        .setLabel(`${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`)
+        .setStyle(ButtonStyle.Primary)
+    );
+    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const row = new ActionRowBuilder().addComponents(buttons);
+    await interaction.message.channel.send({
+      content: `\u{1F3F0} **Imperial Citadel** — **${displayName}** may gain 1 Power Token from the Citadel:`,
+      components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tac_move') {
     // destruct 2026-05-07: show ALL eligible figures (no cap). Discord
@@ -871,6 +913,74 @@ export async function handleSoaFire(interaction, ctx) {
           components: [_moveRow],
         }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
+      }
+    }
+
+  // --- Trust Goes Both Ways (Jyn Erso) ---
+  // Recover 1 Damage on Jyn + chosen friendly. Grant 1 Surge Token to
+  // both. Mark once-per-round.
+  } else if (desc.subPromptKey === 'trust_both_ways') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F91D} **Trust Goes Both Ways** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choiceKey;
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      const { figureIndex: targetFigIdx } = parseFigureKey(targetFk);
+      const selfFk = desc.extras?.selfFigureKey;
+      let targetMsgId = null;
+      if (dcMessageMeta) {
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== gameId) continue;
+          if (mMeta.dcName === targetDcName && mMeta.playerNum === ownerPlayerNum) {
+            targetMsgId = mId;
+            break;
+          }
+        }
+      }
+      let selfHeal = { healed: 0 };
+      let targetHeal = { healed: 0 };
+      if (dcHealthState) {
+        selfHeal = healHp(dcHealthState, game, desc.sourceMsgId, 0, 1, ownerPlayerNum);
+        if (targetMsgId) targetHeal = healHp(dcHealthState, game, targetMsgId, targetFigIdx, 1, ownerPlayerNum);
+      }
+      if (selfFk) grantPowerTokens(game, selfFk, 'Surge', 1);
+      grantPowerTokens(game, targetFk, 'Surge', 1);
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`trustBothWays_${desc.sourceMsgId}`] = true;
+      const parts = [];
+      if (selfHeal.healed > 0) parts.push(`**${displayName}** recovered 1 Damage`);
+      if (targetHeal.healed > 0) parts.push(`**${targetDcName}** recovered 1 Damage`);
+      parts.push(`both gained **1 Surge Token**`);
+      await interaction.message.edit({ content: `\u{1F91D} **Trust Goes Both Ways** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F91D} **Trust Goes Both Ways** — ${parts.join('; ')}.`, { phase: 'ROUND', icon: 'card' });
+    }
+
+  // --- Imperial Citadel (I47) ---
+  // Decrement Citadel pool by 1 of chosen type, grant Power Token to
+  // activator's lead figure, refresh the Citadel DC embed to show new
+  // count.
+  } else if (desc.subPromptKey === 'imperial_citadel') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3F0} **Imperial Citadel** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const tokenType = choiceKey;
+      const _icTokens = game.imperialCitadelTokens || {};
+      if ((_icTokens[tokenType] || 0) > 0) {
+        _icTokens[tokenType]--;
+        game.imperialCitadelTokens = _icTokens;
+        const _icCap = tokenType.charAt(0).toUpperCase() + tokenType.slice(1);
+        grantPowerTokens(game, selfFigKey, _icCap, 1);
+        await interaction.message.edit({ content: `\u{1F3F0} **Imperial Citadel** — **${displayName}** gained **1 ${_icCap} Token**.`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F3F0} **Imperial Citadel** — ${displayName} gained 1 ${_icCap} Token.`, { phase: 'ROUND', icon: 'card' });
+        // Refresh the Citadel DC embed so token counts update on screen.
+        const _icDcListR = getDcList(game, ownerPlayerNum) || [];
+        const _icMsgIdsR = getDcMessageIds(game, ownerPlayerNum) || [];
+        const _icIdxR = _icDcListR.findIndex((dc) => dc?.dcName === '[Imperial Citadel]');
+        if (_icIdxR >= 0 && _icMsgIdsR[_icIdxR]) {
+          await updateDcCardMessage(client, game, _icMsgIdsR[_icIdxR], ctx, { errorContext: 'Failed to refresh Imperial Citadel embed:' });
+        }
+      } else {
+        await interaction.message.edit({ content: `\u{1F3F0} **Imperial Citadel** — No ${tokenType} tokens remaining.`, components: [] }).catch(discordCatch);
       }
     }
 

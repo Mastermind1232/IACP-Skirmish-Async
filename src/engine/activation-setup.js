@@ -698,28 +698,10 @@ export async function finalizeActivation({
     }
   }
 
-  // D26. Trust Goes Both Ways (Jyn Erso)
-  if (_abilityIds.includes('trust_goes_both_ways_jyn')) {
-    const _tgbwRoundKey = `trustBothWays_${msgId}`;
-    if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {
-      const _tgbwDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const _tgbwSelfFk = `${dcName}-${_tgbwDgIndex}-0`;
-      const _tgbwSelfPos = game.figurePositions?.[playerNum]?.[_tgbwSelfFk];
-      const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[playerNum] || {})
-        .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
-      if (_tgbwFriendlies.length > 0) {
-        const _tgbw2Slice = _tgbwFriendlies.slice(0, 4);
-        const _tgbw2Labels = figureChoiceLabels(_tgbw2Slice.map(([fk]) => fk));
-        const btns = _tgbw2Slice.map(([fk], i) =>
-          new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_trustboth_${fk}`).setLabel(_tgbw2Labels[i]).setStyle(ButtonStyle.Primary)
-        );
-        btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🤝 **Trust Goes Both Ways** — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-      } else {
-        await thread.send({ content: `🤝 **Trust Goes Both Ways** — No adjacent friendly figures.` }).catch(discordCatch);
-      }
-    }
-  }
+  // D26. Trust Goes Both Ways — migrated to SoA orchestrator (destruct
+  // 2026-05-07). Descriptor enumerated in soa-orchestrator.js
+  // enumerateActivatorSoaDescriptors when adjacent friendly exists and
+  // ability has not yet been used this round.
 
   // D27. Dead Precise (Ko-Tun)
   if (_abilityIds.includes('dead_precise_kotun')) {
@@ -965,31 +947,10 @@ export async function finalizeActivation({
     }
   }
 
-  // D37. Imperial Citadel (I47): friendly Imperial may gain 1 Power Token
-  {
-    const _icAtkEff = getDcEffects()?.[dcName];
-    if (_icAtkEff?.affiliation === 'Imperial') {
-      if (dcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
-        const _icTokens = game.imperialCitadelTokens || {};
-        const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
-        if (_icAvailable.length > 0) {
-          const _icBtns = _icAvailable.slice(0, 4).map(([type, count]) => {
-            const label = `${type.charAt(0).toUpperCase() + type.slice(1)} (${count})`;
-            return new ButtonBuilder()
-              .setCustomId(`act_passive_${gameId}_${msgId}_citadel_token_${type}`)
-              .setLabel(label)
-              .setStyle(ButtonStyle.Primary);
-          });
-          _icBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_citadel_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await logGameAction(game, client, `🏰 **Imperial Citadel** — <@${ownerId}>, **${displayName}** may gain 1 Power Token from the Citadel:`, {
-            phase: 'ACTIVATION', icon: 'card',
-            components: [new ActionRowBuilder().addComponents(_icBtns)],
-            allowedMentions: { users: [ownerId] },
-          });
-        }
-      }
-    }
-  }
+  // D37. Imperial Citadel — migrated to SoA orchestrator (destruct
+  // 2026-05-07). Descriptor enumerated in soa-orchestrator.js
+  // enumerateActivatorSoaDescriptors when activator is Imperial AND
+  // its team owns [Imperial Citadel] AND tokens > 0.
 
   // D38. I Make the Rules Now — now handled by applyStartOfActivationEffects()
 

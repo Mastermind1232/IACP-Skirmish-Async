@@ -496,6 +496,57 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Trust Goes Both Ways (Jyn Erso): SoA player-driven trigger. Pick an
+  // adjacent friendly figure; both Jyn and the chosen figure recover 1
+  // Damage and gain 1 Surge Token. Once per round per Jyn.
+  if (_abilityIds.includes('trust_goes_both_ways_jyn') && game) {
+    const _tgbwUsed = game.roundFigureAbilityUsed?.[`trustBothWays_${msgId}`];
+    if (!_tgbwUsed) {
+      const _tgbwDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _tgbwSelfFk = `${dcName}-${_tgbwDgIdx}-0`;
+      const _tgbwSelfPos = game.figurePositions?.[playerNum]?.[_tgbwSelfFk];
+      if (_tgbwSelfPos) {
+        const _tgbwAdj = Object.entries(game.figurePositions?.[playerNum] || {})
+          .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1);
+        if (_tgbwAdj.length > 0) {
+          descriptors.push({
+            id: `trust_both_ways:${msgId}`,
+            ownerPlayerNum: playerNum,
+            sourceMsgId: msgId,
+            sourceLabel: 'Trust Goes Both Ways',
+            subPromptKey: 'trust_both_ways',
+            extras: { dcName, selfFigureKey: _tgbwSelfFk },
+          });
+        }
+      }
+    }
+  }
+
+  // Imperial Citadel (I47 mission deploy): activator is Imperial AND
+  // activator's team owns the Citadel and the Citadel pool has at least
+  // one Power Token. Per destruct 2026-05-07: SoA player-driven trigger.
+  // Owner = activating player. Sub-prompt picks which token type to take.
+  if (game) {
+    const _icAtkEff = getDcEffects()?.[dcName];
+    if (_icAtkEff?.affiliation === 'Imperial') {
+      const _icDcList = getDcList(game, playerNum) || [];
+      if (_icDcList.some((dc) => dc?.dcName === '[Imperial Citadel]')) {
+        const _icTokens = game.imperialCitadelTokens || {};
+        const _icAvailable = Object.entries(_icTokens).filter(([, count]) => count > 0);
+        if (_icAvailable.length > 0) {
+          descriptors.push({
+            id: `imperial_citadel:${msgId}`,
+            ownerPlayerNum: playerNum,
+            sourceMsgId: msgId,
+            sourceLabel: 'Imperial Citadel',
+            subPromptKey: 'imperial_citadel',
+            extras: { dcName },
+          });
+        }
+      }
+    }
+  }
+
   // Tactical Movement (Fenn Signis): pick a friendly figure within 3 → that
   // figure gains 2 MP. Trigger only enters the bucket when at least one
   // eligible friendly exists.
