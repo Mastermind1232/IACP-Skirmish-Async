@@ -47,6 +47,10 @@ async function _sendPrivateReactionPrompt(client, game, playerNum, count, contex
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getLoadoutCards as _getLoadoutCardsImpl } from '../data-loader.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
+import {
+  enqueueAttackerStep8Effects as _enqueueAttackerStep8Effects,
+  postPostResolveWindow as _postPostResolveWindow,
+} from '../handlers/after-attack-resolve.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
@@ -1746,11 +1750,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   } else if (damage > 0) {
     await logGameAction(game, client, `<@${ownerId}> dealt **${damage}** damage to **${combat.target.label}**`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   }
-  // Recover keyword: heal attacker even if attack dealt 0 damage (rules: RECOVER)
+  // Recover keyword (CRR step 8) — destruct 2026-05-08: every step-8
+  // effect prompts the attacker via the post-resolve window rather
+  // than firing automatically. Sustained by Rage blocks own Recover —
+  // gate that here BEFORE enqueueing so the button doesn't appear
+  // for blocked figures. The button is rendered + fired by
+  // src/handlers/after-attack-resolve.js.
   const _sbrBlockRecover = getDcEffects()?.[combat.attackerDcName]?.specialAbilityIds?.includes('sustained_by_rage');
-  if (combat.surgeRecover > 0 && combat.attackerMsgId != null && !_sbrBlockRecover) {
-    healHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.surgeRecover || 0, combat.attackerPlayerNum);
-  }
+  if (_sbrBlockRecover) combat.surgeRecover = 0;
+  // Stash step-7 hit/damage on combat so enqueueAttackerStep8Effects
+  // can gate keyword effects (Blast, Cleave, Recover) consistently.
+  combat._step7Hit = hit;
+  combat._step7Damage = damage;
   // Discard consumed conditions post-combat. Then re-apply any conditions
   // granted via surge: focus / surge: hide AFTER the discard, per destruct
   // 2026-05-07 ("hidden is discarded, and then reacquired"). Same logic
@@ -2400,8 +2411,22 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       return;
     }
   }
-  const fkTriggered = await _checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum);
-  if (!fkTriggered) await _finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, client);
+  // destruct 2026-05-08: post-resolve unified window.
+  // After all step-7 damage applies and any per-DC inline applies have
+  // run (those are still inline pending follow-up commits to migrate),
+  // enqueue the step-8 keyword effects + post the attacker window.
+  // Each click fires one effect; Done finishes; defender window opens
+  // next; defender Done runs the legacy combat-close path below.
+  _enqueueAttackerStep8Effects(combat);
+  const _aaCtx = {
+    ...deps,
+    client,
+    afterAttackClose: async (_t, _g, _c) => {
+      const fkTriggered = await _checkPostCombatSurges(_g, _c, resultText, embedRefreshMsgIds, _t, ownerId, defenderPlayerNum);
+      if (!fkTriggered) await _finishCombatResolution(_g, _c, resultText, embedRefreshMsgIds, client);
+    },
+  };
+  await _postPostResolveWindow(thread, game, combat, 'attacker', _aaCtx);
 }
 
 /**

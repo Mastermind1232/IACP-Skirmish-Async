@@ -26,6 +26,7 @@ import {
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleUnhingedStrainAbsorb, handleDbhPickDie } from './combat.js';
+import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
   handleMapSelection,
@@ -269,6 +270,9 @@ register('cover_fire_discard_', handleCoverFireDiscard, 'combat');
 register('guidance_systems_', handleGuidanceSystems, 'combat');
 register('combat_resolve_ready_', handleCombatResolveReady, 'combat');
 register('combat_gate_', handleCombatGateReady, 'combat');
+register('aar_fire_', handleAarFire, 'postCombat');
+register('aar_done_atk_', handleAarDone, 'postCombat');
+register('aar_done_def_', handleAarDone, 'postCombat');
 register('combat_ready_', handleCombatReady, 'combat');
 register('combat_roll_', handleCombatRoll, 'combat');
 register('dbh_pick_die_', handleDbhPickDie, 'combat');
