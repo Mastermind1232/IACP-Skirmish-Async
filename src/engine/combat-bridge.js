@@ -1543,16 +1543,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         await checkWinConditions(game, client);
-        // Celebration: after unique hostile defeated, offer attacker a chance to play it
-        const defeatedDcName = idx >= 0 ? dcList[idx]?.dcName : null;
-        if (isDcUnique(defeatedDcName)) {
-          setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
-          await thread.send(sanitizeMentions({
-            content: `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`,
-            components: [getCelebrationButtons(game.gameId)],
-            allowedMentions: { users: [ownerId] },
-          })).catch(discordCatch);
-        }
+        // Celebration auto-prompt — now handled by WHEN_DEFEATED hook
+        // (damage-pipeline-hooks.js). Hook fires from any defeat source.
         // Auto-prompt for defeat-triggered reaction cards
         try {
           const ccCards = getCcEffectsData?.()?.cards || {};
@@ -1658,15 +1650,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 .catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
             }
           }
-          // Celebration: prompt if unique figure defeated via Blast
-          if (!game.pendingCelebration && isDcUnique(blastDcName)) {
-            setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
-            await thread.send(sanitizeMentions({
-              content: `<@${ownerId}> — You defeated a unique figure (Blast). Play **Celebration** to gain 4 VP?`,
-              components: [getCelebrationButtons(game.gameId)],
-              allowedMentions: { users: [ownerId] },
-            })).catch(discordCatch);
-          }
+          // Celebration auto-prompt for Blast defeats — now handled by
+          // WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         }
       }
       // Wave 3: Blast also damages adjacent crates (objects)

@@ -44,6 +44,8 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
+import { isDcUnique } from '../data-loader.js';
+import { setPendingCelebration } from './interrupts.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -218,6 +220,47 @@ WHEN_DEFEATED_HOOKS.push({
 });
 
 // Useful Hide registered below alongside Into the Force (player-pick).
+
+/**
+ * Celebration (Command Card auto-prompt): when a unique hostile is
+ * defeated, post a "Play Celebration / Pass" button row in the combat
+ * thread. Player can also play the card from hand normally; the hook's
+ * job is the auto-prompt only. Falls back to no-op when ctx lacks a
+ * thread (non-combat defeats — Bleed end-of-action, etc — still notify
+ * via the CC-play timing window in hand channels).
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'celebration_auto_prompt',
+  probe: (game, opts) => {
+    if (!opts.figureKey) return false;
+    if (!opts.attackerPlayerNum) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    return !!isDcUnique(dcName);
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return;
+    const ownerId = game[`player${opts.attackerPlayerNum}Id`];
+    setPendingCelebration(game, {
+      attackerPlayerNum: opts.attackerPlayerNum,
+      combatThreadId: opts.combat?.combatThreadId ?? thread?.id,
+    });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`celebration_play_${game.gameId}`).setLabel('Play Celebration (+4 VP)').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`celebration_pass_${game.gameId}`).setLabel('Pass').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`
+        : `Unique figure defeated. Play **Celebration** to gain 4 VP?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+  },
+});
 
 /**
  * Brutal Tactics (Saw Gerrera passive): once per round, when a hostile
