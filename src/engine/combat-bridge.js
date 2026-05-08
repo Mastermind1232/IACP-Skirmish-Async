@@ -1334,28 +1334,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // Last Stand — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         // Nefarious Gains — now handled by processFigureDefeat
-        // Imperial Citadel: when a friendly Imperial figure is defeated, transfer its Power Tokens to the Citadel card
-        {
-          const _icDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-          const _icDefEff = getDcEffects()?.[_icDefDcName];
-          if (_icDefEff?.affiliation === 'Imperial') {
-            const _icDcList = getDcList(game, defenderPlayerNum) || [];
-            if (_icDcList.some(dc => dc.dcName === '[Imperial Citadel]')) {
-              const _icTokens = game.figurePowerTokens?.[combat.target.figureKey] || [];
-              if (_icTokens.length > 0) {
-                game.imperialCitadelTokens = game.imperialCitadelTokens || { damage: 0, block: 0, hit: 0, surge: 0, evade: 0 };
-                for (const t of _icTokens) {
-                  const tLower = String(t).toLowerCase();
-                  game.imperialCitadelTokens[tLower] = (game.imperialCitadelTokens[tLower] || 0) + 1;
-                }
-                const _icCount = _icTokens.length;
-                delete game.figurePowerTokens[combat.target.figureKey];
-                await logGameAction(game, client, `**Imperial Citadel** — ${_icCount} Power Token${_icCount !== 1 ? 's' : ''} transferred from defeated **${_icDefDcName}** to the Citadel.`, { phase: 'ROUND', icon: 'card' });
-              }
-            }
-          }
-        }
         // Hunt Dissent — now handled by processFigureDefeat
+        // Imperial Citadel — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
+        // This is the Way (Armorer) — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Into the Force — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Vengeance / Forward Vengeance Focus — now handled by WHEN_DEFEATED
         // hook (damage-pipeline-hooks.js). The Forward-Vengeance Elite-only
@@ -1392,17 +1373,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                   }).catch(() => {});
                 } catch {}
               }
-            }
-          }
-        }
-        // This is the Way (The Armorer): when attacker defeats defender, attacker gains 1 Block Token
-        // Per destruct 2026-05-07: skip when noFriendliesActive (Lure / False Orders).
-        if (!combat.noFriendliesActive) {
-          const _armorerOnBoard = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('The Armorer-'));
-          if (_armorerOnBoard) {
-            const _armorerGranted = grantPowerTokens(game, combat.attackerFigureKey, 'Block', 1, 2);
-            if (_armorerGranted > 0) {
-              await logGameAction(game, client, `\u{1F6E1}\uFE0F **This is the Way** — **${combat.attackerDcName}** gains 1 **Block Token** (defeated hostile).`, { phase: 'ROUND', icon: 'card' });
             }
           }
         }

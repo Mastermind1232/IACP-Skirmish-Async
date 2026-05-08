@@ -66,8 +66,11 @@ test('Fury of Kashyyyk Pierce skipped when noFriendliesActive', () => {
 // ── This is the Way (Armorer) ─────────────────────────────────────────────
 
 test('This is the Way (Armorer) skipped when noFriendliesActive', () => {
-  const src = readSrc('src/engine/combat-bridge.js');
-  assert.match(src, /This is the Way[\s\S]{0,400}!combat\.noFriendliesActive/,
+  // 2026-05-08 migration: This is the Way moved from inline combat-bridge.js
+  // to a WHEN_DEFEATED hook in damage-pipeline-hooks.js. The noFriendliesActive
+  // gate now lives on the hook's probe.
+  const src = readSrc('src/game/damage-pipeline-hooks.js');
+  assert.match(src, /this_is_the_way_armorer[\s\S]{0,500}noFriendliesActive/,
     'Armorer Block-Token grant gated by noFriendliesActive');
 });
 

@@ -656,6 +656,76 @@ WHEN_DEFEATED_HOOKS.push({
 });
 
 /**
+ * Imperial Citadel (skirmish upgrade): when a friendly Imperial figure
+ * is defeated, transfer its Power Tokens to the Citadel card. Auto-
+ * applied. Source-agnostic.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'imperial_citadel',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    if (eff?.affiliation !== 'Imperial') return false;
+    const dcList = getDcList(game, opts.controllerPlayerNum) || [];
+    return dcList.some(dc => dc.dcName === '[Imperial Citadel]');
+  },
+  apply: (game, opts, ctx) => {
+    const tokens = game.figurePowerTokens?.[opts.figureKey] || [];
+    if (tokens.length === 0) return;
+    game.imperialCitadelTokens = game.imperialCitadelTokens || { damage: 0, block: 0, hit: 0, surge: 0, evade: 0 };
+    for (const t of tokens) {
+      const tLower = String(t).toLowerCase();
+      game.imperialCitadelTokens[tLower] = (game.imperialCitadelTokens[tLower] || 0) + 1;
+    }
+    const count = tokens.length;
+    delete game.figurePowerTokens[opts.figureKey];
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      const dcName = dcNameFromFigureKey(opts.figureKey);
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `**Imperial Citadel** — ${count} Power Token${count !== 1 ? 's' : ''} transferred from defeated **${dcName}** to the Citadel.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
+ * This is the Way (The Armorer): when attacker defeats a hostile,
+ * attacker gains 1 Block Token. Auto-applied; needs an Armorer on
+ * the attacker's board. Skipped when noFriendliesActive (Lure /
+ * False Orders) per destruct 2026-05-07. Source-agnostic in theory
+ * but `combat.attackerFigureKey` is required to grant the token —
+ * non-combat defeats with no specific attacker figure (Bleed) won't
+ * trigger.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'this_is_the_way_armorer',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.attackerPlayerNum) return false;
+    if (!opts.combat?.attackerFigureKey) return false;
+    if (opts.combat?.noFriendliesActive) return false;
+    return Object.keys(game.figurePositions?.[opts.attackerPlayerNum] || {})
+      .some(fk => fk.startsWith('The Armorer-'));
+  },
+  apply: (game, opts, ctx) => {
+    const granted = grantPowerTokens(game, opts.combat.attackerFigureKey, 'Block', 1, 2);
+    if (granted > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `🛡️ **This is the Way** — **${opts.combat.attackerDcName}** gains 1 **Block Token** (defeated hostile).`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
  * Brutal Tactics (Saw Gerrera passive): once per round, when a hostile
  * figure is defeated, choose **one** hostile within 3 spaces — that
  * figure becomes Weakened. Player-pick prompt: posts a button row to
