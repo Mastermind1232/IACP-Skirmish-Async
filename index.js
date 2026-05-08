@@ -4415,6 +4415,72 @@ client.on('interactionCreate', async (interaction) => {
       const dist2 = getRange(String(krykna2.coord).toLowerCase(), targetRaw2);
       if (dist2 === 0) { await interaction.reply({ content: `Krykna stays at ${String(krykna2.coord).toUpperCase()} — no change.`, ephemeral: true }).catch(discordCatch); return; }
       if (dist2 === null || dist2 > 3) { await interaction.reply({ content: `❌ ${targetRaw2.toUpperCase()} is ${dist2 ?? '?'} spaces away (max 3). Try again.`, ephemeral: true }).catch(discordCatch); return; }
+      // Per destruct 2026-05-07: krykna push MUST end adjacent to the
+      // most non-Krykna figures possible. If multiple candidate
+      // destinations tie at the max, or zero candidates have any
+      // adjacent non-Krykna figure, the player may choose freely
+      // among the tied/all candidates.
+      try {
+        const _kpMapId2 = game2.selectedMap?.id;
+        const _kpRawMs2 = _kpMapId2 ? getMapData(_kpMapId2) : null;
+        const _kpMapDef2 = _kpRawMs2 ? getMapRegistry()?.find?.((m) => m.id === _kpMapId2) : null;
+        const _kpMs2 = _kpRawMs2 ? (filterMapSpacesByBounds?.(_kpRawMs2, _kpMapDef2?.gridBounds) || _kpRawMs2) : null;
+        const _kpAdj2 = _kpMs2?.adjacency || {};
+        if (_kpMs2 && _kpAdj2) {
+          // BFS from krykna's current coord, depth = 3
+          const _kpStart = String(krykna2.coord).toLowerCase();
+          const _kpVisited = new Set([_kpStart]);
+          let _kpFrontier = [_kpStart];
+          for (let _d = 0; _d < 3; _d++) {
+            const _kpNext = [];
+            for (const _c of _kpFrontier) {
+              for (const _n of (_kpAdj2[_c] || [])) {
+                const _nn = String(_n).toLowerCase();
+                if (_kpVisited.has(_nn)) continue;
+                _kpVisited.add(_nn);
+                _kpNext.push(_nn);
+              }
+            }
+            _kpFrontier = _kpNext;
+          }
+          _kpVisited.delete(_kpStart);
+          // Hostile (= non-Krykna) figure coords: all player figures.
+          const _kpHostileCoords = new Set();
+          for (const _pn of [1, 2]) {
+            for (const _fp of Object.values(game2.figurePositions?.[_pn] || {})) {
+              if (_fp) _kpHostileCoords.add(String(_fp).toLowerCase());
+            }
+          }
+          // Don't push onto a hostile or another krykna.
+          const _kpKryknaCoords = new Set((game2.npcKrykna || [])
+            .filter((k) => !k.defeated && k.id !== kryknaId2)
+            .map((k) => String(k.coord).toLowerCase()));
+          // Score each candidate by adjacent-non-krykna-figure count.
+          const _kpCands = [];
+          for (const _coord of _kpVisited) {
+            if (_kpHostileCoords.has(_coord)) continue;
+            if (_kpKryknaCoords.has(_coord)) continue;
+            let _adjN = 0;
+            for (const _n of (_kpAdj2[_coord] || [])) {
+              if (_kpHostileCoords.has(String(_n).toLowerCase())) _adjN++;
+            }
+            _kpCands.push({ coord: _coord, adjN: _adjN });
+          }
+          if (_kpCands.length > 0) {
+            const _maxAdj = Math.max(..._kpCands.map((c) => c.adjN));
+            const _legal = _maxAdj > 0
+              ? new Set(_kpCands.filter((c) => c.adjN === _maxAdj).map((c) => c.coord))
+              : new Set(_kpCands.map((c) => c.coord));
+            if (!_legal.has(targetRaw2)) {
+              const _hint = _maxAdj > 0
+                ? `must end adjacent to **${_maxAdj}** non-Krykna figure${_maxAdj !== 1 ? 's' : ''}; legal: ${[..._legal].map((c) => c.toUpperCase()).slice(0, 12).join(', ')}${_legal.size > 12 ? '…' : ''}`
+                : `no destination reaches any non-Krykna figure — choose any space within 3`;
+              await interaction.reply({ content: `❌ Krykna push rule: ${_hint}`, ephemeral: true }).catch(discordCatch);
+              return;
+            }
+          }
+        }
+      } catch (_kpErr) { /* fail-open if validation infra unavailable */ }
       await interaction.deferReply({ ephemeral: true }).catch(discordCatch);
       const oldCoord2 = String(krykna2.coord).toUpperCase();
       krykna2.coord = targetRaw2;
