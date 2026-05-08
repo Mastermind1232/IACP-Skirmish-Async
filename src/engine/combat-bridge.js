@@ -79,7 +79,7 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
   if (msgId) {
     // destruct 2026-05-08: route through centralized damage pipeline.
     const { newHp, wasDefeated } = await _applyDamage(game, {
-      dcHealthState, logGameAction, client,
+      dcHealthState, logGameAction, client, deps,
     }, {
       figureKey,
       msgId,
@@ -135,6 +135,7 @@ export async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, 
     dcHealthState,
     logGameAction: deps.logGameAction,
     client,
+    deps,
   }, {
     figureKey: figKey,
     msgId,
@@ -603,7 +604,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _cbMsgId = findDcMessageIdForFigure(game.gameId, _cbPn, _cbFk);
           if (!_cbMsgId) continue;
           const { figureIndex: _cbFigIdx } = parseFigureKey(_cbFk);
-          const { newHp: _cbNewHp, wasDefeated: _cbDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          const { newHp: _cbNewHp, wasDefeated: _cbDied } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
             figureKey: _cbFk, msgId: _cbMsgId, figIndex: _cbFigIdx,
             amount: _crateBlastAmt, controllerPlayerNum: _cbPn,
             attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -716,7 +717,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // before-defeated, and when-defeated hooks fire here uniformly
       // with Blast/Cleave/strain/NPC damage paths.
       const _mdResult = await _applyDamage(game, {
-        dcHealthState, logGameAction, client,
+        dcHealthState, logGameAction, client, deps, thread,
       }, {
         figureKey: combat.target.figureKey,
         msgId: targetMsgId,
@@ -851,7 +852,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           // Strain = 1 direct HP damage. destruct 2026-05-08: route
           // through centralized damage pipeline (when-damaged hooks
           // fire here too).
-          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
             figureKey: combat.target.figureKey,
             msgId: targetMsgId,
             figIndex: targetFigIndex,
@@ -1090,7 +1091,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _fdDiceCount = combat.attackDiceResults?.length || 0;
             if (_fdDiceCount > 0 && combat.attackerMsgId) {
               const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
-              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
                 figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _fdAtkFigIdx,
                 amount: _fdDiceCount, controllerPlayerNum: attackerPlayerNum, source: 'Force Deflection', combat,
               });
@@ -1136,7 +1137,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             if (!hasFigureLineOfSight(_dfPathFp, _dfAtkFp, _dfMapSp, null)) continue;
             // Deal 1 Damage to the attacker
             const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
-            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
               figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _dfAtkFigIdx,
               amount: 1, controllerPlayerNum: attackerPlayerNum, source: 'Distracting Fire', combat,
             });
@@ -1582,7 +1583,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
         figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: combat.attackerFigureIndex ?? 0,
         amount: combat.superchargeStrainAfterAttackCount || 0, controllerPlayerNum: combat.attackerPlayerNum,
         source: 'Supercharge', viaStrain: true, combat,
@@ -1613,7 +1614,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
         if (!blastMsgId) continue;
         const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
-        const { newHp: newBCur, wasDefeated: blastDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        const { newHp: newBCur, wasDefeated: blastDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
           figureKey: blastFigureKey, msgId: blastMsgId, figIndex: blastFigIndex,
           amount: effectiveBlast, controllerPlayerNum: blastPlayerNum,
           attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1809,7 +1810,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (_drEntry) {
         const [_drCur] = _drEntry;
         if (_drCur === 1) {
-          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
             figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
             amount: 1, controllerPlayerNum: defenderPlayerNum,
             attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1881,7 +1882,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const { dgIndex: _epDgIdx, figureIndex: _epFigIdx } = parseFigureKey(fk);
             const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
             if (_epMsgId) {
-              await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
                 figureKey: fk, msgId: _epMsgId, figIndex: _epFigIdx,
                 amount: 1, controllerPlayerNum: pNum,
                 attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1900,7 +1901,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     if (_lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) {
       const _qsModified = combat.defenderRerolledOrModified;
       if (_qsModified) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
           figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
           amount: 1, controllerPlayerNum: defenderPlayerNum,
           attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1949,7 +1950,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
               const _abFigIdx = parseFigureKey(_abFk2).figureIndex;
-              await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
                 figureKey: _abFk2, msgId: _abMsgId, figIndex: _abFigIdx,
                 amount: _abHits, controllerPlayerNum: defenderPlayerNum,
                 attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -2042,7 +2043,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       } else {
         const _ftHsBefore = dcHealthState.get(targetMsgId);
         if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
-            const { newHp: _ftNew, wasDefeated: _ftDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            const { newHp: _ftNew, wasDefeated: _ftDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
               figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
               amount: 1, controllerPlayerNum: defenderPlayerNum,
               attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -2082,7 +2083,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const { figureIndex: _ftBlastFigIdx } = parseFigureKey(_ftBlastFk);
         const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
         if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
-        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
           figureKey: _ftBlastFk, msgId: _ftBlastMsgId, figIndex: _ftBlastFigIdx,
           amount: 1, controllerPlayerNum: _ftBlastPn,
           attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -2169,7 +2170,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _sdaPrevHs = dcHealthState.get(_sdaMsgId);
       if (_sdaPrevHs?.[_sdaFigIdx]) {
         const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
-        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
           figureKey: _sdaFigKey, msgId: _sdaMsgId, figIndex: _sdaFigIdx,
           amount: _sdaMaxHp, controllerPlayerNum: attackerPlayerNum,
           source: 'Self-Defeat', combat,
@@ -2194,7 +2195,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (hit && targetMsgId) {
     // Harass: defender suffers N Strain after a non-miss
     if ((combat.surgeHarass || 0) > 0) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
         figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
         amount: combat.surgeHarass, controllerPlayerNum: defenderPlayerNum,
         attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -2208,7 +2209,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const supRoll = combat.defenseRoll || {};
       const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
       if (supAmt > 0) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
           figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
           amount: supAmt, controllerPlayerNum: defenderPlayerNum,
           attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -2286,7 +2287,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const attMsgId = combat.attackerMsgId;
     const attFigIdx = combat.attackerFigureIndex ?? 0;
     if (attMsgId) {
-      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
         figureKey: combat.attackerFigureKey, msgId: attMsgId, figIndex: attFigIdx,
         amount: deflectDmg, controllerPlayerNum: attackerPlayerNum,
         source: 'Deflection', combat,
@@ -2760,7 +2761,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const lureMsgId = findDcMessageIdForFigure(game.gameId, lurePn, lureFk);
     if (lureMsgId) {
       const { figureIndex: lureFi } = parseFigureKey(lureFk);
-      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
         figureKey: lureFk, msgId: lureMsgId, figIndex: lureFi,
         amount: combat.lurePostAttackStrain, controllerPlayerNum: lurePn,
         source: 'Lure of the Dark Side', viaStrain: true, combat,
@@ -3013,7 +3014,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         const _dflTgtMsgId = findDcMessageIdForFigure(game.gameId, _dflTgt.playerNum, _dflTgt.figureKey);
         if (_dflTgtMsgId) {
           const { figureIndex: _dflFigIdx } = parseFigureKey(_dflTgt.figureKey);
-          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
             figureKey: _dflTgt.figureKey, msgId: _dflTgtMsgId, figIndex: _dflFigIdx,
             amount: 1, controllerPlayerNum: _dflTgt.playerNum,
             source: 'Deflect (Luke)', combat,

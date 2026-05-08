@@ -127,6 +127,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   INTERROGATE:           'interrogate',
   HUNTER_PROTOCOL:       'hunter-protocol',
   EXECUTOR_INTERRUPT:    'executor-interrupt',
+  DEFEAT_PICK:           'defeat-pick',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -553,6 +554,22 @@ export function clearPendingHunterProtocol(game) { _clearDual(game, 'pendingHunt
 
 export function setPendingExecutorInterrupt(game, payload) { _setDual(game, 'pendingExecutorInterrupt', INTERRUPT_TYPES.EXECUTOR_INTERRUPT, payload); }
 export function clearPendingExecutorInterrupt(game) { _clearDual(game, 'pendingExecutorInterrupt', INTERRUPT_TYPES.EXECUTOR_INTERRUPT); }
+/**
+ * pendingDefeatPick: player-pick prompt for "when defeated" abilities
+ * with player-choose semantics (Into the Force focus target, Useful
+ * Hide evade-token recipient, Brutal Tactics weaken target).
+ *
+ * Payload shape: {
+ *   gameId, kind: 'itf'|'uh'|'bt',
+ *   choosingPlayerNum: int,             // who clicks the buttons
+ *   defeatedFigureKey: string,
+ *   options: [{ figureKey, label }],    // eligible targets
+ *   remaining?: int,                    // for "distribute N" (Useful Hide)
+ *   alreadyPicked?: string[],           // already-chosen figureKeys
+ * }
+ */
+export function setPendingDefeatPick(game, payload) { _setDual(game, 'pendingDefeatPick', INTERRUPT_TYPES.DEFEAT_PICK, payload); }
+export function clearPendingDefeatPick(game) { _clearDual(game, 'pendingDefeatPick', INTERRUPT_TYPES.DEFEAT_PICK); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }

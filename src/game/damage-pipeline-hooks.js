@@ -217,64 +217,25 @@ WHEN_DEFEATED_HOOKS.push({
   },
 });
 
-/**
- * Useful Hide (Tauntaun Rider): when defeated, distribute up to 2
- * Evade Tokens among friendly figures within 3 spaces. Auto-picks
- * the first 2 eligible friendlies today; player-pick UI is a future
- * enhancement.
- */
-WHEN_DEFEATED_HOOKS.push({
-  id: 'useful_hide_tauntaun',
-  sync: true,
-  probe: (game, opts) => {
-    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
-    if (!opts.defeatedPos) return false;
-    return dcNameFromFigureKey(opts.figureKey) === 'Tauntaun Rider';
-  },
-  apply: (game, opts, ctx) => {
-    const friendly = Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})
-      .filter(([k, pos]) => k !== opts.figureKey && pos && countGameSpaces(game, opts.defeatedPos, pos) <= 3)
-      .map(([k]) => k);
-    if (friendly.length === 0) return;
-    let granted = 0;
-    const recipients = [];
-    for (let i = 0; i < Math.min(2, friendly.length); i++) {
-      const target = friendly[i];
-      const count = grantPowerTokens(game, target, 'Evade', 1, 2);
-      if (count > 0) {
-        granted += count;
-        recipients.push(dcNameFromFigureKey(target));
-      }
-    }
-    if (granted > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
-      ctx.logGameAction(
-        game,
-        ctx.client,
-        `🎭 **Useful Hide** — **Tauntaun Rider** was defeated. Distributed ${granted} **Evade Token${granted !== 1 ? 's' : ''}** to ${recipients.join(', ')}.`,
-        { phase: 'ROUND', icon: 'card' },
-      ).catch(() => {});
-    }
-  },
-});
+// Useful Hide registered below alongside Into the Force (player-pick).
 
 /**
  * Brutal Tactics (Saw Gerrera passive): once per round, when a hostile
- * figure is defeated, choose hostiles within 3 spaces of the defeated
- * figure's space — those become Weakened. Auto-applied today; "choose"
- * picker is a future enhancement. Position read from `opts.defeatedPos`
- * (saved by pipeline before reduceHp removes the figure).
+ * figure is defeated, choose **one** hostile within 3 spaces — that
+ * figure becomes Weakened. Player-pick prompt: posts a button row to
+ * combat thread. Hook is async because it dispatches the prompt; only
+ * fires when ctx carries deps + thread.
  *
  * Trigger side: the player WITH Saw on the board, when an opposing
- * figure dies. Pipeline gives us opts.controllerPlayerNum (defeated
- * figure's owner); Saw lives on the OTHER side.
+ * figure dies. Pipeline opts.controllerPlayerNum is the defeated
+ * figure's owner; Saw lives on the OTHER side, so that side does the
+ * choosing.
  *
- * Once-per-round limit not yet enforced — current inline path also
- * doesn't enforce it; preserve parity for now and revisit alongside
- * the rest of the per-round-limit cleanup.
+ * Once-per-round limit not yet enforced — preserve parity with the
+ * old inline path, revisit alongside the per-round-limit cleanup.
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'brutal_tactics',
-  sync: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     if (!opts.defeatedPos) return false;
@@ -285,24 +246,24 @@ WHEN_DEFEATED_HOOKS.push({
       return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
     });
   },
-  apply: (game, opts, ctx) => {
+  apply: async (game, opts, ctx) => {
     const enemyPos = game.figurePositions?.[opts.controllerPlayerNum] || {};
-    let weakened = 0;
+    const eligible = [];
     for (const [fk, pos] of Object.entries(enemyPos)) {
       if (!pos || fk === opts.figureKey) continue;
       const dist = countGameSpaces(game, opts.defeatedPos, pos);
       if (dist > 3) continue;
       if (isConditionImmune(game, fk)) continue;
-      if (applyCondition(game, fk, 'Weaken')) weakened++;
+      eligible.push({ figureKey: fk, label: dcNameFromFigureKey(fk) });
     }
-    if (weakened > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
-      ctx.logGameAction(
-        game,
-        ctx.client,
-        `⚔️ **Brutal Tactics** — ${weakened} hostile figure${weakened !== 1 ? 's' : ''} within 3 spaces of the defeated figure became **Weakened**.`,
-        { phase: 'ROUND', icon: 'card' },
-      ).catch(() => {});
-    }
+    if (eligible.length === 0) return;
+    const { openDefeatPick } = await import('../handlers/defeat-pick.js');
+    await openDefeatPick(game, ctx, {
+      kind: 'bt',
+      controllerPlayerNum: opts.controllerPlayerNum,
+      defeatedFigureKey: opts.figureKey,
+      options: eligible,
+    });
   },
 });
 
@@ -370,13 +331,11 @@ WHEN_DEFEATED_HOOKS.push({
 
 /**
  * Into the Force (Obi-Wan Kenobi): when defeated, choose another
- * friendly figure — that figure becomes Focused. Auto-picks the
- * first surviving friendly today; player-pick UI is a future
- * enhancement (CC-style picker prompt).
+ * friendly figure — that figure becomes Focused. Player-pick prompt
+ * via openDefeatPick. Async; requires ctx with deps + thread.
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'into_the_force_obiwan',
-  sync: true,
   probe: (game, opts) => {
     if (!opts.figureKey) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
@@ -384,22 +343,47 @@ WHEN_DEFEATED_HOOKS.push({
     const eff = getDcEffects()?.[dcName];
     return (eff?.specialAbilityIds || []).includes('into_the_force_obiwan');
   },
-  apply: (game, opts, ctx) => {
+  apply: async (game, opts, ctx) => {
     if (!opts.controllerPlayerNum) return;
     const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
       .filter(k => !k.startsWith('Obi-Wan Kenobi-'));
     if (alive.length === 0) return;
-    const target = alive[0];
-    if (applyCondition(game, target, 'Focus')) {
-      const targetName = dcNameFromFigureKey(target);
-      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
-        ctx.logGameAction(
-          game,
-          ctx.client,
-          `✨ **Into the Force** — **${targetName}** becomes **Focused** (Obi-Wan was defeated).`,
-          { phase: 'ROUND', icon: 'card' },
-        ).catch(() => {});
-      }
-    }
+    const options = alive.map(fk => ({ figureKey: fk, label: dcNameFromFigureKey(fk) }));
+    const { openDefeatPick } = await import('../handlers/defeat-pick.js');
+    await openDefeatPick(game, ctx, {
+      kind: 'itf',
+      controllerPlayerNum: opts.controllerPlayerNum,
+      defeatedFigureKey: opts.figureKey,
+      options,
+    });
+  },
+});
+
+/**
+ * Useful Hide (Tauntaun Rider): when defeated, distribute up to 2
+ * Evade Tokens among friendly figures within 3 spaces. Player-pick
+ * prompt that re-prompts after each pick until 2 distributed or Done
+ * pressed.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'useful_hide_tauntaun',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if (!opts.defeatedPos) return false;
+    return dcNameFromFigureKey(opts.figureKey) === 'Tauntaun Rider';
+  },
+  apply: async (game, opts, ctx) => {
+    const friendly = Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .filter(([k, pos]) => k !== opts.figureKey && pos && countGameSpaces(game, opts.defeatedPos, pos) <= 3)
+      .map(([k]) => ({ figureKey: k, label: dcNameFromFigureKey(k) }));
+    if (friendly.length === 0) return;
+    const { openDefeatPick } = await import('../handlers/defeat-pick.js');
+    await openDefeatPick(game, ctx, {
+      kind: 'uh',
+      controllerPlayerNum: opts.controllerPlayerNum,
+      defeatedFigureKey: opts.figureKey,
+      options: friendly,
+      remaining: 2,
+    });
   },
 });

@@ -178,6 +178,7 @@ function determineActingPlayer(game) {
     return game.pendingStrainEvent.controllerPN || 'both';
   }
   if (game.pendingExecutorInterrupt) return 'both';
+  if (game.pendingDefeatPick) return game.pendingDefeatPick.choosingPlayerNum || 'both';
 
   // Move in progress — keyed by moveKey, each entry has playerNum
   if (game.moveInProgress && Object.keys(game.moveInProgress).length > 0) {
@@ -228,7 +229,7 @@ const PENDING_KEYS = [
   // Pre-resolution combat abilities (set while pendingCombat still exists)
   'pendingFigurehead', 'pendingCleave', 'pendingFightingKnife',
   'pendingConcussiveBolt', 'pendingAssassinsBlade', 'pendingExtraProtection',
-  'pendingSelfDestruct', 'pendingExecutorInterrupt', 'pendingPunishingStrike',
+  'pendingSelfDestruct', 'pendingExecutorInterrupt', 'pendingDefeatPick', 'pendingPunishingStrike',
   'pendingSuppressiveFireMp',
 ];
 
