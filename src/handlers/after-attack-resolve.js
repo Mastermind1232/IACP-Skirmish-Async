@@ -142,6 +142,12 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
+  // Stun Batons enqueue probe REVERTED — fire handler exists but the
+  // inline auto-apply in combat-bridge.js wasn't successfully removed
+  // this session (character-encoding mismatch on the strain log line).
+  // Re-enabling the enqueue now would double-fire the strain. Lands
+  // in the next commit alongside the inline removal + the centralized
+  // "when figure suffers damage" pipeline (task #165).
   // Stalk Prey (CC, attacker side): triggered by combat.surgeStalkPrey
   // set when the CC was played. Hit-gated.
   if (combat.surgeStalkPrey && combat._step7Hit && combat.attackerMsgId && combat.attackerFigureKey) {

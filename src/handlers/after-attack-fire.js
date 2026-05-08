@@ -19,7 +19,8 @@
  */
 import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
-import { grantMovementBank, grantPowerTokens } from '../game/index.js';
+import { grantMovementBank, grantPowerTokens, opponentPlayerNum } from '../game/index.js';
+import { applyStrain } from './strain-handler.js';
 
 /**
  * Recover N — heals the attacker by N HP. Applies even on a miss
@@ -56,6 +57,25 @@ async function fireLegHydraulics(thread, game, combat, effect, ctx) {
       `\u{1F9BF} **Leg Hydraulics** — **${combat.attackerDcName}** gains 1 MP after attacking.`,
       { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
+}
+
+/**
+ * Stun Batons (Riot Trooper E/R) — attacker after-resolve: target
+ * suffers 1 Strain on damage. Routes through the strain pipeline
+ * (applyStrain), which handles Fireproof, Headhunter, opponent's
+ * strain-prevention CCs, and the underlying damage application —
+ * which fires when-damaged hooks + defeat checks correctly.
+ * destruct 2026-05-08.
+ */
+async function fireStunBatons(thread, game, combat, effect, ctx) {
+  if (!combat?.target?.figureKey) return;
+  const defenderPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  await applyStrain(game, ctx, {
+    figureKey: combat.target.figureKey,
+    controllerPlayerNum: defenderPN,
+    amount: 1,
+    source: 'Stun Batons',
+  });
 }
 
 /**
@@ -117,6 +137,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'stalk_prey':
       await fireStalkPrey(thread, game, combat, effect, ctx);
+      return;
+    case 'stun_batons':
+      await fireStunBatons(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline
