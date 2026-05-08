@@ -5051,6 +5051,59 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.elusiveResolved = true;
     delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'cbs') {
+    // Line of Fire crate-block-sink: defender chose N damage → +N Block.
+    // Apply N to the first carried crate (capped at remaining HP), set
+    // bonus block, mark resolved, re-enter modifier sequence.
+    const _cbsN = Math.max(0, parseInt(choice, 10) || 0);
+    if (_cbsN > 0 && combat.target?.figureKey) {
+      const _cbsRule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+      const _cbsHealthPer = _cbsRule?.healthPerCrate || 5;
+      const _cbsFk = combat.target.figureKey;
+      game.lineOfFireCrateBlock = game.lineOfFireCrateBlock || {};
+      const _cbsBlocks = game.lineOfFireCrateBlock[_cbsFk] || [];
+      const _cbsCarryCnt = typeof game.figureContraband?.[_cbsFk] === 'number'
+        ? game.figureContraband[_cbsFk]
+        : (game.figureContraband?.[_cbsFk] ? 1 : 0);
+      while (_cbsBlocks.length < _cbsCarryCnt) _cbsBlocks.push(0);
+      // Apply damage to crates from first to last; cap each at healthPer.
+      let _cbsRem = _cbsN;
+      for (let _i = 0; _i < _cbsBlocks.length && _cbsRem > 0; _i++) {
+        const _cbsAvail = Math.max(0, _cbsHealthPer - (_cbsBlocks[_i] || 0));
+        const _cbsTake = Math.min(_cbsAvail, _cbsRem);
+        _cbsBlocks[_i] = (_cbsBlocks[_i] || 0) + _cbsTake;
+        _cbsRem -= _cbsTake;
+      }
+      // Discard any crate that hit healthPerCrate.
+      const _cbsBefore = _cbsCarryCnt;
+      const _cbsAfterBlocks = [];
+      for (let _i = 0; _i < _cbsBlocks.length; _i++) {
+        if ((_cbsBlocks[_i] || 0) >= _cbsHealthPer) {
+          // Crate destroyed — drop entry
+        } else {
+          _cbsAfterBlocks.push(_cbsBlocks[_i]);
+        }
+      }
+      const _cbsAfter = _cbsAfterBlocks.length;
+      game.lineOfFireCrateBlock[_cbsFk] = _cbsAfterBlocks;
+      if (_cbsAfter <= 0) {
+        delete game.lineOfFireCrateBlock[_cbsFk];
+        if (game.figureContraband?.[_cbsFk]) delete game.figureContraband[_cbsFk];
+      } else if (typeof game.figureContraband[_cbsFk] === 'number') {
+        game.figureContraband[_cbsFk] = _cbsAfter;
+      }
+      combat.bonusBlock = (combat.bonusBlock || 0) + _cbsN;
+      const _cbsLost = _cbsBefore - _cbsAfter;
+      const _cbsLostNote = _cbsLost > 0 ? ` (${_cbsLost} crate${_cbsLost !== 1 ? 's' : ''} destroyed)` : '';
+      await thread.send(`📦 **Line of Fire — Crate Block Sink** — ${_cbsN} damage to crate; +${_cbsN} Block to defense${_cbsLostNote}.`);
+    } else {
+      await thread.send('📦 **Line of Fire — Crate Block Sink** — Skipped (0 damage / 0 Block).');
+    }
+    combat.crateBlockSinkResolved = true;
+    delete combat.pendingCombatPassive;
+    saveGames(game.gameId);
+    await proceedAfterRerolls(thread, game, combat, ctx);
+    return;
   } else if (abilityKey === 'negotiate') {
     const _negDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     if (choice === 'pay') {
@@ -5418,6 +5471,57 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
       }
     }
+  }
+
+  // Line of Fire (Anchorhead B): crateBlockSink — at the modifier step,
+  // the defender (a small figure carrying ≥1 crate) may choose 0–3
+  // damage to apply to a carried crate; +X Block is added to defense
+  // results (Pierce can still bypass). Crate suffers up to its remaining
+  // health, never more. Per destruct 2026-05-08.
+  if (!combat.crateBlockSinkResolved && combat.target?.figureKey) {
+    const _cbsRule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+    const _cbsTargetFk = combat.target.figureKey;
+    if (_cbsRule && game.figureContraband?.[_cbsTargetFk]) {
+      // Defender size = 1×1 (small)
+      const _cbsRawSize = ctx.getFigureSize ? ctx.getFigureSize(dcNameFromFigureKey(_cbsTargetFk)) : null;
+      const _cbsSize = game.figureOrientations?.[_cbsTargetFk] || _cbsRawSize;
+      const _cbsIsSmall = Array.isArray(_cbsSize) ? (_cbsSize[0] === 1 && _cbsSize[1] === 1) : true;
+      if (_cbsIsSmall) {
+        // Compute remaining HP across all carried crates
+        const _cbsHealthPer = _cbsRule.healthPerCrate || 5;
+        const _cbsBlocks = game.lineOfFireCrateBlock?.[_cbsTargetFk] || [];
+        const _cbsCarryCnt = typeof game.figureContraband[_cbsTargetFk] === 'number'
+          ? game.figureContraband[_cbsTargetFk]
+          : 1;
+        // Pad blocks array to carry count (lazy init: each new crate = 0 block)
+        while (_cbsBlocks.length < _cbsCarryCnt) _cbsBlocks.push(0);
+        const _cbsTotalRemainingHp = _cbsBlocks
+          .slice(0, _cbsCarryCnt)
+          .reduce((sum, b) => sum + Math.max(0, _cbsHealthPer - (b || 0)), 0);
+        const _cbsMax = Math.min(_cbsRule.maxBlockPerAttack || 3, _cbsTotalRemainingHp);
+        if (_cbsMax > 0) {
+          combat.pendingCombatPassive = 'cbs';
+          const _cbsDefId = getPlayerId(game, combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+          const _cbsBtns = [];
+          for (let _n = 0; _n <= _cbsMax; _n++) {
+            _cbsBtns.push(
+              new ButtonBuilder()
+                .setCustomId(`combat_passive_${game.gameId}_cbs_${_n}`)
+                .setLabel(_n === 0 ? 'Skip (0)' : `${_n} dmg → +${_n} Block`)
+                .setStyle(_n === 0 ? ButtonStyle.Secondary : ButtonStyle.Primary),
+            );
+          }
+          await thread.send(sanitizeMentions({
+            content: `<@${_cbsDefId}> **Line of Fire — Crate Block Sink**: choose 0–${_cbsMax} damage to apply to your carried crate. Each point becomes **+1 Block** to defense results (Pierce still bypasses).`,
+            components: [new ActionRowBuilder().addComponents(_cbsBtns.slice(0, 5))],
+            allowedMentions: { users: [_cbsDefId] },
+          })).catch(discordCatch);
+          saveGames?.(game.gameId);
+          return;
+        }
+      }
+    }
+    combat.crateBlockSinkResolved = true;
   }
 
   // Defensible (SC2-M): while defending, apply +1 Block or +1 Evade (player chooses)
