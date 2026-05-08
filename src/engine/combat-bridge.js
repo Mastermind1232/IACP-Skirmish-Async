@@ -2750,7 +2750,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
                   conditionsOwed: 0,
                 });
                 await thread.send(sanitizeMentions({
-                  content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target?`,
+                  content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target. Then, for each chosen figure, **${combat.attackerDcName}** gains 1 HARMFUL condition of your opponent's choice.`,
                   allowedMentions: { users: [_hfOwnerId] },
                   components: [new ActionRowBuilder().addComponents(_hfBtns)],
                 })).catch(discordCatch);

@@ -730,13 +730,16 @@ async function startHeavyFireConditions(game, pending, ctx) {
   await thread.send(dmgMsg).catch(discordCatch);
   await logGameAction(game, client, dmgMsg, { phase: 'ROUND', icon: 'attack' });
 
-  // Filter out defeated targets from condition penalty list
-  const defeatedKeys = new Set(defeatedTargets.map(t => t.figureKey));
-  const survivingChosen = pending.chosenTargets.filter(t => !defeatedKeys.has(t.figureKey));
-  pending.conditionsOwed = survivingChosen.length;
+  // Card text: "Then, for each chosen figure, the figure that attacked
+  // gains 1 HARMFUL condition of your opponent's choice." Per canonical
+  // text the attacker owes 1 condition per chosen figure regardless of
+  // whether that figure was defeated by Heavy Fire — "chose" is past-
+  // tense; the chosen figures don't need to still be on the board for
+  // the attacker's penalty to apply.
+  pending.conditionsOwed = pending.chosenTargets.length;
 
   if (pending.conditionsOwed <= 0) {
-    await thread.send('**Heavy Fire** — No conditions owed (all targeted figures were defeated).').catch(discordCatch);
+    await thread.send('**Heavy Fire** — No targets chosen, no conditions owed.').catch(discordCatch);
     clearPendingHeavyFire(game);
     saveGames(game.gameId);
     return;
