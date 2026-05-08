@@ -579,98 +579,19 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
   };
   const { buildRowPickerButtons: _bRPB } = await import('../discord/components.js');
   const { rows: _pdRows } = _bRPB(reachableSpaces, `space_row_${contextKey}_`);
+  // Add a Skip button so the player can deploy the figure but skip the
+  // optional post-deploy move (matches legacy UX before unification).
+  const _pdSkipKey = `${msgId}_${(figureKey.match(/-(\d+)-(\d+)$/) || [,'0','0'])[2]}`;
+  const _pdSkipBtn = new ButtonBuilder()
+    .setCustomId(`pd_move_skip_${gameId}_${playerNum}_${_pdSkipKey}`)
+    .setLabel('Skip Movement')
+    .setStyle(ButtonStyle.Secondary);
+  const _pdSkipRow = new ActionRowBuilder().addComponents(_pdSkipBtn);
   await _pdGenCh.send({
     content: `🚶 **${active.abilityLabel || 'Post-Deploy Move'}** — <@${ownerId}>, **${dcName}** may move up to **${mp}** spaces. Pick a row:`,
-    components: _pdRows.slice(0, 5),
+    components: [..._pdRows.slice(0, 4), _pdSkipRow],
     allowedMentions: { users: [ownerId] },
   }).catch(() => null);
-  if (saveGames) saveGames(game.gameId);
-  return;
-  // ── unreachable below: legacy MP-button path retained for reference ──
-  /* eslint-disable no-unreachable */
-  const dgMatch = figureKey.match(/^(.+)-(\d+)-(\d+)$/);
-  const figureIndex = dgMatch ? parseInt(dgMatch[3], 10) : 0;
-  game.moveInProgress = game.moveInProgress || {};
-  const moveKey = `${msgId}_${figureIndex}`;
-  game.moveInProgress[moveKey] = {
-    figureKey,
-    playerNum,
-    mpRemaining: mp,
-    displayName: dcName,
-    msgId,
-    movementProfile: profile,
-    boardState,
-    movementCache: cache,
-    cacheMaxMp: mp,
-    startCoord: pos,
-    pendingMp: null,
-    distanceMessageId: null,
-    postDeployReturn: true,
-  };
-
-  const buttonSpaces = [...cache.cells.keys()];
-  const isMultiTile = profile.size && profile.size !== '1x1';
-  game.moveGridMessageIds = game.moveGridMessageIds || {};
-
-  // Build labelMap for multi-tile figures (show bottom-left coords)
-  const labelMap = {};
-  if (isMultiTile) {
-    for (const s of buttonSpaces) {
-      const n = normalizeCoord(s);
-      labelMap[n] = bottomLeftCoord(n, profile.size).toUpperCase();
-    }
-  }
-  const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
-  const rowDisplayOffset = isMultiTile ? parseSizeString(profile.size).rows - 1 : 0;
-  const minimapCells = isMultiTile
-    ? buttonSpaces.map((tl) => bottomLeftCoord(tl, profile.size))
-    : buttonSpaces;
-  const minimap = getMovementMinimapAttachment ? await getMovementMinimapAttachment(game, msgId, figureKey, minimapCells) : null;
-
-  const totalFigs = active.moveFigures.length;
-  const resolvedCount = active._resolvedFigures?.length || 0;
-  const remainingCount = totalFigs - resolvedCount;
-  const figLabel = totalFigs > 1 ? ` (${remainingCount} remaining)` : '';
-
-  // Store pendingSpacePick for generic row→cell handler
-  const moveContextKey = `${gameId}_${moveKey}`;
-  const moveHeader = `🛬 **${active.abilityLabel || 'Post-Deploy'}**${figLabel} — <@${ownerId}>, move **${dcName}** (**${mp}** MP):${multiTileNote}`;
-  const moveActionBtns = [
-    { customId: `pd_move_skip_${gameId}_${playerNum}_${moveKey}`, label: 'Skip Movement', style: ButtonStyle.Secondary },
-  ];
-  game.pendingSpacePick = game.pendingSpacePick || {};
-  game.pendingSpacePick[moveContextKey] = {
-    validSpaces: buttonSpaces,
-    cellPrefix: `move_pick_${msgId}_${figureIndex}_`,
-    mapSpaces: boardState.mapSpaces,
-    labelMap,
-    headerText: moveHeader,
-    actionButtons: moveActionBtns,
-    rowDisplayOffset,
-  };
-  const { rows: moveRowBtns } = buildRowPickerButtons(buttonSpaces, `space_row_${moveContextKey}_`, { rowDisplayOffset });
-  const actionBtns = moveActionBtns.map(b =>
-    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
-  );
-  const actionRow = new ActionRowBuilder().addComponents(...actionBtns);
-
-  // Find the game-log channel to post the movement UI
-  const generalChannel = await fetchGameChannel(client, game.generalId);
-  if (!generalChannel) {
-    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
-    return;
-  }
-
-  const payload = {
-    content: `${moveHeader}\nChoose a row:`,
-    components: [...moveRowBtns.slice(0, 4), actionRow],
-    allowedMentions: { users: [ownerId] },
-  };
-  if (minimap) payload.files = [minimap];
-
-  const gridMsg = await generalChannel.send(payload).catch(() => null);
-  game.moveGridMessageIds[moveKey] = gridMsg?.id ? [gridMsg.id] : [];
-
   if (saveGames) saveGames(game.gameId);
 }
 
