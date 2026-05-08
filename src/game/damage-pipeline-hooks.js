@@ -33,7 +33,7 @@
  */
 import {
   WHEN_DAMAGED_HOOKS,
-  BEFORE_DEFEATED_HOOKS, // eslint-disable-line no-unused-vars -- registered in follow-up commits
+  BEFORE_DEFEATED_HOOKS,
   WHEN_DEFEATED_HOOKS,
 } from './damage-pipeline.js';
 import { getDcList, opponentPlayerNum, vpKey } from './player-helpers.js';
@@ -45,7 +45,8 @@ import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
 import { isDcUnique } from '../data-loader.js';
-import { setPendingCelebration } from './interrupts.js';
+import { setPendingCelebration, setPendingPartingShot } from './interrupts.js';
+import { areConditionEffectsSuppressed } from './conditions.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -98,6 +99,89 @@ WHEN_DAMAGED_HOOKS.push({
   apply: (game, opts, _ctx) => {
     if (!opts.figureKey) return;
     applyCondition(game, opts.figureKey, 'Focus');
+  },
+});
+
+// ── BEFORE_DEFEATED ────────────────────────────────────────────────────────
+
+/**
+ * Parting Shot (Hired Gun, Greedo): "When this figure is about to be
+ * defeated, you may interrupt to perform an attack. Then, this figure
+ * is defeated."
+ *
+ * Deferred-defeat: hook returns `preventDefeat: true`, sets
+ * `pendingPartingShot`, posts [Fire Parting Shot] [Skip] in the combat
+ * thread. Player handlers (parting-shot.js) call
+ * `completeDeferredDefeat` to resume the defeat through applyDamage
+ * with `_skipBeforeDefeatedHooks: true` so the hook doesn't re-fire.
+ *
+ * Stun guard: per CRR p.58, a Stunned figure cannot declare an attack,
+ * so Parting Shot is suppressed. Uses pre-Step-8 condition snapshot if
+ * available (combat._step7DefenderConds) per destruct's clarification
+ * "PS at Step 7 fires before Stun at Step 8".
+ *
+ * Once-per-figure: `partingShotTriggered[msgId]` flag prevents repeats
+ * if a figure is "about to be defeated" multiple times in the same
+ * frame (e.g. Blast splash overlap).
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'parting_shot',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.partingShotTriggered?.[opts.msgId]) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    const sIds = eff?.specialAbilityIds || [];
+    if (!sIds.some(id => id.startsWith('parting_shot_'))) return false;
+    // Stun gate: pre-Step-8 snapshot (PS resolves at Step 7).
+    const preConds = opts.combat?._step7DefenderConds
+      ?? (game.figureConditions?.[opts.figureKey] || []);
+    const suppressed = areConditionEffectsSuppressed(game, opts.figureKey);
+    if (preConds.includes('Stun') && !suppressed) return false;
+    return true;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) {
+      // No prompt UI available (non-Discord ctx, e.g. headless replay).
+      // Skip the interrupt, let defeat proceed normally.
+      return null;
+    }
+    // Headless / oracle / fixture client — no human to click buttons.
+    // Skip the interrupt and let defeat proceed normally so combat
+    // tests don't deadlock waiting for a Discord click.
+    if (ctx?.client?._isFakeClient) {
+      return null;
+    }
+    game.partingShotTriggered = game.partingShotTriggered || {};
+    game.partingShotTriggered[opts.msgId] = true;
+    setPendingPartingShot(game, {
+      gameId: game.gameId,
+      figureKey: opts.figureKey,
+      msgId: opts.msgId,
+      figIndex: opts.figIndex,
+      controllerPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      active: false,
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`parting_shot_fire_${game.gameId}_${opts.msgId}`).setLabel('Fire Parting Shot').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`parting_shot_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> ⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`
+        : `⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
   },
 });
 
@@ -243,6 +327,8 @@ WHEN_DEFEATED_HOOKS.push({
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
     if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return;
+    // Headless / oracle / fixture client — no human to click buttons.
+    if (ctx?.client?._isFakeClient) return;
     const ownerId = game[`player${opts.attackerPlayerNum}Id`];
     setPendingCelebration(game, {
       attackerPlayerNum: opts.attackerPlayerNum,

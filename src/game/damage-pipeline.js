@@ -177,7 +177,7 @@ export const WHEN_DEFEATED_HOOKS = [];
 // applyDamage call so the registry entries land before the first
 // damage event. Avoids circular-import init-order issues.
 let _hooksLoaded = false;
-async function _ensureHooksLoaded() {
+export async function _ensureHooksLoaded() {
   if (_hooksLoaded) return;
   _hooksLoaded = true;
   try {
@@ -192,75 +192,70 @@ export async function applyDamage(game, ctx, opts) {
   if (!opts || !opts.figureKey || !opts.msgId) {
     throw new Error('applyDamage: figureKey + msgId required');
   }
-  let amount = Math.max(0, parseInt(opts.amount || 0, 10));
+  const amount = Math.max(0, parseInt(opts.amount || 0, 10));
   if (amount === 0) {
     return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
   }
 
-  // 1. WHEN_DAMAGED hooks — may modify amount.
-  for (const hook of WHEN_DAMAGED_HOOKS) {
-    if (!hook.probe || !hook.apply) continue;
-    if (!hook.probe(game, { ...opts, amount })) continue;
-    const out = await hook.apply(game, { ...opts, amount }, ctx);
-    if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
-    if (amount === 0) {
-      return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
-    }
-  }
+  // Order per destruct 2026-05-08:
+  //   1. reduceHp first — HP fully applies. On-damage abilities
+  //      trigger because the figure "took damage to become defeated".
+  //   2. WHEN_DAMAGED hooks fire (after reduceHp).
+  //   3. If newHp === 0 (the figure's health reached 0):
+  //        a. BEFORE_DEFEATED CC-play window + sync hooks.
+  //           Hooks may return preventDefeat=true to defer the
+  //           defeat finalization until the interrupt resolves.
+  //        b. If !preventDefeat: WHEN_DEFEATED hooks +
+  //           CC-play window. Caller then calls processFigureDefeat.
+  //
+  // `opts._skipBeforeDefeatedHooks: true` — used by interrupt handlers
+  // resuming a deferred defeat (e.g. completeDeferredDefeat after a
+  // Parting Shot attack). Skips the BEFORE_DEFEATED window so the
+  // hook doesn't re-fire on the same defeat event.
 
-  // 2. would-be-defeated probe (HP read before reduceHp mutates).
-  const dcHealth = ctx?.dcHealthState?.get?.(opts.msgId) || [];
-  const figEntry = dcHealth[opts.figIndex] || [0, 0];
-  const prevHp = figEntry[0] || 0;
-  const wouldBeDefeated = prevHp > 0 && (prevHp - amount) <= 0;
-
-  // 3. BEFORE_DEFEATED hooks — may prevent defeat or modify amount.
-  // Emits CC-play window FIRST so cards like Second Chance / YWNDM
-  // can be played from hand before sync hooks evaluate. Fire-and-
-  // forget; defeat-preventing CCs need to register as BEFORE_DEFEATED
-  // hooks themselves to actually prevent defeat in the same pass.
-  let preventDefeat = false;
-  if (wouldBeDefeated) {
-    await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
-      contextLabel: `figure would be defeated (${opts.source || 'Damage'})`,
-    });
-    for (const hook of BEFORE_DEFEATED_HOOKS) {
-      if (!hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, { ...opts, amount, prevHp })) continue;
-      const out = await hook.apply(game, { ...opts, amount, prevHp }, ctx);
-      if (out?.preventDefeat) preventDefeat = true;
-      if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
-    }
-  }
-
-  if (preventDefeat || amount === 0) {
-    // Defeat prevented (e.g. Second Chance set HP to 1); skip reduceHp.
-    return {
-      amount,
-      prevHp,
-      newHp: ctx?.dcHealthState?.get?.(opts.msgId)?.[opts.figIndex]?.[0] ?? prevHp,
-      wasDefeated: false,
-      preventDefeat: true,
-    };
-  }
-
-  // 4. damage application.
-  // Snapshot defeated figure's position BEFORE reduceHp clears it via
-  // processFigureDefeat. WHEN_DEFEATED hooks that need spatial context
-  // (Brutal Tactics, Vengeance, Useful Hide, Last Resort) read this
-  // through `opts.defeatedPos` instead of querying figurePositions
-  // (which is already empty for the defeated figure by the time the
-  // hook runs).
-  const defeatedPos = wouldBeDefeated && opts.controllerPlayerNum
+  // Snapshot defeated figure's position BEFORE reduceHp /
+  // processFigureDefeat clear figurePositions. WHEN_DEFEATED hooks
+  // with spatial probes (Brutal Tactics, Vengeance, Useful Hide,
+  // Last Resort) consume `opts.defeatedPos` from the hook payload.
+  const defeatedPosCandidate = opts.controllerPlayerNum
     ? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey] || null
     : null;
 
+  // 1. reduceHp.
   const result = reduceHp(
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
+  const defeatedPos = result.wasDefeated ? defeatedPosCandidate : null;
 
-  // 5. WHEN_DEFEATED hooks (only if defeated).
-  if (result.wasDefeated) {
+  // 2. WHEN_DAMAGED hooks (post-reduce). Side effects only — amount
+  //    has already applied.
+  for (const hook of WHEN_DAMAGED_HOOKS) {
+    if (!hook.probe || !hook.apply) continue;
+    if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp })) continue;
+    try {
+      await hook.apply(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp }, ctx);
+    } catch (err) {
+      console.error(`[damage-pipeline] WHEN_DAMAGED hook ${hook.id} threw:`, err?.message ?? err);
+    }
+  }
+
+  let preventDefeat = false;
+  if (result.wasDefeated && !opts._skipBeforeDefeatedHooks) {
+    // 3a. BEFORE_DEFEATED — CC-play window + sync hooks.
+    await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
+      contextLabel: `figure's HP reached 0 (${opts.source || 'Damage'})`,
+    });
+    const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
+    for (const hook of BEFORE_DEFEATED_HOOKS) {
+      if (!hook.probe || !hook.apply) continue;
+      if (!hook.probe(game, beforeOpts)) continue;
+      const out = await hook.apply(game, beforeOpts, ctx);
+      if (out?.preventDefeat) preventDefeat = true;
+    }
+  }
+
+  if (result.wasDefeated && !preventDefeat) {
+    // 3b. WHEN_DEFEATED hooks + CC-play window.
     const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
     for (const hook of WHEN_DEFEATED_HOOKS) {
       if (!hook.probe || !hook.apply) continue;
@@ -268,16 +263,14 @@ export async function applyDamage(game, ctx, opts) {
       try {
         await hook.apply(game, defeatedOpts, ctx);
       } catch (err) {
-        // Hooks must not throw the pipeline; log and continue.
         console.error(`[damage-pipeline] WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
       }
     }
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
       contextLabel: `figure defeated (${opts.source || 'Damage'})`,
     });
-  } else {
-    // Damage applied but figure survived — emit when-suffers-damage
-    // CC window. (Skipped on defeat since when-defeated supersedes.)
+  } else if (!result.wasDefeated) {
+    // Survived damage — emit when-suffers-damage CC window.
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DAMAGED, {
       contextLabel: `figure suffered damage (${opts.source || 'Damage'})`,
     });
@@ -288,7 +281,7 @@ export async function applyDamage(game, ctx, opts) {
     prevHp: result.prevHp,
     newHp: result.newHp,
     wasDefeated: !!result.wasDefeated,
-    preventDefeat: false,
+    preventDefeat,
   };
 }
 
@@ -318,49 +311,42 @@ export function applyDamageSync(game, ctx, opts) {
   if (!opts || !opts.figureKey || !opts.msgId) {
     throw new Error('applyDamageSync: figureKey + msgId required');
   }
-  let amount = Math.max(0, parseInt(opts.amount || 0, 10));
+  const amount = Math.max(0, parseInt(opts.amount || 0, 10));
   if (amount === 0) {
     return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
   }
-  for (const hook of WHEN_DAMAGED_HOOKS) {
-    if (!hook.sync || !hook.probe || !hook.apply) continue;
-    if (!hook.probe(game, { ...opts, amount })) continue;
-    const out = hook.apply(game, { ...opts, amount }, ctx);
-    if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
-    if (amount === 0) {
-      return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
-    }
-  }
-  const dcHealth = ctx?.dcHealthState?.get?.(opts.msgId) || [];
-  const figEntry = dcHealth[opts.figIndex] || [0, 0];
-  const prevHp = figEntry[0] || 0;
-  const wouldBeDefeated = prevHp > 0 && (prevHp - amount) <= 0;
-  let preventDefeat = false;
-  if (wouldBeDefeated) {
-    for (const hook of BEFORE_DEFEATED_HOOKS) {
-      if (!hook.sync || !hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, { ...opts, amount, prevHp })) continue;
-      const out = hook.apply(game, { ...opts, amount, prevHp }, ctx);
-      if (out?.preventDefeat) preventDefeat = true;
-      if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
-    }
-  }
-  if (preventDefeat || amount === 0) {
-    return {
-      amount,
-      prevHp,
-      newHp: ctx?.dcHealthState?.get?.(opts.msgId)?.[opts.figIndex]?.[0] ?? prevHp,
-      wasDefeated: false,
-      preventDefeat: true,
-    };
-  }
-  const defeatedPos = wouldBeDefeated && opts.controllerPlayerNum
+
+  const defeatedPosCandidate = opts.controllerPlayerNum
     ? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey] || null
     : null;
   const result = reduceHp(
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
-  if (result.wasDefeated) {
+  const defeatedPos = result.wasDefeated ? defeatedPosCandidate : null;
+
+  // WHEN_DAMAGED hooks fire post-reduceHp (side effects only).
+  for (const hook of WHEN_DAMAGED_HOOKS) {
+    if (!hook.sync || !hook.probe || !hook.apply) continue;
+    if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp })) continue;
+    try {
+      hook.apply(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp }, ctx);
+    } catch (err) {
+      console.error(`[damage-pipeline] sync WHEN_DAMAGED hook ${hook.id} threw:`, err?.message ?? err);
+    }
+  }
+
+  let preventDefeat = false;
+  if (result.wasDefeated && !opts._skipBeforeDefeatedHooks) {
+    const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
+    for (const hook of BEFORE_DEFEATED_HOOKS) {
+      if (!hook.sync || !hook.probe || !hook.apply) continue;
+      if (!hook.probe(game, beforeOpts)) continue;
+      const out = hook.apply(game, beforeOpts, ctx);
+      if (out?.preventDefeat) preventDefeat = true;
+    }
+  }
+
+  if (result.wasDefeated && !preventDefeat) {
     const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
     for (const hook of WHEN_DEFEATED_HOOKS) {
       if (!hook.sync || !hook.probe || !hook.apply) continue;
@@ -377,7 +363,7 @@ export function applyDamageSync(game, ctx, opts) {
     prevHp: result.prevHp,
     newHp: result.newHp,
     wasDefeated: !!result.wasDefeated,
-    preventDefeat: false,
+    preventDefeat,
   };
 }
 

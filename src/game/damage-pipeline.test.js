@@ -67,29 +67,21 @@ describe('damage-pipeline: applyDamage', () => {
     assert.equal(result.newHp, 0);
   });
 
-  it('WHEN_DAMAGED hook can modify amount', async () => {
+  it('WHEN_DAMAGED hook fires after reduceHp (side effects only)', async () => {
+    // Per destruct 2026-05-08: reduceHp runs first; WHEN_DAMAGED hooks
+    // are side-effect only (no amount modification). They can read
+    // opts.prevHp / opts.newHp to know what just happened.
+    let observedNewHp = null;
     WHEN_DAMAGED_HOOKS.push({
-      id: 'halve-damage',
+      id: 'observe',
       probe: () => true,
-      apply: async (_g, opts) => ({ amount: Math.floor(opts.amount / 2) }),
+      apply: async (_g, opts) => { observedNewHp = opts.newHp; },
     });
     const ctx = _makeCtx();
     const result = await applyDamage({}, ctx, _opts({ amount: 4 }));
-    assert.equal(result.amount, 2);
-    assert.equal(result.newHp, 3);
-  });
-
-  it('WHEN_DAMAGED hook reducing to 0 short-circuits damage application', async () => {
-    WHEN_DAMAGED_HOOKS.push({
-      id: 'nullify',
-      probe: () => true,
-      apply: async () => ({ amount: 0 }),
-    });
-    const ctx = _makeCtx();
-    const result = await applyDamage({}, ctx, _opts({ amount: 5 }));
-    assert.equal(result.amount, 0);
-    assert.equal(result.wasDefeated, false);
-    assert.equal(ctx.dcHealthState.get('m1')[0][0], 5);
+    assert.equal(result.amount, 4);
+    assert.equal(result.newHp, 1);
+    assert.equal(observedNewHp, 1);
   });
 
   it('BEFORE_DEFEATED hook fires only when would-be HP is 0', async () => {
@@ -108,18 +100,22 @@ describe('damage-pipeline: applyDamage', () => {
     assert.equal(fired, true);
   });
 
-  it('BEFORE_DEFEATED hook can prevent defeat', async () => {
+  it('BEFORE_DEFEATED hook can defer defeat (preventDefeat); reduceHp still runs', async () => {
+    // Per destruct 2026-05-08: preventDefeat does NOT prevent reduceHp.
+    // Figure HP goes to 0; defeat finalization (WHEN_DEFEATED hooks +
+    // processFigureDefeat) is deferred until completeDeferredDefeat.
     BEFORE_DEFEATED_HOOKS.push({
-      id: 'second-chance',
+      id: 'parting-shot',
       probe: () => true,
       apply: async () => ({ preventDefeat: true }),
     });
     const ctx = _makeCtx();
     const result = await applyDamage({}, ctx, _opts({ amount: 5 }));
-    assert.equal(result.wasDefeated, false);
+    assert.equal(result.wasDefeated, true);
     assert.equal(result.preventDefeat, true);
-    // HP unchanged because reduceHp was skipped
-    assert.equal(ctx.dcHealthState.get('m1')[0][0], 5);
+    // HP IS reduced to 0 — on-damage abilities trigger; only defeat
+    // finalization is deferred.
+    assert.equal(ctx.dcHealthState.get('m1')[0][0], 0);
   });
 
   it('WHEN_DEFEATED hook fires only on actual defeat', async () => {

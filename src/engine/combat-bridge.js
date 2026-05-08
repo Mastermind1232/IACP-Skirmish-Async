@@ -730,6 +730,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         combat,
       });
       newCur = _mdResult.newHp;
+      // BEFORE_DEFEATED hook (e.g. Parting Shot) may have deferred the
+      // defeat. HP goes to 0 either way, but processFigureDefeat (the
+      // post-defeat block below) must skip until completeDeferredDefeat
+      // resumes. _defeatSuppressed mirrors the pipeline's preventDefeat
+      // for downstream guards.
+      if (_mdResult.preventDefeat) {
+        combat._defeatSuppressed = true;
+      }
     }
     // Combat-pipeline rebuild (slice 6.4): capture the defender's pre-condition
     // state BEFORE the Step 8 condition application block. Parting Shot is a
@@ -1187,7 +1195,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Per CRR + destruct: damage caps at health, defeat suppressed. cur
       // stays at 0; future heals reduce damage from health → cur = heal
       // amount. Set _defeatSuppressed flag so downstream interrupts skip.
-      let _defeatSuppressed = false;
+      // Pipeline-level preventDefeat (e.g. Parting Shot) flows through
+      // combat._defeatSuppressed already — pick it up so downstream
+      // guards (Second Chance, SbR, Last Resort, Executor, processFigureDefeat)
+      // skip when defeat is deferred.
+      let _defeatSuppressed = !!combat._defeatSuppressed;
       if (newCur <= 0 && game.youWillNotDenyMeActive?.playerNum === defenderPlayerNum) {
         const _ywndmDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         if (_ywndmDcName?.toLowerCase().includes('fifth')) {
@@ -1240,36 +1252,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           return;
         }
       }
-      // Parting Shot (Greedo, Hired Gun): pre-defeat interrupt — may perform an attack before being defeated.
-      // Skipped if defeat is suppressed (YWNDM/SbR active — figure isn't actually being defeated).
-      if (newCur <= 0 && !_sbrImmune && !_defeatSuppressed && !game.partingShotTriggered?.[targetMsgId]) {
-        const _psDcName = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _psEff = getDcEffects()?.[_psDcName];
-        const _psSIds = _psEff?.specialAbilityIds || [];
-        const _psHas = _psSIds.some(id => id.startsWith('parting_shot_'));
-        // Combat-pipeline rebuild (slice 6.3 + 6.4): per CRR p.58 STUNNED, a
-        // Stunned figure cannot declare an attack. Parting Shot is a Step 7
-        // interrupt requiring attack declaration. Block if the figure was
-        // Stunned BEFORE this attack's Step 8 surge-conditions landed (i.e.
-        // a pre-existing Stun). Per destruct Q2: HG PS = YES against this
-        // attack's surge-Stun because PS at Step 7 fires before Stun at Step 8.
-        // We use the Step-7 snapshot captured before the condition application
-        // block, NOT the live post-conditions list — that snapshot reflects
-        // what the condition list looked like before this attack's Step 8
-        // resolved.
-        const _psFigConds = combat._step7DefenderConds
-          ?? (game.figureConditions?.[combat.target.figureKey] || []);
-        const _psEffectsSuppressed = areConditionEffectsSuppressed(game, combat.target.figureKey);
-        const _psStunnedAlready = _psFigConds.includes('Stun') && !_psEffectsSuppressed;
-        if (_psHas && _psStunnedAlready) {
-          await logGameAction(game, client, `**Parting Shot** suppressed — **${combat.target.label || _psDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
-        } else if (_psHas) {
-          game.partingShotTriggered = game.partingShotTriggered || {};
-          game.partingShotTriggered[targetMsgId] = true;
-          const _psOwnerId = game[`player${defenderPlayerNum}Id`];
-          await logGameAction(game, client, `<@${_psOwnerId}> \u26A0\uFE0F **Parting Shot** — **${combat.target.label || _psDcName}** is about to be defeated! You may interrupt to perform an attack before defeat. Use the DC's Attack action to fire your parting shot, then click End Turn to proceed with defeat.`, { allowedMentions: { users: [_psOwnerId] } });
-        }
-      }
+      // Parting Shot — now handled by BEFORE_DEFEATED hook
+      // (damage-pipeline-hooks.js + handlers/parting-shot.js).
       // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
       if (newCur <= 0 && !_sbrImmune && !_defeatSuppressed && !game.lastResortTriggered?.[targetMsgId]) {
         const _lrUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
@@ -3370,5 +3354,12 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const attackerPlayerNum = combat.attackerPlayerNum;
     const _ptOvPN = _ptOvPlayerNum ? parseInt(_ptOvPlayerNum, 10) : attackerPlayerNum;
     await sendPowerTokenOverflowUI(game, game.gameId, thread, _ptOvPN, saveGames);
+  }
+  // Parting Shot deferred-defeat resume: if the attacker of THIS combat
+  // is the figure that armed Parting Shot, the free attack just resolved
+  // — complete the deferred defeat now (per CRR + destruct 2026-05-08).
+  if (game.pendingPartingShot?.active && game.pendingPartingShot.figureKey === combat.attackerFigureKey) {
+    const { completeDeferredDefeat } = await import('../handlers/parting-shot.js');
+    await completeDeferredDefeat(game, { dcHealthState, logGameAction, client, deps, thread });
   }
 }

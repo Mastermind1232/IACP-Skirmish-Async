@@ -25,6 +25,7 @@ export const PENDING_STATE_KEYS = [
   'pendingStillFaster',
   'pendingLastResort',
   'pendingDefeatPick',
+  'pendingPartingShot',
   'pendingStrikeMeDown',
   'pendingSlowOnTheDraw',
   'pendingForceExhaustion',

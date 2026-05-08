@@ -448,6 +448,7 @@ const ROUND_NULL_FLAGS = [
   'extraProtectionTriggeredThisCombat',
   'pendingExecutorInterrupt',
   'pendingDefeatPick',
+  'pendingPartingShot',
   'pendingCcConfirmation',
   'pendingNegation',
   'pendingCommDisruptionPrompt',

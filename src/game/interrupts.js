@@ -128,6 +128,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   HUNTER_PROTOCOL:       'hunter-protocol',
   EXECUTOR_INTERRUPT:    'executor-interrupt',
   DEFEAT_PICK:           'defeat-pick',
+  PARTING_SHOT:          'parting-shot',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -570,6 +571,23 @@ export function clearPendingExecutorInterrupt(game) { _clearDual(game, 'pendingE
  */
 export function setPendingDefeatPick(game, payload) { _setDual(game, 'pendingDefeatPick', INTERRUPT_TYPES.DEFEAT_PICK, payload); }
 export function clearPendingDefeatPick(game) { _clearDual(game, 'pendingDefeatPick', INTERRUPT_TYPES.DEFEAT_PICK); }
+/**
+ * pendingPartingShot: deferred-defeat marker for Parting Shot interrupt.
+ * Set by BEFORE_DEFEATED hook when defender has parting_shot ability.
+ *
+ * Payload shape: {
+ *   figureKey, msgId, figIndex,
+ *   controllerPlayerNum, attackerPlayerNum,
+ *   source,                              // damage source label (e.g. 'Damage', 'Blast')
+ *   active: boolean,                     // 'Fire Parting Shot' clicked → next attack completes defeat
+ * }
+ *
+ * Defeat is RESUMED by `completeDeferredDefeat` (handlers/parting-shot.js)
+ * which re-calls applyDamage with `_skipBeforeDefeatedHooks: true` so the
+ * BEFORE_DEFEATED hook doesn't re-fire on the same defeat event.
+ */
+export function setPendingPartingShot(game, payload) { _setDual(game, 'pendingPartingShot', INTERRUPT_TYPES.PARTING_SHOT, payload); }
+export function clearPendingPartingShot(game) { _clearDual(game, 'pendingPartingShot', INTERRUPT_TYPES.PARTING_SHOT); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }
