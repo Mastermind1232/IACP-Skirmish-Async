@@ -37,5 +37,9 @@ export function createFakeClient() {
     // Captured output
     _sentMessages: sentMessages,
     _channelCache: channelCache,
+    // Marker for headless / oracle / fixture code paths so e.g. the
+    // post-resolve button window auto-drains instead of waiting for a
+    // human Done click.
+    _isFakeClient: true,
   };
 }

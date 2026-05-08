@@ -133,17 +133,19 @@ export function enqueueDefenderStep8Effects(_combat) {
  */
 export async function postPostResolveWindow(thread, game, combat, side, ctx) {
   if (!combat) return;
-  if (!hasPendingAfterAttackEffects(combat, side)) {
-    // Nothing to prompt — advance directly.
-    await _advanceFromSide(thread, game, combat, side, ctx);
-    return;
-  }
-  if (game.selfPlay) {
-    // Self-play: fire each pending effect with the auto-pick fallback,
-    // then advance. Mirrors the historical inline auto-apply.
+  // Auto-drain conditions:
+  //   - selfPlay (live Discord bot-vs-bot games)
+  //   - !thread (no Discord thread to post into)
+  //   - fake client (headless oracle/fixture tests)
+  // Live human games keep the buttons + require a Done click.
+  if (game.selfPlay || !thread || ctx?.client?._isFakeClient) {
     await _selfPlayDrain(thread, game, combat, side, ctx);
     return;
   }
+  // destruct 2026-05-08: window must NEVER auto-advance even when the
+  // queue is empty for this side — the player needs the chance to
+  // play after-attack CCs from hand and then press Done. Always post
+  // at least a Done button.
   const ownerPN = side === 'attacker'
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
     : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
@@ -221,13 +223,10 @@ export async function handleAarFire(interaction, ctx) {
     return;
   }
   await fireEffect(thread, game, combat, effect, ctx);
-  // After firing, re-post the window with remaining effects (or
-  // advance to the next side if queue empty for this side).
-  if (hasPendingAfterAttackEffects(combat, effect.side)) {
-    await postPostResolveWindow(thread, game, combat, effect.side, ctx);
-  } else {
-    await _advanceFromSide(thread, game, combat, effect.side, ctx);
-  }
+  // After firing, re-post the window so the player can fire more
+  // pending effects, play after-attack CCs from hand, or click Done.
+  // destruct 2026-05-08: never auto-advance — Done is mandatory.
+  await postPostResolveWindow(thread, game, combat, effect.side, ctx);
   saveGames?.(game.gameId);
 }
 
