@@ -304,21 +304,29 @@ async function _runStrainFollowup(game, ctx, followup) {
 async function _applyDamageFromStrain(game, ctx, ev) {
   const { dcHealthState, findDcMessageIdForFigure, processFigureDefeat, client, logGameAction } = ctx;
   if (!dcHealthState || !findDcMessageIdForFigure) return;
-  const msgId = findDcMessageIdForFigure(game.gameId, ev.controllerPN === ev.originalControllerPN ? ev.originalControllerPN : ev.originalControllerPN, ev.figureKey)
-    || findDcMessageIdForFigure(game.gameId, ev.originalControllerPN, ev.figureKey);
+  const msgId = findDcMessageIdForFigure(game.gameId, ev.originalControllerPN, ev.figureKey);
   if (!msgId) return;
   const figMatch = ev.figureKey.match(/-(\d+)-(\d+)$/);
   const figureIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
   const dcName = dcNameFromFigureKey(ev.figureKey);
-  const healthState = dcHealthState.get(msgId) || [];
-  const entry = healthState[figureIndex];
-  if (!entry) return;
-  const [cur, max] = entry;
-  const newHp = Math.max(0, cur - 1);
-  healthState[figureIndex] = [newHp, max];
-  dcHealthState.set(msgId, healthState);
-  await logGameAction(game, client, `🩸 **Strain → Damage** — **${dcName}**: HP ${cur} → ${newHp}.`, { phase: 'ROUND', icon: 'card' });
-  if (newHp <= 0 && processFigureDefeat) {
+  // destruct 2026-05-08: route through the centralized damage
+  // pipeline so when-suffers-damage / before-defeated / when-defeated
+  // hooks fire on the strain → damage path. viaStrain=true lets
+  // hooks distinguish strain damage from regular attack damage.
+  const { applyDamage } = await import('../game/damage-pipeline.js');
+  const { prevHp, newHp, wasDefeated } = await applyDamage(game, {
+    dcHealthState, logGameAction, client,
+  }, {
+    figureKey: ev.figureKey,
+    msgId,
+    figIndex: figureIndex,
+    amount: 1,
+    controllerPlayerNum: ev.originalControllerPN,
+    source: `Strain (${ev.source})`,
+    viaStrain: true,
+  });
+  await logGameAction(game, client, `🩸 **Strain → Damage** — **${dcName}**: HP ${prevHp} → ${newHp}.`, { phase: 'ROUND', icon: 'card' });
+  if (wasDefeated && processFigureDefeat) {
     await processFigureDefeat(game, {
       defeatedPlayerNum: ev.originalControllerPN,
       figureKey: ev.figureKey,

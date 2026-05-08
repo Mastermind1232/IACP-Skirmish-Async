@@ -1917,7 +1917,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (_drEntry) {
         const [_drCur] = _drEntry;
         if (_drCur === 1) {
-          reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
+            amount: 1, controllerPlayerNum: defenderPlayerNum,
+            attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+            source: 'Disruptor Rifle', combat,
+          });
           await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target?.label || ''}** had 1 HP remaining — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' });
           // Process defeat through canonical pipeline
           const { idx: _drIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
@@ -1984,7 +1989,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const { dgIndex: _epDgIdx, figureIndex: _epFigIdx } = parseFigureKey(fk);
             const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
             if (_epMsgId) {
-              reduceHp(dcHealthState, game, _epMsgId, _epFigIdx, 1, pNum);
+              await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+                figureKey: fk, msgId: _epMsgId, figIndex: _epFigIdx,
+                amount: 1, controllerPlayerNum: pNum,
+                attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+                source: 'Electro-pulse', combat,
+              });
             }
             _epLines.push(`**${_epFkDcName}** suffers 1 Damage`);
           }
@@ -1998,7 +2008,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     if (_lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) {
       const _qsModified = combat.defenderRerolledOrModified;
       if (_qsModified) {
-        reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
+          amount: 1, controllerPlayerNum: defenderPlayerNum,
+          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+          source: 'Quick Strike', combat,
+        });
         await logGameAction(game, client, `\u26A1 **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
@@ -2042,7 +2057,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
               const _abFigIdx = parseFigureKey(_abFk2).figureIndex;
-              reduceHp(dcHealthState, game, _abMsgId, _abFigIdx, _abHits, defenderPlayerNum);
+              await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+                figureKey: _abFk2, msgId: _abMsgId, figIndex: _abFigIdx,
+                amount: _abHits, controllerPlayerNum: defenderPlayerNum,
+                attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+                source: 'Assassin\'s Blade', combat,
+              });
               break;
             }
             await thread.send(`\u{1F5E1}\uFE0F **Assassin's Blade** — Rolled 1 red die: **${_abRollStr}**. **${_abDcName}** suffers **${_abHits} Damage**.`).catch(discordCatch);
@@ -2130,7 +2150,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       } else {
         const _ftHsBefore = dcHealthState.get(targetMsgId);
         if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
-            const { newHp: _ftNew, wasDefeated: _ftDefeated } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+            const { newHp: _ftNew, wasDefeated: _ftDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
+              amount: 1, controllerPlayerNum: defenderPlayerNum,
+              attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+              source: 'Flame Trooper Incinerate', viaStrain: true, combat,
+            });
             await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch(discordCatch);
             if (_ftDefeated || _ftNew <= 0) {
               const { idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
@@ -2165,7 +2190,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const { figureIndex: _ftBlastFigIdx } = parseFigureKey(_ftBlastFk);
         const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
         if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
-        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = reduceHp(dcHealthState, game, _ftBlastMsgId, _ftBlastFigIdx, 1, _ftBlastPn);
+        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: _ftBlastFk, msgId: _ftBlastMsgId, figIndex: _ftBlastFigIdx,
+          amount: 1, controllerPlayerNum: _ftBlastPn,
+          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+          source: 'Incinerate Blast', viaStrain: true, combat,
+        });
         const _ftBlastName = dcNameFromFigureKey(_ftBlastFk);
         await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(discordCatch);
         _ftBlastRefreshMsgIds.push(_ftBlastMsgId);
@@ -2247,7 +2277,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _sdaPrevHs = dcHealthState.get(_sdaMsgId);
       if (_sdaPrevHs?.[_sdaFigIdx]) {
         const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
-        reduceHp(dcHealthState, game, _sdaMsgId, _sdaFigIdx, _sdaMaxHp, attackerPlayerNum);
+        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: _sdaFigKey, msgId: _sdaMsgId, figIndex: _sdaFigIdx,
+          amount: _sdaMaxHp, controllerPlayerNum: attackerPlayerNum,
+          source: 'Self-Defeat', combat,
+        });
         const _sdaDcIds = getDcMessageIds(game, attackerPlayerNum);
         const _sdaIdx = (_sdaDcIds || []).indexOf(_sdaMsgId);
         embedRefreshMsgIds.add(_sdaMsgId);
@@ -2268,7 +2302,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (hit && targetMsgId) {
     // Harass: defender suffers N Strain after a non-miss
     if ((combat.surgeHarass || 0) > 0) {
-      reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, combat.surgeHarass, defenderPlayerNum);
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
+        amount: combat.surgeHarass, controllerPlayerNum: defenderPlayerNum,
+        attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+        source: 'Surge Harass', combat,
+      });
       embedRefreshMsgIds.add(targetMsgId);
       await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -2277,7 +2316,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const supRoll = combat.defenseRoll || {};
       const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
       if (supAmt > 0) {
-        reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, supAmt, defenderPlayerNum);
+        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
+          amount: supAmt, controllerPlayerNum: defenderPlayerNum,
+          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+          source: 'Supreme Power', combat,
+        });
         embedRefreshMsgIds.add(targetMsgId);
         await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });
       }
@@ -2350,7 +2394,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const attMsgId = combat.attackerMsgId;
     const attFigIdx = combat.attackerFigureIndex ?? 0;
     if (attMsgId) {
-      const { maxHp: deflectMax } = reduceHp(dcHealthState, game, attMsgId, attFigIdx, deflectDmg, attackerPlayerNum);
+      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: combat.attackerFigureKey, msgId: attMsgId, figIndex: attFigIdx,
+        amount: deflectDmg, controllerPlayerNum: attackerPlayerNum,
+        source: 'Deflection', combat,
+      });
+      const deflectMax = dcHealthState.get(attMsgId)?.[attFigIdx]?.[1] ?? 0;
       if (deflectMax > 0) {
         embedRefreshMsgIds.add(attMsgId);
         const defOwnerId = getPlayerId(game, defenderPlayerNum);
@@ -2819,7 +2868,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const lureMsgId = findDcMessageIdForFigure(game.gameId, lurePn, lureFk);
     if (lureMsgId) {
       const { figureIndex: lureFi } = parseFigureKey(lureFk);
-      reduceHp(dcHealthState, game, lureMsgId, lureFi, combat.lurePostAttackStrain, lurePn);
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: lureFk, msgId: lureMsgId, figIndex: lureFi,
+        amount: combat.lurePostAttackStrain, controllerPlayerNum: lurePn,
+        source: 'Lure of the Dark Side', viaStrain: true, combat,
+      });
     }
     await thread.send(`**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain.`).catch(discordCatch);
     await logGameAction(game, client, `**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain after the attack.`, { phase: 'ROUND', icon: 'card' });
@@ -3068,7 +3121,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         const _dflTgtMsgId = findDcMessageIdForFigure(game.gameId, _dflTgt.playerNum, _dflTgt.figureKey);
         if (_dflTgtMsgId) {
           const { figureIndex: _dflFigIdx } = parseFigureKey(_dflTgt.figureKey);
-          reduceHp(dcHealthState, game, _dflTgtMsgId, _dflFigIdx, 1, _dflTgt.playerNum);
+          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: _dflTgt.figureKey, msgId: _dflTgtMsgId, figIndex: _dflFigIdx,
+            amount: 1, controllerPlayerNum: _dflTgt.playerNum,
+            source: 'Deflect (Luke)', combat,
+          });
           embedRefreshMsgIds.add(_dflTgtMsgId);
         }
         await thread.send(`**Deflect** — **${_dflCand.dcName}**: **${_dflTgt.label}** suffers 1 Damage.`).catch(discordCatch);
