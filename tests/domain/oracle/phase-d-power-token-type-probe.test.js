@@ -29,17 +29,19 @@ const COMBAT_SRC = readFileSync(resolve(__dirname, '../../../src/handlers/combat
 describe('PROBE-PD-PT-002/004: role-appropriate power-token spend + Wild type choice', () => {
   it('002a: source — getEligibleTokens filters figure tokens by role-allowed set', () => {
     // The "own-token" spend path uses the allowed-set filter.
+    // Per destruct 2026-05-08: Wild is a gain-time selector (CRR p.50)
+    // and never persists at runtime — allowed lists exclude Wild.
     assert.match(COMBAT_SRC,
-      /function getEligibleTokens\(game, figureKey, role\) \{\s*\n\s*const allowed = role === 'attacker' \? \['Damage', 'Surge', 'Wild'\] : \['Block', 'Evade', 'Wild'\];/,
+      /function getEligibleTokens\(game, figureKey, role\) \{[\s\S]*?const allowed = role === 'attacker' \? \['Damage', 'Surge'\] : \['Block', 'Evade'\];/,
       'getEligibleTokens must use role-gated allowed set — CRR-PT-002');
     assert.match(COMBAT_SRC,
       /\.filter\(t => allowed\.includes\(t\.type\)\);/,
       'getEligibleTokens must filter by allowed.includes(type) — CRR-PT-002');
   });
 
-  it('002b: source — attacker allowed set is exactly Damage/Surge/Wild (no Block/Evade)', () => {
+  it('002b: source — attacker allowed set is exactly Damage/Surge (no Block/Evade, no Wild)', () => {
     // Two independent sites share the same allowed-set literal (own-tokens + Squad Cohesion).
-    const pat = /const allowed = role === 'attacker' \? \['Damage', 'Surge', 'Wild'\] : \['Block', 'Evade', 'Wild'\];/g;
+    const pat = /const allowed = role === 'attacker' \? \['Damage', 'Surge'\] : \['Block', 'Evade'\];/g;
     const matches = COMBAT_SRC.match(pat) || [];
     assert.ok(matches.length >= 2,
       `role-gated allowed sets must appear at own-tokens + cohesion sites — matched ${matches.length} — CRR-PT-002`);

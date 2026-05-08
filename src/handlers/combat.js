@@ -4635,9 +4635,13 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
 
 // --- Power token helpers ---
 
-/** Returns [{type, index}] of tokens the role is allowed to spend */
+/** Returns [{type, index}] of tokens the role is allowed to spend.
+ *  Per destruct 2026-05-08: attackers spend Damage/Surge only, defenders
+ *  spend Block/Evade only. Wild tokens are a gain-time selector (CRR
+ *  p.50) and never persist as a stored type — excluded from allowed
+ *  list. */
 function getEligibleTokens(game, figureKey, role) {
-  const allowed = role === 'attacker' ? ['Damage', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
+  const allowed = role === 'attacker' ? ['Damage', 'Surge'] : ['Block', 'Evade'];
   return (game.figurePowerTokens?.[figureKey] || [])
     .map((type, index) => ({ type, index }))
     .filter(t => allowed.includes(t.type));
@@ -4685,7 +4689,11 @@ function getSquadCohesionTokens(game, combat, role) {
   if (!koTunInRange) return null;
 
   // Gather tokens from friendly REBEL figures within 3 spaces of the combat figure
-  const allowed = role === 'attacker' ? ['Damage', 'Surge', 'Wild'] : ['Block', 'Evade', 'Wild'];
+  // Per destruct 2026-05-08: attackers spend Damage/Surge only, defenders
+  // spend Block/Evade only. 'Wild' is a gain-time selector (CRR p.50)
+  // and never persists in figurePowerTokens at runtime — removed from
+  // the allowed list to match the canonical token spend rules.
+  const allowed = role === 'attacker' ? ['Damage', 'Surge'] : ['Block', 'Evade'];
   const cohesionTokens = [];
   for (const [fk, pos] of Object.entries(friendlyPos)) {
     if (fk === combatFigureKey) continue; // skip own tokens (already shown normally)
