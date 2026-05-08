@@ -310,6 +310,15 @@ export async function handleMoveMp(interaction, ctx) {
   const moveKey = `${msgId}_${figureIndex}`;
   const moveState = game.moveInProgress?.[moveKey];
   if (!moveState) {
+    // Diagnostic for post-deploy MASSIVE figure issue (destruct 2026-05-08).
+    // Log the full state context so the next repro shows where the gap is.
+    console.warn(`[move-session-expired] moveKey=${moveKey} not in moveInProgress`,
+      { existingKeys: Object.keys(game.moveInProgress || {}),
+        postDeployActive: game.postDeployQueue?.activeAbility?.abilityId ?? 'none',
+        postDeployActiveMsgId: game.postDeployQueue?.activeAbility?.msgId ?? null,
+        massiveLocked: !!game.massiveMovementLocked,
+        pendingMassivePush: !!game.pendingMassivePush,
+        mp });
     await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
     return;
   }
