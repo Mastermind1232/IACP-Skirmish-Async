@@ -7,6 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck, suffersStrain } from './damage-helpers.js';
+import { applyDamageSync } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -915,11 +916,18 @@ export function resolveAbility(abilityId, context) {
       if (dcHealthState && targetMsgId) {
         const { figureIndex: figIdx } = parseFigureKey(targetFigureKey);
         // destruct 2026-05-08: route through centralized damage
-        // pipeline. Wrapping function isn't async — use the direct
-        // reduceHp call for now and migrate this site to applyDamage
-        // when the enclosing function gets async-ified (separate
-        // change). Marked with a TODO for the cleanup pass.
-        const { prevHp, newHp, wasDefeated } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, targetOwnerNum);
+        // pipeline. resolveAbility is synchronous (called from many
+        // sync sites + ~136 sync test call sites), so use the sync
+        // variant `applyDamageSync` — runs sync registry hooks only.
+        // Async-only hooks won't fire from this call site by design;
+        // document each ability that needs async post-damage handling
+        // separately or convert resolveAbility to async in a later
+        // pass.
+        const { prevHp, newHp, wasDefeated } = applyDamageSync(game, { dcHealthState }, {
+          figureKey: targetFigureKey, msgId: targetMsgId, figIndex: figIdx,
+          amount: 1, controllerPlayerNum: targetOwnerNum,
+          source: 'Tempt',
+        });
         hpNote = ` (HP: ${prevHp} → ${newHp})`;
         if (wasDefeated) {
           defeated = true;

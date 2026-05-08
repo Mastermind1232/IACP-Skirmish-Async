@@ -191,6 +191,87 @@ export async function applyDamage(game, ctx, opts) {
 }
 
 /**
+ * Synchronous variant of applyDamage for callers that can't await
+ * (e.g. resolveAbility's `tempt` branch). Skips async hooks; only
+ * runs hooks tagged `sync: true` in their registry entry. Use when
+ * the caller is stuck in a sync function and the migration cost of
+ * making it async is too high.
+ *
+ * Trade-off: when async-only hooks register (most will be async since
+ * they may post Discord prompts), they DO NOT FIRE from sync callers.
+ * Document each sync call site so registries don't surprise the
+ * caller. Today, registries are empty, so behavior is identical to
+ * the async variant.
+ *
+ * @param {object} game
+ * @param {object} ctx
+ * @param {DamageOpts} opts
+ * @returns {DamageResult}
+ */
+export function applyDamageSync(game, ctx, opts) {
+  if (!opts || !opts.figureKey || !opts.msgId) {
+    throw new Error('applyDamageSync: figureKey + msgId required');
+  }
+  let amount = Math.max(0, parseInt(opts.amount || 0, 10));
+  if (amount === 0) {
+    return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
+  }
+  for (const hook of WHEN_DAMAGED_HOOKS) {
+    if (!hook.sync || !hook.probe || !hook.apply) continue;
+    if (!hook.probe(game, { ...opts, amount })) continue;
+    const out = hook.apply(game, { ...opts, amount }, ctx);
+    if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
+    if (amount === 0) {
+      return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
+    }
+  }
+  const dcHealth = ctx?.dcHealthState?.get?.(opts.msgId) || [];
+  const figEntry = dcHealth[opts.figIndex] || [0, 0];
+  const prevHp = figEntry[0] || 0;
+  const wouldBeDefeated = prevHp > 0 && (prevHp - amount) <= 0;
+  let preventDefeat = false;
+  if (wouldBeDefeated) {
+    for (const hook of BEFORE_DEFEATED_HOOKS) {
+      if (!hook.sync || !hook.probe || !hook.apply) continue;
+      if (!hook.probe(game, { ...opts, amount, prevHp })) continue;
+      const out = hook.apply(game, { ...opts, amount, prevHp }, ctx);
+      if (out?.preventDefeat) preventDefeat = true;
+      if (out && typeof out.amount === 'number') amount = Math.max(0, out.amount);
+    }
+  }
+  if (preventDefeat || amount === 0) {
+    return {
+      amount,
+      prevHp,
+      newHp: ctx?.dcHealthState?.get?.(opts.msgId)?.[opts.figIndex]?.[0] ?? prevHp,
+      wasDefeated: false,
+      preventDefeat: true,
+    };
+  }
+  const result = reduceHp(
+    ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
+  );
+  if (result.wasDefeated) {
+    for (const hook of WHEN_DEFEATED_HOOKS) {
+      if (!hook.sync || !hook.probe || !hook.apply) continue;
+      if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp })) continue;
+      try {
+        hook.apply(game, { ...opts, amount, prevHp: result.prevHp }, ctx);
+      } catch (err) {
+        console.error(`[damage-pipeline] sync WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
+      }
+    }
+  }
+  return {
+    amount,
+    prevHp: result.prevHp,
+    newHp: result.newHp,
+    wasDefeated: !!result.wasDefeated,
+    preventDefeat: false,
+  };
+}
+
+/**
  * Test-helper: clear all registries. Used by unit tests to isolate
  * pipeline behavior from migration drift.
  */
