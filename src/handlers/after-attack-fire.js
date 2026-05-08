@@ -41,6 +41,24 @@ async function fireRecover(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Leg Hydraulics (Tress Hacnua) — attacker after-resolve: grant 1 MP
+ * to the attacker's figure. Note task #164: card text is actually
+ * "MOVE 1 SPACE" not "1 MP" — that's a separate bug fix; this
+ * migration preserves current (incorrect) behavior so the #164 fix
+ * can be a clean, isolated change.
+ */
+async function fireLegHydraulics(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  if (combat.attackerMsgId == null) return;
+  grantMovementBank(game, combat.attackerMsgId, 1);
+  if (logGameAction && thread) {
+    await logGameAction(game, client,
+      `\u{1F9BF} **Leg Hydraulics** — **${combat.attackerDcName}** gains 1 MP after attacking.`,
+      { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
  * Slippery (Alliance Smuggler E/R) — defender after-resolve: grant
  * 2 MP to the defender's figure. Inline auto-apply removed; the
  * defender clicks a button in their post-resolve window to fire it.
@@ -68,6 +86,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'slippery':
       await fireSlippery(thread, game, combat, effect, ctx);
+      return;
+    case 'leg_hydraulics':
+      await fireLegHydraulics(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

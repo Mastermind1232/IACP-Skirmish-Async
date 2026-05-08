@@ -114,6 +114,37 @@ export function enqueueAttackerStep8Effects(combat) {
 }
 
 /**
+ * Per-DC attacker-side after-resolve abilities. Reads attacker DC's
+ * specialAbilityIds and enqueues a button per matching ability.
+ *
+ * Wired so far:
+ *   - Leg Hydraulics (Tress Hacnua) — gain 1 MP
+ * Pending follow-up commits: Stun Batons, Jets, Locked and Loaded,
+ *   Open-Minded, Distracting Fire, Flame Trooper Incinerate, Stalk
+ *   Prey, Cover Fire (CT-1701), Fighting Knife, Concussive Bolt,
+ *   Spread the Pain, Fell Swoop, Sidewinder, Boltslinger,
+ *   Indiscriminate Fire, Heavy Fire, Havoc Shot, Lure of the Dark
+ *   Side, Defensive Fire, Dual-Wield Pistols, Bladestorm, Wanton
+ *   Destruction (Saw).
+ */
+export function enqueueAttackerPerDcEffects(combat, game, deps) {
+  if (!combat || !combat.attackerFigureKey) return;
+  const getDcEffects = deps?.getDcEffects;
+  if (!getDcEffects) return;
+  const _atkDcName = combat.attackerDcName;
+  const _atkEff = _atkDcName ? getDcEffects()?.[_atkDcName] : null;
+  const _atkIds = _atkEff?.specialAbilityIds || [];
+  // Leg Hydraulics (Tress Hacnua): "after resolving an attack, gain 1 MP"
+  if (_atkIds.includes('leg_hydraulics_tress') && combat.attackerMsgId) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'leg_hydraulics',
+      label: 'Leg Hydraulics: gain 1 MP',
+    });
+  }
+}
+
+/**
  * Enqueue defender-side step-8 effects. Called when attacker's window
  * closes (Done). Each defender after-resolve ability gets a button.
  * Reads game/combat state to detect eligibility — this runs after

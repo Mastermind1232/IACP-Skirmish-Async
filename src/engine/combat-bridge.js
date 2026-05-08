@@ -974,15 +974,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // 2026-05-08). Enqueue + fire handler live in
       // src/handlers/after-attack-{resolve,fire}.js. Defender clicks
       // the "Slippery: gain 2 MP" button in their post-resolve window.
-      // Leg Hydraulics (Tress Hacnua): after resolving an attack, attacker gains 1 MP
-      {
-        const _lhAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
-        const _lhEff = getDcEffects()?.[_lhAtkDcName];
-        if ((_lhEff?.specialAbilityIds || []).includes('leg_hydraulics_tress') && combat.attackerMsgId) {
-          grantMovementBank(game, combat.attackerMsgId, 1);
-          await logGameAction(game, client, `\u{1F9BF} **Leg Hydraulics** — **${_lhAtkDcName}** gains 1 MP after attacking.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-        }
-      }
+      // Leg Hydraulics — migrated to step-8 button window (slice 2b,
+      // destruct 2026-05-08). Enqueue + fire handler in
+      // src/handlers/after-attack-{resolve,fire}.js. Note task #164:
+      // current behavior is "gain 1 MP" but card text is actually
+      // "MOVE 1 SPACE" — that fix lives separately and isn't gated on
+      // this migration.
       // Loku Recon Token: Set Your Sights — after Loku's attack resolves, place recon token on target
       {
         const _lkAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
@@ -2410,6 +2407,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Each click fires one effect; Done finishes; defender window opens
   // next; defender Done runs the legacy combat-close path below.
   _enqueueAttackerStep8Effects(combat);
+  // Per-DC atk-side effects (Slippery's atk-side cousin Leg Hydraulics
+  // and the rest as they migrate). Reads combat.attackerDcName +
+  // specialAbilityIds; pushes one entry per matching ability.
+  const { enqueueAttackerPerDcEffects } = await import('../handlers/after-attack-resolve.js');
+  enqueueAttackerPerDcEffects(combat, game, deps);
   const _aaCtx = {
     ...deps,
     client,
