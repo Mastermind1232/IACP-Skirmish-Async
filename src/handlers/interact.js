@@ -149,6 +149,17 @@ export async function handleInteractChoice(interaction, ctx) {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** flipped **${tokenLabel}** (${upper}) to **${side}**.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId === 'use_terminal') {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
+  } else if (optionId.startsWith('mark_patron_')) {
+    // M11 Gaining Favor: place 1 of player's mission tokens on the
+    // patron. Decrement remaining tokens, set ownership; VP scoring
+    // (getAnchorheadPatronVpBonus) reads anchorheadPatronTokens at win-
+    // condition + scorecard time and applies the [0,2,5,10,20] table.
+    const _patronCoord = optionId.replace('mark_patron_', '').toLowerCase();
+    game.anchorheadPatronTokens = game.anchorheadPatronTokens || {};
+    game.anchorheadPatronTokens[_patronCoord] = playerNum;
+    game.anchorheadTokensRemaining = game.anchorheadTokensRemaining || { 1: 4, 2: 4 };
+    game.anchorheadTokensRemaining[playerNum] = Math.max(0, (game.anchorheadTokensRemaining[playerNum] ?? 4) - 1);
+    logMsg = await logGameAction(game, interaction.client, `🍻 **${pLabel}: ${figLabel}** marked patron at **${_patronCoord.toUpperCase()}** (${game.anchorheadTokensRemaining[playerNum]} token${game.anchorheadTokensRemaining[playerNum] !== 1 ? 's' : ''} left).`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('open_door_')) {
     // Door ID may contain multiple comma-separated edge keys for multi-space doors
     const edgeKeys = optionId.replace('open_door_', '').split(',');

@@ -323,6 +323,41 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
   }
 
+  // M11 Gaining Favor (Anchorhead Cantina Bar A): figure can interact with
+  // a patron it CONTROLS to mark it with one of its player's mission tokens.
+  // Per destruct 2026-05-08: control = standard space control (player has
+  // figure on/adjacent and opponent does not). Patron is unclaimed if not
+  // yet in anchorheadPatronTokens. Player must have tokens remaining
+  // (anchorheadTokensRemaining starts at 4 each at SoG).
+  if (mapId === 'anchorhead-cantina-bar' && variant === 'a') {
+    const patronCoords = getMissionTokenCoords(mapData.missionA);
+    const anchorheadTokens = game.anchorheadPatronTokens || {};
+    const tokensRemaining = (game.anchorheadTokensRemaining || {})[playerNum] ?? 4;
+    if (tokensRemaining > 0 && patronCoords.length > 0) {
+      const patronSet = toLowerSet(patronCoords);
+      const adjacentPatrons = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, patronSet);
+      const oppNum = opponentPlayerNum(playerNum);
+      for (const coord of adjacentPatrons) {
+        if (anchorheadTokens[coord]) continue; // already marked
+        // Check standard control: opponent has no figure on/adjacent.
+        const oppPositions = game.figurePositions?.[oppNum] || {};
+        let oppContests = false;
+        for (const [oppFk, oppCoord] of Object.entries(oppPositions)) {
+          if (!oppCoord) continue;
+          const oppSize = getEffectiveFigureSize(game, oppFk, dcNameFromFigureKey(oppFk));
+          const oppFootprint = getFootprintCells(oppCoord, oppSize).map((c) => normalizeCoord(c));
+          if (oppFootprint.some((c) => c === coord)) { oppContests = true; break; }
+          // also check opponent adjacency to patron
+          const oppAdj = getFigureAdjacentCoordsFromSet(game, oppNum, oppFk, mapId, new Set([coord]));
+          if (oppAdj.length > 0) { oppContests = true; break; }
+        }
+        if (oppContests) continue;
+        const upper = String(coord).toUpperCase();
+        options.push({ id: `mark_patron_${coord}`, label: `Mark Patron (${upper}) — ${tokensRemaining} token${tokensRemaining !== 1 ? 's' : ''} left`, missionSpecific: true });
+      }
+    }
+  }
+
   const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
   // Group adjacent parallel door edges into logical doors
   const doorGroups = groupDoorEdges(mapData.doors || []);
