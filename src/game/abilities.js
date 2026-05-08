@@ -2484,11 +2484,25 @@ export function resolveAbility(abilityId, context) {
           const _selfAttackerPN = _rollOneDieSelfFigureKey
             ? (Object.entries(game.figurePositions?.[1] || {}).some(([k]) => k === _rollOneDieSelfFigureKey) ? 1 : 2)
             : null;
+          // Per destruct 2026-05-08: Fireproof (Flame Trooper attachment)
+          // — figures unaffected by abilities with "Flamethrower" in
+          // their name (full skip, not just strain immunity).
+          const _isFlameNamedAbility = /flamethrower/i.test(String(entry.label || ''));
           for (const pn of [1, 2]) {
             for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
               if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
               if (!entry.includeSelf && _rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+              // Fireproof — skip Flame Trooper attached figures from
+              // any ability whose label contains "Flamethrower".
+              if (_isFlameNamedAbility && figMsgId) {
+                const _fpKey = pn === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+                const _fpAtts = game[_fpKey]?.[figMsgId] || [];
+                if (_fpAtts.some((a) => /flame trooper/i.test(String(a)))) {
+                  affected.push(`${dcNameFromFigureKey(fk)} (Fireproof — immune)`);
+                  continue;
+                }
+              }
               if (dcHealthState && figMsgId) {
                 const fkMatch = fk.match(/-(\d+)-(\d+)$/);
                 const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;

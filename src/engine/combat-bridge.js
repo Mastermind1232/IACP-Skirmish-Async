@@ -2766,7 +2766,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
   // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
-  // each figure within 2 spaces of target (other than the defender) suffers Damage = Hits and Strain = Surges on that die.
+  // each OTHER figure within 2 spaces of target (other than the defender
+  // AND other than Bossk himself) suffers Damage = Hits and Strain = Surges
+  // on that die. Per destruct 2026-05-08: Bossk excluded.
   if (pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
     const ifDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const targetPos = game.figurePositions?.[ifDefPlayerNum]?.[combat.target.figureKey];
@@ -2777,7 +2779,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       for (const pn of [1, 2]) {
         const figs = game.figurePositions?.[pn] || {};
         for (const [fk, pos] of Object.entries(figs)) {
-          if (fk === combat.target.figureKey) continue;
+          if (fk === combat.target.figureKey) continue; // defender excluded
+          if (fk === combat.attackerFigureKey) continue; // Bossk himself excluded
           if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
           const { label: lbl } = getFigureLabel(game, pn, fk);
           splashTargets.push({ figureKey: fk, playerNum: pn, label: lbl });
