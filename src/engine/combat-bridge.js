@@ -1200,24 +1200,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // guards (Second Chance, SbR, Last Resort, Executor, processFigureDefeat)
       // skip when defeat is deferred.
       let _defeatSuppressed = !!combat._defeatSuppressed;
-      // Self-Destruct Protocol: pre-defeat interrupt — prompt owner to use ability before defeat
-      if (newCur <= 0 && !_defeatSuppressed && !game.selfDestructProtocolTriggered?.[targetMsgId]) {
-        const _sdpDcName2 = idx >= 0 ? dcList?.[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _sdpEff2 = getDcEffects()?.[_sdpDcName2];
-        if ((_sdpEff2?.specialAbilityIds || []).includes('self_destruct_protocol')) {
-          game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
-          game.selfDestructProtocolTriggered[targetMsgId] = true;
-          setPendingSelfDestruct(game, { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex });
-          const _sdpOwnerId2 = game[`player${defenderPlayerNum}Id`];
-          const _sdpRow2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`self_destruct_protocol_use_${game.gameId}_${targetMsgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`self_destruct_protocol_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await logGameAction(game, client, `<@${_sdpOwnerId2}> **Self-Destruct Protocol** — **${combat.target.label || _sdpDcName2}** is about to be defeated! Roll 1 red die, apply Hits to adjacent figures, then the figure is defeated.`, { components: [_sdpRow2], allowedMentions: { users: [_sdpOwnerId2] } });
-          saveGames(game.gameId);
-          return;
-        }
-      }
+      // Self-Destruct Protocol — now handled by BEFORE_DEFEATED hook
+      // (damage-pipeline-hooks.js + handlers/interrupts.js handleSelfDestructProtocol).
       // Parting Shot — now handled by BEFORE_DEFEATED hook
       // (damage-pipeline-hooks.js + handlers/parting-shot.js).
       // Last Resort — now handled by BEFORE_DEFEATED hook

@@ -159,10 +159,10 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     );
 
     assert.strictEqual(game.pendingSelfDestructMove, undefined, 'pendingSelfDestructMove cleared');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called once');
-    const reentry = calls.applyDamageAndFinishCombat[0];
-    assert.strictEqual(reentry.params.damage, 3, 'original damage passed to re-entry');
-    assert.strictEqual(reentry.params.targetMsgId, 'dc2', 'correct targetMsgId');
+    // 2026-05-08 migration: defeat finalized via processFigureDefeat
+    // (completeDeferredDefeat) instead of legacy applyDamageAndFinishCombat re-entry.
+    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for SDP figure');
+    assert.strictEqual(calls.processFigureDefeat[0].defeatedPlayerNum, 2, 'defender side defeated');
     // Position unchanged on skip.
     assert.strictEqual(game.figurePositions[2]['Rebel Trooper-1-0'], 'a1', 'figure stayed in place on skip');
   });
@@ -186,7 +186,8 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
 
     assert.strictEqual(game.pendingSelfDestructMove, undefined, 'pendingSelfDestructMove cleared');
     assert.strictEqual(game.figurePositions[2]['Rebel Trooper-1-0'], 'c3', 'figure moved to picked destination');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called once after move');
+    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat.
+    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for SDP figure after move');
   });
 
   it('B-I-PREDEFEAT-002: SDP skip path deletes pending and calls re-entry', async () => {
@@ -206,8 +207,10 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     );
 
     assert.strictEqual(game.pendingSelfDestruct, undefined, 'pendingSelfDestruct deleted');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
-    assert.strictEqual(calls.processFigureDefeat.length, 0, 'no splash defeats on skip');
+    // 2026-05-08 migration: skip path finalizes via completeDeferredDefeat
+    // → processFigureDefeat (replacing applyDamageAndFinishCombat re-entry).
+    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for SDP figure on skip');
+    assert.strictEqual(calls.processFigureDefeat[0].source, 'Self-Destruct Protocol skipped', 'source labeled');
   });
 
   it('B-I-PREDEFEAT-003: Last Resort use path depletes attachment, calls re-entry', async () => {

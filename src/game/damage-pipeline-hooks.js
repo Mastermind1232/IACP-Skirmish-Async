@@ -197,6 +197,63 @@ BEFORE_DEFEATED_HOOKS.push({
 });
 
 /**
+ * Self-Destruct Protocol (IG-11): "When this figure is about to be
+ * defeated, you may move up to 3 spaces, then roll 1 red die — each
+ * figure adjacent suffers Damage equal to the Hits. Then this figure
+ * is defeated."
+ *
+ * Detection: specialAbilityIds includes 'self_destruct_protocol'.
+ * Once-per-figure flag `game.selfDestructProtocolTriggered[msgId]`.
+ *
+ * Returns preventDefeat=true; sets pendingSelfDestruct. Handler in
+ * interrupts.js (handleSelfDestructProtocol → handleSelfDestructMovePick)
+ * does the move + splash + completeDeferredDefeat.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'self_destruct_protocol',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.selfDestructProtocolTriggered?.[opts.msgId]) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    return (eff?.specialAbilityIds || []).includes('self_destruct_protocol');
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
+    game.selfDestructProtocolTriggered[opts.msgId] = true;
+    setPendingSelfDestruct(game, {
+      gameId: game.gameId,
+      figureKey: opts.figureKey,
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+      defenderPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`self_destruct_protocol_use_${game.gameId}_${opts.msgId}`).setLabel('Use Self-Destruct').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`self_destruct_protocol_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> **Self-Destruct Protocol** — **${dcName}** is about to be defeated! Roll 1 red die, apply Hits to adjacent figures, then the figure is defeated.`
+        : `**Self-Destruct Protocol** — **${dcName}** is about to be defeated!`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
  * Last Resort (Skirmish Upgrade attachment): "Deplete this card when
  * a figure in this group has suffered Damage equal to its Health.
  * Before that figure is defeated, roll 1 red die. Each figure and

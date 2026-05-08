@@ -359,13 +359,22 @@ async function _runSelfDestructExplode(game, pending, ctx) {
       });
     }
   }
-  // Finalize defeat by re-calling applyDamageAndFinishCombat (SDP flag already set so no re-trigger).
-  await applyDamageAndFinishCombat(game, combat, {
-    damage: pending.damage, hit: pending.hit, resultText: pending.resultText,
-    totalBlast: pending.totalBlast, defenderPlayerNum: pending.defenderPlayerNum,
-    attackerPlayerNum: pending.attackerPlayerNum, ownerId: pending.ownerId,
-    targetMsgId: pending.targetMsgId, targetFigIndex: pending.targetFigIndex,
-  }, client);
+  // Finalize SDP figure's defeat via shared deferred-defeat helper.
+  // Per destruct 2026-05-08 migration: HP already at 0 (BEFORE_DEFEATED
+  // hook ran after reduceHp). completeDeferredDefeat fires
+  // WHEN_DEFEATED hooks + processFigureDefeat.
+  const { completeDeferredDefeat: _sdpComplete } = await import('../game/deferred-defeat.js');
+  const _sdpFigKey = combat?.target?.figureKey;
+  const _sdpFigIdxMatch = String(_sdpFigKey || '').match(/-(\d+)-(\d+)$/);
+  const _sdpFigIdx = _sdpFigIdxMatch ? parseInt(_sdpFigIdxMatch[2], 10) : (pending.targetFigIndex ?? 0);
+  await _sdpComplete(game, ctx, {
+    figureKey: _sdpFigKey,
+    msgId: pending.targetMsgId,
+    figIndex: _sdpFigIdx,
+    controllerPlayerNum: pending.defenderPlayerNum,
+    attackerPlayerNum: pending.attackerPlayerNum,
+    source: 'Self-Destruct Protocol',
+  });
   saveGames(game.gameId);
 }
 
@@ -389,13 +398,19 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
     clearPendingSelfDestruct(_sdcpGame);
     const _sdcpCombat = _sdcpGame.pendingCombat;
     await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — Skipped. ${_sdcpCombat?.target?.label || 'Figure'} is defeated.`, { phase: 'ROUND', icon: 'card' });
-    const { applyDamageAndFinishCombat } = ctx;
-    await applyDamageAndFinishCombat(_sdcpGame, _sdcpCombat, {
-      damage: _sdcpPending.damage, hit: _sdcpPending.hit, resultText: _sdcpPending.resultText,
-      totalBlast: _sdcpPending.totalBlast, defenderPlayerNum: _sdcpPending.defenderPlayerNum,
-      attackerPlayerNum: _sdcpPending.attackerPlayerNum, ownerId: _sdcpPending.ownerId,
-      targetMsgId: _sdcpPending.targetMsgId, targetFigIndex: _sdcpPending.targetFigIndex,
-    }, client);
+    // Skip → no splash, finalize the figure's defeat directly.
+    const { completeDeferredDefeat: _sdpSkipComplete } = await import('../game/deferred-defeat.js');
+    const _sdpSkipFigKey = _sdcpCombat?.target?.figureKey;
+    const _sdpSkipFigIdxMatch = String(_sdpSkipFigKey || '').match(/-(\d+)-(\d+)$/);
+    const _sdpSkipFigIdx = _sdpSkipFigIdxMatch ? parseInt(_sdpSkipFigIdxMatch[2], 10) : (_sdcpPending.targetFigIndex ?? 0);
+    await _sdpSkipComplete(_sdcpGame, ctx, {
+      figureKey: _sdpSkipFigKey,
+      msgId: _sdcpPending.targetMsgId,
+      figIndex: _sdpSkipFigIdx,
+      controllerPlayerNum: _sdcpPending.defenderPlayerNum,
+      attackerPlayerNum: _sdcpPending.attackerPlayerNum,
+      source: 'Self-Destruct Protocol skipped',
+    });
     saveGames(_sdcpGame.gameId); return;
   }
 
