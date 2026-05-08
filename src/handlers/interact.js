@@ -151,12 +151,26 @@ export async function handleInteractChoice(interaction, ctx) {
     logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** used terminal.`, { phase: 'ROUND', icon: 'deploy' });
   } else if (optionId.startsWith('mark_patron_')) {
     // M11 Gaining Favor: place 1 of player's mission tokens on the
-    // patron. Decrement remaining tokens, set ownership; VP scoring
+    // patron. Per destruct 2026-05-08: BOTH players may mark the same
+    // patron at different times — storage is per-player flag per coord.
+    // Decrement remaining tokens; VP scoring
     // (getAnchorheadPatronVpBonus) reads anchorheadPatronTokens at win-
-    // condition + scorecard time and applies the [0,2,5,10,20] table.
+    // condition + scorecard time and applies the [0,2,5,10,20] table
+    // independently per player.
     const _patronCoord = optionId.replace('mark_patron_', '').toLowerCase();
     game.anchorheadPatronTokens = game.anchorheadPatronTokens || {};
-    game.anchorheadPatronTokens[_patronCoord] = playerNum;
+    const _existing = game.anchorheadPatronTokens[_patronCoord];
+    let _entry;
+    if (_existing && typeof _existing === 'object') {
+      _entry = { ..._existing };
+    } else if (_existing === 1 || _existing === 2) {
+      // Legacy shape — promote to per-player object preserving prior owner.
+      _entry = { [_existing]: true };
+    } else {
+      _entry = {};
+    }
+    _entry[playerNum] = true;
+    game.anchorheadPatronTokens[_patronCoord] = _entry;
     game.anchorheadTokensRemaining = game.anchorheadTokensRemaining || { 1: 4, 2: 4 };
     game.anchorheadTokensRemaining[playerNum] = Math.max(0, (game.anchorheadTokensRemaining[playerNum] ?? 4) - 1);
     logMsg = await logGameAction(game, interaction.client, `🍻 **${pLabel}: ${figLabel}** marked patron at **${_patronCoord.toUpperCase()}** (${game.anchorheadTokensRemaining[playerNum]} token${game.anchorheadTokensRemaining[playerNum] !== 1 ? 's' : ''} left).`, { phase: 'ROUND', icon: 'deploy' });

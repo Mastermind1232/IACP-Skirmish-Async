@@ -338,7 +338,15 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
       const adjacentPatrons = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, patronSet);
       const oppNum = opponentPlayerNum(playerNum);
       for (const coord of adjacentPatrons) {
-        if (anchorheadTokens[coord]) continue; // already marked
+        // Per destruct 2026-05-08: a patron can be marked by BOTH
+        // players at different times. Skip only if THIS player has
+        // already marked. Both legacy single-owner shape and per-player
+        // object shape supported.
+        const _ahEntry = anchorheadTokens[coord];
+        const _ahMarked = (_ahEntry && typeof _ahEntry === 'object')
+          ? !!(_ahEntry[playerNum])
+          : (_ahEntry === playerNum);
+        if (_ahMarked) continue;
         // Check standard control: opponent has no figure on/adjacent.
         const oppPositions = game.figurePositions?.[oppNum] || {};
         let oppContests = false;

@@ -35,16 +35,33 @@ export function getCrateDeploymentVpBonus(game, deps) {
   return { p1, p2 };
 }
 
-/** Compute persistent VP bonus from Anchorhead A patron tokens. */
+/**
+ * Compute persistent VP bonus from Anchorhead A patron tokens.
+ *
+ * Per destruct 2026-05-08: a patron can be marked by BOTH players (each
+ * places their token at a different time when they control it). Storage
+ * is per-player flags per coord:
+ *   game.anchorheadPatronTokens[coord] = { "1": true, "2": true }
+ *
+ * Legacy shape (single owner: `{ coord: playerNum }`) is also accepted
+ * for backwards compatibility with games saved before this change.
+ */
 export function getAnchorheadPatronVpBonus(game) {
   if (game.selectedMap?.id !== 'anchorhead-cantina-bar' || game.selectedMission?.variant !== 'a') return { p1: 0, p2: 0 };
   const VP_TABLE = [0, 2, 5, 10, 20];
   const patronTokens = game.anchorheadPatronTokens || {};
   let p1 = 0;
   let p2 = 0;
-  for (const owner of Object.values(patronTokens)) {
-    if (owner === 1) p1++;
-    else if (owner === 2) p2++;
+  for (const entry of Object.values(patronTokens)) {
+    if (entry == null) continue;
+    if (typeof entry === 'object') {
+      if (entry[1] || entry['1']) p1++;
+      if (entry[2] || entry['2']) p2++;
+    } else {
+      // Legacy single-owner shape
+      if (entry === 1) p1++;
+      else if (entry === 2) p2++;
+    }
   }
   return { p1: VP_TABLE[Math.min(p1, 4)] || 0, p2: VP_TABLE[Math.min(p2, 4)] || 0 };
 }
