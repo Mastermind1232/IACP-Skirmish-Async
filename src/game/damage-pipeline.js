@@ -38,6 +38,8 @@
  */
 
 import { reduceHp } from './damage-helpers.js';
+import { getPlayableReactionCardsForTiming } from './cc-timing.js';
+import { opponentPlayerNum } from './player-helpers.js';
 
 /**
  * @typedef {Object} DamageOpts
@@ -61,6 +63,48 @@ import { reduceHp } from './damage-helpers.js';
  * @property {boolean} wasDefeated
  * @property {boolean} preventDefeat - true if a before-defeated hook prevented defeat
  */
+
+/**
+ * CC-play window timings emitted by the pipeline. Each phase posts
+ * a prompt to the relevant player's hand channel listing CCs with
+ * matching `timing` field. Players play CCs orthogonally; the
+ * pipeline does NOT pause for these (fire-and-forget). Defeat-
+ * preventing CCs (Second Chance, YWNDM) must register as
+ * BEFORE_DEFEATED hooks with sync logic — they cannot rely on the
+ * notify window alone.
+ *
+ * Recognized timings (canonical names from CC effect data):
+ *   - whenFigureSuffersDamage      — fired after damage applies
+ *   - beforeFigureIsDefeated       — fired when would-be HP = 0
+ *   - whenFigureIsDefeated         — fired after defeat confirmed
+ *
+ * Add more as cards are audited and their timings get codified.
+ */
+const CC_TIMINGS_WHEN_DAMAGED = ['whenFigureSuffersDamage'];
+const CC_TIMINGS_BEFORE_DEFEATED = ['beforeFigureIsDefeated'];
+const CC_TIMINGS_WHEN_DEFEATED = ['whenFigureIsDefeated'];
+
+/**
+ * Notify both players that a CC-play window is open with the given
+ * timings. For each player who has a matching CC in hand, posts a
+ * lightweight prompt to their hand channel. Fire-and-forget; pipeline
+ * does not block on player response.
+ *
+ * Players play CCs via the normal cc-hand handlers — those handlers
+ * mutate game state which the next pipeline call observes.
+ */
+async function _notifyCcPlayWindow(game, ctx, timings, opts) {
+  if (!ctx?.client || !timings?.length) return;
+  const sendPrivateReactionPrompt = ctx.sendPrivateReactionPrompt;
+  if (typeof sendPrivateReactionPrompt !== 'function') return;
+  for (const pn of [1, 2]) {
+    const cards = getPlayableReactionCardsForTiming(game, pn, timings);
+    if (!cards.length) continue;
+    try {
+      await sendPrivateReactionPrompt(ctx.client, game, pn, cards.length, opts.contextLabel);
+    } catch (_e) { /* non-fatal — prompt failure shouldn't break damage */ }
+  }
+}
 
 /**
  * WHEN_DAMAGED registry. Each entry:
@@ -140,8 +184,15 @@ export async function applyDamage(game, ctx, opts) {
   const wouldBeDefeated = prevHp > 0 && (prevHp - amount) <= 0;
 
   // 3. BEFORE_DEFEATED hooks — may prevent defeat or modify amount.
+  // Emits CC-play window FIRST so cards like Second Chance / YWNDM
+  // can be played from hand before sync hooks evaluate. Fire-and-
+  // forget; defeat-preventing CCs need to register as BEFORE_DEFEATED
+  // hooks themselves to actually prevent defeat in the same pass.
   let preventDefeat = false;
   if (wouldBeDefeated) {
+    await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
+      contextLabel: `figure would be defeated (${opts.source || 'Damage'})`,
+    });
     for (const hook of BEFORE_DEFEATED_HOOKS) {
       if (!hook.probe || !hook.apply) continue;
       if (!hook.probe(game, { ...opts, amount, prevHp })) continue;
@@ -179,6 +230,15 @@ export async function applyDamage(game, ctx, opts) {
         console.error(`[damage-pipeline] WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
       }
     }
+    await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
+      contextLabel: `figure defeated (${opts.source || 'Damage'})`,
+    });
+  } else {
+    // Damage applied but figure survived — emit when-suffers-damage
+    // CC window. (Skipped on defeat since when-defeated supersedes.)
+    await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DAMAGED, {
+      contextLabel: `figure suffered damage (${opts.source || 'Damage'})`,
+    });
   }
 
   return {
