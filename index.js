@@ -233,6 +233,7 @@ import {
   postKryknaPlaceButtons as _postKryknaPlaceButtonsPure,
   postFluctuationSwapButtons as _postFluctuationSwapButtonsPure,
   postArmsDistributionPrompt as _postArmsDistributionPromptPure,
+  postPrototypeMovePrompt as _postPrototypeMovePromptPure,
 } from './src/engine/misc-helpers.js';
 import {
   updateAttachmentMessageForDc as _updateAttachmentMessageForDcPure,
@@ -1132,6 +1133,12 @@ async function postFluctuationSwapButtons(game, channel, gameId, playerNum) {
 
 async function postArmsDistributionPrompt(game, channel, gameId) {
   return _postArmsDistributionPromptPure(game, channel, gameId, {
+    getPlayerId, discordCatch,
+  });
+}
+
+async function postPrototypeMovePrompt(game, channel, gameId) {
+  return _postPrototypeMovePromptPure(game, channel, gameId, {
     getPlayerId, discordCatch,
   });
 }
@@ -3491,7 +3498,7 @@ function buildAllDeps() {
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
     getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,
-    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons, postArmsDistributionPrompt,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons, postArmsDistributionPrompt, postPrototypeMovePrompt,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,

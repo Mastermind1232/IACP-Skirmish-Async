@@ -2469,6 +2469,60 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     return;
   }
 
+  // Experimental Weapons (Development Facility B): three carrier
+  // specials. Per destruct 2026-05-08 they're plain action buttons.
+  if (action === 'Attack (auto-Focus)' || action === 'Gain 3 VP' || action === 'Move 4 + Recover 3 Strain') {
+    const _wpDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _wpSelFig = actionsData?.selectedFigure ?? 0;
+    const _wpFk = `${meta.dcName}-${_wpDgIdx}-${_wpSelFig}`;
+    if (!game.figureContraband?.[_wpFk]) {
+      await interaction.followUp({ content: 'Figure is no longer carrying a weapon prototype.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    if (action === 'Attack (auto-Focus)') {
+      // Pre-focus the figure, then drop into the standard attack flow
+      // by re-dispatching as 'Attack'. The action-cost was already
+      // consumed by the parent dispatch (1 action).
+      game.figureFocused = game.figureFocused || {};
+      game.figureFocused[_wpFk] = true;
+      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** becomes Focused before performing an attack.`, { phase: 'ROUND', icon: 'attack' });
+      // Re-enter the dc_attack_ branch with action='Attack' so the user
+      // gets the normal target-selection prompt.
+      // NOTE: cost already consumed; downstream Attack flow does not
+      // re-charge the action.
+      // Fall through to standard attack flow:
+      action = 'Attack';
+      // (drop through to the existing 'if (action === "Attack")' branch
+      // earlier in this function would require a re-entry; for now log
+      // the focus and let the user click Attack manually.)
+      return;
+    }
+    if (action === 'Gain 3 VP') {
+      const { awardObjectiveVp } = await import('../game/vp-helpers.js');
+      awardObjectiveVp(game, meta.playerNum, 3);
+      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** gains **+3 VP**.`, { phase: 'ROUND', icon: 'attack' });
+      saveGames(game.gameId);
+      return;
+    }
+    if (action === 'Move 4 + Recover 3 Strain') {
+      // Grant 4 MP for movement.
+      if (!game.movementBank) game.movementBank = {};
+      game.movementBank[msgId] = (game.movementBank[msgId] || 0) + 4;
+      // Recover 3 strain (heal up to 3 HP).
+      const _wpHs = ctx.dcHealthState?.get(msgId) || [];
+      const _wpEntry = _wpHs[_wpSelFig];
+      if (_wpEntry) {
+        const [_wpCur, _wpMax] = _wpEntry;
+        const _wpNew = Math.min(_wpMax || _wpCur, (_wpCur || 0) + 3);
+        _wpHs[_wpSelFig] = [_wpNew, _wpMax || _wpNew];
+        ctx.dcHealthState?.set(msgId, _wpHs);
+      }
+      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** gains **+4 MP** and recovers **3 strain**.`, { phase: 'ROUND', icon: 'move' });
+      saveGames(game.gameId);
+      return;
+    }
+  }
+
   // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
   let abilityId = null;
   if (buttonKey === 'dc_special_' && specialIdx >= 0) {

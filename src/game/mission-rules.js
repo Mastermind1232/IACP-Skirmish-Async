@@ -84,6 +84,25 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
 }
 
 /**
+ * Experimental Weapons (Development Facility B) rule reader. Per
+ * destruct 2026-05-08 the carrier gains 3 special-action / double-action
+ * options as extra buttons on their DC actions message; combat-bridge
+ * applies weaponPrototypeCarrierBlockPenalty to defense; the action list
+ * (weaponPrototypeCarrierActions) is consumed by components.js when
+ * rendering the carrier's button row.
+ *
+ * @param {object} game
+ * @returns {{ blockPenalty: number, carrierActions: Array }}
+ */
+export function getExperimentalWeaponsRules(game) {
+  const persistent = game?.selectedMission?.rules?.persistent;
+  return {
+    blockPenalty: typeof persistent?.weaponPrototypeCarrierBlockPenalty === 'number' ? persistent.weaponPrototypeCarrierBlockPenalty : 0,
+    carrierActions: Array.isArray(persistent?.weaponPrototypeCarrierActions) ? persistent.weaponPrototypeCarrierActions : [],
+  };
+}
+
+/**
  * Line of Fire (Anchorhead Cantina Bar B) rule readers. The actual dispatch
  * happens in:
  *   • src/handlers/movement.js — extractionPointVp on figure entry
@@ -454,6 +473,63 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
             await checkWinConditions(game, client);
             if (game.ended) return { gameEnded: true };
           }
+        }
+      }
+    }
+  }
+
+  // movePrototypePerTerminal: builds a per-terminal pick queue that the
+  // round.js continuation pops via interactive prompts. Used by The
+  // Art of Robotics (Development Facility A): each terminal a player
+  // controls grants one prototype-move (up to 4 spaces). Per destruct
+  // 2026-05-08. Awards no VP itself — the companion rule
+  // vpForControllingAtLeastOnePrototype handles scoring AFTER moves.
+  if (rules.movePrototypePerTerminal && mapId) {
+    const { movePerPick = 4 } = rules.movePrototypePerTerminal;
+    const { countTerminalsControlledByPlayer } = ctx;
+    if (typeof countTerminalsControlledByPlayer === 'function') {
+      const initPn = getInitiativePlayerNum(game);
+      const otherPn = initPn === 1 ? 2 : 1;
+      const queue = [];
+      for (const pn of [initPn, otherPn]) {
+        const tCount = countTerminalsControlledByPlayer(game, pn, mapId) || 0;
+        for (let i = 0; i < tCount; i++) queue.push({ playerNum: pn, movePerPick });
+      }
+      if (queue.length > 0) {
+        // Lazy-init prototypePositions from missionA token positions.
+        if (!game.prototypePositions) {
+          const _ppData = getMapTokensData?.()[mapId]?.missionA;
+          const _ppCoords = Object.values(_ppData?.positions || {}).flat().filter(Boolean);
+          game.prototypePositions = {};
+          _ppCoords.forEach((c, i) => { game.prototypePositions[`prototype-${i + 1}`] = normalizeCoord(c); });
+        }
+        game.pendingPrototypeMoveQueue = queue;
+      }
+    }
+  }
+
+  // vpForControllingAtLeastOnePrototype: 8 VP per player who controls
+  // at least one Droid prototype (post-move). Used by The Art of
+  // Robotics (Development Facility A). Per destruct 2026-05-08.
+  if (rules.vpForControllingAtLeastOnePrototype && mapId) {
+    const { vp = 8, vpMessage } = rules.vpForControllingAtLeastOnePrototype;
+    const positions = game.prototypePositions;
+    if (positions && typeof positions === 'object') {
+      // For each player, check if they control any prototype space.
+      for (const pn of [1, 2]) {
+        let controlsAny = false;
+        for (const coord of Object.values(positions)) {
+          if (!coord) continue;
+          const _ppController = getSpaceController(game, mapId, coord);
+          if (_ppController === pn) { controlsAny = true; break; }
+        }
+        if (controlsAny) {
+          const pid = getPlayerId(game, pn);
+          awardObjectiveVp(game, pn, vp);
+          const msg = vpMessage || `controlling at least 1 Droid prototype (${vp} VP)`;
+          await logGameAction(game, client, `<@${pid}> gained **${vp} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+          await checkWinConditions(game, client);
+          if (game.ended) return { gameEnded: true };
         }
       }
     }

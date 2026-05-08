@@ -267,16 +267,38 @@
         "persistent": "End of each Round: For each terminal he controls, each player may choose 1 Droid prototype and move it up to 4 spaces. Then, each player who controls at least 1 Droid prototype gains 8 VPs.",
         "rules": {
           "startOfRound": {},
-          "endOfRound": {}
+          "endOfRound": {
+            "movePrototypePerTerminal": {
+              "movePerPick": 4,
+              "tokenLabel": "Droid Prototype"
+            },
+            "vpForControllingAtLeastOnePrototype": {
+              "vp": 8,
+              "vpMessage": "[Mission VP] The Art of Robotics — controlling at least 1 Droid prototype (8 VP)"
+            }
+          }
         }
       },
       "b": {
         "name": "Experimental Weapons",
         "tokenLabel": "Weapon Prototype",
+        "interactLabel": "Retrieve Weapon Prototype",
+        "mechanics": {
+          "type": "carry",
+          "maxCarry": 1
+        },
         "imagePath": "vassal_extracted/images/mission-cards/Development Facility-B-Experiment.jpg",
         "setup": "",
         "persistent": "A figure can retrieve a weapon prototype. A figure can carry only 1 weapon prototype.\n\nA figure carrying a weapon prototype applies -1 Block to its defense results and gains: Surge: Perform an attack. Before performing the attack, you become Focused. Hit+Hit: Gain 3 VPs. Hit+Hit: Move up to 4 spaces and recover 3 Strain.",
         "rules": {
+          "persistent": {
+            "weaponPrototypeCarrierBlockPenalty": -1,
+            "weaponPrototypeCarrierActions": [
+              { "id": "wp_attack_focus", "label": "Attack (auto-Focus)", "actionCost": 1, "effect": "perform_attack_with_pre_focus" },
+              { "id": "wp_gain_vp", "label": "Gain 3 VP", "actionCost": 2, "effect": "gain_vp", "vp": 3 },
+              { "id": "wp_move_recover", "label": "Move 4 + Recover 3 Strain", "actionCost": 2, "effect": "move_and_recover_strain", "spaces": 4, "strain": 3 }
+            ]
+          },
           "startOfRound": {},
           "endOfRound": {}
         }

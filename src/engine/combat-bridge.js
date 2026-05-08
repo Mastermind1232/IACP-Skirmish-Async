@@ -290,6 +290,18 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   // at the modifier step inside src/handlers/combat.js proceedAfterRerolls
   // (defender chooses 0-3 damage → +N Block via combat_passive_<gid>_cbs_N).
   // Per destruct 2026-05-08.
+  // Experimental Weapons (Development Facility B): a carrier of a
+  // weapon prototype applies weaponPrototypeCarrierBlockPenalty (−1
+  // Block) to defense results. Per destruct 2026-05-08. Stacks with
+  // other defense modifiers; runs once per attack.
+  if (!combat.weaponPrototypePenaltyApplied && combat.target?.figureKey) {
+    const _wpRule = game?.selectedMission?.rules?.persistent?.weaponPrototypeCarrierBlockPenalty;
+    if (typeof _wpRule === 'number' && game.figureContraband?.[combat.target.figureKey]) {
+      combat.bonusBlock = (combat.bonusBlock || 0) + _wpRule;
+      combat.weaponPrototypePenaltyApplied = true;
+      await logGameAction(game, client, `🔫 **Experimental Weapons** — **${combat.target.label}** carries a weapon prototype: ${_wpRule > 0 ? '+' : ''}${_wpRule} Block to defense.`, { phase: 'ROUND', icon: 'attack' });
+    }
+  }
   let { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;

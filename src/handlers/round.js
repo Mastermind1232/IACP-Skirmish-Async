@@ -771,7 +771,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   const missionRules = getMissionRules?.(mapId, variant) ?? {};
   const endOfRoundRules = missionRules.endOfRound;
   if (endOfRoundRules && runEndOfRoundRules) {
-    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, client };
+    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, countTerminalsControlledByPlayer, client };
     const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
     if (gameEnded) {
       if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -970,6 +970,9 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   const generalChannel = await fetchGameChannel(client, game.generalId);
   if (game.pendingArmsDistribution?.queue?.length > 0 && ctx.postArmsDistributionPrompt) {
     await ctx.postArmsDistributionPrompt(game, generalChannel, gameId);
+  }
+  if (Array.isArray(game.pendingPrototypeMoveQueue) && game.pendingPrototypeMoveQueue.length > 0 && ctx.postPrototypeMovePrompt) {
+    await ctx.postPrototypeMovePrompt(game, generalChannel, gameId);
   }
   // Devaron Garrison B: terminal→door selection + crate push prompts.
   // Driven by rules.openDoorPerTerminal flag (CRR mission card data).

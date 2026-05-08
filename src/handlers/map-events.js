@@ -488,3 +488,160 @@ export async function handleArmsDistributeSkip(interaction, ctx) {
   await _advanceArmsDistribution(game, gameId, ctx);
   saveGames(game.gameId);
 }
+
+// ── The Art of Robotics (Development Facility A) prototype-move ───────────
+
+async function _advancePrototypeQueue(game, gameId, ctx) {
+  const { client, postPrototypeMovePrompt } = ctx;
+  const queue = game.pendingPrototypeMoveQueue;
+  if (!Array.isArray(queue) || queue.length === 0) {
+    delete game.pendingPrototypeMoveQueue;
+    return;
+  }
+  const generalCh = await fetchGameChannel(client, game.generalId);
+  if (generalCh && postPrototypeMovePrompt) {
+    await postPrototypeMovePrompt(game, generalCh, gameId, { getPlayerId, discordCatch });
+  }
+}
+
+export async function handlePrototypePick(interaction, ctx) {
+  const { getGame, saveGames, canActAsPlayer, getMapData, getMapRegistry, filterMapSpacesByBounds } = ctx;
+  const rest = parseCustomId(interaction.customId, 'prototype_pick_');
+  const firstUnderscore = rest.indexOf('_');
+  if (firstUnderscore < 0) return;
+  const gameId = rest.substring(0, firstUnderscore);
+  const prototypeId = rest.substring(firstUnderscore + 1);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const queue = game.pendingPrototypeMoveQueue;
+  if (!Array.isArray(queue) || queue.length === 0) {
+    await interaction.followUp({ content: 'No prototype move pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const head = queue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, head.playerNum, canActAsPlayer, `It's P${head.playerNum}'s turn to move a prototype.`)) return;
+  const startCoord = game.prototypePositions?.[prototypeId];
+  if (!startCoord) {
+    await interaction.followUp({ content: 'Prototype no longer on the board.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // BFS up to movePerPick spaces from startCoord using map adjacency.
+  const mapId = game.selectedMap?.id;
+  const rawMs = mapId && getMapData ? getMapData(mapId) : null;
+  const mapDef = rawMs && getMapRegistry ? getMapRegistry()?.find?.((m) => m.id === mapId) : null;
+  const ms = rawMs ? (filterMapSpacesByBounds?.(rawMs, mapDef?.gridBounds) || rawMs) : null;
+  const adj = ms?.adjacency || {};
+  if (!adj || Object.keys(adj).length === 0) {
+    await interaction.followUp({ content: 'Map adjacency unavailable; cannot compute move set.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const start = String(startCoord).toLowerCase();
+  const visited = new Set([start]);
+  let frontier = [start];
+  const movePer = head.movePerPick || 4;
+  for (let d = 0; d < movePer; d++) {
+    const next = [];
+    for (const c of frontier) {
+      for (const n of (adj[c] || [])) {
+        const nn = String(n).toLowerCase();
+        if (!visited.has(nn)) { visited.add(nn); next.push(nn); }
+      }
+    }
+    frontier = next;
+  }
+  // Exclude spaces occupied by figures or other prototypes.
+  const occupied = new Set();
+  for (const pn of [1, 2]) {
+    for (const fp of Object.values(game.figurePositions?.[pn] || {})) {
+      if (fp) occupied.add(String(fp).toLowerCase());
+    }
+  }
+  for (const [otherId, c] of Object.entries(game.prototypePositions || {})) {
+    if (otherId !== prototypeId && c) occupied.add(String(c).toLowerCase());
+  }
+  const validSpaces = [...visited].filter((c) => !occupied.has(c));
+  if (validSpaces.length === 0) {
+    await interaction.followUp({ content: 'No legal destination spaces.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const contextKey = `${gameId}_prototype_${prototypeId}`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[contextKey] = {
+    validSpaces,
+    cellPrefix: `prototype_dest_pick_${gameId}_${prototypeId}_`,
+    mapSpaces: null,
+    headerText: `Move ${prototypeId} (from ${start.toUpperCase()})`,
+    style: 1,
+  };
+  const { rows } = buildRowPickerButtons(validSpaces, `space_row_${contextKey}_`, {});
+  await interaction.message.edit({
+    content: `🤖 **The Art of Robotics** — Move **${prototypeId}** from **${start.toUpperCase()}**. Pick a row, then a destination space:`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  saveGames(game.gameId);
+}
+
+export async function handlePrototypeSkip(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'prototype_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const queue = game.pendingPrototypeMoveQueue;
+  if (!Array.isArray(queue) || queue.length === 0) {
+    await interaction.followUp({ content: 'No prototype move pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const head = queue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, head.playerNum, canActAsPlayer, `It's P${head.playerNum}'s turn to move a prototype.`)) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  const pid = getPlayerId(game, head.playerNum);
+  await logGameAction(game, client, `🤖 <@${pid}> skipped a prototype move (terminal forfeit).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  queue.shift();
+  await _advancePrototypeQueue(game, gameId, ctx);
+  saveGames(game.gameId);
+}
+
+/**
+ * customId: prototype_dest_pick_<gameId>_<prototypeId>_<coord>
+ */
+export async function handlePrototypeDestPick(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer } = ctx;
+  const rest = parseCustomId(interaction.customId, 'prototype_dest_pick_');
+  // Format: <gameId>_<prototypeId>_<coord>; gameId is single-token until first underscore,
+  // prototypeId follows pattern "prototype-<n>", coord is last token (no underscore).
+  const lastUnderscore = rest.lastIndexOf('_');
+  if (lastUnderscore < 0) return;
+  const head = rest.substring(0, lastUnderscore);
+  const coord = rest.substring(lastUnderscore + 1).toLowerCase();
+  const firstUnderscore = head.indexOf('_');
+  if (firstUnderscore < 0) return;
+  const gameId = head.substring(0, firstUnderscore);
+  const prototypeId = head.substring(firstUnderscore + 1);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const queue = game.pendingPrototypeMoveQueue;
+  if (!Array.isArray(queue) || queue.length === 0) {
+    await interaction.followUp({ content: 'No prototype move pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const queueHead = queue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, queueHead.playerNum, canActAsPlayer, `It's P${queueHead.playerNum}'s turn to move a prototype.`)) return;
+  const contextKey = `${gameId}_prototype_${prototypeId}`;
+  const valid = game.pendingSpacePick?.[contextKey]?.validSpaces || [];
+  if (!valid.includes(coord)) {
+    await interaction.followUp({ content: `${coord.toUpperCase()} is not a legal destination.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const oldCoord = String(game.prototypePositions?.[prototypeId] || '').toUpperCase();
+  game.prototypePositions[prototypeId] = normalizeCoord(coord);
+  cleanupSpacePick(game, contextKey);
+  const pid = getPlayerId(game, queueHead.playerNum);
+  await logGameAction(game, client, `🤖 <@${pid}> The Art of Robotics — moved **${prototypeId}** **${oldCoord} → ${coord.toUpperCase()}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'move' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  queue.shift();
+  await _advancePrototypeQueue(game, gameId, ctx);
+  saveGames(game.gameId);
+}

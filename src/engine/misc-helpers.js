@@ -357,6 +357,50 @@ export async function postKryknaPlaceButtons(game, channel, gameId, deps) {
 }
 
 /**
+ * Post The Art of Robotics (Development Facility A) prototype-move prompt.
+ * Reads game.pendingPrototypeMoveQueue[0] and posts buttons one per
+ * non-defeated prototype the player can pick. After clicking, a follow-up
+ * space picker BFS-restricted to up-to-N spaces fires.
+ *
+ * @param {object} game
+ * @param {import('discord.js').TextChannel} channel
+ * @param {string} gameId
+ * @param {object} deps - { getPlayerId, discordCatch }
+ */
+export async function postPrototypeMovePrompt(game, channel, gameId, deps) {
+  const queue = game.pendingPrototypeMoveQueue;
+  if (!Array.isArray(queue) || queue.length === 0) return;
+  const head = queue[0];
+  if (!head) return;
+  const positions = game.prototypePositions || {};
+  const ids = Object.keys(positions).filter((id) => positions[id]);
+  if (ids.length === 0) {
+    queue.shift();
+    return;
+  }
+  const pid = deps.getPlayerId(game, head.playerNum);
+  const buttons = ids.slice(0, 24).map((id) =>
+    new ButtonBuilder()
+      .setCustomId(`prototype_pick_${gameId}_${id}`)
+      .setLabel(`Move ${id} (at ${String(positions[id]).toUpperCase()})`.slice(0, 80))
+      .setStyle(ButtonStyle.Primary),
+  );
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId(`prototype_skip_${gameId}`)
+      .setLabel('Skip this terminal')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const rows = chunkButtonsToRows(buttons).slice(0, 5);
+  const remaining = queue.length;
+  await channel.send(sanitizeMentions({
+    content: `🤖 **The Art of Robotics** — <@${pid}>, choose a Droid prototype to move up to **${head.movePerPick || 4}** spaces (${remaining} prototype move${remaining !== 1 ? 's' : ''} queued):`,
+    components: rows,
+    allowedMentions: { users: [pid] },
+  })).catch(deps.discordCatch);
+}
+
+/**
  * Post Arms Salvage (Devaron Garrison A) distribute prompts. Reads
  * game.pendingArmsDistribution.queue and posts buttons for the current
  * head: one button per (token × eligible friendly) so the controller

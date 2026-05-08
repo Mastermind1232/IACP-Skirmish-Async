@@ -933,6 +933,27 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       specialCosts = [...specialCosts, 1];
     }
   }
+  // Experimental Weapons (Development Facility B): when figure carries a
+  // weapon prototype, expose the 3 carrier-specific actions as extra
+  // blue buttons. Per destruct 2026-05-08. Costs from data:
+  //   • Attack (auto-Focus) — 1 action
+  //   • Gain 3 VP — 2 actions
+  //   • Move 4 + Recover 3 Strain — 2 actions
+  if (game?.selectedMission?.name === 'Experimental Weapons') {
+    const _wpActions = game?.selectedMission?.rules?.persistent?.weaponPrototypeCarrierActions || [];
+    if (_wpActions.length > 0) {
+      const _wpDgIdx = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _wpSelFig = typeof actionsDataOrRemaining === 'object' ? (actionsDataOrRemaining?.selectedFigure ?? 0) : 0;
+      const _wpFk = `${dcName}-${_wpDgIdx}-${_wpSelFig}`;
+      if (game.figureContraband?.[_wpFk]) {
+        for (const _wpAct of _wpActions) {
+          if (!_wpAct?.label) continue;
+          specials = [...specials, _wpAct.label];
+          specialCosts = [...specialCosts, _wpAct.actionCost || 1];
+        }
+      }
+    }
+  }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
   const actionsRemaining = actionsData.remaining ?? 2;
