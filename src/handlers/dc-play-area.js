@@ -3623,7 +3623,8 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   if (!m) return;
   const [, gameId, officerMsgId, space] = m;
   const chosenSpace = String(space).toLowerCase();
-  const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client } = ctx;
+  const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client,
+    getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementPath } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   cleanupSpacePick(game, `${gameId}_${officerMsgId}`);
@@ -3635,8 +3636,24 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
 
-  const { figureKey, targetMsgId, label } = pending;
+  const { figureKey, targetMsgId, label, mp } = pending;
   const dcName = dcNameFromFigureKey(figureKey);
+  // Per destruct 2026-05-08: the granted-MP move pipeline must compute
+  // the figure's path so opponent abilities (Parting Blow, Dirty Trick,
+  // Disengage, Overwatch) can fire on path traversal.
+  const startPos = game.figurePositions?.[pending.playerNum]?.[figureKey];
+  let path = [];
+  try {
+    if (startPos && getBoardStateForMovement && getMovementProfile && computeMovementCache && getMovementPath) {
+      const _omBoardState = getBoardStateForMovement(game, figureKey);
+      if (_omBoardState) {
+        const _omProfile = getMovementProfile(dcName, figureKey, game);
+        const _omCache = computeMovementCache(startPos, mp || 99, _omBoardState, _omProfile);
+        path = getMovementPath(_omCache, startPos, chosenSpace, _omProfile.size, _omProfile) || [];
+      }
+    }
+  } catch (_omErr) { path = [startPos, chosenSpace].filter(Boolean); }
+
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
   game.figurePositions[pending.playerNum][figureKey] = chosenSpace;
@@ -3648,6 +3665,32 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
     game.movementBank[targetMsgId].remaining = 0;
   }
   clearPendingOrderedMove(game);
+
+  // Detect post-move interrupts on the path (Parting Blow, Dirty Trick,
+  // Disengage, Overwatch). Mirrors the activation-move flow at
+  // src/handlers/movement.js:1366+.
+  if (path.length >= 2) {
+    try {
+      const { detectPostMoveInterrupts } = await import('../game/movement-interrupts.js');
+      const triggers = detectPostMoveInterrupts(game, pending.playerNum, figureKey, path);
+      for (const trigger of triggers) {
+        const oppId = getPlayerId(game, trigger.candidatePlayerNum);
+        if (trigger.type === 'overwatch') {
+          const owBtns = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`ow_interrupt_use_${game.gameId}_${trigger.owMsgId}`).setLabel('Use Overwatch (Interrupt Attack)').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`ow_interrupt_skip_${game.gameId}_${trigger.owMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await interaction.channel.send({ content: `⚠️ <@${oppId}> — ${trigger.description}`, components: [owBtns], allowedMentions: { users: oppId ? [oppId] : [] } }).catch(discordCatch);
+        } else {
+          const triggerBtns = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`).setLabel(`Play ${trigger.cardName}`).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`mvint_skip_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await interaction.channel.send({ content: `⚠️ <@${oppId}> — ${trigger.description}`, components: [triggerBtns], allowedMentions: { users: oppId ? [oppId] : [] } }).catch(discordCatch);
+        }
+      }
+    } catch (_omIntErr) { /* fail-open */ }
+  }
 
   if (logGameAction) await logGameAction(game, client, `🎯 **${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
 
