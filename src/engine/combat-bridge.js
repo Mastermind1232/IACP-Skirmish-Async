@@ -2225,19 +2225,34 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     embedRefreshMsgIds.add(combat.attackerMsgId);
     delete combat.surgeStalkPrey;
   }
-  // Squad Command: Focus an adjacent friendly TROOPER
+  // Squad Command (Kayn Somos surge): Focus an adjacent friendly TROOPER.
+  // Per destruct 2026-05-08: ACS (Advanced Com Systems) extends "adjacent"
+  // → "within 3" for Kayn's abilities. The card text says "Choose AN
+  // adjacent friendly TROOPER" (singular) — current impl auto-Focuses
+  // the first eligible (TODO: full player-choice prompt).
   if (hit && combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
-    const sqAdj = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id);
-    for (const { figureKey: sqFk, playerNum: sqPn } of sqAdj) {
-      if (sqPn !== attackerPlayerNum) continue;
-      const sqDcName = dcNameFromFigureKey(sqFk);
-      const sqEff = getDcEffect(sqDcName);
-      const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
-      if (!sqKws.includes('TROOPER')) continue;
-      if (_applyCondition(game, sqFk, 'Focus')) {
-        const sqMsgId = findDcMessageIdForFigure(game.gameId, sqPn, sqFk);
-        if (sqMsgId) embedRefreshMsgIds.add(sqMsgId);
-        await logGameAction(game, client, `**Squad Command** — **${sqDcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
+    // ACS check on Kayn's DC msgId.
+    const _sqAtkMsgId = combat.attackerMsgId;
+    const _sqAtts = (game.p1DcAttachments?.[_sqAtkMsgId] || game.p2DcAttachments?.[_sqAtkMsgId] || []);
+    const _sqHasACS = _sqAtts.some((a) => /Advanced Com Systems/i.test(String(a)));
+    const _sqRange = _sqHasACS ? 3 : 1;
+    const _sqAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    let _sqApplied = false;
+    if (_sqAtkPos) {
+      for (const [sqFk, sqPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
+        if (_sqApplied) break;
+        if (sqFk === combat.attackerFigureKey || !sqPos) continue;
+        if (typeof isWithinN === 'function' && !isWithinN(sqPos, _sqAtkPos, _sqRange, game.selectedMap.id)) continue;
+        const sqDcName = dcNameFromFigureKey(sqFk);
+        const sqEff = getDcEffect(sqDcName);
+        const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
+        if (!sqKws.includes('TROOPER')) continue;
+        if (_applyCondition(game, sqFk, 'Focus')) {
+          const sqMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, sqFk);
+          if (sqMsgId) embedRefreshMsgIds.add(sqMsgId);
+          await logGameAction(game, client, `**Squad Command**${_sqHasACS ? ' (ACS within 3)' : ''} — **${sqDcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
+          _sqApplied = true;
+        }
       }
     }
   }

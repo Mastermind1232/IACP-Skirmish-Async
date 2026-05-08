@@ -1124,6 +1124,13 @@ export function resolveAbility(abilityId, context) {
       if (chosenMsgId) {
         game.pendingFiringSquad = game.pendingFiringSquad || [];
         game.pendingFiringSquad.push({ forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
+        // Per destruct 2026-05-08: also tag through the universal
+        // free-attack pipeline so granted-attack accounting (defeat
+        // hooks, exhaust state, free-attack count) sees these as
+        // free attacks consistently with Emperor / Battlefield
+        // Leadership / Order Hit etc.
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[chosenMsgId] = { from: 'Firing Squad' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Check if this is the second pick or if we should offer another
@@ -1276,6 +1283,10 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingCoordinatedRaid(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
+        // Per destruct 2026-05-08: also tag through universal free-attack
+        // pipeline (consistent accounting with Emperor / Order Hit / etc).
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[chosenMsgId] = { from: 'Coordinated Raid' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1313,6 +1324,10 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingCoordinatedRaid(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
+        // Per destruct 2026-05-08: also tag through universal free-attack
+        // pipeline (consistent accounting with Emperor / Order Hit / etc).
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[chosenMsgId] = { from: 'Coordinated Raid' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1326,6 +1341,9 @@ export function resolveAbility(abilityId, context) {
       // Auto-select the only other figure
       const onlyFk = otherGroupFigures[0];
       setPendingCoordinatedRaid(game, { forMsgId: msgId, chosenFigureKey: onlyFk, triggeredByMsgId: msgId });
+      // Universal free-attack pipeline tag.
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Coordinated Raid' };
       const chosenName = dcNameFromFigureKey(onlyFk);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
     }
