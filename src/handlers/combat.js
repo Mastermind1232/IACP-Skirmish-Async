@@ -1607,22 +1607,36 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.bloodFeudApplied = true;
   }
 
-  // Forward Mounted Blasters (74-Z Speeder Bike): per card text, "While
-  // attacking, if the target space occupies the same row as both of your
-  // spaces, apply +1 Hit to the attack results." No effect when target is
-  // in a different row. Old code applied a reroll instead of +1 Hit and
-  // an undocumented -1 Hit penalty when not same-row — both fixed.
+  // Forward Mounted Blasters (74-Z Speeder Bike): updated per destruct
+  // 2026-05-08. Card text: "While attacking, if the target space
+  // occupies the same row as both of your spaces, you may reroll one
+  // attack die. Otherwise, apply −1 Damage to the attack results."
+  // "Row" here means a row OR column — i.e. the speeder's two cells +
+  // target are colinear (inline) on either axis. The speeder's two
+  // cells are always edge-adjacent, so they're always inline on one
+  // axis; the test reduces to: target row matches both speeder rows
+  // (horizontal alignment) OR target column matches both speeder
+  // columns (vertical alignment).
   if ((getDcStats(meta.dcName).passives || []).includes('Forward Mounted Blasters')) {
     const _fmbSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(meta.dcName);
     const _fmbPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     const _fmbTargetPos = game.figurePositions?.[opponentPlayerNum(attackerPlayerNum)]?.[target.figureKey];
     if (_fmbPos && _fmbTargetPos) {
       const _fmbCells = getFootprintCells(_fmbPos, _fmbSize);
-      const _fmbTargetRow = parseCoord(_fmbTargetPos).row;
-      const _fmbAllSameRow = _fmbCells.every(c => parseCoord(c).row === _fmbTargetRow);
-      if (_fmbAllSameRow) {
-        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-        await thread.send('🎯 **Forward Mounted Blasters** — Target in same row: +1 Hit applied to attack results.').catch(discordCatch);
+      const _fmbTarget = parseCoord(_fmbTargetPos);
+      const _fmbSameRow = _fmbCells.every((c) => parseCoord(c).row === _fmbTarget.row);
+      const _fmbSameCol = _fmbCells.every((c) => parseCoord(c).col === _fmbTarget.col);
+      const _fmbInline = _fmbSameRow || _fmbSameCol;
+      if (_fmbInline) {
+        // Inline → +1 attacker reroll (player chooses which die in the
+        // reroll window).
+        game.pendingCombat.attackerRerollsRemaining = (game.pendingCombat.attackerRerollsRemaining || 0) + 1;
+        await thread.send('🎯 **Forward Mounted Blasters** — Target inline with speeder: may reroll 1 attack die.').catch(discordCatch);
+      } else {
+        // Not inline → −1 Damage (bonusHits is the same modifier slot
+        // used for ±Damage adjustments to the attack results).
+        game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
+        await thread.send('🎯 **Forward Mounted Blasters** — Target NOT inline with speeder: −1 Damage to attack results.').catch(discordCatch);
       }
     }
   }
