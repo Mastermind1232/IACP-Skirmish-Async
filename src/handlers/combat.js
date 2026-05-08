@@ -450,6 +450,40 @@ export async function handleCombatGateReady(interaction, ctx) {
 }
 
 /**
+ * Defender reroll-phase entry. Defender's window covers (own rerolls +
+ * controlled cross-side rerolls). If neither, falls through to step 4.
+ * Sets controlledRerollSide so the forced-UI filter knows which side
+ * owns the active controlled-reroll window. Per destruct 2026-05-08.
+ */
+async function _enterDefenderRerollPhase(thread, game, combat, ctx, defPN) {
+  const _defCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN);
+  if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrlForced) {
+    combat.rerollPhase = 'defender';
+    combat.controlledRerollSide = defPN;
+    combat.currentStep = 'step3-defender';
+    await sendRerollUI(thread, game, combat, 'defender');
+    return;
+  }
+  await _enterStep4(thread, game, combat, ctx);
+}
+
+/**
+ * Step-4 entry. Self-play skips Mods Y/N entirely; humans get the
+ * sequential per-player Mods Y/N starting with the attacker.
+ */
+async function _enterStep4(thread, game, combat, ctx) {
+  combat.rerollPhase = null;
+  combat.controlledRerollSide = null;
+  combat.currentStep = 'step4-attacker';
+  if (game.selfPlay) {
+    combat.currentStep = 'step5';
+    await proceedAfterRerolls(thread, game, combat, ctx);
+  } else {
+    await sendModsYn(thread, game, combat, 'attacker');
+  }
+}
+
+/**
  * Dispatch to the next combat step after a gate is cleared.
  */
 async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
@@ -469,101 +503,83 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'post_roll': {
-      // Proceed to reroll phases.
-      // Combat-pipeline rebuild (slice 3.7-3.8): advance currentStep from 'roll'
-      // to the appropriate sub-window. The 'roll' state means dice just hit the
-      // table; the next sub-window is whichever reroll path applies, or step4
-      // if no rerolls at all.
-      const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
-      if ((combat.attackerRerollsRemaining || 0) > 0) {
+      // Proceed to reroll phases. Per destruct 2026-05-08: only two
+      // reroll buckets exist — attacker side and defender side. Each
+      // side's bucket is (own rerolls + controlled cross-side rerolls
+      // where the queue entry's controlPlayer === that side's PN). The
+      // legacy "forced" middle phase is gone; controlled entries are
+      // routed inside the side's window.
+      const atkPN = combat.attackerPlayerNum || 1;
+      const defPN = opponentPlayerNum(atkPN);
+      const _atkCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN);
+      if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrlForced) {
         combat.rerollPhase = 'attacker';
+        combat.controlledRerollSide = atkPN;
         combat.currentStep = 'step3-attacker';
         await sendRerollUI(thread, game, combat, 'attacker');
-      } else if (hasForcedRerolls) {
-        combat.rerollPhase = 'forced';
-        combat.currentStep = 'step3-rapidrecal';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else if ((combat.defenderRerollsRemaining || 0) > 0) {
-        combat.rerollPhase = 'defender';
-        combat.currentStep = 'step3-defender';
-        await sendRerollUI(thread, game, combat, 'defender');
       } else {
-        // No rerolls at all — proceed to modifications.
-        // Per destruct 2026-05-08: attacker still gets the step-4 Y/N
-        // prompt before defender. Self-play skips both.
-        combat.rerollPhase = null;
-        combat.currentStep = 'step4-attacker';
-        if (game.selfPlay) {
-          combat.currentStep = 'step5';
-          await proceedAfterRerolls(thread, game, combat, ctx);
-        } else {
-          await sendModsYn(thread, game, combat, 'attacker');
-        }
+        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
       }
       break;
     }
 
     case 'post_attacker_reroll': {
-      // Attacker done → forced rerolls or defender
-      const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
-      if (hasForcedRerolls) {
+      // Attacker's own rerolls done. If atk-controlled cross-side
+      // rerolls remain in the queue, fold them into THIS window
+      // (controlled phase, side=attacker). Otherwise hand off to
+      // defender's window.
+      const atkPN = combat.attackerPlayerNum || 1;
+      const defPN = opponentPlayerNum(atkPN);
+      const _atkCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN);
+      if (_atkCtrlForced) {
         combat.rerollPhase = 'forced';
+        combat.controlledRerollSide = atkPN;
         combat.currentStep = 'step3-rapidrecal';
         await sendRerollUI(thread, game, combat, 'forced');
       } else {
-        // Demoralizing Monologue is now wired via the forced-reroll queue (per
-        // CRR: card text says "choose and reroll 1 defense die" — ATTACKER
-        // chooses, controller forces). Old flag-based path removed.
-        if ((combat.defenderRerollsRemaining || 0) > 0) {
-          combat.rerollPhase = 'defender';
-          combat.currentStep = 'step3-defender';
-          await sendRerollUI(thread, game, combat, 'defender');
-        } else {
-          combat.rerollPhase = null;
-          combat.currentStep = 'step4-attacker';
-          if (game.selfPlay) {
-            combat.currentStep = 'step5';
-            await proceedAfterRerolls(thread, game, combat, ctx);
-          } else {
-            await sendModsYn(thread, game, combat, 'attacker');
-          }
-        }
+        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
       }
       break;
     }
 
     case 'post_forced_reroll': {
-      // Forced done → defender rerolls
-      if ((combat.defenderRerollsRemaining || 0) > 0) {
-        combat.rerollPhase = 'defender';
-        combat.currentStep = 'step3-defender';
-        await sendRerollUI(thread, game, combat, 'defender');
+      // One controlled-cross-side reroll done. Re-check the queue
+      // filtered to the active side. If more remain on this side,
+      // continue. Else, hand off:
+      //   - attacker side → defender's window
+      //   - defender side → step 4
+      const activeSidePN = combat.controlledRerollSide
+        ?? combat.attackerPlayerNum
+        ?? 1;
+      const atkPN = combat.attackerPlayerNum || 1;
+      const defPN = opponentPlayerNum(atkPN);
+      const _stillForActiveSide = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === activeSidePN);
+      if (_stillForActiveSide) {
+        combat.rerollPhase = 'forced';
+        combat.currentStep = 'step3-rapidrecal';
+        await sendRerollUI(thread, game, combat, 'forced');
+      } else if (activeSidePN === atkPN) {
+        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
       } else {
-        combat.rerollPhase = null;
-        combat.currentStep = 'step4-attacker';
-        if (game.selfPlay) {
-          combat.currentStep = 'step5';
-          await proceedAfterRerolls(thread, game, combat, ctx);
-        } else {
-          await sendModsYn(thread, game, combat, 'attacker');
-        }
+        await _enterStep4(thread, game, combat, ctx);
       }
       break;
     }
 
     case 'post_defender_reroll': {
-      combat.rerollPhase = null;
-      combat.currentStep = 'step4-attacker';
-      // Per Destruct: sequential per-player "Apply modifiers? Y/N" before
-      // advancing to surge (CRR step 4: Apply Modifiers, then step 5: Surge).
-      // Attacker prompts first, then defender. Skips for self-play.
-      if (game.selfPlay) {
-        // Self-play skips both modifier sub-windows; jump currentStep to step5.
-        combat.currentStep = 'step5';
-        await proceedAfterRerolls(thread, game, combat, ctx);
-        break;
+      // Defender's own rerolls done. If def-controlled cross-side
+      // rerolls remain, fold them into THIS window. Otherwise step 4.
+      const atkPN = combat.attackerPlayerNum || 1;
+      const defPN = opponentPlayerNum(atkPN);
+      const _defCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN);
+      if (_defCtrlForced) {
+        combat.rerollPhase = 'forced';
+        combat.controlledRerollSide = defPN;
+        combat.currentStep = 'step3-rapidrecal';
+        await sendRerollUI(thread, game, combat, 'forced');
+      } else {
+        await _enterStep4(thread, game, combat, ctx);
       }
-      await sendModsYn(thread, game, combat, 'attacker');
       break;
     }
 
@@ -3813,19 +3829,32 @@ export async function sendRerollUI(thread, game, combat, phase) {
   if (phase === 'attacker' || phase === 'defender') {
     if (await maybePromptRerollYn(thread, game, combat, phase)) return;
   }
-  // Helper: advance from forced to defender (or null)
+  // Helper: advance after a controlled (formerly "forced") reroll
+  // entry resolves. Per destruct 2026-05-08, controlled entries belong
+  // to the side whose controlPlayer matches their owning figure. If
+  // more entries remain on the active side, keep the window open. When
+  // none remain on this side, hand off:
+  //   - active side = attacker → defender reroll window opens
+  //                                (own + def-controlled cross-side)
+  //   - active side = defender → step 4
   const _advanceFromForced = async () => {
-    if ((combat.forcedRerollQueue || []).length > 0) {
+    const atkPN = combat.attackerPlayerNum || 1;
+    const defPN = opponentPlayerNum(atkPN);
+    const activeSidePN = combat.controlledRerollSide ?? atkPN;
+    const _stillForActiveSide = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === activeSidePN);
+    if (_stillForActiveSide) {
       combat.rerollPhase = 'forced';
       await sendRerollUI(thread, game, combat, 'forced');
       return;
     }
-    combat.rerollPhase = 'defender';
-    if ((combat.defenderRerollsRemaining || 0) > 0) {
-      await sendRerollUI(thread, game, combat, 'defender');
+    if (activeSidePN === atkPN) {
+      // Hand off to defender's window
+      await _enterDefenderRerollPhase(thread, game, combat, /*ctx*/ undefined, defPN);
       return;
     }
+    // Defender side done — step 4
     combat.rerollPhase = null;
+    combat.controlledRerollSide = null;
   };
   if (phase === 'attacker') {
     // Pre-reroll prompts: show before any reroll dice are offered
@@ -3901,9 +3930,19 @@ export async function sendRerollUI(thread, game, combat, phase) {
       components: buildRerollRows(dieButtons, trailing),
     });
   } else if (phase === 'forced') {
-    const entry = (combat.forcedRerollQueue || [])[0];
-    if (!entry || entry.remaining <= 0) {
-      combat.forcedRerollQueue.shift();
+    // Per destruct 2026-05-08: pick the first queued entry owned by the
+    // currently active side (controlledRerollSide). Entries belonging
+    // to the OTHER side stay queued — they fire inside that side's
+    // own reroll window. Drop globally-exhausted entries (remaining
+    // <= 0) eagerly so they don't pile up regardless of which side
+    // they belong to.
+    combat.forcedRerollQueue = (combat.forcedRerollQueue || [])
+      .filter(e => (e.remaining ?? 0) > 0);
+    const _activeSidePN = combat.controlledRerollSide
+      ?? combat.attackerPlayerNum
+      ?? 1;
+    const entry = combat.forcedRerollQueue.find(e => e.controlPlayer === _activeSidePN);
+    if (!entry) {
       await _advanceFromForced();
       return;
     }
@@ -4073,10 +4112,16 @@ export async function handleCombatReroll(interaction, ctx) {
       return;
     }
   }
-  // Permission: for forced phase, use controlPlayer from queue entry
+  // Permission: for forced phase, find first entry matching the active
+  // side (controlledRerollSide) — that's the entry being displayed.
+  // Per destruct 2026-05-08, controlled cross-side entries belong to
+  // the side whose controlPlayer matches.
   let expectedPlayer;
   if (combat.rerollPhase === 'forced') {
-    expectedPlayer = (combat.forcedRerollQueue || [])[0]?.controlPlayer;
+    const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
+    expectedPlayer = (combat.forcedRerollQueue || [])
+      .find(e => e.controlPlayer === _frActiveSidePN)?.controlPlayer
+      ?? _frActiveSidePN;
   } else {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
@@ -4096,7 +4141,10 @@ export async function handleCombatReroll(interaction, ctx) {
 
   // --- Forced reroll phase handling ---
   if (combat.rerollPhase === 'forced') {
-    const _frEntry = (combat.forcedRerollQueue || [])[0];
+    // Match the active side's first entry (destruct 2026-05-08).
+    const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
+    const _frEntry = (combat.forcedRerollQueue || [])
+      .find(e => e.controlPlayer === _frActiveSidePN);
     if (choice !== 'done' && _frEntry && _frEntry.remaining > 0) {
       const idx = parseInt(choice, 10);
       if (side === 'atk') {
@@ -4166,16 +4214,23 @@ export async function handleCombatReroll(interaction, ctx) {
         }
       }
     }
-    // Transition: done or entry exhausted
+    // Transition: done or entry exhausted. Remove the matched entry
+    // (not necessarily index 0 — destruct 2026-05-08 mixed-side queue).
     if (choice === 'done' || !_frEntry || _frEntry.remaining <= 0) {
-      if (_frEntry) combat.forcedRerollQueue.shift();
+      if (_frEntry) {
+        const _frRemoveIdx = combat.forcedRerollQueue.indexOf(_frEntry);
+        if (_frRemoveIdx >= 0) combat.forcedRerollQueue.splice(_frRemoveIdx, 1);
+      }
     }
-    if ((combat.forcedRerollQueue || []).length > 0) {
+    // Continue THIS side's window if more entries match active side.
+    const _frActiveSideStill = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _frActiveSidePN);
+    if (_frActiveSideStill) {
       await sendRerollUI(thread, game, combat, 'forced');
       saveGames(game.gameId);
       return;
     }
-    // All forced rerolls done — combat gate before defender rerolls
+    // Active side's controlled rerolls done — fire the gate so dispatch
+    // routes correctly (atk side → defender phase; def side → step 4).
     await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
     saveGames(game.gameId);
     return;

@@ -251,7 +251,12 @@ describe('B-C-SURGE: Surge spending and tracking', () => {
 // ── B-C-REROLL: Reroll queue ordering ────────────────────────────────────────
 
 describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
-  it('B-C-REROLL-001: attacker done transitions through forced queue to defender', async () => {
+  it('B-C-REROLL-001: attacker phase with no own rerolls + def-controlled forced → falls through to defender phase', async () => {
+    // destruct 2026-05-08: defender-controlled cross-side rerolls
+    // belong to the DEFENDER's reroll window, not the attacker's.
+    // sendRerollUI('attacker') with 0 own rerolls and only a
+    // def-controlled queue entry must skip past forced and land in
+    // defender phase (where def's own + def-controlled fold together).
     const combat = makeCombat({
       rerollPhase: 'attacker',
       attackerRerollsRemaining: 0, // already exhausted
@@ -263,17 +268,19 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
 
     await sendRerollUI(thread, game, combat, 'attacker');
 
-    // With 0 attacker rerolls, should advance to forced phase
-    assert.strictEqual(combat.rerollPhase, 'forced', 'advanced to forced phase');
-    // Should show forced reroll UI
-    const lastMsg = thread._sent[thread._sent.length - 1];
-    const content = typeof lastMsg === 'string' ? lastMsg : lastMsg?.content || '';
-    assert.ok(content.includes('Doubt') || content.includes('Forced'), 'forced reroll UI shown');
+    assert.strictEqual(combat.rerollPhase, 'defender',
+      'fell through to defender phase — def-controlled forced does NOT fire in attacker window');
+    assert.strictEqual(combat.controlledRerollSide, 2,
+      'controlledRerollSide tracks defender for def\'s window');
   });
 
-  it('B-C-REROLL-002: forced queue pop after entry exhausted advances correctly', async () => {
+  it('B-C-REROLL-002: sendRerollUI("forced") drops globally-exhausted entries from the queue', async () => {
+    // destruct 2026-05-08: an entry with remaining<=0 is done,
+    // regardless of which side owns it. Global cleanup at the top of
+    // the forced UI prevents stale entries from piling up.
     const combat = makeCombat({
       rerollPhase: 'forced',
+      controlledRerollSide: 1, // attacker's controlled-rerolls window
       forcedRerollQueue: [
         { source: 'Doubt', pool: 'attack', remaining: 0, controlPlayer: 2 },
         { source: 'Zeal', pool: 'defense', remaining: 1, controlPlayer: 1 },
@@ -283,16 +290,19 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const thread = mockThread();
 
-    // sendRerollUI with forced phase, first entry has 0 remaining → should shift and show next
     await sendRerollUI(thread, game, combat, 'forced');
 
-    assert.strictEqual(combat.forcedRerollQueue.length, 1, 'exhausted entry popped');
-    assert.strictEqual(combat.forcedRerollQueue[0].source, 'Zeal', 'second entry is now first');
+    assert.strictEqual(combat.forcedRerollQueue.length, 1, 'exhausted Doubt dropped');
+    assert.strictEqual(combat.forcedRerollQueue[0].source, 'Zeal', 'Zeal remains');
   });
 
   it('B-C-REROLL-003: handleCombatReroll forced reroll decrements remaining and marks rerolled', async () => {
+    // destruct 2026-05-08: with a defender-controlled entry, the
+    // active forced window must declare controlledRerollSide=2 so the
+    // permission check accepts a player2 click.
     const combat = makeCombat({
       rerollPhase: 'forced',
+      controlledRerollSide: 2,
       forcedRerollQueue: [{ source: 'Doubt', pool: 'attack', remaining: 2, controlPlayer: 2 }],
       attackerRerolledIndices: [],
     });
