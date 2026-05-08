@@ -2762,7 +2762,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Havoc Shot (Fenn Signis): after attack that didn't miss, suffer 1 Strain → up to 2 figures within 2 of target in LOS suffer 1 Damage
+  // Havoc Shot (Fenn Signis): after an attack that didn't miss, suffer
+  // 1 Strain to choose up to 2 OTHER figures within 2 spaces of the
+  // target space in LOS, who suffer 1 Damage. "Other" excludes the
+  // attacker AND the original target — the secondary picks are the
+  // splash; the main target already resolved its own damage.
   if (pcAttIds.includes('havoc_shot') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
     const _hsTargetPos = game.figurePositions?.[combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)]?.[combat.target.figureKey] || combat._savedTargetPos;
     const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
@@ -2773,7 +2777,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       const _hsEligible = [];
       for (const pn of [1, 2]) {
         for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-          if (!pos || fk === combat.attackerFigureKey) continue;
+          if (!pos) continue;
+          if (fk === combat.attackerFigureKey) continue;
+          if (fk === combat.target.figureKey) continue;
           if (!isWithinN(pos, _hsTargetPos, 2, game.selectedMap.id)) continue;
           const candFp = getFigureFootprint(game, pn, fk, getFigureSize);
           if (!hasFigureLineOfSight(_hsAtkFp, candFp, _hsMapSpaces, _hsAllFootprints)) continue;
