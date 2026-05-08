@@ -274,8 +274,9 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     assert.strictEqual(game.movementBank.dc3.remaining, 2, '2 MP granted');
     // Free attack granted
     assert.strictEqual(game.freeAttackBonusPending?.dc3, true, 'free attack pending');
-    // Re-entry called
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
+    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat.
+    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for friendly defeat');
+    assert.strictEqual(calls.processFigureDefeat[0].source, 'Executor (RGC)', 'source labeled');
   });
 
   it('B-I-PREDEFEAT-005: triggered-once guards prevent re-trigger on re-entry', async () => {
@@ -333,8 +334,8 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     // Verify no MP/attack granted on skip
     assert.strictEqual(game2.movementBank, undefined, 'no MP granted on skip');
     assert.strictEqual(game2.freeAttackBonusPending, undefined, 'no free attack on skip');
-    // Re-entry still called (to finalize the original defeat)
-    assert.strictEqual(calls2.applyDamageAndFinishCombat.length, 1, 're-entry called even on skip');
+    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat finalizes friendly defeat.
+    assert.strictEqual(calls2.processFigureDefeat.length, 1, 'processFigureDefeat called even on skip');
   });
 });
 

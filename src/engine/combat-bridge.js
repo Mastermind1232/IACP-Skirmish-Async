@@ -1206,45 +1206,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // (damage-pipeline-hooks.js + handlers/parting-shot.js).
       // Last Resort — now handled by BEFORE_DEFEATED hook
       // (damage-pipeline-hooks.js + handlers/interrupts.js handleLastResort).
-      // Executor (Royal Guard Champion): when a friendly figure is defeated within 3 spaces,
-      // RGC may interrupt to move 2 spaces + perform a free attack. Limit once per round.
-      if (newCur <= 0 && !_defeatSuppressed && !game.executorTriggered?.[targetMsgId]) {
-        const _exDefeatedPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-        if (_exDefeatedPos && game.selectedMap?.id) {
-          const _exFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
-          for (const [_exFk, _exPos] of Object.entries(_exFriendlyFigs)) {
-            if (_exFk === combat.target.figureKey) continue;
-            const _exDcName = dcNameFromFigureKey(_exFk);
-            const _exEff = getDcEffects()?.[_exDcName];
-            if (!(_exEff?.specialAbilityIds || []).includes('executor')) continue;
-            // Check within 3 spaces
-            if (!isWithinN(_exPos, _exDefeatedPos, 3, game.selectedMap.id)) continue;
-            // Limit once per round
-            const _exRoundKey = `${_exFk}_executor`;
-            if (game.roundFigureAbilityUsed?.[_exRoundKey]) continue;
-            // Find RGC's msgId
-            const _exRgcMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, _exFk);
-            if (!_exRgcMsgId) continue;
-            // Trigger the interrupt
-            game.executorTriggered = game.executorTriggered || {};
-            game.executorTriggered[targetMsgId] = true;
-            setPendingExecutorInterrupt(game, {
-              rgcFigKey: _exFk, rgcMsgId: _exRgcMsgId, rgcPlayerNum: defenderPlayerNum,
-              rgcDcName: _exDcName, defeatedLabel: combat.target.label,
-              targetMsgId, defenderPlayerNum, attackerPlayerNum,
-              damage, hit, resultText, totalBlast, ownerId, targetFigIndex,
-            });
-            const _exOwnerId = game[`player${defenderPlayerNum}Id`];
-            const _exRow = new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`executor_use_${game.gameId}_${_exRgcMsgId}`).setLabel('Use Executor').setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId(`executor_skip_${game.gameId}_${_exRgcMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-            );
-            await logGameAction(game, client, `<@${_exOwnerId}> **Executor** — **${_exDcName}** may interrupt (friendly **${combat.target.label}** defeated within 3 spaces). Move up to 2 spaces, then perform an attack.`, { components: [_exRow], allowedMentions: { users: [_exOwnerId] } });
-            saveGames(game.gameId);
-            return;
-          }
-        }
-      }
+      // Executor (RGC) — now handled by BEFORE_DEFEATED hook
+      // (damage-pipeline-hooks.js + handlers/interrupts.js handleExecutor).
       if (newCur <= 0 && !_defeatSuppressed) {
         // PRE-DEFEAT: Combat-specific context for CC timing validation (Of No Importance, etc.)
         game.lastDefeatInfo = { playerNum: defenderPlayerNum, figureKey: combat.target.figureKey, dcName: targetDcName };

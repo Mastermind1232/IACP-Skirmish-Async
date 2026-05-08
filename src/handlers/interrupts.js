@@ -1196,13 +1196,22 @@ export async function handleExecutor(interaction, ctx) {
     await logGameAction(_exGame, client, `**Executor** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
 
-  // Finalize defeat by re-calling applyDamageAndFinishCombat (executorTriggered flag already set)
-  await applyDamageAndFinishCombat(_exGame, _exCombat, {
-    damage: _exPending.damage, hit: _exPending.hit, resultText: _exPending.resultText,
-    totalBlast: _exPending.totalBlast, defenderPlayerNum: _exPending.defenderPlayerNum,
-    attackerPlayerNum: _exPending.attackerPlayerNum, ownerId: _exPending.ownerId,
-    targetMsgId: _exPending.targetMsgId, targetFigIndex: _exPending.targetFigIndex,
-  }, client);
+  // Finalize friendly's defeat via shared deferred-defeat helper.
+  // Per destruct 2026-05-08 migration: HP at 0 already (BEFORE_DEFEATED
+  // hook ran post-reduceHp). completeDeferredDefeat fires WHEN_DEFEATED
+  // hooks + processFigureDefeat.
+  const { completeDeferredDefeat: _exComplete } = await import('../game/deferred-defeat.js');
+  const _exFigKey = _exCombat?.target?.figureKey;
+  const _exFigIdxMatch = String(_exFigKey || '').match(/-(\d+)-(\d+)$/);
+  const _exFigIdx = _exFigIdxMatch ? parseInt(_exFigIdxMatch[2], 10) : (_exPending.targetFigIndex ?? 0);
+  await _exComplete(_exGame, ctx, {
+    figureKey: _exFigKey,
+    msgId: _exPending.targetMsgId,
+    figIndex: _exFigIdx,
+    controllerPlayerNum: _exPending.defenderPlayerNum,
+    attackerPlayerNum: _exPending.attackerPlayerNum,
+    source: 'Executor (RGC)',
+  });
   saveGames(_exGame.gameId);
   return;
 }

@@ -44,7 +44,7 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
-import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort } from './interrupts.js';
+import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt } from './interrupts.js';
 import { cardNameIncludes } from './card-names.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
@@ -192,6 +192,101 @@ BEFORE_DEFEATED_HOOKS.push({
         { phase: 'ROUND', icon: 'card' },
       ).catch(() => {});
     }
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Executor (Royal Guard Champion): "When a friendly figure within 3
+ * spaces is defeated, you may interrupt to move up to 2 spaces and
+ * perform an attack. Limit once per round."
+ *
+ * Trigger side: the side OWNING the dying friendly figure (which is
+ * the same as opts.controllerPlayerNum). RGC must be on that same
+ * side, alive, within 3 of the dying figure, and not yet used Executor
+ * this round (`game.roundFigureAbilityUsed[`${rgcFigKey}_executor`]`).
+ *
+ * Returns preventDefeat=true; sets pendingExecutorInterrupt. Handler
+ * (handleExecutor in interrupts.js) grants RGC 2 MP + free attack
+ * flag, then calls completeDeferredDefeat to finalize the original
+ * friendly figure's defeat.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'executor_rgc',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.executorTriggered?.[opts.msgId]) return false;
+    const defeatedPos = opts.defeatedPos
+      ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return false;
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('executor')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) > 3) continue;
+      if (game.roundFigureAbilityUsed?.[`${fk}_executor`]) continue;
+      return true;
+    }
+    return false;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    const defeatedPos = opts.defeatedPos
+      ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    let rgcFigKey = null;
+    let rgcDcName = null;
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('executor')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) > 3) continue;
+      if (game.roundFigureAbilityUsed?.[`${fk}_executor`]) continue;
+      rgcFigKey = fk;
+      rgcDcName = dcN;
+      break;
+    }
+    if (!rgcFigKey) return null;
+    const rgcMsgId = findDcMessageIdForFigure(game.gameId, opts.controllerPlayerNum, rgcFigKey);
+    if (!rgcMsgId) return null;
+    game.executorTriggered = game.executorTriggered || {};
+    game.executorTriggered[opts.msgId] = true;
+    setPendingExecutorInterrupt(game, {
+      gameId: game.gameId,
+      rgcFigKey,
+      rgcMsgId,
+      rgcPlayerNum: opts.controllerPlayerNum,
+      rgcDcName,
+      defeatedLabel: dcNameFromFigureKey(opts.figureKey),
+      figureKey: opts.figureKey,
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+      defenderPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`executor_use_${game.gameId}_${rgcMsgId}`).setLabel('Use Executor').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`executor_skip_${game.gameId}_${rgcMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    const defeatedLabel = dcNameFromFigureKey(opts.figureKey);
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> **Executor** — **${rgcDcName}** may interrupt (friendly **${defeatedLabel}** defeated within 3 spaces). Move up to 2 spaces, then perform an attack.`
+        : `**Executor** — **${rgcDcName}** may interrupt (friendly **${defeatedLabel}** defeated within 3 spaces).`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
     return { preventDefeat: true };
   },
 });
