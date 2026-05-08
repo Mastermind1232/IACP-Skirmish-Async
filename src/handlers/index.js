@@ -22,6 +22,7 @@ import {
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
+  handleSetYourSightsPick,
   handleCompanionDeployPick,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
@@ -249,6 +250,7 @@ register('pd_walker_move_', handleWalkerMove, 'postDeploy');
 register('pd_walker_skip_', handleWalkerSkip, 'postDeploy');
 register('pd_arms_dist_fig_', handleArmsDistFigPick, 'postDeploy');
 register('pd_arms_dist_token_', handleArmsDistTokenPick, 'postDeploy');
+register('pd_set_your_sights_pick_', handleSetYourSightsPick, 'postDeploy');
 register('pd_comp_space_', handleCompanionDeployPick, 'postDeploy');
 
 // --- Movement ---
@@ -699,6 +701,7 @@ export {
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
+  handleSetYourSightsPick,
   handleCompanionDeployPick,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';

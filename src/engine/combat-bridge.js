@@ -1051,15 +1051,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // current behavior is "gain 1 MP" but card text is actually
       // "MOVE 1 SPACE" — that fix lives separately and isn't gated on
       // this migration.
-      // Loku Recon Token: Set Your Sights — after Loku's attack resolves, place recon token on target
-      {
-        const _lkAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
-        const _lkAtkEff = getDcEffects()?.[_lkAtkDcName];
-        if ((_lkAtkEff?.specialAbilityIds || []).includes('set_your_sights_loku') && combat.target?.figureKey) {
-          game.reconToken = { figureKey: combat.target.figureKey, playerNum: combat.attackerPlayerNum };
-          await logGameAction(game, client, `\u{1F3AF} **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(combat.target.figureKey)}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-        }
-      }
+      // Loku Recon Token: Set Your Sights — moved to post-deploy
+      // (handlers/post-deploy.js: scanPlayerPostDeployAbilities +
+      // case 'set_your_sights'). Card text is "At the start of the
+      // mission, place a Recon token on a unique hostile figure";
+      // the prior after-attack placement was incorrect timing.
       // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
       // attacker suffers Damage = number of attack dice rolled. Limit once per round.
       {

@@ -145,6 +145,12 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     if (sIds.includes('arms_distribution_kotun') && !game[`armsDistDeployFired_p${playerNum}`]) {
       abilities.push({ abilityId: 'arms_distribution_deploy', label: 'Arms Distribution (Deploy)', dcName, figureKey: fk, playerNum, interactive: true, type: 'token_pick' });
     }
+    // Loku Set Your Sights: at start of mission, place a Recon token on
+    // a unique hostile figure. Once-per-game (game.reconToken persists
+    // until cleared); de-dupe by player so the picker only fires once.
+    if (sIds.includes('set_your_sights_loku') && !game[`setYourSightsFired_p${playerNum}`]) {
+      abilities.push({ abilityId: 'set_your_sights', label: 'Set Your Sights', dcName, figureKey: fk, playerNum, interactive: true, type: 'figure_pick' });
+    }
   }
 
   // Direct DC companion deployment (e.g., Jarrod Kelvin → J4X-7, Iden Versio → Dio)
@@ -869,6 +875,50 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       const rows = chunkButtonsToRows(btns);
       await logGameAction(game, client, `🎯 **Arms Distribution (Deploy)** — <@${ownerId}>, choose **1 friendly figure** within 3 spaces of **${ability.dcName}** to gain **1 Power Token**:`, {
         components: rows.slice(0, 5),
+        allowedMentions: { users: [ownerId] },
+      });
+      break;
+    }
+    case 'set_your_sights': {
+      // Loku Kanoloa: "At the start of the mission, place a Recon
+      // token on a unique hostile figure." Find every UNIQUE hostile
+      // figure and present a picker. The chosen figure carries the
+      // recon token for the rest of the game (see combat.js for the
+      // Pierce 1 application + Mon Cala SF Focus trigger).
+      const oppPN = opponentPlayerNum(ability.playerNum);
+      const dcEffectsLocal = getDcEffects() || {};
+      const hostilePositions = game.figurePositions?.[oppPN] || {};
+      const uniqueHostiles = [];
+      for (const [hfk, hpos] of Object.entries(hostilePositions)) {
+        if (!hpos) continue;
+        const hDcName = dcNameFromFigureKey(hfk);
+        const hEff = dcEffectsLocal[hDcName] || dcEffectsLocal[hDcName?.replace(/\s*\(Elite\)\s*$/, '')];
+        if (!hEff?.unique) continue;
+        uniqueHostiles.push({ figureKey: hfk, dcName: hDcName });
+      }
+      if (uniqueHostiles.length === 0) {
+        await logGameAction(game, client, `🎯 **Set Your Sights** — No unique hostile figures on the board for **${ability.dcName}**; recon token not placed.`, { phase: 'ROUND', icon: 'deployed' });
+        game[`setYourSightsFired_p${ability.playerNum}`] = true;
+        game.postDeployQueue.activeAbility = null; game.postDeployQueue.pendingActions = null;
+        await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+        break;
+      }
+      game.postDeployQueue.activeAbility = {
+        abilityId: 'set_your_sights',
+        playerNum: ability.playerNum,
+        dcName: ability.dcName,
+        figureKey: ability.figureKey,
+        candidates: uniqueHostiles,
+      };
+      const sysBtns = uniqueHostiles.slice(0, 20).map(h => new ButtonBuilder()
+        .setCustomId(`pd_set_your_sights_pick_${gameId}_${ability.playerNum}_${h.figureKey}`)
+        .setLabel(buildFigureButtonLabel(h.figureKey, game))
+        .setStyle(ButtonStyle.Danger)
+      );
+      _stashPendingActions(game, sysBtns, 'Set Your Sights');
+      const sysRows = chunkButtonsToRows(sysBtns);
+      await logGameAction(game, client, `🎯 **Set Your Sights** — <@${ownerId}>, place a **Recon token** on a unique hostile figure for **${ability.dcName}**:`, {
+        components: sysRows.slice(0, 5),
         allowedMentions: { users: [ownerId] },
       });
       break;
@@ -1794,6 +1844,37 @@ export async function handleArmsDistTokenPick(interaction, ctx) {
   }
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  game.postDeployQueue.activeAbility = null;
+  await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+  saveGames(game.gameId);
+}
+
+/**
+ * Set Your Sights (Loku Kanoloa): start-of-mission Recon token placement.
+ * customId: pd_set_your_sights_pick_${gameId}_${playerNum}_${figureKey}
+ */
+export async function handleSetYourSightsPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'pd_set_your_sights_pick_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
+    await interaction.followUp({ content: 'Only the owning player can place the Recon token.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const active = game.postDeployQueue?.activeAbility;
+  if (!active || active.abilityId !== 'set_your_sights') return;
+
+  game.reconToken = { figureKey, playerNum };
+  game[`setYourSightsFired_p${playerNum}`] = true;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(figureKey)}**.`, { phase: 'ROUND', icon: 'deployed' });
 
   game.postDeployQueue.activeAbility = null;
   await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
