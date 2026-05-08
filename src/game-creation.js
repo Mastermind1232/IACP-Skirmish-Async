@@ -181,14 +181,18 @@ export async function createGameChannels(guild, player1Id, player2Id, deps) {
     position,
   });
 
-  // Game Log is read-only for humans — bot owns all output. Combat threads
-  // inherit these perms from this parent channel, so this also covers
-  // combat-thread chat. @everyone deny ViewChannel keeps non-participants
-  // out; deny SendMessages prevents players (who get explicit ViewChannel)
-  // from typing. Bot retains full SendMessages + ManageMessages.
+  // Game Log: players CAN type per corndog 2026-05-08 (revert of earlier
+  // read-only-for-humans policy). Combat threads inherit these perms from
+  // this parent channel, so this also covers combat-thread chat.
+  // @everyone deny ViewChannel keeps non-participants out; players get
+  // ViewChannel + SendMessages + SendMessagesInThreads. Bot retains full
+  // SendMessages + ManageMessages.
   const gameLogPerms = [
-    ...playerPerms.filter((p) => p.id !== botId && p.id !== everyoneRole.id),
-    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages },
+    { id: everyoneRole.id, deny: PermissionFlagsBits.ViewChannel },
+    ...getAdminOverride(guild),
+    ...(isDiscordSnowflake(player1Id) ? [{ id: player1Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.SendMessagesInThreads }] : []),
+    ...(isDiscordSnowflake(player2Id) ? [{ id: player2Id, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.SendMessagesInThreads }] : []),
+    { id: BOTHELPERS_ROLE_ID, allow: PermissionFlagsBits.ViewChannel },
     { id: botId, allow: PermissionFlagsBits.ViewChannel | PermissionFlagsBits.SendMessages | PermissionFlagsBits.ManageMessages },
   ];
   const generalChannel = await guild.channels.create({
