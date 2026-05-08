@@ -1376,6 +1376,97 @@ export async function handleDcHeroicAttack(interaction, ctx) {
 }
 
 /**
+ * Pick a figure to act with in a multi-figure group activation.
+ * Per destruct 2026-05-08: each figure is its own separate activation.
+ * Selecting a new figure resets BOTH the action bank and the MP bank
+ * so the figure starts fresh: 2 actions + Speed-MP granted on its
+ * next Move click. Start-of-Activation effects fire once per figure
+ * (figureSoaFired tracks per-index).
+ *
+ * customId: `dc_fig_pick_<msgId>_f<figureIndex>`
+ */
+export async function handleDcFigPick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, updateDcActionsMessage, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^dc_fig_pick_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid figure-pick button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const ownerId = getPlayerId(game, meta.playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the owner can pick a figure.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const figIdx = parseInt(figureIndexStr, 10);
+  await interaction.deferUpdate().catch(discordCatch);
+  game.dcActionsData = game.dcActionsData || {};
+  game.dcActionsData[msgId] = game.dcActionsData[msgId] || {};
+  const _ad = game.dcActionsData[msgId];
+  // Refuse picking a locked figure
+  if (_ad.figureLocked?.[figIdx]) return;
+  _ad.selectedFigure = figIdx;
+  // Per-figure separate activation: reset shared action bank + MP bank.
+  // perFigureRemaining tracks each figure's individual 2-action budget;
+  // align the shared `remaining` to the new figure's budget so action
+  // gating reflects the picked figure, not the group total.
+  const _newRem = _ad.perFigureRemaining?.[figIdx] ?? 2;
+  _ad.remaining = _newRem;
+  if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+  // Per destruct 2026-05-07: each figure has individual SoA. Fire
+  // figure-scoped start-of-activation effects once per figure.
+  _ad.figureSoaFired = _ad.figureSoaFired || {};
+  if (!_ad.figureSoaFired[figIdx]) {
+    try {
+      const { enumerateActivatorSoaDescriptors, startSoaResolution, describeChooserPrompt } = await import('../game/soa-orchestrator.js');
+      const _soaDesc = enumerateActivatorSoaDescriptors(game, {
+        dcName: meta.dcName,
+        playerNum: meta.playerNum,
+        msgId,
+        figureIndex: figIdx,
+      });
+      if (_soaDesc.length > 0) {
+        const initPN = (game.initiative ?? game.firstPlayer ?? meta.playerNum);
+        const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: meta.playerNum, activatorMsgId: msgId });
+        if (_started) {
+          const _soaShape = describeChooserPrompt(game.pendingSoaResolution, game.gameId);
+          if (_soaShape) {
+            const _soaButtons = _soaShape.choices.map((c) => {
+              const style = c.descId === '__skip_all__' ? ButtonStyle.Secondary : ButtonStyle.Primary;
+              return new ButtonBuilder().setCustomId(c.customId).setLabel(c.label).setStyle(style);
+            });
+            const _soaRow = new ActionRowBuilder().addComponents(_soaButtons);
+            const _threadId = _ad.threadId;
+            if (_threadId) {
+              try {
+                const _thread = await client.channels.fetch(_threadId);
+                if (_thread) {
+                  await _thread.send({
+                    content: `\u{2728} **Start-of-Activation** (figure ${figIdx + 1}) — Player ${_soaShape.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
+                    components: [_soaRow],
+                  }).catch(discordCatch);
+                }
+              } catch { /* non-fatal */ }
+            }
+          }
+        }
+      }
+    } catch { /* non-fatal: SoA prompt failure leaves figure usable */ }
+    _ad.figureSoaFired[figIdx] = true;
+  }
+  if (saveGames) saveGames(game.gameId);
+  await updateDcActionsMessage(game, msgId, client);
+}
+
+/**
  * End Figure: voluntarily forfeit the current figure's remaining
  * actions and lock it so the next figure of a multi-figure group can
  * begin. Per destruct 2026-05-07: "complete one figure before the

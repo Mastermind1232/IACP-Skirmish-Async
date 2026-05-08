@@ -1052,24 +1052,31 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         rows.push(new ActionRowBuilder().addComponents(endFigBtn));
       }
     } else {
-      // No figure selected yet: show dropdown only
-      // Phase 2 (destruct 2026-05-07): exclude locked figures (figures
-      // that have already finished their 2 actions). IACP "complete one
-      // figure before another" — once locked, can't return.
-      const options = [];
+      // No figure selected yet: show one Pick button per unlocked figure.
+      // Per destruct 2026-05-08: each figure is its own activation; the
+      // pick handler resets BOTH the action bank and the MP bank so the
+      // chosen figure starts fresh with 2 actions and Speed-MP granted
+      // on its next Move click. Locked figures are excluded — IACP
+      // "complete one figure before another" prevents re-pick.
+      const figButtons = [];
       for (let f = 0; f < figures; f++) {
         if (_figLocked[f]) continue;
         const fk = `${dcName}-${dgIndex}-${f}`;
         const nick = game?.figureNicknames?.[fk];
-        const label = nick ? `Figure ${dgIndex}${FIGURE_LETTERS[f]} (${nick})` : `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
-        options.push({ label: label.slice(0, 100), value: String(f), default: false });
+        const label = nick
+          ? `${dgIndex}${FIGURE_LETTERS[f]} (${nick})`
+          : `Figure ${dgIndex}${FIGURE_LETTERS[f]}`;
+        figButtons.push(
+          new ButtonBuilder()
+            .setCustomId(`dc_fig_pick_${msgId}_f${f}`)
+            .setLabel(label.slice(0, 80))
+            .setStyle(ButtonStyle.Primary),
+        );
       }
-      if (options.length > 0) {
-        const selectMenu = new StringSelectMenuBuilder()
-          .setCustomId(`dc_fig_select_${msgId}`)
-          .setPlaceholder('Select a figure to act with…')
-          .addOptions(options);
-        rows.push(new ActionRowBuilder().addComponents(selectMenu));
+      // Discord caps an ActionRow at 5 buttons; multi-figure DGs are at
+      // most 4 (figures field) so this fits in a single row in practice.
+      if (figButtons.length > 0) {
+        rows.push(new ActionRowBuilder().addComponents(...figButtons.slice(0, 5)));
       }
     }
   } else {
