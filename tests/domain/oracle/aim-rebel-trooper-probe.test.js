@@ -157,42 +157,38 @@ describe('PROBE-AIM-REBEL-TROOPER-005: library + dc-effects wiring', () => {
     assert.equal(e.wiredStatus, 'wired');
   });
 
-  it('LATENT-AIM-ELITE: elite slug library entry has DIFFERENT semantics than reg (target-damage gate vs. movement gate)', async () => {
-    // Surfaced during Phase 2.2 probe grind (2026-04-22):
-    //   - aim_rebel_trooper_elite description: "if the target has suffered
-    //     damage during this group's activation"
-    //   - aim_rebel_trooper_reg   description: "if you have not exited a
-    //     space during this activation"
-    // combat.js:2107 handles both with the SAME movement-gate predicate,
-    // so the elite slug is either wrong code OR wrong library text.
-    //
-    // Mitigation: no DC currently references aim_rebel_trooper_elite
-    // (Rebel Trooper (Elite) references get_into_position instead), so
-    // the mismatch is latent — no live bug. Probe pins down both facts
-    // so drift is caught when someone wires the elite slug to a DC.
+  it('AIM-ELITE-PARITY: elite library entry now MATCHES reg (post-destruct 2026-05-08 revert)', async () => {
+    // Per destruct 2026-05-08: Elite Rebel Trooper's Aim was reverted
+    // to be the same as Regular's — "If you have not exited a space
+    // during this activation, apply +1 Hit and +2 Accuracy." Both
+    // library entries now share the same movement-gate description.
+    // Earlier note about "target has suffered damage" was the OLD
+    // pre-revert text and no longer applies.
     const { readFile } = await import('node:fs/promises');
     const lib = JSON.parse(
       await readFile(new URL('../../../data/ability-library.json', import.meta.url), 'utf8'),
     );
     const elite = lib.abilities?.aim_rebel_trooper_elite;
     const reg = lib.abilities?.aim_rebel_trooper_reg;
-    assert.match(elite?.description || '', /suffered damage/i);
+    assert.match(elite?.description || '', /have not exited/i);
     assert.match(reg?.description || '', /have not exited/i);
-    assert.notEqual(elite?.description, reg?.description);
+    assert.equal(elite?.description, reg?.description);
   });
 
-  it('LATENT-AIM-ELITE: no DC currently references aim_rebel_trooper_elite', async () => {
+  it('AIM-ELITE-WIRED: Rebel Trooper (Elite) DC references aim_rebel_trooper_elite (post-revert 2026-05-08)', async () => {
+    // Per destruct 2026-05-08: Elite's Aim was reverted to match Regular's
+    // movement-gate version, and the DC now references the elite slug.
+    // Both slugs share the same predicate via hasAimAbility() so semantics
+    // are identical — earlier "no DC references elite" probe stale.
     const { readFile } = await import('node:fs/promises');
     const effects = JSON.parse(
       await readFile(new URL('../../../data/dc-effects.json', import.meta.url), 'utf8'),
     );
-    const refs = Object.entries(effects.cards || {}).filter(
-      ([, d]) => (d?.specialAbilityIds || []).includes('aim_rebel_trooper_elite'),
-    );
-    assert.equal(
-      refs.length,
-      0,
-      `expected no DC to reference aim_rebel_trooper_elite yet (would trigger the semantics mismatch); found: ${refs.map((r) => r[0]).join(', ')}`,
+    const elite = effects.cards?.['Rebel Trooper (Elite)'];
+    assert.ok(elite);
+    assert.ok(
+      (elite.specialAbilityIds || []).includes('aim_rebel_trooper_elite'),
+      'Rebel Trooper (Elite) must reference aim_rebel_trooper_elite',
     );
   });
 

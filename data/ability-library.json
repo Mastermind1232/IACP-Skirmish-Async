@@ -127,7 +127,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Aim",
-      "description": "While attacking during your activation, if the target has suffered damage during this group's activation, apply +1 Hit and +2 Accuracy to the attack results.",
+      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
       "wiredStatus": "wired"
     },
     "aim_rebel_trooper_reg": {
@@ -136,6 +136,13 @@
       "label": "Aim",
       "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
       "wiredStatus": "wired"
+    },
+    "get_ready_rebel_trooper_elite": {
+      "type": "dcSpecial",
+      "category": "passive-soa",
+      "label": "Get Ready",
+      "description": "At the start of your activation, another figure in your group interrupts to move 1 space.",
+      "wiredStatus": "stub"
     },
     "air_support_bodhi": {
       "type": "dcSpecial",

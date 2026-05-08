@@ -5283,7 +5283,7 @@
       "affiliation": "Rebel"
     },
     "Rebel Trooper (Elite)": {
-      "abilityText": "Double Action Special (Get into Position): Move up to 4 spaces and become Focused.\n\nAim: While attacking during your activation, if the target has suffered damage during this group's activation, apply +1 Hit and +2 Accuracy to the attack results.",
+      "abilityText": "Double Action Special (Get into Position): Move up to 4 spaces and become Focused.\n\nAim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.\n\nGet Ready: At the start of your activation, another figure in your group interrupts to move 1 space.",
       "keywords": [
         "TROOPER"
       ],
@@ -5292,10 +5292,9 @@
       "health": 5,
       "speed": 4,
       "specialAbilityIds": [
-        "get_into_position"
-      ],
-      "passives": [
-        "Aim"
+        "get_into_position",
+        "aim_rebel_trooper_elite",
+        "get_ready_rebel_trooper_elite"
       ],
       "figures": 3,
       "attack": {
