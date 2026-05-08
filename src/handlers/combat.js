@@ -6,6 +6,7 @@ import { COLORS } from '../discord/colors.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingUnhingedStrain, clearPendingUnhingedStrain } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { consumeActionForCurrentFigure } from '../game/activation-state.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -760,7 +761,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     });
     // Apply headhunter direct damage immediately (it's not strain — no choice)
     if (headhunterDmg > 0) {
-      reduceHp(dcHealthState, game, msgId, figureIndex, headhunterDmg, playerNum);
+      await _applyDamage(game, { dcHealthState, logGameAction, client: thread?.client }, {
+        figureKey, msgId, figIndex: figureIndex,
+        amount: headhunterDmg, controllerPlayerNum: playerNum,
+        source: 'Headhunter',
+      });
       await thread.send(`**${abilityLabel}** — **${dcName}** suffers ${headhunterDmg} Damage from Headhunter.`).catch(discordCatch);
     }
 
@@ -821,7 +826,12 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
     return;
   }
 
-  const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, totalHpLoss, playerNum);
+  const { newHp: newCur, prevHp: _strainPrev } = await _applyDamage(game, { dcHealthState, logGameAction, client: thread?.client }, {
+    figureKey, msgId, figIndex: figureIndex,
+    amount: totalHpLoss, controllerPlayerNum: playerNum,
+    source: sourceLabel || 'Strain',
+    viaStrain: true,
+  });
   if (!headhunterTriggered) {
     await withDiscordRetry(() => thread.send(`**${abilityLabel}** (${sourceLabel}) — **${dcName}** suffers 1 Strain (${_strainPrev} → ${newCur} HP).`));
   } else {
@@ -875,7 +885,12 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
   } = ctx;
   const { playerNum, figureKey, dcName, msgId, figureIndex, abilityLabel } = pending;
   if (hpDamage <= 0) return;
-  const { newHp: newCur, prevHp: _strainPrev } = reduceHp(dcHealthState, game, msgId, figureIndex, hpDamage, playerNum);
+  const { newHp: newCur, prevHp: _strainPrev } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+    figureKey, msgId, figIndex: figureIndex,
+    amount: hpDamage, controllerPlayerNum: playerNum,
+    source: abilityLabel || 'Strain',
+    viaStrain: true,
+  });
   await thread.send(`**${abilityLabel}** — **${dcName}** takes ${hpDamage} HP Strain damage (${_strainPrev} → ${newCur} HP).`).catch(discordCatch);
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered ${hpDamage} Strain as damage.`, { phase: 'ROUND', icon: 'attack' });
@@ -1482,7 +1497,11 @@ export async function handleAttackTarget(interaction, ctx) {
       if (_merTargetMsgId && dcHealthState) {
         const _merFkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
         const _merFigIdx = _merFkMatch ? parseInt(_merFkMatch[2], 10) : 0;
-        reduceHp(dcHealthState, game, _merTargetMsgId, _merFigIdx, 1, _merDefPn2);
+        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: target.figureKey, msgId: _merTargetMsgId, figIndex: _merFigIdx,
+          amount: 1, controllerPlayerNum: _merDefPn2,
+          attackerPlayerNum, source: 'Merciless',
+        });
       }
       await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
     }
@@ -2706,7 +2725,11 @@ export async function handleAttackTarget(interaction, ctx) {
           }
           if (_tfMsgId) {
             const _tfFi = parseInt(_tfFiStr, 10);
-            reduceHp(_tfDcHs, game, _tfMsgId, _tfFi, 1, attackerPlayerNum);
+            await _applyDamage(game, { dcHealthState: _tfDcHs, logGameAction, client }, {
+              figureKey: _tfiwmTarget, msgId: _tfMsgId, figIndex: _tfFi,
+              amount: 1, controllerPlayerNum: attackerPlayerNum,
+              source: 'The Force is With Me',
+            });
           }
         }
       }
@@ -6957,7 +6980,11 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
 
   if (deck.length === 0) {
     if (strainMsgId && dcHealthState) {
-      reduceHp(dcHealthState, game, strainMsgId, strainFigIdx, 1, atkPN);
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey, msgId: strainMsgId, figIndex: strainFigIdx,
+        amount: 1, controllerPlayerNum: atkPN,
+        source: 'Krennic Strain (empty deck)', viaStrain: true,
+      });
     }
     await thread.send(`**Unhinged Director Strain** — **${strainDcName}** suffers 1 Damage (no CCs in deck to absorb).`).catch(discordCatch);
     await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
@@ -7042,7 +7069,11 @@ export async function handleUnhingedStrainAbsorb(interaction, ctx) {
     if (deck.length === 0) {
       // Race / state inconsistency — fall through to HP damage.
       if (pending.attackerMsgId && dcHealthState) {
-        reduceHp(dcHealthState, game, pending.attackerMsgId, pending.attackerFigureIndex ?? 0, 1, atkPN);
+        await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+          figureKey: figKey, msgId: pending.attackerMsgId, figIndex: pending.attackerFigureIndex ?? 0,
+          amount: 1, controllerPlayerNum: atkPN,
+          source: 'Unhinged Director Strain (empty deck)', viaStrain: true,
+        });
       }
       await thread.send(`**Unhinged Director Strain** — Deck empty, **${figName}** takes 1 Damage instead.`).catch(discordCatch);
     } else {
@@ -7055,7 +7086,11 @@ export async function handleUnhingedStrainAbsorb(interaction, ctx) {
   } else {
     // HP damage path
     if (pending.attackerMsgId && dcHealthState) {
-      reduceHp(dcHealthState, game, pending.attackerMsgId, pending.attackerFigureIndex ?? 0, 1, atkPN);
+      await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+        figureKey: figKey, msgId: pending.attackerMsgId, figIndex: pending.attackerFigureIndex ?? 0,
+        amount: 1, controllerPlayerNum: atkPN,
+        source: 'Unhinged Director Strain', viaStrain: true,
+      });
     }
     await thread.send(`**Unhinged Director Strain** — **${figName}** suffers 1 Damage.`).catch(discordCatch);
     logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — **${figName}** suffered 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
@@ -7124,7 +7159,11 @@ export async function handleCleaveTarget(interaction, ctx) {
     const cleaveM = cleaveFigureKey.match(/-(\d+)-(\d+)$/);
     const cleaveFigIndex = cleaveM ? parseInt(cleaveM[2], 10) : 0;
     const cleaveDmg = pending.surgeCleave || 0;
-    const { newHp: newCCur, wasDefeated: cleaveDefeated } = reduceHp(dcHealthState, game, cleaveMsgId, cleaveFigIndex, cleaveDmg, cleavePlayerNum);
+    const { newHp: newCCur, wasDefeated: cleaveDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+      figureKey: cleaveFigureKey, msgId: cleaveMsgId, figIndex: cleaveFigIndex,
+      amount: cleaveDmg, controllerPlayerNum: cleavePlayerNum,
+      attackerPlayerNum, source: 'Cleave',
+    });
     // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
     if (cleaveDmg >= 3 && newCCur > 0) {
       const _fokCleaveDcList = getDcList(game, cleavePlayerNum) || [];
@@ -7476,7 +7515,14 @@ export async function handleFigureheadDecision(interaction, ctx) {
     const fhDamage = Math.max(0, damage - 1);
     let fhResultText = '';
     if (fhMsgId && fhFigKey && dcHealthState) {
-      const { newHp: fhNew, prevHp: fhPrev, maxHp: fhMaxHp } = reduceHp(dcHealthState, game, fhMsgId, fhFigIndex, fhDamage, defenderPlayerNum);
+      const _fhRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: fhFigKey, msgId: fhMsgId, figIndex: fhFigIndex,
+        amount: fhDamage, controllerPlayerNum: defenderPlayerNum,
+        attackerPlayerNum, source: 'Figurehead',
+      });
+      const fhNew = _fhRes.newHp;
+      const fhPrev = _fhRes.prevHp;
+      const fhMaxHp = dcHealthState.get(fhMsgId)?.[fhFigIndex]?.[1] ?? 0;
       if (fhMaxHp > 0) {
         fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
         if (fhNew <= 0) {
