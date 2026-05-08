@@ -6510,6 +6510,10 @@
       "health": 7,
       "speed": 4,
       "figures": 2,
+      "passives": [
+        "+1 Damage",
+        "Pierce 1"
+      ],
       "attack": {
         "dice": [
           "red",
