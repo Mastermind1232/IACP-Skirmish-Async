@@ -473,10 +473,17 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
         combat.currentStep = 'step3-defender';
         await sendRerollUI(thread, game, combat, 'defender');
       } else {
-        // No rerolls at all — proceed to modifications
+        // No rerolls at all — proceed to modifications.
+        // Per destruct 2026-05-08: attacker still gets the step-4 Y/N
+        // prompt before defender. Self-play skips both.
         combat.rerollPhase = null;
         combat.currentStep = 'step4-attacker';
-        await proceedAfterRerolls(thread, game, combat, ctx);
+        if (game.selfPlay) {
+          combat.currentStep = 'step5';
+          await proceedAfterRerolls(thread, game, combat, ctx);
+        } else {
+          await sendModsYn(thread, game, combat, 'attacker');
+        }
       }
       break;
     }
@@ -499,7 +506,12 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
         } else {
           combat.rerollPhase = null;
           combat.currentStep = 'step4-attacker';
-          await proceedAfterRerolls(thread, game, combat, ctx);
+          if (game.selfPlay) {
+            combat.currentStep = 'step5';
+            await proceedAfterRerolls(thread, game, combat, ctx);
+          } else {
+            await sendModsYn(thread, game, combat, 'attacker');
+          }
         }
       }
       break;
@@ -514,7 +526,12 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
       } else {
         combat.rerollPhase = null;
         combat.currentStep = 'step4-attacker';
-        await proceedAfterRerolls(thread, game, combat, ctx);
+        if (game.selfPlay) {
+          combat.currentStep = 'step5';
+          await proceedAfterRerolls(thread, game, combat, ctx);
+        } else {
+          await sendModsYn(thread, game, combat, 'attacker');
+        }
       }
       break;
     }
@@ -7942,7 +7959,7 @@ export async function handleZilloDiscard(interaction, ctx) {
   const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (isSkip) {
     clearPendingZilloDiscard(game);
-    await interaction.message.edit({ content: '**Zillo Technique** — Skipped (+1 Block).', components: [] }).catch(discordCatch);
+    await interaction.message.edit({ content: '**Zillo Technique** — Skipped (no Block applied).', components: [] }).catch(discordCatch);
   } else {
     const defPN = pending.defenderPN;
     const cardIdx = parseInt(parts[1], 10);

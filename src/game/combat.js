@@ -124,10 +124,15 @@ export function getInnateRerolls(dcName) {
   const card = getDcEffects()[dcName] || getDcEffects()[dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const text = (card?.abilityText || '').toLowerCase();
   let attackReroll = 0, defenseReroll = 0;
-  const atkMatch = text.match(/while attacking.*?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
+  // Match unconditional rerolls only — "while defending/attacking" must be
+  // directly followed by "(you may) reroll …", with no extra conditional
+  // clause ("while adjacent…", "if …", "when …") in between. Conditional
+  // rerolls (Cower, Soresu Form, Squad Training) have dedicated handlers
+  // in src/handlers/combat.js that gate on the runtime condition.
+  const atkMatch = text.match(/while attacking,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
   if (atkMatch) attackReroll = parseInt(atkMatch[1], 10) || 1;
   else if (/professional/i.test(text)) attackReroll = 1;
-  const defMatch = text.match(/while defending.*?reroll\s+(?:up to\s+)?(\d+)\s+defense?\s+di/);
+  const defMatch = text.match(/while defending,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+defense?\s+di/);
   if (defMatch) defenseReroll = parseInt(defMatch[1], 10) || 1;
   return { attackReroll, defenseReroll };
 }
