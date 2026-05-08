@@ -2591,21 +2591,18 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
 
   const thread = await fetchCombatThread(client, combat.combatThreadId);
   await thread.send(resultText);
-  // Lure of the Dark Side: after attack resolves, hostile figure suffers strain (damage to HP)
+  // Lure of the Dark Side: after attack resolves, the chosen (forced)
+  // hostile figure suffers Strain. Routes through applyStrain so
+  // Fireproof immunity, Headhunter, Under Duress, and the per-strain
+  // damage/discard choice all fire correctly.
   if (combat.isLure && combat.lurePostAttackStrain > 0 && combat.attackerFigureKey) {
-    const lureFk = combat.attackerFigureKey;
-    const lurePn = combat.attackerPlayerNum;
-    const lureMsgId = findDcMessageIdForFigure(game.gameId, lurePn, lureFk);
-    if (lureMsgId) {
-      const { figureIndex: lureFi } = parseFigureKey(lureFk);
-      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-        figureKey: lureFk, msgId: lureMsgId, figIndex: lureFi,
-        amount: combat.lurePostAttackStrain, controllerPlayerNum: lurePn,
-        source: 'Lure of the Dark Side', viaStrain: true, combat,
-      });
-    }
     await thread.send(`**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain.`).catch(discordCatch);
-    await logGameAction(game, client, `**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain after the attack.`, { phase: 'ROUND', icon: 'card' });
+    await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+      figureKey: combat.attackerFigureKey,
+      controllerPlayerNum: combat.attackerPlayerNum,
+      amount: combat.lurePostAttackStrain,
+      source: 'Lure of the Dark Side',
+    });
   }
   // Hit and Run: add pending MP when attack resolves
   const pending = game.hitAndRunPendingMp;
