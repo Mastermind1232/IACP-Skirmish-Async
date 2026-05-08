@@ -34,12 +34,13 @@
 import {
   WHEN_DAMAGED_HOOKS,
   BEFORE_DEFEATED_HOOKS, // eslint-disable-line no-unused-vars -- registered in follow-up commits
-  WHEN_DEFEATED_HOOKS,   // eslint-disable-line no-unused-vars -- registered in follow-up commits
+  WHEN_DEFEATED_HOOKS,
 } from './damage-pipeline.js';
-import { getDcList } from './player-helpers.js';
+import { getDcList, opponentPlayerNum, vpKey } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getDcEffects, getDcKeywords } from '../data-loader.js';
 import { applyCondition } from './conditions.js';
+import { awardObjectiveVp } from './vp-helpers.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -92,5 +93,117 @@ WHEN_DAMAGED_HOOKS.push({
   apply: (game, opts, _ctx) => {
     if (!opts.figureKey) return;
     applyCondition(game, opts.figureKey, 'Focus');
+  },
+});
+
+// ── WHEN_DEFEATED ──────────────────────────────────────────────────────────
+
+/**
+ * Bounty (Fennec Shand passive): when this figure is defeated, the
+ * opponent gains 2 VP. Source-agnostic: triggers from attack, Bleed,
+ * Blast splash, etc. Inline path in combat-bridge.js was removed in
+ * the same commit to prevent double-award.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'bounty',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    return (eff?.passives || []).includes('Bounty');
+  },
+  apply: (game, opts, ctx) => {
+    if (!opts.figureKey) return;
+    const oppPn = opts.attackerPlayerNum
+      ?? (opts.controllerPlayerNum ? opponentPlayerNum(opts.controllerPlayerNum) : null);
+    if (!oppPn) return;
+    awardObjectiveVp(game, oppPn, 2);
+    const total = game[vpKey(oppPn)]?.total ?? '?';
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `\u{1F4B0} **Bounty** — **${dcName}** was defeated. Opponent (P${oppPn}) gains **2 VP** (${total} total).`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
+ * Last Stand (Stormtrooper Elite passive): when this figure is
+ * defeated, another figure in the same group becomes Focused.
+ * Idempotent (`applyCondition` returns false if already present), so
+ * inline path in combat-bridge.js is left alone for now — hook fires
+ * orthogonally on non-combat defeats (Bleed, Blast splash, etc.).
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'last_stand',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    return (eff?.passives || []).includes('Last Stand');
+  },
+  apply: (game, opts, ctx) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const dgMatch = (opts.figureKey || '').match(/-(\d+)-\d+$/);
+    const dgIdx = dgMatch ? dgMatch[1] : '1';
+    const prefix = `${dcName}-${dgIdx}-`;
+    const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .filter(k => k.startsWith(prefix) && k !== opts.figureKey);
+    if (alive.length === 0) return;
+    const target = alive[0];
+    if (applyCondition(game, target, 'Focus')) {
+      const targetName = dcNameFromFigureKey(target);
+      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+        ctx.logGameAction(
+          game,
+          ctx.client,
+          `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
+          { phase: 'ROUND', icon: 'card' },
+        ).catch(() => {});
+      }
+    }
+  },
+});
+
+/**
+ * Into the Force (Obi-Wan Kenobi): when defeated, choose another
+ * friendly figure — that figure becomes Focused. Auto-picks the
+ * first surviving friendly today; player-pick UI is a future
+ * enhancement (CC-style picker prompt).
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'into_the_force_obiwan',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    if (dcName !== 'Obi-Wan Kenobi') return false;
+    const eff = getDcEffects()?.[dcName];
+    return (eff?.specialAbilityIds || []).includes('into_the_force_obiwan');
+  },
+  apply: (game, opts, ctx) => {
+    if (!opts.controllerPlayerNum) return;
+    const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .filter(k => !k.startsWith('Obi-Wan Kenobi-'));
+    if (alive.length === 0) return;
+    const target = alive[0];
+    if (applyCondition(game, target, 'Focus')) {
+      const targetName = dcNameFromFigureKey(target);
+      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+        ctx.logGameAction(
+          game,
+          ctx.client,
+          `✨ **Into the Force** — **${targetName}** becomes **Focused** (Obi-Wan was defeated).`,
+          { phase: 'ROUND', icon: 'card' },
+        ).catch(() => {});
+      }
+    }
   },
 });

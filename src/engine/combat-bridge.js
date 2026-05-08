@@ -1465,22 +1465,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
           delete game.recoverOnHostileDefeat[attackerPlayerNum];
         }
-        // Last Stand (Stormtrooper Elite): when defeated, another figure in the group becomes Focused
+        // Last Stand — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _lsEff = getDcEffects()?.[_lsDcName];
-        if ((_lsEff?.passives || []).includes('Last Stand')) {
-          const _lsDgMatch = (combat.target.figureKey || '').match(/-(\d+)-\d+$/);
-          const _lsDgIdx = _lsDgMatch ? _lsDgMatch[1] : '1';
-          const _lsPrefix = `${_lsDcName}-${_lsDgIdx}-`;
-          const _lsAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => k.startsWith(_lsPrefix) && k !== combat.target.figureKey);
-          if (_lsAlive.length > 0) {
-            const _lsTarget = _lsAlive[0];
-            if (_applyCondition(game, _lsTarget, 'Focus')) {
-              const _lsName = dcNameFromFigureKey(_lsTarget);
-              await logGameAction(game, client, `\u26A1 **Last Stand** — **${_lsName}** becomes **Focused** (another figure in the group was defeated).`, { phase: 'ROUND', icon: 'card' });
-            }
-          }
-        }
         // Nefarious Gains — now handled by processFigureDefeat
         // Imperial Citadel: when a friendly Imperial figure is defeated, transfer its Power Tokens to the Citadel card
         {
@@ -1504,17 +1490,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         // Hunt Dissent — now handled by processFigureDefeat
-        // Into the Force (Obi-Wan): when defeated, a friendly figure becomes Focused
-        if (_lsDcName === 'Obi-Wan Kenobi') {
-          const _obiAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).filter(k => !k.startsWith('Obi-Wan Kenobi-'));
-          if (_obiAlive.length > 0) {
-            const _obiTarget = _obiAlive[0];
-            if (_applyCondition(game, _obiTarget, 'Focus')) {
-              const _obiName = dcNameFromFigureKey(_obiTarget);
-              await logGameAction(game, client, `\u2728 **Into the Force** — **${_obiName}** becomes **Focused** (Obi-Wan was defeated).`, { phase: 'ROUND', icon: 'card' });
-            }
-          }
-        }
+        // Into the Force — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Vengeance (Royal Guard Regular): when adjacent friendly non-GUARDIAN defeated, become Focused
         {
           const _defPos = _targetCoordBeforeDefeat;
@@ -1572,16 +1548,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Bounty (Fennec Shand): when defeated, opponent (= attacker) gains 2 VP
-        {
-          const _bountyDcName = _lsDcName;
-          const _bountyEff = getDcEffects()?.[_bountyDcName];
-          if ((_bountyEff?.passives || []).includes('Bounty')) {
-            awardObjectiveVp(game, attackerPlayerNum, 2);
-            const _bountyVpK2 = vpKey(attackerPlayerNum);
-            await logGameAction(game, client, `\u{1F4B0} **Bounty** — **${_bountyDcName}** was defeated. Opponent (P${attackerPlayerNum}) gains **2 VP** (${game[_bountyVpK2].total} total).`, { phase: 'ROUND', icon: 'card' });
-          }
-        }
+        // Bounty — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Brutal Tactics (Saw Gerrerra): when a hostile figure is defeated, each hostile within 3 of that figure becomes Weakened
         {
           const _btPlayerNum = attackerPlayerNum; // attacker's side has Saw

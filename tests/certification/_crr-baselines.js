@@ -47,8 +47,12 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // All eight extend "adjacent" or "within 2" → "within 3" per the IACP
 // ACS card text — they're DC-ability ACS gaps that the previous audit
 // missed.
+// 2026-05-08: dcName_equality 59→60. Into the Force WHEN_DEFEATED hook
+// in damage-pipeline-hooks.js probes `dcName === 'Obi-Wan Kenobi'` —
+// migration of inline path from combat-bridge.js into the centralized
+// hook framework. Net change is +1 dcName equality across the codebase.
 export const DD_BASELINE = {
-  dcName_equality: 59,
+  dcName_equality: 60,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 93,
