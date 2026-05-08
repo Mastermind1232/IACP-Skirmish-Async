@@ -76,7 +76,19 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
   }
 
   if (msgId) {
-    const { newHp, maxHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
+    // destruct 2026-05-08: route through centralized damage pipeline.
+    const { applyDamage } = await import('../game/damage-pipeline.js');
+    const { newHp, wasDefeated } = await applyDamage(game, {
+      dcHealthState, logGameAction, client,
+    }, {
+      figureKey,
+      msgId,
+      figIndex: figureIndex,
+      amount: damage,
+      controllerPlayerNum: playerNum,
+      source: sourceLabel,
+    });
+    const maxHp = dcHealthState.get(msgId)?.[figureIndex]?.[1] ?? 0;
     if (dcHealthState.get(msgId)?.[figureIndex]) {
       if (wasDefeated) {
         const oppPN = opponentPlayerNum(playerNum);
@@ -106,13 +118,31 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
  * Handles HP reduction, death, VP award to the opponent, and thread logging.
  */
 export async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, damage, client, thread, sourceName, deps) {
-  const { dcHealthState, reduceHp, dcNameFromFigureKey, discordCatch,
+  const { dcHealthState, dcNameFromFigureKey, discordCatch,
     getDcMessageIds, getDcList, opponentPlayerNum } = deps;
 
   if (!msgId) return;
   const figMatch = figKey.match(/-\d+-(\d+)$/);
   const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-  const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figIdx, damage, playerNum);
+  // destruct 2026-05-08: route through the centralized damage pipeline
+  // so when-damaged / before-defeated / when-defeated hooks fire
+  // uniformly regardless of damage source. processFigureDefeat is
+  // still called below since pipeline registries don't yet include
+  // the existing post-defeat orchestration (slice 2b migration in
+  // progress — registries populate as inline checks move out).
+  const { applyDamage } = await import('../game/damage-pipeline.js');
+  const { wasDefeated } = await applyDamage(game, {
+    dcHealthState,
+    logGameAction: deps.logGameAction,
+    client,
+  }, {
+    figureKey: figKey,
+    msgId,
+    figIndex: figIdx,
+    amount: damage,
+    controllerPlayerNum: playerNum,
+    source: sourceName,
+  });
   const figName = dcNameFromFigureKey(figKey);
   if (thread) await thread.send(`**${sourceName}** — ${figName} suffers **${damage} Damage**.`).catch(discordCatch);
   const dcIds = getDcMessageIds(game, playerNum);
@@ -676,7 +706,25 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _epHpState = dcHealthState.get(targetMsgId)?.[targetFigIndex];
       newCur = Array.isArray(_epHpState) ? _epHpState[0] : 0;
     } else {
-      ({ newHp: newCur } = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, damage, defenderPlayerNum));
+      // destruct 2026-05-08: step-7 main-target damage routes through
+      // the centralized damage pipeline so when-suffers-damage,
+      // before-defeated, and when-defeated hooks fire here uniformly
+      // with Blast/Cleave/strain/NPC damage paths.
+      const { applyDamage } = await import('../game/damage-pipeline.js');
+      const _mdResult = await applyDamage(game, {
+        dcHealthState, logGameAction, client,
+      }, {
+        figureKey: combat.target.figureKey,
+        msgId: targetMsgId,
+        figIndex: targetFigIndex,
+        amount: damage,
+        controllerPlayerNum: defenderPlayerNum,
+        attackerPlayerNum,
+        attackerFigureKey: combat.attackerFigureKey,
+        source: 'Attack',
+        combat,
+      });
+      newCur = _mdResult.newHp;
     }
     // Combat-pipeline rebuild (slice 6.4): capture the defender's pre-condition
     // state BEFORE the Step 8 condition application block. Parting Shot is a
