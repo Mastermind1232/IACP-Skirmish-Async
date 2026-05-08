@@ -2465,7 +2465,15 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const defLabel = combat.target.label || defenderDcName;
     await thread.send(`**Agitate** — **${defLabel}**'s group must be the next to activate this round, if able.`).catch(discordCatch);
   }
-  // Fell Swoop (Davith Elso): after attack, become Hidden, gain 2 MP, free attack. Limit once per round.
+  // Fell Swoop (Davith Elso): "After this attack resolves, become
+  // Hidden, move up to 2 spaces, then perform an attack. Limit once
+  // per round."
+  //
+  // The "move up to 2 spaces" is Move-X-shaped (CRR MOVE-017): each
+  // granted point buys 1 space regardless of difficult terrain — so
+  // we grant 2 MP and tag moveXBypassActive. Prior implementation
+  // banked raw MP, which under-delivered into difficult terrain
+  // (2 MP bought 1 space when entry cost was 2).
   if (combat.surgeFellSwoop && combat.attackerFigureKey) {
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
@@ -2473,13 +2481,15 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       game.roundFigureAbilityUsed[fsKey] = true;
       _applyCondition(game, combat.attackerFigureKey, 'Hide');
       grantMovementBank(game, combat.attackerMsgId, 2);
+      game.moveXBypassActive = game.moveXBypassActive || {};
+      game.moveXBypassActive[combat.attackerMsgId] = true;
       if (game.movementBank?.[combat.attackerMsgId]) {
         updateMovementBankMessage(game, combat.attackerMsgId, client).catch(discordCatch);
       }
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
       const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
-      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and gains **2 Movement Points**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch(discordCatch);
+      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch(discordCatch);
     }
   }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
