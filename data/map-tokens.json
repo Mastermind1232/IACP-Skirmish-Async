@@ -553,17 +553,28 @@
       ]
     },
     "anchorhead-cantina-bar": {
-      "terminals": [],
+      "terminals": [
+        "l13",
+        "u9"
+      ],
+      "extractionPoints": [
+        "f12",
+        "f13"
+      ],
       "missionA": {
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Panel",
+            "label": "Patron",
             "image": "Mission Token--Neutral GRAY.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "n13",
+            "q11",
+            "r12"
+          ]
         },
         "launchPanels": []
       },
@@ -571,14 +582,22 @@
         "tokenTypes": [
           {
             "id": "0",
-            "label": "",
+            "label": "Crate",
             "image": "Mission Token--Neutral GRAY.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "r6",
+            "u7",
+            "s10"
+          ]
         },
-        "contraband": []
+        "contraband": [
+          "r6",
+          "u7",
+          "s10"
+        ]
       },
       "doors": [],
       "namedAreas": [

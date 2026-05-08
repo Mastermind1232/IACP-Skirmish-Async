@@ -835,13 +835,21 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   // map-tokens), which is null until the IACP card layout lands.
   try {
     const _lofExt = game?.selectedMission?.rules?.persistent?.extractionPointVp;
-    const _lofExtCoord = game?.selectedMission?.rules?.persistent?.extractionPointCoord
-      || ctx?.getMapTokensData?.()[mapId]?.extractionPoint
-      || null;
-    if (_lofExt && _lofExtCoord && game.figureContraband?.[figureKey]) {
+    // Per destruct 2026-05-08: extraction-point may be a single coord
+    // or an array of coords (Anchorhead B has 2 cells). Support both.
+    const _lofRuleCoord = game?.selectedMission?.rules?.persistent?.extractionPointCoord;
+    const _lofMapToks = ctx?.getMapTokensData?.()[mapId];
+    const _lofExtCoords = (
+      Array.isArray(_lofRuleCoord) ? _lofRuleCoord :
+      typeof _lofRuleCoord === 'string' ? [_lofRuleCoord] :
+      Array.isArray(_lofMapToks?.extractionPoints) ? _lofMapToks.extractionPoints :
+      typeof _lofMapToks?.extractionPoint === 'string' ? [_lofMapToks.extractionPoint] :
+      []
+    ).map((c) => String(c).toLowerCase());
+    if (_lofExt && _lofExtCoords.length > 0 && game.figureContraband?.[figureKey]) {
       const _lofEnterCoord = String(newTopLeft).toLowerCase();
-      const _lofEpCoord = String(_lofExtCoord).toLowerCase();
-      if (_lofEnterCoord === _lofEpCoord) {
+      if (_lofExtCoords.includes(_lofEnterCoord)) {
+        const _lofEpCoord = _lofEnterCoord;
         const _lofBlocks = game.lineOfFireCrateBlock?.[figureKey] || [];
         const _lofBlockSuffered = _lofBlocks.length > 0 ? (_lofBlocks[0] || 0) : 0;
         const _lofVp = Math.max(0, (_lofExt.vpBase || 10) - (_lofExt.vpPenaltyPerBlockSuffered || 2) * _lofBlockSuffered);
