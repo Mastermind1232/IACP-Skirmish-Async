@@ -187,6 +187,44 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
+  // 6b. Into the Force (Obi-Wan): when defeated, choose another friendly
+  // figure → that figure becomes Focused. Per destruct 2026-05-08: must
+  // fire when Obi chooses to be defeated via Strike Me Down too. Routes
+  // through processFigureDefeat (called for all defeat sources including
+  // SMD), so the trigger fires regardless of cause.
+  {
+    const dcEff = getDcEffects();
+    const itfEffEntry = dcEff?.[dcName] || dcEff?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    if ((itfEffEntry?.specialAbilityIds || []).includes('into_the_force_obiwan')) {
+      // Pick a friendly to receive Focus. Auto-pick first eligible
+      // friendly figure (player choice prompt deferred — falls back to
+      // auto-pick rather than skipping the trigger entirely so the
+      // ability fires correctly per destruct's "ensure usable" note).
+      const itfFriendlyPos = game.figurePositions?.[defeatedPlayerNum] || {};
+      let itfPicked = null;
+      for (const [itfFk, itfPos] of Object.entries(itfFriendlyPos)) {
+        if (!itfPos) continue;
+        if (itfFk.startsWith(`${dcName}-`)) continue; // skip Obi-Wan's own group
+        itfPicked = itfFk;
+        break;
+      }
+      if (itfPicked) {
+        try {
+          const { applyCondition } = await import('../game/conditions.js');
+          if (applyCondition(game, itfPicked, 'Focus')) {
+            await logGameAction(game, client,
+              `🌌 **Into the Force** — **${itfPicked}** becomes Focused (Obi-Wan defeated).`,
+              { phase: 'ROUND', icon: 'card' });
+          }
+        } catch { /* fail-open */ }
+      } else {
+        await logGameAction(game, client,
+          `🌌 **Into the Force** — Obi-Wan defeated, but no other friendly figure on the board to Focus.`,
+          { phase: 'ROUND', icon: 'card' });
+      }
+    }
+  }
+
   // 7. Nefarious Gains (Jabba: gain 1 VP when hostile defeated)
   if (checkNefariousGains) {
     await checkNefariousGains(game, defeatedPlayerNum, client);
