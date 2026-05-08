@@ -12,6 +12,7 @@ import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation, isActivationActionInProgress } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getValidPushDestinations } from '../game/movement.js';
 import { getAllFigureCoords } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
@@ -1186,7 +1187,11 @@ export async function handleActPassive(interaction, ctx) {
       // Apply 1 Strain to the activating figure
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const selfFk = `${meta.dcName}-${dgIndex}-0`;
-      reduceHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: selfFk, msgId, figIndex: 0,
+        amount: 1, controllerPlayerNum: meta.playerNum,
+        source: 'Calming Presence', viaStrain: true,
+      });
       const condFkName = dcNameFromFigureKey(condFk);
       await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `**Calming Presence** (Yoda) — Removed ${condName} from ${condFkName}; ${displayName} suffered 1 Strain.`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -1237,7 +1242,11 @@ export async function handleActPassive(interaction, ctx) {
         if (targetMsgId) {
           const figMatch = targetFk.match(/-(\d+)$/);
           const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-          reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, meta.playerNum);
+          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: targetFk, msgId: targetMsgId, figIndex: figIdx,
+            amount: 1, controllerPlayerNum: meta.playerNum,
+            source: 'Unshakable', viaStrain: true,
+          });
         }
         // Exhaust Unshakable
         const _usDcList2 = getDcList(game, meta.playerNum) || [];
@@ -1533,7 +1542,11 @@ export async function handleActPassive(interaction, ctx) {
           if (targetMsgId) {
             const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-            const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
+            const res = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              figureKey: targetFk, msgId: targetMsgId, figIndex: figIdx,
+              amount: hits, controllerPlayerNum: targetPlayerNum,
+              source: 'Wookiee Slam',
+            });
             const _wsDefNote = res.newHp <= 0 ? ' **(defeated)**' : '';
             resultParts.push(`${hits} Damage to **${targetDcName}**${_wsDefNote} (HP: ${res.prevHp} -> ${res.newHp})`);
             if (res.newHp <= 0 && processFigureDefeat) {
@@ -1639,7 +1652,11 @@ export async function handleActPassive(interaction, ctx) {
           if (targetMsgId) {
             const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-            const res = reduceHp(dcHealthState, game, targetMsgId, figIdx, hits, targetPlayerNum);
+            const res = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              figureKey: targetFk, msgId: targetMsgId, figIndex: figIdx,
+              amount: hits, controllerPlayerNum: targetPlayerNum,
+              source: 'Durasteel Fist',
+            });
             const _dfDefNote = res.newHp <= 0 ? ' **(defeated)**' : '';
             resultParts.push(`${hits} Damage to **${targetDcName}**${_dfDefNote} (HP: ${res.prevHp} -> ${res.newHp})`);
             if (res.newHp <= 0 && processFigureDefeat) {
@@ -2393,7 +2410,13 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
   // Defeat the figure: set HP to 0
   const hs = dcHealthState?.get(targetMsgId);
   const prevHp = hs?.[targetFigIdx]?.[0] ?? 0;
-  if (prevHp > 0) reduceHp(dcHealthState, game, targetMsgId, targetFigIdx, prevHp, playerNum);
+  if (prevHp > 0) {
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey, msgId: targetMsgId, figIndex: targetFigIdx,
+      amount: prevHp, controllerPlayerNum: playerNum,
+      source: "It Will Be Alright",
+    });
+  }
 
   // Route through centralized defeat handler (VP, CC attachments, passive redraws,
   // Heroic Effort, Scavenged Weaponry, Hunt Dissent, activation decrement, win conditions)

@@ -8,6 +8,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells, normalizeCoord, parseSizeString } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
@@ -923,7 +924,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       const [hCur, hMax] = hEntry;
       const hCurHp = hCur ?? hMax ?? 0;
       if (hMax === 0 || hCurHp <= 0) continue;
-      const { prevHp: curHp, newHp } = reduceHp(_dcHealthState, game, hostileMsgId, hFigIndex, 2, hostilePlayerNum);
+      const _orRes = await _applyDamage(game, { dcHealthState: _dcHealthState, logGameAction, client }, {
+        figureKey: hostileFk, msgId: hostileMsgId, figIndex: hFigIndex,
+        amount: 2, controllerPlayerNum: hostilePlayerNum,
+        source: 'Overrun',
+      });
+      const curHp = _orRes.prevHp;
+      const newHp = _orRes.newHp;
       const hDisplayName = dcMessageMeta.get(hostileMsgId)?.displayName || hostileDcName;
       const defeatNote = newHp <= 0 ? ' **(defeated)**' : '';
       await logGameAction(game, client, `**Overrun** — **${displayName}** entered **${hDisplayName}**'s space: 2 Damage${defeatNote} (HP: ${curHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
@@ -977,7 +984,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         const [hCur2, hMax2] = hEntry2;
         const hCurHp2 = hCur2 ?? hMax2 ?? 0;
         if (hMax2 === 0 || hCurHp2 <= 0) continue;
-        const { prevHp: hCur, newHp: hNewHp } = reduceHp(_dcHs, game, hMsgId, hFigIdx, 1, hostilePlayerNum);
+        const _crRes = await _applyDamage(game, { dcHealthState: _dcHs, logGameAction, client }, {
+          figureKey: hFk, msgId: hMsgId, figIndex: hFigIdx,
+          amount: 1, controllerPlayerNum: hostilePlayerNum,
+          source: 'Cut and Run',
+        });
+        const hCur = _crRes.prevHp;
+        const hNewHp = _crRes.newHp;
         const hDispName = dcMessageMeta.get(hMsgId)?.displayName || hDcName;
         const defeatNote = hNewHp <= 0 ? ' **(defeated)**' : '';
         await logGameAction(game, client, `⚔️ **Cut and Run** — **${displayName}** exits **${hDispName}**'s space: 1 Damage${defeatNote} (HP: ${hCur}→${hNewHp}).`, { phase: 'ROUND', icon: 'attack' });
@@ -1271,7 +1284,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         if (!_swEntry || !Array.isArray(_swEntry)) continue;
         const [_swCur, _swMax] = _swEntry;
         if ((_swMax ?? 0) === 0 || ((_swCur ?? _swMax ?? 0) <= 0)) continue;
-        const { prevHp: _swPrev, newHp: _swNew } = reduceHp(_swHs, game, _swTgtMsgId, _swFigIdx, 1, _swOppPN);
+        const _swDmgRes = await _applyDamage(game, { dcHealthState: _swHs, logGameAction, client }, {
+          figureKey: _swTgtFk, msgId: _swTgtMsgId, figIndex: _swFigIdx,
+          amount: 1, controllerPlayerNum: _swOppPN,
+          source: 'Self-Defense',
+        });
+        const _swPrev = _swDmgRes.prevHp;
+        const _swNew = _swDmgRes.newHp;
         const _swDefeat = _swNew <= 0 ? ' **(defeated)**' : '';
         await logGameAction(game, client, `**Swipe** — **Salacious B. Crumb** enters **${_swTgtDcName}**'s space: 1 Damage${_swDefeat} (HP: ${_swPrev}→${_swNew}).`, { phase: 'ROUND', icon: 'attack' });
         if (_swNew <= 0 && processFigureDefeat) {
@@ -1317,7 +1336,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       if (!_spEntry || !Array.isArray(_spEntry)) continue;
       const [_spCur, _spMax] = _spEntry;
       if ((_spMax ?? 0) === 0 || ((_spCur ?? _spMax ?? 0) <= 0)) continue;
-      const { prevHp: _spPrev, newHp: _spNew } = reduceHp(_spHs, game, _spTgtMsgId, _spFigIdx, 1, _spOppPN);
+      const _spDmgRes = await _applyDamage(game, { dcHealthState: _spHs, logGameAction, client }, {
+        figureKey: _spTgtFk, msgId: _spTgtMsgId, figIndex: _spFigIdx,
+        amount: 1, controllerPlayerNum: _spOppPN,
+        source: 'Stampede',
+      });
+      const _spPrev = _spDmgRes.prevHp;
+      const _spNew = _spDmgRes.newHp;
       const _spDefeatTag = _spNew <= 0 ? ' **(defeated)**' : '';
       await logGameAction(game, client, `**Stampede** — **Bantha Rider** ends movement on **${_spTgtDcName}**'s space: 1 Damage${_spDefeatTag} (HP: ${_spPrev}→${_spNew}).`, { phase: 'ROUND', icon: 'attack' });
       if (_spNew <= 0 && processFigureDefeat) {

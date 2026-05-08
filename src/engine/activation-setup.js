@@ -21,6 +21,7 @@ import { detectDroidKitTrigger } from '../game/droid-kit-helpers.js';
 import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getConfig } from '../game/figure-config.js';
@@ -328,7 +329,11 @@ export async function finalizeActivation({
         const _swTgtMsgId = findDcMessageIdForFigure(gameId, _swEnemyPN, _swEfk);
         if (_swTgtMsgId) {
           const _swFigIdx = parseFigureKey(_swEfk).figureIndex;
-          reduceHp(dcHealthState, game, _swTgtMsgId, _swFigIdx, 1, _swEnemyPN);
+          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: _swEfk, msgId: _swTgtMsgId, figIndex: _swFigIdx,
+            amount: 1, controllerPlayerNum: _swEnemyPN,
+            source: 'Swipe',
+          });
         }
         const _swTgtName = dcNameFromFigureKey(_swEfk);
         await thread.send(`**Swipe** — **Salacious B. Crumb** activates in **${_swTgtName}**'s space: **${_swTgtName}** suffers 1 Damage.`).catch(discordCatch);

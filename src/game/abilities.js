@@ -914,6 +914,11 @@ export function resolveAbility(abilityId, context) {
       const targetMsgId = findMsgIdForFigureKey(game, targetOwnerNum, targetFigureKey, dcMessageMeta);
       if (dcHealthState && targetMsgId) {
         const { figureIndex: figIdx } = parseFigureKey(targetFigureKey);
+        // destruct 2026-05-08: route through centralized damage
+        // pipeline. Wrapping function isn't async — use the direct
+        // reduceHp call for now and migrate this site to applyDamage
+        // when the enclosing function gets async-ified (separate
+        // change). Marked with a TODO for the cleanup pass.
         const { prevHp, newHp, wasDefeated } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, targetOwnerNum);
         hpNote = ` (HP: ${prevHp} → ${newHp})`;
         if (wasDefeated) {

@@ -6,6 +6,7 @@ import { getDcEffects, getMapData, getFormCards, getCcEffectsData, getMapTokensD
 import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, grantMovementBank, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
@@ -462,7 +463,14 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       if (!entry || typeof entry.damage !== 'number') continue;
       const msgId = entry.msgId;
       if (!msgId || !dcMessageMeta.get(msgId)) continue;
-      const { wasDefeated: _eorDied } = reduceHp(dcHealthState, game, msgId, 0, entry.damage, playerNum);
+      const _eorDcN = dcMessageMeta.get(msgId)?.dcName || 'Figure';
+      const _eorDgM = (dcMessageMeta.get(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _eorFkX = `${_eorDcN.replace(/\s*\[.*\]\s*$/, '').trim()}-${_eorDgM ? _eorDgM[1] : '1'}-0`;
+      const { wasDefeated: _eorDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: _eorFkX, msgId, figIndex: 0,
+        amount: entry.damage, controllerPlayerNum: playerNum,
+        source: 'End-of-Round Self-Damage',
+      });
       const meta = dcMessageMeta.get(msgId);
       const displayName = meta?.displayName || meta?.dcName || 'Figure';
       await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
@@ -1913,7 +1921,11 @@ export async function handleCtfPick(interaction, ctx) {
       if (_ctfFigMsgId && dcHealthState) {
         const figMatch = fk.match(/-(\d+)$/);
         const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-        reduceHp(dcHealthState, game, _ctfFigMsgId, figIdx, cost, playerNum);
+        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: fk, msgId: _ctfFigMsgId, figIndex: figIdx,
+          amount: cost, controllerPlayerNum: playerNum,
+          source: 'Cantina Brawl strain', viaStrain: true,
+        });
       }
       await logGameAction(game, client,
         `**Channel the Force** — **${fuName}** suffers **${cost} Strain**.`,
@@ -1977,7 +1989,11 @@ export async function handleCtfStrain(interaction, ctx) {
   if (_ctsFigMsgId && dcHealthState) {
     const figMatch = fig.fk.match(/-(\d+)$/);
     const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-    reduceHp(dcHealthState, game, _ctsFigMsgId, figIdx, pending.cost, playerNum);
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: fig.fk, msgId: _ctsFigMsgId, figIndex: figIdx,
+      amount: pending.cost, controllerPlayerNum: playerNum,
+      source: 'Channel the Force strain', viaStrain: true,
+    });
   }
   clearPendingChannelTheForceStrain(game);
   await interaction.message.edit({

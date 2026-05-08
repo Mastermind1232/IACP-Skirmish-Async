@@ -19,6 +19,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
 import { healHp, reduceHp } from '../game/damage-helpers.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand, getDcList } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { applyCondition } from '../game/conditions.js';
@@ -725,7 +726,11 @@ export async function handleSoaFire(interaction, ctx) {
           applyCondition(game, fk, 'Focus');
           if (dcHealthState) {
             const fkIdx = parseFigureKey(fk).figureIndex;
-            reduceHp(dcHealthState, game, desc.sourceMsgId, fkIdx, 1, ownerPlayerNum);
+            await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              figureKey: fk, msgId: desc.sourceMsgId, figIndex: fkIdx,
+              amount: 1, controllerPlayerNum: ownerPlayerNum,
+              source: 'Madness', viaStrain: true,
+            });
           }
         }
         await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** suffered **1 Strain** and became **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);

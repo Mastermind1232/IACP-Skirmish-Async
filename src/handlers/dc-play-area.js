@@ -20,6 +20,7 @@ import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPen
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, getActivatedDcIndices,
@@ -3875,7 +3876,7 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
 /**
  * Apply N damage to a figure via dcHealthState, syncing dcList. Returns { newHp, wasDefeated }.
  */
-function _applyHpDamage(game, dcHealthState, dcMessageMeta, figureKey, damage) {
+async function _applyHpDamage(game, dcHealthState, dcMessageMeta, figureKey, damage, ctx) {
   const fkMatch = figureKey.match(/^(.+)-(\d+)-(\d+)$/);
   if (!fkMatch) return { newHp: null, wasDefeated: false };
   const [, dcName, dgIndex, figIndexStr] = fkMatch;
@@ -3892,7 +3893,11 @@ function _applyHpDamage(game, dcHealthState, dcMessageMeta, figureKey, damage) {
   if (!targetMsgId) return { newHp: null, wasDefeated: false };
   const meta = dcMessageMeta.get(targetMsgId);
   const playerNum = meta?.playerNum ?? 1;
-  const { newHp, prevHp, wasDefeated } = reduceHp(dcHealthState, game, targetMsgId, figIndex, damage, playerNum);
+  const { newHp, prevHp, wasDefeated } = await _applyDamage(game, { dcHealthState, logGameAction: ctx?.logGameAction, client: ctx?.client }, {
+    figureKey, msgId: targetMsgId, figIndex,
+    amount: damage, controllerPlayerNum: playerNum,
+    source: 'Direct Damage',
+  });
   if (prevHp === 0 && newHp === 0) return { newHp: prevHp, wasDefeated: false }; // already dead or no entry
   return { newHp, wasDefeated, targetMsgId };
 }
@@ -3939,8 +3944,8 @@ export async function handleRushPushFig(interaction, ctx) {
   if (validSpaces.length === 1) {
     // Only current space — auto-resolve (damage only, no actual push)
     const targetName = dcNameFromFigureKey(targetFk);
-    const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
-    const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
+    const t = await _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1, ctx);
+    const a = await _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1, ctx);
     const tNote = t.wasDefeated ? ' **(defeated)**' : '';
     const aNote = a.wasDefeated ? ' **(defeated)**' : '';
     const logMsg = `**Rush** — Both suffer 1 Damage: **${targetName}**${tNote}, **Onar**${aNote}. No push (no open space).`;
@@ -4007,8 +4012,8 @@ export async function handleRushPushSpace(interaction, ctx) {
   const targetName = dcNameFromFigureKey(targetFk);
   const pushed = chosenSpace !== (prevPos ? String(prevPos).toLowerCase() : null);
   // Apply 1 damage to both
-  const t = _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1);
-  const a = _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1);
+  const t = await _applyHpDamage(game, dcHealthState, dcMessageMeta, targetFk, 1, ctx);
+  const a = await _applyHpDamage(game, dcHealthState, dcMessageMeta, pending.activatorFigureKey, 1, ctx);
   const tNote = t.wasDefeated ? ' **(defeated)**' : '';
   const aNote = a.wasDefeated ? ' **(defeated)**' : '';
   const pushNote = pushed ? ` Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}.` : '';

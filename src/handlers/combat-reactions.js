@@ -2,6 +2,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
@@ -367,7 +368,13 @@ export async function handleStrikeMeDown(interaction, ctx) {
       const entry = healthState[figIdx];
       if (entry) {
         const curHp = entry[0];
-        if (curHp > 0) reduceHp(dcHealthState, game, targetMsgId, figIdx, curHp, defPN);
+        if (curHp > 0) {
+          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: fk, msgId: targetMsgId, figIndex: figIdx,
+            amount: curHp, controllerPlayerNum: defPN,
+            source: 'Strike Me Down',
+          });
+        }
       }
     }
 
