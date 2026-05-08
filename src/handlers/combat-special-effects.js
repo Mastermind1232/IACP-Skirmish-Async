@@ -44,7 +44,13 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
     if (!mid) continue;
     const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
-    const { newHp, maxHp: splashMaxHp } = reduceHp(dcHealthState, game, mid, figIdx, totalEffect, t.playerNum);
+    const _spRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: t.figureKey, msgId: mid, figIndex: figIdx,
+      amount: totalEffect, controllerPlayerNum: t.playerNum,
+      source: 'Splash',
+    });
+    const newHp = _spRes.newHp;
+    const splashMaxHp = dcHealthState.get(mid)?.[figIdx]?.[1] ?? 0;
     if (splashMaxHp === 0) continue;
     // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
     if (totalEffect >= 3 && newHp > 0) {
@@ -163,7 +169,11 @@ export async function handleBleedResolve(interaction, ctx) {
 
   if (action === 'accept') {
     if (msgId) {
-      const { newHp, wasDefeated } = reduceHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
+      const { newHp, wasDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+        figureKey, msgId, figIndex: figureIndex,
+        amount: 1, controllerPlayerNum: playerNum,
+        source: 'Bleeding', viaStrain: true,
+      });
       if (dcHealthState.get(msgId)?.[figureIndex]) {
         await logGameAction(game, interaction.client, `\u{1FA78} **Bleeding** — **${dcName}** suffered 1 damage.`, { phase: 'ROUND', icon: 'attack' });
         const dcIds = getDcMessageIds(game, playerNum);
@@ -259,7 +269,11 @@ export async function handleSidewinderApply(interaction, ctx) {
   }
   await interaction.deferUpdate().catch(discordCatch);
   // Apply 1 Strain
-  reduceHp(dcHealthState, game, attackerMsgId, figureIndex, 1, meta.playerNum);
+  await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+    figureKey, msgId: attackerMsgId, figIndex: figureIndex,
+    amount: 1, controllerPlayerNum: meta.playerNum,
+    source: 'Sidewinder', viaStrain: true,
+  });
   // Grant 2 MP
   game.movementBank = game.movementBank || {};
   const bank = game.movementBank[attackerMsgId] || { total: 0, remaining: 0 };
@@ -304,7 +318,11 @@ export async function handleBoltslingerTarget(interaction, ctx) {
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
-    const { newHp: bsNewHp, wasDefeated: bsDied } = reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    const { newHp: bsNewHp, wasDefeated: bsDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: targetMsgId, figIndex: figIdx,
+      amount: 1, controllerPlayerNum: target.playerNum,
+      attackerPlayerNum, source: 'Boltslinger',
+    });
     await updateDcCardMessage(client, game, targetMsgId, ctx, { errorContext: 'Failed to refresh Boltslinger target embed:' });
     if (bsDied && processFigureDefeat) {
       const _bsDcIds = getDcMessageIds(game, target.playerNum) || [];
@@ -401,7 +419,11 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (hits > 0 && target.msgId) {
     const { figureIndex: figIndex } = parseFigureKey(target.figureKey);
-    const { newHp: newCur, wasDefeated: fkDefeated } = reduceHp(dcHealthState, game, target.msgId, figIndex, hits, target.playerNum);
+    const { newHp: newCur, wasDefeated: fkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: target.msgId, figIndex,
+      amount: hits, controllerPlayerNum: target.playerNum,
+      attackerPlayerNum: pending.attackerPlayerNum, source: 'Fighting Knife',
+    });
     // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
     if (hits >= 3 && newCur > 0) {
       const _fokFkDcList = getDcList(game, target.playerNum) || [];
@@ -682,7 +704,11 @@ async function startHeavyFireConditions(game, pending, ctx) {
     const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
     if (!mid) continue;
     const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
-    const { newHp, wasDefeated } = reduceHp(dcHealthState, game, mid, figIdx, 1, t.playerNum);
+    const { newHp, wasDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: t.figureKey, msgId: mid, figIndex: figIdx,
+      amount: 1, controllerPlayerNum: t.playerNum,
+      attackerPlayerNum: pending.attackerPlayerNum, source: 'Heavy Fire',
+    });
     lines.push(`• **${t.label}** suffers 1 Damage`);
     if (wasDefeated && processFigureDefeat) {
       const defeatResult = await processFigureDefeat(game, {
@@ -884,7 +910,11 @@ export async function handleHavocShotUse(interaction, ctx) {
   // Suffer 1 Strain (HP damage) to attacker
   const atkMsgId = hs.attackerMsgId;
   if (atkMsgId) {
-    reduceHp(dcHealthState, game, atkMsgId, hs.attackerFigureIndex, 1, hs.attackerPlayerNum);
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: hs.attackerFigureKey, msgId: atkMsgId, figIndex: hs.attackerFigureIndex,
+      amount: 1, controllerPlayerNum: hs.attackerPlayerNum,
+      source: 'Havoc Shot', viaStrain: true,
+    });
     // Refresh attacker embed
     await updateDcCardMessage(client, game, atkMsgId, ctx);
   }
@@ -930,7 +960,11 @@ export async function handleHavocShotPick(interaction, ctx) {
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
-    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: targetMsgId, figIndex: figIdx,
+      amount: 1, controllerPlayerNum: target.playerNum,
+      attackerPlayerNum: hs.attackerPlayerNum, source: 'Havoc Shot',
+    });
     await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   hs.chosen.push(target.figureKey);
@@ -984,7 +1018,11 @@ export async function handleDeflectPick(interaction, ctx) {
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
-    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: targetMsgId, figIndex: figIdx,
+      amount: 1, controllerPlayerNum: target.playerNum,
+      source: 'Deflect',
+    });
     await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   const dfThread = await fetchCombatThread(client, df.combatThreadId);
@@ -1093,7 +1131,11 @@ export async function handleWantonPick(interaction, ctx) {
   const targetMsgId = findDcMessageIdForFigure(gameId, target.playerNum, target.figureKey);
   if (targetMsgId) {
     const { figureIndex: figIdx } = parseFigureKey(target.figureKey);
-    reduceHp(dcHealthState, game, targetMsgId, figIdx, 1, target.playerNum);
+    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: targetMsgId, figIndex: figIdx,
+      amount: 1, controllerPlayerNum: target.playerNum,
+      attackerPlayerNum: wd.ownerPlayerNum, source: 'Wanton Destruction',
+    });
     await updateDcCardMessage(client, game, targetMsgId, ctx);
   }
   wd.chosen.push(target.figureKey);

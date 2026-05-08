@@ -33,10 +33,15 @@ const CB_SRC = readFileSync(resolve(ROOT, 'src/engine/combat-bridge.js'), 'utf8'
 const CM_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('PROBE-PD-BLED-003: Bleeding damage uses the HP-damage path, not the voluntary-strain helper', () => {
-  it('003a: source — handleBleedResolve calls reduceHp directly on "accept" (generic HP-damage path)', () => {
+  it('003a: source — handleBleedResolve applies damage on "accept" via the centralized damage pipeline', () => {
+    // destruct 2026-05-08: reduceHp call sites migrated to applyDamage
+    // (src/game/damage-pipeline.js). Bleeding damage now routes through
+    // _applyDamage with viaStrain=true so the strain → damage layering
+    // is preserved (when-damaged hooks fire, opponent's prevention CCs
+    // still gate via the strain handler in earlier-step paths).
     assert.match(CS_SRC,
-      /export async function handleBleedResolve[\s\S]*?if \(action === 'accept'\) \{[\s\S]*?reduceHp\(dcHealthState, game, msgId, figureIndex, 1, playerNum\);/,
-      'handleBleedResolve must reduce HP directly on accept — CRR-BLED-003');
+      /export async function handleBleedResolve[\s\S]*?if \(action === 'accept'\) \{[\s\S]*?_applyDamage\(game,[\s\S]*?source: 'Bleeding'/,
+      'handleBleedResolve must apply damage via the centralized pipeline on accept — CRR-BLED-003');
   });
 
   it('003b: source — handleBleedResolve must NOT route Bleeding through applyStrainToFigure', () => {
