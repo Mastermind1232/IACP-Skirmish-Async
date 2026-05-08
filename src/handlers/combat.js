@@ -2201,13 +2201,19 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Disposable** — −1 Evade applied to defender\'s defense results.');
   }
 
-  // Front Line (Echo Base Trooper): within 3 spaces, replace 1 blue die with red
+  // Front Line (Echo Base Trooper): within 3 spaces, replace 1 blue die
+  // with red AND apply +2 Accuracy. Per destruct 2026-05-08 the accuracy
+  // boost is part of Front Line (fires when target is within 3),
+  // not a flat innate passive — moved out of the passives list.
   if (hasFrontLineAbility(atkSpecialIds) && frontLineInRange(distanceToTarget)) {
     const swap = applyFrontLineDieSwap(game.pendingCombat.attackInfo.dice || []);
+    let _flMsg = `**Front Line** — Target within ${distanceToTarget} spaces: +2 Accuracy applied.`;
+    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
     if (swap.applied) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: swap.dice };
-      await thread.send(`**Front Line** — 1 blue die replaced with red (target within ${distanceToTarget} spaces).`);
+      _flMsg = `**Front Line** — 1 blue die replaced with red + +2 Accuracy (target within ${distanceToTarget} spaces).`;
     }
+    await thread.send(_flMsg);
   }
 
   // Cortosis Weave (Echo Base Trooper Elite): reduce Pierce by 2

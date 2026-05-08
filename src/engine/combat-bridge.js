@@ -699,6 +699,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Also skip on Extra Protection re-entry since conditions were already applied.
       if (damage > 0 && !_epReentry) {
         let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+        // Bleed (passive ability — Gaarkhan): every attack auto-applies
+        // Bleed to defender, no surge cost. Per destruct 2026-05-08.
+        // Wired by reading attacker DC's passives — extends naturally to
+        // any future DC with a "Bleed" passive entry.
+        const _bleedEff = getDcEffect(combat.attackerDcName);
+        const _bleedPassives = (_bleedEff?.passives || []).map((p) => String(p));
+        if (_bleedPassives.includes('Bleed') && !allConditions.includes('Bleed')) {
+          allConditions.push('Bleed');
+        }
         // CRR p.13 (ATTACKING OBJECTS): "Conditions cannot be applied to objects,
         // and objects cannot suffer Strain." Crates (and other object targets) are
         // skipped here — NPC FIGURES like Thugs / Krykna are still condition-eligible.

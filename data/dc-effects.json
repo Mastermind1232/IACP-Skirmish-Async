@@ -2475,7 +2475,7 @@
       "affiliation": "Imperial"
     },
     "Echo Base Trooper (Elite)": {
-      "abilityText": "Front Line: While attacking, if the target is within 3 spaces of you, you may replace 1 blue die in your attack pool with 1 red die.\n\nCortosis Weave: While you are defending, you may reduce the Pierce value of the attack results by 2, to a minimum of 0.",
+      "abilityText": "Front Line: While attacking, if the target is within 3 spaces of you, you may replace 1 blue die in your attack pool with 1 red die. +2 Accuracy.\n\nCortosis Weave: While you are defending, you may reduce the Pierce value of the attack results by 2, to a minimum of 0.",
       "keywords": [
         "TROOPER"
       ],
@@ -2488,7 +2488,6 @@
       "health": 8,
       "speed": 4,
       "passives": [
-        "+2 Accuracy",
         "Efficient Travel"
       ],
       "figures": 2,
@@ -2630,6 +2629,9 @@
       "specialAbilityIds": [
         "much_to_learn",
         "brush_ezra"
+      ],
+      "passives": [
+        "Block 1"
       ],
       "subname": "SPECTRE-6",
       "cost": 7,
