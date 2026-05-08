@@ -296,7 +296,7 @@
             "weaponPrototypeCarrierActions": [
               { "id": "wp_attack_focus", "label": "Attack (auto-Focus)", "actionCost": 1, "effect": "perform_attack_with_pre_focus" },
               { "id": "wp_gain_vp", "label": "Gain 3 VP", "actionCost": 2, "effect": "gain_vp", "vp": 3 },
-              { "id": "wp_move_recover", "label": "Move 4 + Recover 3 Strain", "actionCost": 2, "effect": "move_and_recover_strain", "spaces": 4, "strain": 3 }
+              { "id": "wp_move_recover", "label": "Move 4 + Recover 3 Damage", "actionCost": 2, "effect": "move_and_recover_damage", "spaces": 4, "damage": 3 }
             ]
           },
           "startOfRound": {},

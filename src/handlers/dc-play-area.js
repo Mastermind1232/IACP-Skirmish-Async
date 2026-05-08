@@ -2471,7 +2471,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   // Experimental Weapons (Development Facility B): three carrier
   // specials. Per destruct 2026-05-08 they're plain action buttons.
-  if (action === 'Attack (auto-Focus)' || action === 'Gain 3 VP' || action === 'Move 4 + Recover 3 Strain') {
+  if (action === 'Attack (auto-Focus)' || action === 'Gain 3 VP' || action === 'Move 4 + Recover 3 Damage') {
     const _wpDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _wpSelFig = actionsData?.selectedFigure ?? 0;
     const _wpFk = `${meta.dcName}-${_wpDgIdx}-${_wpSelFig}`;
@@ -2480,21 +2480,46 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
     if (action === 'Attack (auto-Focus)') {
-      // Pre-focus the figure, then drop into the standard attack flow
-      // by re-dispatching as 'Attack'. The action-cost was already
-      // consumed by the parent dispatch (1 action).
+      // Per destruct 2026-05-08: focus + attack is one action; user
+      // does not click Attack again. We:
+      //   1) Mark the figure Focused (carrier-only effect; does not
+      //      stack with normal Focus tokens that the figure may already
+      //      have, since IA Focus is a binary "focused/not" state).
+      //   2) Inline the Attack-flow prep work and post target buttons
+      //      directly (so this single button click drives the attack).
+      // The 1 action cost was already consumed by the parent special-
+      // action dispatch (mission-cards weaponPrototypeCarrierActions
+      // entry actionCost: 1).
       game.figureFocused = game.figureFocused || {};
       game.figureFocused[_wpFk] = true;
-      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** becomes Focused before performing an attack.`, { phase: 'ROUND', icon: 'attack' });
-      // Re-enter the dc_attack_ branch with action='Attack' so the user
-      // gets the normal target-selection prompt.
-      // NOTE: cost already consumed; downstream Attack flow does not
-      // re-charge the action.
-      // Fall through to standard attack flow:
-      action = 'Attack';
-      // (drop through to the existing 'if (action === "Attack")' branch
-      // earlier in this function would require a re-entry; for now log
-      // the focus and let the user click Attack manually.)
+      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** becomes Focused and performs an attack.`, { phase: 'ROUND', icon: 'attack' });
+      const _wpPlayerNum = meta.playerNum;
+      const _wpAttackerPos = game.figurePositions?.[_wpPlayerNum]?.[_wpFk];
+      if (!_wpAttackerPos) {
+        await interaction.followUp({ content: 'Carrier has no position yet.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const _wpStats = getDcStats(meta.dcName);
+      const _wpAttackInfo = _wpStats.attack || { dice: ['red'], type: 'range' };
+      const [_wpMinRange, _wpMaxRange] = defaultAttackRange(_wpAttackInfo);
+      const _wpAtkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const _wpAtkKws = (_wpAtkEff?.keywords || []).map((k) => String(k).toUpperCase());
+      const _wpHasReach = _wpAtkKws.includes('REACH') || (_wpAtkEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_wpPlayerNum];
+      const _wpEffMax = _wpHasReach && _wpMaxRange < 2 ? 2 : _wpMaxRange;
+      const _wpMs = getMapData(game.selectedMap?.id);
+      if (!_wpMs) {
+        await interaction.followUp({ content: 'Map data unavailable for attack flow.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const _wpEnemyPn = _wpPlayerNum === 1 ? 2 : 1;
+      const _wpDgIdxNum = parseInt(_wpDgIdx, 10) || 1;
+      if (pushUndo) pushUndo(game, { type: 'attack', label: 'Attack (auto-Focus)', msgId, gameLogMessageId: null });
+      await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, _wpFk, _wpSelFig, {
+        dgIndex: _wpDgIdxNum, attackerPos: _wpAttackerPos, attackerKws: _wpAtkKws,
+        minRange: _wpMinRange, effectiveMaxRange: _wpEffMax, ms: _wpMs,
+        playerNum: _wpPlayerNum, enemyPlayerNum: _wpEnemyPn, stats: _wpStats,
+      });
+      saveGames(game.gameId);
       return;
     }
     if (action === 'Gain 3 VP') {
@@ -2504,11 +2529,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       saveGames(game.gameId);
       return;
     }
-    if (action === 'Move 4 + Recover 3 Strain') {
-      // Grant 4 MP for movement.
+    if (action === 'Move 4 + Recover 3 Damage') {
+      // Per destruct 2026-05-08: recover *damage* (heal HP), not strain.
       if (!game.movementBank) game.movementBank = {};
       game.movementBank[msgId] = (game.movementBank[msgId] || 0) + 4;
-      // Recover 3 strain (heal up to 3 HP).
       const _wpHs = ctx.dcHealthState?.get(msgId) || [];
       const _wpEntry = _wpHs[_wpSelFig];
       if (_wpEntry) {
@@ -2517,7 +2541,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         _wpHs[_wpSelFig] = [_wpNew, _wpMax || _wpNew];
         ctx.dcHealthState?.set(msgId, _wpHs);
       }
-      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** gains **+4 MP** and recovers **3 strain**.`, { phase: 'ROUND', icon: 'move' });
+      await logGameAction(game, interaction.client, `🔫 **Experimental Weapons** — **${meta.displayName || meta.dcName}** gains **+4 MP** and recovers **3 damage**.`, { phase: 'ROUND', icon: 'move' });
       saveGames(game.gameId);
       return;
     }
