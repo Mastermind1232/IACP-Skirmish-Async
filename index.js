@@ -232,6 +232,7 @@ import {
   postKryknaPushButtons as _postKryknaPushButtonsPure,
   postKryknaPlaceButtons as _postKryknaPlaceButtonsPure,
   postFluctuationSwapButtons as _postFluctuationSwapButtonsPure,
+  postArmsDistributionPrompt as _postArmsDistributionPromptPure,
 } from './src/engine/misc-helpers.js';
 import {
   updateAttachmentMessageForDc as _updateAttachmentMessageForDcPure,
@@ -1126,6 +1127,12 @@ async function postKryknaPlaceButtons(game, channel, gameId) {
 async function postFluctuationSwapButtons(game, channel, gameId, playerNum) {
   return _postFluctuationSwapButtonsPure(game, channel, gameId, playerNum, {
     getPlayerId, getMapTokensData, discordCatch, getCurrentFluctuationPositions,
+  });
+}
+
+async function postArmsDistributionPrompt(game, channel, gameId) {
+  return _postArmsDistributionPromptPure(game, channel, gameId, {
+    getPlayerId, discordCatch,
   });
 }
 
@@ -3437,6 +3444,7 @@ function buildAllDeps() {
     resolveAbility, getPlayableCcFromHand, isCcPlayableNow,
     isCcPlayLegalByRestriction, filterMapSpacesByBounds,
     reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, removeFigurePosition,
+    grantPowerTokens, grantMovementBank,
 
     // Data loader (imported)
     getDcEffects, getDiceData, getCcEffect, isCcAttachment, isDcAttachment,
@@ -3483,7 +3491,7 @@ function buildAllDeps() {
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
     getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,
-    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons,
+    postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons, postArmsDistributionPrompt,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,
     postMissionCardAfterMapSelection, postPinnedMissionCardFromGameState,

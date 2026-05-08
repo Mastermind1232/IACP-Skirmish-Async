@@ -964,9 +964,15 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
 
+  // Arms Salvage (Devaron Garrison A): if EoR queued an interactive
+  // distribute, post the first prompt now. Subsequent prompts fire
+  // from the handler chain.
+  const generalChannel = await fetchGameChannel(client, game.generalId);
+  if (game.pendingArmsDistribution?.queue?.length > 0 && ctx.postArmsDistributionPrompt) {
+    await ctx.postArmsDistributionPrompt(game, generalChannel, gameId);
+  }
   // Devaron Garrison B: terminal→door selection + crate push prompts.
   // Driven by rules.openDoorPerTerminal flag (CRR mission card data).
-  const generalChannel = await fetchGameChannel(client, game.generalId);
   if (hasMissionFlag(mapId, variant, 'openDoorPerTerminal')) {
     if (!game.cratePositions) {
       const dMap = getMapTokensData()['devaron-garrison'];

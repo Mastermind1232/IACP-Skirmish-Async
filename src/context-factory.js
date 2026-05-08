@@ -150,6 +150,7 @@ const CONTEXT_GROUPS = {
     'sendRoundActivationPhaseMessage', 'buildBoardMapPayload',
     'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
     'postKryknaPushButtons', 'postFluctuationSwapButtons',
+    'postArmsDistributionPrompt',
     'client', 'sendPhaseGateMessages',
   ],
 
@@ -286,6 +287,7 @@ const CONTEXT_GROUPS = {
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'logGameAction',
     'getMapTokensData', 'postDevaronDoorButtons', 'postDevaronCratePushPrompts',
     'getSpaceController', 'postKryknaPlaceButtons',
+    'postArmsDistributionPrompt', 'grantPowerTokens',
   ],
 
   postDeploy: [

@@ -347,34 +347,41 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
     }
   }
 
-  // autoDistributeCrateTokens: for each crate with accumulated tokens, find the controller,
-  // then auto-give all tokens to the first friendly figure on or adjacent to the crate.
-  // Also awards 2 VP per controlled crate. Used by Devaron Garrison A.
+  // autoDistributeCrateTokens: per destruct 2026-05-07, the controlling
+  // player MAY distribute the Power Tokens among friendly figures on or
+  // adjacent to the crate (player choice — not auto-pick first). We award
+  // 2 VP per controlled crate immediately (deterministic), and queue
+  // each crate's tokens for an interactive distribute prompt that
+  // _continueAfterMissionSor (round.js) posts to the general channel.
+  // Crates with no eligible nearby friendly are dropped without grant.
   if (rules.autoDistributeCrateTokens && mapId) {
     const { vpPerCrate = 2 } = rules.autoDistributeCrateTokens;
     const { getFiguresOnOrAdjacentToSpace } = ctx;
     const crateTokens = game.crateTokens;
     if (crateTokens && typeof crateTokens === 'object') {
       const vpByPlayer = { 1: 0, 2: 0 };
-      const distributionLog = [];
+      const queue = [];
+      const droppedLog = [];
       for (const [coord, tokens] of Object.entries(crateTokens)) {
         if (!Array.isArray(tokens) || tokens.length === 0) continue;
         const controller = getSpaceController(game, mapId, coord);
         if (!controller) { game.crateTokens[coord] = []; continue; }
         vpByPlayer[controller] += vpPerCrate;
-        // Find first friendly figure on or adjacent to this crate
-        const nearbyFigs = getFiguresOnOrAdjacentToSpace ? getFiguresOnOrAdjacentToSpace(game, controller, coord, mapId) : [];
-        if (nearbyFigs.length > 0) {
-          const recipient = nearbyFigs[0];
-          for (const tok of tokens) grantPowerTokens(game, recipient, tok, 1);
-          distributionLog.push(`${coord}: [${tokens.join(', ')}] → ${recipient}`);
+        const nearbyFigs = getFiguresOnOrAdjacentToSpace
+          ? getFiguresOnOrAdjacentToSpace(game, controller, coord, mapId)
+          : [];
+        if (nearbyFigs.length === 0) {
+          droppedLog.push(`${coord}: [${tokens.join(', ')}] — no friendly adjacent; tokens lost`);
         } else {
-          distributionLog.push(`${coord}: [${tokens.join(', ')}] — no adjacent friendly, tokens lost`);
+          queue.push({ playerNum: controller, crateCoord: coord, tokens: [...tokens], eligibleFigs: [...nearbyFigs] });
         }
         game.crateTokens[coord] = [];
       }
-      if (distributionLog.length > 0) {
-        await logGameAction(game, client, `**Crate tokens distributed:** ${distributionLog.join(' | ')}`, { phase: 'ROUND', icon: 'round' });
+      if (queue.length > 0) {
+        game.pendingArmsDistribution = { queue, postedFor: null };
+      }
+      if (droppedLog.length > 0) {
+        await logGameAction(game, client, `**Arms Salvage:** ${droppedLog.join(' | ')}`, { phase: 'ROUND', icon: 'round' });
       }
       for (const pn of [1, 2]) {
         if (vpByPlayer[pn] > 0) {

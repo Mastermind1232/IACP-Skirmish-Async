@@ -276,6 +276,7 @@ export function buildHeadlessDeps(options = {}) {
   const postDevaronDoorButtons = noopAsync;
   const postDevaronCratePushPrompts = noopAsync;
   const postKryknaPushButtons = noopAsync;
+  const postArmsDistributionPrompt = noopAsync;
   const updateDeployPromptMessages = noopAsync;
 
   // Setup/creation stubs
@@ -605,6 +606,7 @@ export function buildHeadlessDeps(options = {}) {
     repopulateDcMapsForGame: () => {},
     sendBleedingPrompt, sendDeckIllegalAlert, sendSquadConfirmation,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
+    postArmsDistributionPrompt,
     updateDeployPromptMessages, getDcPlayAreaComponents,
     getDcActionButtons, getActivateDcButtons,
 

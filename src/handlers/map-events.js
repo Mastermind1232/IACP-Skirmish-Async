@@ -414,3 +414,77 @@ export async function handleKryknaPlacePick(interaction, ctx) {
   }
   saveGames(game.gameId);
 }
+
+// ── Arms Salvage (Devaron Garrison A) distribute handlers ─────────────────
+
+async function _advanceArmsDistribution(game, gameId, ctx) {
+  const { client, postArmsDistributionPrompt } = ctx;
+  const pa = game.pendingArmsDistribution;
+  if (!pa?.queue) return;
+  while (pa.queue.length > 0 && (!pa.queue[0].tokens?.length || !pa.queue[0].eligibleFigs?.length)) {
+    pa.queue.shift();
+  }
+  if (pa.queue.length === 0) {
+    delete game.pendingArmsDistribution;
+    return;
+  }
+  const generalCh = await fetchGameChannel(client, game.generalId);
+  if (generalCh && postArmsDistributionPrompt) {
+    await postArmsDistributionPrompt(game, generalCh, gameId, { getPlayerId, discordCatch });
+  }
+}
+
+export async function handleArmsDistributePick(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer, grantPowerTokens } = ctx;
+  const rest = parseCustomId(interaction.customId, 'arms_distribute_pick_');
+  const firstUnderscore = rest.indexOf('_');
+  if (firstUnderscore < 0) return;
+  const gameId = rest.substring(0, firstUnderscore);
+  const figureKey = rest.substring(firstUnderscore + 1);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pa = game.pendingArmsDistribution;
+  if (!pa?.queue || pa.queue.length === 0) {
+    await interaction.followUp({ content: 'No Arms Salvage distribution pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const head = pa.queue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, head.playerNum, canActAsPlayer, `It's P${head.playerNum}'s turn to distribute.`)) return;
+  if (!head.eligibleFigs.includes(figureKey)) {
+    await interaction.followUp({ content: 'That figure is no longer eligible.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const token = head.tokens.shift();
+  if (token && typeof grantPowerTokens === 'function') {
+    grantPowerTokens(game, figureKey, token, 1);
+  }
+  const pid = getPlayerId(game, head.playerNum);
+  await logGameAction(game, client, `📦 <@${pid}> Arms Salvage — gave **${token}** to **${figureKey}** from crate at **${String(head.crateCoord).toUpperCase()}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (head.tokens.length === 0) pa.queue.shift();
+  await _advanceArmsDistribution(game, gameId, ctx);
+  saveGames(game.gameId);
+}
+
+export async function handleArmsDistributeSkip(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'arms_distribute_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pa = game.pendingArmsDistribution;
+  if (!pa?.queue || pa.queue.length === 0) {
+    await interaction.followUp({ content: 'No Arms Salvage distribution pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const head = pa.queue[0];
+  if (!await requirePlayer(interaction, game, interaction.user.id, head.playerNum, canActAsPlayer, `It's P${head.playerNum}'s turn to distribute.`)) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  const token = head.tokens.shift();
+  const pid = getPlayerId(game, head.playerNum);
+  await logGameAction(game, client, `📦 <@${pid}> Arms Salvage — discarded **${token}** from crate at **${String(head.crateCoord).toUpperCase()}**.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (head.tokens.length === 0) pa.queue.shift();
+  await _advanceArmsDistribution(game, gameId, ctx);
+  saveGames(game.gameId);
+}

@@ -357,6 +357,48 @@ export async function postKryknaPlaceButtons(game, channel, gameId, deps) {
 }
 
 /**
+ * Post Arms Salvage (Devaron Garrison A) distribute prompts. Reads
+ * game.pendingArmsDistribution.queue and posts buttons for the current
+ * head: one button per (token × eligible friendly) so the controller
+ * picks recipient per token.
+ *
+ * @param {object} game
+ * @param {import('discord.js').TextChannel} channel
+ * @param {string} gameId
+ * @param {object} deps - { getPlayerId, discordCatch }
+ */
+export async function postArmsDistributionPrompt(game, channel, gameId, deps) {
+  const pa = game.pendingArmsDistribution;
+  if (!pa?.queue || pa.queue.length === 0) return;
+  const head = pa.queue[0];
+  if (!head?.tokens?.length || !head?.eligibleFigs?.length) {
+    pa.queue.shift();
+    return;
+  }
+  const pid = deps.getPlayerId(game, head.playerNum);
+  const token = head.tokens[0];
+  const buttons = head.eligibleFigs.slice(0, 24).map((figKey) =>
+    new ButtonBuilder()
+      .setCustomId(`arms_distribute_pick_${gameId}_${figKey}`)
+      .setLabel(`${token} → ${figKey}`.slice(0, 80))
+      .setStyle(ButtonStyle.Primary)
+  );
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId(`arms_distribute_skip_${gameId}`)
+      .setLabel(`Skip (discard ${token})`)
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const rows = chunkButtonsToRows(buttons).slice(0, 5);
+  pa.postedFor = head.playerNum;
+  await channel.send(sanitizeMentions({
+    content: `📦 **Arms Salvage** — <@${pid}>, choose a friendly figure to receive **${token}** from the crate at **${String(head.crateCoord).toUpperCase()}** (${head.tokens.length} token${head.tokens.length !== 1 ? 's' : ''} remaining):`,
+    components: rows,
+    allowedMentions: { users: [pid] },
+  })).catch(deps.discordCatch);
+}
+
+/**
  * Post fluctuation swap buttons for Lothal Wastes B end-of-round swap phase.
  * Shows one button per fluctuation position (that hasn't been moved this round) + Skip.
  * If game.pendingFluctuationSwapFirst is set, we're in the second-pick phase (target selection).
