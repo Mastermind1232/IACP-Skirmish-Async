@@ -23,14 +23,19 @@ function readSrc(relPath) {
 
 // ── ORACLE-BMDEFEAT-001: Black Market uses reduceHp, not raw dcHealthState ──
 describe('ORACLE-BMDEFEAT-001: Black Market strain uses canonical HP path', () => {
-  it('handleBlackMarket calls reduceHp for strain damage', () => {
+  it('handleBlackMarket applies strain damage via the centralized damage pipeline', () => {
+    // destruct 2026-05-08 migration: reduceHp call sites moved to
+    // applyDamage. Black Market routes through _applyDamage with
+    // viaStrain=true so the strain → damage layering is preserved.
     const src = readSrc('src/handlers/interrupts.js');
     const bmIdx = src.indexOf('function handleBlackMarket');
     assert.ok(bmIdx > 0, 'handleBlackMarket found');
     const fnEnd = src.indexOf('\nexport ', bmIdx + 1);
     const block = src.slice(bmIdx, fnEnd > bmIdx ? fnEnd : bmIdx + 3000);
-    assert.ok(block.includes('reduceHp(dcHealthState, game, smugglerMsgId'),
-      'Black Market must use reduceHp() for strain');
+    assert.ok(/_applyDamage\(game,[\s\S]*?msgId: smugglerMsgId/.test(block),
+      'Black Market must apply damage via the centralized pipeline (smugglerMsgId)');
+    assert.ok(block.includes("source: 'Black Market'"),
+      'Black Market damage must be tagged with source: "Black Market"');
   });
 
   it('handleBlackMarket no longer mutates dcHealthState directly', () => {

@@ -15,6 +15,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
 import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -155,7 +156,14 @@ export async function handleOverdrive(interaction, ctx) {
   if (!await requirePlayer(interaction, _odGame, interaction.user.id, _odMeta.playerNum, canActAsPlayer, 'Only the DC owner can use Overdrive.')) return;
   const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
   if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(discordCatch); return; }
-  const { prevHp: _odPrevHp, newHp: _odNewHp, maxHp: _odMaxHp } = reduceHp(dcHealthState, _odGame, _odMsgId, 0, 1, _odMeta.playerNum);
+  const _odRes = await _applyDamage(_odGame, { dcHealthState, logGameAction, client: interaction.client }, {
+    figureKey: `${_odMeta.dcName}-1-0`, msgId: _odMsgId, figIndex: 0,
+    amount: 1, controllerPlayerNum: _odMeta.playerNum,
+    source: 'Overdrive',
+  });
+  const _odPrevHp = _odRes.prevHp;
+  const _odNewHp = _odRes.newHp;
+  const _odMaxHp = dcHealthState.get(_odMsgId)?.[0]?.[1] ?? 0;
   const _odHS = dcHealthState.get(_odMsgId) || [];
   let _odHpNote = '';
   if (_odMaxHp > 0) {
@@ -222,7 +230,14 @@ export async function handleSelfDestructProbe(interaction, ctx) {
       const _sdpFkMatch = _sdpFk.match(/^(.+)-(\d+)-(\d+)$/);
       if (!_sdpFkMatch) continue;
       const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
-      const { prevHp: _hc, newHp: _hnc, maxHp: _sdpMaxHp } = reduceHp(dcHealthState, _sdpGame, _sdpHMsgId, _sdpHFigIdx, _sdpHits, _sdpHostileNum);
+      const _sdpRes = await _applyDamage(_sdpGame, { dcHealthState, logGameAction, client }, {
+        figureKey: _sdpFk, msgId: _sdpHMsgId, figIndex: _sdpHFigIdx,
+        amount: _sdpHits, controllerPlayerNum: _sdpHostileNum,
+        attackerPlayerNum: _sdpMeta.playerNum, source: 'Self-Destruct',
+      });
+      const _hc = _sdpRes.prevHp;
+      const _hnc = _sdpRes.newHp;
+      const _sdpMaxHp = dcHealthState.get(_sdpHMsgId)?.[_sdpHFigIdx]?.[1] ?? 0;
       if (_sdpMaxHp === 0 || _hc === null || _hc <= 0) continue;
       const _sdpDefNote = _hnc <= 0 ? ' **(defeated)**' : '';
       _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})${_sdpDefNote}`);
@@ -233,7 +248,11 @@ export async function handleSelfDestructProbe(interaction, ctx) {
     _sdpResultLog += 'No hits.';
   }
   // Defeat the probe via centralized defeat pipeline
-  reduceHp(dcHealthState, _sdpGame, _sdpMsgId, 0, 9999, _sdpMeta.playerNum);
+  await _applyDamage(_sdpGame, { dcHealthState, logGameAction, client }, {
+    figureKey: `${_sdpMeta.dcName}-1-0`, msgId: _sdpMsgId, figIndex: 0,
+    amount: 9999, controllerPlayerNum: _sdpMeta.playerNum,
+    source: 'Self-Destruct (probe defeats itself)',
+  });
   await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog}`, { phase: 'ROUND', icon: 'attack' });
   const _sdpFigureKey = `${_sdpMeta.dcName}-1-0`;
   await processFigureDefeat(_sdpGame, {
@@ -309,7 +328,14 @@ async function _runSelfDestructExplode(game, pending, ctx) {
         const sfkFigIdx = parseInt(figMatch[3], 10);
         // Damage = hits (NO strain — destruct 2026-05-06 confirmed
         // "No strain involved" for IG-11 Self-Destruct Protocol).
-        const { prevHp, newHp, maxHp } = reduceHp(dcHealthState, game, sfkMsgId, sfkFigIdx, hits, eachPN);
+        const _ig11Res = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: sfk, msgId: sfkMsgId, figIndex: sfkFigIdx,
+          amount: hits, controllerPlayerNum: eachPN,
+          attackerPlayerNum: pending.defenderPlayerNum, source: 'IG-11 Self-Destruct',
+        });
+        const prevHp = _ig11Res.prevHp;
+        const newHp = _ig11Res.newHp;
+        const maxHp = dcHealthState.get(sfkMsgId)?.[sfkFigIdx]?.[1] ?? 0;
         if (maxHp === 0 || prevHp === null || prevHp <= 0) { continue; }
         const defNote = newHp <= 0 ? ' **(defeated)**' : '';
         const sideLabel = eachPN === pending.defenderPlayerNum ? 'friendly' : 'hostile';
@@ -513,7 +539,13 @@ export async function handleYHSIW(interaction, ctx) {
     if (tMsgId && dcHealthState) {
       const fkMatch = targetFk.match(/-(\d+)-(\d+)$/);
       const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-      const { prevHp, newHp } = reduceHp(dcHealthState, game, tMsgId, figIdx, 3, oppPlayerNum);
+      const _yhRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: targetFk, msgId: tMsgId, figIndex: figIdx,
+        amount: 3, controllerPlayerNum: oppPlayerNum,
+        source: 'You Have Something I Want',
+      });
+      const prevHp = _yhRes.prevHp;
+      const newHp = _yhRes.newHp;
       const _yhDefNote = newHp <= 0 ? ' **(defeated)**' : '';
       await logGameAction(game, client, `**You Have Something I Want** — **${targetName}** suffers **3 Damage**${_yhDefNote} (HP: ${prevHp}→${newHp}).`, { phase: 'ROUND', icon: 'attack' });
       if (newHp <= 0 && processFigureDefeat) {
@@ -583,7 +615,14 @@ export async function handleLastResort(interaction, ctx) {
           const _lfkMatch = _lfk.match(/^(.+)-(\d+)-(\d+)$/);
           if (!_lfkMatch) continue;
           const _lfkFigIdx = parseInt(_lfkMatch[3], 10);
-          const { prevHp: _lhc, newHp: _lhnc, maxHp: _lfkMaxHp } = reduceHp(dcHealthState, _lrGame, _lfkMsgId, _lfkFigIdx, _lrHits, pn);
+          const _lrRes = await _applyDamage(_lrGame, { dcHealthState, logGameAction, client }, {
+            figureKey: _lfk, msgId: _lfkMsgId, figIndex: _lfkFigIdx,
+            amount: _lrHits, controllerPlayerNum: pn,
+            source: 'Last Resort',
+          });
+          const _lhc = _lrRes.prevHp;
+          const _lhnc = _lrRes.newHp;
+          const _lfkMaxHp = dcHealthState.get(_lfkMsgId)?.[_lfkFigIdx]?.[1] ?? 0;
           if (_lfkMaxHp === 0 || _lhc === null || _lhc <= 0) continue;
           const _lrDefNote = _lhnc <= 0 ? ' **(defeated)**' : '';
           _lrDamaged.push(`${dcMessageMeta.get(_lfkMsgId)?.displayName || _lfkMatch[1]} (HP: ${_lhc}→${_lhnc})${_lrDefNote}`);
@@ -743,7 +782,11 @@ export async function handleAssassinsBladePickTarget(interaction, ctx) {
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId || meta.playerNum !== defenderPlayerNum || meta.dcName !== dcName) continue;
     const figIdx = parseFigureKey(figureKey).figureIndex;
-    const result = reduceHp(dcHealthState, game, msgId, figIdx, hits, defenderPlayerNum);
+    const result = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+      figureKey, msgId, figIndex: figIdx,
+      amount: hits, controllerPlayerNum: defenderPlayerNum,
+      attackerPlayerNum, source: "Assassin's Blade",
+    });
     _abNewHp = result.newHp;
     break;
   }
@@ -984,8 +1027,13 @@ export async function handleBlackMarket(interaction, ctx) {
     return;
   }
 
-  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER via canonical reduceHp path
-  const { prevHp: _bmPrevHp, newHp: _bmNewHp } = reduceHp(dcHealthState, game, smugglerMsgId, smugglerFigIdx, 1, _bmPn);
+  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER via the centralized
+  // damage pipeline (viaStrain=true so when-damaged hooks distinguish).
+  const { prevHp: _bmPrevHp, newHp: _bmNewHp } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+    figureKey: smugglerFk, msgId: smugglerMsgId, figIndex: smugglerFigIdx,
+    amount: 1, controllerPlayerNum: _bmPn,
+    source: 'Black Market', viaStrain: true,
+  });
   const _bmDefeatNote = _bmNewHp <= 0 ? ' **(defeated)**' : '';
   if (_bmNewHp <= 0 && processFigureDefeat) {
     await processFigureDefeat(game, {
