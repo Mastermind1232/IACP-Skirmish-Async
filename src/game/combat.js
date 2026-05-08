@@ -294,6 +294,13 @@ export function computeCombatResult(combat) {
     defRoll.evade = (defRoll.evade || 0) + 1;
     defRoll.dodge = false;
   }
+  // Conclusion (HK-47): −1 Dodge to defense results — cancels any Dodge
+  // rolled on this attack. Per destruct 2026-05-08: applies to Dodge,
+  // not Evade. Since Dodge is binary in defRoll, "−1" here means
+  // "cancel any Dodge".
+  if (defRoll.dodge && combat.conclusionDodgeCancel) {
+    defRoll.dodge = false;
+  }
   if (defRoll.dodge && !combat.surgeCancelDodge) {
     hit = false;
     missReason = 'Dodge';

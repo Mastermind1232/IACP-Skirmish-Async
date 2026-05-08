@@ -2179,19 +2179,20 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Conclusion (HK-47): -1 Evade to defense results while attacking
+  // Conclusion (HK-47): −1 Dodge to defense results while attacking.
+  // Per destruct 2026-05-08: applies to Dodge, not Evade. computeCombatResult
+  // reads conclusionDodgeCancel and clears defRoll.dodge.
   if (hasConclusionAbility(atkSpecialIds)) {
-    const bump = applyEvadeDebuff(game.pendingCombat);
-    game.pendingCombat.bonusEvade = bump.bonusEvade;
-    await thread.send('**Conclusion** — −1 Evade applied to defense results.');
+    game.pendingCombat.conclusionDodgeCancel = true;
+    await thread.send('**Conclusion** — −1 Dodge: any Dodge rolled by defender is cancelled.');
   }
 
-  // Query (HK-47): +1 Hit unless defender becomes Bleeding
+  // Query (HK-47): defender prompt deferred to proceedAfterRerolls
+  // (modifier step) — same pattern as Negotiate. Per destruct 2026-05-08
+  // defender chooses "become Bleeding" or "accept +1 Damage". Tagged
+  // here at declare time; resolved at modifier step.
   if (hasQueryAbility(atkSpecialIds)) {
-    const bump = applyQueryBonus(game.pendingCombat);
-    game.pendingCombat.bonusHits = bump.bonusHits;
-    game.pendingCombat.queryBonusHitApplied = bump.queryBonusHitApplied;
-    await thread.send('**Query** — +1 Hit applied. (Will be removed if defender becomes Bleeding from this attack.)');
+    game.pendingCombat.queryNeedsPrompt = true;
   }
 
   // Disposable (Hired Gun Regular): -1 Evade to own defense results
@@ -5071,6 +5072,28 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.elusiveResolved = true;
     delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'query') {
+    // HK-47 Query: defender chose. 'bleed' = apply Bleed to defender,
+    // skip the +1 Damage. 'accept' = no Bleed, +1 Damage.
+    if (choice === 'bleed') {
+      // Apply Bleed to defender via the standard condition pipeline.
+      // Already-Bleeding defender: applyCondition is a no-op (Bleed
+      // doesn't stack); choosing Bleed still avoids the +1 Damage.
+      if (combat.target?.figureKey) {
+        const { applyCondition } = await import('../game/conditions.js');
+        applyCondition(game, combat.target.figureKey, 'Bleed');
+      }
+      await thread.send('🩸 **Query** — Defender chose to become **Bleeding** (no damage bonus).');
+    } else {
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('💢 **Query** — Defender accepted **+1 Damage** to the attack results.');
+    }
+    combat.queryResolved = true;
+    delete combat.queryNeedsPrompt;
+    delete combat.pendingCombatPassive;
+    saveGames(game.gameId);
+    await proceedAfterRerolls(thread, game, combat, ctx);
+    return;
   } else if (abilityKey === 'cbs') {
     // Line of Fire crate-block-sink: defender chose N damage → +N Block.
     // Apply N to the first carried crate (capped at remaining HP), set
@@ -5491,6 +5514,26 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
       }
     }
+  }
+
+  // Query (HK-47): defender chooses become-Bleeding or accept +1 Damage.
+  // Per destruct 2026-05-08. Already-Bleeding defender can still
+  // "choose" Bleeding (no-op) to avoid the damage bonus.
+  if (combat.queryNeedsPrompt && !combat.queryResolved) {
+    const _qDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _qDefId = getPlayerId(game, _qDefPN);
+    combat.pendingCombatPassive = 'query';
+    const _qBtns = [
+      new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_query_bleed`).setLabel('Become Bleeding (avoid +1 Damage)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_query_accept`).setLabel('Accept +1 Damage').setStyle(ButtonStyle.Danger),
+    ];
+    await thread.send(sanitizeMentions({
+      content: `<@${_qDefId}> **Query (HK-47)** — choose: become **Bleeding** (no damage bonus), or accept **+1 Damage** to the attack results.`,
+      allowedMentions: { users: [_qDefId] },
+      components: [new ActionRowBuilder().addComponents(_qBtns)],
+    })).catch(discordCatch);
+    saveGames?.(game.gameId);
+    return;
   }
 
   // Line of Fire (Anchorhead B): crateBlockSink — at the modifier step,
