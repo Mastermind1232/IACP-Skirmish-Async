@@ -115,14 +115,41 @@ export function enqueueAttackerStep8Effects(combat) {
 
 /**
  * Enqueue defender-side step-8 effects. Called when attacker's window
- * closes (Done). Per-DC defender after-resolve abilities (Slippery,
- * Force Deflection, Return Fire, Deflect, Deflection) get enqueued
- * here in follow-up commits; this skeleton is intentionally empty so
- * the defender window opens-and-closes cleanly even when there are no
- * pending def effects.
+ * closes (Done). Each defender after-resolve ability gets a button.
+ * Reads game/combat state to detect eligibility — this runs after
+ * step-7 damage has already applied, so it sees the post-damage
+ * board state.
+ *
+ * Per destruct 2026-05-08: nothing auto. If an ability fires today,
+ * its enqueue check belongs here and its inline auto-apply in
+ * combat-bridge.js should be removed.
+ *
+ * Wired so far:
+ *   - Slippery (Alliance Smuggler E/R)
+ * Pending follow-up commits:
+ *   - Force Deflection (Yoda), Return Fire (Han / Migs),
+ *     Deflect (Luke JK), and the Deflection CC from defender hand.
  */
-export function enqueueDefenderStep8Effects(_combat) {
-  // Stub — populated in follow-up commits.
+export function enqueueDefenderStep8Effects(combat, game, deps) {
+  if (!combat || !combat.target?.figureKey) return;
+  const getDcEffects = deps?.getDcEffects;
+  const findDcMessageIdForFigure = deps?.findDcMessageIdForFigure;
+  if (!getDcEffects || !findDcMessageIdForFigure) return;
+  const dcNameFromFigureKey = deps.dcNameFromFigureKey;
+  const _slipDcName = dcNameFromFigureKey?.(combat.target.figureKey);
+  const _slipEff = _slipDcName ? getDcEffects()?.[_slipDcName] : null;
+  const _slipIds = _slipEff?.specialAbilityIds || [];
+  if (_slipIds.includes('slippery_smuggler_elite') || _slipIds.includes('slippery_smuggler_reg')) {
+    const _slipMsgId = findDcMessageIdForFigure(game.gameId, combat.defenderPlayerNum ?? null, combat.target.figureKey);
+    if (_slipMsgId) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'defender',
+        type: 'slippery',
+        label: 'Slippery: gain 2 MP',
+        payload: { msgId: _slipMsgId, defenderDcName: _slipDcName },
+      });
+    }
+  }
 }
 
 /**
@@ -274,7 +301,7 @@ export async function handleAarDone(interaction, ctx) {
  */
 async function _advanceFromSide(thread, game, combat, side, ctx) {
   if (side === 'attacker') {
-    enqueueDefenderStep8Effects(combat);
+    enqueueDefenderStep8Effects(combat, game, ctx);
     await postPostResolveWindow(thread, game, combat, 'defender', ctx);
     return;
   }

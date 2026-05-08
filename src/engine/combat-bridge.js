@@ -970,18 +970,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Slippery (Alliance Smuggler E/R): after attack resolves, defender gains 2 MP
-      {
-        const _slipDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _slipEff = getDcEffects()?.[_slipDcName];
-        if ((_slipEff?.specialAbilityIds || []).some(id => id === 'slippery_smuggler_elite' || id === 'slippery_smuggler_reg')) {
-          const _slipMsgId = targetMsgId;
-          if (_slipMsgId) {
-            grantMovementBank(game, _slipMsgId, 2);
-          }
-          await logGameAction(game, client, `\u{1F3C3} **Slippery** — **${_slipDcName}** gains 2 MP after being attacked.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-        }
-      }
+      // Slippery — migrated to step-8 button window (slice 2b, destruct
+      // 2026-05-08). Enqueue + fire handler live in
+      // src/handlers/after-attack-{resolve,fire}.js. Defender clicks
+      // the "Slippery: gain 2 MP" button in their post-resolve window.
       // Leg Hydraulics (Tress Hacnua): after resolving an attack, attacker gains 1 MP
       {
         const _lhAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);

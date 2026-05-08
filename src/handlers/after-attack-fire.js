@@ -19,6 +19,7 @@
  */
 import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
+import { grantMovementBank } from '../game/index.js';
 
 /**
  * Recover N — heals the attacker by N HP. Applies even on a miss
@@ -40,6 +41,23 @@ async function fireRecover(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Slippery (Alliance Smuggler E/R) — defender after-resolve: grant
+ * 2 MP to the defender's figure. Inline auto-apply removed; the
+ * defender clicks a button in their post-resolve window to fire it.
+ */
+async function fireSlippery(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  const msgId = effect.payload?.msgId;
+  if (!msgId) return;
+  grantMovementBank(game, msgId, 2);
+  if (logGameAction && thread) {
+    await logGameAction(game, client,
+      `\u{1F3C3} **Slippery** — **${effect.payload?.defenderDcName || combat.target?.label}** gains 2 MP after being attacked.`,
+      { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -47,6 +65,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
   switch (effect.type) {
     case 'recover':
       await fireRecover(thread, game, combat, effect, ctx);
+      return;
+    case 'slippery':
+      await fireSlippery(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline
