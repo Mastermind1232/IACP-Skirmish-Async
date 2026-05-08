@@ -1491,48 +1491,40 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
         // Hunt Dissent — now handled by processFigureDefeat
         // Into the Force — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
-        // Vengeance (Royal Guard Regular): when adjacent friendly non-GUARDIAN defeated, become Focused
+        // Vengeance / Forward Vengeance Focus — now handled by WHEN_DEFEATED
+        // hook (damage-pipeline-hooks.js). The Forward-Vengeance Elite-only
+        // optional 1-space move prompt remains here because the hook
+        // framework doesn't have access to deps/thread for Discord buttons.
         {
           const _defPos = _targetCoordBeforeDefeat;
           if (_defPos) {
             const _defDcEff = getDcEffects()?.[_lsDcName];
             const _defKws = (_defDcEff?.keywords || []).map(k => k.toUpperCase());
-            const _defIsGuardian = _defKws.includes('GUARDIAN');
-            if (!_defIsGuardian) {
+            if (!_defKws.includes('GUARDIAN')) {
               const _ms = getMapData(game.selectedMap?.id);
-              const _defAdj = (_ms?.adjacency?.[String(_defPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
+              const _defAdj = (_ms?.adjacency?.[String(_defPos).toLowerCase()] || [])
+                .map(a => String(a).toLowerCase());
               for (const [rgFk, rgPos] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
                 if (!rgPos || rgFk === combat.target.figureKey) continue;
                 if (!_defAdj.includes(String(rgPos).toLowerCase())) continue;
-                const rgDcName = dcNameFromFigureKey(rgFk);
-                if (rgDcName !== 'Royal Guard (Regular)' && rgDcName !== 'Royal Guard (Elite)') continue;
-                if (_applyCondition(game, rgFk, 'Focus')) {
-                  const vLabel = rgDcName === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
-                  await logGameAction(game, client, `\u2694\uFE0F **${vLabel}** — **${rgDcName}** becomes **Focused** (adjacent friendly defeated).`, { phase: 'ROUND', icon: 'card' });
-                  // Forward Vengeance (Elite only): may also move 1 space.
-                  // Per destruct 2026-05-07. Grant 1 MP to the RG Elite's
-                  // bank and post a granted_move button so the player can
-                  // optionally spend it.
-                  if (rgDcName === 'Royal Guard (Elite)' && deps?.findDcMessageIdForFigure && deps?.ButtonBuilder && deps?.ButtonStyle && deps?.ActionRowBuilder) {
-                    try {
-                      const _fvMsgId = deps.findDcMessageIdForFigure(game.gameId, defenderPlayerNum, rgFk);
-                      if (_fvMsgId) {
-                        const { grantMovementBank: _grantMv } = await import('../game/game-helpers.js');
-                        _grantMv(game, _fvMsgId, 1);
-                        const _fvFkMatch = String(rgFk).match(/-(\d+)-(\d+)$/);
-                        const _fvFigIdx = _fvFkMatch ? _fvFkMatch[2] : '0';
-                        const _fvBtn = new deps.ButtonBuilder()
-                          .setCustomId(`granted_move_${game.gameId}_${_fvMsgId}_f${_fvFigIdx}`)
-                          .setLabel(`Forward Vengeance Move (${rgDcName})`)
-                          .setStyle(deps.ButtonStyle.Primary);
-                        await thread.send({
-                          content: `\u2694\uFE0F **Forward Vengeance** \u2014 **${rgDcName}** may move **1 space**:`,
-                          components: [new deps.ActionRowBuilder().addComponents(_fvBtn)],
-                        }).catch(() => {});
-                      }
-                    } catch {}
-                  }
-                }
+                if (dcNameFromFigureKey(rgFk) !== 'Royal Guard (Elite)') continue;
+                if (!deps?.findDcMessageIdForFigure || !deps?.ButtonBuilder || !deps?.ButtonStyle || !deps?.ActionRowBuilder) continue;
+                try {
+                  const _fvMsgId = deps.findDcMessageIdForFigure(game.gameId, defenderPlayerNum, rgFk);
+                  if (!_fvMsgId) continue;
+                  const { grantMovementBank: _grantMv } = await import('../game/game-helpers.js');
+                  _grantMv(game, _fvMsgId, 1);
+                  const _fvFkMatch = String(rgFk).match(/-(\d+)-(\d+)$/);
+                  const _fvFigIdx = _fvFkMatch ? _fvFkMatch[2] : '0';
+                  const _fvBtn = new deps.ButtonBuilder()
+                    .setCustomId(`granted_move_${game.gameId}_${_fvMsgId}_f${_fvFigIdx}`)
+                    .setLabel(`Forward Vengeance Move (Royal Guard (Elite))`)
+                    .setStyle(deps.ButtonStyle.Primary);
+                  await thread.send({
+                    content: `⚔️ **Forward Vengeance** — **Royal Guard (Elite)** may move **1 space**:`,
+                    components: [new deps.ActionRowBuilder().addComponents(_fvBtn)],
+                  }).catch(() => {});
+                } catch {}
               }
             }
           }
@@ -1549,36 +1541,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         // Bounty — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
-        // Brutal Tactics (Saw Gerrerra): when a hostile figure is defeated, each hostile within 3 of that figure becomes Weakened
-        {
-          const _btPlayerNum = attackerPlayerNum; // attacker's side has Saw
-          const _btAllFigs = Object.keys(game.figurePositions?.[_btPlayerNum] || {});
-          const _btHasSaw = _btAllFigs.some(fk => {
-            const dcN = dcNameFromFigureKey(fk);
-            return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
-          });
-          if (_btHasSaw) {
-            // defeated figure's position (use saved coord — figure already removed from figurePositions)
-            const _btDefPos = _targetCoordBeforeDefeat;
-            if (_btDefPos) {
-              const _btEnemyPos = game.figurePositions?.[defenderPlayerNum] || {};
-              let _btWeakened = 0;
-              for (const [fk, pos] of Object.entries(_btEnemyPos)) {
-                if (!pos || fk === (combat.target.figureKey || '')) continue;
-                const dist = countGameSpaces(game, _btDefPos, pos);
-                if (dist <= 3) {
-                  if (isConditionImmune(game, fk)) continue; // Condition Immunity: skip Weaken
-                  if (_applyCondition(game, fk, 'Weaken')) {
-                    _btWeakened++;
-                  }
-                }
-              }
-              if (_btWeakened > 0) {
-                await logGameAction(game, client, `\u2694\uFE0F **Brutal Tactics** — ${_btWeakened} hostile figure${_btWeakened !== 1 ? 's' : ''} within 3 spaces of the defeated figure became **Weakened**.`, { phase: 'ROUND', icon: 'card' });
-              }
-            }
-          }
-        }
+        // Brutal Tactics — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Useful Hide (Tauntaun Rider): when defeated, distribute up to 2 Evade Tokens among friendly figures within 3 spaces
         if (_lsDcName === 'Tauntaun Rider') {
           const _uhDefeatPos = combat._savedTargetPos;

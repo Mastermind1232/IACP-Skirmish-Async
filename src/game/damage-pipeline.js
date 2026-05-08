@@ -245,17 +245,28 @@ export async function applyDamage(game, ctx, opts) {
   }
 
   // 4. damage application.
+  // Snapshot defeated figure's position BEFORE reduceHp clears it via
+  // processFigureDefeat. WHEN_DEFEATED hooks that need spatial context
+  // (Brutal Tactics, Vengeance, Useful Hide, Last Resort) read this
+  // through `opts.defeatedPos` instead of querying figurePositions
+  // (which is already empty for the defeated figure by the time the
+  // hook runs).
+  const defeatedPos = wouldBeDefeated && opts.controllerPlayerNum
+    ? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey] || null
+    : null;
+
   const result = reduceHp(
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
 
   // 5. WHEN_DEFEATED hooks (only if defeated).
   if (result.wasDefeated) {
+    const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
     for (const hook of WHEN_DEFEATED_HOOKS) {
       if (!hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp })) continue;
+      if (!hook.probe(game, defeatedOpts)) continue;
       try {
-        await hook.apply(game, { ...opts, amount, prevHp: result.prevHp }, ctx);
+        await hook.apply(game, defeatedOpts, ctx);
       } catch (err) {
         // Hooks must not throw the pipeline; log and continue.
         console.error(`[damage-pipeline] WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
@@ -343,15 +354,19 @@ export function applyDamageSync(game, ctx, opts) {
       preventDefeat: true,
     };
   }
+  const defeatedPos = wouldBeDefeated && opts.controllerPlayerNum
+    ? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey] || null
+    : null;
   const result = reduceHp(
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
   if (result.wasDefeated) {
+    const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
     for (const hook of WHEN_DEFEATED_HOOKS) {
       if (!hook.sync || !hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp })) continue;
+      if (!hook.probe(game, defeatedOpts)) continue;
       try {
-        hook.apply(game, { ...opts, amount, prevHp: result.prevHp }, ctx);
+        hook.apply(game, defeatedOpts, ctx);
       } catch (err) {
         console.error(`[damage-pipeline] sync WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
       }

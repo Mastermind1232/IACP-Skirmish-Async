@@ -38,9 +38,10 @@ import {
 } from './damage-pipeline.js';
 import { getDcList, opponentPlayerNum, vpKey } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { getDcEffects, getDcKeywords } from '../data-loader.js';
-import { applyCondition } from './conditions.js';
+import { getDcEffects, getDcKeywords, getMapData } from '../data-loader.js';
+import { applyCondition, isConditionImmune } from './conditions.js';
 import { awardObjectiveVp } from './vp-helpers.js';
+import { countGameSpaces } from './board-helpers.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -167,6 +168,117 @@ WHEN_DEFEATED_HOOKS.push({
           `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
           { phase: 'ROUND', icon: 'card' },
         ).catch(() => {});
+      }
+    }
+  },
+});
+
+/**
+ * Brutal Tactics (Saw Gerrera passive): once per round, when a hostile
+ * figure is defeated, choose hostiles within 3 spaces of the defeated
+ * figure's space — those become Weakened. Auto-applied today; "choose"
+ * picker is a future enhancement. Position read from `opts.defeatedPos`
+ * (saved by pipeline before reduceHp removes the figure).
+ *
+ * Trigger side: the player WITH Saw on the board, when an opposing
+ * figure dies. Pipeline gives us opts.controllerPlayerNum (defeated
+ * figure's owner); Saw lives on the OTHER side.
+ *
+ * Once-per-round limit not yet enforced — current inline path also
+ * doesn't enforce it; preserve parity for now and revisit alongside
+ * the rest of the per-round-limit cleanup.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'brutal_tactics',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if (!opts.defeatedPos) return false;
+    const triggerSidePn = opts.controllerPlayerNum === 1 ? 2 : 1;
+    const figs = Object.keys(game.figurePositions?.[triggerSidePn] || {});
+    return figs.some(fk => {
+      const dcN = dcNameFromFigureKey(fk);
+      return (getDcEffects()?.[dcN]?.passives || []).includes('Brutal Tactics');
+    });
+  },
+  apply: (game, opts, ctx) => {
+    const enemyPos = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    let weakened = 0;
+    for (const [fk, pos] of Object.entries(enemyPos)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dist = countGameSpaces(game, opts.defeatedPos, pos);
+      if (dist > 3) continue;
+      if (isConditionImmune(game, fk)) continue;
+      if (applyCondition(game, fk, 'Weaken')) weakened++;
+    }
+    if (weakened > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `⚔️ **Brutal Tactics** — ${weakened} hostile figure${weakened !== 1 ? 's' : ''} within 3 spaces of the defeated figure became **Weakened**.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
+ * Vengeance (Royal Guard Regular): when an adjacent friendly non-
+ * GUARDIAN, non-companion figure is defeated, this RG becomes Focused.
+ *
+ * Forward Vengeance (Royal Guard Elite) is the same trigger PLUS an
+ * optional 1-space move. The move requires a UI prompt (granted-move
+ * button) — that prompt path stays in combat-bridge.js for now since
+ * the pipeline doesn't have access to deps/thread. The hook here only
+ * handles the Focus side-effect for both variants.
+ *
+ * Inline path retained in combat-bridge.js for the move prompt. Focus
+ * application is idempotent (`applyCondition` no-ops if already
+ * focused), so dual-fire is safe.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'royal_guard_vengeance_focus',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if (!opts.defeatedPos) return false;
+    // Defeated figure must be non-GUARDIAN (per card text).
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+    if (kws.includes('GUARDIAN')) return false;
+    // Same-side RG must exist adjacent to defeated position.
+    const ms = getMapData(game.selectedMap?.id);
+    const adj = (ms?.adjacency?.[String(opts.defeatedPos).toLowerCase()] || [])
+      .map(a => String(a).toLowerCase());
+    if (adj.length === 0) return false;
+    return Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .some(([rgFk, rgPos]) => {
+        if (!rgPos || rgFk === opts.figureKey) return false;
+        if (!adj.includes(String(rgPos).toLowerCase())) return false;
+        const rgDc = dcNameFromFigureKey(rgFk);
+        return rgDc === 'Royal Guard (Regular)' || rgDc === 'Royal Guard (Elite)';
+      });
+  },
+  apply: (game, opts, ctx) => {
+    const ms = getMapData(game.selectedMap?.id);
+    const adj = (ms?.adjacency?.[String(opts.defeatedPos).toLowerCase()] || [])
+      .map(a => String(a).toLowerCase());
+    for (const [rgFk, rgPos] of Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})) {
+      if (!rgPos || rgFk === opts.figureKey) continue;
+      if (!adj.includes(String(rgPos).toLowerCase())) continue;
+      const rgDc = dcNameFromFigureKey(rgFk);
+      if (rgDc !== 'Royal Guard (Regular)' && rgDc !== 'Royal Guard (Elite)') continue;
+      if (applyCondition(game, rgFk, 'Focus')) {
+        const label = rgDc === 'Royal Guard (Elite)' ? 'Forward Vengeance' : 'Vengeance';
+        if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+          ctx.logGameAction(
+            game,
+            ctx.client,
+            `⚔️ **${label}** — **${rgDc}** becomes **Focused** (adjacent friendly defeated).`,
+            { phase: 'ROUND', icon: 'card' },
+          ).catch(() => {});
+        }
       }
     }
   },
