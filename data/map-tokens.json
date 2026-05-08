@@ -330,15 +330,10 @@
           {
             "id": "2",
             "label": "Fluctuation",
-            "image": "Mission Token--Neutral Blue.gif"
-          },
-          {
-            "id": "3",
-            "label": "Fluctuation",
             "image": "Mission Token--Neutral Green.gif"
           },
           {
-            "id": "4",
+            "id": "3",
             "label": "Fluctuation",
             "image": "Mission Token--Neutral Red.gif"
           }
@@ -348,16 +343,15 @@
             "j10",
             "p10"
           ],
-          "1": [],
-          "2": [
+          "1": [
             "h21",
             "t21"
           ],
-          "3": [
+          "2": [
             "i16",
             "q16"
           ],
-          "4": [
+          "3": [
             "l7",
             "o7"
           ]
