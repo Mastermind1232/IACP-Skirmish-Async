@@ -75,21 +75,22 @@ describe('PROBE-PD-PT-005: at most one power-token spend per figure per attack',
       'handleCombatToken must have exactly 4 advance-phase calls (wild + skip + squad-cohesion + direct) — CRR-PT-005');
   });
 
-  it('005e: source — sendTokenWindow is opened at most once per attack per role; every opener first sets tokenPhase to match', () => {
-    // After PT-on-declare refactor: attacker window is opened from proceedToTokenPhase
-    // (pre-roll). Defender window from proceedToTokenPhase (skip-path) and from
-    // advanceTokenPhase (after attacker spends). Two mutually exclusive defender sites.
-    // Allow up to ~3 intervening lines (e.g. resolving the recipient's user id for @-ping)
-    // between tokenPhase assignment and the sendTokenWindow call.
-    const attackerWindow = H_CB_SRC.match(/combat\.tokenPhase = 'attacker';[\s\S]{0,200}?await sendTokenWindow\(thread, game\.gameId, 'attacker',/g) || [];
-    const defenderWindow = H_CB_SRC.match(/combat\.tokenPhase = 'defender';[\s\S]{0,200}?await sendTokenWindow\(thread, game\.gameId, 'defender',/g) || [];
-    assert.equal(attackerWindow.length, 1,
-      'attacker window must be opened from exactly one site — CRR-PT-005');
-    assert.ok(defenderWindow.length >= 1 && defenderWindow.length <= 2,
-      'defender window may be opened from ≤2 mutually exclusive sites — CRR-PT-005');
-    const allSendWindow = H_CB_SRC.match(/await sendTokenWindow\(thread, game\.gameId, '(attacker|defender)',/g) || [];
-    assert.equal(allSendWindow.length, attackerWindow.length + defenderWindow.length,
-      'every sendTokenWindow call must be preceded by a tokenPhase assignment — CRR-PT-005');
+  it('005e: source — every sendTokenWindow call site sets combat.tokenPhase first', () => {
+    // After on-declare merge (destruct 2026-05-08): proceedToTokenPhase
+    // is gone. sendTokenWindow is now opened from:
+    //   - sendOnDeclareTokenWindow (parameterized by `role`) — one call site
+    //   - advanceTokenPhase legacy attacker→defender promotion ('defender'
+    //     literal) — kept as a safety branch even though on-declare path
+    //     short-circuits via onDeclareTokenContext.
+    // Total: 2 distinct call sites.
+    const allSendWindow = H_CB_SRC.match(/await sendTokenWindow\(thread, game\.gameId, /g) || [];
+    assert.ok(allSendWindow.length >= 2 && allSendWindow.length <= 3,
+      'sendTokenWindow must have 2–3 call sites (sendOnDeclareTokenWindow + legacy advance) — CRR-PT-005');
+    // Each call must be preceded by a combat.tokenPhase = ... assignment
+    // within ~200 chars (allow @-ping resolution lines in between).
+    const paired = H_CB_SRC.match(/combat\.tokenPhase = (?:role|'attacker'|'defender');[\s\S]{0,200}?await sendTokenWindow\(thread, game\.gameId, /g) || [];
+    assert.equal(paired.length, allSendWindow.length,
+      'every sendTokenWindow call must be preceded by tokenPhase assignment — CRR-PT-005');
   });
 
   it('005f: source — after a spend, the spent token is removed from the figure pool (one-way consumption)', () => {

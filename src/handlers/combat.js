@@ -295,11 +295,18 @@ const COMBAT_GATE_LABELS = {
  * Destruct's UX feedback says the bot should just proceed (e.g. damage
  * applies automatically per CRR step 7).
  */
-// post_defender_reroll auto-advances per destruct 2026-05-08: the
-// per-player Mods Y/N (sendModsYn) IS the step-4 modifier window — a
-// general "Apply Modifiers — Ready" gate posted before the per-player
-// Y/N produced two prompts where one was correct.
-const AUTO_ADVANCE_SUB_PHASES = new Set(['pre_resolve', 'post_defender_reroll']);
+// All post-reroll gates auto-advance per destruct 2026-05-08: rerolls
+// are sequential per-player (sendRerollUI handles the attacker window,
+// then forced, then defender) — a "Both Ready" check between them just
+// adds a redundant click. The per-player Mods Y/N at step 4 is the
+// modifier window itself; the legacy "Apply Modifiers — Ready" gate
+// also went away here.
+const AUTO_ADVANCE_SUB_PHASES = new Set([
+  'pre_resolve',
+  'post_attacker_reroll',
+  'post_forced_reroll',
+  'post_defender_reroll',
+]);
 
 /**
  * Send a combat sub-phase gate to the combat thread.
@@ -2921,10 +2928,13 @@ export async function handleCombatReady(interaction, ctx) {
     const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
     await preMsg.edit({ components: [] }).catch(discordCatch);
   } catch {}
-  // Per CRR p.50, power tokens are spent at declare — before dice are rolled.
-  // The token phase posts the Roll Combat Dice button itself when both players
-  // are done (see postRollDiceButton).
-  await proceedToTokenPhase(thread, game, combat, ctx);
+  // Per destruct 2026-05-08: tokens are spent inside the on_declare
+  // per-player window now (sendOnDeclareTokenWindow), so by the time
+  // both players have ack'd this gate the token phase is already done.
+  // Just post the Roll Combat Dice button — auto-roll runs from there.
+  combat.onDeclareTokenContext = false;
+  combat.tokenPhase = null;
+  await postRollDiceButton(thread, game, combat, ctx);
   saveGames(game.gameId);
 }
 
@@ -5928,61 +5938,12 @@ export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) 
   await sendTokenWindow(thread, game.gameId, role, ownTokens, displayName, combat, ownerId);
 }
 
-/**
- * Pre-roll power-token phase. Per CRR p.50: "When a figure with a power token
- * declares an attack or is declared as the target of an attack, that figure may
- * spend 1 of its power tokens." Spend decision happens at declare, BEFORE rolls.
- *
- * Order: attacker first, then defender. Self-play short-circuits straight to
- * the roll button. When no tokens are eligible on either side, also short-
- * circuits — there's no decision to make.
- *
- * Caller: handleCombatReady once both players hit Ready.
- */
-export async function proceedToTokenPhase(thread, game, combat, ctx) {
-  // Vague and Unconvincing (K-2S0): while defending, neither player can spend power tokens
-  let _vagueBlockTokens = false;
-  if (combat.target?.figureKey) {
-    const _vuDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _vuDefDcName = dcNameFromFigureKey(combat.target.figureKey);
-    const _vuDefEff = _vuDcEff[_vuDefDcName] || _vuDcEff[(_vuDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((_vuDefEff?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) {
-      _vagueBlockTokens = true;
-      combat.vagueAndUnconvincing = true;
-      await thread.send('**Vague and Unconvincing** — Neither player may spend Power Tokens or play Command Cards during this attack.');
-    }
-  }
-
-  const attackerTokens = getEligibleTokens(game, combat.attackerFigureKey, 'attacker');
-  const defenderTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
-
-  // Squad Cohesion (Ko-Tun Feralo): gather cross-figure tokens for attacker and defender
-  if (!_vagueBlockTokens) {
-    combat.squadCohesionTokens = {};
-    const scAtk = getSquadCohesionTokens(game, combat, 'attacker');
-    if (scAtk) combat.squadCohesionTokens.attacker = scAtk.cohesionTokens;
-    const scDef = getSquadCohesionTokens(game, combat, 'defender');
-    if (scDef) combat.squadCohesionTokens.defender = scDef.cohesionTokens;
-  }
-
-  const hasAtkCohesion = (combat.squadCohesionTokens?.attacker || []).length > 0;
-  const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
-  if (!game.selfPlay) {
-    if (!_vagueBlockTokens && (attackerTokens.length > 0 || hasAtkCohesion)) {
-      combat.tokenPhase = 'attacker';
-      const atkOwnerId = getPlayerId(game, combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum);
-      await sendTokenWindow(thread, game.gameId, 'attacker', attackerTokens, combat.attackerDisplayName, combat, atkOwnerId);
-      return;
-    }
-    if (!_vagueBlockTokens && (defenderTokens.length > 0 || hasDefCohesion)) {
-      combat.tokenPhase = 'defender';
-      const defOwnerId = getPlayerId(game, opponentPlayerNum(combat.attackerPlayerNum));
-      await sendTokenWindow(thread, game.gameId, 'defender', defenderTokens, combat.target.label, combat, defOwnerId);
-      return;
-    }
-  }
-  await postRollDiceButton(thread, game, combat, ctx);
-}
+// proceedToTokenPhase removed 2026-05-08 per destruct: tokens are now
+// merged into the on_declare per-player window via
+// sendOnDeclareTokenWindow. The legacy two-step flow (gate ack →
+// sequential token windows → roll) is gone. Token window prep that
+// used to live here is now inside sendOnDeclareTokenWindow's first-
+// call init block (Vague & Unconvincing check + Squad Cohesion gather).
 
 /** Auto-roll both sides' dice without a user click (per Destruct's UX
  * feedback 2026-05-04: "the dice can auto roll, no need for prompt in
@@ -7734,8 +7695,13 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-  // Skip the legacy pre-combat ready gate; go straight to the token phase.
-  await proceedToTokenPhase(thread, game, game.pendingCombat, ctx);
+  // Per destruct 2026-05-08: tokens are merged into the on_declare
+  // per-player window. Even for False Orders / Lure attacks, the
+  // controller (acting as attacker) and the target's owner each get
+  // a window for cards + tokens. Post the gate + attacker token
+  // window; defender token window posts on the gate transition.
+  await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
+  await sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx);
   saveGames(game.gameId);
 }
 

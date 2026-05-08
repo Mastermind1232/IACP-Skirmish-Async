@@ -227,25 +227,22 @@ describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', 
     assert.strictEqual(combat.rerollPhase, 'attacker',
       'Step 2: rerollPhase set to attacker');
 
-    // Step 3: Attacker clicks "done" → sendCombatGate('post_attacker_reroll')
+    // Step 3: Attacker clicks "done" → sendCombatGate('post_attacker_reroll'),
+    // which now AUTO-ADVANCES (destruct 2026-05-08 — the "both Ready" check
+    // between reroll phases was redundant padding; sendRerollUI already runs
+    // sequentially per-player). Dispatch fires immediately:
+    //   no forced, no defender rerolls → currentStep='step4-attacker'
+    //   → sendModsYn(attacker)
     const rerollInteraction = mockInteraction('combat_reroll_42_atk_done', 'player1', client);
     await handleCombatReroll(rerollInteraction, ctx);
-    assert.strictEqual(combat.combatGate?.phase, 'post_attacker_reroll',
-      'Step 3: combatGate = post_attacker_reroll after reroll done');
-
-    // Step 4: Both players ready → dispatchCombatGateAdvance('post_attacker_reroll')
-    //   → no forced, no defender rerolls → currentStep='step4-attacker'
-    //   → sendModsYn (attacker) — destruct 2026-05-08: attacker mods window
-    //   must fire at step 4 before defender / damage resolution.
-    await advanceGate(game, client, ctx);
-    assert.strictEqual(combat.rerollPhase, null,
-      'Step 4: rerollPhase cleared to null');
-    assert.strictEqual(combat.currentStep, 'step4-attacker',
-      'Step 4: currentStep advanced to step4-attacker — Mods Y/N owns the window');
-    assert.strictEqual(calls.resolveCombatAfterRolls.length, 0,
-      'Step 4: resolveCombatAfterRolls NOT called — Mods Y/N prompt intervenes');
     assert.strictEqual(combat.combatGate, undefined,
-      'Step 4: no stale combatGate — gate consumed by dispatch');
+      'Step 3: gate consumed by AUTO_ADVANCE — no "both Ready" UI');
+    assert.strictEqual(combat.rerollPhase, null,
+      'Step 3: rerollPhase cleared to null');
+    assert.strictEqual(combat.currentStep, 'step4-attacker',
+      'Step 3: currentStep advanced to step4-attacker — Mods Y/N owns the window');
+    assert.strictEqual(calls.resolveCombatAfterRolls.length, 0,
+      'Step 3: resolveCombatAfterRolls NOT called — Mods Y/N prompt intervenes');
   });
 });
 

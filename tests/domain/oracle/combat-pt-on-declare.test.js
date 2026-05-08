@@ -25,30 +25,34 @@ const ROOT = resolve(__dirname, '../../..');
 const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
-  it('handleCombatReady invokes proceedToTokenPhase (not the roll button) once both players ready', () => {
-    // Locate the body of handleCombatReady.
+  it('handleCombatReady advances to postRollDiceButton (tokens already spent in on_declare merge)', () => {
+    // Per destruct 2026-05-08: tokens are spent inside the per-player
+    // on_declare window (sendOnDeclareTokenWindow), so by the time both
+    // players ack the gate, token phase is done. handleCombatReady's
+    // post-ack path goes straight to postRollDiceButton.
     const fnMatch = H_CB_SRC.match(/export async function handleCombatReady\(interaction, ctx\) \{[\s\S]*?^}/m);
     assert.ok(fnMatch, 'handleCombatReady body must be locatable');
     const body = fnMatch[0];
-    // After the both-ready guard, the next phase call must be proceedToTokenPhase.
-    assert.match(body, /await proceedToTokenPhase\(thread, game, combat, ctx\);/,
-      'handleCombatReady must call proceedToTokenPhase before the roll — CRR p.50');
-    // It must NOT post the Roll Combat Dice button directly inside handleCombatReady —
-    // that would skip the pre-roll PT phase. The button is posted by postRollDiceButton.
+    assert.match(body, /await postRollDiceButton\(thread, game, combat, ctx\);/,
+      'handleCombatReady must call postRollDiceButton after both ack — tokens done in declare');
+    assert.doesNotMatch(body, /await proceedToTokenPhase\b/,
+      'handleCombatReady must not call the deleted proceedToTokenPhase — tokens are merged into on_declare');
     assert.doesNotMatch(body, /setLabel\('Roll Combat Dice'\)/,
-      'handleCombatReady must not post the roll button itself — postRollDiceButton owns it — CRR p.50');
+      'handleCombatReady must not post the roll button itself — postRollDiceButton owns it');
   });
 
-  it('proceedToTokenPhase exists, opens the attacker token window, and falls through to postRollDiceButton', () => {
-    const fnMatch = H_CB_SRC.match(/export async function proceedToTokenPhase\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'proceedToTokenPhase must exist as an exported function');
-    const body = fnMatch[0];
-    assert.match(body, /combat\.tokenPhase = 'attacker';/,
-      'proceedToTokenPhase must promote tokenPhase to attacker first');
-    assert.match(body, /combat\.tokenPhase = 'defender';/,
-      'proceedToTokenPhase must promote tokenPhase to defender as fallback');
-    assert.match(body, /await postRollDiceButton\(thread, game, combat, ctx\);/,
-      'proceedToTokenPhase must end with postRollDiceButton when no tokens to spend');
+  it('on_declare gate posts sendOnDeclareTokenWindow inline so cards + tokens land in same player window', () => {
+    // The merge replaces the legacy "all cards first, then tokens
+    // sequentially" with a per-player combined window. Source-pin the
+    // wiring at the attack-declaration site.
+    assert.match(H_CB_SRC,
+      /await sendCombatGate\(thread, game, game\.pendingCombat, 'on_declare', ctx\);\s*\n\s*await sendOnDeclareTokenWindow\(thread, game, game\.pendingCombat, 'attacker', ctx\);/,
+      'attack-declare must post on_declare gate AND attacker token window inline — destruct 2026-05-08');
+  });
+
+  it('proceedToTokenPhase has been removed', () => {
+    assert.doesNotMatch(H_CB_SRC, /export async function proceedToTokenPhase\(/,
+      'proceedToTokenPhase function must be deleted — its callers go through sendOnDeclareTokenWindow + postRollDiceButton now');
   });
 
   it('postRollDiceButton always auto-rolls (no roll button posted)', () => {

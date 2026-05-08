@@ -264,8 +264,13 @@ describe('B-CTIME2-004: handleCombatReroll integration — attacker rerolls die'
 
 // ── B-CTIME2-005: handleCombatReroll — "done" → combatGate ─────────────────
 
-describe('B-CTIME2-005: handleCombatReroll — attacker "done" sets combatGate', () => {
-  it('005: attacker clicks done → combatGate set to post_attacker_reroll', async () => {
+describe('B-CTIME2-005: handleCombatReroll — attacker "done" auto-advances gate', () => {
+  it('005: attacker clicks done → post_attacker_reroll auto-advances (no "Both Ready" UI)', async () => {
+    // Per destruct 2026-05-08: rerolls are sequential per-player via
+    // sendRerollUI; the post_*_reroll "both Ready" gate was redundant
+    // padding. Auto-advance means the gate dispatches immediately and
+    // currentStep moves on. With no defender rerolls + no forced rerolls
+    // here, dispatch lands on step4-attacker (Mods Y/N).
     const game = makeGame({
       pendingCombat: makeCombat({
         rerollPhase: 'attacker',
@@ -280,12 +285,12 @@ describe('B-CTIME2-005: handleCombatReroll — attacker "done" sets combatGate',
     await handleCombatReroll(interaction, ctx);
 
     const combat = game.pendingCombat;
-    assert.ok(combat.combatGate, 'combatGate created');
-    assert.strictEqual(combat.combatGate.phase, 'post_attacker_reroll',
-      'combatGate.phase = post_attacker_reroll');
-    // Sequential gate: acked map empty, attacker is the active player.
-    assert.deepStrictEqual(combat.combatGate.acked, {}, 'acked map empty');
-    assert.strictEqual(combat.combatGate.activePlayer, 1, 'activePlayer = attacker (P1)');
+    assert.strictEqual(combat.combatGate, undefined,
+      'combatGate consumed by AUTO_ADVANCE — no Ready UI posted');
+    assert.strictEqual(combat.rerollPhase, null,
+      'rerollPhase cleared after dispatch');
+    assert.strictEqual(combat.currentStep, 'step4-attacker',
+      'currentStep advanced past rerolls into step-4 Mods Y/N');
     // rerollsRemaining unchanged (done doesn't consume a reroll)
     assert.strictEqual(combat.attackerRerollsRemaining, 2,
       'attackerRerollsRemaining unchanged — "done" doesn\'t spend a reroll');
@@ -443,17 +448,19 @@ describe('B-CTIME2-011: Phase sequencing invariant across reroll → surge → t
     });
     const client = mockClientWithThread();
 
-    // Step 1: Attacker clicks "done" on rerolls
+    // Step 1: Attacker clicks "done" on rerolls. post_attacker_reroll
+    // now auto-advances (destruct 2026-05-08) — gate is consumed and
+    // dispatch fires immediately. With no defender rerolls in this
+    // setup, dispatch lands on step4-attacker.
     const { ctx: ctx1 } = buildCombatCtx(game, { client });
     await handleCombatReroll(
       mockInteraction('combat_reroll_42_atk_done', 'player1', { client }), ctx1);
 
     const combat = game.pendingCombat;
-    assert.strictEqual(combat.combatGate?.phase, 'post_attacker_reroll',
-      'Step 1: combatGate = post_attacker_reroll after reroll done');
+    assert.strictEqual(combat.combatGate, undefined,
+      'Step 1: post_attacker_reroll AUTO_ADVANCED — no gate left behind');
 
-    // Step 2: Clear gate (simulating both players ready) and set up for surge
-    delete combat.combatGate;
+    // Step 2: Set up for surge directly (test isolates surge → pre_resolve)
     combat.rerollPhase = null; // rerolls done
 
     // Step 3: Surge done → pre_resolve auto-advances → no gate left behind
@@ -482,8 +489,13 @@ describe('B-CTIME2-011: Phase sequencing invariant across reroll → surge → t
 
 // ── B-CTIME2-012: Reroll exhaustion → auto-gate ────────────────────────────
 
-describe('B-CTIME2-012: Reroll exhaustion auto-gates when rerollsRemaining hits 0', () => {
-  it('012: last reroll (remaining=1) → rerollsRemaining=0, combatGate=post_attacker_reroll', async () => {
+describe('B-CTIME2-012: Reroll exhaustion auto-advances when rerollsRemaining hits 0', () => {
+  it('012: last reroll (remaining=1) → rerollsRemaining=0, post_attacker_reroll auto-advances', async () => {
+    // destruct 2026-05-08: when the final reroll is consumed,
+    // sendCombatGate('post_attacker_reroll') still fires but is now in
+    // AUTO_ADVANCE_SUB_PHASES — the gate is consumed and dispatch
+    // moves currentStep on. With no defender rerolls here, dispatch
+    // lands on step4-attacker.
     const game = makeGame({
       pendingCombat: makeCombat({
         rerollPhase: 'attacker',
@@ -503,10 +515,10 @@ describe('B-CTIME2-012: Reroll exhaustion auto-gates when rerollsRemaining hits 
       'attackerRerollsRemaining decremented to 0');
     assert.ok(combat.attackerRerolledIndices.includes(0),
       'die index 0 recorded in rerolledIndices');
-    // Auto-gate: when rerollsRemaining hits 0, sendCombatGate is called
-    assert.ok(combat.combatGate, 'combatGate created on reroll exhaustion');
-    assert.strictEqual(combat.combatGate.phase, 'post_attacker_reroll',
-      'combatGate.phase = post_attacker_reroll (auto-gate on exhaustion)');
+    assert.strictEqual(combat.combatGate, undefined,
+      'No gate left behind — auto-advance consumed it on exhaustion');
+    assert.strictEqual(combat.currentStep, 'step4-attacker',
+      'currentStep advanced past rerolls into step-4 Mods Y/N');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });
