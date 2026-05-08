@@ -80,9 +80,25 @@ import { opponentPlayerNum } from './player-helpers.js';
  *
  * Add more as cards are audited and their timings get codified.
  */
-const CC_TIMINGS_WHEN_DAMAGED = ['whenFigureSuffersDamage'];
-const CC_TIMINGS_BEFORE_DEFEATED = ['beforeFigureIsDefeated'];
-const CC_TIMINGS_WHEN_DEFEATED = ['whenFigureIsDefeated'];
+const CC_TIMINGS_WHEN_DAMAGED = [
+  'whenFigureSuffersDamage',
+  'afterHostileFigureSuffersDamage',
+  'whenFriendlyFigureWithin2SpacesSuffers3PlusDamage',
+];
+const CC_TIMINGS_BEFORE_DEFEATED = [
+  'beforeFigureIsDefeated',
+  // destruct 2026-05-08: "when X suffers damage equal to its Health"
+  // is canonical wording for the same trigger.
+  'whenYouHaveSufferedDamageEqualToYourHealth',
+  'whenFriendlyFigureWithin3SpacesWouldBeDefeated',
+];
+const CC_TIMINGS_WHEN_DEFEATED = [
+  'whenFigureIsDefeated',
+  'whenOneOfYourFiguresDefeated',
+  'whenHostileFigureDefeatedNotYourActivation',
+  'whenHostileFigureWithin3SpacesDefeated',
+  'afterUniqueHostileDefeated',
+];
 
 /**
  * Notify both players that a CC-play window is open with the given
@@ -157,7 +173,22 @@ export const WHEN_DEFEATED_HOOKS = [];
  * @param {DamageOpts} opts
  * @returns {Promise<DamageResult>}
  */
+// Lazy hook registration: import damage-pipeline-hooks.js on first
+// applyDamage call so the registry entries land before the first
+// damage event. Avoids circular-import init-order issues.
+let _hooksLoaded = false;
+async function _ensureHooksLoaded() {
+  if (_hooksLoaded) return;
+  _hooksLoaded = true;
+  try {
+    await import('./damage-pipeline-hooks.js');
+  } catch (err) {
+    console.error('[damage-pipeline] failed to load hooks:', err?.message ?? err);
+  }
+}
+
 export async function applyDamage(game, ctx, opts) {
+  await _ensureHooksLoaded();
   if (!opts || !opts.figureKey || !opts.msgId) {
     throw new Error('applyDamage: figureKey + msgId required');
   }
@@ -269,6 +300,10 @@ export async function applyDamage(game, ctx, opts) {
  * @returns {DamageResult}
  */
 export function applyDamageSync(game, ctx, opts) {
+  // Sync caller can't await dynamic import — kick off hook load in
+  // background; first sync call may miss hooks if registration hasn't
+  // completed. Subsequent calls hit the populated registries.
+  _ensureHooksLoaded();
   if (!opts || !opts.figureKey || !opts.msgId) {
     throw new Error('applyDamageSync: figureKey + msgId required');
   }
