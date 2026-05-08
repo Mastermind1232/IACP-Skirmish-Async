@@ -42,19 +42,25 @@ async function fireRecover(thread, game, combat, effect, ctx) {
 }
 
 /**
- * Leg Hydraulics (Tress Hacnua) — attacker after-resolve: grant 1 MP
- * to the attacker's figure. Note task #164: card text is actually
- * "MOVE 1 SPACE" not "1 MP" — that's a separate bug fix; this
- * migration preserves current (incorrect) behavior so the #164 fix
- * can be a clean, isolated change.
+ * Leg Hydraulics (Tress Hacnua) — attacker after-resolve: "After you
+ * resolve an attack, move up to 1 space."
+ *
+ * Implemented as the freeMoveBonus pattern (1 free MP + moveXBypass)
+ * which makes the granted point cost 1 per space regardless of
+ * difficult terrain — matching the canonical "1 space of movement"
+ * semantics under CRR MOVE-017. Without the bypass flag the prior
+ * "1 MP" implementation under-delivered into difficult terrain (1 MP
+ * doesn't reach an adjacent space when entry costs 2 MP).
  */
 async function fireLegHydraulics(thread, game, combat, effect, ctx) {
   const { logGameAction, client } = ctx;
   if (combat.attackerMsgId == null) return;
   grantMovementBank(game, combat.attackerMsgId, 1);
+  game.moveXBypassActive = game.moveXBypassActive || {};
+  game.moveXBypassActive[combat.attackerMsgId] = true;
   if (logGameAction && thread) {
     await logGameAction(game, client,
-      `\u{1F9BF} **Leg Hydraulics** — **${combat.attackerDcName}** gains 1 MP after attacking.`,
+      `\u{1F9BF} **Leg Hydraulics** — **${combat.attackerDcName}** may move up to 1 space after attacking.`,
       { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
 }
