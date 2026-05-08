@@ -108,8 +108,11 @@ export function recalcAttackTotals(dice) {
 
 /** Recalculate defense totals from individual dice results. */
 export function recalcDefenseTotals(dice) {
-  let block = 0, evade = 0, dodge = false;
-  for (const d of dice) { block += d.block ?? 0; evade += d.evade ?? 0; if (d.dodge) dodge = true; }
+  // Per destruct 2026-05-08: Dodge is COUNTED (some abilities apply
+  // +1 Dodge), not binary. Aggregate per-die dodge booleans into a
+  // numeric total so additions/subtractions stack correctly.
+  let block = 0, evade = 0, dodge = 0;
+  for (const d of dice) { block += d.block ?? 0; evade += d.evade ?? 0; if (d.dodge) dodge += 1; }
   return { block, evade, dodge };
 }
 
@@ -289,19 +292,18 @@ export function computeCombatResult(combat) {
     hit = false;
     missReason = 'On the Lam (target moved out of LOS)';
   }
-  // Wookiee Avenger (Skirmish Upgrade): convert Dodge results to Evade results
+  // Wookiee Avenger (Skirmish Upgrade): convert Dodge results to Evade
+  // results — converts ALL rolled Dodge (numeric).
   if (defRoll.dodge && combat.wookieeAvengerDefend) {
-    defRoll.evade = (defRoll.evade || 0) + 1;
-    defRoll.dodge = false;
+    defRoll.evade = (defRoll.evade || 0) + defRoll.dodge;
+    defRoll.dodge = 0;
   }
-  // Conclusion (HK-47): −1 Dodge to defense results — cancels any Dodge
-  // rolled on this attack. Per destruct 2026-05-08: applies to Dodge,
-  // not Evade. Since Dodge is binary in defRoll, "−1" here means
-  // "cancel any Dodge".
-  if (defRoll.dodge && combat.conclusionDodgeCancel) {
-    defRoll.dodge = false;
-  }
-  if (defRoll.dodge && !combat.surgeCancelDodge) {
+  // Conclusion (HK-47) and any other "−1 Dodge" effects flow through
+  // combat.bonusDodge (negative). Sum dice-rolled + bonus, clamp at 0.
+  // Per destruct 2026-05-08: Dodge is counted, not binary.
+  if (combat.conclusionDodgeCancel) combat.bonusDodge = (combat.bonusDodge || 0) - 1;
+  const _totalDodge = Math.max(0, (defRoll.dodge || 0) + (combat.bonusDodge || 0));
+  if (_totalDodge > 0 && !combat.surgeCancelDodge) {
     hit = false;
     missReason = 'Dodge';
   } else if (combat.isRanged && combat.distanceToTarget != null) {

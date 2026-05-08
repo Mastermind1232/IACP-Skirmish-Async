@@ -139,7 +139,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
         defDice[dieIdx] = { ...old, block: block + 2, evade: evade + 1, dodge: false };
       }
       combat.defenseDiceResults = defDice;
-      const newTotal = defDice.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge || !!d.dodge }), { block: 0, evade: 0, dodge: false });
+      const newTotal = defDice.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge + (d.dodge ? 1 : 0) }), { block: 0, evade: 0, dodge: 0 });
       combat.defenseRoll = { block: newTotal.block, evade: newTotal.evade, dodge: newTotal.dodge };
       if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(discordCatch);
     }

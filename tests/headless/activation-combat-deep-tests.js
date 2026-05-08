@@ -436,13 +436,13 @@ describe('reroll: recalcDefenseTotals', () => {
     const totals = recalcDefenseTotals(dice);
     assert.strictEqual(totals.block, 1);
     assert.strictEqual(totals.evade, 1);
-    assert.strictEqual(totals.dodge, true);
+    assert.strictEqual(totals.dodge, 1);
   });
 
-  it('dodge is false when no die rolled dodge', () => {
+  it('dodge is 0 when no die rolled dodge', () => {
     const dice = [{ block: 2, evade: 0, dodge: false }];
     const totals = recalcDefenseTotals(dice);
-    assert.strictEqual(totals.dodge, false);
+    assert.strictEqual(totals.dodge, 0);
   });
 });
 

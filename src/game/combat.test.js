@@ -273,7 +273,7 @@ test('recalcDefenseTotals aggregates correctly', () => {
   const totals = recalcDefenseTotals(dice);
   assert.strictEqual(totals.block, 3);
   assert.strictEqual(totals.evade, 1);
-  assert.strictEqual(totals.dodge, false);
+  assert.strictEqual(totals.dodge, 0);
 });
 
 test('recalcDefenseTotals propagates dodge', () => {
@@ -282,7 +282,7 @@ test('recalcDefenseTotals propagates dodge', () => {
     { color: 'black', block: 2, evade: 0, dodge: false },
   ];
   const totals = recalcDefenseTotals(dice);
-  assert.strictEqual(totals.dodge, true);
+  assert.strictEqual(totals.dodge, 1);
 });
 
 // --- Extended computeCombatResult tests (Pillar 8) ---

@@ -90,10 +90,10 @@ function makeCombat(overrides = {}) {
     ],
     attackRoll: { acc: 3, dmg: 6, surge: 2 },
     defenseDiceResults: [
-      { color: 'black', block: 2, evade: 0, dodge: false },
-      { color: 'white', block: 1, evade: 1, dodge: false },
+      { color: 'black', block: 2, evade: 0, dodge: 0 },
+      { color: 'white', block: 1, evade: 1, dodge: 0 },
     ],
-    defenseRoll: { block: 3, evade: 1, dodge: false },
+    defenseRoll: { block: 3, evade: 1, dodge: 0 },
     attackerRerolledIndices: [],
     defenderRerolledIndices: [],
     attackerRerollsRemaining: 0,
@@ -138,7 +138,7 @@ describe('B-CR-TL: Tough Luck die splice', () => {
 
     assert.strictEqual(combat.defenseDiceResults.length, 1, 'one defense die removed');
     assert.strictEqual(combat.defenseDiceResults[0].color, 'white', 'white at index 0');
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: false }, 'defense totals recalculated');
+    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 }, 'defense totals recalculated');
   });
 
   it('B-CR-TL-003: skip path clears pendingToughLuck without mutating dice', async () => {
@@ -617,7 +617,7 @@ describe('B-CR-CHAIN: Multi-step reroll chain tests', () => {
 
     assert.strictEqual(combat.defenseDiceResults.length, 1, 'one die remains');
     assert.strictEqual(combat.defenseDiceResults[0].color, 'white');
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: false });
+    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 });
 
     // Step 2: TINT skip (no further mutations)
     game.pendingThereIsNoTry = {};
@@ -626,7 +626,7 @@ describe('B-CR-CHAIN: Multi-step reroll chain tests', () => {
 
     assert.strictEqual(combat.tintResolved, true);
     // Defense totals unchanged
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: false },
+    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 },
       'defense totals stable after TINT skip');
   });
 });
@@ -1746,7 +1746,7 @@ describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
     await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx1);
 
     assert.strictEqual(combat.defenseDiceResults.length, 1);
-    assert.deepStrictEqual(combat.defenseRoll, { block: 2, evade: 0, dodge: false });
+    assert.deepStrictEqual(combat.defenseRoll, { block: 2, evade: 0, dodge: 0 });
 
     // Step 2: TINT sets black die face to 1B/1E
     game.pendingThereIsNoTry = { pickedDieIdx: 0 };
@@ -1755,7 +1755,7 @@ describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
 
     assert.strictEqual(combat.defenseDiceResults[0].block, 1);
     assert.strictEqual(combat.defenseDiceResults[0].evade, 1);
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: false },
+    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 },
       'totals reflect both TL removal and TINT face set');
   });
 });

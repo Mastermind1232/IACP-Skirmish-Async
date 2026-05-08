@@ -126,7 +126,7 @@ describe('ORACLE-HANDLER-001: G22 Condition Gating — Negative Path', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 1 dmg vs 2 block = 0 final damage
       attackRoll: { acc: 3, dmg: 1, surge: 1 },
-      defenseRoll: { block: 2, evade: 0, dodge: false },
+      defenseRoll: { block: 2, evade: 0, dodge: 0 },
       surgeConditions: ['Stun'],
       surgeDamage: 0,
     });
@@ -153,7 +153,7 @@ describe('ORACLE-HANDLER-001: G22 Condition Gating — Negative Path', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 2 dmg vs 3 block = 0 final damage
       attackRoll: { acc: 4, dmg: 2, surge: 1 },
-      defenseRoll: { block: 3, evade: 0, dodge: false },
+      defenseRoll: { block: 3, evade: 0, dodge: 0 },
       surgeConditions: ['Bleed'],
       surgeDamage: 0,
     });
@@ -178,7 +178,7 @@ describe('ORACLE-HANDLER-001: G22 Condition Gating — Negative Path', () => {
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 3, dmg: 1, surge: 2 },
-      defenseRoll: { block: 2, evade: 0, dodge: false },
+      defenseRoll: { block: 2, evade: 0, dodge: 0 },
       surgeConditions: ['Stun', 'Bleed'],
       surgeDamage: 0,
     });
@@ -211,7 +211,7 @@ describe('ORACLE-HANDLER-002: G22 Condition Gating — Positive Path', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 3 dmg vs 1 block = 2 final damage
       attackRoll: { acc: 4, dmg: 3, surge: 1 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun'],
       surgeDamage: 0,
     });
@@ -237,7 +237,7 @@ describe('ORACLE-HANDLER-002: G22 Condition Gating — Positive Path', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 4 dmg + 1 surge dmg vs 2 block = 3 final damage
       attackRoll: { acc: 5, dmg: 4, surge: 1 },
-      defenseRoll: { block: 2, evade: 0, dodge: false },
+      defenseRoll: { block: 2, evade: 0, dodge: 0 },
       surgeConditions: ['Bleed'],
       surgeDamage: 1,
     });
@@ -263,7 +263,7 @@ describe('ORACLE-HANDLER-002: G22 Condition Gating — Positive Path', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 2 dmg vs 1 block = 1 final damage (boundary case)
       attackRoll: { acc: 3, dmg: 2, surge: 1 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Weaken'],
       surgeDamage: 0,
     });
@@ -310,7 +310,7 @@ describe('ORACLE-HANDLER-003: Condition Immunity', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 4 dmg vs 1 block = 3 final damage — conditions should still be blocked
       attackRoll: { acc: 5, dmg: 4, surge: 1 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun'],
       surgeDamage: 0,
     });
@@ -343,7 +343,7 @@ describe('ORACLE-HANDLER-003: Condition Immunity', () => {
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 5, dmg: 4, surge: 2 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun', 'Bleed'],
       surgeDamage: 0,
     });
@@ -368,7 +368,7 @@ describe('ORACLE-HANDLER-003: Condition Immunity', () => {
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 5, dmg: 4, surge: 1 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun'],
       surgeDamage: 0,
     });
@@ -404,7 +404,7 @@ describe('ORACLE-HANDLER-004: Fireproof (I30)', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 4 dmg vs 1 block = 3 final damage
       attackRoll: { acc: 5, dmg: 4, surge: 2 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun', 'Bleed'],
       surgeDamage: 0,
       extra: { defenderFireproof: true },
@@ -434,7 +434,7 @@ describe('ORACLE-HANDLER-004: Fireproof (I30)', () => {
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 5, dmg: 4, surge: 2 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       surgeConditions: ['Stun', 'Bleed'],
       surgeDamage: 0,
       // No defenderFireproof
@@ -485,7 +485,7 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 2 dmg vs 3 block = 0 final damage (fully blocked, NOT a miss)
       attackRoll: { acc: 3, dmg: 2, surge: 0 },
-      defenseRoll: { block: 3, evade: 0, dodge: false },
+      defenseRoll: { block: 3, evade: 0, dodge: 0 },
       isRanged: false,
       distanceToTarget: 1,
     });
@@ -538,7 +538,7 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
     const combat = buildCombat(game, dcMessageMeta, {
       // 4 dmg vs 1 block = 3 final damage — Han takes damage
       attackRoll: { acc: 3, dmg: 4, surge: 0 },
-      defenseRoll: { block: 1, evade: 0, dodge: false },
+      defenseRoll: { block: 1, evade: 0, dodge: 0 },
       isRanged: false,
       distanceToTarget: 1,
     });
@@ -564,7 +564,7 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
  *
  * @param {object} opts
  * @param {object[]} opts.attackDice - Individual attack die faces, e.g. [{ color: 'blue', acc: 3, dmg: 2, surge: 1 }]
- * @param {object[]} opts.defenseDice - Individual defense die faces, e.g. [{ color: 'black', block: 2, evade: 0, dodge: false }]
+ * @param {object[]} opts.defenseDice - Individual defense die faces, e.g. [{ color: 'black', block: 2, evade: 0, dodge: 0 }]
  * @param {string} [opts.rerollPhase='attacker'] - 'attacker' or 'defender'
  * @param {number} [opts.attackerRerolls=1] - Rerolls remaining for attacker
  * @param {number} [opts.defenderRerolls=0] - Rerolls remaining for defender
@@ -596,7 +596,7 @@ function buildMidCombatGame(opts) {
   );
   const defTotals = opts.defenseDice.reduce(
     (t, d) => ({ block: t.block + (d.block ?? 0), evade: t.evade + (d.evade ?? 0), dodge: t.dodge || !!d.dodge }),
-    { block: 0, evade: 0, dodge: false }
+    { block: 0, evade: 0, dodge: 0 }
   );
 
   // Construct pendingCombat in mid-reroll state
@@ -679,7 +679,7 @@ describe('ORACLE-HANDLER-005: Reroll Total Recalculation', () => {
     const die0 = { color: 'blue', acc: 3, dmg: 2, surge: 1 };
     const die1 = { color: 'green', acc: 1, dmg: 1, surge: 1 };
     const fixtureDie = { color: 'blue', acc: 5, dmg: 1, surge: 0 };
-    const defDie = { color: 'black', block: 1, evade: 0, dodge: false };
+    const defDie = { color: 'black', block: 1, evade: 0, dodge: 0 };
 
     const { game, harness } = buildMidCombatGame({
       attackDice: [die0, die1],
@@ -712,8 +712,8 @@ describe('ORACLE-HANDLER-005: Reroll Total Recalculation', () => {
 
   it('005b: defense die reroll updates totals correctly', async () => {
     const atkDie = { color: 'blue', acc: 3, dmg: 2, surge: 1 };
-    const defDie0 = { color: 'black', block: 2, evade: 1, dodge: false };
-    const fixtureDefDie = { color: 'black', block: 0, evade: 0, dodge: true };
+    const defDie0 = { color: 'black', block: 2, evade: 1, dodge: 0 };
+    const fixtureDefDie = { color: 'black', block: 0, evade: 0, dodge: 1 };
 
     const { game, harness } = buildMidCombatGame({
       attackDice: [atkDie],
@@ -744,7 +744,7 @@ describe('ORACLE-HANDLER-005: Reroll Total Recalculation', () => {
     const die0 = { color: 'blue', acc: 3, dmg: 2, surge: 1 };
     const die1 = { color: 'green', acc: 1, dmg: 1, surge: 1 };
     const fixtureDie = { color: 'blue', acc: 5, dmg: 1, surge: 0 };
-    const defDie = { color: 'black', block: 1, evade: 0, dodge: false };
+    const defDie = { color: 'black', block: 1, evade: 0, dodge: 0 };
 
     const { game, harness } = buildMidCombatGame({
       attackDice: [die0, die1],
@@ -788,7 +788,7 @@ describe('ORACLE-HANDLER-005: Reroll Total Recalculation', () => {
 describe('ORACLE-HANDLER-006: Reroll Phase Enforcement', () => {
   it('006a: defense-side reroll rejected during attacker phase', async () => {
     const atkDie = { color: 'blue', acc: 3, dmg: 2, surge: 1 };
-    const defDie = { color: 'black', block: 2, evade: 0, dodge: false };
+    const defDie = { color: 'black', block: 2, evade: 0, dodge: 0 };
 
     const { game, harness } = buildMidCombatGame({
       attackDice: [atkDie],
@@ -823,7 +823,7 @@ describe('ORACLE-HANDLER-006: Reroll Phase Enforcement', () => {
 
   it('006b: wrong player rejected during attacker phase', async () => {
     const atkDie = { color: 'blue', acc: 3, dmg: 2, surge: 1 };
-    const defDie = { color: 'black', block: 2, evade: 0, dodge: false };
+    const defDie = { color: 'black', block: 2, evade: 0, dodge: 0 };
 
     const { game, harness } = buildMidCombatGame({
       attackDice: [atkDie],

@@ -2969,13 +2969,13 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
     const defDiceResults = [];
-    let block = 0, evade = 0, dodge = false;
+    let block = 0, evade = 0, dodge = 0;
     for (const color of diceToRoll) {
       const r = rollDefenseDice(color);
       defDiceResults.push(r);
       block += r.block;
       evade += r.evade;
-      if (r.dodge) dodge = true;
+      if (r.dodge) dodge += 1;
     }
     combat.defenseRoll = { block, evade, dodge };
     combat.defenseDiceResults = defDiceResults;
@@ -3137,13 +3137,13 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeCount = Math.min(removeMax, pool.length);
     const diceToRoll = pool.slice(0, pool.length - removeCount);
     const defDiceResults = [];
-    let block = 0, evade = 0, dodge = false;
+    let block = 0, evade = 0, dodge = 0;
     for (const color of diceToRoll) {
       const r = rollDefenseDice(color);
       defDiceResults.push(r);
       block += r.block;
       evade += r.evade;
-      if (r.dodge) dodge = true;
+      if (r.dodge) dodge += 1;
     }
     combat.defenseRoll = { block, evade, dodge };
     combat.defenseDiceResults = defDiceResults;
