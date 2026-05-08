@@ -3649,7 +3649,60 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
       if (_omBoardState) {
         const _omProfile = getMovementProfile(dcName, figureKey, game);
         const _omCache = computeMovementCache(startPos, mp || 99, _omBoardState, _omProfile);
-        path = getMovementPath(_omCache, startPos, chosenSpace, _omProfile.size, _omProfile) || [];
+        const _omShortest = getMovementPath(_omCache, startPos, chosenSpace, _omProfile.size, _omProfile) || [];
+        // Per destruct 2026-05-08: prefer paths avoiding hostile-adjacent
+        // spaces. Build a hostile-adjacent set from opponent figure
+        // positions, then re-walk possible paths preferring lower
+        // hostile-adjacency count. Falls back to shortest if no
+        // alternative exists.
+        try {
+          const _omEnemyNum = pending.playerNum === 1 ? 2 : 1;
+          const _omEnemyPositions = game.figurePositions?.[_omEnemyNum] || {};
+          const _omAdj = _omBoardState.mapSpaces?.adjacency || _omBoardState.adjacency || {};
+          const _omHostileAdjSet = new Set();
+          for (const _omEp of Object.values(_omEnemyPositions)) {
+            if (!_omEp) continue;
+            const _omEpLc = String(_omEp).toLowerCase();
+            _omHostileAdjSet.add(_omEpLc);
+            for (const _omN of (_omAdj[_omEpLc] || [])) {
+              _omHostileAdjSet.add(String(_omN).toLowerCase());
+            }
+          }
+          // Score the shortest path; if it has 0 hostile-adjacent visits,
+          // accept it. Otherwise BFS for an equally-short path with fewer
+          // hostile-adjacent visits and pick that.
+          const _omScore = (p) => p.reduce((s, c) => s + (_omHostileAdjSet.has(String(c).toLowerCase()) ? 1 : 0), 0);
+          path = _omShortest;
+          const _omShortestScore = _omScore(_omShortest);
+          if (_omShortestScore > 0) {
+            // BFS all shortest paths from start to chosenSpace;
+            // pick min-hostile-adjacent. Cap to keep cost bounded.
+            const _omTargetLen = _omShortest.length;
+            const _omStartLc = String(startPos).toLowerCase();
+            const _omGoalLc = String(chosenSpace).toLowerCase();
+            const _omAllPaths = [];
+            const _omWalk = (cur, soFar, depth) => {
+              if (_omAllPaths.length >= 32) return;
+              if (depth >= _omTargetLen) {
+                if (cur === _omGoalLc) _omAllPaths.push([...soFar]);
+                return;
+              }
+              for (const _omN of (_omAdj[cur] || [])) {
+                const _omNlc = String(_omN).toLowerCase();
+                if (soFar.includes(_omNlc)) continue;
+                soFar.push(_omNlc);
+                _omWalk(_omNlc, soFar, depth + 1);
+                soFar.pop();
+              }
+            };
+            _omWalk(_omStartLc, [_omStartLc], 1);
+            if (_omAllPaths.length > 0) {
+              _omAllPaths.sort((a, b) => _omScore(a) - _omScore(b));
+              const _omBest = _omAllPaths[0];
+              if (_omScore(_omBest) < _omShortestScore) path = _omBest;
+            }
+          }
+        } catch (_omSafeErr) { /* fall back to shortest */ }
       }
     }
   } catch (_omErr) { path = [startPos, chosenSpace].filter(Boolean); }
@@ -3709,6 +3762,22 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
   await interaction.followUp(replyPayload).catch(discordCatch);
+
+  // Per destruct 2026-05-08: if this ordered-move came from the post-deploy
+  // queue (Scavenged Walker / Smooth Landing / Strike Team / Forward
+  // Emplacement etc.), advance the queue to the next figure / next ability
+  // after the move applies. The unified pipeline replaces the legacy
+  // moveInProgress flow that was vulnerable to "Move session expired".
+  if (pending.postDeployReturn) {
+    try {
+      const { _advanceAfterFigure } = await import('./post-deploy.js')
+        .then((m) => ({ _advanceAfterFigure: m._advanceAfterFigure }));
+      if (_advanceAfterFigure) {
+        await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
+      }
+    } catch (_pdAdvErr) { /* non-fatal */ }
+  }
+
   saveGames(game.gameId);
 }
 

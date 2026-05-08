@@ -550,7 +550,44 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
     return;
   }
 
-  // Set up movement via the movement engine
+  // Per destruct 2026-05-08: post-deploy moves use the same
+  // pendingOrderedMove pipeline as Officer Order / Tactical Maneuver
+  // — eliminates the brittle moveInProgress lifecycle that was
+  // causing "Move session expired" on AT-DP / MASSIVE figures.
+  const reachableSpaces = [...cache.cells.keys()];
+  const { setPendingOrderedMove } = await import('../game/interrupts.js');
+  setPendingOrderedMove(game, {
+    figureKey,
+    targetMsgId: msgId,
+    playerNum,
+    mp,
+    label: active.abilityLabel || 'Post-Deploy Move',
+    postDeployReturn: true,
+  });
+  const _pdGenCh = await fetchGameChannel(client, game.generalId);
+  if (!_pdGenCh) {
+    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
+    return;
+  }
+  const contextKey = `${gameId}_${msgId}`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[contextKey] = {
+    validSpaces: reachableSpaces,
+    cellPrefix: `order_move_space_${gameId}_${msgId}_`,
+    mapSpaces: boardState.mapSpaces || {},
+    headerText: `**${active.abilityLabel || 'Post-Deploy Move'}** — Choose a space for **${dcName}** (up to ${mp} MP)`,
+  };
+  const { buildRowPickerButtons: _bRPB } = await import('../discord/components.js');
+  const { rows: _pdRows } = _bRPB(reachableSpaces, `space_row_${contextKey}_`);
+  await _pdGenCh.send({
+    content: `🚶 **${active.abilityLabel || 'Post-Deploy Move'}** — <@${ownerId}>, **${dcName}** may move up to **${mp}** spaces. Pick a row:`,
+    components: _pdRows.slice(0, 5),
+    allowedMentions: { users: [ownerId] },
+  }).catch(() => null);
+  if (saveGames) saveGames(game.gameId);
+  return;
+  // ── unreachable below: legacy MP-button path retained for reference ──
+  /* eslint-disable no-unreachable */
   const dgMatch = figureKey.match(/^(.+)-(\d+)-(\d+)$/);
   const figureIndex = dgMatch ? parseInt(dgMatch[3], 10) : 0;
   game.moveInProgress = game.moveInProgress || {};
@@ -643,7 +680,7 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
  * strike_team (index-based + token distribution transition), and others (index-based).
  * @param {string} figureKey — REQUIRED: the figure that just finished.
  */
-async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
+export async function _advanceAfterFigure(game, gameId, client, ctx, figureKey) {
   const { logGameAction, saveGames } = ctx;
   const q = game.postDeployQueue;
   if (!q) return;
