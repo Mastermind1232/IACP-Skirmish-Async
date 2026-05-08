@@ -217,6 +217,44 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   }
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
+  // Inside Job (Hoth Battle Station A): persistent defenseModifierByZone.
+  // Defender in own zone: +ownZone.blockBonus (negative on this card → −1).
+  // Defender in opponent's zone: +opponentZone.evadeBonus (+1).
+  // Per destruct 2026-05-07: must apply during defense resolution.
+  if (combat.target?.figureKey && !combat.insideJobApplied) {
+    const _ijMapId = game.selectedMap?.id;
+    const _ijVariant = game?.selectedMission?.variant;
+    if (_ijMapId && _ijVariant) {
+      const { getMissionFlag, getDeploymentZones } = await import('../data-loader.js');
+      const _ijRule = getMissionFlag(_ijMapId, _ijVariant, 'defenseModifierByZone');
+      if (_ijRule && (typeof _ijRule.ownZone === 'object' || typeof _ijRule.opponentZone === 'object')) {
+        const _ijZones = getDeploymentZones()?.[_ijMapId] || {};
+        const _ijDefPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+        if (_ijDefPos) {
+          const _ijCoord = String(_ijDefPos).toLowerCase();
+          const _ijRedSet = new Set((_ijZones.red || []).map((c) => normalizeCoord(c)));
+          const _ijBlueSet = new Set((_ijZones.blue || []).map((c) => normalizeCoord(c)));
+          // Determine defender's own zone color.
+          const { getInitiativePlayerNum } = await import('../game/player-helpers.js');
+          const _ijInitPn = getInitiativePlayerNum(game);
+          const _ijDefZoneColor = defenderPlayerNum === _ijInitPn
+            ? game.deploymentZoneChosen
+            : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+          const _ijDefOwnSet = _ijDefZoneColor === 'red' ? _ijRedSet : _ijBlueSet;
+          const _ijDefOppSet = _ijDefZoneColor === 'red' ? _ijBlueSet : _ijRedSet;
+          if (_ijDefOwnSet.has(_ijCoord) && typeof _ijRule.ownZone?.blockBonus === 'number') {
+            combat.bonusBlock = (combat.bonusBlock || 0) + _ijRule.ownZone.blockBonus;
+            combat.insideJobApplied = true;
+            await logGameAction(game, client, `🏫 **Inside Job** — **${combat.target.label}** defending in own deployment zone: ${_ijRule.ownZone.blockBonus > 0 ? '+' : ''}${_ijRule.ownZone.blockBonus} Block.`, { phase: 'ROUND', icon: 'attack' });
+          } else if (_ijDefOppSet.has(_ijCoord) && typeof _ijRule.opponentZone?.evadeBonus === 'number') {
+            combat.bonusEvade = (combat.bonusEvade || 0) + _ijRule.opponentZone.evadeBonus;
+            combat.insideJobApplied = true;
+            await logGameAction(game, client, `🏫 **Inside Job** — **${combat.target.label}** defending in opponent's deployment zone: ${_ijRule.opponentZone.evadeBonus > 0 ? '+' : ''}${_ijRule.opponentZone.evadeBonus} Evade.`, { phase: 'ROUND', icon: 'attack' });
+          }
+        }
+      }
+    }
+  }
   // Harsh Environment: exterior spaces -1 Evade; interior spaces +1 Block (applied once per combat resolution)
   if (game.harshEnvironmentActive && !combat.harshEnvApplied) {
     const _heMapId = game.selectedMap?.id;
