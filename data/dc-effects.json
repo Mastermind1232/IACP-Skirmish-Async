@@ -4092,7 +4092,7 @@
       ]
     },
     "Ko-Tun Feralo": {
-      "abilityText": "Arms Distribution: At the beginning of your activation, distribute 2 Power Tokens among up to 2 friendly figures within 3 spaces.\n\nDead Precise: When a friendly figure within 2 spaces spends a Power Token while attacking, apply Pierce 1 to the attack results.\n\nSquad Cohesion: When a friendly REBEL figure within 3 spaces declares an attack, it may spend a Power Token from a friendly REBEL figure within 3 spaces of itself for its effect.",
+      "abilityText": "Arms Distribution: At the beginning of your activation, distribute 2 Power Tokens among up to 2 friendly figures within 3 spaces.\n\nDead Precise: When a figure within 3 spaces of Ko-Tun is attacking, if it spent a Power Token, it may reroll 1 attack die and apply -1 Dodge to the attack results. (Also applies to Ko-Tun; stacks with Professional.)\n\nSquad Cohesion: When a friendly REBEL figure within 3 spaces declares an attack, it may spend a Power Token from a friendly REBEL figure within 3 spaces of itself for its effect.",
       "keywords": [
         "TROOPER",
         "LEADER"

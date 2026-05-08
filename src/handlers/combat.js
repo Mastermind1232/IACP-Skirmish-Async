@@ -2508,13 +2508,19 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Dead Precise (Ko-Tun Feralo) — REWRITTEN per destruct 2026-05-08
-  // canonical card: "When a friendly figure within 2 spaces spends a
-  // Power Token while attacking, apply Pierce 1 to the attack results."
-  // Aura passive: triggers when an attacker (any friendly within 2 of
-  // Ko-Tun) spends a Power Token during this attack. The previous
-  // movement-gated +2 Accuracy attacker self-buff was wrong — that
-  // text doesn't appear on the card.
+  // Dead Precise (Ko-Tun Feralo) — per destruct 2026-05-08:
+  // "When a figure within 3 spaces of Ko-Tun is attacking, if it spent
+  //  a Power Token, it may reroll 1 attack die and apply −1 Dodge to
+  //  the attack results. Also applies to Ko-Tun herself and stacks
+  //  with Professional."
+  //
+  // Aura: triggers when attacker is within 3 of ANY friendly Ko-Tun
+  // (including Ko-Tun herself, since distance 0 is within 3) AND has
+  // spent a Power Token this attack. Effects:
+  //   +1 attacker reroll (stacks with Professional, Targeting Computer,
+  //    Heir to the Jedi, etc.)
+  //   −1 Dodge to attack results (cancels 1 of the defender's Dodges
+  //    via the numeric bonusDodge model wired earlier this session).
   if (game.pendingCombat.attackerSpentPowerToken && !game.pendingCombat.deadPreciseApplied) {
     const _dpAtkPos = game.pendingCombat.attackerFigureKey
       ? (game.figurePositions?.[attackerPlayerNum]?.[game.pendingCombat.attackerFigureKey])
@@ -2526,14 +2532,15 @@ export async function handleAttackTarget(interaction, ctx) {
       for (const [_dpFk, _dpPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
         if (!_dpPos) continue;
         if (dcNameFromFigureKey(_dpFk) !== 'Ko-Tun Feralo') continue;
-        if (!isWithinSpaces(_dpMs, String(_dpPos).toLowerCase(), String(_dpAtkPos).toLowerCase(), 2)) continue;
+        if (!isWithinSpaces(_dpMs, String(_dpPos).toLowerCase(), String(_dpAtkPos).toLowerCase(), 3)) continue;
         _dpFound = true;
         break;
       }
       if (_dpFound) {
-        game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
+        game.pendingCombat.attackerRerollsRemaining = (game.pendingCombat.attackerRerollsRemaining || 0) + 1;
+        game.pendingCombat.bonusDodge = (game.pendingCombat.bonusDodge || 0) - 1;
         game.pendingCombat.deadPreciseApplied = true;
-        await thread.send('**Dead Precise** (Ko-Tun within 2) — attacker spent a Power Token: +1 Pierce.');
+        await thread.send('**Dead Precise** (Ko-Tun within 3) — attacker spent a Power Token: +1 attack-die reroll, −1 Dodge to attack results.');
       }
     }
   }
