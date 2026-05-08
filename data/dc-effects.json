@@ -2127,10 +2127,9 @@
       ],
       "subname": "RUTHLESS KILLER",
       "cost": 7,
-      "health": 12,
+      "health": 11,
       "speed": 4,
       "passives": [
-        "+1 Hit",
         "Block 1"
       ],
       "figures": 1,
