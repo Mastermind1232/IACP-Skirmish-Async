@@ -1220,23 +1220,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
       // Parting Shot — now handled by BEFORE_DEFEATED hook
       // (damage-pipeline-hooks.js + handlers/parting-shot.js).
-      // Last Resort (Skirmish Upgrade): pre-defeat interrupt — roll 1 red die, adjacent figures suffer Hits as damage
-      if (newCur <= 0 && !_defeatSuppressed && !game.lastResortTriggered?.[targetMsgId]) {
-        const _lrUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-        if (cardNameIncludes(_lrUpgrades, 'Last Resort')) {
-          game.lastResortTriggered = game.lastResortTriggered || {};
-          game.lastResortTriggered[targetMsgId] = true;
-          setPendingLastResort(game, { targetMsgId, defenderPlayerNum, attackerPlayerNum, damage, hit, resultText, totalBlast, ownerId, targetFigIndex });
-          const _lrOwnerId = game[`player${defenderPlayerNum}Id`];
-          const _lrRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`last_resort_use_${game.gameId}_${targetMsgId}`).setLabel('Use Last Resort').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`last_resort_skip_${game.gameId}_${targetMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await logGameAction(game, client, `<@${_lrOwnerId}> **Last Resort** — **${combat.target.label}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`, { components: [_lrRow], allowedMentions: { users: [_lrOwnerId] } });
-          saveGames(game.gameId);
-          return;
-        }
-      }
+      // Last Resort — now handled by BEFORE_DEFEATED hook
+      // (damage-pipeline-hooks.js + handlers/interrupts.js handleLastResort).
       // Executor (Royal Guard Champion): when a friendly figure is defeated within 3 spaces,
       // RGC may interrupt to move 2 spaces + perform a free attack. Limit once per round.
       if (newCur <= 0 && !_defeatSuppressed && !game.executorTriggered?.[targetMsgId]) {
@@ -3324,8 +3309,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // Parting Shot deferred-defeat resume: if the attacker of THIS combat
   // is the figure that armed Parting Shot, the free attack just resolved
   // — complete the deferred defeat now (per CRR + destruct 2026-05-08).
+  // Pass `deps` directly as ctx so processFigureDefeat has all its
+  // required dependencies (removeFigurePosition, calculateKillVp, etc.).
   if (game.pendingPartingShot?.active && game.pendingPartingShot.figureKey === combat.attackerFigureKey) {
     const { completeDeferredDefeat } = await import('../handlers/parting-shot.js');
-    await completeDeferredDefeat(game, { dcHealthState, logGameAction, client, deps, thread });
+    await completeDeferredDefeat(game, deps);
   }
 }

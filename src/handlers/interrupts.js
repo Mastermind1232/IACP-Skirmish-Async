@@ -648,13 +648,24 @@ export async function handleLastResort(interaction, ctx) {
   } else {
     await logGameAction(_lrGame, client, `**Last Resort** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
-  // Finalize defeat by re-calling applyDamageAndFinishCombat (lastResortTriggered flag already set)
-  await applyDamageAndFinishCombat(_lrGame, _lrCombat, {
-    damage: _lrPending.damage, hit: _lrPending.hit, resultText: _lrPending.resultText,
-    totalBlast: _lrPending.totalBlast, defenderPlayerNum: _lrPending.defenderPlayerNum,
-    attackerPlayerNum: _lrPending.attackerPlayerNum, ownerId: _lrPending.ownerId,
-    targetMsgId: _lrPending.targetMsgId, targetFigIndex: _lrPending.targetFigIndex,
-  }, client);
+  // Finalize defeat via shared deferred-defeat helper. Per destruct
+  // 2026-05-08: HP is already 0 (BEFORE_DEFEATED hook ran after
+  // reduceHp). completeDeferredDefeat checks SC/MW heal and YWNDM,
+  // then fires WHEN_DEFEATED hooks + processFigureDefeat.
+  const { completeDeferredDefeat } = await import('../game/deferred-defeat.js');
+  const _lrFigKey2 = _lrCombat?.target?.figureKey;
+  const _lrFigIdxMatch = String(_lrFigKey2 || '').match(/-(\d+)-(\d+)$/);
+  const _lrFigIdx = _lrFigIdxMatch ? parseInt(_lrFigIdxMatch[2], 10) : (_lrPending.targetFigIndex ?? 0);
+  // Pass full ctx so processFigureDefeat has its required deps
+  // (removeFigurePosition, calculateKillVp, etc.).
+  await completeDeferredDefeat(_lrGame, ctx, {
+    figureKey: _lrFigKey2,
+    msgId: _lrPending.targetMsgId,
+    figIndex: _lrFigIdx,
+    controllerPlayerNum: _lrPending.defenderPlayerNum,
+    attackerPlayerNum: _lrPending.attackerPlayerNum,
+    source: 'Last Resort',
+  });
   saveGames(_lrGame.gameId); return;
 }
 

@@ -232,8 +232,12 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     // Last Resort depleted from attachments
     assert.ok(!game.p2DcAttachments.dc2.includes('Last Resort'), 'Last Resort removed from attachments');
     assert.ok(game.p2DcAttachments.dc2.includes('Targeting Computer'), 'other attachments preserved');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
-    assert.strictEqual(calls.applyDamageAndFinishCombat[0].params.damage, 4, 'original damage passed');
+    // 2026-05-08 migration: handler now finalizes the deferred defeat
+    // via completeDeferredDefeat → processFigureDefeat instead of
+    // re-entering the legacy applyDamageAndFinishCombat path.
+    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for deferred defeat');
+    assert.strictEqual(calls.processFigureDefeat[0].defeatedPlayerNum, 2, 'defender side defeated');
+    assert.strictEqual(calls.processFigureDefeat[0].source, 'Last Resort', 'source labeled');
   });
 
   it('B-I-PREDEFEAT-004: Executor use path grants MP + free attack, marks once-per-round', async () => {

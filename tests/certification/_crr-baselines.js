@@ -51,11 +51,16 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // in damage-pipeline-hooks.js probes `dcName === 'Obi-Wan Kenobi'` —
 // migration of inline path from combat-bridge.js into the centralized
 // hook framework. Net change is +1 dcName equality across the codebase.
+// 2026-05-08: cardNameIncludes 93→94. Last Resort BEFORE_DEFEATED hook
+// in damage-pipeline-hooks.js calls cardNameIncludes(upgrades, 'Last
+// Resort') — same detection as the inline path it replaced, but the
+// inline check was inside the same file so the count stayed flat;
+// after migration the hook adds one new occurrence.
 export const DD_BASELINE = {
   dcName_equality: 60,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 93,
+  cardNameIncludes: 94,
 };
 // 2026-05-08: dcName_equality 58→59. Damage-pipeline hook for Fury
 // of Kashyyyk needs to detect the [Fury of Kashyyyk] CC attachment

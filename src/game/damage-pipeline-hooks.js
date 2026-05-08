@@ -197,6 +197,69 @@ BEFORE_DEFEATED_HOOKS.push({
 });
 
 /**
+ * Last Resort (Skirmish Upgrade attachment): "Deplete this card when
+ * a figure in this group has suffered Damage equal to its Health.
+ * Before that figure is defeated, roll 1 red die. Each figure and
+ * object on or adjacent to that figure suffers Damage equal to the
+ * Hit results."
+ *
+ * Detection: cardNameIncludes(playerAttachments, 'Last Resort') for
+ * the defender's player. Once-per-figure flag
+ * `game.lastResortTriggered[msgId]` prevents repeats.
+ *
+ * Returns preventDefeat=true; sets pendingLastResort. Handler in
+ * src/handlers/interrupts.js (handleLastResort) does the roll +
+ * splash + completeDeferredDefeat.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'last_resort',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.lastResortTriggered?.[opts.msgId]) return false;
+    const attKey = dcAttachmentsKey(opts.controllerPlayerNum);
+    const upgrades = game[attKey]?.[opts.msgId] || [];
+    return cardNameIncludes(upgrades, 'Last Resort');
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    game.lastResortTriggered = game.lastResortTriggered || {};
+    game.lastResortTriggered[opts.msgId] = true;
+    setPendingLastResort(game, {
+      gameId: game.gameId,
+      figureKey: opts.figureKey,
+      msgId: opts.msgId,
+      figIndex: opts.figIndex,
+      controllerPlayerNum: opts.controllerPlayerNum,
+      defenderPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      // Legacy fields used by handleLastResort's adjacency math:
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`last_resort_use_${game.gameId}_${opts.msgId}`).setLabel('Use Last Resort').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`last_resort_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> **Last Resort** — **${dcName}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`
+        : `**Last Resort** — **${dcName}** is about to be defeated! Deplete to roll 1 red die — adjacent figures suffer Hits as Damage.`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
  * Parting Shot (Hired Gun, Greedo): "When this figure is about to be
  * defeated, you may interrupt to perform an attack. Then, this figure
  * is defeated."
