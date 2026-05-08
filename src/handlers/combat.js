@@ -2737,10 +2737,10 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Loku Recon Token: Set Your Sights — Pierce 2 when attacking figure with recon token
+  // Loku Recon Token: Set Your Sights — Pierce 1 when attacking figure with recon token
   if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
-    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 2;
-    await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 2.');
+    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
+    await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 1.');
   }
   // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
   if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
