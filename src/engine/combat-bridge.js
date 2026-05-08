@@ -51,6 +51,7 @@ import {
   enqueueAttackerStep8Effects as _enqueueAttackerStep8Effects,
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
+import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
@@ -77,8 +78,7 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
 
   if (msgId) {
     // destruct 2026-05-08: route through centralized damage pipeline.
-    const { applyDamage } = await import('../game/damage-pipeline.js');
-    const { newHp, wasDefeated } = await applyDamage(game, {
+    const { newHp, wasDefeated } = await _applyDamage(game, {
       dcHealthState, logGameAction, client,
     }, {
       figureKey,
@@ -603,7 +603,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _cbMsgId = findDcMessageIdForFigure(game.gameId, _cbPn, _cbFk);
           if (!_cbMsgId) continue;
           const { figureIndex: _cbFigIdx } = parseFigureKey(_cbFk);
-          const { newHp: _cbNewHp, wasDefeated: _cbDied } = reduceHp(dcHealthState, game, _cbMsgId, _cbFigIdx, _crateBlastAmt, _cbPn);
+          const { newHp: _cbNewHp, wasDefeated: _cbDied } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: _cbFk, msgId: _cbMsgId, figIndex: _cbFigIdx,
+            amount: _crateBlastAmt, controllerPlayerNum: _cbPn,
+            attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+            source: 'Crate Blast', combat,
+          });
           const _cbName = dcNameFromFigureKey(_cbFk);
           await logGameAction(game, client, `\u{1F4A5} **Blast ${_crateBlastAmt}** \u2014 **${_cbName}** suffers ${_crateBlastAmt} damage.`, { phase: 'ROUND', icon: 'attack' });
           if (_cbDied) {
@@ -710,8 +715,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // the centralized damage pipeline so when-suffers-damage,
       // before-defeated, and when-defeated hooks fire here uniformly
       // with Blast/Cleave/strain/NPC damage paths.
-      const { applyDamage } = await import('../game/damage-pipeline.js');
-      const _mdResult = await applyDamage(game, {
+      const _mdResult = await _applyDamage(game, {
         dcHealthState, logGameAction, client,
       }, {
         figureKey: combat.target.figureKey,
@@ -844,8 +848,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           } else {
           game.figureConditions = game.figureConditions || {};
           game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-          // Strain = 1 direct HP damage (apply via health reduction)
-          const _sbResult = reduceHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+          // Strain = 1 direct HP damage. destruct 2026-05-08: route
+          // through centralized damage pipeline (when-damaged hooks
+          // fire here too).
+          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+            figureKey: combat.target.figureKey,
+            msgId: targetMsgId,
+            figIndex: targetFigIndex,
+            amount: 1,
+            controllerPlayerNum: defenderPlayerNum,
+            source: 'Stun Batons',
+            viaStrain: true,
+          });
           newCur = _sbResult.newHp;
           await logGameAction(game, client, `\u26A1 **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
           }
@@ -1697,7 +1711,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
         if (!blastMsgId) continue;
         const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
-        const { newHp: newBCur, wasDefeated: blastDefeated } = reduceHp(dcHealthState, game, blastMsgId, blastFigIndex, effectiveBlast, blastPlayerNum);
+        const { newHp: newBCur, wasDefeated: blastDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+          figureKey: blastFigureKey, msgId: blastMsgId, figIndex: blastFigIndex,
+          amount: effectiveBlast, controllerPlayerNum: blastPlayerNum,
+          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+          source: 'Blast', combat,
+        });
         const { dcList: blastDcList, idx: blastIdx } = lookupFigureDcIndex(game, blastPlayerNum, blastFigureKey);
         // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
         if (effectiveBlast >= 3 && newBCur > 0) {
