@@ -382,17 +382,23 @@
       ]
     },
     "development-facility": {
-      "terminals": [],
+      "terminals": [
+        "h7",
+        "k15"
+      ],
       "missionA": {
         "tokenTypes": [
           {
             "id": "0",
-            "label": "Panel",
+            "label": "Droid Prototype",
             "image": "Mission Token--Neutral GRAY.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "u20",
+            "o12"
+          ]
         },
         "launchPanels": []
       },
@@ -400,16 +406,27 @@
         "tokenTypes": [
           {
             "id": "0",
-            "label": "",
+            "label": "Weapon Prototype",
             "image": "Mission Token--Neutral GRAY.gif"
           }
         ],
         "positions": {
-          "0": []
+          "0": [
+            "g18",
+            "p16",
+            "r12"
+          ]
         },
-        "contraband": []
+        "contraband": [
+          "g18",
+          "p16",
+          "r12"
+        ]
       },
-      "doors": [],
+      "doors": [
+        ["g8", "h9"],
+        ["i7", "j8"]
+      ],
       "namedAreas": [
         {
           "name": "Area 1",
