@@ -1090,7 +1090,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _fdDiceCount = combat.attackDiceResults?.length || 0;
             if (_fdDiceCount > 0 && combat.attackerMsgId) {
               const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
-              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _fdAtkFigIdx, _fdDiceCount, attackerPlayerNum);
+              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+                figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _fdAtkFigIdx,
+                amount: _fdDiceCount, controllerPlayerNum: attackerPlayerNum, source: 'Force Deflection', combat,
+              });
               if (_fdAtkPrev > 0) {
                 _fdNeedsEmbedRefresh = true;
                 const _fdYodaDcName = dcNameFromFigureKey(_fdYodaFigKey);
@@ -1133,7 +1136,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             if (!hasFigureLineOfSight(_dfPathFp, _dfAtkFp, _dfMapSp, null)) continue;
             // Deal 1 Damage to the attacker
             const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
-            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = reduceHp(dcHealthState, game, combat.attackerMsgId, _dfAtkFigIdx, 1, attackerPlayerNum);
+            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+              figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _dfAtkFigIdx,
+              amount: 1, controllerPlayerNum: attackerPlayerNum, source: 'Distracting Fire', combat,
+            });
             if (_dfAtkPrev > 0) {
               _fdNeedsEmbedRefresh = true;
               await logGameAction(game, client, `**Distracting Fire** — **${_dfDcName}** has LOS to attacker **${combat.attackerDcName}**! Attacker suffers **1 Damage**. HP: ${_dfAtkPrev} \u2192 ${_dfAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
@@ -1684,7 +1690,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
-      reduceHp(dcHealthState, game, combat.attackerMsgId, combat.attackerFigureIndex ?? 0, combat.superchargeStrainAfterAttackCount || 0, combat.attackerPlayerNum);
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: combat.attackerFigureIndex ?? 0,
+        amount: combat.superchargeStrainAfterAttackCount || 0, controllerPlayerNum: combat.attackerPlayerNum,
+        source: 'Supercharge', viaStrain: true, combat,
+      });
     }
     // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack (before blast applies)
     let effectiveBlast = totalBlast;
