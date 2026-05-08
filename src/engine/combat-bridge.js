@@ -286,6 +286,28 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     combat.queryBonusHitApplied = false;
     await logGameAction(game, client, '**Query** — +1 Hit removed (defender became Bleeding).', { phase: 'ROUND', icon: 'attack' });
   }
+  // Line of Fire (Anchorhead B): crateBlockSink — when an attack on a
+  // small figure carrying a crate is declared, the defender may have
+  // the crate suffer up to maxBlockPerAttack Block; +X Damage applied to
+  // the attack results, where X = block sucked. Per destruct 2026-05-08.
+  // PARTIAL: pendingBlockSink stub set but interactive defender prompt
+  // is deferred; for now the rule is recognized + telemetry posts a
+  // notice, with `crateBlockSinkSkipped: true` on combat so a future
+  // pre-resolution prompt can wedge in.
+  if (!combat.crateBlockSinkResolved) {
+    const _cbsRule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+    const _cbsTargetFk = combat.target?.figureKey;
+    if (_cbsRule && _cbsTargetFk && game.figureContraband?.[_cbsTargetFk]) {
+      const _cbsRawSize = ctx?.getFigureSize ? ctx.getFigureSize(dcNameFromFigureKey(_cbsTargetFk)) : null;
+      const _cbsSize = game.figureOrientations?.[_cbsTargetFk] || _cbsRawSize;
+      const _cbsIsSmall = Array.isArray(_cbsSize) ? (_cbsSize[0] === 1 && _cbsSize[1] === 1) : true;
+      if (_cbsIsSmall) {
+        combat.crateBlockSinkPending = true;
+        await logGameAction(game, client, `📦 **Line of Fire** — defender carries a crate; block-sink prompt is pending implementation (max ${_cbsRule.maxBlockPerAttack || 3} block to crate, +X damage to attack). Resolved as 0 block this attack.`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+    combat.crateBlockSinkResolved = true;
+  }
   let { hit, damage, resultText } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;

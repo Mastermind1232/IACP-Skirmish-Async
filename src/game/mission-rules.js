@@ -84,6 +84,28 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
 }
 
 /**
+ * Line of Fire (Anchorhead Cantina Bar B) rule readers. The actual dispatch
+ * happens in:
+ *   • src/handlers/movement.js — extractionPointVp on figure entry
+ *   • src/engine/combat-bridge.js — crateBlockSink during attack resolution
+ *   • src/handlers/dc-play-area.js — smallFigureCarryNoAttack on dc_attack_
+ * These tiny readers expose the rule shape from a centrally-tested file so
+ * the dispatch-parity test can recognize the keys, and consumers can opt in
+ * to data-driven access without re-walking the rules tree.
+ *
+ * @param {object} game
+ * @returns {{ extractionPointVp: ?{vpBase:number,vpPenaltyPerBlockSuffered:number}, crateBlockSink: ?{maxBlockPerAttack:number,healthPerCrate:number}, smallFigureCarryNoAttack: boolean }}
+ */
+export function getLineOfFireRules(game) {
+  const persistent = game?.selectedMission?.rules?.persistent;
+  return {
+    extractionPointVp: persistent?.extractionPointVp || null,
+    crateBlockSink: persistent?.crateBlockSink || null,
+    smallFigureCarryNoAttack: persistent?.smallFigureCarryNoAttack === true,
+  };
+}
+
+/**
  * Run end-of-round rules for the given mission variant.
  * @param {object} game - Game state
  * @param {string} mapId - Selected map id

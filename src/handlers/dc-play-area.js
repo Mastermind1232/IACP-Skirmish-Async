@@ -1897,6 +1897,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+    // Line of Fire (Anchorhead B): a small figure carrying a crate cannot
+    // attack. Per persistent rule smallFigureCarryNoAttack.
+    const _lofRule = (game?.selectedMission?.rules?.persistent?.smallFigureCarryNoAttack === true)
+      || (game?.selectedMap?.id === 'anchorhead-cantina-bar' && game?.selectedMission?.variant === 'b');
+    if (_lofRule && game.figureContraband?.[figureKey]) {
+      // Resolve size via ctx.getFigureSize + figureOrientations override.
+      const _lofRawSize = ctx.getFigureSize ? ctx.getFigureSize(meta.dcName) : null;
+      const _lofSize = game.figureOrientations?.[figureKey] || _lofRawSize;
+      const _lofIsSmall = Array.isArray(_lofSize) ? (_lofSize[0] === 1 && _lofSize[1] === 1) : true;
+      if (_lofIsSmall) {
+        await interaction.followUp({ content: '**Line of Fire** — A small figure carrying a crate cannot attack.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+    }
     // Stunned figures cannot Attack
     const attackFigureConds = game.figureConditions?.[figureKey] || [];
     if (attackFigureConds.includes('Stun')) {

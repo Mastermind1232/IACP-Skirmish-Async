@@ -233,10 +233,26 @@
       "b": {
         "name": "Line of Fire",
         "tokenLabel": "Crate",
+        "interactLabel": "Retrieve Crate",
+        "mechanics": {
+          "type": "carry",
+          "maxCarry": 1
+        },
         "imagePath": "vassal_extracted/images/mission-cards/Anchorhead Bar-B-Line of Fire.jpg",
         "setup": "",
         "persistent": "A figure can retrieve a crate. Each figure can carry only 1 crate. A small figure carrying a crate cannot attack.\n\nCrates have 5 Health. When an attack targeting a small figure is declared, that figure may choose for a crate it is carrying to suffer up to 3 Block. Then, apply +X Damage to the results, where X is the Block the crate just suffered.\n\nWhen a figure carrying a crate enters the extraction point, discard that crate and that figure scores 10 VPs minus 2 VPs for each Block that crate has suffered.",
         "rules": {
+          "persistent": {
+            "smallFigureCarryNoAttack": true,
+            "crateBlockSink": {
+              "maxBlockPerAttack": 3,
+              "healthPerCrate": 5
+            },
+            "extractionPointVp": {
+              "vpBase": 10,
+              "vpPenaltyPerBlockSuffered": 2
+            }
+          },
           "startOfRound": {},
           "endOfRound": {}
         }

@@ -827,6 +827,44 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   // Track that this figure has moved (used by Tripod, etc.)
   if (!game.figureMoved) game.figureMoved = {};
   game.figureMoved[figureKey] = true;
+  // Line of Fire (Anchorhead B): extractionPointVp — when a figure
+  // carrying a crate enters the extraction point, discard 1 crate and
+  // score (vpBase − vpPenaltyPerBlockSuffered × blockSuffered) VP.
+  // Per destruct 2026-05-08. Coord sourced from
+  // game.selectedMission.rules.persistent.extractionPointCoord (or
+  // map-tokens), which is null until the IACP card layout lands.
+  try {
+    const _lofExt = game?.selectedMission?.rules?.persistent?.extractionPointVp;
+    const _lofExtCoord = game?.selectedMission?.rules?.persistent?.extractionPointCoord
+      || ctx?.getMapTokensData?.()[mapId]?.extractionPoint
+      || null;
+    if (_lofExt && _lofExtCoord && game.figureContraband?.[figureKey]) {
+      const _lofEnterCoord = String(newTopLeft).toLowerCase();
+      const _lofEpCoord = String(_lofExtCoord).toLowerCase();
+      if (_lofEnterCoord === _lofEpCoord) {
+        const _lofBlocks = game.lineOfFireCrateBlock?.[figureKey] || [];
+        const _lofBlockSuffered = _lofBlocks.length > 0 ? (_lofBlocks[0] || 0) : 0;
+        const _lofVp = Math.max(0, (_lofExt.vpBase || 10) - (_lofExt.vpPenaltyPerBlockSuffered || 2) * _lofBlockSuffered);
+        if (typeof game.figureContraband[figureKey] === 'number') {
+          game.figureContraband[figureKey] -= 1;
+          if (game.figureContraband[figureKey] <= 0) delete game.figureContraband[figureKey];
+        } else {
+          delete game.figureContraband[figureKey];
+        }
+        if (Array.isArray(game.lineOfFireCrateBlock?.[figureKey])) {
+          game.lineOfFireCrateBlock[figureKey].shift();
+          if (game.lineOfFireCrateBlock[figureKey].length === 0) delete game.lineOfFireCrateBlock[figureKey];
+        }
+        const _lofAwardVp = ctx?.awardObjectiveVp || (await import('../game/vp-helpers.js')).awardObjectiveVp;
+        if (_lofVp > 0 && typeof _lofAwardVp === 'function') {
+          _lofAwardVp(game, playerNum, _lofVp);
+        }
+        if (typeof logGameAction === 'function') {
+          await logGameAction(game, client, `📦 **Line of Fire** — **${meta.displayName || meta.dcName}** delivered a crate to the extraction point at **${_lofEpCoord.toUpperCase()}** (block suffered: ${_lofBlockSuffered}). +**${_lofVp} VP**.`, { phase: 'ROUND', icon: 'round' });
+        }
+      }
+    }
+  } catch (_lofErr) { /* fail-open */ }
   // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session)
   if (game.overrunThisActivation?.[msgId]) {
     const hostilePlayerNum = opponentPlayerNum(playerNum);

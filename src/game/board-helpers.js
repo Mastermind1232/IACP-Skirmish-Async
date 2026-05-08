@@ -281,19 +281,26 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
 
   if (interactLabel && mech?.type === 'carry') {
     const missionSide = variant === 'a' ? 'missionA' : 'missionB';
-    // Per destruct 2026-05-07: no per-figure carry cap on this or most
-    // missions. Always offer retrieve when adjacent/on a token (or on a
-    // dropped-token space). Earlier "alreadyCarrying" gate removed.
-    let eligible = isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide);
-    // CRR RTK-002: dropped-on-defeat tokens are also retrievable.
-    if (!eligible) {
-      const dropped = game.droppedContrabandSpaces || [];
-      if (dropped.length) {
-        const droppedSet = toLowerSet(dropped);
-        eligible = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet).length > 0;
+    // Per destruct 2026-05-07: no per-figure carry cap on most missions.
+    // EXCEPT when the mission card explicitly states a cap via
+    // mechanics.maxCarry — e.g. Line of Fire (Anchorhead B): "Each figure
+    // can carry only 1 crate." Apply the cap only when set.
+    const _maxCarry = (typeof mech?.maxCarry === 'number' && mech.maxCarry > 0) ? mech.maxCarry : Infinity;
+    const _curCarry = typeof game.figureContraband?.[figureKey] === 'number'
+      ? game.figureContraband[figureKey]
+      : (game.figureContraband?.[figureKey] ? 1 : 0);
+    if (_curCarry < _maxCarry) {
+      let eligible = isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide);
+      // CRR RTK-002: dropped-on-defeat tokens are also retrievable.
+      if (!eligible) {
+        const dropped = game.droppedContrabandSpaces || [];
+        if (dropped.length) {
+          const droppedSet = toLowerSet(dropped);
+          eligible = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet).length > 0;
+        }
       }
+      if (eligible) options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
     }
-    if (eligible) options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
   }
 
   if (interactLabel && mech?.type === 'flip') {
