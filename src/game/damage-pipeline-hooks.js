@@ -36,17 +36,16 @@ import {
   BEFORE_DEFEATED_HOOKS,
   WHEN_DEFEATED_HOOKS,
 } from './damage-pipeline.js';
-import { getDcList, opponentPlayerNum, vpKey } from './player-helpers.js';
+import { getDcList, getDcMessageIds, opponentPlayerNum, vpKey, getActivatedDcIndices, dcAttachmentsKey } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { getDcEffects, getDcKeywords, getMapData } from '../data-loader.js';
-import { applyCondition, isConditionImmune } from './conditions.js';
+import { getDcEffects, getDcKeywords, getMapData, isDcUnique } from '../data-loader.js';
+import { applyCondition, isConditionImmune, areConditionEffectsSuppressed } from './conditions.js';
 import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
-import { isDcUnique } from '../data-loader.js';
-import { setPendingCelebration, setPendingPartingShot } from './interrupts.js';
-import { areConditionEffectsSuppressed } from './conditions.js';
+import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort } from './interrupts.js';
+import { cardNameIncludes } from './card-names.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -103,6 +102,99 @@ WHEN_DAMAGED_HOOKS.push({
 });
 
 // ── BEFORE_DEFEATED ────────────────────────────────────────────────────────
+
+/**
+ * You Will Not Deny Me (Fifth Brother CC effect): when active for the
+ * defender's player, Fifth Brother cannot be defeated. Per destruct
+ * 2026-05-08: YWNDM keeps the figure at HP=0 (no heal), defeat
+ * suppressed until the falloff condition triggers (e.g. round end
+ * or hostile-defeated heal). Auto-applied; no prompt.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'you_will_not_deny_me',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if (game.youWillNotDenyMeActive?.playerNum !== opts.controllerPlayerNum) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    return !!dcName && dcName.toLowerCase().includes('fifth');
+  },
+  apply: (game, opts, ctx) => {
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `**You Will Not Deny Me** — Fifth Brother cannot be defeated! Damage capped at health.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Sustained by Rage (Krrsantan): cannot be defeated if has not
+ * activated this round. Per CRR + destruct: HP stays at 0, defeat
+ * suppressed until Krrsantan activates (then SbR no longer applies).
+ * Auto-applied; no prompt.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'sustained_by_rage',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    if (!(eff?.specialAbilityIds || []).includes('sustained_by_rage')) return false;
+    const dcMessageIds = getDcMessageIds(game, opts.controllerPlayerNum) || [];
+    const idx = dcMessageIds.indexOf(opts.msgId);
+    if (idx < 0) return false;
+    const activated = getActivatedDcIndices(game, opts.controllerPlayerNum) || [];
+    return !activated.includes(idx);
+  },
+  apply: (game, opts, ctx) => {
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `**Sustained by Rage** — **${dcName}** cannot be defeated (has not activated this round)! Damage capped at health.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Second Chance (CC attachment): when this DC is at HP=0, recover 2
+ * Damage and discard the card. State carrier:
+ * `game.secondChanceDcMsgId[msgId] === playerNum`. Auto-applied; the
+ * heal restores HP > 0 so completeDeferredDefeat / downstream defeat
+ * checks see the figure is alive.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'second_chance',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.msgId || !opts.controllerPlayerNum) return false;
+    return game.secondChanceDcMsgId?.[opts.msgId] === opts.controllerPlayerNum;
+  },
+  apply: (game, opts, ctx) => {
+    if (!ctx?.dcHealthState) return { preventDefeat: true };
+    const { newHp } = healHp(ctx.dcHealthState, game, opts.msgId, opts.figIndex, 2, opts.controllerPlayerNum);
+    delete game.secondChanceDcMsgId[opts.msgId];
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `**Second Chance** triggered! Recovered 2 Damage (HP → ${newHp}). Card discarded.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+    return { preventDefeat: true };
+  },
+});
 
 /**
  * Parting Shot (Hired Gun, Greedo): "When this figure is about to be
