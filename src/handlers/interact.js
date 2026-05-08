@@ -116,7 +116,13 @@ export async function handleInteractChoice(interaction, ctx) {
   let logMsg = null;
   if (optionId === 'retrieve_contraband') {
     game.figureContraband = game.figureContraband || {};
-    game.figureContraband[figureKey] = true;
+    // Per destruct 2026-05-07: figures may carry multiple contraband
+    // tokens (no per-figure cap). Track as a count so each token can be
+    // discarded / scored individually.
+    const _prevCount = typeof game.figureContraband[figureKey] === 'number'
+      ? game.figureContraband[figureKey]
+      : (game.figureContraband[figureKey] ? 1 : 0);
+    game.figureContraband[figureKey] = _prevCount + 1;
     // RTK-002: if picking up a dropped-on-defeat token, consume one dropped-space entry
     // that the figure is adjacent to / on. Static spawn-coord tokens are unaffected.
     if (game.droppedContrabandSpaces?.length) {

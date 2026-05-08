@@ -281,19 +281,19 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
 
   if (interactLabel && mech?.type === 'carry') {
     const missionSide = variant === 'a' ? 'missionA' : 'missionB';
-    const alreadyCarrying = !!game.figureContraband?.[figureKey];
-    if (!alreadyCarrying) {
-      let eligible = isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide);
-      // CRR RTK-002: dropped-on-defeat tokens are also retrievable.
-      if (!eligible) {
-        const dropped = game.droppedContrabandSpaces || [];
-        if (dropped.length) {
-          const droppedSet = toLowerSet(dropped);
-          eligible = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet).length > 0;
-        }
+    // Per destruct 2026-05-07: no per-figure carry cap on this or most
+    // missions. Always offer retrieve when adjacent/on a token (or on a
+    // dropped-token space). Earlier "alreadyCarrying" gate removed.
+    let eligible = isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, mapId, missionSide);
+    // CRR RTK-002: dropped-on-defeat tokens are also retrievable.
+    if (!eligible) {
+      const dropped = game.droppedContrabandSpaces || [];
+      if (dropped.length) {
+        const droppedSet = toLowerSet(dropped);
+        eligible = getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, droppedSet).length > 0;
       }
-      if (eligible) options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
     }
+    if (eligible) options.push({ id: 'retrieve_contraband', label: interactLabel, missionSpecific: true });
   }
 
   if (interactLabel && mech?.type === 'flip') {

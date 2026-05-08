@@ -4103,9 +4103,14 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   const pending = game.pendingBombDrop[msgId];
   const chosenSpace = String(space).toLowerCase();
 
-  // Discard the explosive
+  // Discard 1 explosive (per Bomb Drop card text). Figures may carry
+  // multiple — decrement count, only fully delete the entry at zero.
   if (game.figureContraband?.[pending.figureKey]) {
-    delete game.figureContraband[pending.figureKey];
+    const _bdCur = typeof game.figureContraband[pending.figureKey] === 'number'
+      ? game.figureContraband[pending.figureKey]
+      : 1;
+    if (_bdCur <= 1) delete game.figureContraband[pending.figureKey];
+    else game.figureContraband[pending.figureKey] = _bdCur - 1;
   }
 
   // Find all spaces on/adjacent to chosen space

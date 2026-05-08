@@ -99,6 +99,8 @@ export async function processFigureDefeat(game, opts, deps) {
   // 0. Capture position + carry state BEFORE removing (needed for RTK-002 drop).
   const lastPos = game.figurePositions?.[defeatedPlayerNum]?.[figureKey] || null;
   const wasCarryingContraband = !!(game.figureContraband?.[figureKey]);
+  const _carryRaw = game.figureContraband?.[figureKey];
+  const droppedTokenCount = typeof _carryRaw === 'number' ? _carryRaw : (wasCarryingContraband ? 1 : 0);
 
   // 1. Remove position + conditions + device tokens
   removeFigurePosition(game, defeatedPlayerNum, figureKey);
@@ -106,12 +108,15 @@ export async function processFigureDefeat(game, opts, deps) {
   // 1b. CRR RTK-002: carried tokens drop in the defeated figure's space.
   //     Mos Eisley Outskirts B (Smuggled Goods) is the current skirmish
   //     substrate; gated on mission mechanics so non-carry missions are unaffected.
+  // Per destruct 2026-05-07: figures may carry multiple — push one space
+  // entry per dropped token so each can be picked up individually.
   if (wasCarryingContraband) {
     const mech = game?.selectedMission?.mechanics;
     if (mech?.type === 'carry' && lastPos) {
       game.droppedContrabandSpaces = game.droppedContrabandSpaces || [];
       const norm = String(lastPos).toLowerCase();
-      if (!game.droppedContrabandSpaces.includes(norm)) {
+      const _dropN = droppedTokenCount > 0 ? droppedTokenCount : 1;
+      for (let i = 0; i < _dropN; i++) {
         game.droppedContrabandSpaces.push(norm);
       }
     }

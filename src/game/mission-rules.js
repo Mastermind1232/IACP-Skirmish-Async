@@ -119,28 +119,35 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
   if (rules.vpPerContrabandInDeploymentZone && game.figureContraband) {
     const { vp, vpMessage } = rules.vpPerContrabandInDeploymentZone;
     if (typeof vp === 'number') {
-      const vpPerFigure = vp;
+      const vpPerToken = vp;
       const { isFigureInDeploymentZone } = ctx;
       for (const pn of [1, 2]) {
-        let scored = 0;
+        let tokensScored = 0;
+        let figuresScored = 0;
         for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
           if (!carrying) continue;
           const poses = game.figurePositions?.[pn] || {};
           if (!(figureKey in poses)) continue;
           if (!isFigureInDeploymentZone(game, pn, figureKey, mapId)) continue;
+          // Per destruct 2026-05-07: figures may carry multiple tokens.
+          // Score VP per token, then drop the carrier's stack to zero.
+          const carryCount = typeof carrying === 'number' ? carrying : 1;
+          const vpEarned = vpPerToken * carryCount;
           const vpState = game[`player${pn}VP`] || { total: 0, kills: 0, objectives: 0 };
-          vpState.total = (vpState.total || 0) + vpPerFigure;
-          vpState.objectives = (vpState.objectives || 0) + vpPerFigure;
+          vpState.total = (vpState.total || 0) + vpEarned;
+          vpState.objectives = (vpState.objectives || 0) + vpEarned;
           game[`player${pn}VP`] = vpState;
           delete game.figureContraband[figureKey];
-          scored++;
+          tokensScored += carryCount;
+          figuresScored++;
         }
-        if (scored > 0) {
+        if (tokensScored > 0) {
           const pid = getPlayerId(game, pn);
+          const totalVp = vpPerToken * tokensScored;
           const msg = vpMessage
-            ? vpMessage.replace('{vp}', String(vpPerFigure * scored)).replace('{count}', String(scored))
-            : `${scored} figure(s) scoring ${vpPerFigure} VP each (mission objective)`;
-          await logGameAction(game, client, `<@${pid}> gained **${vpPerFigure * scored} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+            ? vpMessage.replace('{vp}', String(totalVp)).replace('{count}', String(tokensScored))
+            : `${tokensScored} contraband token(s) across ${figuresScored} figure(s) — ${vpPerToken} VP each`;
+          await logGameAction(game, client, `<@${pid}> gained **${totalVp} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
           await checkWinConditions(game, client);
           if (game.ended) return { gameEnded: true };
         }
@@ -185,24 +192,25 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
   }
 
   // setTemporaryVpBuffForControllingCell: per CRR "is considered to have N
-  // additional VP" mechanic (Sabacc Standoff). Unlike vpPerTokenForControllingCell
-  // (permanent award), this stores a temporary buff that's added to the
-  // player's effective VP for win-condition + display purposes, and gets
-  // overwritten the next time this rule fires (= end of next round).
-  // Token count is consumed (reset to 0) just like the permanent variant.
+  // additional VP" mechanic (Sabacc Standoff). Per destruct 2026-05-07:
+  // tokens accumulate next to the Cantina across rounds (e.g. 3 + 4 + 2 = 9
+  // by round 3). The buff is recomputed each EoR from the running total —
+  // it is "until end of next round" for the *current controller's claim*,
+  // not for the tokens themselves (tokens persist). If a different player
+  // controls the Cantina next round they can score against the same pool.
   if (rules.setTemporaryVpBuffForControllingCell && mapId) {
     const { controlCell, vpPerToken, tokenCountKey, buffStateKey, vpMessage: tokenVpMsg } = rules.setTemporaryVpBuffForControllingCell;
     if (controlCell && tokenCountKey && buffStateKey && typeof vpPerToken === 'number') {
-      // CRR: "Until end of next round" — at the moment this rule fires
-      // (end of next round), the OLD buff expires. Reset both players'
-      // buff slots, then set fresh.
+      // Reset both players' buff slots — only the current controller's
+      // buff applies during the next round.
       game[buffStateKey] = { p1: 0, p2: 0 };
       const controller = getSpaceController(game, mapId, controlCell);
       const count = typeof game[tokenCountKey] === 'number' ? game[tokenCountKey] : 0;
       if (controller && count > 0) {
         const vpVal = vpPerToken * count;
         game[buffStateKey][`p${controller}`] = vpVal;
-        game[tokenCountKey] = 0;
+        // Tokens are NOT consumed — they persist next to the Cantina and
+        // accumulate further as more rounds add to the pool.
         const pid = getPlayerId(game, controller);
         const ctrlMsg = tokenVpMsg
           ? tokenVpMsg.replace('{vp}', String(vpVal)).replace('{count}', String(count))
@@ -211,9 +219,9 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
         await checkWinConditions(game, client);
         if (game.ended) return { gameEnded: true };
       } else if (controller === null && count > 0) {
-        // Tokens still on table but no one controls — log and consume.
-        game[tokenCountKey] = 0;
-        await logGameAction(game, client, `🎯 **[Mission VP] Sabacc Standoff** — no one controlled the Cantina; ${count} token${count !== 1 ? 's' : ''} discarded.`, { phase: 'ROUND', icon: 'round' });
+        // Tokens still on table but no one controls — log and keep them in
+        // the pool for next round.
+        await logGameAction(game, client, `🎯 **[Mission VP] Sabacc Standoff** — no one controls the Cantina; **${count}** token${count !== 1 ? 's' : ''} remain in the pool for next round.`, { phase: 'ROUND', icon: 'round' });
       }
     }
   }
@@ -434,21 +442,26 @@ export async function runEndOfRoundRules(game, mapId, variant, rules, ctx) {
           const oppPn = 3 - pn;
           const oppZoneColor = oppPn === initPn ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
           const oppZoneSpaces = new Set((oppZoneData[oppZoneColor] || []).map(s => normalizeCoord(s)));
-          let scored = 0;
+          let tokensScored = 0;
           for (const [figureKey, carrying] of Object.entries(game.figureContraband)) {
             if (!carrying) continue;
             const poses = game.figurePositions?.[pn] || {};
             if (!(figureKey in poses)) continue;
             const figCoord = normalizeCoord(poses[figureKey]);
             if (!oppZoneSpaces.has(figCoord)) continue;
-            scored++;
+            // Per destruct 2026-05-07: multi-carry — discard ALL carried
+            // explosives on this figure and score VP per discarded.
+            const carryCount = typeof carrying === 'number' ? carrying : 1;
+            tokensScored += carryCount;
             delete game.figureContraband[figureKey];
           }
-          if (scored > 0) {
-            const vpVal = vp * scored;
+          if (tokensScored > 0) {
+            const vpVal = vp * tokensScored;
             const pid = getPlayerId(game, pn);
             awardObjectiveVp(game, pn, vpVal);
-            const msg = vpMessage || `explosive(s) discarded in opponent's deployment zone (${vp} VP each)`;
+            const msg = vpMessage
+              ? vpMessage.replace('{vp}', String(vpVal)).replace('{count}', String(tokensScored))
+              : `${tokensScored} explosive(s) discarded in opponent's deployment zone (${vp} VP each)`;
             await logGameAction(game, client, `<@${pid}> gained **${vpVal} VP** — ${msg}.`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
             await checkWinConditions(game, client);
             if (game.ended) return { gameEnded: true };
@@ -479,10 +492,15 @@ export async function runStartOfRoundRules(game, mapId, variant, rules, ctx = {}
     if (gameKey) {
       const initId = game.initiativePlayerId;
       const hand = initId === game.player1Id ? (game.player1CcHand || []) : (game.player2CcHand || []);
-      game[gameKey] = hand.length;
+      // Per destruct 2026-05-07: tokens accumulate next to the Cantina
+      // across rounds (round 1 places 3, round 2 places 4, etc → total 7,
+      // and so on). Add to the running count rather than overwriting.
+      const prior = typeof game[gameKey] === 'number' ? game[gameKey] : 0;
+      const placed = hand.length;
+      game[gameKey] = prior + placed;
       if (logGameAction && client) {
         const missionName = game.selectedMission?.name || 'Mission Effect';
-        await logGameAction(game, client, `🎯 **[Mission VP] ${missionName}** — Cantina holds **${hand.length} VP** this round (= initiative player's hand size). Control the cantina to score them at end of round.`, { phase: 'ROUND', icon: 'round' });
+        await logGameAction(game, client, `🎯 **[Mission VP] ${missionName}** — initiative player places **${placed}** token${placed !== 1 ? 's' : ''} next to the Cantina (total now **${game[gameKey]}**). Control the Cantina at end of round to claim +1 VP per token.`, { phase: 'ROUND', icon: 'round' });
       }
     }
   }
