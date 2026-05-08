@@ -2508,11 +2508,34 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Dead Precise (Ko-Tun Feralo): +2 Accuracy if didn't move this activation
-  if (hasDeadPreciseAbility(atkSpecialIds) && deadPreciseBonusApplies(attackerFigureKey, game.figureMoved)) {
-    const bump = applyDeadPreciseBonus({ bonusAccuracy: game.pendingCombat.bonusAccuracy });
-    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
-    await thread.send('**Dead Precise** — Has not moved this activation: +2 Accuracy.');
+  // Dead Precise (Ko-Tun Feralo) — REWRITTEN per destruct 2026-05-08
+  // canonical card: "When a friendly figure within 2 spaces spends a
+  // Power Token while attacking, apply Pierce 1 to the attack results."
+  // Aura passive: triggers when an attacker (any friendly within 2 of
+  // Ko-Tun) spends a Power Token during this attack. The previous
+  // movement-gated +2 Accuracy attacker self-buff was wrong — that
+  // text doesn't appear on the card.
+  if (game.pendingCombat.attackerSpentPowerToken && !game.pendingCombat.deadPreciseApplied) {
+    const _dpAtkPos = game.pendingCombat.attackerFigureKey
+      ? (game.figurePositions?.[attackerPlayerNum]?.[game.pendingCombat.attackerFigureKey])
+      : null;
+    const _dpMapId = game.selectedMap?.id;
+    const _dpMs = _dpMapId ? getMapData?.(_dpMapId) : null;
+    if (_dpAtkPos && _dpMs) {
+      let _dpFound = false;
+      for (const [_dpFk, _dpPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
+        if (!_dpPos) continue;
+        if (dcNameFromFigureKey(_dpFk) !== 'Ko-Tun Feralo') continue;
+        if (!isWithinSpaces(_dpMs, String(_dpPos).toLowerCase(), String(_dpAtkPos).toLowerCase(), 2)) continue;
+        _dpFound = true;
+        break;
+      }
+      if (_dpFound) {
+        game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
+        game.pendingCombat.deadPreciseApplied = true;
+        await thread.send('**Dead Precise** (Ko-Tun within 2) — attacker spent a Power Token: +1 Pierce.');
+      }
+    }
   }
 
   // Spray Fire (Heavy Stormtrooper Elite): -3 Accuracy, +1 Surge (always beneficial at melee range)
