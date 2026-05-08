@@ -5346,7 +5346,7 @@
       "affiliation": "Rebel"
     },
     "Riot Trooper (Elite)": {
-      "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Damage, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block Tokens, gain 1 Block Token.\n\nProfessional: While attacking, you may reroll 1 attack die.",
+      "abilityText": "Weaken (passive): your attacks apply Weakened to the target.\n\nStun Batons: After you resolve an attack, if the target suffered any Damage, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block Tokens, gain 1 Block Token.\n\nProfessional: While attacking, you may reroll 1 attack die.",
       "keywords": [
         "TROOPER",
         "BRAWLER",
@@ -5372,6 +5372,7 @@
         "damage 2"
       ],
       "passives": [
+        "Weaken",
         "Stun Batons",
         "Shield",
         "Professional"
