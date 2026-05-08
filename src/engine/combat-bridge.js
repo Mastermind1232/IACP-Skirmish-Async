@@ -2215,18 +2215,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
-  // Stalk Prey: attacker gains +2 MP and +1 Damage Token after attack resolves
+  // Stalk Prey — migrated to step-8 button window (slice 2b, destruct
+  // 2026-05-08). fireStalkPrey reads combat.surgeStalkPrey flag and
+  // clears it; enqueue probe is in enqueueAttackerPerDcEffects.
   if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
-    game.movementBank = game.movementBank || {};
-    const spBank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
-    spBank.total = (spBank.total ?? 0) + 2;
-    spBank.remaining = (spBank.remaining ?? 0) + 2;
-    game.movementBank[combat.attackerMsgId] = spBank;
-    grantPowerTokens(game, combat.attackerFigureKey, 'Damage', 1);
-    await logGameAction(game, client, `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Damage Token`, { phase: 'ROUND', icon: 'card' });
-    await deps.ensureMovementBankMessage(game, combat.attackerMsgId, client);
     embedRefreshMsgIds.add(combat.attackerMsgId);
-    delete combat.surgeStalkPrey;
   }
   // Squad Command (Kayn Somos surge): Focus an adjacent friendly TROOPER.
   // Per destruct 2026-05-08: ACS (Advanced Com Systems) extends "adjacent"

@@ -142,6 +142,15 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
+  // Stalk Prey (CC, attacker side): triggered by combat.surgeStalkPrey
+  // set when the CC was played. Hit-gated.
+  if (combat.surgeStalkPrey && combat._step7Hit && combat.attackerMsgId && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'stalk_prey',
+      label: 'Stalk Prey: +2 MP + 1 Damage Token',
+    });
+  }
 }
 
 /**

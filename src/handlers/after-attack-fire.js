@@ -19,7 +19,7 @@
  */
 import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
-import { grantMovementBank } from '../game/index.js';
+import { grantMovementBank, grantPowerTokens } from '../game/index.js';
 
 /**
  * Recover N — heals the attacker by N HP. Applies even on a miss
@@ -59,6 +59,31 @@ async function fireLegHydraulics(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Stalk Prey (Bossk CC) — attacker after-resolve: +2 MP + 1 Damage
+ * Token. Triggered by combat.surgeStalkPrey flag set when the CC
+ * was played; this fire handler clears the flag.
+ */
+async function fireStalkPrey(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, ensureMovementBankMessage } = ctx;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  game.movementBank = game.movementBank || {};
+  const bank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
+  bank.total = (bank.total ?? 0) + 2;
+  bank.remaining = (bank.remaining ?? 0) + 2;
+  game.movementBank[combat.attackerMsgId] = bank;
+  grantPowerTokens(game, combat.attackerFigureKey, 'Damage', 1);
+  delete combat.surgeStalkPrey;
+  if (logGameAction && thread) {
+    await logGameAction(game, client,
+      `**Stalk Prey** — **${combat.attackerDcName}** gained +2 MP and +1 Damage Token`,
+      { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+  if (ensureMovementBankMessage) {
+    await ensureMovementBankMessage(game, combat.attackerMsgId, client).catch(() => {});
+  }
+}
+
+/**
  * Slippery (Alliance Smuggler E/R) — defender after-resolve: grant
  * 2 MP to the defender's figure. Inline auto-apply removed; the
  * defender clicks a button in their post-resolve window to fire it.
@@ -89,6 +114,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'leg_hydraulics':
       await fireLegHydraulics(thread, game, combat, effect, ctx);
+      return;
+    case 'stalk_prey':
+      await fireStalkPrey(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline
