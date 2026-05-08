@@ -39,9 +39,16 @@ describe('PROBE-PD-PT-005: at most one power-token spend per figure per attack',
     // Per CRR p.50, the token phase now runs pre-roll. After both sides finish:
     //   - pre-roll path → postRollDiceButton (post the Roll Combat Dice button)
     //   - post-roll path (legacy / safety) → proceedAfterTokens (passives + surge)
+    // Per CRR p.50 + destruct 2026-05-08 on-declare merge: function may
+    // open with a short-circuit branch when combat.onDeclareTokenContext
+    // is set (per-player on_declare window keeps control until Ready),
+    // BUT the legacy path must still: clear tokenPhase, promote attacker
+    // → defender (and ONLY in that direction), then branch on attackRoll
+    // to either postRollDiceButton (pre-roll) or proceedAfterTokens
+    // (post-roll). The match below is anchored on the legacy block only.
     assert.match(H_CB_SRC,
-      /async function advanceTokenPhase\(thread, game, combat, completedRole, ctx\) \{\s*\n\s*combat\.tokenPhase = null;\s*\n\s*if \(completedRole === 'attacker'\) \{[\s\S]*?combat\.tokenPhase = 'defender';[\s\S]*?\}\s*\n\s*if \(!combat\.attackRoll\) \{\s*\n\s*await postRollDiceButton\(thread, game, combat, ctx\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*await proceedAfterTokens\(thread, game, combat, ctx\);\s*\n\}/,
-      'advanceTokenPhase must branch on attackRoll: pre-roll → postRollDiceButton, post-roll → proceedAfterTokens — CRR-PT-005');
+      /combat\.tokenPhase = null;\s*\n\s*if \(completedRole === 'attacker'\) \{[\s\S]*?combat\.tokenPhase = 'defender';[\s\S]*?\}\s*\n\s*if \(!combat\.attackRoll\) \{\s*\n\s*await postRollDiceButton\(thread, game, combat, ctx\);\s*\n\s*return;\s*\n\s*\}\s*\n\s*await proceedAfterTokens\(thread, game, combat, ctx\);\s*\n\}/,
+      'advanceTokenPhase legacy path must branch on attackRoll: pre-roll → postRollDiceButton, post-roll → proceedAfterTokens — CRR-PT-005');
   });
 
   it('005b: source — there is exactly one promotion to defender inside advanceTokenPhase (no loop-back to attacker)', () => {

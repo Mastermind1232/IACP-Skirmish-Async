@@ -295,7 +295,11 @@ const COMBAT_GATE_LABELS = {
  * Destruct's UX feedback says the bot should just proceed (e.g. damage
  * applies automatically per CRR step 7).
  */
-const AUTO_ADVANCE_SUB_PHASES = new Set(['pre_resolve']);
+// post_defender_reroll auto-advances per destruct 2026-05-08: the
+// per-player Mods Y/N (sendModsYn) IS the step-4 modifier window — a
+// general "Apply Modifiers — Ready" gate posted before the per-player
+// Y/N produced two prompts where one was correct.
+const AUTO_ADVANCE_SUB_PHASES = new Set(['pre_resolve', 'post_defender_reroll']);
 
 /**
  * Send a combat sub-phase gate to the combat thread.
@@ -446,10 +450,14 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
 
   switch (subPhase) {
     case 'on_declare': {
-      // Both players Ready'd after combat declaration — proceed to the
-      // power-token phase (which posts the Roll Combat Dice buttons when
-      // both have spent or skipped tokens).
-      await proceedToTokenPhase(thread, game, combat, ctx);
+      // Both players Ready'd after combat declaration. Per destruct
+      // 2026-05-08: tokens were merged into each player's on_declare
+      // window (sendOnDeclareTokenWindow), so the legacy
+      // proceedToTokenPhase pass is skipped. Clear the merge flag and
+      // post the Roll Combat Dice button (auto-roll runs from there).
+      combat.onDeclareTokenContext = false;
+      combat.tokenPhase = null;
+      await postRollDiceButton(thread, game, combat, ctx);
       break;
     }
 
@@ -2835,11 +2843,13 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
-  // On-declare ready gate: both players get a window to play CCs /
-  // abilities / tokens that trigger when combat is declared (Shock and
-  // Awe on Cara, on-declare CCs, etc.). Click Ready to advance to the
-  // power-token phase. Self-play auto-advances. Per Destruct's spec.
+  // On-declare per-player window. Per destruct 2026-05-08: each player
+  // gets a single combined window for cards-from-hand AND tokens; the
+  // player picks the order. Token window posts inline with the gate
+  // (sendOnDeclareTokenWindow); CCs are played from each player's hand
+  // channel as usual; the gate Ready button advances to the next role.
   await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
+  await sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx);
   saveGames(game.gameId);
 }
 
@@ -2893,6 +2903,15 @@ export async function handleCombatReady(interaction, ctx) {
   const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
   await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
   if (combat.currentStep === 'step1+2-attacker' || combat.currentStep === 'step1+2-defender') {
+    // Attacker just acked → defender's window is now active. Post the
+    // defender's on-declare token window so cards + tokens land in one
+    // combined window for the defender too (destruct 2026-05-08).
+    if (combat.currentStep === 'step1+2-defender' && !game.selfPlay) {
+      const _ondThread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+      if (_ondThread) {
+        await sendOnDeclareTokenWindow(_ondThread, game, combat, 'defender', ctx);
+      }
+    }
     saveGames(game.gameId);
     return;
   }
@@ -4957,6 +4976,14 @@ function buildRogueOneSurgeButton(game, combat) {
  * Post-roll (legacy callers) → continue to passive checks + surge spending.
  */
 async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
+  // On-declare merge (destruct 2026-05-08): token spends inside the
+  // on_declare per-player window must NOT auto-advance — the player
+  // still owns the window and clicks the gate Ready button to hand
+  // off. Just clear tokenPhase so further token clicks reject.
+  if (combat.onDeclareTokenContext) {
+    combat.tokenPhase = null;
+    return;
+  }
   combat.tokenPhase = null;
   if (completedRole === 'attacker') {
     const defTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
@@ -5846,6 +5873,59 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
 
   // Power-token phase already ran pre-roll (see proceedToTokenPhase); fall through.
   await proceedAfterTokens(thread, game, combat, ctx);
+}
+
+/**
+ * On-declare merge (destruct 2026-05-08): post the active player's
+ * token-spend window inline with their on_declare gate, so cards
+ * (played from hand) and tokens land in the SAME window. After the
+ * spend is recorded, advanceTokenPhase short-circuits — the player
+ * still owns the window until they click the gate Ready button.
+ *
+ * Sets combat.onDeclareTokenContext = true so handleCombatToken's
+ * advance-after-spend is suppressed. Cleared in
+ * dispatchCombatGateAdvance('on_declare') when both players ack.
+ *
+ * Idempotent for same role: safe to call from sendCombatGate(on_declare)
+ * AND from the attacker→defender transition in handleCombatGateReady.
+ */
+export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) {
+  if (game.selfPlay) return;
+  // Vague & Unconvincing (K-2S0): blocks tokens AND cards while defending.
+  // Run the prep once per combat — flagged on combat after first call.
+  if (!combat._onDeclarePrepared) {
+    if (combat.target?.figureKey) {
+      const _vuDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+      const _vuDefDcName = dcNameFromFigureKey(combat.target.figureKey);
+      const _vuDefEff = _vuDcEff[_vuDefDcName] || _vuDcEff[(_vuDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((_vuDefEff?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) {
+        combat.vagueAndUnconvincing = true;
+        await thread.send('**Vague and Unconvincing** — Neither player may spend Power Tokens or play Command Cards during this attack.');
+      }
+    }
+    if (!combat.vagueAndUnconvincing) {
+      combat.squadCohesionTokens = combat.squadCohesionTokens || {};
+      const scAtk = getSquadCohesionTokens(game, combat, 'attacker');
+      if (scAtk) combat.squadCohesionTokens.attacker = scAtk.cohesionTokens;
+      const scDef = getSquadCohesionTokens(game, combat, 'defender');
+      if (scDef) combat.squadCohesionTokens.defender = scDef.cohesionTokens;
+    }
+    combat._onDeclarePrepared = true;
+  }
+  if (combat.vagueAndUnconvincing) return;
+  const figKey = role === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+  if (!figKey) return;
+  const ownTokens = getEligibleTokens(game, figKey, role);
+  const cohesion = (combat.squadCohesionTokens?.[role] || []);
+  if (ownTokens.length === 0 && cohesion.length === 0) return;
+  const ownerPN = role === 'attacker'
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+    : opponentPlayerNum(combat.attackerPlayerNum);
+  const ownerId = getPlayerId(game, ownerPN);
+  const displayName = role === 'attacker' ? combat.attackerDisplayName : combat.target?.label;
+  combat.tokenPhase = role;
+  combat.onDeclareTokenContext = true;
+  await sendTokenWindow(thread, game.gameId, role, ownTokens, displayName, combat, ownerId);
 }
 
 /**
