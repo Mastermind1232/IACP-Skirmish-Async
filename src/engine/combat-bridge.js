@@ -1447,24 +1447,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             }
           }
         }
-        // Apex Predator: recover HP when a hostile within range is defeated this activation
-        if (game.recoverOnHostileDefeat?.[attackerPlayerNum]) {
-          const _apData = game.recoverOnHostileDefeat[attackerPlayerNum];
-          const _apRange = _apData.range ?? 2;
-          const _apDist = combat.distanceToTarget ?? 0;
-          if (_apDist <= _apRange) {
-            const _apMsgId = _apData.msgId ?? combat.attackerMsgId;
-            const _apAmt = _apData.amount ?? 2;
-            if (_apMsgId) {
-              const _apFigIdx = combat.attackerFigureIndex ?? 0;
-              const { healed: _apHealed } = healHp(dcHealthState, game, _apMsgId, _apFigIdx, _apAmt, attackerPlayerNum);
-              if (_apHealed > 0) {
-                await logGameAction(game, client, `**Apex Predator** — Recovered ${_apAmt} HP after defeating hostile within ${_apRange}.`, { phase: 'ROUND', icon: 'card' });
-              }
-            }
-          }
-          delete game.recoverOnHostileDefeat[attackerPlayerNum];
-        }
+        // Apex Predator — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Last Stand — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         const _lsDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         // Nefarious Gains — now handled by processFigureDefeat
@@ -1542,28 +1525,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
         // Bounty — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Brutal Tactics — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
-        // Useful Hide (Tauntaun Rider): when defeated, distribute up to 2 Evade Tokens among friendly figures within 3 spaces
-        if (_lsDcName === 'Tauntaun Rider') {
-          const _uhDefeatPos = combat._savedTargetPos;
-          const _uhFriendly = Object.entries(game.figurePositions?.[defenderPlayerNum] || {})
-            .filter(([k, pos]) => k !== (combat.target.figureKey || '') && pos && _uhDefeatPos && countGameSpaces(game, _uhDefeatPos, pos) <= 3)
-            .map(([k]) => k);
-          if (_uhFriendly.length > 0) {
-            let _uhGranted = 0;
-            const _uhRecipients = [];
-            for (let _uhi = 0; _uhi < Math.min(2, _uhFriendly.length); _uhi++) {
-              const _uhTarget = _uhFriendly[_uhi];
-              const count = grantPowerTokens(game, _uhTarget, 'Evade', 1, 2);
-              if (count > 0) {
-                _uhGranted += count;
-                _uhRecipients.push(dcNameFromFigureKey(_uhTarget));
-              }
-            }
-            if (_uhGranted > 0) {
-              await logGameAction(game, client, `\u{1F3AD} **Useful Hide** — **Tauntaun Rider** was defeated. Distributed ${_uhGranted} **Evade Token${_uhGranted !== 1 ? 's' : ''}** to ${_uhRecipients.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
-            }
-          }
-        }
+        // Useful Hide — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
         // Passive Redraws, defeat log, activation decrement, CC attachment cleanup — now handled by processFigureDefeat
         resultText += ` — **${combat.target.label} defeated!** +${vp} VP`;
         // Clean up pending sub-states referencing this DC (prevents orphaned states after defeat)

@@ -42,6 +42,8 @@ import { getDcEffects, getDcKeywords, getMapData } from '../data-loader.js';
 import { applyCondition, isConditionImmune } from './conditions.js';
 import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
+import { grantPowerTokens } from './game-helpers.js';
+import { healHp } from './damage-helpers.js';
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -169,6 +171,88 @@ WHEN_DEFEATED_HOOKS.push({
           { phase: 'ROUND', icon: 'card' },
         ).catch(() => {});
       }
+    }
+  },
+});
+
+/**
+ * Apex Predator (CC effect): when this attacker defeats a hostile
+ * within range, recover N HP. State carrier is `game.recoverOnHostileDefeat[playerNum] = { msgId, range, amount }`,
+ * set by resolveAbility when Apex Predator is played. Today this is
+ * combat-only — non-combat defeats (Bleed, Blast splash) don't pass
+ * the attacker figure index needed for the heal target. Probe
+ * requires an active combat-style attack frame.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'apex_predator_recover',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.attackerPlayerNum) return false;
+    const apData = game.recoverOnHostileDefeat?.[opts.attackerPlayerNum];
+    if (!apData) return false;
+    if (!opts.combat) return false;
+    const range = apData.range ?? 2;
+    const dist = opts.combat.distanceToTarget ?? 0;
+    return dist <= range;
+  },
+  apply: (game, opts, ctx) => {
+    const apData = game.recoverOnHostileDefeat?.[opts.attackerPlayerNum];
+    if (!apData) return;
+    const apMsgId = apData.msgId ?? opts.combat?.attackerMsgId;
+    const apAmt = apData.amount ?? 2;
+    if (apMsgId && ctx?.dcHealthState) {
+      const figIdx = opts.combat?.attackerFigureIndex ?? 0;
+      const { healed } = healHp(ctx.dcHealthState, game, apMsgId, figIdx, apAmt, opts.attackerPlayerNum);
+      if (healed > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+        const range = apData.range ?? 2;
+        ctx.logGameAction(
+          game,
+          ctx.client,
+          `**Apex Predator** — Recovered ${apAmt} HP after defeating hostile within ${range}.`,
+          { phase: 'ROUND', icon: 'card' },
+        ).catch(() => {});
+      }
+    }
+    delete game.recoverOnHostileDefeat[opts.attackerPlayerNum];
+  },
+});
+
+/**
+ * Useful Hide (Tauntaun Rider): when defeated, distribute up to 2
+ * Evade Tokens among friendly figures within 3 spaces. Auto-picks
+ * the first 2 eligible friendlies today; player-pick UI is a future
+ * enhancement.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'useful_hide_tauntaun',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if (!opts.defeatedPos) return false;
+    return dcNameFromFigureKey(opts.figureKey) === 'Tauntaun Rider';
+  },
+  apply: (game, opts, ctx) => {
+    const friendly = Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .filter(([k, pos]) => k !== opts.figureKey && pos && countGameSpaces(game, opts.defeatedPos, pos) <= 3)
+      .map(([k]) => k);
+    if (friendly.length === 0) return;
+    let granted = 0;
+    const recipients = [];
+    for (let i = 0; i < Math.min(2, friendly.length); i++) {
+      const target = friendly[i];
+      const count = grantPowerTokens(game, target, 'Evade', 1, 2);
+      if (count > 0) {
+        granted += count;
+        recipients.push(dcNameFromFigureKey(target));
+      }
+    }
+    if (granted > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `🎭 **Useful Hide** — **Tauntaun Rider** was defeated. Distributed ${granted} **Evade Token${granted !== 1 ? 's' : ''}** to ${recipients.join(', ')}.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
     }
   },
 });
