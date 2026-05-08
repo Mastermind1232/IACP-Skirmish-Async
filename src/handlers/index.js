@@ -567,6 +567,35 @@ register('krykna_place_', handleKryknaPlace, 'mapEvents');
 register('fluctuation_swap_', handleFluctuationSwap, 'round');
 register('fluctuation_skip_', handleFluctuationSkip, 'round');
 register('arms_distribute_pick_', handleArmsDistributePick, 'mapEvents');
+register('into_the_force_pick_', async (interaction, ctx) => {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  const m = interaction.customId.match(/^into_the_force_pick_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, figureKey] = m;
+  const game = getGame(gameId);
+  if (!game?.pendingIntoTheForce) {
+    await interaction.followUp({ content: 'No pending Into the Force.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const itf = game.pendingIntoTheForce;
+  const expectedId = itf.playerNum === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== expectedId) {
+    await interaction.followUp({ content: 'Only Obi-Wan\'s owner may pick.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!itf.eligible.includes(figureKey)) {
+    await interaction.followUp({ content: 'That figure is no longer eligible.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const { applyCondition } = await import('../game/conditions.js');
+  if (applyCondition(game, figureKey, 'Focus')) {
+    await logGameAction(game, client, `🌌 **Into the Force** — **${figureKey}** becomes Focused.`, { phase: 'ROUND', icon: 'card' });
+  }
+  await interaction.message.edit({ components: [] }).catch(() => {});
+  delete game.pendingIntoTheForce;
+  saveGames(game.gameId);
+}, 'mapEvents');
 register('arms_distribute_skip_', handleArmsDistributeSkip, 'mapEvents');
 register('prototype_dest_pick_', handlePrototypeDestPick, 'mapEvents');
 register('prototype_pick_', handlePrototypePick, 'mapEvents');

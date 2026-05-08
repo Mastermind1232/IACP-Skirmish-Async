@@ -187,40 +187,60 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
-  // 6b. Into the Force (Obi-Wan): when defeated, choose another friendly
-  // figure → that figure becomes Focused. Per destruct 2026-05-08: must
-  // fire when Obi chooses to be defeated via Strike Me Down too. Routes
-  // through processFigureDefeat (called for all defeat sources including
-  // SMD), so the trigger fires regardless of cause.
+  // 6b. Into the Force (Obi-Wan): when defeated, the OWNING PLAYER picks
+  // another friendly figure → that figure becomes Focused. Per destruct
+  // 2026-05-08: player choice (not auto-pick). Fires on all defeat
+  // sources including Strike Me Down (which routes through this handler).
+  // Sets pendingIntoTheForce + posts button picker in round channel.
   {
     const dcEff = getDcEffects();
     const itfEffEntry = dcEff?.[dcName] || dcEff?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
     if ((itfEffEntry?.specialAbilityIds || []).includes('into_the_force_obiwan')) {
-      // Pick a friendly to receive Focus. Auto-pick first eligible
-      // friendly figure (player choice prompt deferred — falls back to
-      // auto-pick rather than skipping the trigger entirely so the
-      // ability fires correctly per destruct's "ensure usable" note).
       const itfFriendlyPos = game.figurePositions?.[defeatedPlayerNum] || {};
-      let itfPicked = null;
+      const itfEligible = [];
       for (const [itfFk, itfPos] of Object.entries(itfFriendlyPos)) {
         if (!itfPos) continue;
-        if (itfFk.startsWith(`${dcName}-`)) continue; // skip Obi-Wan's own group
-        itfPicked = itfFk;
-        break;
+        if (itfFk.startsWith(`${dcName}-`)) continue;
+        itfEligible.push(itfFk);
       }
-      if (itfPicked) {
+      if (itfEligible.length === 0) {
+        await logGameAction(game, client,
+          `🌌 **Into the Force** — Obi-Wan defeated, but no other friendly figure on the board to Focus.`,
+          { phase: 'ROUND', icon: 'card' });
+      } else if (itfEligible.length === 1) {
+        // Only one eligible — apply directly (no choice to make).
         try {
           const { applyCondition } = await import('../game/conditions.js');
-          if (applyCondition(game, itfPicked, 'Focus')) {
+          if (applyCondition(game, itfEligible[0], 'Focus')) {
             await logGameAction(game, client,
-              `🌌 **Into the Force** — **${itfPicked}** becomes Focused (Obi-Wan defeated).`,
+              `🌌 **Into the Force** — **${itfEligible[0]}** becomes Focused (Obi-Wan defeated; only eligible target).`,
               { phase: 'ROUND', icon: 'card' });
           }
         } catch { /* fail-open */ }
       } else {
-        await logGameAction(game, client,
-          `🌌 **Into the Force** — Obi-Wan defeated, but no other friendly figure on the board to Focus.`,
-          { phase: 'ROUND', icon: 'card' });
+        // Multiple eligible — post player-pick prompt.
+        game.pendingIntoTheForce = {
+          playerNum: defeatedPlayerNum,
+          eligible: itfEligible,
+        };
+        try {
+          const _itfMod = await import('discord.js');
+          const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = _itfMod;
+          const _itfBtns = itfEligible.slice(0, 24).map((fk) =>
+            new ButtonBuilder()
+              .setCustomId(`into_the_force_pick_${game.gameId}_${fk}`)
+              .setLabel(`Focus ${fk}`.slice(0, 80))
+              .setStyle(ButtonStyle.Primary)
+          );
+          const _itfRows = [];
+          for (let i = 0; i < _itfBtns.length; i += 5) {
+            _itfRows.push(new ActionRowBuilder().addComponents(_itfBtns.slice(i, i + 5)));
+          }
+          const _itfPid = (defeatedPlayerNum === 1 ? game.player1Id : game.player2Id);
+          await logGameAction(game, client,
+            `🌌 **Into the Force** — <@${_itfPid}>, Obi-Wan was defeated. Choose another friendly figure to become Focused.`,
+            { phase: 'ROUND', icon: 'card', components: _itfRows.slice(0, 5), allowedMentions: { users: [_itfPid] } });
+        } catch (_itfErr) { /* fail-open */ }
       }
     }
   }

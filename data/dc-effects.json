@@ -6511,8 +6511,7 @@
       "speed": 4,
       "figures": 2,
       "passives": [
-        "+1 Damage",
-        "Pierce 1"
+        "+1 Damage"
       ],
       "attack": {
         "dice": [
@@ -6526,7 +6525,7 @@
       ],
       "surgeAbilities": [
         "pierce 1",
-        "weaken"
+        "accuracy 1"
       ],
       "doubleSurgeAbilities": [
         "+1 hit"

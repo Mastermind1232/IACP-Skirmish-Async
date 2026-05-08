@@ -59,9 +59,12 @@ describe('CERT-ATK-002: Melee DCs with accuracy surges are Reach figures', () =>
   it('002: melee DCs with accuracy surges have Reach or extended-range ability', () => {
     // Known melee figures with accuracy surges (all have Reach or extended melee):
     // K-2S0: Reach, "accuracy 1, pierce 1"
-    // Kanan Jarrus: Reach, "accuracy 3"
+    // Kanan Jarrus: Reach, "accuracy 3" — REMOVED in favor of pierce 3 per destruct 2026-05-08
     // Zeb Orrelios: Bo-Rifle (extended range melee), "accuracy 2, recover 1"
-    const knownReachMelee = ['K-2S0', 'Kanan Jarrus', 'Zeb Orrelios'];
+    // Tusken Raider (Elite): melee dice (R/G) but Tusken Cycler special action
+    //   uses 1 blue + 1 red for a Ranged attack — accuracy surges fire on
+    //   that ranged attack path (per destruct 2026-05-08 audit).
+    const knownReachMelee = ['K-2S0', 'Kanan Jarrus', 'Zeb Orrelios', 'Tusken Raider (Elite)'];
     const unknownAnomalies = [];
 
     for (const dcName of allDcNames) {
