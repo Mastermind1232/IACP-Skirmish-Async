@@ -143,6 +143,24 @@ async function fireSlippery(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Vader's Finest (Attack+Move special action) — attacker after-resolve:
+ * 1-space Move-X picker, bypassCosts true. The attack already fired
+ * via freeAttackBonusPending; this is the move that follows.
+ */
+async function fireVadersFinestMove(thread, game, combat, effect, ctx) {
+  if (combat.attackerMsgId == null || !combat.attackerFigureKey) return;
+  await setupPendingMoveX(game, ctx, {
+    msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
+    playerNum: combat.attackerPlayerNum,
+    spaces: 1,
+    source: "Vader's Finest",
+    threadId: combat.combatThreadId,
+    bypassCosts: true,
+  });
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -162,6 +180,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'stun_batons':
       await fireStunBatons(thread, game, combat, effect, ctx);
+      return;
+    case 'vaders_finest_move':
+      await fireVadersFinestMove(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

@@ -356,6 +356,11 @@ const ROUND_OBJECT_FLAGS = [
   'lastResortTriggered',
   'attackPerformedThisActivation',
   'vadersFocusUsedThisRound',
+  // Vader's Finest Attack+Move special: per-msgId flag set when the
+  // special action button is clicked. Consumed in
+  // enqueueAttackerPerDcEffects to enqueue a vaders_finest_move
+  // step-8 effect, which fires the 1-space Move-X picker.
+  'vadersFinestPostAttackMove',
   'scavengedWalkerAttackPenalty',
   'drivenByHatredAttackPenalty',
   'roundProgrammingOverrideTrait',

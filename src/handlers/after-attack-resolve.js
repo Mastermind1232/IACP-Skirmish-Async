@@ -142,6 +142,19 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
+  // Vader's Finest (Attack+Move special action): "after the attack
+  // resolves, move up to 1 space" — Move-X picker, bypassCosts true.
+  // Triggered by the per-msgId vadersFinestPostAttackMove flag set
+  // when the special action button was clicked.
+  if (combat.attackerMsgId && game?.vadersFinestPostAttackMove?.[combat.attackerMsgId]) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'vaders_finest_move',
+      label: "Vader's Finest: move up to 1 space",
+    });
+    delete game.vadersFinestPostAttackMove[combat.attackerMsgId];
+    if (Object.keys(game.vadersFinestPostAttackMove).length === 0) delete game.vadersFinestPostAttackMove;
+  }
   // Stun Batons enqueue probe REVERTED — fire handler exists but the
   // inline auto-apply in combat-bridge.js wasn't successfully removed
   // this session (character-encoding mismatch on the strain log line).

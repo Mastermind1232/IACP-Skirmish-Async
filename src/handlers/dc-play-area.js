@@ -2331,13 +2331,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
 
-    // Vader's Finest: Attack+Move — perform an attack, then move up to 1 space
+    // Vader's Finest: Attack+Move — perform an attack, then move up
+    // to 1 space (CRR MOVE-017 picker after the attack resolves).
     if (_suHandler === 'VF: Attack+Move') {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: "Vader's Finest" };
-      game.pendingMpBonus = game.pendingMpBonus || {};
-      game.pendingMpBonus[msgId] = 1;
-      await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, gain **1 MP**.`).catch(discordCatch);
+      game.vadersFinestPostAttackMove = game.vadersFinestPostAttackMove || {};
+      game.vadersFinestPostAttackMove[msgId] = true;
+      await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, you may move up to **1 space** (Move-X picker).`).catch(discordCatch);
       await updateDcActionsMessage(game, msgId, client);
       saveGames(game.gameId);
       return;
