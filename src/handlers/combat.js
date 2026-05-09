@@ -3081,6 +3081,40 @@ export async function handleCombatRoll(interaction, ctx) {
   if (!thread) throw new Error(`handleCombatRoll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
   const effectiveAttackerPlayerNum = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
 
+  // Attacker-validity probe (per user 2026-05-09): after defender on-declare
+  // reactions resolve and just before dice are rolled, verify the attacker
+  // is still on the board AND still has LOS to the target. If either
+  // fails, abort combat — preserves rules-correctness for cases like:
+  //   - SoD interrupt defeated the attacker (this combat resumes with
+  //     attacker removed)
+  //   - Cara Dune CC / Ahsoka CC / Last and Final Hope / Force Push
+  //     etc. removed the attacker mid-flow
+  //   - LAM (Look at Me) repositioned the target out of LOS
+  if (combat.attackerFigureKey && combat.target?.figureKey) {
+    const _avAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    if (!_avAtkPos) {
+      await thread.send('🚫 **Attack aborted** — attacker is no longer on the board.').catch(discordCatch);
+      resolvePendingCombat(game);
+      saveGames(game.gameId);
+      return;
+    }
+    const _avHasLos = ctx.hasFigureLineOfSight;
+    const _avGetFigureSize = ctx.getFigureSize;
+    const _avGetFigureFootprint = ctx.getFigureFootprint;
+    const _avGetMapData = ctx.getMapData;
+    if (game.selectedMap?.id && _avHasLos && _avGetFigureFootprint && _avGetFigureSize && _avGetMapData) {
+      const _avMs = _avGetMapData(game.selectedMap.id);
+      const _avAtkFp = _avGetFigureFootprint(game, attackerPlayerNum, combat.attackerFigureKey, _avGetFigureSize);
+      const _avTgtFp = _avGetFigureFootprint(game, defenderPlayerNum, combat.target.figureKey, _avGetFigureSize);
+      if (_avAtkFp && _avTgtFp && !_avHasLos(_avAtkFp, _avTgtFp, _avMs, null)) {
+        await thread.send('🚫 **Attack aborted** — attacker no longer has line of sight to the target.').catch(discordCatch);
+        resolvePendingCombat(game);
+        saveGames(game.gameId);
+        return;
+      }
+    }
+  }
+
   // Held-roll early gates: when role is specified (new buttons), reject
   // if that side already rolled. Old single-button path skips this.
   if (role === 'atk' && combat.attackRoll) {

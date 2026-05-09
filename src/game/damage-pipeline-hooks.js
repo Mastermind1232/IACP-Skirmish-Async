@@ -45,8 +45,10 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
-import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt } from './interrupts.js';
+import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt, setPendingExtraProtection } from './interrupts.js';
 import { cardNameIncludes } from './card-names.js';
+import { getCcHand } from './player-helpers.js';
+import { isWithinN } from '../engine/utils.js';
 
 // Wire dc-effects resolver into damage-pipeline so its
 // isImmuneToDirectDefeat helper can read special-ability ids without
@@ -104,6 +106,93 @@ WHEN_DAMAGED_HOOKS.push({
   apply: (game, opts, _ctx) => {
     if (!opts.figureKey) return;
     applyCondition(game, opts.figureKey, 'Focus');
+  },
+});
+
+/**
+ * Extra Protection (Onar Koma CC) — fires WHEN_DAMAGED per CRR + user
+ * 2026-05-09 spec: when ANOTHER friendly figure within 2 spaces of Onar
+ * suffers ≥3 damage, Onar's player may play Extra Protection from hand
+ * to move up to 2 spaces and perform an attack. Triggers on lethal
+ * damage too — does NOT gate on survival. Fires before BEFORE_DEFEATED
+ * so the prompt resolves before Parting Shot's window in the 7-damage-
+ * lethal-on-Greedo scenario. Once-per-combat via
+ * extraProtectionTriggeredThisCombat.
+ */
+WHEN_DAMAGED_HOOKS.push({
+  id: 'extra_protection_onar_koma',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if ((opts.amount || 0) < 3) return false;
+    if (game.extraProtectionTriggeredThisCombat) return false;
+    const defPN = opts.controllerPlayerNum;
+    const hand = getCcHand(game, defPN) || [];
+    if (hand.indexOf('Extra Protection') < 0) return false;
+    if (!game.selectedMap?.id) return false;
+    const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
+    if (!targetPos) return false;
+    const friendly = game.figurePositions?.[defPN] || {};
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (fk === opts.figureKey) continue; // "another" friendly figure
+      const dcN = dcNameFromFigureKey(fk);
+      if (dcN !== 'Onar Koma') continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      return true;
+    }
+    return false;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
+    const logGameAction = ctx?.deps?.logGameAction ?? ctx?.logGameAction;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    const defPN = opts.controllerPlayerNum;
+    const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
+    if (!targetPos) return null;
+    const friendly = game.figurePositions?.[defPN] || {};
+    let onarFk = null;
+    let onarPos = null;
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (fk === opts.figureKey) continue;
+      if (dcNameFromFigureKey(fk) !== 'Onar Koma') continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      onarFk = fk; onarPos = pos; break;
+    }
+    if (!onarFk) return null;
+    const onarMsgId = findDcMessageIdForFigure(game.gameId, defPN, onarFk);
+    if (!onarMsgId) return null;
+    game.extraProtectionTriggeredThisCombat = true;
+    setPendingExtraProtection(game, {
+      targetFigKey: opts.figureKey,
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+      damage: opts.amount,
+      playerNum: defPN,
+      onarFigKey: onarFk,
+      onarMsgId,
+      onarDcName: 'Onar Koma',
+      // combat-flow re-entry params (read by handleExtraProtection):
+      hit: opts.combat?._step7Hit ?? true,
+      resultText: opts.combat?._step7ResultText || '',
+      totalBlast: (opts.combat?.surgeBlast || 0) + (opts.combat?.bonusBlast || 0),
+      defenderPlayerNum: defPN,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      ownerId: opts.combat ? game[`player${opts.combat.attackerPlayerNum}Id`] : null,
+    });
+    const ownerId = game[`player${defPN}Id`];
+    const damagedLabel = opts.combat?.target?.label || dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`extra_protection_play_${game.gameId}`).setLabel('Play Extra Protection (move 2 + attack)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    if (logGameAction) {
+      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **Onar Koma** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] } });
+    }
+    return null;
   },
 });
 

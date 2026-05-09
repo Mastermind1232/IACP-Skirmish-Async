@@ -867,9 +867,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       } // end !_epReentry guard for post-damage effects
-      // Extra Protection (Onar Koma CC): when a friendly figure within 2 spaces suffers 3+ damage
-      // and survives, prompt the defending player to play Extra Protection (move 2 + free attack).
-      if (damage >= 3 && newCur > 0 && !game.extraProtectionTriggeredThisCombat) {
+      // Extra Protection inline disabled 2026-05-09 → moved to WHEN_DAMAGED
+      // hook in damage-pipeline-hooks.js (extra_protection_onar_koma).
+      // Old inline path was gated on `newCur > 0` (would NOT fire on lethal
+      // damage — bug per user spec) and ran AFTER _applyDamage so it fired
+      // AFTER BEFORE_DEFEATED hooks like Parting Shot — wrong pipeline order.
+      // The hook fires in WHEN_DAMAGED alongside Self-Preservation, BEFORE
+      // BEFORE_DEFEATED, and triggers on lethal damage too.
+      if (false && damage >= 3 && newCur > 0 && !game.extraProtectionTriggeredThisCombat) { // eslint-disable-line no-constant-condition
         const _epHand = getCcHand(game, defenderPlayerNum) || [];
         const _epCardIdx = _epHand.indexOf('Extra Protection');
         if (_epCardIdx >= 0) {
