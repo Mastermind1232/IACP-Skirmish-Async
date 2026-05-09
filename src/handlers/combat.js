@@ -3083,13 +3083,16 @@ export async function handleCombatRoll(interaction, ctx) {
 
   // Attacker-validity probe (per user 2026-05-09): after defender on-declare
   // reactions resolve and just before dice are rolled, verify the attacker
-  // is still on the board AND still has LOS to the target. If either
-  // fails, abort combat — preserves rules-correctness for cases like:
+  // is still on the board AND still has effective LOS to the target.
+  // Aborts combat for cases like:
   //   - SoD interrupt defeated the attacker (this combat resumes with
   //     attacker removed)
-  //   - Cara Dune CC / Ahsoka CC / Last and Final Hope / Force Push
-  //     etc. removed the attacker mid-flow
-  //   - LAM (Look at Me) repositioned the target out of LOS
+  //   - Cara Dune CC / Ahsoka CC / Force Push removed the attacker
+  //   - LAM repositioned the target out of LOS
+  // Uses the shared hasEffectiveLineOfSight helper so the LOS treatment
+  // matches buildAndSendAttackTargets exactly (closed doors / shields /
+  // smoke / broken walls / Marksman / Priority Target / Massive /
+  // Clawdite Scout / multi-cell footprints).
   if (combat.attackerFigureKey && combat.target?.figureKey) {
     const _avAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
     if (!_avAtkPos) {
@@ -3098,15 +3101,16 @@ export async function handleCombatRoll(interaction, ctx) {
       saveGames(game.gameId);
       return;
     }
-    const _avHasLos = ctx.hasFigureLineOfSight;
-    const _avGetFigureSize = ctx.getFigureSize;
-    const _avGetFigureFootprint = ctx.getFigureFootprint;
-    const _avGetMapData = ctx.getMapData;
-    if (game.selectedMap?.id && _avHasLos && _avGetFigureFootprint && _avGetFigureSize && _avGetMapData) {
-      const _avMs = _avGetMapData(game.selectedMap.id);
-      const _avAtkFp = _avGetFigureFootprint(game, attackerPlayerNum, combat.attackerFigureKey, _avGetFigureSize);
-      const _avTgtFp = _avGetFigureFootprint(game, defenderPlayerNum, combat.target.figureKey, _avGetFigureSize);
-      if (_avAtkFp && _avTgtFp && !_avHasLos(_avAtkFp, _avTgtFp, _avMs, null)) {
+    if (game.selectedMap?.id) {
+      const { hasEffectiveLineOfSight } = await import('../game/effective-los.js');
+      const _avLos = hasEffectiveLineOfSight(
+        game,
+        attackerPlayerNum, combat.attackerFigureKey,
+        defenderPlayerNum, combat.target.figureKey,
+        ctx,
+        { marksmanActive: !!game.nextAttackIgnoreFigureLOS?.[combat.attackerMsgId] },
+      );
+      if (!_avLos) {
         await thread.send('🚫 **Attack aborted** — attacker no longer has line of sight to the target.').catch(discordCatch);
         resolvePendingCombat(game);
         saveGames(game.gameId);
