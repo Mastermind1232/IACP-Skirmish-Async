@@ -1455,10 +1455,28 @@ export async function handleActPassive(interaction, ctx) {
           break;
         }
       }
-      grantMovementBank(game, targetMsgId, 2);
+      // Recipient ≠ activator (card explicitly says "another friendly")
+      // → spend immediately, no bank. setupPendingMoveX with bypassCosts:
+      // false so terrain/figure adders apply.
+      if (targetMsgId) {
+        try {
+          const { setupPendingMoveX } = await import('./move-x-handler.js');
+          await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+            msgId: targetMsgId,
+            figureKey: targetFk,
+            playerNum: meta.playerNum,
+            spaces: 2,
+            source: "General's Orders",
+            threadId: null,
+            bypassCosts: false,
+          });
+        } catch (err) {
+          console.error("[activation] General's Orders picker stamp failed:", err?.message ?? err);
+        }
+      }
       pending.chosen.push(targetFk);
       pending.remaining--;
-      await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gained 2 MP.`, { phase: 'ACTIVATION', icon: 'activate' });
+      await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gains 2 MP (spend immediately, no bank).`, { phase: 'ACTIVATION', icon: 'activate' });
       if (pending.remaining <= 0) {
         await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(discordCatch);
         clearPendingGeneralsOrders(game);
@@ -1764,10 +1782,26 @@ export async function handleActPassive(interaction, ctx) {
       filterCondition(game, targetFk, choice);
       resultParts.push(`discarded ${choice}`);
     }
-    // Grant 1 MP to target
+    // Grant 1 MP to chosen target (≠ activator per card text "choose
+    // a friendly figure with a lower figure cost than you"). Spend
+    // immediately, no bank. bypassCosts: false.
     if (targetMsgId) {
-      grantMovementBank(game, targetMsgId, 1);
-      resultParts.push('gained 1 MP');
+      try {
+        const { setupPendingMoveX } = await import('./move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+          msgId: targetMsgId,
+          figureKey: targetFk,
+          playerNum: meta.playerNum,
+          spaces: 1,
+          source: 'Motivation',
+          threadId: null,
+          bypassCosts: false,
+        });
+        resultParts.push('gains 1 MP (spend immediately)');
+      } catch (err) {
+        console.error('[activation] Motivation picker stamp failed:', err?.message ?? err);
+        resultParts.push('1 MP (resolve manually)');
+      }
     }
     clearPendingMotivation(game);
     await interaction.message.edit({ content: `**Motivation** — **${targetDcName}**: ${resultParts.join(', ')}.`, components: [] }).catch(discordCatch);
@@ -2236,10 +2270,28 @@ export async function handleScFigPick(interaction, ctx) {
       break;
     }
   }
-  grantMovementBank(game, targetMsgId, 2);
+  // Recipient is "another friendly figure" → ≠ activator. Spend
+  // immediately, no bank. bypassCosts: false so terrain/figure
+  // adders apply unless the figure's profile bypasses them.
+  if (targetMsgId) {
+    try {
+      const { setupPendingMoveX } = await import('./move-x-handler.js');
+      await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+        msgId: targetMsgId,
+        figureKey: targetFk,
+        playerNum: meta.playerNum,
+        spaces: 2,
+        source: '[Spectre Cell]',
+        threadId: null,
+        bypassCosts: false,
+      });
+    } catch (err) {
+      console.error('[activation] Spectre Cell picker stamp failed:', err?.message ?? err);
+    }
+  }
 
   await interaction.message.edit({
-    content: `**[Spectre Cell]** — **${targetDcName}** gains 2 MP and may interrupt to perform an attack. (Exhausted)`,
+    content: `**[Spectre Cell]** — **${targetDcName}** gains 2 MP (spend immediately, no bank) and may interrupt to perform an attack. (Exhausted)`,
     components: [],
   }).catch(discordCatch);
   await logGameAction?.(game, client, `**[Spectre Cell]** — ${targetDcName} gains 2 MP, may interrupt attack. (Exhausted)`, { phase: 'ACTIVATION', icon: 'card' });

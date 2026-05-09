@@ -1004,23 +1004,31 @@ export async function handleSoaFire(interaction, ctx) {
       if (!targetMsgId) {
         await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
       } else if (targetMsgId === activatorMsgId) {
+        // Recipient = the figure whose activation just started → bank
+        // (rule 3, in-activation grant on the activator).
         grantMovementBank(game, targetMsgId, 1);
         await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — **${targetDcName}** gained **1 MP** (added to activation bank).`, components: [] }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${targetDcName} +1 MP.`, { phase: 'ROUND', icon: 'card' });
       } else {
-        grantMovementBank(game, targetMsgId, 1);
-        const _fkMatch = String(targetFk).match(/-(\d+)-(\d+)$/);
-        const _figIdx = _fkMatch ? _fkMatch[2] : '0';
-        const _moveBtn = new ButtonBuilder()
-          .setCustomId(`granted_move_${gameId}_${targetMsgId}_f${_figIdx}`)
-          .setLabel(`Interrupt Move (${targetDcName})`)
-          .setStyle(ButtonStyle.Primary);
-        const _moveRow = new ActionRowBuilder().addComponents(_moveBtn);
+        // Recipient ≠ activator → spend immediately, no bank
+        // (rule 1, out-of-activation grant on another figure). Stamp
+        // pendingMoveX with bypassCosts: false so each step honors
+        // terrain/figure adders.
+        const { setupPendingMoveX } = await import('./move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+          msgId: targetMsgId,
+          figureKey: targetFk,
+          playerNum: cadPn,
+          spaces: 1,
+          source: 'I Make the Rules Now',
+          threadId: null,
+          bypassCosts: false,
+        });
         await interaction.message.edit({
-          content: `\u{1F3AF} **I Make the Rules Now** — **${targetDcName}** gains **1 MP** and must use it immediately. Click below to perform the interrupt move.`,
-          components: [_moveRow],
+          content: `\u{1F3AF} **I Make the Rules Now** — **${targetDcName}** gains **1 MP** — spend at once, remainder lost (picker posted).`,
+          components: [],
         }).catch(discordCatch);
-        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${targetDcName} +1 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **I Make the Rules Now** — ${targetDcName} gains 1 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
       }
     }
 
@@ -1051,30 +1059,30 @@ export async function handleSoaFire(interaction, ctx) {
       if (!targetMsgId) {
         await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
       } else if (targetFk === sourceFk) {
-        // Self-target: 2 MP goes into the activator's own bank.
+        // Self-target = activator → bank (rule 3, in-activation grant
+        // on the activator).
         grantMovementBank(game, targetMsgId, 2);
         await interaction.message.edit({ content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gained **2 MP** (added to activation bank).`, components: [] }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP.`, { phase: 'ROUND', icon: 'card' });
       } else {
-        // Other-figure: interrupt-move. Grant 2 MP to that figure's bank
-        // and post a Move button in the source's activation thread that
-        // opens the chosen figure's standard Move flow. The MP is intended
-        // to be used IMMEDIATELY — any leftover after the interrupt move
-        // remains in the bank but should not be carried forward (manual
-        // policing for now; auto-clear is a later slice).
-        grantMovementBank(game, targetMsgId, 2);
-        const _fkMatch = String(targetFk).match(/-(\d+)-(\d+)$/);
-        const _figIdx = _fkMatch ? _fkMatch[2] : '0';
-        const _moveBtn = new ButtonBuilder()
-          .setCustomId(`granted_move_${gameId}_${targetMsgId}_f${_figIdx}`)
-          .setLabel(`Interrupt Move (${targetDcName})`)
-          .setStyle(ButtonStyle.Primary);
-        const _moveRow = new ActionRowBuilder().addComponents(_moveBtn);
+        // Recipient ≠ activator → no bank, picker posted with the
+        // 2-MP budget; bypassCosts: false so terrain/figure adders
+        // still apply (the figure's profile keywords still bypass).
+        const { setupPendingMoveX } = await import('./move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+          msgId: targetMsgId,
+          figureKey: targetFk,
+          playerNum: ownerPlayerNum,
+          spaces: 2,
+          source: 'Tactical Movement',
+          threadId: null,
+          bypassCosts: false,
+        });
         await interaction.message.edit({
-          content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gains **2 MP** and must use them immediately. Click below to perform the interrupt move.`,
-          components: [_moveRow],
+          content: `\u{1F3AF} **Tactical Movement** — **${targetDcName}** gains **2 MP** — spend at once, remainder lost (picker posted).`,
+          components: [],
         }).catch(discordCatch);
-        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (interrupt move).`, { phase: 'ROUND', icon: 'card' });
+        if (logGameAction) await logGameAction(game, client, `\u{1F3AF} **Tactical Movement** — ${targetDcName} gained 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
       }
     }
 
