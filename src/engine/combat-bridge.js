@@ -61,7 +61,7 @@ import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPending
  */
 export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage, sourceLabel, deps) {
   const { logGameAction, client, dcHealthState, dcMessageMeta,
-    dcNameFromFigureKey, parseFigureKey, reduceHp,
+    dcNameFromFigureKey, parseFigureKey,
     opponentPlayerNum, getDcMessageIds, getDcList } = deps;
 
   const dcName = dcNameFromFigureKey(figureKey);
@@ -530,7 +530,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   const {
     logGameAction, saveGames, dcHealthState, dcMessageMeta,
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
-    reduceHp, healHp, removeFigurePosition,
+    healHp, removeFigurePosition,
     calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
     getPlayerId, getMapData, getEffectiveMapSpaces,
@@ -2609,7 +2609,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   const {
     logGameAction, saveGames, dcHealthState, dcMessageMeta, dcExhaustedState,
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
-    reduceHp, healHp,
+    healHp,
     getDcList, getDcMessageIds, getDcStats, getDcEffect, getDcEffects, getDcKeywords,
     getPlayerId, getPlayAreaId, getMapData,
     isWithinN, hasLineOfSight,
