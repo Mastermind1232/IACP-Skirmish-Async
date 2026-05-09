@@ -2144,9 +2144,16 @@ export function resolveAbility(abilityId, context) {
     // freeAttackPrompt continuation; the "Declare Attack" button
     // posts after the picker drains. Cards without the flag stay
     // on the legacy banked-MP path until classified.
+    //
+    // Strict ordering for cards that ALSO grant a power token
+    // (Final Stand): defer the Move-X picker until after the
+    // power-token-type prompt resolves. handlePowerTokenChoice
+    // (combat.js) reads `deferredMoveX` on the pending grant and
+    // stamps + posts the picker once the player picks token type.
     let fabMpNote = '';
     let fabMpRefresh = false;
     let _fabPmxMsgId = null;
+    let _fabRequiresTokenChoice = false;
     if (typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
       if (entry.isMoveX) {
         const meta = dcMessageMeta?.get?.(msgId);
@@ -2155,8 +2162,7 @@ export function resolveAbility(abilityId, context) {
         const _fabSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         const _fabFigureKey = _fabFigureKeys[_fabSelectedIdx] || _fabFigureKeys[0] || null;
         if (_fabFigureKey) {
-          game.pendingMoveX = game.pendingMoveX || {};
-          game.pendingMoveX[msgId] = {
+          const _fabPicker = {
             remaining: entry.mpBonus,
             source: entry.label || 'Move X',
             playerNum,
@@ -2173,11 +2179,28 @@ export function resolveAbility(abilityId, context) {
               },
             },
           };
-          _fabPmxMsgId = msgId;
-          fabMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+          if (typeof entry.powerTokenGain === 'number' && entry.powerTokenGain > 0) {
+            // Defer Move-X stamp until token-type chosen. Power
+            // token grant fires first; handlePowerTokenChoice
+            // stamps the picker after the type is selected.
+            const _figName = dcNameFromFigureKey(_fabFigureKey);
+            game.pendingPowerTokenGrant = {
+              grants: [{ figureKey: _fabFigureKey, figName: _figName, count: entry.powerTokenGain }],
+              channelId: null,
+              playerNum,
+              deferredMoveX: _fabPicker,
+            };
+            _fabRequiresTokenChoice = true;
+            fabMpNote = ` Gain ${entry.powerTokenGain} Power Token (choose type), then move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''}, then take a free attack.`;
+          } else {
+            game.pendingMoveX = game.pendingMoveX || {};
+            game.pendingMoveX[msgId] = _fabPicker;
+            _fabPmxMsgId = msgId;
+            fabMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+          }
         }
       }
-      if (!_fabPmxMsgId) {
+      if (!_fabPmxMsgId && !_fabRequiresTokenChoice) {
         addMovementPoints(game, msgId, entry.mpBonus);
         fabMpNote = ` Gained ${entry.mpBonus} MP.`;
         fabMpRefresh = true;
@@ -2192,6 +2215,7 @@ export function resolveAbility(abilityId, context) {
       refreshMovementBank: fabMpRefresh,
       activeMsgId: msgId,
       pendingMoveXMsgId: _fabPmxMsgId,
+      requiresPowerTokenChoice: _fabRequiresTokenChoice,
       logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action.${accNote} Click Attack when ready.` + fabMpNote),
     };
   }

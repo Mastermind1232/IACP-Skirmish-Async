@@ -7300,7 +7300,26 @@ export async function handlePowerTokenChoice(interaction, ctx) {
     grantPowerTokens(game, figureKey, type, count);
     lines.push(`${figName}: ${count > 1 ? `${count}× ` : ''}**${type}**`);
   }
+  // deferredMoveX (Final Stand and similar): the originating dispatch
+  // staged a Move-X picker behind the power-token-choice prompt so
+  // the order is "token type → move → free attack." Now that the
+  // type is locked, stamp pendingMoveX and post the picker.
+  const _deferredMoveX = game.pendingPowerTokenGrant?.deferredMoveX || null;
   game.pendingPowerTokenGrant = null;
+  if (_deferredMoveX && _deferredMoveX.msgId && _deferredMoveX.figureKey) {
+    try {
+      const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+      stampPendingMoveX(game, _deferredMoveX);
+      const _dmxCtx = {
+        client: interaction.client, saveGames,
+        logGameAction: ctx.logGameAction,
+        dcMessageMeta: ctx.dcMessageMeta,
+      };
+      await postMoveXPicker(game, _dmxCtx, _deferredMoveX.msgId);
+    } catch (err) {
+      console.error('[handlePowerTokenChoice] deferredMoveX failed:', err?.message ?? err);
+    }
+  }
   if (channelId) {
     const ch = await fetchGameChannel(interaction.client, channelId);
     if (ch) {
