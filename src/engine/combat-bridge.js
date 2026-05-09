@@ -3164,6 +3164,26 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (game.multiFireBlockedTarget?.[combat.attackerMsgId]) delete game.multiFireBlockedTarget[combat.attackerMsgId];
     }
   }
+  // Overheated (Paz Vizsla): -1 Hit re-stamped for 2nd attack; attack
+  // type flips to Melee after BOTH attacks complete (per CRR last-thing
+  // ordering). Ranged for both attacks; swap is the closing step.
+  if (game.overheatedActive?.[combat.attackerMsgId]) {
+    const oh = game.overheatedActive[combat.attackerMsgId];
+    oh.attacksRemaining -= 1;
+    if (oh.attacksRemaining > 0) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1, source: 'Overheated' };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Overheated' };
+      await thread.send(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Use the Attack button.`).catch(discordCatch);
+    } else {
+      delete game.overheatedActive[combat.attackerMsgId];
+      // Last thing: attack type becomes Melee for the rest of the round.
+      game.attackTypeOverride = game.attackTypeOverride || {};
+      game.attackTypeOverride[combat.attackerMsgId] = 'melee';
+      await thread.send(`**Overheated** — Both attacks resolved. Attack type is now **Melee** for the rest of the round.`).catch(discordCatch);
+    }
+  }
   // Saber Orbit (Second Sister): re-apply override dice for remaining chained attacks
   if (game.saberOrbitAttacksRemaining?.[combat.attackerMsgId] > 0) {
     game.saberOrbitAttacksRemaining[combat.attackerMsgId] -= 1;

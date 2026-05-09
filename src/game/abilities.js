@@ -8797,13 +8797,15 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Optimal Bombardment** — Free attack granted to: ${names.join(', ')} (${count} figure${count !== 1 ? 's' : ''}, up to 3).` };
   }
 
-  // ccEffect: overheatedEffect (Overheated) — Strain 4; override next attack(s) to Melee; 2 total attacks if originally Ranged
-  // Self-strain via pendingStrainCost so apply-ability-result.js routes
-  // it through applyStrain (Fireproof / Headhunter / per-strain choice /
-  // Under Duress / Paz). Strain fires BEFORE the attack queue is set up
-  // — the existing attack-override / freeAttackBonusPending flags still
-  // get stamped synchronously so the multi-attack chain happens after
-  // strain resolves.
+  // ccEffect: overheatedEffect (Overheated) — Paz Vizsla.
+  // Resolution order per CRR:
+  //   1. Strain 4 (self-cost) — queued via pendingStrainCost so it routes
+  //      through applyStrain BEFORE other side effects (Fireproof /
+  //      Headhunter / per-strain choice / Under Duress / Paz).
+  //   2. If Paz currently has Ranged attack type: 2 Ranged attacks at -1
+  //      Hit each (no attack-type swap during these attacks).
+  //   3. AFTER both attacks complete (handled in combat-bridge post-attack
+  //      hook): attack type becomes Melee for the rest of the round.
   if (entry.type === 'ccEffect' && entry.overheatedEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -8816,14 +8818,41 @@ export function resolveAbility(abilityId, context) {
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const selfFk = `${meta.dcName}-${dgIndex}-${figIdx}`;
-    // Override next attack to melee (with -1 Hit); grant 1 free attack (for 2 total)
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { type: 'melee', bonusHits: -1 };
-    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+
+    // Determine current attack type — only Ranged gates the 2-attack chain.
+    const currentOverride = game.attackTypeOverride?.[msgId];
+    const dcStats = getStatsForDc(meta.dcName);
+    const baseAttackType = (dcStats?.attack?.type || '').toLowerCase();
+    const effectiveAttackType = currentOverride || baseAttackType;
+    const isRanged = effectiveAttackType === 'range' || effectiveAttackType === 'ranged';
+
+    if (isRanged) {
+      // First of 2 attacks: -1 Hit, no attack-type swap yet (stays Ranged).
+      // Track attacksRemaining so combat-bridge's post-attack hook can:
+      //   (a) re-stamp -1 Hit + grant the 2nd free attack
+      //   (b) on attacksRemaining=0, flip attackTypeOverride[msgId] = 'melee'
+      game.overheatedActive = game.overheatedActive || {};
+      game.overheatedActive[msgId] = { attacksRemaining: 2 };
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[msgId] = { bonusHits: -1, source: 'Overheated' };
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[msgId] = { from: 'Overheated' };
+      return {
+        applied: true,
+        logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Ranged attacks queued at −1 Hit each. Attack type becomes Melee after both resolve.`,
+        refreshDcEmbed: true,
+        pendingStrainCost: {
+          figureKey: selfFk,
+          controllerPlayerNum: playerNum,
+          amount: 4,
+          source: 'Overheated',
+        },
+      };
+    }
+    // Not Ranged: only the strain cost applies; no extra attacks; no type swap.
     return {
       applied: true,
-      logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Melee attacks queued; −1 Hit applied automatically per attack.`,
+      logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). Not currently Ranged, so the 2-attack clause does not trigger.`,
       refreshDcEmbed: true,
       pendingStrainCost: {
         figureKey: selfFk,

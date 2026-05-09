@@ -1373,6 +1373,17 @@ export async function handleAttackTarget(interaction, ctx) {
   const attackerStats = getDcStats(meta.dcName);
   let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
 
+  // attackTypeOverride (Overheated → 'melee'): persistent per-msgId
+  // attack-type swap that survives across attacks until round cleanup.
+  // Applied BEFORE pendingOverrideAttackDice so a per-attack override
+  // can still further modify if needed.
+  const _attackTypeOverride = game.attackTypeOverride?.[msgId];
+  if (_attackTypeOverride === 'melee') {
+    attackInfo = { ...attackInfo, range: [1, 1], attackType: 'Melee' };
+  } else if (_attackTypeOverride === 'ranged') {
+    attackInfo = { ...attackInfo, range: [attackInfo.range?.[0] ?? 1, Math.max(attackInfo.range?.[1] ?? 3, 99)], attackType: 'Ranged' };
+  }
+
   // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Definition: 'Love'): replace dice/type/pierce for this attack
   const overrideDice = game.pendingOverrideAttackDice?.[msgId];
   const overrideDiceSource = overrideDice?.source; // capture before deletion for Heir to the Jedi check

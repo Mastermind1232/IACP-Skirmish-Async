@@ -50,6 +50,15 @@ const ACTIVATION_MSGID_FLAGS = [
   'boRifleStaffUsedThisActivation',
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',
+  // Overheated (Paz Vizsla): per-msgId attack-type override that
+  // persists across attacks. Set after Overheated's 2 ranged attacks
+  // resolve so the figure's attack type becomes Melee for the rest
+  // of the round. Cleared on round boundary.
+  'attackTypeOverride',
+  // Overheated active state — tracks attacksRemaining so the
+  // post-attack hook in combat-bridge knows when to flip
+  // attackTypeOverride to 'melee'.
+  'overheatedActive',
   'nextAttackReach',
   'selfDestructProtocolTriggered',
   'falseOrdersUpgrade',
@@ -292,6 +301,15 @@ const ROUND_OBJECT_FLAGS = [
   'boRifleStaffUsedThisActivation',
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',
+  // Overheated (Paz Vizsla): per-msgId attack-type override that
+  // persists across attacks. Set after Overheated's 2 ranged attacks
+  // resolve so the figure's attack type becomes Melee for the rest
+  // of the round. Cleared on round boundary.
+  'attackTypeOverride',
+  // Overheated active state — tracks attacksRemaining so the
+  // post-attack hook in combat-bridge knows when to flip
+  // attackTypeOverride to 'melee'.
+  'overheatedActive',
   'nextAttackReach',
   'fellSwoopFreeAttack',
   // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
