@@ -775,27 +775,6 @@ async function fireBladestorm(thread, game, combat, effect, ctx) {
 }
 
 /**
- * Wild Fury (post-activation conditions): apply queued conditions to the
- * attacker figure. Condition Immunity filters harmful out per CRR.
- */
-async function fireWildFury(thread, game, combat, effect, ctx) {
-  const { logGameAction, client } = ctx;
-  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
-  let conds = game.pendingPostAttackConditions?.[combat.attackerMsgId];
-  delete game.pendingPostAttackConditions?.[combat.attackerMsgId];
-  if (!Array.isArray(conds) || conds.length === 0) return;
-  if (isConditionImmune(game, combat.attackerFigureKey)) {
-    conds = conds.filter((c) => !HARMFUL_CONDITIONS.includes(c));
-  }
-  if (conds.length === 0) return;
-  for (const c of conds) applyCondition(game, combat.attackerFigureKey, c);
-  if (logGameAction) {
-    const dcName = dcNameFromFigureKey(combat.attackerFigureKey);
-    await logGameAction(game, client, `**Wild Fury** — **${dcName}** is now **${conds.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-  }
-}
-
-/**
  * Sidewinder (Jyn Odan): "after this attack, suffer 1 Strain to move
  * up to 2 spaces. Limit once per round." Posts the same yes/skip prompt
  * the inline path used to auto-post after combat close. Existing
@@ -1293,9 +1272,6 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'bladestorm':
       await fireBladestorm(thread, game, combat, effect, ctx);
-      return;
-    case 'wild_fury':
-      await fireWildFury(thread, game, combat, effect, ctx);
       return;
     case 'sidewinder':
       await fireSidewinder(thread, game, combat, effect, ctx);

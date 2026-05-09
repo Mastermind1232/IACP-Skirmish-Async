@@ -11,7 +11,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation, isActivationActionInProgress } from '../game/activation-state.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels, isConditionImmune, HARMFUL_CONDITIONS } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getValidPushDestinations } from '../game/movement.js';
 import { getAllFigureCoords } from '../game/spatial.js';
@@ -1002,6 +1002,28 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
   await maybePromptFieldTactics(game, meta, msgId, logGameAction, client, ctx.findDcMessageIdForFigure);
+
+  // Wild Fury post-activation conditions (per CRR + user 2026-05-09:
+  // applies at END OF ACTIVATION, not after each attack). Reads the
+  // queue populated when Wild Fury was played; applies Stun + Bleed
+  // (or whatever was queued) to figure 0 of the activating DC, with
+  // Condition Immunity filtering harmful conditions on immune figures.
+  if (game.postActivationConditions?.[msgId]) {
+    let waConds = game.postActivationConditions[msgId];
+    delete game.postActivationConditions[msgId];
+    if (Array.isArray(waConds) && waConds.length > 0) {
+      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+      const waFigureKey = `${meta.dcName}-${dgIndex}-0`;
+      const _waImmune = (game.figurePositions?.[meta.playerNum]?.[waFigureKey]) ? isConditionImmune(game, waFigureKey) : false;
+      if (_waImmune) {
+        waConds = waConds.filter((c) => !HARMFUL_CONDITIONS.includes(c));
+      }
+      if (waConds.length > 0) {
+        for (const c of waConds) applyCondition(game, waFigureKey, c);
+        await logGameAction(game, client, `**Wild Fury** — **${displayName}** is now **${waConds.join(' + ')}** (end of activation).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+      }
+    }
+  }
 
   saveGames(game.gameId);
 }

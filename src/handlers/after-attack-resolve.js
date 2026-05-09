@@ -287,15 +287,12 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: `Bladestorm: AoE ${combat.postAttackAoeDamage} damage`,
     });
   }
-  // Wild Fury (post-activation conditions): after the attacker's final
-  // free attack of the chain, apply Stun + Bleed to attacker figure.
-  if (combat.attackerMsgId && Array.isArray(game?.pendingPostAttackConditions?.[combat.attackerMsgId]) && game.pendingPostAttackConditions[combat.attackerMsgId].length > 0 && combat.attackerFigureKey) {
-    enqueueAfterAttackEffect(combat, {
-      side: 'attacker',
-      type: 'wild_fury',
-      label: 'Wild Fury: Apply post-activation conditions',
-    });
-  }
+  // Wild Fury REMOVED 2026-05-09: per CRR + user clarification, Wild
+  // Fury's Stun + Bleed apply at END OF ACTIVATION (handleDcEndActivation
+  // in activation.js), not after each attack. Step-8 attacker queue is
+  // not the right window. The dc-play-area code that previously moved
+  // postActivationConditions → pendingPostAttackConditions on the last
+  // free attack click was also removed.
   // Sidewinder (Jyn Odan): "after this attack, suffer 1 Strain to move
   // up to 2 spaces. Limit once per round." Fire handler posts the
   // existing yes/skip prompt; handleSidewinderApply handles the rest.

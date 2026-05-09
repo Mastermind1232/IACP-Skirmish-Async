@@ -2231,12 +2231,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         // Brutality / Sarlacc Sweep: clear different-target tracker once the
         // last free attack is consumed.
         if (game.freeAttackDifferentTargets?.[msgId]) delete game.freeAttackDifferentTargets[msgId];
-        // Wild Fury: on the last free attack, queue postActivationConditions (Stun + Bleed) to apply after combat
-        if (game.postActivationConditions?.[msgId]) {
-          game.pendingPostAttackConditions = game.pendingPostAttackConditions || {};
-          game.pendingPostAttackConditions[msgId] = [...game.postActivationConditions[msgId]];
-          delete game.postActivationConditions[msgId];
-        }
+        // Wild Fury REMOVED 2026-05-09: post-activation conditions now
+        // apply at end of activation (handleDcEndActivation), not on the
+        // last free attack click. The original conversion to
+        // pendingPostAttackConditions + the after-attack apply were
+        // both wrong-timing per CRR + user clarification.
       }
       // Stay Down: apply Stun to the attacker figure when the free attack is consumed
       if (game.stayDownPendingMsgId?.[msgId]) {
