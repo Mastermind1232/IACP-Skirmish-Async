@@ -192,7 +192,13 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
         side: 'defender',
         type: 'slippery',
         label: 'Slippery: gain 2 MP',
-        payload: { msgId: _slipMsgId, defenderDcName: _slipDcName },
+        payload: {
+          msgId: _slipMsgId,
+          defenderDcName: _slipDcName,
+          figureKey: combat.target.figureKey,
+          playerNum: combat.defenderPlayerNum ?? null,
+          threadId: combat.combatThreadId,
+        },
       });
     }
   }

@@ -107,20 +107,34 @@ async function fireStalkPrey(thread, game, combat, effect, ctx) {
 }
 
 /**
- * Slippery (Alliance Smuggler E/R) — defender after-resolve: grant
- * 2 MP to the defender's figure. Inline auto-apply removed; the
- * defender clicks a button in their post-resolve window to fire it.
+ * Slippery (Alliance Smuggler E/R) — defender after-resolve: "After
+ * an attack targeting you resolves, gain 2 movement points." This
+ * is an OUT-OF-ACTIVATION MP gain (the defender isn't activating)
+ * so per the gain-MP rules the points must be spent IMMEDIATELY by
+ * interrupt — not banked. Routes through setupPendingMoveX so the
+ * 1-space-at-a-time picker fires; remaining points are discarded
+ * when the picker closes.
  */
 async function fireSlippery(thread, game, combat, effect, ctx) {
   const { logGameAction, client } = ctx;
   const msgId = effect.payload?.msgId;
-  if (!msgId) return;
-  grantMovementBank(game, msgId, 2);
+  const figureKey = effect.payload?.figureKey;
+  const playerNum = effect.payload?.playerNum;
+  const threadId = effect.payload?.threadId || null;
+  if (!msgId || !figureKey || !playerNum) return;
   if (logGameAction && thread) {
     await logGameAction(game, client,
-      `\u{1F3C3} **Slippery** — **${effect.payload?.defenderDcName || combat.target?.label}** gains 2 MP after being attacked.`,
+      `\u{1F3C3} **Slippery** — **${effect.payload?.defenderDcName || combat.target?.label}** may move up to 2 spaces (interrupt; remaining discarded).`,
       { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
+  await setupPendingMoveX(game, ctx, {
+    msgId,
+    figureKey,
+    playerNum,
+    spaces: 2,
+    source: 'Slippery',
+    threadId,
+  });
 }
 
 /**
