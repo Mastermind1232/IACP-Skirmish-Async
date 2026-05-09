@@ -963,7 +963,11 @@ test('resolveAbility Dirty Trick with strain: choice applies 3 Strain damage', (
   ]);
   const result = resolveAbility('Dirty Trick', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: `strain:${hostileFk}` });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(healthState[0], [1, 5]); // 4 - 3 Strain = 1
+  // Strain queues via pendingStrain[] — HP unchanged synchronously.
+  assert.deepStrictEqual(healthState[0], [4, 5]);
+  assert.ok(Array.isArray(result.pendingStrain) && result.pendingStrain.length === 1);
+  assert.strictEqual(result.pendingStrain[0].figureKey, hostileFk);
+  assert.strictEqual(result.pendingStrain[0].amount, 3);
 });
 
 test('resolveAbility Close and Personal stamps pendingMoveX (no bank)', () => {
@@ -1048,7 +1052,10 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
   ]);
   const result = resolveAbility('Out of Time', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(healthState[0], [4, 10]); // 8 - 4 (round 4) = 4
+  // Strain queues via pendingStrain[] — HP unchanged synchronously.
+  assert.deepStrictEqual(healthState[0], [8, 10]);
+  assert.ok(Array.isArray(result.pendingStrain) && result.pendingStrain.length === 1);
+  assert.strictEqual(result.pendingStrain[0].amount, 4); // round 4
 });
 
 test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if FORCE USER', () => {

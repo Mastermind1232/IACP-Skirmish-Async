@@ -86,9 +86,12 @@ describe('ORACLE-DISOR-002: Resolution discards condition and applies Strain', (
     const conds = game.figureConditions?.['Darth Vader-1-0'] || [];
     assert.ok(!conds.includes('Focus'), 'Focus should be discarded');
 
-    // HP should be reduced by 2 (Strain = HP damage in this engine)
+    // Strain queues via pendingStrain[] — HP unchanged synchronously.
     const targetHp = dcHealthState.get(targetMsgId);
-    assert.deepStrictEqual(targetHp, [[14, 16]], 'Vader HP should be 16 → 14 (2 Strain)');
+    assert.deepStrictEqual(targetHp, [[16, 16]], 'Vader HP unchanged synchronously (strain via pipeline)');
+    assert.ok(Array.isArray(result.pendingStrain) && result.pendingStrain.length === 1);
+    assert.strictEqual(result.pendingStrain[0].figureKey, 'Darth Vader-1-0');
+    assert.strictEqual(result.pendingStrain[0].amount, 2);
   });
 
   it('002b: Hidden also counts as beneficial condition', () => {

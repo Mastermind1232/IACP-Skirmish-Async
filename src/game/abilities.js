@@ -6115,13 +6115,30 @@ export function resolveAbility(abilityId, context) {
       const healthState = dcHealthState.get(targetMsgId) || [];
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
+      // Damage applies synchronously; strain queues via pendingStrain[]
+      // so apply-ability-result.js routes it through applyStrain (Fireproof
+      // / Headhunter / per-strain choice / Under Duress / Paz).
       const [cur, max] = hs;
-      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
-      dcHealthState.set(targetMsgId, healthState);
-      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
-      const strainPart2 = strain > 0 ? ` and ${strain} Strain` : '';
+      if (damage > 0) {
+        healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
+        dcHealthState.set(targetMsgId, healthState);
+        syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+      }
+      const _cahPendingStrain = strain > 0 ? [{
+        figureKey: chosenFigureKey,
+        controllerPlayerNum: oppNum,
+        amount: strain,
+        source: entry.label || context.cardName || 'CC ability',
+      }] : [];
+      const strainPart2 = strain > 0 ? ` + ${strain} Strain (queued)` : '';
       const tName = targetMeta.displayName || targetMeta.dcName || chosenFigureKey;
-      return { applied: true, logMessage: `**${tName}** suffered ${damage > 0 ? `${damage} Damage${strainPart2}` : `${strain} Strain`}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [targetMsgId] };
+      return {
+        applied: true,
+        logMessage: `**${tName}** suffered ${damage > 0 ? `${damage} Damage${strainPart2}` : `${strain} Strain`}.`,
+        refreshDcEmbed: true,
+        refreshDcEmbedMsgIds: [targetMsgId],
+        ...(_cahPendingStrain.length ? { pendingStrain: _cahPendingStrain } : {}),
+      };
     }
     // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -6205,16 +6222,26 @@ export function resolveAbility(abilityId, context) {
     const healthState = dcHealthState.get(targetMsgId) || [];
     const hs0 = healthState[targetIdx];
     if (!Array.isArray(hs0) || hs0.length < 1) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
+    // Damage applies synchronously; strain queues via pendingStrain[].
     const [cur, max] = hs0;
-    healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
-    dcHealthState.set(targetMsgId, healthState);
-    syncHealthStateToList(game, oppNum, targetMsgId, healthState);
-    const strainPart = strain > 0 ? ` and ${strain} Strain` : '';
+    if (damage > 0) {
+      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
+      dcHealthState.set(targetMsgId, healthState);
+      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+    }
+    const _cahAutoPendingStrain = strain > 0 ? [{
+      figureKey: targetFk,
+      controllerPlayerNum: oppNum,
+      amount: strain,
+      source: entry.label || context.cardName || 'CC ability',
+    }] : [];
+    const strainPart = strain > 0 ? ` + ${strain} Strain (queued)` : '';
     return {
       applied: true,
-      logMessage: `Gained ${entry.mpBonus} MP. Adjacent hostile suffered ${damage > 0 ? `${damage} Damage${strainPart}` : `${strain} Strain`} (${totalDamage} total).`,
+      logMessage: `Gained ${entry.mpBonus} MP. Adjacent hostile suffered ${damage > 0 ? `${damage} Damage${strainPart}` : `${strain} Strain`}.`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
+      ...(_cahAutoPendingStrain.length ? { pendingStrain: _cahAutoPendingStrain } : {}),
     };
   }
 
@@ -6664,14 +6691,25 @@ export function resolveAbility(abilityId, context) {
         ? [...baseTargetConditions, 'Weaken']
         : baseTargetConditions;
       const strain = useWeakenIfNotAlreadyWeakened && !targetAlreadyWeakened ? 0 : strainBase;
-      const totalDamage = damage + strain;
       const healthState = dcHealthState.get(targetMsgId) || [];
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
+      // Damage applies synchronously; strain queues via pendingStrain[]
+      // so apply-ability-result.js routes it through applyStrain (Fireproof
+      // / Headhunter / per-strain choice / Under Duress / Paz). Splash and
+      // selfStrain still take the legacy synchronous path here.
       const [cur, max] = hs;
-      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - totalDamage), max];
-      dcHealthState.set(targetMsgId, healthState);
-      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+      if (damage > 0) {
+        healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
+        dcHealthState.set(targetMsgId, healthState);
+        syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+      }
+      const _cahPendingStrain = strain > 0 ? [{
+        figureKey: targetFk,
+        controllerPlayerNum: oppNum,
+        amount: strain,
+        source: entry.label || abilityId || 'CC ability',
+      }] : [];
       // Apply conditions to target
       if (targetConditions.length > 0) {
         for (const c of targetConditions) applyCondition(game, targetFk, c);
@@ -6742,10 +6780,16 @@ export function resolveAbility(abilityId, context) {
           }
         }
       }
-      const strainLabel = strain > 0 ? (damage > 0 ? ` and ${strain} Strain` : `${strain} Strain`) : '';
+      const strainLabel = strain > 0 ? (damage > 0 ? ` + ${strain} Strain (queued)` : `${strain} Strain (queued)`) : '';
       const dmgLabel = damage > 0 ? `${damage} Damage` : '';
       const condPart = targetConditions.length > 0 ? `; target gains ${targetConditions.join(', ')}` : '';
-      return { applied: true, logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}${selfHealMsg}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+      return {
+        applied: true,
+        logMessage: `Hostile suffered ${dmgLabel}${strainLabel}${condPart}.${selfStrainMsg}${selfHealMsg}`,
+        refreshDcEmbed: true,
+        refreshDcEmbedMsgIds: refreshIds,
+        ...(_cahPendingStrain.length ? { pendingStrain: _cahPendingStrain } : {}),
+      };
     };
     // Second pass: user already picked a figure (or an orStunInstead prefixed choice)
     if (chosenFigureKey) {
