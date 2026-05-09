@@ -30,7 +30,7 @@ import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from
 import { sanitizeMentions } from '../discord/channel-helpers.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
-  setPendingIndiscriminateFire,
+  setPendingIndiscriminateFire, setPendingConcussiveBolt,
 } from '../game/interrupts.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
@@ -1031,6 +1031,54 @@ async function fireHavocShot(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Concussive Bolt (4-LOM): on hit, push 1x1 target 1 space (attacker
+ * picks direction). Posts the same push-destination prompt as the
+ * inline path; pending state carries fromStep8Queue so the click
+ * handler re-posts the attacker step-8 window instead of closing combat.
+ */
+async function fireConcussiveBolt(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  if (!thread || !combat.target?.figureKey || !game.selectedMap?.id) return;
+  const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
+  if (getFigureSize(targetDcName) !== '1x1') return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+  if (!targetPos) return;
+  const { getValidPushDestinations } = await import('../game/movement.js');
+  const pusherDc = combat.attackerFigureKey ? dcNameFromFigureKey(combat.attackerFigureKey) : null;
+  const pusherKws = pusherDc ? (getDcEffect(pusherDc)?.keywords || []).map((k) => String(k).toUpperCase()) : [];
+  const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defPN, { pusherIsMassive: pusherKws.includes('MASSIVE') });
+  if (adjSpaces.length === 0) return;
+  const { label } = getFigureLabel(game, defPN, combat.target.figureKey, targetDcName, 80, {
+    dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+  });
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  setPendingConcussiveBolt(game, {
+    gameId: game.gameId,
+    combatThreadId: combat.combatThreadId,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    defenderPlayerNum: defPN,
+    ownerId,
+    figureKey: combat.target.figureKey,
+    figureLabel: String(label).slice(0, 80),
+    currentPos: targetPos,
+    adjSpaces,
+    resultText: combat._step7ResultText || '',
+    combat,
+    initialEmbedRefreshMsgIds: [],
+    fromStep8Queue: true,
+  });
+  const btns = adjSpaces.slice(0, 4).map((sp) =>
+    new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Concussive Bolt** — Push **${label}** 1 space. Choose a destination:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -1110,6 +1158,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'havoc_shot':
       await fireHavocShot(thread, game, combat, effect, ctx);
+      return;
+    case 'concussive_bolt':
+      await fireConcussiveBolt(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

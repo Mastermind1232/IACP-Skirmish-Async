@@ -493,11 +493,27 @@ export async function handleConcussiveBoltPush(interaction, ctx) {
     return;
   }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const fromStep8Queue = !!pending.fromStep8Queue;
   clearPendingConcussiveBolt(game);
   // Move the figure to the chosen space
   pushFigure(game, pending.defenderPlayerNum, pending.figureKey, space);
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await logGameAction(game, client, `**Concussive Bolt** — **${pending.figureLabel}** pushed from ${String(pending.currentPos).toUpperCase()} to **${space.toUpperCase()}**`, { phase: 'ROUND', icon: 'attack' });
+  if (fromStep8Queue) {
+    // 2026-05-09: triggered from a step-8 attacker button — return to
+    // the attacker post-resolve window instead of closing combat. The
+    // remaining attacker effects (and any defender effects) still need
+    // their own clicks before combat actually closes.
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
+      if (cThread) await postPostResolveWindow(cThread, game, pending.combat, 'attacker', { ...ctx, client });
+    } catch (err) {
+      console.error('[handleConcussiveBoltPush] step-8 reopen failed:', err?.message ?? err);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames(game.gameId);
 }
@@ -534,7 +550,19 @@ export async function handleConcussiveBoltSkip(interaction, ctx) {
   if (!game?.pendingConcussiveBolt) return;
   const pending = game.pendingConcussiveBolt;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const fromStep8Queue = !!pending.fromStep8Queue;
   clearPendingConcussiveBolt(game);
+  if (fromStep8Queue) {
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
+      if (cThread) await postPostResolveWindow(cThread, game, pending.combat, 'attacker', { ...ctx, client });
+    } catch (err) {
+      console.error('[handleConcussiveBoltSkip] step-8 reopen failed:', err?.message ?? err);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames(game.gameId);

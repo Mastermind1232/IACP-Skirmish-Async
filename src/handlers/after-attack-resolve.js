@@ -350,6 +350,16 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Havoc Shot: 1 Strain → splash up to 2',
     });
   }
+  // Concussive Bolt (4-LOM surge): hit-gated, 1x1 target only.
+  // fireConcussiveBolt re-validates at click time and skips if the push
+  // would have no legal destinations.
+  if (combat.surgeConcussiveBolt && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'concussive_bolt',
+      label: 'Concussive Bolt: push target 1 space',
+    });
+  }
 }
 
 /**

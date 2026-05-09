@@ -2318,8 +2318,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       return true;
     }
   }
-  // Concussive Bolt (4-LOM): after non-miss on SMALL target, push target 1 space (attacker picks direction)
-  if (hit && combat.surgeConcussiveBolt && combat.target?.figureKey && game.selectedMap?.id) {
+  // Concussive Bolt inline disabled 2026-05-09 → fireConcussiveBolt
+  // (step-8 attacker button, with fromStep8Queue bypass on click handler).
+  if (false && hit && combat.surgeConcussiveBolt && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
     const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
     const targetSize = getFigureSize(targetDcName);
     if (targetSize === '1x1') {
