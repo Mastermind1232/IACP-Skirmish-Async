@@ -163,6 +163,14 @@ async function _dispatchNextMassivePush(game, result, interaction, ctx) {
     // pendingMassivePush. No-op if nothing was deferred.
     const { resumeDeferredPostDeployMove } = await import('./post-deploy.js');
     await resumeDeferredPostDeployMove(game, gameId, client, ctx);
+    // Resume On a Mission per-step push picker if a Move-X picker was
+    // suspended for this displacement. No-op if nothing pending.
+    try {
+      const { resumeOnAMissionPushIfPending } = await import('./move-x-handler.js');
+      await resumeOnAMissionPushIfPending(game, { client, logGameAction, saveGames });
+    } catch (err) {
+      console.error('[move-x] resumeOnAMissionPushIfPending failed:', err?.message ?? err);
+    }
     if (saveGames) saveGames(game.gameId);
     return;
   }
