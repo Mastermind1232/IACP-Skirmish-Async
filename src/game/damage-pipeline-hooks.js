@@ -306,6 +306,10 @@ BEFORE_DEFEATED_HOOKS.push({
  */
 BEFORE_DEFEATED_HOOKS.push({
   id: 'self_destruct_protocol',
+  // Canonical trigger: "When you have suffered Damage equal to your
+  // Health, before you are defeated …" — does NOT fire on direct
+  // defeat (figure didn't suffer damage to reach 0 HP).
+  requiresDamage: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
     if (game.selfDestructProtocolTriggered?.[opts.msgId]) return false;
@@ -365,6 +369,10 @@ BEFORE_DEFEATED_HOOKS.push({
  */
 BEFORE_DEFEATED_HOOKS.push({
   id: 'last_resort',
+  // Canonical trigger: "Deplete this card when a figure in this group
+  // has suffered Damage equal to its Health" — damage-required.
+  // Does NOT fire on direct defeat.
+  requiresDamage: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
     if (game.lastResortTriggered?.[opts.msgId]) return false;
@@ -433,6 +441,10 @@ BEFORE_DEFEATED_HOOKS.push({
  */
 BEFORE_DEFEATED_HOOKS.push({
   id: 'parting_shot',
+  // Canonical trigger: "When you have suffered Damage equal to your
+  // Health, before you are defeated …" — damage-required. Does NOT
+  // fire on direct defeat.
+  requiresDamage: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
     if (game.partingShotTriggered?.[opts.msgId]) return false;

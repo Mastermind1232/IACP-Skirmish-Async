@@ -416,9 +416,6 @@ export async function applyDirectDefeat(game, ctx, opts) {
   if (curHp > 0) {
     reduceHp(ctx.dcHealthState, game, opts.msgId, opts.figIndex, curHp, opts.controllerPlayerNum);
   }
-  // WHEN_DEFEATED hooks. Async first, then sync, mirroring the
-  // applyDamage path. Skip WHEN_DAMAGED and BEFORE_DEFEATED entirely
-  // — figures defeated this way did NOT suffer damage.
   const defeatedOpts = {
     ...opts,
     amount: curHp,
@@ -427,6 +424,39 @@ export async function applyDirectDefeat(game, ctx, opts) {
     defeatedPos,
     directDefeat: true,
   };
+  // BEFORE_DEFEATED hooks fire on direct defeat too, EXCEPT for hooks
+  // whose canonical trigger text requires "suffered damage equal to
+  // health" (Self-Destruct Protocol, Last Resort, Parting Shot).
+  // Those are tagged `requiresDamage: true` on registration; we skip
+  // them on the direct-defeat path. Categorical "would be defeated"
+  // hooks (You Will Not Deny Me, Sustained by Rage, Second Chance,
+  // Executor RGC, etc.) DO fire — they're independent of damage.
+  // CC-play timing window for "before defeated" also fires.
+  await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
+    contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
+  });
+  let preventDefeat = false;
+  for (const hook of BEFORE_DEFEATED_HOOKS) {
+    if (!hook.probe || !hook.apply) continue;
+    if (hook.requiresDamage) continue;
+    if (!hook.probe(game, defeatedOpts)) continue;
+    try {
+      const out = await hook.apply(game, defeatedOpts, ctx);
+      if (out?.preventDefeat) preventDefeat = true;
+    } catch (err) {
+      console.error(`[damage-pipeline] direct-defeat BEFORE_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
+    }
+  }
+  if (preventDefeat) {
+    return {
+      figureKey: opts.figureKey,
+      prevHp: curHp,
+      newHp: 0,
+      wasDefeated: false,
+      preventDefeat: true,
+    };
+  }
+  // WHEN_DEFEATED hooks. Mirrors applyDamage's WHEN_DEFEATED block.
   for (const hook of WHEN_DEFEATED_HOOKS) {
     if (!hook.probe || !hook.apply) continue;
     if (!hook.probe(game, defeatedOpts)) continue;
