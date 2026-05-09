@@ -8794,15 +8794,43 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play.)`, refreshDcEmbed: !!figMsgId };
     }
-    // Phase 1: hostile figure picker (move DROIDs first manually)
-    const oppNum = opponentPlayerNum(playerNum);
-    const hostileKeys = [];
-    const hostileLabels = [];
-    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
-      hostileKeys.push(fk); hostileLabels.push(dcNameFromFigureKey(fk));
+    // Phase 1: stamp a Move-X sequence for up to 3 friendly DROIDs
+    // (each picker grants 1 space, bypassCosts: true per MOVE-017).
+    // afterAction=triangulateTarget posts the hostile-target picker
+    // once every DROID's picker drains; Phase 2 above applies damage.
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const friendlyDroidFigs = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!kws.includes('DROID')) continue;
+      const fkMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      if (!fkMsgId) continue;
+      friendlyDroidFigs.push({ msgId: fkMsgId, figureKey: fk, dcName: dcN });
     }
-    if (!hostileKeys.length) return { applied: false, manualMessage: 'No hostile figures to target.' };
-    return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Target: ${n} (move DROIDs first)`), choiceValues: hostileKeys };
+    if (friendlyDroidFigs.length === 0) {
+      return { applied: false, manualMessage: '**Triangulate** — no friendly DROIDs in play; resolve manually.' };
+    }
+    const seqFigures = friendlyDroidFigs.slice(0, 3).map((f) => ({
+      msgId: f.msgId,
+      figureKey: f.figureKey,
+      playerNum,
+      spaces: 1,
+      dcName: f.dcName,
+    }));
+    return {
+      applied: true,
+      pendingMoveXSequenceSetup: {
+        figures: seqFigures,
+        source: 'Triangulate',
+        threadId: null,
+        bypassCosts: true,
+        afterAction: { type: 'triangulateTarget', playerNum },
+      },
+      logMessage: `**Triangulate** — ${seqFigures.length} friendly DROID${seqFigures.length === 1 ? '' : 's'} may each move up to 1 space; pick order. After all moves, choose a hostile target.`,
+    };
   }
 
   // ccEffect: packAlphaEffect (Pack Alpha) — move CREATUREs manually; pick hostile; deal damage = # adjacent CREATUREs

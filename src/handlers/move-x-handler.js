@@ -631,6 +631,47 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
     }
     return;
   }
+  if (afterAction.type === 'triangulateTarget') {
+    // Triangulate: after up to 3 DROIDs have each moved 1 space, post
+    // the hostile-target picker. Phase 2 (resolveAbility chosenFigureKey)
+    // applies damage via the existing triangulateEffect dispatch.
+    try {
+      const { client, logGameAction } = ctx;
+      const playerNum = afterAction.playerNum;
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const hostileKeys = [];
+      const hostileLabels = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+        if (!pos) continue;
+        hostileKeys.push(fk);
+        hostileLabels.push(dcNameFromFigureKey(fk));
+      }
+      if (hostileKeys.length === 0) {
+        await logGameAction?.(game, client, `**Triangulate** — no hostile figures on the board; effect skipped.`, { phase: 'ROUND', icon: 'card' });
+        return;
+      }
+      const ownerId = getPlayerId(game, playerNum);
+      const choiceOptions = hostileLabels.map(n => `Target: ${n}`);
+      game.pendingCcChoice = {
+        gameId: game.gameId,
+        playerNum,
+        cardName: 'Triangulate',
+        abilityId: 'Triangulate',
+        choiceOptions,
+        choiceValues: hostileKeys,
+      };
+      const btns = choiceOptions.slice(0, 20).map((label) => new ButtonBuilder()
+        .setCustomId(`cc_choice_${game.gameId}_${label}`)
+        .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
+        .setStyle(ButtonStyle.Danger));
+      const rows = chunkButtonsToRows(btns).slice(0, 5);
+      const content = `<@${ownerId}> 📡 **Triangulate** — choose a hostile figure (within 5 + LOS). Damage = # of those moved DROIDs with LOS.`;
+      await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+    } catch (err) {
+      console.error('[move-x] triangulateTarget failed:', err?.message ?? err);
+    }
+    return;
+  }
   console.warn(`[move-x] unknown sequence afterAction type "${afterAction.type}"; dropping`);
 }
 
