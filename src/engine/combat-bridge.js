@@ -2007,28 +2007,29 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   }
 
   // --- Named surge post-combat effects ---
+  // Harass / Suppression both deal Strain to the defender — route through
+  // applyStrain so Fireproof / Headhunter / per-strain choice / Under
+  // Duress / Paz all gate correctly.
   if (hit && targetMsgId) {
-    // Harass: defender suffers N Strain after a non-miss
     if ((combat.surgeHarass || 0) > 0) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-        figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
-        amount: combat.surgeHarass, controllerPlayerNum: defenderPlayerNum,
-        attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-        source: 'Surge Harass', combat,
+      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+        figureKey: combat.target.figureKey,
+        controllerPlayerNum: defenderPlayerNum,
+        amount: combat.surgeHarass,
+        source: 'Surge Harass',
       });
       embedRefreshMsgIds.add(targetMsgId);
       await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
     }
-    // Suppression: target suffers Strain = min(block + evade + [1 if dodge], 2)
     if (combat.surgeSuppressionStrain) {
       const supRoll = combat.defenseRoll || {};
       const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
       if (supAmt > 0) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-          figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
-          amount: supAmt, controllerPlayerNum: defenderPlayerNum,
-          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-          source: 'Supreme Power', combat,
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+          figureKey: combat.target.figureKey,
+          controllerPlayerNum: defenderPlayerNum,
+          amount: supAmt,
+          source: 'Suppression',
         });
         embedRefreshMsgIds.add(targetMsgId);
         await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });

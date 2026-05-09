@@ -224,7 +224,7 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
     assert.ok(!result.requiresChoice, 'should not offer choice when no targets');
   });
 
-  it('Phase 2: applies 2 damage + 1 strain to chosen target', () => {
+  it('Phase 2: applies 2 damage synchronously and queues 1 strain via pendingStrain', () => {
     const { context, dcHealthState } = buildForceChokeContext({
       enemyPositions: { 'Rebel Trooper-1-0': 'c5' },
       choiceIndex: 0,
@@ -232,9 +232,14 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
     });
     const result = resolveAbility('force_choke', context);
     assert.equal(result.applied, true);
-    // 2 damage + 1 strain = 3 total HP reduction
+    // Damage applies synchronously; strain routes through applyStrain pipeline.
     const healthAfter = dcHealthState.get('msg_enemy');
-    assert.equal(healthAfter[0][0], 2, 'HP should be 5 - 3 = 2');
+    assert.equal(healthAfter[0][0], 3, 'HP should be 5 - 2 (damage only) = 3');
+    assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');
+    assert.equal(result.pendingStrain.length, 1);
+    assert.equal(result.pendingStrain[0].figureKey, 'Rebel Trooper-1-0');
+    assert.equal(result.pendingStrain[0].amount, 1);
+    assert.equal(result.pendingStrain[0].controllerPlayerNum, 2);
   });
 
   it('Phase 1: no valid targets returns not-applied', () => {
@@ -368,7 +373,7 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
     };
   }
 
-  it('Phase 2: applies 1 damage + 1 strain + Bleed to target, Focus to self', () => {
+  it('Phase 2: applies 1 damage synchronously, queues 1 strain via pendingStrain, applies Bleed to target + Focus to self', () => {
     const { context, game, dcHealthState } = buildInvasiveContext({
       enemyPositions: { 'Rebel Trooper-1-0': ADJACENT_POS },
       choiceIndex: 0,
@@ -376,9 +381,12 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
     });
     const result = resolveAbility('invasive_procedure', context);
     assert.equal(result.applied, true);
-    // 1 damage + 1 strain = 2 total
+    // Damage applies synchronously; strain routes through applyStrain pipeline.
     const healthAfter = dcHealthState.get('msg_enemy');
-    assert.equal(healthAfter[0][0], 2, 'HP should be 4 - 2 = 2');
+    assert.equal(healthAfter[0][0], 3, 'HP should be 4 - 1 (damage only) = 3');
+    assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');
+    assert.equal(result.pendingStrain.length, 1);
+    assert.equal(result.pendingStrain[0].amount, 1);
     // Bleed on target
     assert.ok(game.figureConditions?.['Rebel Trooper-1-0']?.includes('Bleed'),
       'target should have Bleed');

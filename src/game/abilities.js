@@ -501,27 +501,36 @@ export function resolveAbility(abilityId, context) {
       const _thfTargetOwner = enemyPositions[targetFigureKey] ? enemyPlayerNum : (friendlyPositions[targetFigureKey] ? playerNum : enemyPlayerNum);
       const targetMsgId = findMsgIdForFigureKey(game, _thfTargetOwner, targetFigureKey, dcMessageMeta);
       const parts = [];
-      const totalDmg = damage + strain;
-      // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck — auto-
-      // queues lethal hits onto game._pendingFigureDefeats.
+      // Damage applies synchronously through applyDamageWithDefeatCheck;
+      // Strain is queued via pendingStrain[] so apply-ability-result.js
+      // routes it through the canonical applyStrain pipeline (Fireproof /
+      // Headhunter / per-strain choice / Under Duress / Paz).
+      const _thfPendingStrain = [];
       let _hadDefeats = false;
-      if (totalDmg > 0 && dcHealthState && targetMsgId) {
+      if (damage > 0 && dcHealthState && targetMsgId) {
         const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, totalDmg, _thfTargetOwner, {
+        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, damage, _thfTargetOwner, {
           sourceLabel: entry.label || 'Force ability',
           attackerPlayerNum: playerNum,
         });
         if (dmgRes.maxHp > 0) {
-          const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
-          parts.push(`suffered ${dmgStr} (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
+          parts.push(`suffered ${damage} Damage (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
           if (dmgRes.wasDefeated) _hadDefeats = true;
         } else {
-          parts.push(`(HP not tracked — apply ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''} manually)`);
+          parts.push(`(HP not tracked — apply ${damage} Damage manually)`);
         }
-      } else if (totalDmg > 0) {
-        const dmgStr = damage > 0 && strain > 0 ? `${damage} Damage + ${strain} Strain` : damage > 0 ? `${damage} Damage` : `${strain} Strain`;
-        parts.push(`(apply ${dmgStr} manually)`);
+      } else if (damage > 0) {
+        parts.push(`(apply ${damage} Damage manually)`);
+      }
+      if (strain > 0) {
+        _thfPendingStrain.push({
+          figureKey: targetFigureKey,
+          controllerPlayerNum: _thfTargetOwner,
+          amount: strain,
+          source: entry.label || 'Force ability',
+        });
+        parts.push(`+ ${strain} Strain`);
       }
       if (condToApply) {
         if (applyCondition(game, targetFigureKey, condToApply)) {
@@ -579,6 +588,7 @@ export function resolveAbility(abilityId, context) {
         freeAction: !!entry.freeAction,
         logMessage: `**${entry.label}** — **${dcName}** ${parts.join(', ') || 'targeted'}.${splashLog}${selfCondLog}`,
         refreshDcEmbed: true,
+        ...(_thfPendingStrain.length ? { pendingStrain: _thfPendingStrain } : {}),
         ...(_hadDefeats ? { refreshBoard: true } : {}),
       };
     }
@@ -2844,32 +2854,44 @@ export function resolveAbility(abilityId, context) {
       const adj = entry.fixedAreaTargetOnly ? [] : (boardState?.mapSpaces?.adjacency?.[spaceNorm] || []);
       const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
       const results = [];
-      // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
+      // Damage applies synchronously through applyDamageWithDefeatCheck;
+      // Strain is queued via pendingStrain[] so apply-ability-result.js
+      // routes it through the canonical applyStrain pipeline (Fireproof /
+      // Headhunter / per-strain choice / Under Duress / Paz).
+      const _faePendingStrain = [];
       let _fadHadDefeats = false;
       for (const pn of [1, 2]) {
         for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
           if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
           const dcName = dcNameFromFigureKey(fk);
           const parts = [];
-          if (totalPerFig > 0) {
+          if (dmgAmt > 0) {
             const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
             if (figMsgId) {
               const fkMatch = fk.match(/-(\d+)-(\d+)$/);
               const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-              const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, figIdx, totalPerFig, pn, {
+              const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, figIdx, dmgAmt, pn, {
                 sourceLabel: entry.label || 'fixedArea damage',
                 attackerPlayerNum: playerNum || (pn === 1 ? 2 : 1),
               });
               if (dmgRes.maxHp > 0) {
-                const dmgLabel = [dmgAmt > 0 ? `${dmgAmt} Dmg` : null, strainAmt > 0 ? `${strainAmt} Strain` : null].filter(Boolean).join('+');
-                parts.push(`${dmgLabel} (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
+                parts.push(`${dmgAmt} Dmg (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
                 if (dmgRes.wasDefeated) _fadHadDefeats = true;
               } else {
-                parts.push(`apply ${totalPerFig} damage manually`);
+                parts.push(`apply ${dmgAmt} damage manually`);
               }
             } else {
-              parts.push(`apply ${totalPerFig} damage manually`);
+              parts.push(`apply ${dmgAmt} damage manually`);
             }
+          }
+          if (strainAmt > 0) {
+            _faePendingStrain.push({
+              figureKey: fk,
+              controllerPlayerNum: pn,
+              amount: strainAmt,
+              source: entry.label || 'fixedArea strain',
+            });
+            parts.push(`+ ${strainAmt} Strain`);
           }
           if (conditions.length) {
             const added = conditions.filter((c) => applyCondition(game, fk, c));
@@ -2886,21 +2908,21 @@ export function resolveAbility(abilityId, context) {
           if (parts.length) results.push(`**${dcName}**: ${parts.join(', ')}`);
         }
       }
-      // Apply self strain
+      // Apply self strain via applyStrain pipeline (Demolish costs 1 self-strain)
       const selfStrainAmt = entry.fixedSelfStrain || 0;
-      if (selfStrainAmt > 0 && dcHealthState && msgId) {
+      if (selfStrainAmt > 0 && msgId) {
         const actData = game.dcActionsData?.[msgId];
         const selfFigIdx = actData?.selectedFigure ?? 0;
         const dgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
         const dgIndex = dgMatch ? dgMatch[1] : '1';
-        const selfHs = dcHealthState.get(msgId) || [];
-        const selfHp = selfHs[selfFigIdx];
-        if (selfHp) {
-          const [cur, max] = selfHp;
-          const newCur = Math.max(0, (cur ?? max) - selfStrainAmt);
-          selfHs[selfFigIdx] = [newCur, max ?? newCur];
-          dcHealthState.set(msgId, selfHs);
-          syncHealthStateToList(game, playerNum, msgId, selfHs);
+        const selfFigureKey = meta?.dcName ? `${meta.dcName}-${dgIndex}-${selfFigIdx}` : null;
+        if (selfFigureKey && playerNum) {
+          _faePendingStrain.push({
+            figureKey: selfFigureKey,
+            controllerPlayerNum: playerNum,
+            amount: selfStrainAmt,
+            source: `${entry.label || 'fixedArea'} (self)`,
+          });
           results.push(`**${meta?.dcName}** suffers ${selfStrainAmt} Strain (self)`);
         }
       }
@@ -2921,6 +2943,7 @@ export function resolveAbility(abilityId, context) {
         logMessage: `**${entry.label}** — Space **${spaceUpper}**. ${results.length ? results.join('; ') : 'No figures affected.'}`,
         refreshDcEmbed: results.length > 0,
         refreshBoard: !!entry.placesRubble || _fadHadDefeats,
+        ...(_faePendingStrain.length ? { pendingStrain: _faePendingStrain } : {}),
       };
     }
     // Phase 1: pick a space within range

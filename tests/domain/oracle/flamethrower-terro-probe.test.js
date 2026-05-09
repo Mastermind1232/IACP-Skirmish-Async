@@ -95,8 +95,8 @@ describe('PROBE-TERRO-FLAME-001: Phase 1 enumerates adjacent-to-hostile spaces w
   });
 });
 
-describe('PROBE-TERRO-FLAME-002: Phase 2 applies 2 damage + 1 strain + Weaken to each figure in area', () => {
-  it('target on chosen space takes 3 HP damage and gains Weakened', () => {
+describe('PROBE-TERRO-FLAME-002: Phase 2 applies 2 damage synchronously, queues 1 strain via pendingStrain, Weaken to each figure in area', () => {
+  it('target on chosen space takes 2 damage synchronously, gains Weakened, has strain queued', () => {
     const { game, dcMessageMeta, dcHealthState, meta, terroMsgId, trooperMsgId } = buildGame({ terroPos: 'a1', hostilePos: 'b1' });
     const result = resolveAbility('flamethrower_terro', {
       game, playerNum: 1, meta, msgId: terroMsgId,
@@ -105,9 +105,13 @@ describe('PROBE-TERRO-FLAME-002: Phase 2 applies 2 damage + 1 strain + Weaken to
     });
     assert.equal(result.applied, true, `should resolve: ${result.logMessage || result.manualMessage}`);
     const trooperHp = dcHealthState.get(trooperMsgId);
-    assert.deepStrictEqual(trooperHp, [[1, 4]], 'trooper: 4 HP → 1 HP (2 dmg + 1 strain)');
+    assert.deepStrictEqual(trooperHp, [[2, 4]], 'trooper: 4 HP → 2 HP (damage only; strain via pipeline)');
     const conds = game.figureConditions?.['Rebel Trooper-1-0'] || [];
     assert.ok(conds.includes('Weaken'), `expected Weaken on target, got: ${JSON.stringify(conds)}`);
+    assert.ok(Array.isArray(result.pendingStrain), 'pendingStrain queued');
+    const trooperStrain = result.pendingStrain.find((s) => s.figureKey === 'Rebel Trooper-1-0');
+    assert.ok(trooperStrain, 'trooper strain entry queued');
+    assert.equal(trooperStrain.amount, 1);
   });
 
   it('friendly figure adjacent to chosen space ALSO takes damage (no self-exclusion)', () => {
@@ -122,9 +126,12 @@ describe('PROBE-TERRO-FLAME-002: Phase 2 applies 2 damage + 1 strain + Weaken to
     });
     assert.equal(result.applied, true);
     const friendlyHp = dcHealthState.get(friendlyMsgId);
-    assert.deepStrictEqual(friendlyHp, [[6, 9]], 'friendly adjacent: 9 HP → 6 HP');
+    assert.deepStrictEqual(friendlyHp, [[7, 9]], 'friendly adjacent: 9 HP → 7 HP (damage only; strain via pipeline)');
     const conds = game.figureConditions?.['Gamorrean Guard-1-0'] || [];
     assert.ok(conds.includes('Weaken'), 'friendly also becomes Weakened');
+    assert.ok(Array.isArray(result.pendingStrain), 'pendingStrain queued');
+    const friendlyStrain = result.pendingStrain.find((s) => s.figureKey === 'Gamorrean Guard-1-0');
+    assert.ok(friendlyStrain, 'friendly strain entry queued');
   });
 });
 
