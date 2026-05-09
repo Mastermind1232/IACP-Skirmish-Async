@@ -8560,11 +8560,11 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validTargets.map(getFigLbl), choiceValues: validTargets };
   }
 
-  // ccEffect: lookingForAFightChoice — gain 1 Power Token; then move 2 spaces or push an adjacent hostile 1 space
+  // ccEffect: lookingForAFightChoice — gain 1 Power Token; then move 1 space OR push an adjacent SMALL figure 1 space
   // Must come before the general powerTokenGain handler to take priority.
-  // Phase 1 (no chosenFigureKey): grant Wild token + present Move/Push choice
-  // Phase 2a (chosenFigureKey='move2'): add 2 MP
-  // Phase 2b (chosenFigureKey=hostile fk): present space picker for push
+  // Phase 1 (no chosenFigureKey): defer Power Token + present Move/Push choice (push restricted to adjacent SMALL hostiles)
+  // Phase 2a (chosenFigureKey='move1'): stamp pendingMoveX (1 space) + grantPowerToken continuation
+  // Phase 2b (chosenFigureKey=hostile SMALL fk): present space picker for the 1-space push
   // Phase 3 (chosenFigureKey + chosenSpace): push hostile to space
   if (entry.type === 'ccEffect' && entry.powerTokenGain && entry.lookingForAFightChoice) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
@@ -8578,7 +8578,7 @@ export function resolveAbility(abilityId, context) {
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const activatorFk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     // Phase 3: push hostile to chosen space
-    if (chosenFigureKey && chosenFigureKey !== 'move2' && chosenSpace) {
+    if (chosenFigureKey && chosenFigureKey !== 'move1' && chosenSpace) {
       const { prevPos: _lffPrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       const nm = dcNameFromFigureKey(chosenFigureKey);
       const { pathStr: _lffPathStr, warnings: _lffWarnings } = computePushPathAndWarnings(game, _lffPrevPos, chosenSpace, oppNum);
@@ -8594,16 +8594,16 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: _lffLogMsg, refreshBoard: true, requiresPowerTokenChoice: !!lffTokenFk };
     }
-    // Phase 2a: Move 2 spaces — pendingMoveX picker per CRR MOVE-017,
+    // Phase 2a: Move 1 space — pendingMoveX picker per CRR MOVE-017,
     // with a grantPowerToken continuation so the deferred Power Token
     // grant prompt fires AFTER the move completes (matching the prior
     // ordering: Move first, then token-type pick).
-    if (chosenFigureKey === 'move2') {
+    if (chosenFigureKey === 'move1') {
       const lffTokenFk = game._lffPendingTokenFigureKey;
       delete game._lffPendingTokenFigureKey;
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
-        remaining: 2,
+        remaining: 1,
         source: 'Looking for a Fight',
         playerNum,
         figureKey: activatorFk,
@@ -8619,11 +8619,16 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         pendingMoveXMsgId: msgId,
         activeMsgId: msgId,
-        logMessage: `**Looking for a Fight** — Chose to move 2 spaces.${lffTokenFk ? ' Power Token prompt will follow the move.' : ''}`,
+        logMessage: `**Looking for a Fight** — Chose to move 1 space.${lffTokenFk ? ' Power Token prompt will follow the move.' : ''}`,
       };
     }
-    // Phase 2b: Push hostile — find spaces adjacent to the chosen hostile
-    if (chosenFigureKey && chosenFigureKey !== 'move2' && !chosenSpace) {
+    // Phase 2b: Push SMALL hostile — find spaces adjacent to the chosen hostile
+    if (chosenFigureKey && chosenFigureKey !== 'move1' && !chosenSpace) {
+      // Defend against state drift: phase 1 already filtered to SMALL.
+      const _lffTargetName = dcNameFromFigureKey(chosenFigureKey);
+      const _lffTargetStats = getStatsForDc(_lffTargetName);
+      const _lffIsSmall = !(_lffTargetStats?.keywords || []).some(k => /large|massive/i.test(k));
+      if (!_lffIsSmall) return { applied: false, manualMessage: `**${_lffTargetName}** is not SMALL — Looking for a Fight may only push SMALL figures.` };
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       const mapId = game.selectedMap?.id;
       if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve push manually.' };
@@ -8637,20 +8642,24 @@ export function resolveAbility(abilityId, context) {
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Looking for a Fight** — Push **${nm}** to which space?` };
     }
     // Phase 1: defer power token choice + present Move/Push choice
+    // (Push branch lists ONLY adjacent SMALL hostiles per canonical card.)
     game._lffPendingTokenFigureKey = activatorFk;
     const mapId = game.selectedMap?.id;
-    const adjHostileFks = [];
+    const adjSmallHostileFks = [];
     if (mapId) {
       for (const fk of figureKeys) {
         const adj = getFiguresAdjacentToTarget(game, fk, mapId);
         for (const { figureKey, playerNum: p } of adj) {
-          if (p === oppNum && !adjHostileFks.includes(figureKey)) adjHostileFks.push(figureKey);
+          if (p !== oppNum || adjSmallHostileFks.includes(figureKey)) continue;
+          const hStats = getStatsForDc(dcNameFromFigureKey(figureKey));
+          const hIsSmall = !(hStats?.keywords || []).some(k => /large|massive/i.test(k));
+          if (hIsSmall) adjSmallHostileFks.push(figureKey);
         }
       }
     }
-    const opts = ['Move 2 spaces'];
-    const vals = ['move2'];
-    for (const hfk of adjHostileFks) {
+    const opts = ['Move 1 space'];
+    const vals = ['move1'];
+    for (const hfk of adjSmallHostileFks) {
       const hMsgId = findMsgIdForFigureKey(game, oppNum, hfk, dcMessageMeta);
       const hMeta = hMsgId ? dcMessageMeta.get(hMsgId) : null;
       const hName = hMeta?.displayName || hMeta?.dcName || dcNameFromFigureKey(hfk);

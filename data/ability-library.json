@@ -2976,10 +2976,10 @@
     },
     "Looking for a Fight": {
       "type": "ccEffect",
-      "label": "Gain 1 Power Token; then move 2 spaces or push an adjacent hostile 1 space",
+      "label": "Gain 1 Power Token; then move 1 space or push an adjacent SMALL figure 1 space",
       "powerTokenGain": 1,
       "lookingForAFightChoice": true,
-      "logMessage": "Gained **1 Power Token**. Choose: Move 2 spaces OR push an adjacent hostile 1 space.",
+      "logMessage": "Gained **1 Power Token**. Choose: Move 1 space OR push an adjacent SMALL figure 1 space.",
       "wiredStatus": "wired"
     },
     "Lord of the Sith": {
