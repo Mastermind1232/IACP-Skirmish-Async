@@ -1269,9 +1269,11 @@
     },
     "Desperate Escape": {
       "type": "ccEffect",
-      "label": "At end of round: move up to 6 spaces",
+      "label": "At end of round: move up to 6 spaces (or, if your Kuiil is defeated, discard to distribute 2 Power Tokens among friendlies)",
+      "kuilSplitMode": true,
       "mpBonus": 6,
       "isMoveX": true,
+      "kuilDeadDistributePowerTokens": 2,
       "wiredStatus": "wired"
     },
     "Devotion": {

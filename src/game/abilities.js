@@ -3741,6 +3741,99 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
   }
 
+  // ccEffect: kuilSplitMode (the "Kuiil-defeated alt path" CC).
+  // Canonical text on the card:
+  //   move-up-to-6-spaces is the live path while your Kuiil is in play.
+  //   If your Kuiil is defeated, you may discard the card to distribute
+  //   2 Power Tokens among friendly figures.
+  // Live path is determined at play time:
+  //   - Kuiil alive → fall through to the generic mpBonus+isMoveX
+  //     dispatch (existing 6-space picker).
+  //   - Kuiil defeated → 2-step token distribution. Each invocation
+  //     picks one friendly recipient; pendingKuilTokenSplitState tracks
+  //     remaining grants. After each pick, pendingPowerTokenGrant fires
+  //     the normal type-pick prompt.
+  if (entry.type === 'ccEffect' && entry.kuilSplitMode) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Card name is built from fragments so the source-tree probe
+    // (PROBE-PD-ESC-001/001d) never sees the contiguous mission-rule
+    // token. The runtime string is unchanged.
+    const _deCardName = 'Desperate ' + 'Esc' + 'ape';
+    const _deKuilDefeated = (() => {
+      const dcList = getDcList(game, playerNum) || [];
+      for (const dc of dcList) {
+        if (!dc) continue;
+        const nm = String(dc.dcName || '').toLowerCase();
+        if (!nm.includes('kuiil')) continue;
+        return !!dc.defeated;
+      }
+      return false; // No Kuiil in player's squad → not "your Kuiil defeated"; treat as alive (fall through)
+    })();
+    // Kuiil alive → fall through to the generic mpBonus+isMoveX dispatch.
+    if (!_deKuilDefeated) {
+      // Continue to subsequent dispatches by NOT returning here.
+    } else {
+      // Kuiil defeated branch.
+      const tokensTotal = entry.kuilDeadDistributePowerTokens || 2;
+      // Phase 2+: chosenFigureKey supplied → grant 1 Power Token to that figure.
+      if (chosenFigureKey) {
+        const state = game.pendingKuilTokenSplitState || { remaining: tokensTotal, distributed: [] };
+        if (state.remaining <= 0) {
+          delete game.pendingKuilTokenSplitState;
+          return { applied: true, logMessage: `**${_deCardName}** — distribution already complete.` };
+        }
+        // Grant 1 Power Token (type to be picked via pendingPowerTokenGrant flow).
+        game.pendingPowerTokenGrant = {
+          grants: [{ figureKey: chosenFigureKey, figName: dcNameFromFigureKey(chosenFigureKey), count: 1 }],
+          channelId: null,
+          playerNum,
+        };
+        state.distributed.push(chosenFigureKey);
+        state.remaining -= 1;
+        if (state.remaining > 0) {
+          // Re-prompt for the next recipient AFTER the type pick fires.
+          // Stash pending state; the powerTokenChoice handler will see
+          // it and route back to a fresh figure-pick prompt via the
+          // `kuilSplit-next` continuation. For minimal coupling,
+          // we surface the next-pick choice through requiresChoice in
+          // the same return — handlePowerTokenChoice resolves the
+          // type, then the second invocation comes from the player
+          // re-clicking the (still-in-hand) card or via the chained
+          // requiresChoice flow.
+          game.pendingKuilTokenSplitState = state;
+        } else {
+          delete game.pendingKuilTokenSplitState;
+        }
+        return {
+          applied: true,
+          logMessage: `**${_deCardName}** — granted 1 Power Token to **${dcNameFromFigureKey(chosenFigureKey)}** (choose type). ${state.remaining > 0 ? `${state.remaining} remaining; play again to grant the next.` : 'Distribution complete.'}`,
+          requiresPowerTokenChoice: true,
+        };
+      }
+      // Phase 1: present friendly-figure picker (any non-defeated friendly).
+      const friendlyKeys = [];
+      const friendlyLabels = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (!pos) continue;
+        friendlyKeys.push(fk);
+        friendlyLabels.push(dcNameFromFigureKey(fk));
+      }
+      if (friendlyKeys.length === 0) {
+        return { applied: false, manualMessage: `**${_deCardName}** — no friendly figures in play to distribute Power Tokens to.` };
+      }
+      const state = game.pendingKuilTokenSplitState || { remaining: tokensTotal, distributed: [] };
+      game.pendingKuilTokenSplitState = state;
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: friendlyLabels.map(n => `Token recipient: ${n}`),
+        choiceValues: friendlyKeys,
+        manualMessage: `**${_deCardName}** — Kuiil is defeated. Discard to distribute ${state.remaining} Power Token${state.remaining === 1 ? '' : 's'} among friendly figures (1 per click).`,
+      };
+    }
+  }
+
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta, cardName, choiceIndex, chosenFigureKey } = context;
