@@ -152,7 +152,7 @@ async function _finishPicker(game, ctx, msgId) {
  * figures, and so on.
  */
 export async function setupPendingMoveXSequence(game, ctx, opts) {
-  const { figures, source, threadId, bypassCosts } = opts;
+  const { figures, source, threadId, bypassCosts, afterAction } = opts;
   if (!Array.isArray(figures) || figures.length === 0) return;
   game.pendingMoveXSequence = {
     gameId: game.gameId,
@@ -162,6 +162,12 @@ export async function setupPendingMoveXSequence(game, ctx, opts) {
     completed: [],
     currentMsgId: null,
     bypassCosts: bypassCosts !== false,
+    // afterAction: typed continuation that fires once the queue is
+    // fully drained (every figure's picker has resolved). Currently
+    // supported types:
+    //   { type: 'postDeployAdvance' } — calls advancePostDeployQueue
+    //     so the post-deploy ability queue advances to the next ability.
+    afterAction: afterAction || null,
   };
   await _postSequenceOrderPicker(game, ctx);
   ctx.saveGames?.(game.gameId);
@@ -213,12 +219,36 @@ async function _advanceMoveXSequence(game, ctx) {
     seq.currentMsgId = null;
   }
   if (seq.queue.length === 0) {
+    const afterAction = seq.afterAction || null;
     delete game.pendingMoveXSequence;
     ctx.saveGames?.(game.gameId);
+    // Dispatch sequence-completion continuation, if any.
+    if (afterAction) {
+      await _runSequenceAfterAction(game, ctx, afterAction);
+    }
     return;
   }
   await _postSequenceOrderPicker(game, ctx);
   ctx.saveGames?.(game.gameId);
+}
+
+/**
+ * Dispatch the post-sequence continuation. New types plug in here.
+ * Imports the post-deploy advance lazily to avoid a cycle.
+ */
+async function _runSequenceAfterAction(game, ctx, afterAction) {
+  if (!afterAction || !afterAction.type) return;
+  if (afterAction.type === 'postDeployAdvance') {
+    try {
+      const { advancePostDeployQueue } = await import('./post-deploy.js');
+      await advancePostDeployQueue(game, game.gameId, ctx.client, ctx);
+    } catch (err) {
+      console.error('[move-x] postDeployAdvance failed:', err?.message ?? err);
+    }
+    return;
+  }
+  // Unknown type — log and drop.
+  console.warn(`[move-x] unknown sequence afterAction type "${afterAction.type}"; dropping`);
 }
 
 /** Order-pick handler — customId: move_x_seq_pick_${gameId}_${figureKey}

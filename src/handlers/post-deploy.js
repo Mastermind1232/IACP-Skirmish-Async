@@ -677,29 +677,64 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       break;
     }
     case 'smooth_landing': {
-      // Log the ability, then start sequential movement for each figure
+      // Smooth Landing grants 1 MP to Bodhi + each adjacent friendly.
+      // Per the gain-MP rules audit (rule 1: out-of-activation), the
+      // MP must be spent IMMEDIATELY by each figure — no banking.
+      // Multi-figure → orchestrate via setupPendingMoveXSequence so
+      // the player picks the order. afterAction: postDeployAdvance
+      // drains the post-deploy queue once every figure is done.
       const labels = ability.moveFigures.map(f => f.dcName);
-      await logGameAction(game, client, `🛬 **Smooth Landing** — ${labels.join(', ')} gain${labels.length === 1 ? 's' : ''} **1 MP** after deployment. Resolve movement now.`, { phase: 'ROUND', icon: 'deployed' });
-      game.postDeployQueue.activeAbility = {
-        abilityId: 'smooth_landing',
-        abilityLabel: 'Smooth Landing',
-        moveFigures: ability.moveFigures,
-        currentFigureIdx: 0,
-        playerNum: ability.playerNum,
-      };
-      await _startNextMovement(game, gameId, client, ctx);
+      await logGameAction(game, client, `🛬 **Smooth Landing** — ${labels.join(', ')} gain${labels.length === 1 ? 's' : ''} **1 MP** after deployment. Pick order; each figure spends immediately.`, { phase: 'ROUND', icon: 'deployed' });
+      const seqFigures = [];
+      for (const mf of ability.moveFigures) {
+        let mid = null;
+        for (const [m, meta] of dcMessageMeta) {
+          if (meta.dcName === mf.dcName && meta.playerNum === ability.playerNum) { mid = m; break; }
+        }
+        if (mid) seqFigures.push({ msgId: mid, figureKey: mf.figureKey, playerNum: ability.playerNum, spaces: mf.mp, dcName: mf.dcName });
+      }
+      if (seqFigures.length === 0) {
+        await logGameAction(game, client, `🛬 **Smooth Landing** — no eligible figures resolved.`, { phase: 'ROUND', icon: 'deployed' });
+        game.postDeployQueue.activeAbility = null;
+        await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+        break;
+      }
+      game.postDeployQueue.activeAbility = { abilityId: 'smooth_landing', abilityLabel: 'Smooth Landing', playerNum: ability.playerNum };
+      const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+      await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+        figures: seqFigures,
+        source: 'Smooth Landing',
+        threadId: null,
+        bypassCosts: false,
+        afterAction: { type: 'postDeployAdvance' },
+      });
       break;
     }
     case 'forward_emplacement': {
-      await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${ability.dcName}** gains **${ability.mp} MP** after deployment. Resolve movement now.`, { phase: 'ROUND', icon: 'deployed' });
-      game.postDeployQueue.activeAbility = {
-        abilityId: 'forward_emplacement',
-        abilityLabel: 'Forward Emplacement',
-        moveFigures: [{ figureKey: ability.figureKey, dcName: ability.dcName, mp: ability.mp }],
-        currentFigureIdx: 0,
-        playerNum: ability.playerNum,
-      };
-      await _startNextMovement(game, gameId, client, ctx);
+      // Forward Emplacement grants speed-MP to one figure post-deploy
+      // (out-of-activation gain — rule 1). Picker is the spend UI;
+      // remaining MP discarded if the player stops early. Single
+      // figure → sequence-of-one (auto-advance, no order prompt).
+      await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${ability.dcName}** gains **${ability.mp} MP** after deployment. Spend immediately.`, { phase: 'ROUND', icon: 'deployed' });
+      let mid = null;
+      for (const [m, meta] of dcMessageMeta) {
+        if (meta.dcName === ability.dcName && meta.playerNum === ability.playerNum) { mid = m; break; }
+      }
+      if (!mid) {
+        await logGameAction(game, client, `⚠️ **Forward Emplacement** — could not locate **${ability.dcName}**'s play area; skipping.`, { phase: 'ROUND', icon: 'deployed' });
+        game.postDeployQueue.activeAbility = null;
+        await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+        break;
+      }
+      game.postDeployQueue.activeAbility = { abilityId: 'forward_emplacement', abilityLabel: 'Forward Emplacement', playerNum: ability.playerNum };
+      const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+      await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+        figures: [{ msgId: mid, figureKey: ability.figureKey, playerNum: ability.playerNum, spaces: ability.mp, dcName: ability.dcName }],
+        source: 'Forward Emplacement',
+        threadId: null,
+        bypassCosts: false,
+        afterAction: { type: 'postDeployAdvance' },
+      });
       break;
     }
     case 'strike_team': {
