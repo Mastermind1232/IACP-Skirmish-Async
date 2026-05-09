@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
-import { reduceHp, healHp, applyDamageWithDefeatCheck, suffersStrain } from './damage-helpers.js';
+import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
@@ -1993,18 +1993,26 @@ export function resolveAbility(abilityId, context) {
       mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
       blockSurgeAbilities: entry.blockSurgeAbilities || false,
     };
-    // strainCostToSelf (Brutal Cleave): figure pays N Strain to activate
-    // ability. Uses unified suffersStrain helper — auto-routes through
-    // strain-prevention path (when wired) + auto-fires defeat if lethal.
+    // strainCostToSelf (Brutal Cleave / Trained / etc.): figure pays N
+    // Strain to activate the ability. The strain is fired through the
+    // applyStrain pipeline (Fireproof / Headhunter / Under Duress /
+    // Paz / top-of-deck-discard prompt) BEFORE the ability's other
+    // side effects via result.pendingStrainCost.
     let strainNote = '';
+    let _strainCostPayload = null;
     if (entry.strainCostToSelf > 0 && dcHealthState) {
       const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const sRes = suffersStrain(dcHealthState, game, msgId, selectedFig, entry.strainCostToSelf, playerNum, {
-        sourceLabel: `${entry.label || 'ability'} cost`,
-        attackerPlayerNum: null, // self-inflicted
-      });
-      if (sRes.maxHp > 0) {
-        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${sRes.prevHp} → ${sRes.newHp} HP).`;
+      const _strainFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+      const _strainFigKey = _strainFigKeys[selectedFig] || _strainFigKeys[0] || null;
+      if (_strainFigKey) {
+        _strainCostPayload = {
+          figureKey: _strainFigKey,
+          controllerPlayerNum: playerNum,
+          amount: entry.strainCostToSelf,
+          source: `${entry.label || 'ability'} cost`,
+        };
+        strainNote = ` Suffers ${entry.strainCostToSelf} Strain (resolve via prompt).`;
       } else {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
       }
@@ -2053,6 +2061,7 @@ export function resolveAbility(abilityId, context) {
       refreshMovementBank: false,
       activeMsgId: msgId,
       pendingMoveXMsgId: _odPmxMsgId,
+      pendingStrainCost: _strainCostPayload,
       logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
     };
   }
@@ -3232,15 +3241,17 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const healthState = dcHealthState.get(msgId) || [];
     if (!healthState.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
-    // Stimulants self-damage via unified suffersStrain helper. (Stimulants
-    // is technically self-damage, not strain — but routes through the same
-    // flow since both end up as damage in skirmish. If the prevention path
-    // shouldn't apply to direct self-damage, suffersStrain's caller can
-    // pass an opt to skip it; for now self-damage and strain coincide.)
-    const sRes = suffersStrain(dcHealthState, game, msgId, 0, damage, playerNum, {
-      sourceLabel: entry.label || 'self-damage',
-      attackerPlayerNum: null,
-    });
+    // Stimulants self-damage: the canonical card is "1 Damage" (NOT
+    // strain). Applied via applyDamageSync — direct HP reduction with
+    // defeat check, no strain pipeline.
+    const sRes = applyDamageSync(game, { dcHealthState }, {
+      figureKey: `${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1'}-0`,
+      msgId,
+      figIndex: 0,
+      amount: damage,
+      controllerPlayerNum: playerNum,
+      source: entry.label || 'self-damage',
+    }) || { wasDefeated: false };
     if (mpBonus > 0) {
       addMovementPoints(game, msgId, mpBonus);
     }
@@ -3299,20 +3310,29 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
 
-    // Apply strain cost to activating figure (e.g. Fool Me Once costs 2 Strain)
-    // via unified suffersStrain helper.
+    // Strain cost (Fool Me Once: 2 Strain) — fired via the applyStrain
+    // pipeline BEFORE the ability's other side effects via
+    // result.pendingStrainCost (Fireproof / Headhunter / UD / Paz /
+    // top-of-deck-discard prompt).
     let strainNote = '';
     let refreshDcEmbed = false;
+    let _fmoStrainPayload = null;
     if (entry.strainCostToSelf > 0 && dcMessageMeta && dcHealthState) {
       const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
       if (selfMsgId) {
         const selectedFig = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
-        const sRes = suffersStrain(dcHealthState, game, selfMsgId, selectedFig, entry.strainCostToSelf, playerNum, {
-          sourceLabel: `${entry.label || 'CC'} cost`,
-          attackerPlayerNum: null,
-        });
-        if (sRes.maxHp > 0) {
-          strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${sRes.prevHp} → ${sRes.newHp} HP).`;
+        const _fmoMeta = dcMessageMeta.get(selfMsgId);
+        const _fmoFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+          .filter(k => k.startsWith((_fmoMeta?.dcName || '') + '-'));
+        const _fmoFigKey = _fmoFigKeys[selectedFig] || _fmoFigKeys[0] || null;
+        if (_fmoFigKey) {
+          _fmoStrainPayload = {
+            figureKey: _fmoFigKey,
+            controllerPlayerNum: playerNum,
+            amount: entry.strainCostToSelf,
+            source: `${entry.label || 'CC'} cost`,
+          };
+          strainNote = ` Suffers ${entry.strainCostToSelf} Strain (resolve via prompt).`;
           refreshDcEmbed = true;
         } else {
           strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
@@ -3352,6 +3372,7 @@ export function resolveAbility(abilityId, context) {
       drewCards: drew.length ? drew : undefined,
       refreshOpponentDiscard: cleared > 0,
       refreshDcEmbed,
+      pendingStrainCost: _fmoStrainPayload,
     };
   }
 
@@ -4687,18 +4708,25 @@ export function resolveAbility(abilityId, context) {
       const copiesInDiscard = discard.filter(c => c === context.cardName).length;
       n += copiesInDiscard;
     }
-    // defenderStrain via unified suffersStrain helper.
-    const sRes = suffersStrain(dcHealthState, game, targetMsgId, targetIdx, n, defenderPlayerNum, {
-      sourceLabel: entry.label || 'Strain damage',
-      attackerPlayerNum: playerNum,
-    });
+    // defenderStrain (Escalating Hostility, Toxic Dart, etc.): the
+    // defender suffers N Strain via the applyStrain pipeline so
+    // Fireproof / Headhunter / UD / Paz / top-of-deck-discard prompt
+    // all gate correctly. wasDefeated/refreshBoard are determined
+    // post-pipeline; we conservatively flag refreshBoard so the
+    // board re-renders after potential defeat.
     const bonusNote = n > entry.defenderStrain ? ` (+${n - entry.defenderStrain} from copies in discard)` : '';
     return {
       applied: true,
-      logMessage: `Defender suffered ${n} Strain${bonusNote}.`,
+      logMessage: `Defender suffers ${n} Strain${bonusNote} (resolve via prompt).`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
-      ...(sRes.wasDefeated ? { refreshBoard: true } : {}),
+      refreshBoard: true,
+      pendingStrain: [{
+        figureKey: targetFk,
+        controllerPlayerNum: defenderPlayerNum,
+        amount: n,
+        source: entry.label || 'Strain damage',
+      }],
     };
   }
 

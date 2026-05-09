@@ -213,7 +213,11 @@ test("resolveAbility Fool Me Once clears opponent discard and draws 1 if SPY", (
   assert.strictEqual(game.player1CcHand.length, 1);
 });
 
-test("resolveAbility Fool Me Once applies 2 Strain to activating figure", () => {
+test("resolveAbility Fool Me Once stamps pendingStrainCost (resolved via prompt, no sync HP reduction)", () => {
+  // Migration 2026-05-09: Fool Me Once's 2-Strain cost is now fired
+  // through the applyStrain pipeline via result.pendingStrainCost, so
+  // Fireproof / Headhunter / Under Duress / Paz / top-of-deck-discard
+  // all gate correctly. The dispatch no longer reduces HP synchronously.
   const msgId = 'msg-spy2';
   const game = {
     player1CcDeck: ['A'],
@@ -233,10 +237,13 @@ test("resolveAbility Fool Me Once applies 2 Strain to activating figure", () => 
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player2CcDiscard.length, 0);
   assert.deepStrictEqual(game.gameBox, ['X', 'Y']);
-  // Strain cost: 8 - 2 = 6
+  // HP unchanged synchronously — strain prompt fires via applyAbilityResult.
   const hs = dcHealthState.get(msgId);
-  assert.strictEqual(hs[0][0], 6);
-  assert.ok(result.logMessage.includes('suffered 2 Strain'));
+  assert.strictEqual(hs[0][0], 8);
+  assert.strictEqual(result.pendingStrainCost?.figureKey, 'Agent Blaise-1-0');
+  assert.strictEqual(result.pendingStrainCost?.controllerPlayerNum, 1);
+  assert.strictEqual(result.pendingStrainCost?.amount, 2);
+  assert.ok(result.logMessage.includes('Suffers 2 Strain'));
   assert.strictEqual(result.refreshDcEmbed, true);
 });
 

@@ -231,6 +231,15 @@ export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureInd
  * @param {number|null} [opts.attackerPlayerNum=null]
  * @returns {{ newHp: number, prevHp: number, wasDefeated: boolean, defeatRecord: object | null, prevented: number, applied: number }}
  */
+/**
+ * @deprecated 2026-05-09 — bypasses the applyStrain pipeline (no
+ * Fireproof / Headhunter / Under Duress / Paz / top-of-deck-discard
+ * prompts). Callers must migrate to async applyStrain
+ * (src/handlers/strain-handler.js) — typically by returning a
+ * `pendingStrainCost` or `pendingStrain` payload from a dispatch and
+ * letting applyAbilityResult fire it. Not currently called from any
+ * ability dispatch; retained as @deprecated until a final delete pass.
+ */
 export function suffersStrain(dcHealthState, game, msgId, figureIndex, amount, playerNum, opts = {}) {
   const { sourceLabel = 'Strain', attackerPlayerNum = null } = opts;
   // TODO (slice 8.5+): wire prevention path — top-of-deck CC discard, Paz

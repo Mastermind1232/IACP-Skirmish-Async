@@ -55,6 +55,37 @@ export async function applyAbilityResult(result, opts) {
     return { handled: false, requiresChoice: false, requiresSpaceChoice: true };
   }
 
+  // --- Strain via the applyStrain pipeline ---
+  // Two fields:
+  //   - pendingStrainCost: a single { figureKey, controllerPlayerNum,
+  //     amount, source } payload for "ability costs N Strain" — fired
+  //     BEFORE other side effects (granted attack, picker post) per
+  //     IACP "strain is dealt before resolving the ability".
+  //   - pendingStrain: an array of the same payload shape for
+  //     ability-deals-strain effects (defender suffers N Strain, etc.)
+  //     fired in order at the same point.
+  // Both route through applyStrain so Fireproof / Headhunter / Under
+  // Duress / Paz / top-of-deck-discard prompts gate correctly.
+  if (result.applied && (result.pendingStrainCost || (Array.isArray(result.pendingStrain) && result.pendingStrain.length > 0))) {
+    try {
+      const { applyStrain } = await import('../handlers/strain-handler.js');
+      const queue = [];
+      if (result.pendingStrainCost) queue.push(result.pendingStrainCost);
+      if (Array.isArray(result.pendingStrain)) queue.push(...result.pendingStrain);
+      for (const sc of queue) {
+        if (!sc || !sc.figureKey || !sc.amount) continue;
+        await applyStrain(game, ctx, {
+          figureKey: sc.figureKey,
+          controllerPlayerNum: sc.controllerPlayerNum,
+          amount: sc.amount,
+          source: sc.source || 'ability strain',
+        });
+      }
+    } catch (err) {
+      console.error('[apply-ability-result] strain pipeline failed:', err?.message ?? err);
+    }
+  }
+
   // --- Ready figures: unexhaust and rebuild DC embed ---
   if (result.applied && result.readyDcMsgIds?.length && dcExhaustedState) {
     for (const id of result.readyDcMsgIds) {
