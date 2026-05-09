@@ -2804,19 +2804,32 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)
+  // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — Move X spaces, next attack gets +N Hit)
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && entry.nextAttacksBonusHits) {
     const { game, msgId, meta } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    addMovementPoints(game, msgId, entry.freeMoveBonus);
-    // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
-    game.moveXBypassActive = game.moveXBypassActive || {};
-    game.moveXBypassActive[msgId] = true;
+    const _othFigureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+      .filter(k => k.startsWith((meta.dcName || '') + '-'));
+    const _othSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _othFigureKey = _othFigureKeys[_othSelectedIdx] || _othFigureKeys[0] || null;
+    let _pmxMsgId = null;
+    if (_othFigureKey) {
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.freeMoveBonus,
+        source: entry.label || 'On the Hunt',
+        playerNum: meta.playerNum,
+        figureKey: _othFigureKey,
+        dcName: meta.dcName || '',
+        threadId: null,
+      };
+      _pmxMsgId = msgId;
+    }
     const nb = entry.nextAttacksBonusHits;
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
     game.nextAttacksBonusHits[meta.playerNum] = { count: nb.count, bonus: nb.bonus };
-    const logMsg = entry.logMessage || `Gained ${entry.freeMoveBonus} free MP. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Hit.`;
-    return { applied: true, logMessage: logMsg };
+    const logMsg = entry.logMessage || `**${entry.label || 'On the Hunt'}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Hit.`;
+    return { applied: true, logMessage: logMsg, pendingMoveXMsgId: _pmxMsgId };
   }
 
   // ccEffect: noCommandDrawThisRound (Cut Lines — players cannot draw CCs this round)
@@ -4330,17 +4343,34 @@ export function resolveAbility(abilityId, context) {
     }
     dcHealthState.set(msgId, healthState);
     syncHealthStateToList(game, meta.playerNum, msgId, healthState);
-    const freeMovePart = entry.freeMoveBonus > 0 ? ` Gained ${entry.freeMoveBonus} free movement point${entry.freeMoveBonus !== 1 ? 's' : ''} — use the Move button.` : '';
+    let _pmxMsgId = null;
+    const freeMovePart = entry.freeMoveBonus > 0 ? ` May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}.` : '';
     if (entry.freeMoveBonus > 0) {
-      addMovementPoints(game, msgId, entry.freeMoveBonus);
-      // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
-      game.moveXBypassActive = game.moveXBypassActive || {};
-      game.moveXBypassActive[msgId] = true;
+      // Move-X picker stamp (Evasive Maneuver and any other recover +
+      // freeMoveBonus combo). Caller posts the picker via
+      // pendingMoveXMsgId.
+      const _emFigureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+        .filter(k => k.startsWith((meta.dcName || '') + '-'));
+      const _emSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _emFigureKey = _emFigureKeys[_emSelectedIdx] || _emFigureKeys[0] || null;
+      if (_emFigureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: entry.freeMoveBonus,
+          source: entry.label || 'Move X',
+          playerNum: meta.playerNum,
+          figureKey: _emFigureKey,
+          dcName: meta.dcName || '',
+          threadId: null,
+        };
+        _pmxMsgId = msgId;
+      }
     }
     return {
       applied: true,
       logMessage: totalRecovered > 0 ? `Recovered ${totalRecovered} Damage.${freeMovePart}` : `Already at full health.${freeMovePart}`,
       refreshDcEmbed: true,
+      pendingMoveXMsgId: _pmxMsgId,
     };
   }
 
