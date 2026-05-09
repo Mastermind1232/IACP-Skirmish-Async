@@ -222,6 +222,54 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Quick Strike: 1 Damage to defender',
     });
   }
+  // Tonfa Strike (Imperial Loadout): "after this attack, you may make
+  // an additional attack." No prep besides the prompt; arms
+  // freeAttackBonusPending. Per user spec the new attack must wait for
+  // defender step 8 — fireTonfaStrike defers via combat._pendingChainAttacks.
+  if (combat.attackerMsgId && game?.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'tonfa_strike',
+      label: '🗡️ Tonfa Strike: chain attack →',
+    });
+  }
+  // Barrage (CT-1701): "after first attack, perform a second attack
+  // (target within 3 of first; defender +1 white die)." Fire handler
+  // stages target-window + defense bonus on combat.
+  if (combat.attackerMsgId && game?.barrageSecondAttack?.[combat.attackerMsgId]) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'barrage',
+      label: '🔫 Barrage: chain attack →',
+    });
+  }
+  // Flurry of Blows (Electrobaton loadout post-attack): hit-gated.
+  // 1-green-die melee with +1 Hit, once per activation. Fire handler
+  // does dice override + chain-attack staging.
+  if (combat.loadoutPostAttack === 'flurry_of_blows' && combat._step7Hit && combat.attackerMsgId) {
+    const _fobKey = `flurryOfBlows_${combat.attackerMsgId}`;
+    if (!game?.roundFigureAbilityUsed?.[_fobKey]) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'flurry_of_blows',
+        label: '🥊 Flurry of Blows: chain attack →',
+      });
+    }
+  }
+  // Fell Swoop (Davith Elso): "After this attack resolves, become Hidden,
+  // move up to 2 spaces, then perform an attack. Limit once per round."
+  // The Move 2 picker fires on click; the new attack is staged for
+  // after defender step 8 closes.
+  if (combat.surgeFellSwoop && combat.attackerFigureKey) {
+    const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
+    if (!game?.roundFigureAbilityUsed?.[fsKey]) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'fell_swoop',
+        label: '🗡️ Fell Swoop: Hide + Move 2 + chain attack →',
+      });
+    }
+  }
 }
 
 /**

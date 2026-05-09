@@ -603,6 +603,128 @@ async function fireQuickStrike(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Stage a chain-attack prompt for after-defender-Done. The fire handlers
+ * below populate combat._pendingChainAttacks; combat-bridge's
+ * _finishCombatResolution iterates and posts each prompt + sets the
+ * matching pending flag so the player gets the new attack only AFTER
+ * the defender's step-8 window has closed (per user 2026-05-09 spec).
+ */
+function _stageChainAttack(combat, entry) {
+  combat._pendingChainAttacks = combat._pendingChainAttacks || [];
+  combat._pendingChainAttacks.push(entry);
+}
+
+/**
+ * Tonfa Strike (Imperial Loadout): "after this attack, you may make an
+ * additional attack." Stage the chain attack — combat-close will post
+ * the Declare Attack prompt + arm freeAttackBonusPending after the
+ * defender step-8 window closes.
+ */
+async function fireTonfaStrike(thread, game, combat, effect, ctx) {
+  if (!combat.attackerMsgId) return;
+  if (game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
+    delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
+  }
+  _stageChainAttack(combat, {
+    source: 'Tonfa Strike',
+    msgId: combat.attackerMsgId,
+    flagKey: 'freeAttackBonusPending',
+    flagValue: true,
+    message: '**Tonfa Strike** — You may perform an additional attack (use Attack button).',
+  });
+}
+
+/**
+ * Barrage (CT-1701): "after first attack, perform a second attack
+ * (target within 3 of first; defender +1 white die)." Stages target
+ * window + defense bonus alongside the chain attack.
+ */
+async function fireBarrage(thread, game, combat, effect, ctx) {
+  if (!combat.attackerMsgId) return;
+  if (game.barrageSecondAttack?.[combat.attackerMsgId]) {
+    delete game.barrageSecondAttack[combat.attackerMsgId];
+  }
+  // Capture target's position now (target may move/be removed during
+  // defender step 8); chain-attack post-close uses this for the within-3 gate.
+  const targetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[combat.target?.figureKey];
+  _stageChainAttack(combat, {
+    source: 'Barrage',
+    msgId: combat.attackerMsgId,
+    flagKey: 'freeAttackBonusPending',
+    flagValue: true,
+    barrageTargetSpace: targetPos || null,
+    barrageDefenseBonus: true,
+    message: '**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.',
+  });
+}
+
+/**
+ * Flurry of Blows (Electrobaton loadout): hit-gated free 1-green-die
+ * melee attack with +1 Hit, once per activation. Stages override-dice +
+ * the chain attack.
+ */
+async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
+  if (!combat.attackerMsgId) return;
+  combat.loadoutPostAttack = null;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[`flurryOfBlows_${combat.attackerMsgId}`] = true;
+  _stageChainAttack(combat, {
+    source: 'Flurry of Blows',
+    msgId: combat.attackerMsgId,
+    flagKey: 'freeAttackBonusPending',
+    flagValue: true,
+    pendingOverrideAttackDice: { dice: ['green'], type: 'melee', bonusHits: 1 },
+    message: '**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.',
+  });
+}
+
+/**
+ * Fell Swoop (Davith Elso surge): apply Hide, present Move 2 picker,
+ * then stage the chain attack for after defender step 8 closes. The
+ * Move-X picker fires immediately on click; after it drains, the new
+ * attack waits until the defender Done.
+ */
+async function fireFellSwoop(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, saveGames } = ctx;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
+  if (game.roundFigureAbilityUsed[fsKey]) return;
+  game.roundFigureAbilityUsed[fsKey] = true;
+  applyCondition(game, combat.attackerFigureKey, 'Hide');
+  const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
+  if (logGameAction) {
+    await logGameAction(game, client, `**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**, then make a free attack.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+  _stageChainAttack(combat, {
+    source: 'Fell Swoop',
+    msgId: combat.attackerMsgId,
+    flagKey: 'fellSwoopFreeAttack',
+    flagValue: true,
+    message: null, // deferred prompt is posted via freeAttackPrompt continuation when Move-X drains
+  });
+  const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+  stampPendingMoveX(game, {
+    msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
+    playerNum: combat.attackerPlayerNum,
+    spaces: 2,
+    source: 'Fell Swoop',
+    threadId: combat.combatThreadId,
+    nextAction: {
+      type: 'freeAttackPrompt',
+      payload: {
+        msgId: combat.attackerMsgId,
+        playerNum: combat.attackerPlayerNum,
+        figureKey: combat.attackerFigureKey,
+        sourceLabel: 'Fell Swoop',
+      },
+    },
+  });
+  await postMoveXPicker(game, { client, logGameAction, saveGames }, combat.attackerMsgId);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -649,6 +771,18 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'quick_strike':
       await fireQuickStrike(thread, game, combat, effect, ctx);
+      return;
+    case 'tonfa_strike':
+      await fireTonfaStrike(thread, game, combat, effect, ctx);
+      return;
+    case 'barrage':
+      await fireBarrage(thread, game, combat, effect, ctx);
+      return;
+    case 'flurry_of_blows':
+      await fireFlurryOfBlows(thread, game, combat, effect, ctx);
+      return;
+    case 'fell_swoop':
+      await fireFellSwoop(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

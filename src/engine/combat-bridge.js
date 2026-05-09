@@ -1644,15 +1644,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Tonfa Strike: grant second free attack after first resolves
-  if (game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
+  // Tonfa Strike inline disabled 2026-05-09 → fireTonfaStrike (chain-attack
+  // queued, fires after defender step 8 closes per user spec).
+  if (false && game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerMsgId] = true;
     await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
   }
-  // Barrage (CT-1701): after first attack resolves, grant second free attack (defender +1 white die, within 3 of first target)
-  if (game.barrageSecondAttack?.[combat.attackerMsgId]) {
+  // Barrage inline disabled 2026-05-09 → fireBarrage.
+  if (false && game.barrageSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.barrageSecondAttack[combat.attackerMsgId];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerMsgId] = true;
@@ -1725,8 +1726,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         await logGameAction(game, client, `\u26A1 **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
-    // Flurry of Blows (Electrobatons): free melee attack with 1 green die + +1 Hit, limit once per activation
-    if (_lpa === 'flurry_of_blows' && hit && combat.attackerMsgId) {
+    // Flurry of Blows inline disabled 2026-05-09 → fireFlurryOfBlows
+    // (chain-attack staged, fires after defender step 8 closes).
+    if (false && _lpa === 'flurry_of_blows' && hit && combat.attackerMsgId) { // eslint-disable-line no-constant-condition
       const _fobKey = `flurryOfBlows_${combat.attackerMsgId}`;
       if (!game.roundFigureAbilityUsed?.[_fobKey]) {
         if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
@@ -2468,7 +2470,10 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   // Move-X 2-space budget: routes through pendingMoveX (immediate,
   // per-effect, no bank). Hide + free-attack flag fire alongside; the
   // free attack is gated separately by fellSwoopFreeAttack[msgId].
-  if (combat.surgeFellSwoop && combat.attackerFigureKey) {
+  // Fell Swoop inline disabled 2026-05-09 → fireFellSwoop. Fire handler
+  // applies Hide + presents Move 2 picker; chain attack waits for
+  // defender step 8 to close (combat._pendingChainAttacks).
+  if (false && combat.surgeFellSwoop && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
     if (!game.roundFigureAbilityUsed[fsKey]) {
@@ -3267,5 +3272,38 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   if (game.pendingPartingShot?.active && game.pendingPartingShot.figureKey === combat.attackerFigureKey) {
     const { completeDeferredDefeat } = await import('../handlers/parting-shot.js');
     await completeDeferredDefeat(game, deps);
+  }
+  // Chain-attack queue (Tonfa Strike / Barrage / Flurry of Blows / Fell
+  // Swoop): step-8 fire handlers stage chain-attack configs onto
+  // combat._pendingChainAttacks during the attacker window. Per the user
+  // 2026-05-09 spec the new attack only fires AFTER the defender's step-8
+  // window has closed — which is here, at combat-close. Each entry sets
+  // its pending flag (freeAttackBonusPending / fellSwoopFreeAttack) and
+  // posts the prompt so the player can declare the next attack.
+  const _pca = Array.isArray(combat._pendingChainAttacks) ? combat._pendingChainAttacks : [];
+  for (const _entry of _pca) {
+    if (!_entry?.msgId) continue;
+    if (_entry.flagKey === 'freeAttackBonusPending') {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[_entry.msgId] = _entry.flagValue ?? true;
+    } else if (_entry.flagKey === 'fellSwoopFreeAttack') {
+      game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
+      game.fellSwoopFreeAttack[_entry.msgId] = _entry.flagValue ?? true;
+    }
+    if (_entry.pendingOverrideAttackDice) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_entry.msgId] = _entry.pendingOverrideAttackDice;
+    }
+    if (_entry.barrageTargetSpace) {
+      game.barrageTargetSpace = game.barrageTargetSpace || {};
+      game.barrageTargetSpace[_entry.msgId] = _entry.barrageTargetSpace;
+    }
+    if (_entry.barrageDefenseBonus) {
+      game.barrageDefenseBonus = game.barrageDefenseBonus || {};
+      game.barrageDefenseBonus[_entry.msgId] = true;
+    }
+    if (_entry.message && thread) {
+      await thread.send(_entry.message).catch(discordCatch);
+    }
   }
 }
