@@ -1200,20 +1200,55 @@ export async function handleExtraProtection(interaction, ctx) {
     _epGame[_epDiscardKey] = _epGame[_epDiscardKey] || [];
     _epGame[_epDiscardKey].push('Extra Protection');
 
-    // Grant 2 free movement points to Onar Koma
-    _epGame.movementBank = _epGame.movementBank || {};
-    if (!_epGame.movementBank[_epPending.onarMsgId]) {
-      _epGame.movementBank[_epPending.onarMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _epPending.onarDcName };
-    } else {
-      _epGame.movementBank[_epPending.onarMsgId].total = (_epGame.movementBank[_epPending.onarMsgId].total || 0) + 2;
-      _epGame.movementBank[_epPending.onarMsgId].remaining = (_epGame.movementBank[_epPending.onarMsgId].remaining || 0) + 2;
-    }
-
-    // Grant free attack (next attack costs no action)
+    // Card text: "move up to 2 spaces and perform an attack." That's
+    // a Move-X effect — pendingMoveX with bypassCosts: true, no
+    // bank, freeAttackPrompt continuation for the attack.
     _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
     _epGame.freeAttackBonusPending[_epPending.onarMsgId] = true;
 
-    await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Gains 2 MP and a free attack. Use Move/Attack buttons on the DC.`, { phase: 'ROUND', icon: 'card' });
+    // Resolve Onar's figure key from dcMessageMeta for the picker.
+    let _epOnarFigureKey = null;
+    const _epDcMsgMeta = ctx.dcMessageMeta;
+    if (_epDcMsgMeta && _epDcMsgMeta.get?.(_epPending.onarMsgId)) {
+      const _epMeta = _epDcMsgMeta.get(_epPending.onarMsgId);
+      const _epFigKeys = Object.keys(_epGame.figurePositions?.[_epMeta.playerNum] || {})
+        .filter(k => k.startsWith((_epMeta.dcName || '') + '-'));
+      _epOnarFigureKey = _epFigKeys[0] || null;
+    }
+
+    if (_epOnarFigureKey) {
+      const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+      stampPendingMoveX(_epGame, {
+        msgId: _epPending.onarMsgId,
+        figureKey: _epOnarFigureKey,
+        playerNum: _epPending.playerNum,
+        spaces: 2,
+        source: 'Extra Protection',
+        threadId: null,
+        nextAction: {
+          type: 'freeAttackPrompt',
+          payload: {
+            msgId: _epPending.onarMsgId,
+            playerNum: _epPending.playerNum,
+            figureKey: _epOnarFigureKey,
+            sourceLabel: 'Extra Protection',
+          },
+        },
+      });
+      await postMoveXPicker(_epGame, { client, logGameAction, saveGames }, _epPending.onarMsgId);
+      await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Move up to 2 spaces, then take a free attack.`, { phase: 'ROUND', icon: 'card' });
+    } else {
+      // Fallback: no figure resolved, retain legacy bank path so the
+      // player isn't stuck with no MP and no attack.
+      _epGame.movementBank = _epGame.movementBank || {};
+      if (!_epGame.movementBank[_epPending.onarMsgId]) {
+        _epGame.movementBank[_epPending.onarMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _epPending.onarDcName };
+      } else {
+        _epGame.movementBank[_epPending.onarMsgId].total = (_epGame.movementBank[_epPending.onarMsgId].total || 0) + 2;
+        _epGame.movementBank[_epPending.onarMsgId].remaining = (_epGame.movementBank[_epPending.onarMsgId].remaining || 0) + 2;
+      }
+      await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Gains 2 MP and a free attack (manual; figure lookup failed).`, { phase: 'ROUND', icon: 'card' });
+    }
   } else {
     await logGameAction(_epGame, client, `**Extra Protection** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
