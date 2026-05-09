@@ -27,9 +27,10 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { getReachableSpaces } from '../game/movement.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
-import { chunkButtonsToRows } from '../discord/components.js';
+import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { splitCustomId } from '../discord/custom-id.js';
@@ -83,6 +84,92 @@ export function clearPendingMoveX(game, msgId) {
 
 export function isPendingMoveX(game, msgId) {
   return !!game.pendingMoveX?.[msgId];
+}
+
+/**
+ * Finish a Move-X budget: snapshot the deferred continuation (if any),
+ * clear pendingMoveX, then trigger the continuation. Used by both
+ * "exhausted budget" (handleMoveXStep / Rotate when remaining hits 0)
+ * and "stopped early" (handleMoveXDone) paths so chained abilities
+ * fire AFTER the picker fully completes — not concurrently.
+ */
+async function _finishPicker(game, ctx, msgId) {
+  const pending = game.pendingMoveX?.[msgId];
+  if (!pending) return;
+  const nextAction = pending.nextAction || null;
+  clearPendingMoveX(game, msgId);
+  if (!nextAction) return;
+  if (nextAction.type === 'rollOneDieSpacePick') {
+    await _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, nextAction);
+  }
+  // Future continuation types plug in here.
+}
+
+/**
+ * Continuation for the rollOneDie + freeMoveBonus chain (Mortar
+ * Launcher and friends). Recomputes the valid target spaces from
+ * the figure's NEW position, sets up pendingPounceSpaceChoice +
+ * pendingSpacePick, and posts the row picker via the figure's
+ * combat thread (or the game-log channel as fallback).
+ */
+async function _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, next) {
+  const { client, logGameAction } = ctx;
+  const figurePos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  if (!figurePos) return;
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapData(mapId) : null;
+  if (!ms) return;
+  // Build occupiedSet (every cell occupied by any figure other than
+  // the activating figure — the figure may target its own space).
+  const occupied = new Set();
+  for (const pn of [1, 2]) {
+    for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!otherPos || otherFk === pending.figureKey) continue;
+      const otherDc = dcNameFromFigureKey(otherFk);
+      const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(otherDc) || '1x1';
+      for (const c of getFootprintCells(otherPos, otherSize)) occupied.add(normalizeCoord(c));
+    }
+  }
+  const reachable = getReachableSpaces(figurePos, next.range, ms, [...occupied]);
+  const validSet = new Set([String(figurePos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
+  const validSpaces = [...validSet];
+  if (validSpaces.length === 0) {
+    await logGameAction?.(game, client,
+      `**${next.label}** — No valid target spaces from current position; effect skipped.`,
+      { phase: 'ROUND', icon: 'attack' });
+    return;
+  }
+  // Set up pendingPounceSpaceChoice + pendingSpacePick state for the
+  // existing space-row pick handler.
+  game.pendingPounceSpaceChoice = game.pendingPounceSpaceChoice || {};
+  game.pendingPounceSpaceChoice[msgId] = {
+    gameId: game.gameId,
+    playerNum: pending.playerNum,
+    figureIndex: next.figureIndex,
+    msgId,
+    abilityId: next.abilityId,
+    specialIdx: next.specialIdx,
+    validSpaces,
+    targetFigureKey: null,
+  };
+  const pounceContextKey = `${game.gameId}_${msgId}_${next.figureIndex}`;
+  game.pendingSpacePick = game.pendingSpacePick || {};
+  game.pendingSpacePick[pounceContextKey] = {
+    validSpaces,
+    cellPrefix: `pounce_space_${game.gameId}_${msgId}_${next.figureIndex}_`,
+    mapSpaces: ms,
+    headerText: next.spaceChoiceLabel,
+  };
+  const { rows: rowBtns } = buildRowPickerButtons(validSpaces, `space_row_${pounceContextKey}_`);
+  const content = `${next.spaceChoiceLabel}\nChoose a row:`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rowBtns.slice(0, 5) }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rowBtns.slice(0, 5), phase: 'ROUND', icon: 'attack' });
 }
 
 /**
@@ -389,10 +476,10 @@ export async function handleMoveXStep(interaction, ctx) {
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {
-    clearPendingMoveX(game, msgId);
     await logGameAction?.(game, client,
       `🦿 **${pending.source}** — **${pending.dcName}** has used all granted spaces.`,
       { phase: 'ROUND', icon: 'attack' });
+    await _finishPicker(game, ctx, msgId);
   } else {
     await postMoveXPicker(game, ctx, msgId);
   }
@@ -442,10 +529,10 @@ export async function handleMoveXRotate(interaction, ctx) {
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {
-    clearPendingMoveX(game, msgId);
     await logGameAction?.(game, client,
       `🦿 **${pending.source}** — **${pending.dcName}** has used all granted spaces.`,
       { phase: 'ROUND', icon: 'attack' });
+    await _finishPicker(game, ctx, msgId);
   } else {
     await postMoveXPicker(game, ctx, msgId);
   }
@@ -470,9 +557,9 @@ export async function handleMoveXDone(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const dropped = pending.remaining;
-  clearPendingMoveX(game, msgId);
   await logGameAction?.(game, client,
     `🦿 **${pending.source}** — **${pending.dcName}** stops early; ${dropped} space(s) discarded.`,
     { phase: 'ROUND', icon: 'attack' });
+  await _finishPicker(game, ctx, msgId);
   saveGames?.(gameId);
 }

@@ -2578,18 +2578,15 @@ export function resolveAbility(abilityId, context) {
       const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
       const validSpaces = [...validSet];
       if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
-      // freeMoveBonus + rollOneDie (Mortar Launcher): the figure may
-      // move up to N spaces and then pick a target space within range
-      // for the dice roll. The Move-X portion now stamps pendingMoveX
-      // so the picker is the budget; the rollOneDie target-space
-      // picker is posted alongside via the existing requiresSpaceChoice
-      // result flag (player can move via the picker first, then pick
-      // the target — or pick the target first and move after, which
-      // matches prior banked-MP behavior).
-      let _pmxMsgId = null;
+      // freeMoveBonus + rollOneDie (Mortar Launcher): the figure must
+      // first complete the Move-X budget, THEN pick a target space
+      // for the dice roll. Strict sequencing — the target-space
+      // picker is deferred onto pendingMoveX.nextAction and fires
+      // when the Move-X picker finishes (either by exhausting the
+      // budget or the player clicking Stop).
       if (entry.freeMoveBonus > 0 && msgId) {
         const _meta = context.meta;
-        const _rdpn = _meta?.playerNum ?? context.playerNum;
+        const _rdpn = _meta?.playerNum ?? playerNum;
         const _rdFigureKeys = Object.keys(game.figurePositions?.[_rdpn] || {})
           .filter(k => k.startsWith((_meta?.dcName || '') + '-'));
         const _rdSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
@@ -2603,18 +2600,33 @@ export function resolveAbility(abilityId, context) {
             figureKey: _rdFigureKey,
             dcName: _meta?.dcName || '',
             threadId: null,
+            msgId,
+            nextAction: {
+              type: 'rollOneDieSpacePick',
+              range,
+              label: entry.label || 'Roll 1 Die',
+              abilityId,
+              specialIdx: context.specialIdx ?? null,
+              figureIndex: _rdSelectedIdx,
+              spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:`,
+            },
           };
-          _pmxMsgId = msgId;
+          return {
+            applied: true,
+            pendingMoveXMsgId: msgId,
+            logMessage: `**${entry.label}** — Move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''} first, then choose a target space within ${range}.`,
+            activeMsgId: msgId,
+          };
         }
       }
-      const moveNote = entry.freeMoveBonus > 0 ? ` (Use the Move-X picker for up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''} first, then choose a target space.)` : '';
+      // No Move-X budget (no freeMoveBonus) — original immediate
+      // space-pick path.
       return {
         requiresSpaceChoice: true,
         validSpaces,
-        spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`,
+        spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:`,
         refreshMovementBank: false,
         activeMsgId: msgId,
-        pendingMoveXMsgId: _pmxMsgId,
       };
     }
 
