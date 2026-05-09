@@ -6385,103 +6385,229 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, requiresChoice: true, choiceOptions: figureChoiceLabels(hostiles), choiceValues: hostiles };
   }
 
-  // ccEffect: Chaotic Force — roll 1 green die, all figures on both sides suffer Strain = Accuracy
-  // Strain queues via pendingStrain[] so apply-ability-result.js routes
-  // it through applyStrain (Fireproof / Headhunter / per-strain choice /
-  // Under Duress / Paz). Each figure's controller gets their own per-
-  // strain prompt.
-  if (entry.type === 'ccEffect' && entry.chaoticForceEffect) {
-    const { game, playerNum, dcMessageMeta } = context;
+  // ccEffect: Chaotic Force / Corrupting Force / Balancing Force —
+  // start-of-round Force trio. All three share the same picker:
+  //   "Each player chooses up to 3 figures. Roll 1 die. Each chosen
+  //    figure suffers/recovers <effect> equal to die result."
+  //
+  // Picker flow (chained chooseUpToN with player switch):
+  //   Stage 1 (cardPlayer): up-to-3 pick from cardPlayer's own figures.
+  //   Stage 2 (opponent): up-to-3 pick from opponent's own figures
+  //                       (routed via choiceForControllerPlayerNum).
+  //   Stage 3: roll the die, apply to every chosen figure.
+  //
+  // Strain (Chaotic) queues via pendingStrain[]; Damage/Heal apply
+  // synchronously (consistent with the existing damage/heal paths).
+  if (entry.type === 'ccEffect' && (entry.chaoticForceEffect || entry.corruptingForceEffect || entry.balancingForceEffect)) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
-    const faces = getDiceData().attack?.green || [];
-    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 green die manually.' };
-    const face = faces[Math.floor(Math.random() * faces.length)];
-    const acc = face.acc ?? 0;
-    if (acc === 0) return { applied: true, logMessage: '**Chaotic Force** — Rolled 1 green die: **0 Accuracy** — no Strain applied.' };
-    const pendingStrain = [];
-    const targetNames = [];
-    for (const pn of [1, 2]) {
+
+    // Card-specific configuration.
+    const cardConfig = entry.chaoticForceEffect
+      ? { card: 'Chaotic Force', effect: 'strain', dieColor: 'green', dieField: 'acc', dieLabel: 'Accuracy' }
+      : entry.corruptingForceEffect
+      ? { card: 'Corrupting Force', effect: 'damage', dieColor: 'blue', dieField: 'dmg', dieLabel: 'Hit' }
+      : { card: 'Balancing Force', effect: 'heal', dieColor: 'red', dieField: 'dmg', dieLabel: 'Hit' };
+
+    const oppNum = opponentPlayerNum(playerNum);
+
+    // Initialize pending picker state on first call.
+    if (!game.pendingForceCardPick) {
+      game.pendingForceCardPick = {
+        card: cardConfig.card,
+        effect: cardConfig.effect,
+        dieColor: cardConfig.dieColor,
+        dieField: cardConfig.dieField,
+        dieLabel: cardConfig.dieLabel,
+        cardPlayerNum: playerNum,
+        currentPickerPN: playerNum,
+        picksByPlayer: { 1: [], 2: [] },
+      };
+    }
+    const fp = game.pendingForceCardPick;
+
+    // Done-marker for the current picker stage.
+    const DONE_KEY = '__force_card_done__';
+
+    // Helper: enumerate the current picker's own figures, minus already-chosen.
+    function _enumerateOwnFigures(pn) {
+      const already = new Set(fp.picksByPlayer[pn] || []);
+      const out = [];
       for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!coord) continue;
-        pendingStrain.push({ figureKey: fk, controllerPlayerNum: pn, amount: acc, source: 'Chaotic Force' });
-        targetNames.push(dcNameFromFigureKey(fk));
+        if (!coord || already.has(fk)) continue;
+        out.push(fk);
       }
+      return out;
+    }
+
+    // Accumulate a pick (or advance on Done / max-3 cap).
+    if (chosenFigureKey === DONE_KEY) {
+      // Picker done — switch stage or finalize.
+    } else if (chosenFigureKey) {
+      const pickerPN = fp.currentPickerPN;
+      fp.picksByPlayer[pickerPN] = fp.picksByPlayer[pickerPN] || [];
+      if (!fp.picksByPlayer[pickerPN].includes(chosenFigureKey)) {
+        fp.picksByPlayer[pickerPN].push(chosenFigureKey);
+      }
+      // If 3 picked, auto-advance.
+      if (fp.picksByPlayer[pickerPN].length < 3) {
+        const remaining = _enumerateOwnFigures(pickerPN);
+        if (remaining.length > 0) {
+          const choiceValues = [...remaining, DONE_KEY];
+          const choiceOptions = [
+            ...remaining.map((fk) => dcNameFromFigureKey(fk)),
+            `Done (${fp.picksByPlayer[pickerPN].length} chosen)`,
+          ];
+          return {
+            applied: false,
+            requiresChoice: true,
+            choiceOptions,
+            choiceValues,
+            ...(pickerPN !== fp.cardPlayerNum ? { choiceForControllerPlayerNum: pickerPN } : {}),
+          };
+        }
+      }
+    }
+
+    // Advance picker stage if cardPlayer just finished.
+    if (fp.currentPickerPN === fp.cardPlayerNum) {
+      fp.currentPickerPN = oppNum;
+      const oppFigures = _enumerateOwnFigures(oppNum);
+      if (oppFigures.length > 0) {
+        const choiceValues = [...oppFigures, DONE_KEY];
+        const choiceOptions = [
+          ...oppFigures.map((fk) => dcNameFromFigureKey(fk)),
+          'Done (0 chosen)',
+        ];
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions,
+          choiceValues,
+          choiceForControllerPlayerNum: oppNum,
+        };
+      }
+      // Opponent has no figures — fall through to die roll.
+    }
+
+    // First call: enumerate cardPlayer's figures.
+    if (fp.picksByPlayer[fp.cardPlayerNum].length === 0 && chosenFigureKey == null && fp.currentPickerPN === fp.cardPlayerNum) {
+      const ownFigures = _enumerateOwnFigures(fp.cardPlayerNum);
+      if (ownFigures.length === 0) {
+        // No figures to pick — switch to opponent.
+        fp.currentPickerPN = oppNum;
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: DONE_KEY });
+      }
+      const choiceValues = [...ownFigures, DONE_KEY];
+      const choiceOptions = [
+        ...ownFigures.map((fk) => dcNameFromFigureKey(fk)),
+        'Done (0 chosen)',
+      ];
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions,
+        choiceValues,
+      };
+    }
+
+    // Both players done — roll die and apply.
+    const allChosen = [
+      ...fp.picksByPlayer[1].map((fk) => ({ fk, pn: 1 })),
+      ...fp.picksByPlayer[2].map((fk) => ({ fk, pn: 2 })),
+    ];
+    const faces = getDiceData().attack?.[cardConfig.dieColor] || [];
+    if (!faces.length) {
+      delete game.pendingForceCardPick;
+      return { applied: false, manualMessage: `Roll 1 ${cardConfig.dieColor} die manually.` };
+    }
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const dieVal = face[cardConfig.dieField] ?? 0;
+    delete game.pendingForceCardPick;
+
+    if (allChosen.length === 0) {
+      return { applied: true, logMessage: `**${cardConfig.card}** — No figures chosen. Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** — no effect.` };
+    }
+
+    if (cardConfig.effect === 'strain') {
+      const pendingStrain = allChosen.map(({ fk, pn }) => ({
+        figureKey: fk, controllerPlayerNum: pn, amount: dieVal, source: cardConfig.card,
+      }));
+      const names = allChosen.map(({ fk }) => dcNameFromFigureKey(fk)).join(', ');
+      if (dieVal === 0) {
+        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Strain applied to ${names}.` };
+      }
+      return {
+        applied: true,
+        logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → ${dieVal} Strain to ${names} (queued via applyStrain).`,
+        pendingStrain,
+      };
+    }
+
+    if (cardConfig.effect === 'damage') {
+      if (dieVal === 0) {
+        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Damage applied.` };
+      }
+      const refreshIds = [];
+      const parts = [];
+      for (const { fk, pn } of allChosen) {
+        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        if (!fMsgId || !dcHealthState) continue;
+        const hs = dcHealthState.get(fMsgId) || [];
+        const m = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = m ? parseInt(m[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (!hp) continue;
+        const [cur, max] = hp;
+        const newCur = Math.max(0, (cur ?? max) - dieVal);
+        hs[figIdx] = [newCur, max];
+        dcHealthState.set(fMsgId, hs);
+        syncHealthStateToList(game, pn, fMsgId, hs);
+        parts.push(`${dcNameFromFigureKey(fk)}: ${cur ?? max}→${newCur}`);
+        if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+      }
+      return {
+        applied: true,
+        logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → ${dieVal} Damage to chosen.\n${parts.join(', ')}`,
+        refreshDcEmbed: true,
+        refreshDcEmbedMsgIds: refreshIds,
+      };
+    }
+
+    // heal
+    const healAmt = dieVal;
+    if (healAmt === 0) {
+      return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no recovery.` };
+    }
+    const refreshIds = [];
+    const parts = [];
+    for (const { fk, pn } of allChosen) {
+      const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+      if (!fMsgId || !dcHealthState) continue;
+      const hs = dcHealthState.get(fMsgId) || [];
+      const m = fk.match(/-(\d+)-(\d+)$/);
+      const figIdx = m ? parseInt(m[2], 10) : 0;
+      const hp = hs[figIdx];
+      if (!hp) continue;
+      const [cur, max] = hp;
+      const damage = (max ?? cur) - (cur ?? 0);
+      if (damage <= 0) {
+        parts.push(`${dcNameFromFigureKey(fk)}: full HP (no heal)`);
+        continue;
+      }
+      const heal = Math.min(healAmt, damage);
+      hs[figIdx] = [(cur ?? 0) + heal, max];
+      dcHealthState.set(fMsgId, hs);
+      syncHealthStateToList(game, pn, fMsgId, hs);
+      parts.push(`${dcNameFromFigureKey(fk)}: +${heal} HP`);
+      if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
     }
     return {
       applied: true,
-      logMessage: `**Chaotic Force** — Rolled 1 green die: **${acc} Accuracy** → ${acc} Strain to all figures (queued via applyStrain).`,
-      pendingStrain,
+      logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → recover ${healAmt} Damage on chosen.\n${parts.length ? parts.join(', ') : 'No damaged figures chosen.'}`,
+      refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: refreshIds,
     };
-  }
-
-  // ccEffect: Corrupting Force — roll 1 blue die, all figures on both sides suffer Damage = Hits
-  if (entry.type === 'ccEffect' && entry.corruptingForceEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
-    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
-    const faces = getDiceData().attack?.blue || [];
-    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 blue die manually.' };
-    const face = faces[Math.floor(Math.random() * faces.length)];
-    const hits = face.dmg ?? 0;
-    if (hits === 0) return { applied: true, logMessage: '**Corrupting Force** — Rolled 1 blue die: **0 Hits** — no Damage applied.' };
-    const refreshIds = [];
-    const parts = [];
-    for (const pn of [1, 2]) {
-      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!coord) continue;
-        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
-        if (!fMsgId) continue;
-        const hs = dcHealthState.get(fMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
-          dcHealthState.set(fMsgId, hs);
-          syncHealthStateToList(game, pn, fMsgId, hs);
-          parts.push(`${dcNameFromFigureKey(fk)}: ${cur ?? max}→${Math.max(0, (cur ?? max) - hits)}`);
-          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
-        }
-      }
-    }
-    return { applied: true, logMessage: `**Corrupting Force** — Rolled 1 blue die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${hits} Damage to all figures.\n${parts.join(', ')}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
-  }
-
-  // ccEffect: Balancing Force — roll 1 red die, all damaged friendly figures recover Damage = Hits
-  if (entry.type === 'ccEffect' && entry.balancingForceEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
-    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
-    const faces = getDiceData().attack?.red || [];
-    if (!faces.length) return { applied: false, manualMessage: 'Roll 1 red die manually.' };
-    const face = faces[Math.floor(Math.random() * faces.length)];
-    const hits = face.dmg ?? 0;
-    const healAmt = Math.max(1, hits); // minimum 1 recovery guaranteed
-    const refreshIds = [];
-    const parts = [];
-    // Apply to ALL damaged figures on both sides (card says "each player chooses up to 3" — auto-heal all)
-    for (const pn of [1, 2]) {
-      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!coord) continue;
-        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
-        if (!fMsgId) continue;
-        const hs = dcHealthState.get(fMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          const damage = (max ?? cur) - (cur ?? 0);
-          if (damage <= 0) continue;
-          const heal = Math.min(healAmt, damage);
-          hs[figIdx] = [(cur ?? 0) + heal, max];
-          dcHealthState.set(fMsgId, hs);
-          syncHealthStateToList(game, pn, fMsgId, hs);
-          parts.push(`${dcNameFromFigureKey(fk)}: +${heal} HP`);
-          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
-        }
-      }
-    }
-    return { applied: true, logMessage: `**Balancing Force** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → all damaged figures recover ${healAmt} Damage.\n${parts.length ? parts.join(', ') : 'No damaged figures.'}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
   }
 
   // ccEffect: Whistling Birds — Move 2 (Move-X), then roll 1 red die,

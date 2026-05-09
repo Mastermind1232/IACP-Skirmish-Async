@@ -62,6 +62,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // Static Pulse per-target chained choice state — cleared at round
   // boundary in case a player abandons the picker mid-flight.
   'pendingStaticPulse',
+  // Chaotic / Corrupting / Balancing Force shared per-player picker
+  // state — cleared at round boundary in case picker is abandoned.
+  'pendingForceCardPick',
   'nextAttackReach',
   'selfDestructProtocolTriggered',
   'falseOrdersUpgrade',
@@ -316,6 +319,9 @@ const ROUND_OBJECT_FLAGS = [
   // Static Pulse per-target chained choice state — cleared at round
   // boundary in case a player abandons the picker mid-flight.
   'pendingStaticPulse',
+  // Chaotic / Corrupting / Balancing Force shared per-player picker
+  // state — cleared at round boundary in case picker is abandoned.
+  'pendingForceCardPick',
   'nextAttackReach',
   'fellSwoopFreeAttack',
   // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
