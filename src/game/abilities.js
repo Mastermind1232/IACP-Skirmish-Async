@@ -6429,13 +6429,19 @@ export function resolveAbility(abilityId, context) {
     // Done-marker for the current picker stage.
     const DONE_KEY = '__force_card_done__';
 
-    // Helper: enumerate the current picker's own figures, minus already-chosen.
-    function _enumerateOwnFigures(pn) {
-      const already = new Set(fp.picksByPlayer[pn] || []);
+    // Helper: enumerate ALL figures (friendly + hostile) on the board,
+    // minus what THIS player has already chosen. Per CRR each player
+    // may pick any 3 figures — no friendly/hostile restriction. The
+    // two players' picks are de-duplicated as a union when effects
+    // are applied (a figure picked by both still suffers only once).
+    function _enumerateAllFigures(pickerPN) {
+      const already = new Set(fp.picksByPlayer[pickerPN] || []);
       const out = [];
-      for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-        if (!coord || already.has(fk)) continue;
-        out.push(fk);
+      for (const pn of [1, 2]) {
+        for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!coord || already.has(fk)) continue;
+          out.push({ fk, owner: pn });
+        }
       }
       return out;
     }
@@ -6451,11 +6457,11 @@ export function resolveAbility(abilityId, context) {
       }
       // If 3 picked, auto-advance.
       if (fp.picksByPlayer[pickerPN].length < 3) {
-        const remaining = _enumerateOwnFigures(pickerPN);
+        const remaining = _enumerateAllFigures(pickerPN);
         if (remaining.length > 0) {
-          const choiceValues = [...remaining, DONE_KEY];
+          const choiceValues = [...remaining.map((r) => r.fk), DONE_KEY];
           const choiceOptions = [
-            ...remaining.map((fk) => dcNameFromFigureKey(fk)),
+            ...remaining.map((r) => `${dcNameFromFigureKey(r.fk)} (P${r.owner})`),
             `Done (${fp.picksByPlayer[pickerPN].length} chosen)`,
           ];
           return {
@@ -6472,11 +6478,11 @@ export function resolveAbility(abilityId, context) {
     // Advance picker stage if cardPlayer just finished.
     if (fp.currentPickerPN === fp.cardPlayerNum) {
       fp.currentPickerPN = oppNum;
-      const oppFigures = _enumerateOwnFigures(oppNum);
+      const oppFigures = _enumerateAllFigures(oppNum);
       if (oppFigures.length > 0) {
-        const choiceValues = [...oppFigures, DONE_KEY];
+        const choiceValues = [...oppFigures.map((r) => r.fk), DONE_KEY];
         const choiceOptions = [
-          ...oppFigures.map((fk) => dcNameFromFigureKey(fk)),
+          ...oppFigures.map((r) => `${dcNameFromFigureKey(r.fk)} (P${r.owner})`),
           'Done (0 chosen)',
         ];
         return {
@@ -6490,17 +6496,17 @@ export function resolveAbility(abilityId, context) {
       // Opponent has no figures — fall through to die roll.
     }
 
-    // First call: enumerate cardPlayer's figures.
+    // First call: enumerate ALL figures for cardPlayer.
     if (fp.picksByPlayer[fp.cardPlayerNum].length === 0 && chosenFigureKey == null && fp.currentPickerPN === fp.cardPlayerNum) {
-      const ownFigures = _enumerateOwnFigures(fp.cardPlayerNum);
-      if (ownFigures.length === 0) {
-        // No figures to pick — switch to opponent.
+      const allFigures = _enumerateAllFigures(fp.cardPlayerNum);
+      if (allFigures.length === 0) {
+        // No figures on board — switch to opponent.
         fp.currentPickerPN = oppNum;
         return resolveAbility(abilityId, { ...context, chosenFigureKey: DONE_KEY });
       }
-      const choiceValues = [...ownFigures, DONE_KEY];
+      const choiceValues = [...allFigures.map((r) => r.fk), DONE_KEY];
       const choiceOptions = [
-        ...ownFigures.map((fk) => dcNameFromFigureKey(fk)),
+        ...allFigures.map((r) => `${dcNameFromFigureKey(r.fk)} (P${r.owner})`),
         'Done (0 chosen)',
       ];
       return {
@@ -6511,11 +6517,22 @@ export function resolveAbility(abilityId, context) {
       };
     }
 
-    // Both players done — roll die and apply.
-    const allChosen = [
-      ...fp.picksByPlayer[1].map((fk) => ({ fk, pn: 1 })),
-      ...fp.picksByPlayer[2].map((fk) => ({ fk, pn: 2 })),
-    ];
+    // Both players done — roll die and apply to UNION (deduplicated).
+    const _figureOwner = (fk) => {
+      if (game.figurePositions?.[1]?.[fk]) return 1;
+      if (game.figurePositions?.[2]?.[fk]) return 2;
+      return null;
+    };
+    const _seenFks = new Set();
+    const allChosen = [];
+    for (const pickerPN of [1, 2]) {
+      for (const fk of (fp.picksByPlayer[pickerPN] || [])) {
+        if (_seenFks.has(fk)) continue;
+        _seenFks.add(fk);
+        const owner = _figureOwner(fk);
+        if (owner) allChosen.push({ fk, pn: owner });
+      }
+    }
     const faces = getDiceData().attack?.[cardConfig.dieColor] || [];
     if (!faces.length) {
       delete game.pendingForceCardPick;
