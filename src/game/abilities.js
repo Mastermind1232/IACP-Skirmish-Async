@@ -6724,23 +6724,25 @@ export function resolveAbility(abilityId, context) {
       }
       // Apply self-strain to activating figure(s)
       const refreshIds = [targetMsgId];
+      // Self-strain: queue via pendingStrain[] anchored to the
+      // activating figure (NOT every figure in the group). Routes
+      // through applyStrain so Fireproof / Headhunter / per-strain
+      // choice / Under Duress / Paz still gate.
       let selfStrainMsg = '';
       if (selfStrain > 0) {
         const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-        if (selfMsgId && dcHealthState) {
-          const selfMeta = dcMessageMeta.get(selfMsgId);
-          const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
-          const selfHs = (dcHealthState.get(selfMsgId) || []).slice();
-          for (let si = 0; si < selfKeys.length; si++) {
-            const shs = selfHs[si];
-            if (Array.isArray(shs) && shs.length >= 1) {
-              const [sCur, sMax] = shs;
-              selfHs[si] = [Math.max(0, (sCur ?? sMax ?? 0) - selfStrain), sMax];
-            }
-          }
-          dcHealthState.set(selfMsgId, selfHs);
-          if (!refreshIds.includes(selfMsgId)) refreshIds.push(selfMsgId);
-          selfStrainMsg = ` You suffered ${selfStrain} Strain.`;
+        const selfMeta = selfMsgId ? dcMessageMeta.get(selfMsgId) : null;
+        const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
+        const selfFigIdx = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
+        const selfFk = selfKeys[selfFigIdx] || selfKeys[0];
+        if (selfFk) {
+          _cahPendingStrain.push({
+            figureKey: selfFk,
+            controllerPlayerNum: playerNum,
+            amount: selfStrain,
+            source: `${entry.label || abilityId || 'CC ability'} (self)`,
+          });
+          selfStrainMsg = ` You suffer ${selfStrain} Strain (queued).`;
         }
       }
       // Heal self if activating figure has the required trait (e.g. Force Drain: recover 3 if FORCE USER)
