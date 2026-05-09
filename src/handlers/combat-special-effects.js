@@ -48,12 +48,29 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     const mid = findDcMessageIdForFigure(game.gameId, t.playerNum, t.figureKey);
     if (!mid) continue;
     const { figureIndex: figIdx } = parseFigureKey(t.figureKey);
-    const _spRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-      figureKey: t.figureKey, msgId: mid, figIndex: figIdx,
-      amount: totalEffect, controllerPlayerNum: t.playerNum,
-      source: 'Splash',
-    });
-    const newHp = _spRes.newHp;
+    // Damage applies sync via _applyDamage; strain routed through
+    // applyStrain (Fireproof / Headhunter / per-strain choice / Under
+    // Duress / Paz). Defeat finalization on damage branch happens
+    // inside applyStrain → _applyDamageFromStrain.
+    let newHp;
+    if (totalDmg > 0) {
+      const _spRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: t.figureKey, msgId: mid, figIndex: figIdx,
+        amount: totalDmg, controllerPlayerNum: t.playerNum,
+        source: 'Indiscriminate Fire (Splash)',
+      });
+      newHp = _spRes.newHp;
+    } else {
+      newHp = dcHealthState.get(mid)?.[figIdx]?.[0] ?? 0;
+    }
+    if (totalStrain > 0) {
+      await applyStrain(game, ctx, {
+        figureKey: t.figureKey,
+        controllerPlayerNum: t.playerNum,
+        amount: totalStrain,
+        source: 'Indiscriminate Fire (Splash)',
+      });
+    }
     const splashMaxHp = dcHealthState.get(mid)?.[figIdx]?.[1] ?? 0;
     if (splashMaxHp === 0) continue;
     // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
