@@ -10158,7 +10158,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
-    // Phase 3: Force Choke chosen figure — 2 Damage applies sync, 2
+    // Phase 3: Force Choke chosen figure — 2 Damage applies sync, 1
     // Strain queues via pendingStrain[] for applyStrain pipeline.
     if (chosenFigureKey) {
       const oppNum = opponentPlayerNum(playerNum);
@@ -10174,7 +10174,7 @@ export function resolveAbility(abilityId, context) {
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
           syncHealthStateToList(game, oppNum, figMsgId, hs);
-          dmgNote = `2 Dmg (HP: ${cur ?? max}→${newCur}) + 2 Strain (queued)`;
+          dmgNote = `2 Dmg (HP: ${cur ?? max}→${newCur}) + 1 Strain (queued)`;
         }
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
@@ -10185,7 +10185,7 @@ export function resolveAbility(abilityId, context) {
         pendingStrain: [{
           figureKey: chosenFigureKey,
           controllerPlayerNum: oppNum,
-          amount: 2,
+          amount: 1,
           source: 'Lord of the Sith — Force Choke',
         }],
       };
