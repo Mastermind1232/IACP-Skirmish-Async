@@ -302,6 +302,10 @@ const ROUND_OBJECT_FLAGS = [
   // SMALL figure currently being prompted for a 1-space push. Cleared
   // by handleOnAMissionPush (direction or skip).
   'pendingOnAMissionPush',
+  // Deploy the Garrison per-figure resolution state — tracks which
+  // qualifying TROOPER/GUARDIAN figures have already chosen
+  // token-or-move so the dispatch knows what's remaining each click.
+  'pendingDeployGarrison',
   'roundAttackSurgeBonus',
   'overrunThisActivation',
   'roundFigureAbilityUsed',

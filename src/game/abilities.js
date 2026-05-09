@@ -7870,84 +7870,157 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** —${freeNote}${rangeNote}${dieNote} Use the Attack button.` };
   }
 
-  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — each friendly Trooper/Guardian within 4 gains 2 MP or 1 Damage Token (choice)
+  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — at start of
+  // a round, each friendly TROOPER or GUARDIAN within 4 spaces makes a
+  // PER-FIGURE choice between gaining 1 Hit Token or moving up to 2
+  // spaces. Order is player-chosen; each figure resolves before the
+  // next one is offered. No activation is in progress (start-of-round
+  // timing) so all MP grants use the picker (rule 1, no bank,
+  // bypassCosts: false).
   if (entry.type === 'ccEffect' && entry.deployGarrisonEffect) {
-    const { game, playerNum, dcMessageMeta, choiceIndex } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // The "you" who plays this card at start of round: pick any
+    // friendly figure on the board to anchor the within-4 measurement.
+    // Per spec the player chooses the activator-equivalent themselves;
+    // here we anchor to the first friendly with a position to keep the
+    // dispatch deterministic. (Multi-figure DGs use figure 0.)
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    const meta = dcMessageMeta.get(msgId);
-    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const actData = game.dcActionsData?.[msgId];
-    const selfFigIdx = actData?.selectedFigure ?? 0;
-    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-    const dgIndex = dgMatch ? dgMatch[1] : '1';
-    const selfFigKey = `${meta.dcName}-${dgIndex}-${selfFigIdx}`;
-    const selfPos = game.figurePositions?.[playerNum]?.[selfFigKey];
-    if (!selfPos) return { applied: false, manualMessage: 'Resolve manually: activated figure has no position.' };
-    const boardState = getBoardStateForMovement(game, null);
-    const mapSpaces = boardState?.mapSpaces;
-
-    // Helper: collect qualifying friendly figures within 4 (TROOPER or GUARDIAN keyword, not the activating figure)
+    let anchorPos = null;
+    if (msgId) {
+      const meta = dcMessageMeta.get(msgId);
+      const actData = game.dcActionsData?.[msgId];
+      const selfFigIdx = actData?.selectedFigure ?? 0;
+      const dgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIndex = dgMatch ? dgMatch[1] : '1';
+      const selfFigKey = `${meta?.dcName}-${dgIndex}-${selfFigIdx}`;
+      anchorPos = game.figurePositions?.[playerNum]?.[selfFigKey];
+    }
+    if (!anchorPos) {
+      // No activation context → fall back to first friendly position.
+      for (const pos of Object.values(game.figurePositions?.[playerNum] || {})) {
+        if (pos) { anchorPos = pos; break; }
+      }
+    }
+    if (!anchorPos) return { applied: false, manualMessage: 'Resolve manually: no friendly figure on the board to anchor "within 4".' };
     const dcEffects = getDcEffects();
-    const qualifyingMsgIds = [];
-    const qualifyingNames = [];
+    // Resume in progress (chosenFigureKey supplied via figure-pick
+    // button) — we want a fresh figure-list each iteration so we
+    // recompute below.
+    const allQualifyingFigures = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos) continue;
-      const dcName = dcNameFromFigureKey(fk);
-      const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\[.*\]\s*$/, '')] || {};
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = dcEffects[dcN] || dcEffects[dcN.replace(/\s*\[.*\]\s*$/, '')] || {};
       const kws = (eff.keywords || []).map(k => String(k).toUpperCase());
       if (!kws.includes('TROOPER') && !kws.includes('GUARDIAN')) continue;
-      if (countGameSpaces(game, selfPos, pos) > 4) continue;
-      // Find the msgId for this figure
-      const figMid = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
-      if (!figMid) continue;
-      if (!qualifyingMsgIds.includes(figMid)) {
-        qualifyingMsgIds.push(figMid);
-        qualifyingNames.push(dcName);
+      if (countGameSpaces(game, anchorPos, pos) > 4) continue;
+      allQualifyingFigures.push({ figureKey: fk, dcName: dcN });
+    }
+    if (allQualifyingFigures.length === 0) {
+      return { applied: true, logMessage: `**Deploy the Garrison** — No friendly TROOPER / GUARDIAN figures within 4 spaces.` };
+    }
+    // Initialize / read pending-resolved set so each figure resolves once.
+    if (!game.pendingDeployGarrison) {
+      game.pendingDeployGarrison = { resolved: [], playerNum };
+    }
+    const remaining = allQualifyingFigures.filter(f => !game.pendingDeployGarrison.resolved.includes(f.figureKey));
+    if (remaining.length === 0) {
+      delete game.pendingDeployGarrison;
+      return { applied: true, logMessage: `**Deploy the Garrison** — All eligible figures resolved.` };
+    }
+    // Each figure-pick click sends back chosenFigureKey of form
+    // "<figKey>|<choice>" (choice = "token" or "move") so this single
+    // dispatch handles both phases. The figure picker is the
+    // ability-library standard requiresChoice; the token/move sub-
+    // choice is passed back by the existing cc_choice handler with a
+    // structured choiceValues entry.
+    if (chosenFigureKey) {
+      const sepIdx = String(chosenFigureKey).lastIndexOf('|');
+      if (sepIdx < 0) {
+        // Phase 2: figure picked → present token-or-move sub-choice
+        // for this figure via chained requiresChoice.
+        const dcN = dcNameFromFigureKey(chosenFigureKey);
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions: [
+            `${dcN}: gain 1 Hit Token`,
+            `${dcN}: move up to 2 spaces (no bank)`,
+          ],
+          choiceValues: [`${chosenFigureKey}|token`, `${chosenFigureKey}|move`],
+        };
       }
-    }
-    if (qualifyingMsgIds.length === 0) {
-      return { applied: true, logMessage: `**Deploy the Garrison** — No friendly Trooper/Guardian figures within 4 spaces.` };
-    }
-
-    if (choiceIndex === undefined || choiceIndex === null) {
-      // Phase 1: ask player to choose MP or Damage Token
+      // Phase 3: choice supplied → apply, mark resolved, loop.
+      const figKey = chosenFigureKey.slice(0, sepIdx);
+      const sub = chosenFigureKey.slice(sepIdx + 1);
+      const dcN = dcNameFromFigureKey(figKey);
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, figKey, dcMessageMeta);
+      game.pendingDeployGarrison.resolved.push(figKey);
+      const stillRemaining = allQualifyingFigures.filter(f => !game.pendingDeployGarrison.resolved.includes(f.figureKey));
+      if (sub === 'token') {
+        grantPowerTokens(game, figKey, 'Damage', 1);
+        if (stillRemaining.length === 0) {
+          delete game.pendingDeployGarrison;
+          return {
+            applied: true,
+            logMessage: `**Deploy the Garrison** — **${dcN}** gained 1 Damage Token. All eligible figures resolved.`,
+          };
+        }
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions: stillRemaining.map(f => `Resolve next: ${f.dcName}`),
+          choiceValues: stillRemaining.map(f => f.figureKey),
+          logMessage: `**Deploy the Garrison** — **${dcN}** gained 1 Damage Token. ${stillRemaining.length} figure(s) remaining.`,
+        };
+      }
+      // Move sub-choice → setupPendingMoveX picker (no bank).
+      if (!figMsgId) {
+        return { applied: true, logMessage: `**Deploy the Garrison** — could not locate **${dcN}**'s play area; resolve their 2 MP move manually.` };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[figMsgId] = {
+        remaining: 2,
+        source: 'Deploy the Garrison',
+        playerNum,
+        figureKey: figKey,
+        dcName: dcN,
+        threadId: null,
+        bypassCosts: false,
+        msgId: figMsgId,
+        nextAction: null,
+      };
+      if (stillRemaining.length === 0) {
+        delete game.pendingDeployGarrison;
+        return {
+          applied: true,
+          pendingMoveXMsgId: figMsgId,
+          activeMsgId: figMsgId,
+          logMessage: `**Deploy the Garrison** — **${dcN}** moves up to 2 spaces (spend at once, no bank). All eligible figures resolved.`,
+        };
+      }
+      // Both: post the picker AND chain to the next figure-pick.
+      // Caller already saw pendingMoveXMsgId; the chained
+      // requiresChoice surfaces remaining figures via cc-hand's
+      // chained-arm so the player keeps resolving in sequence.
       return {
+        applied: true,
+        pendingMoveXMsgId: figMsgId,
+        activeMsgId: figMsgId,
         requiresChoice: true,
-        choiceOptions: [`2 Movement Points to each (${qualifyingNames.join(', ')})`, `1 Damage Token to each (${qualifyingNames.join(', ')})`],
+        choiceOptions: stillRemaining.map(f => `Resolve next: ${f.dcName}`),
+        choiceValues: stillRemaining.map(f => f.figureKey),
+        logMessage: `**Deploy the Garrison** — **${dcN}** moves up to 2 spaces (spend at once, no bank). ${stillRemaining.length} figure(s) remaining.`,
       };
     }
-
-    // Phase 2: apply chosen effect to all qualifying figures
-    const grantMp = choiceIndex === 0;
-    const results = [];
-    for (let i = 0; i < qualifyingMsgIds.length; i++) {
-      const mid = qualifyingMsgIds[i];
-      const nm = qualifyingNames[i];
-      if (grantMp) {
-        addMovementPoints(game, mid, 2);
-        results.push(`**${nm}** +2 MP`);
-      } else {
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        // Grant Hit token to the first figure in that DC group (index 0)
-        const metaForMid = dcMessageMeta.get(mid);
-        if (metaForMid?.dcName) {
-          const actD = game.dcActionsData?.[mid];
-          const figIdx = actD?.selectedFigure ?? 0;
-          const fkForMid = Object.keys(game.figurePositions?.[playerNum] || {}).find(fk => fk.startsWith(`${metaForMid.dcName}-`) && fk.endsWith(`-${figIdx}`));
-          if (fkForMid) {
-            grantPowerTokens(game, fkForMid, 'Damage', 1);
-            results.push(`**${nm}** +Damage Token`);
-          }
-        }
-      }
-    }
-    const effectLabel = grantMp ? '2 MP each' : '1 Damage Token each';
+    // Phase 1: present figure-order picker (player chooses next figure to resolve).
     return {
-      applied: true,
-      logMessage: `**Deploy the Garrison** — Granted ${effectLabel}: ${results.join(', ')}.`,
-      refreshMovementBank: grantMp,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: remaining.map(f => `Resolve next: ${f.dcName}`),
+      choiceValues: remaining.map(f => f.figureKey),
+      manualMessage: `**Deploy the Garrison** — Resolve each TROOPER/GUARDIAN within 4 spaces in order; each chooses 1 Hit Token or 2-space move.`,
     };
   }
 
