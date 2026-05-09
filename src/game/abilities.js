@@ -6068,50 +6068,38 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Balancing Force** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → all damaged figures recover ${healAmt} Damage.\n${parts.length ? parts.join(', ') : 'No damaged figures.'}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
   }
 
-  // ccEffect: Whistling Birds — gain 2 MP, roll 1 red die, all hostiles within 2 suffer Hits as Damage
+  // ccEffect: Whistling Birds — Move 2 (Move-X), then roll 1 red die,
+  // up to 3 hostiles within 2 of the post-move position suffer Hits as Damage
   if (entry.type === 'ccEffect' && entry.whistlingBirdsEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
-    // Grant 2 MP
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (msgId) addMovementPoints(game, msgId, 2);
-    // Roll 1 red die
-    const faces = getDiceData().attack?.red || [];
-    if (!faces.length) return { applied: true, logMessage: 'Gained 2 MP. Roll 1 red die manually for Whistling Birds.' };
-    const face = faces[Math.floor(Math.random() * faces.length)];
-    const hits = face.dmg ?? 0;
-    if (hits === 0) return { applied: true, logMessage: '**Whistling Birds** — Gained 2 MP. Rolled 1 red die: **0 Hits** — no Damage applied.', refreshMovementBank: true };
-    // Apply to all hostiles within 2 spaces (up to 3)
-    const oppNum = opponentPlayerNum(playerNum);
-    const meta = msgId ? dcMessageMeta.get(msgId) : null;
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
     const activatingKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
-    const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
-    const refreshIds = [];
-    const parts = [];
-    let count = 0;
-    if (activatorPos && dcHealthState) {
-      for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
-        if (!coord || count >= 3) continue;
-        if (countGameSpaces(game, activatorPos, coord) > 2) continue;
-        const fMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
-        if (!fMsgId) continue;
-        const hs = dcHealthState.get(fMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
-          dcHealthState.set(fMsgId, hs);
-          syncHealthStateToList(game, oppNum, fMsgId, hs);
-          parts.push(`${dcNameFromFigureKey(fk)}: ${hits} Dmg`);
-          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
-          count++;
-        }
-      }
-    }
-    return { applied: true, logMessage: `**Whistling Birds** — Gained 2 MP. Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${parts.length ? parts.join(', ') : 'no hostiles within 2 spaces'}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshMovementBank: true };
+    if (!activatorFk) return { applied: false, manualMessage: '**Whistling Birds** — could not locate activating figure.' };
+    // CRR MOVE-017: 2-space Move-X picker; whistlingBirdsRoll fires
+    // post-move so adjacency for the damage spray is computed from
+    // the figure's NEW position.
+    game.pendingMoveX = game.pendingMoveX || {};
+    game.pendingMoveX[msgId] = {
+      remaining: 2,
+      source: 'Whistling Birds',
+      playerNum,
+      figureKey: activatorFk,
+      dcName: meta?.dcName || '',
+      threadId: null,
+      bypassCosts: true,
+      msgId,
+      nextAction: { type: 'whistlingBirdsRoll', payload: { playerNum, msgId } },
+    };
+    return {
+      applied: true,
+      pendingMoveXMsgId: msgId,
+      activeMsgId: msgId,
+      logMessage: '**Whistling Birds** — Move up to 2 spaces, then roll 1 red die; up to 3 hostiles within 2 spaces suffer Hits as Damage.',
+    };
   }
 
   // ccEffect: Second Chance — place on DC as attachment; triggers defeat prevention + EOR recovery

@@ -159,8 +159,69 @@ async function _finishPicker(game, ctx, msgId) {
     await _runCahTargetPickContinuation(game, ctx, pending, nextAction);
   } else if (nextAction.type === 'grantPowerToken') {
     await _runGrantPowerTokenContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'whistlingBirdsRoll') {
+    await _runWhistlingBirdsRollContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Whistling Birds post-move: roll 1 red die, then deal that many
+ * Damage to up to 3 hostiles within 2 spaces of the figure's NEW
+ * position. Mirrors the prior whistlingBirdsEffect dispatch's
+ * application logic, just using the post-move adjacency.
+ */
+async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
+  const { client, logGameAction } = ctx;
+  const { dcHealthState, dcMessageMeta, getDiceData: gd } = ctx;
+  const playerNum = next.payload?.playerNum || pending.playerNum;
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const { getDiceData } = await import('../data-loader.js');
+  const faces = (gd?.()?.attack?.red) || (getDiceData()?.attack?.red) || [];
+  if (!faces.length) {
+    await logGameAction?.(game, client, '**Whistling Birds** — Roll 1 red die manually (dice data unavailable).', { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const face = faces[Math.floor(Math.random() * faces.length)];
+  const hits = face.dmg ?? 0;
+  if (hits === 0) {
+    await logGameAction?.(game, client, '**Whistling Birds** — Rolled 1 red die: **0 Hits** — no Damage applied.', { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const activatorPos = game.figurePositions?.[playerNum]?.[pending.figureKey];
+  if (!activatorPos) {
+    await logGameAction?.(game, client, `**Whistling Birds** — rolled **${hits}** but activator position is missing; resolve manually.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const { countGameSpaces } = await import('../game/movement.js').catch(() => ({}));
+  const { findMsgIdForFigureKey } = await import('../game/index.js').catch(() => ({}));
+  const { syncHealthStateToList } = await import('../game/index.js').catch(() => ({}));
+  const parts = [];
+  const refreshIds = [];
+  let count = 0;
+  for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+    if (!coord || count >= 3) continue;
+    if (typeof countGameSpaces === 'function' && countGameSpaces(game, activatorPos, coord) > 2) continue;
+    const fMsgId = typeof findMsgIdForFigureKey === 'function'
+      ? findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta)
+      : null;
+    if (!fMsgId || !dcHealthState) continue;
+    const hs = dcHealthState.get(fMsgId) || [];
+    const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+    const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+    const hp = hs[figIdx];
+    if (hp) {
+      const [cur, max] = hp;
+      hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
+      dcHealthState.set(fMsgId, hs);
+      if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, fMsgId, hs);
+      parts.push(`${dcNameFromFigureKey(fk)}: ${hits} Dmg`);
+      if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
+      count++;
+    }
+  }
+  const msg = `**Whistling Birds** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${parts.length ? parts.join(', ') : 'no hostiles within 2 spaces'}.`;
+  await logGameAction?.(game, client, msg, { phase: 'ROUND', icon: 'card' });
 }
 
 /**
