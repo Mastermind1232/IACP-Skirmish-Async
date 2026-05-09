@@ -3082,24 +3082,34 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — first call: return validSpaces; second call: apply with chosenSpace
+  // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — 3 phases:
+  //   Phase 1 (no chosenSpace): return validSpaces (within 2 of activator).
+  //   Phase 2 (chosenSpace, no chosenFigureKey): place smoke + friendly-figure picker
+  //     (figures within 2 of chosen space).
+  //   Phase 3 (chosenSpace + chosenFigureKey): grant MP to chosen friendly.
+  //     Recipient = activating figure → bank N MP (rule 3, in-activation).
+  //     Recipient ≠ activating figure → pendingMoveX picker (rule 1, out-of-
+  //     activation grant on someone else; spend immediately, no bank).
+  //     bypassCosts FALSE either way — MP grant, not Move-X.
   if (entry.type === 'ccEffect' && entry.chooseSpaceWithin2OfActivating) {
-    const { game, playerNum, dcMessageMeta, chosenSpace } = context;
+    const { game, playerNum, dcMessageMeta, chosenSpace, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const activatingFigKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (activatingFigKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    const activatorIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const activatingFigKey = activatingFigKeys[activatorIdx] || activatingFigKeys[0];
+    // Phase 1: pick a space within 2 of any activating-DC figure.
     if (!chosenSpace) {
-      const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-      if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
-      const meta = dcMessageMeta.get(msgId);
-      if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-      if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
       const boardState = getBoardStateForMovement(game, null);
       if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve manually: map data missing.' };
       const validSet = new Set();
-      for (const fk of figureKeys) {
+      for (const fk of activatingFigKeys) {
         const pos = game.figurePositions?.[playerNum]?.[fk];
         if (!pos) continue;
-        const profile = getMovementProfile(meta.dcName, fk, game);
         const occ = boardState.occupiedSet;
         const occArr = occ instanceof Set ? [...occ] : (occ || []);
         const cells = getReachableSpaces(pos, 2, boardState.mapSpaces, occArr);
@@ -3109,13 +3119,84 @@ export function resolveAbility(abilityId, context) {
       if (validSpaces.length === 0) return { applied: false, manualMessage: 'No spaces within 2 to choose.' };
       return { requiresSpaceChoice: true, validSpaces };
     }
+    // Phase 3: figure picked → apply MP grant to that friendly.
+    if (chosenFigureKey) {
+      const recipientPos = game.figurePositions?.[playerNum]?.[chosenFigureKey];
+      if (!recipientPos) {
+        return { applied: false, manualMessage: `**Smoke Grenade** — recipient ${chosenFigureKey} no longer on the board.` };
+      }
+      const n = entry.mpBonus || 0;
+      // Rule 3 (in-activation grant on the activating figure) → bank.
+      if (chosenFigureKey === activatingFigKey) {
+        addMovementPoints(game, msgId, n);
+        return {
+          applied: true,
+          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** (activating) banks **${n} MP**.`,
+          refreshMovementBank: true,
+          activeMsgId: msgId,
+        };
+      }
+      // Rule 1 (grant on a non-activating friendly) → pendingMoveX
+      // picker, spend immediately, remainder lost. Recipient might be
+      // controlled by the same player but isn't the active DC — they
+      // need a fresh msgId-keyed picker. We piggyback on the recipient
+      // DC's msgId so the picker scopes to the right figure.
+      const recipMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!recipMsgId) {
+        return { applied: false, manualMessage: `**Smoke Grenade** — could not locate **${dcNameFromFigureKey(chosenFigureKey)}**'s play area; resolve manually.` };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[recipMsgId] = {
+        remaining: n,
+        source: 'Smoke Grenade',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName: dcNameFromFigureKey(chosenFigureKey),
+        threadId: null,
+        bypassCosts: false,
+        msgId: recipMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: recipMsgId,
+        activeMsgId: recipMsgId,
+        logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once, remainder lost.`,
+      };
+    }
+    // Phase 2: place smoke token, then present friendly-figure picker.
     const spaceUpper = String(chosenSpace).toUpperCase();
     game.ancillaryTokens = game.ancillaryTokens || {};
     game.ancillaryTokens.smoke = [...(game.ancillaryTokens.smoke || []), chosenSpace];
-    const mpLabel = entry.mpBonus ? `; choose a friendly figure within 2 of that space to gain ${entry.mpBonus} MP` : '';
+    // Compute friendlies within 2 spaces (graph distance) of the smoke
+    // space. Use countGameSpaces for distance — same helper Looking
+    // for a Fight, etc. use.
+    const friendlyKeys = [];
+    const friendlyLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      if (countGameSpaces(game, pos, chosenSpace) > 2) continue;
+      friendlyKeys.push(fk);
+      friendlyLabels.push(dcNameFromFigureKey(fk));
+    }
+    if (friendlyKeys.length === 0) {
+      return {
+        applied: true,
+        logMessage: `**Smoke Grenade** — placed smoke at **${spaceUpper}**. No friendly figures within 2 spaces; MP grant skipped.`,
+        refreshBoard: true,
+      };
+    }
+    if (friendlyKeys.length === 1) {
+      // Exactly one valid recipient — auto-pick by recursing with
+      // chosenFigureKey set. Re-run dispatch picks up Phase 3.
+      return resolveAbility('Smoke Grenade', { ...context, chosenFigureKey: friendlyKeys[0] });
+    }
     return {
-      applied: true,
-      logMessage: `Chose space **${spaceUpper}**. Placed smoke token there${mpLabel}.`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: friendlyLabels.map(n => `MP recipient: ${n}`),
+      choiceValues: friendlyKeys,
+      logMessage: `**Smoke Grenade** — placed smoke at **${spaceUpper}**. Choose a friendly figure within 2 spaces to gain ${entry.mpBonus || 0} MP.`,
       refreshBoard: true,
     };
   }
