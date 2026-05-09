@@ -23,7 +23,7 @@ const BATCH = [
   ['Beatdown',             ['nextAttacksBonusHits']],
   ['Black Market Prices',  ['draw', 'drawThenDiscardOneGainVp']],
   ['Blitz',                ['attackSurgeBonus']],
-  ['Bodyguard',            ['mpBonus', 'attackTargetSwap']],
+  ['Bodyguard',            ['attackTargetSwap']],
   ['Burst Fire',           ['freeAttackBonus']],
   ['Capture the Weary',    ['chooseAdjacentHostileThen']],
   ['Cavalry Charge',       ['roundDefenseBonusBlock', 'trooperRoundAttackHitBonus']],

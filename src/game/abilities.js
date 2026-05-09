@@ -3657,42 +3657,50 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: attackTargetSwap + mpBonus (Bodyguard, Get Behind Me!) — swap combat target to the activating figure
-  if (entry.type === 'ccEffect' && entry.attackTargetSwap && typeof entry.mpBonus === 'number') {
+  // ccEffect: attackTargetSwap (Bodyguard, Get Behind Me!) — swap combat target to the activating figure.
+  // Bodyguard has NO MP grant per canonical card text. Get Behind Me! retains
+  // the optional mpBonus + isMoveX path.
+  if (entry.type === 'ccEffect' && entry.attackTargetSwap) {
     const { game, playerNum, dcMessageMeta } = context;
     const isGetBehindMe = !!entry.getsBehindMe;
     const cardLabel = isGetBehindMe ? 'Get Behind Me!' : 'Bodyguard';
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    // Bodyguard fires off the defender's interrupt timing, not their
+    // own activation — there may be no activation in progress. The
+    // dispatch only needs the active combat for the target swap.
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    const n = entry.mpBonus;
+    const n = typeof entry.mpBonus === 'number' ? entry.mpBonus : 0;
     let _swPmxMsgId = null;
-    let mpNote = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
-    if (entry.isMoveX) {
-      const meta = dcMessageMeta?.get?.(msgId);
-      const _swFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
-        .filter(k => k.startsWith((meta?.dcName || '') + '-'));
-      const _swSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const _swFigureKey = _swFigKeys[_swSelectedIdx] || _swFigKeys[0] || null;
-      if (!_swFigureKey) {
-        return { applied: false, manualMessage: `**${cardLabel}** — could not locate the activating figure; resolve manually.` };
+    let mpNote = '';
+    if (n > 0) {
+      if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+      mpNote = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+      if (entry.isMoveX) {
+        const meta = dcMessageMeta?.get?.(msgId);
+        const _swFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+          .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+        const _swSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const _swFigureKey = _swFigKeys[_swSelectedIdx] || _swFigKeys[0] || null;
+        if (!_swFigureKey) {
+          return { applied: false, manualMessage: `**${cardLabel}** — could not locate the activating figure; resolve manually.` };
+        }
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: n,
+          source: cardLabel,
+          playerNum,
+          figureKey: _swFigureKey,
+          dcName: meta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: null,
+        };
+        _swPmxMsgId = msgId;
+        mpNote = `May move up to ${n} space${n !== 1 ? 's' : ''} (no bank).`;
+      } else {
+        addMovementPoints(game, msgId, n);
       }
-      game.pendingMoveX = game.pendingMoveX || {};
-      game.pendingMoveX[msgId] = {
-        remaining: n,
-        source: cardLabel,
-        playerNum,
-        figureKey: _swFigureKey,
-        dcName: meta?.dcName || '',
-        threadId: null,
-        bypassCosts: true,
-        msgId,
-        nextAction: null,
-      };
-      _swPmxMsgId = msgId;
-      mpNote = `May move up to ${n} space${n !== 1 ? 's' : ''} (no bank).`;
-    } else {
-      addMovementPoints(game, msgId, n);
     }
 
     // Attempt to swap the combat target to the activating figure
@@ -3814,7 +3822,7 @@ export function resolveAbility(abilityId, context) {
       if (cancelledEffects.length > 0) {
         const cancelNote = ` Cancelled prior defender CC effects: ${cancelledEffects.join(', ')}.`;
         const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}${cancelNote}`;
-        return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
+        return { applied: true, logMessage: swapLog, refreshMovementBank: n > 0 && !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
       }
     }
 

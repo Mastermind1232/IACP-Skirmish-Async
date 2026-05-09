@@ -436,10 +436,9 @@
     },
     "Bodyguard": {
       "type": "ccEffect",
-      "label": "Gain 2 MP; attack targets you instead of adjacent friendly",
-      "mpBonus": 2,
+      "label": "Attack targets you instead of adjacent friendly",
       "attackTargetSwap": true,
-      "logMessage": "Gained **2 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then click Attack as the defender (if attacked) to proceed.",
+      "logMessage": "**Bodyguard** — Incoming attack now targets you instead of the adjacent friendly. Inform your opponent and proceed as the defender.",
       "wiredStatus": "wired"
     },
     "boltslinger": {
