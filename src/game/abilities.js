@@ -994,11 +994,23 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tactical Maneuver** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
-      if (chosenMsgId) {
-        addMovementPoints(game, chosenMsgId, 2);
-      }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gained **2 movement points**.`, orderMovePrompt: { figureKey: targetFigureKey, msgId: chosenMsgId, name: chosenName, mp: 2, label: 'Tactical Maneuver' } };
+      if (chosenMsgId) {
+        // Rule 2 — special-action MP gain. Stamp pendingMoveX with
+        // bypassCosts: false so terrain/figure adders apply, no bank.
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[chosenMsgId] = {
+          remaining: 2, source: 'Tactical Maneuver',
+          playerNum, figureKey: targetFigureKey, dcName: chosenName,
+          threadId: null, bypassCosts: false, msgId: chosenMsgId,
+        };
+        return {
+          applied: true,
+          logMessage: `**Tactical Maneuver** — **${chosenName}** gains 2 MP (spend immediately, remainder discarded).`,
+          pendingMoveXMsgId: chosenMsgId,
+        };
+      }
+      return { applied: true, logMessage: `**Tactical Maneuver** — **${chosenName}** gains 2 MP (resolve manually — could not locate play area).` };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -1061,11 +1073,23 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Order** manually.' };
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
-      if (chosenMsgId) {
-        addMovementPoints(game, chosenMsgId, 2);
-      }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Order** — **${chosenName}** gained **2 movement points**.`, orderMovePrompt: { figureKey: targetFigureKey, msgId: chosenMsgId, name: chosenName, mp: 2, label: 'Order' } };
+      if (chosenMsgId) {
+        // Rule 2 — special-action MP gain. Stamp pendingMoveX with
+        // bypassCosts: false so terrain/figure adders apply, no bank.
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[chosenMsgId] = {
+          remaining: 2, source: 'Order',
+          playerNum, figureKey: targetFigureKey, dcName: chosenName,
+          threadId: null, bypassCosts: false, msgId: chosenMsgId,
+        };
+        return {
+          applied: true,
+          logMessage: `**Order** — **${chosenName}** gains 2 MP (spend immediately, remainder discarded).`,
+          pendingMoveXMsgId: chosenMsgId,
+        };
+      }
+      return { applied: true, logMessage: `**Order** — **${chosenName}** gains 2 MP (resolve manually — could not locate play area).` };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
