@@ -98,6 +98,10 @@ const CONTEXT_GROUPS = {
     'processFigureDefeat',
   ],
 
+  moveX: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+  ],
+
   combat: COMBAT_DEPS,
 
   combatReactions: [
