@@ -247,7 +247,19 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
     }
     return;
   }
-  // Unknown type — log and drop.
+  if (afterAction.type === 'strikeTeamTokenDistrib') {
+    // After Cassian + the chosen friend complete their MP pickers,
+    // hand off to Strike Team's existing token-distribution flow.
+    // Caller is responsible for having stamped activeAbility with
+    // tokenRemaining + alreadyReceived before the sequence fired.
+    try {
+      const { _postStrikeTeamTokenPicker } = await import('./post-deploy.js');
+      await _postStrikeTeamTokenPicker(game, game.gameId, afterAction.playerNum, ctx.client, ctx.logGameAction);
+    } catch (err) {
+      console.error('[move-x] strikeTeamTokenDistrib failed:', err?.message ?? err);
+    }
+    return;
+  }
   console.warn(`[move-x] unknown sequence afterAction type "${afterAction.type}"; dropping`);
 }
 

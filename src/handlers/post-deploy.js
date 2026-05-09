@@ -753,45 +753,61 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         }
       }
 
+      const findMidForDc = (dcName) => {
+        if (!dcMessageMeta) return null;
+        for (const [m, meta] of dcMessageMeta) {
+          if (meta.dcName === dcName && meta.playerNum === ability.playerNum) return m;
+        }
+        return null;
+      };
       if (adjFriendlies.length === 0) {
-        // No adjacent friendlies — Cassian moves alone, then Hit tokens
+        // No adjacent friendlies — Cassian moves alone via sequence-of-one,
+        // then token distribution.
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** gains **2 MP**. No adjacent friendly figures for additional MP.`, { phase: 'ROUND', icon: 'deployed' });
+        const cassianMid = findMidForDc(ability.dcName);
         game.postDeployQueue.activeAbility = {
           abilityId: 'strike_team',
           abilityLabel: 'Strike Team',
-          step: 'movement',
-          moveFigures: stMoveFigures,
-          currentFigureIdx: 0,
+          step: 'movement_sequence',
           playerNum: ability.playerNum,
           figureKey: ability.figureKey,
           tokenRemaining: 4,
           alreadyReceived: [],
         };
-        await _startNextMovement(game, gameId, client, ctx);
+        if (cassianMid) {
+          const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+          await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+            figures: [{ msgId: cassianMid, figureKey: ability.figureKey, playerNum: ability.playerNum, spaces: 2, dcName: ability.dcName }],
+            source: 'Strike Team', threadId: null, bypassCosts: false,
+            afterAction: { type: 'strikeTeamTokenDistrib', playerNum: ability.playerNum },
+          });
+        }
       } else if (adjFriendlies.length === 1) {
-        // Only one adjacent — auto-pick, then let player choose movement order
+        // Single adjacent — auto-pick recipient, then orchestrator's order
+        // picker handles movement order, then token distribution.
         const friend = adjFriendlies[0];
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** and **${friend.dcName}** each gain **2 MP**.`, { phase: 'ROUND', icon: 'deployed' });
+        const cassianMid = findMidForDc(ability.dcName);
+        const friendMid = findMidForDc(friend.dcName);
         game.postDeployQueue.activeAbility = {
           abilityId: 'strike_team',
           abilityLabel: 'Strike Team',
-          step: 'order_pick',
-          cassianMoveFigure: stMoveFigures[0],
-          friendMoveFigure: { figureKey: friend.figureKey, dcName: friend.dcName, mp: 2 },
+          step: 'movement_sequence',
           playerNum: ability.playerNum,
           figureKey: ability.figureKey,
           tokenRemaining: 4,
           alreadyReceived: [],
         };
-        const orderBtns = [
-          new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_cassian`).setLabel(`Move ${ability.dcName} first`).setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${ability.playerNum}_friend`).setLabel(`Move ${friend.dcName} first`).setStyle(ButtonStyle.Primary),
-        ];
-        _stashPendingActions(game, orderBtns, 'Strike Team');
-        await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
-          components: [new ActionRowBuilder().addComponents(orderBtns)],
-          allowedMentions: { users: [ownerId] },
-        });
+        const figures = [];
+        if (cassianMid) figures.push({ msgId: cassianMid, figureKey: ability.figureKey, playerNum: ability.playerNum, spaces: 2, dcName: ability.dcName });
+        if (friendMid) figures.push({ msgId: friendMid, figureKey: friend.figureKey, playerNum: ability.playerNum, spaces: 2, dcName: friend.dcName });
+        if (figures.length > 0) {
+          const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+          await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+            figures, source: 'Strike Team', threadId: null, bypassCosts: false,
+            afterAction: { type: 'strikeTeamTokenDistrib', playerNum: ability.playerNum },
+          });
+        }
       } else {
         // Multiple adjacent — player picks
         game.postDeployQueue.activeAbility = {
@@ -1023,21 +1039,25 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       break;
     }
     case 'scavenged_walker_move': {
+      // Scavenged Walker grants speed-MP after deployment (out-of-
+      // activation gain — rule 1). Previous flow had a separate Y/N
+      // "Perform Move / Skip" prompt; that's redundant now that the
+      // pendingMoveX picker exposes its own "Stop (discard remaining)"
+      // button — the player can just click Stop without moving.
       game[`scavengedWalkerDeployMoveFired_${ability.msgId}`] = true;
-      // Use the unified movement flow
       const dcEffectsData = getDcEffects() || {};
       const walkerEff = dcEffectsData[ability.dcName];
       const walkerMp = walkerEff?.speed || 4;
-      game.postDeployQueue.activeAbility = {
-        abilityId: 'scavenged_walker_move',
-        abilityLabel: 'Scavenged Walker',
-        moveFigures: [{ figureKey: ability.figureKey, dcName: ability.dcName, mp: walkerMp }],
-        currentFigureIdx: 0,
-        playerNum: ability.playerNum,
-        msgId: ability.msgId,
-        optional: true,
-      };
-      await renderWalkerMovePrompt(game, gameId, client, { logGameAction });
+      await logGameAction(game, client, `🚜 **Scavenged Walker** — **${ability.dcName}** may move up to ${walkerMp} MP after deployment (Stop discards remaining).`, { phase: 'ROUND', icon: 'deployed' });
+      game.postDeployQueue.activeAbility = { abilityId: 'scavenged_walker_move', abilityLabel: 'Scavenged Walker', playerNum: ability.playerNum, msgId: ability.msgId };
+      const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+      await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+        figures: [{ msgId: ability.msgId, figureKey: ability.figureKey, playerNum: ability.playerNum, spaces: walkerMp, dcName: ability.dcName }],
+        source: 'Scavenged Walker',
+        threadId: null,
+        bypassCosts: false,
+        afterAction: { type: 'postDeployAdvance' },
+      });
       break;
     }
   }
@@ -1045,7 +1065,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
 
 // ── Strike Team: Damage Token distribution ──────────────────────────────────────
 
-async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction) {
+export async function _postStrikeTeamTokenPicker(game, gameId, playerNum, client, logGameAction) {
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'strike_team') return;
 
@@ -1479,58 +1499,56 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
 
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
-  // Let player choose movement order
-  if (active) {
-    const cassianMove = active.cassianMoveFigure || { figureKey: cassianFk, dcName: cassianName, mp: 2 };
-    active.step = 'order_pick';
-    active.cassianMoveFigure = cassianMove;
-    active.friendMoveFigure = { figureKey: friendFk, dcName: friendDcName, mp: 2 };
-    const ownerId = getPlayerId(game, playerNum);
-    const orderBtns = [
-      new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_cassian`).setLabel(`Move ${cassianName} first`).setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`pd_strike_order_${gameId}_${playerNum}_friend`).setLabel(`Move ${friendDcName} first`).setStyle(ButtonStyle.Primary),
-    ];
-    _stashPendingActions(game, orderBtns, 'Strike Team');
-    await logGameAction(game, client, `⚡ **Strike Team** — <@${ownerId}>, choose who moves first:`, {
-      components: [new ActionRowBuilder().addComponents(orderBtns)],
-      allowedMentions: { users: [ownerId] },
-    });
-  }
-  saveGames(game.gameId);
-}
-
-/**
- * Strike Team: player chooses movement order (Cassian first or friend first).
- */
-export async function handleStrikeTeamOrderPick(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = splitCustomId(interaction.customId, 'pd_strike_order_');
-  const gameId = parts[0];
-  const playerNum = parseInt(parts[1], 10);
-  const choice = parts[2]; // 'cassian' or 'friend'
-
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owning player can pick.', ephemeral: true }).catch(discordCatch);
+  if (!active) {
+    saveGames(game.gameId);
     return;
   }
 
-  const active = game.postDeployQueue?.activeAbility;
-  if (!active || active.abilityId !== 'strike_team' || active.step !== 'order_pick') return;
+  // Build sequence figures for Cassian + the chosen friend. Resolve
+  // each msgId via dcMessageMeta lookup. The orchestrator's order
+  // picker replaces the legacy "Move X first / Move Y first" buttons
+  // — same UX, fewer codepaths.
+  const dcMessageMetaCtx = ctx.dcMessageMeta;
+  const findMid = (dcName) => {
+    if (!dcMessageMetaCtx) return null;
+    for (const [m, meta] of dcMessageMetaCtx) {
+      if (meta.dcName === dcName && meta.playerNum === playerNum) return m;
+    }
+    return null;
+  };
+  const seqFigures = [];
+  const cassianMid = findMid(cassianName);
+  if (cassianMid && cassianFk) seqFigures.push({ msgId: cassianMid, figureKey: cassianFk, playerNum, spaces: 2, dcName: cassianName });
+  const friendMid = findMid(friendDcName);
+  if (friendMid) seqFigures.push({ msgId: friendMid, figureKey: friendFk, playerNum, spaces: 2, dcName: friendDcName });
+  if (seqFigures.length === 0) {
+    await logGameAction(game, client, `⚡ **Strike Team** — could not locate play area messages; skipping movement.`, { phase: 'ROUND', icon: 'deployed' });
+    await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+    saveGames(game.gameId);
+    return;
+  }
 
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-
-  const cassianMove = active.cassianMoveFigure;
-  const friendMove = active.friendMoveFigure;
-  active.step = 'movement';
-  active.moveFigures = choice === 'friend'
-    ? [friendMove, cassianMove]
-    : [cassianMove, friendMove];
-  active.currentFigureIdx = 0;
-  await _startNextMovement(game, gameId, client, ctx);
+  // Persist activeAbility state needed by the token-distribution
+  // afterAction (tokenRemaining, alreadyReceived). The Strike Team
+  // ability stays "active" through the sequence and into the token
+  // step; it clears when token distribution completes.
+  active.step = 'movement_sequence';
+  active.tokenRemaining = active.tokenRemaining ?? 4;
+  active.alreadyReceived = active.alreadyReceived || [];
+  const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+  await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+    figures: seqFigures,
+    source: 'Strike Team',
+    threadId: null,
+    bypassCosts: false,
+    afterAction: { type: 'strikeTeamTokenDistrib', playerNum },
+  });
   saveGames(game.gameId);
 }
+
+// handleStrikeTeamOrderPick removed: the orchestrator's order picker
+// (game.pendingMoveXSequence) now handles movement order for Strike
+// Team via setupPendingMoveXSequence + the move_x_seq_pick_ button.
 
 /**
  * Strike Team: player picks a figure outside deployment zone for Damage Token.

@@ -18,7 +18,7 @@ import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
-  handleStrikeTeamOrderPick, handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
+  handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
@@ -241,7 +241,6 @@ register('doubt_remove_', handleDoubtRemove, 'round');
 register('pd_pick_', handlePostDeployPick, 'postDeploy');
 register('pd_security_pick_', handleSecurityDetailPick, 'postDeploy');
 register('pd_strike_adj_', handleStrikeTeamAdjPick, 'postDeploy');
-register('pd_strike_order_', handleStrikeTeamOrderPick, 'postDeploy');
 register('pd_strike_token_done_', handleStrikeTeamTokenDone, 'postDeploy');
 register('pd_strike_token_', handleStrikeTeamTokenPick, 'postDeploy');
 register('pd_move_skip_', handlePostDeployMoveSkip, 'postDeploy');
@@ -702,7 +701,7 @@ export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
-  handleStrikeTeamOrderPick, handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
+  handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
   handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
