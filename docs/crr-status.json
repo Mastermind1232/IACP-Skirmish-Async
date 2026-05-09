@@ -29,23 +29,23 @@
     "ccCount": 292
   },
   "directDetectionCensus": {
-    "baselineTotal": 163,
+    "baselineTotal": 164,
     "perFamily": {
       "dcName_equality": 60,
       "dcName_includes": 5,
       "dcName_startsWith": 4,
-      "cardNameIncludes": 94
+      "cardNameIncludes": 95
     }
   },
   "roundFlagsCompleteness": {
     "bucketSizes": {
-      "ROUND_OBJECT_FLAGS": 107,
+      "ROUND_OBJECT_FLAGS": 109,
       "ROUND_NULL_FLAGS": 124,
       "ROUND_ARRAY_FLAGS": 5,
       "ROUND_FALSE_FLAGS": 5,
       "ROUND_DELETE_FLAGS": 26
     },
-    "totalUniqueKeys": 267,
+    "totalUniqueKeys": 269,
     "baselineDuplicates": [],
     "baselineUnused": [
       "deviceRerollGranted",

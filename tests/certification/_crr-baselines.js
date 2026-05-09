@@ -56,11 +56,16 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // Resort') — same detection as the inline path it replaced, but the
 // inline check was inside the same file so the count stayed flat;
 // after migration the hook adds one new occurrence.
+// 2026-05-09: cardNameIncludes 94→95. New hunt-dissent.js handler
+// detects [Advanced Com Systems] attachment to extend Hunt Dissent's
+// within-1 → within-3 range; same detection pattern other ACS sites
+// use (no specialAbilityIds pointer for ACS, equality on attachment
+// name is correct shape).
 export const DD_BASELINE = {
   dcName_equality: 60,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 94,
+  cardNameIncludes: 95,
 };
 // 2026-05-08: dcName_equality 58→59. Damage-pipeline hook for Fury
 // of Kashyyyk needs to detect the [Fury of Kashyyyk] CC attachment

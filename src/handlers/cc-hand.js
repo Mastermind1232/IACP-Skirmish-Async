@@ -880,6 +880,17 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // C14: Comm Disruption — prompt opponent if they have it in hand
   await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+  // Hunt Dissent (Agent Kallus): if this is the OPPOSING player's
+  // first CC of the round and Kallus is on the board with the
+  // hunt_dissent_kallus passive, post Kallus's controller a 2-Hit-
+  // Token distribution picker over friendlies within 1 (or 3 with
+  // [Advanced Com Systems]).
+  try {
+    const { fireHuntDissentIfFirstCcOfRound } = await import('./hunt-dissent.js');
+    await fireHuntDissentIfFirstCcOfRound(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+  } catch (err) {
+    console.error('[cc-hand] Hunt Dissent hook failed:', err?.message ?? err);
+  }
   saveGames(game.gameId);
 }
 

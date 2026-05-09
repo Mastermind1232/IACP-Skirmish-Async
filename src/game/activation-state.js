@@ -306,6 +306,13 @@ const ROUND_OBJECT_FLAGS = [
   // qualifying TROOPER/GUARDIAN figures have already chosen
   // token-or-move so the dispatch knows what's remaining each click.
   'pendingDeployGarrison',
+  // Hunt Dissent (Agent Kallus): once-per-round gate keyed by Kallus's
+  // playerNum. Set true on the FIRST opponent CC-play of the round
+  // when the Hunt Dissent picker fires. Cleared on round boundary so
+  // the trigger is available again next round.
+  'huntDissentResolvedThisRound',
+  // Hunt Dissent active distribution state (when picker is open).
+  'pendingHuntDissent',
   'roundAttackSurgeBonus',
   'overrunThisActivation',
   'roundFigureAbilityUsed',
