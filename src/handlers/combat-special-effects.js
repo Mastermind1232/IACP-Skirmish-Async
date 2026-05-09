@@ -89,15 +89,41 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
 }
 
 /** Show next Spread the Pain figure-pick prompt, or finish if all conditions applied. */
-async function advanceSpreadThePain(game, pending, ctx) {
+export async function advanceSpreadThePain(game, pending, ctx) {
   const {
     client, saveGames, finishCombatResolution, getMapData, getFigureLabel,
   } = ctx;
   const thread = await fetchCombatThread(client, pending.combatThreadId);
-  if (!thread) { await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client); saveGames(game.gameId); return; }
+  // Returns to attacker post-resolve window when triggered from a step-8
+  // attacker button (rather than the legacy auto-fire path), so other
+  // queued attacker effects + defender step 8 still get their windows.
+  const _stpRedirectStep8 = async () => {
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      const cThread = thread || await fetchCombatThread(client, pending.combatThreadId);
+      if (cThread) await postPostResolveWindow(cThread, game, pending.combat, 'attacker', { ...ctx, client });
+    } catch (err) {
+      console.error('[advanceSpreadThePain] step-8 reopen failed:', err?.message ?? err);
+    }
+  };
+  if (!thread) {
+    if (pending.fromStep8Queue) {
+      clearPendingSpreadThePain(game);
+      await _stpRedirectStep8();
+    } else {
+      await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   if (pending.conditionIdx >= pending.conditions.length) {
+    const fromStep8Queue = !!pending.fromStep8Queue;
     clearPendingSpreadThePain(game);
-    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    if (fromStep8Queue) {
+      await _stpRedirectStep8();
+    } else {
+      await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    }
     saveGames(game.gameId);
     return;
   }
@@ -118,8 +144,13 @@ async function advanceSpreadThePain(game, pending, ctx) {
     }
   }
   if (figuresAtSpaces.length === 0) {
+    const fromStep8Queue = !!pending.fromStep8Queue;
     clearPendingSpreadThePain(game);
-    await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    if (fromStep8Queue) {
+      await _stpRedirectStep8();
+    } else {
+      await finishCombatResolution(game, pending.combat, pending.resultText, new Set(pending.initialEmbedRefreshMsgIds || []), client);
+    }
     saveGames(game.gameId);
     return;
   }

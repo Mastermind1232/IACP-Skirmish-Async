@@ -2362,8 +2362,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       }
     }
   }
-  // Spread the Pain (Dengar): after non-miss, apply each chosen HARMFUL condition to a figure on/adjacent to target
-  if (hit && combat.spreadThePainConditions?.length > 0 && combat.target?.figureKey && game.selectedMap?.id) {
+  // Spread the Pain inline disabled 2026-05-09 → fireSpreadThePain
+  // (step-8 attacker button + fromStep8Queue bypass on advanceSpreadThePain).
+  if (false && hit && combat.spreadThePainConditions?.length > 0 && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
     const conditions = [...combat.spreadThePainConditions];
     const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
     if (targetPos) {

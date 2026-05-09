@@ -31,7 +31,7 @@ import { sanitizeMentions } from '../discord/channel-helpers.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
-  setPendingFightingKnife,
+  setPendingFightingKnife, setPendingSpreadThePain,
 } from '../game/interrupts.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
@@ -1123,6 +1123,54 @@ async function fireFightingKnife(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Spread the Pain (Dengar surge): on hit, apply each chosen HARMFUL
+ * condition to a figure on or adjacent to the target. Multi-step flow:
+ * one figure pick prompt per condition, advanced by advanceSpreadThePain.
+ * Stages fromStep8Queue: true so the multi-step return path goes back
+ * to the attacker post-resolve window.
+ */
+async function fireSpreadThePain(thread, game, combat, effect, ctx) {
+  if (!thread || !Array.isArray(combat.spreadThePainConditions) || combat.spreadThePainConditions.length === 0) return;
+  if (!combat.target?.figureKey || !game.selectedMap?.id) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+  if (!targetPos) return;
+  const ms = ctx.getMapData?.(game.selectedMap.id);
+  const adjacency = ms?.adjacency || {};
+  const candSpaces = new Set([
+    String(targetPos).toLowerCase(),
+    ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()),
+  ]);
+  let anyEligible = false;
+  for (const p of [1, 2]) {
+    for (const figPos of Object.values(game.figurePositions?.[p] || {})) {
+      if (candSpaces.has(String(figPos).toLowerCase())) { anyEligible = true; break; }
+    }
+    if (anyEligible) break;
+  }
+  if (!anyEligible) return;
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  setPendingSpreadThePain(game, {
+    gameId: game.gameId,
+    combatThreadId: combat.combatThreadId,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    defenderPlayerNum: defPN,
+    ownerId,
+    conditions: [...combat.spreadThePainConditions],
+    conditionIdx: 0,
+    resultText: combat._step7ResultText || '',
+    combat,
+    initialEmbedRefreshMsgIds: [],
+    fromStep8Queue: true,
+  });
+  // Reuse the existing multi-step prompt advancer.
+  const { advanceSpreadThePain } = await import('./combat-special-effects.js').catch(() => ({}));
+  if (advanceSpreadThePain) {
+    await advanceSpreadThePain(game, game.pendingSpreadThePain, ctx);
+  }
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -1208,6 +1256,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'fighting_knife':
       await fireFightingKnife(thread, game, combat, effect, ctx);
+      return;
+    case 'spread_the_pain':
+      await fireSpreadThePain(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

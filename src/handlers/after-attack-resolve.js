@@ -370,6 +370,16 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Fighting Knife: roll 1 red die on adjacent',
     });
   }
+  // Spread the Pain (Dengar): hit-gated, conditions chosen via prior
+  // surge spend land in combat.spreadThePainConditions. fireSpreadThePain
+  // posts the multi-step figure-pick flow.
+  if (Array.isArray(combat.spreadThePainConditions) && combat.spreadThePainConditions.length > 0 && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'spread_the_pain',
+      label: `Spread the Pain: apply ${combat.spreadThePainConditions.length} condition${combat.spreadThePainConditions.length > 1 ? 's' : ''}`,
+    });
+  }
 }
 
 /**
