@@ -8215,56 +8215,82 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Protect the Old Ways** — +**${bonus}** Block to your defense this round (1 + ${forceUserCount} FORCE USER CC${forceUserCount !== 1 ? 's' : ''} in discard).` };
   }
 
-  // ccEffect: staticPulseEffect (Static Pulse) — for each hostile adjacent to Dio: 2 Strain or Weaken (single choice for all)
+  // ccEffect: staticPulseEffect (Static Pulse) — per CRR: for each
+  // hostile adjacent to a friendly Dio, you may have that figure suffer
+  // 2 Strain OR become Weakened. The card player picks per-target (not
+  // a single uniform pick across all hostiles). Strain branch queues
+  // via pendingStrain[] so applyStrain pipeline routes per-strain
+  // choice to each target's controller.
+  // Implementation: chained per-target choice using game.pendingStaticPulse.
+  // Each click resolves one figure; if more remain, re-prompt for the
+  // next one. Final call returns aggregate logMessage + pendingStrain[].
   if (entry.type === 'ccEffect' && entry.staticPulseEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex } = context;
+    const { game, playerNum, dcMessageMeta, choiceIndex } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const mapId = game.selectedMap?.id;
-    const dioCandidates = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => fk.startsWith('Dio-'));
-    if (dioCandidates.length === 0) {
-      return { applied: true, logMessage: '**Static Pulse** — Dio is not in play. Deploy Dio to your space then apply the effect manually.' };
-    }
-    const dioFk = dioCandidates[0];
     const oppNum = opponentPlayerNum(playerNum);
-    const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
-    const hostiles = adjAll.filter(({ playerNum: p }) => p !== playerNum).map((a) => a.figureKey);
-    if (hostiles.length === 0) {
-      return { applied: true, logMessage: '**Static Pulse** — No hostile figures adjacent to Dio.' };
-    }
-    if (choiceIndex === undefined || choiceIndex === null) {
-      const hostileNames = hostiles.map((fk) => dcNameFromFigureKey(fk)).join(', ');
-      return {
-        requiresChoice: true,
-        choiceOptions: [
-          `2 Strain to each (${hostileNames})`,
-          `Weaken each (${hostileNames})`,
-        ],
+
+    // First call: enumerate hostiles adjacent to Dio.
+    if (!game.pendingStaticPulse) {
+      const mapId = game.selectedMap?.id;
+      const dioCandidates = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => fk.startsWith('Dio-'));
+      if (dioCandidates.length === 0) {
+        return { applied: true, logMessage: '**Static Pulse** — Dio is not in play. Deploy Dio to your space then apply the effect manually.' };
+      }
+      const dioFk = dioCandidates[0];
+      const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
+      const hostiles = adjAll.filter(({ playerNum: p }) => p !== playerNum).map((a) => a.figureKey);
+      if (hostiles.length === 0) {
+        return { applied: true, logMessage: '**Static Pulse** — No hostile figures adjacent to Dio.' };
+      }
+      game.pendingStaticPulse = {
+        remainingHostiles: hostiles.slice(),
+        pendingStrain: [],
+        results: [],
       };
     }
-    // choiceIndex 0 = strain branch (queue via applyStrain pipeline);
-    // choiceIndex 1 = weaken branch (synchronous condition apply).
-    const isStrainBranch = choiceIndex === 0;
-    const results = [];
-    const pendingStrain = [];
-    for (const fk of hostiles) {
+
+    const sp = game.pendingStaticPulse;
+
+    // Apply choice to current figure (if a choice was made).
+    if (choiceIndex != null && sp.remainingHostiles.length > 0) {
+      const fk = sp.remainingHostiles.shift();
       const dcName = dcNameFromFigureKey(fk);
-      if (isStrainBranch) {
-        pendingStrain.push({ figureKey: fk, controllerPlayerNum: oppNum, amount: 2, source: 'Static Pulse' });
-        results.push(`**${dcName}** 2 Strain (queued)`);
+      if (choiceIndex === 0) {
+        sp.pendingStrain.push({ figureKey: fk, controllerPlayerNum: oppNum, amount: 2, source: 'Static Pulse' });
+        sp.results.push(`**${dcName}** 2 Strain (queued)`);
       } else {
         if (isConditionImmune(game, fk)) {
-          results.push(`**${dcName}** immune to Weaken`);
+          sp.results.push(`**${dcName}** immune to Weaken`);
         } else {
           applyCondition(game, fk, 'Weaken');
-          results.push(`**${dcName}** Weakened`);
+          sp.results.push(`**${dcName}** Weakened`);
         }
       }
     }
+
+    // More hostiles to resolve? Re-prompt for the next one.
+    if (sp.remainingHostiles.length > 0) {
+      const nextFk = sp.remainingHostiles[0];
+      const nextName = dcNameFromFigureKey(nextFk);
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [
+          `${nextName}: 2 Strain`,
+          `${nextName}: Weaken`,
+        ],
+      };
+    }
+
+    // All hostiles resolved.
+    const finalResults = sp.results.slice();
+    const finalPendingStrain = sp.pendingStrain.slice();
+    delete game.pendingStaticPulse;
     return {
       applied: true,
-      logMessage: `**Static Pulse** — ${results.join(', ')}.`,
+      logMessage: `**Static Pulse** — ${finalResults.join(', ')}.`,
       refreshDcEmbed: true,
-      ...(pendingStrain.length ? { pendingStrain } : {}),
+      ...(finalPendingStrain.length ? { pendingStrain: finalPendingStrain } : {}),
     };
   }
 

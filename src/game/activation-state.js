@@ -59,6 +59,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // post-attack hook in combat-bridge knows when to flip
   // attackTypeOverride to 'melee'.
   'overheatedActive',
+  // Static Pulse per-target chained choice state — cleared at round
+  // boundary in case a player abandons the picker mid-flight.
+  'pendingStaticPulse',
   'nextAttackReach',
   'selfDestructProtocolTriggered',
   'falseOrdersUpgrade',
@@ -310,6 +313,9 @@ const ROUND_OBJECT_FLAGS = [
   // post-attack hook in combat-bridge knows when to flip
   // attackTypeOverride to 'melee'.
   'overheatedActive',
+  // Static Pulse per-target chained choice state — cleared at round
+  // boundary in case a player abandons the picker mid-flight.
+  'pendingStaticPulse',
   'nextAttackReach',
   'fellSwoopFreeAttack',
   // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
