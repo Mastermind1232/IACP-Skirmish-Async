@@ -2617,8 +2617,7 @@
       "type": "dcSpecial",
       "label": "Improved Smuggler's Instincts",
       "description": "Perform an interact, then move up to 3 spaces.",
-      "freeAction": true,
-      "logMessage": "**Improved Smuggler's Instincts** — Perform your Interact action, then use the 3 free MP granted below.",
+      "logMessage": "**Improved Smuggler's Instincts** — Perform your Interact action, then use the Move-X picker for up to 3 spaces.",
       "freeMoveBonus": 3,
       "wiredStatus": "wired"
     },
