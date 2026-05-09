@@ -599,6 +599,12 @@ async function _advanceFromSide(thread, game, combat, side, ctx) {
   // Defender done — close combat. Caller passes the existing
   // _finishCombatResolution handle through ctx.afterAttackClose.
   clearAfterAttackEffects(combat);
+  // Per user 2026-05-09: post a "Combat complete" message in the combat
+  // thread right before the close path runs, so both players see the
+  // explicit end of the after-attack windows.
+  if (thread) {
+    await withDiscordRetry(() => thread.send({ content: '✅ **Combat complete.**' })).catch(discordCatch);
+  }
   if (typeof ctx.afterAttackClose === 'function') {
     await ctx.afterAttackClose(thread, game, combat);
   }

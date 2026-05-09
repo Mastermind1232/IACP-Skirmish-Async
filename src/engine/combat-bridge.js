@@ -835,13 +835,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Critical Hit (Mak): if target suffered damage, target cannot play CCs this round
-      if (damage > 0 && combat.surgeCriticalHit) {
-        game.criticalHitBlockedPlayer = defenderPlayerNum;
-        await logGameAction(game, client, `\u{1F3AF} **Critical Hit** — **${combat.target.label}** cannot play Command cards for the rest of this round.`, { phase: 'ROUND', icon: 'attack' });
-      }
-      // Self-Preservation (Hired Gun Elite): when you suffer damage, become Focused
-      if (newCur > 0) {
+      // Critical Hit moved 2026-05-09 to surge-spend phase
+      // (handlers/combat.js — applies immediately when the surge is
+      // chosen, per user clarification that it's a non-keyword surge).
+      // Self-Preservation inline disabled 2026-05-09 — fires via the
+      // self_preservation_hired_gun_elite WHEN_DAMAGED hook in
+      // damage-pipeline-hooks.js (correct timing per user: when damage
+      // is suffered, not after attack resolves). Inline was double-applying.
+      if (false && newCur > 0) { // eslint-disable-line no-constant-condition
         const _spDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _spEff = getDcEffects()?.[_spDcName];
         if ((_spEff?.passives || []).includes('Self-Preservation')) {

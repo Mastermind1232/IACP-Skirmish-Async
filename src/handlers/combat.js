@@ -6471,7 +6471,15 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeHarass) combat.surgeHarass = (combat.surgeHarass || 0) + mod.surgeHarass;
       if (mod.surgeSquadCommand) combat.surgeSquadCommand = true;
       if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
-      if (mod.surgeCriticalHit) combat.surgeCriticalHit = true;
+      if (mod.surgeCriticalHit) {
+        combat.surgeCriticalHit = true;
+        // Per user 2026-05-09: Critical Hit is a surge that's not a
+        // keyword — it applies IMMEDIATELY when the surge is spent
+        // (during surge-spend phase), not in step 7 or step 8.
+        // Sets the per-round CC-block flag for the defender.
+        game.criticalHitBlockedPlayer = combat.defenderPlayerNum;
+        await thread.send(`\u{1F3AF} **Critical Hit** — Defender's Command cards are blocked for the rest of this round.`).catch(discordCatch);
+      }
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
