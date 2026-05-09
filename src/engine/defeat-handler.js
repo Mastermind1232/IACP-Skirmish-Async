@@ -250,10 +250,11 @@ export async function processFigureDefeat(game, opts, deps) {
     await checkNefariousGains(game, defeatedPlayerNum, client);
   }
 
-  // 8. Hunt Dissent (Kallus: gain Block token when hostile defeated)
-  if (attackerFigureKey && checkHuntDissent) {
-    await checkHuntDissent(game, attackerPlayerNum, attackerFigureKey, client);
-  }
+  // 8. Hunt Dissent (Kallus) — REMOVED from defeat path. Per
+  // canonical card text Hunt Dissent fires when the OPPONENT plays
+  // a Command card, not on figure defeat. The previous defeat-trigger
+  // wiring was incorrect and is now disabled. Re-wire as a CC-play
+  // hook in a follow-up slice.
 
   // 8d. This is the Way (The Armorer: another friendly defeats hostile → attacker gains Block token)
   if (attackerFigureKey && checkThisIsTheWay) {

@@ -216,8 +216,14 @@ export async function checkNefariousGains(game, defeatedOwnerPN, client, deps) {
 }
 
 /**
- * Hunt Dissent (Agent Kallus): when a hostile figure is defeated by Kallus
- * or a friendly TROOPER within 3 spaces of Kallus, Kallus gains 1 Block Token.
+ * Hunt Dissent (Agent Kallus) — DEPRECATED defeat-trigger implementation.
+ *
+ * Per canonical card text, Hunt Dissent fires when the OPPONENT plays
+ * a Command card (and lets Kallus distribute 2 Hit Tokens among
+ * friendlies within 1 space). The defeat-trigger wiring below was
+ * incorrect and is no longer called from defeat-handler.js. Kept as
+ * a reference until the CC-play hook lands; safe to delete then.
+ * @deprecated wrong trigger window — replace with a CC-play hook.
  * @param {object} game
  * @param {number} attackerPlayerNum - playerNum who defeated the hostile figure
  * @param {string|null} attackerFigureKey - figureKey of the figure that did the defeating

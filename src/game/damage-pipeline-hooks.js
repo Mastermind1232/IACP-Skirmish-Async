@@ -492,6 +492,47 @@ BEFORE_DEFEATED_HOOKS.push({
   },
 });
 
+/**
+ * Last Stand (passive): when this figure is defeated, choose another
+ * figure in your group to become Focused. Fires in BEFORE_DEFEATED so
+ * the chosen group-mate is Focused before the defeat finalizes (and
+ * before any WHEN_DEFEATED side effects from the defeating figure).
+ * Does NOT prevent the defeat — the buff is purely a parting bonus.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'last_stand',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey) return false;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const eff = getDcEffects()?.[dcName];
+    return (eff?.passives || []).includes('Last Stand');
+  },
+  apply: (game, opts, ctx) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return;
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const dgMatch = (opts.figureKey || '').match(/-(\d+)-\d+$/);
+    const dgIdx = dgMatch ? dgMatch[1] : '1';
+    const prefix = `${dcName}-${dgIdx}-`;
+    const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
+      .filter(k => k.startsWith(prefix) && k !== opts.figureKey);
+    if (alive.length === 0) return;
+    const target = alive[0];
+    if (applyCondition(game, target, 'Focus')) {
+      const targetName = dcNameFromFigureKey(target);
+      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+        ctx.logGameAction(
+          game,
+          ctx.client,
+          `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group is being defeated).`,
+          { phase: 'ROUND', icon: 'card' },
+        ).catch(() => {});
+      }
+    }
+    // No preventDefeat returned — the defeat continues normally.
+  },
+});
+
 // ── WHEN_DEFEATED ──────────────────────────────────────────────────────────
 
 /**
@@ -535,38 +576,10 @@ WHEN_DEFEATED_HOOKS.push({
  * inline path in combat-bridge.js is left alone for now — hook fires
  * orthogonally on non-combat defeats (Bleed, Blast splash, etc.).
  */
-WHEN_DEFEATED_HOOKS.push({
-  id: 'last_stand',
-  sync: true,
-  probe: (game, opts) => {
-    if (!opts.figureKey) return false;
-    const dcName = dcNameFromFigureKey(opts.figureKey);
-    const eff = getDcEffects()?.[dcName];
-    return (eff?.passives || []).includes('Last Stand');
-  },
-  apply: (game, opts, ctx) => {
-    if (!opts.figureKey || !opts.controllerPlayerNum) return;
-    const dcName = dcNameFromFigureKey(opts.figureKey);
-    const dgMatch = (opts.figureKey || '').match(/-(\d+)-\d+$/);
-    const dgIdx = dgMatch ? dgMatch[1] : '1';
-    const prefix = `${dcName}-${dgIdx}-`;
-    const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
-      .filter(k => k.startsWith(prefix) && k !== opts.figureKey);
-    if (alive.length === 0) return;
-    const target = alive[0];
-    if (applyCondition(game, target, 'Focus')) {
-      const targetName = dcNameFromFigureKey(target);
-      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
-        ctx.logGameAction(
-          game,
-          ctx.client,
-          `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
-          { phase: 'ROUND', icon: 'card' },
-        ).catch(() => {});
-      }
-    }
-  },
-});
+// Last Stand moved to BEFORE_DEFEATED hooks above — see the
+// `last_stand` registration in the BEFORE_DEFEATED section. The
+// trigger fires before the defeat finalizes so the chosen group-mate
+// is Focused while the defeating figure is still on the board.
 
 /**
  * Apex Predator (CC effect): when this attacker defeats a hostile

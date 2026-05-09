@@ -167,7 +167,7 @@ const BATCH = [
   ["DC-SPEC-HOLD-THE-LINE", "hold_the_line", "Hold the Line", "passive-auto"],
   ["DC-SPEC-HOP-ON-KUIIL", "hop_on_kuiil", "Hop On!", "dc-special"],
   ["DC-SPEC-HUNKER-DOWN", "hunker_down", "Hunker Down", "passive-auto"],
-  ["DC-SPEC-HUNT-DISSENT-KALLUS", "hunt_dissent_kallus", "Hunt Dissent", "passive"],
+  ["DC-SPEC-HUNT-DISSENT-KALLUS", "hunt_dissent_kallus", "Hunt Dissent", "passive-reactive"],
   ["DC-SPEC-I-AM-ONE-WITH-THE-FORCE", "i_am_one_with_the_force", "I'm One With the Force", null],
   ["DC-SPEC-I-KNOW-EVERYTHING-GIDEON", "i_know_everything_gideon", "I Know Everything", "passive"],
   ["DC-SPEC-I-MAKE-THE-RULES-CAD-BANE", "i_make_the_rules_cad_bane", "I Make the Rules Now", "passive-reactive"],

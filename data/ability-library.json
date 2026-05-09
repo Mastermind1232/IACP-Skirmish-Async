@@ -2517,10 +2517,10 @@
     },
     "hunt_dissent_kallus": {
       "type": "dcSpecial",
-      "category": "passive",
+      "category": "passive-reactive",
       "label": "Hunt Dissent",
-      "description": "When you or a friendly TROOPER within 3 spaces defeats a hostile figure, you gain 1 Block Token.",
-      "wiredStatus": "wired"
+      "description": "When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.",
+      "wiredStatus": "partial"
     },
     "Hunter Protocol": {
       "type": "ccEffect",

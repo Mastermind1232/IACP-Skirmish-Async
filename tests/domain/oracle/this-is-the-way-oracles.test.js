@@ -216,17 +216,20 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('ORACLE-TITW-004: Coexistence with Hunt Dissent', () => {
-  it('004a: defeat-handler calls both checkHuntDissent and checkThisIsTheWay', () => {
+  it('004a: defeat-handler calls checkThisIsTheWay (Hunt Dissent removed from defeat path)', () => {
+    // Hunt Dissent's defeat-trigger wiring was removed 2026-05-09 —
+    // canonical Hunt Dissent fires when the OPPONENT plays a Command
+    // card, not on figure defeat. This is the Way remains in the
+    // defeat path; Hunt Dissent will re-land as a CC-play hook in a
+    // follow-up slice. Test now asserts only the surviving path.
     const src = readSrc('src/engine/defeat-handler.js');
-    const huntIdx = src.indexOf('checkHuntDissent(game');
     const titwIdx = src.indexOf('checkThisIsTheWay(game');
-    assert.ok(huntIdx > 0, 'checkHuntDissent call must exist');
     assert.ok(titwIdx > 0, 'checkThisIsTheWay call must exist');
-    // Both are in the same function, both guarded by attackerFigureKey
-    assert.ok(src.includes('attackerFigureKey && checkHuntDissent'),
-      'Hunt Dissent guarded by attackerFigureKey');
     assert.ok(src.includes('attackerFigureKey && checkThisIsTheWay'),
       'This is the Way guarded by attackerFigureKey');
+    // Hunt Dissent must NOT be invoked from the defeat path.
+    assert.ok(!src.includes('checkHuntDissent(game'),
+      'checkHuntDissent must not fire on defeat — wrong trigger window');
   });
 
   it('004b: Hunt Dissent grants to Kallus, This is the Way grants to attacker — different recipients', () => {
