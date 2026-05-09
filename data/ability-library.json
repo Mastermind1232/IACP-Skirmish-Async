@@ -1270,6 +1270,7 @@
       "type": "ccEffect",
       "label": "At end of round: move up to 6 spaces",
       "mpBonus": 6,
+      "isMoveX": true,
       "wiredStatus": "wired"
     },
     "Devotion": {

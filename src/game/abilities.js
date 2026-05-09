@@ -3698,6 +3698,38 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
     }
     const n = entry.mpBonus;
+    // Move-X CCs (data flag `isMoveX: true`): the granted MP is a
+    // Move-X effect per CRR MOVE-017 — pendingMoveX picker, no bank,
+    // remainder discarded. The flag is opt-in so cards in this
+    // dispatch that ARE rule-3 banked-MP gains (Rank and File,
+    // Fleet Footed, etc.) don't accidentally migrate.
+    if (entry.isMoveX) {
+      const meta = dcMessageMeta.get(msgId);
+      const _imxFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+      const _imxSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _imxFigureKey = _imxFigureKeys[_imxSelectedIdx] || _imxFigureKeys[0] || null;
+      if (_imxFigureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: n,
+          source: entry.label || cardName || 'Move X',
+          playerNum,
+          figureKey: _imxFigureKey,
+          dcName: meta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: null,
+        };
+        return {
+          applied: true,
+          pendingMoveXMsgId: msgId,
+          activeMsgId: msgId,
+          logMessage: `**${entry.label || cardName || 'Move'}** — May move up to ${n} space${n !== 1 ? 's' : ''} (no bank, remainder discarded).`,
+        };
+      }
+    }
     addMovementPoints(game, msgId, n);
     let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
     // Rank and File: each other friendly TROOPER also gains N MP immediately
