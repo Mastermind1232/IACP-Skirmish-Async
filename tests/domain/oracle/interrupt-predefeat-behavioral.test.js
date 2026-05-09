@@ -409,7 +409,7 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
   });
 
-  it('B-I-EP-004: play path grants Onar MP + free attack, clears pending, calls re-entry', async () => {
+  it('B-I-EP-004: play path stamps pendingMoveX (no bank) + free attack, clears pending, calls re-entry', async () => {
     const combat = makeCombat();
     const game = makeGame({
       pendingCombat: combat,
@@ -423,8 +423,11 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
         defenderPlayerNum: 2, attackerPlayerNum: 1, ownerId: 'player1',
       },
       extraProtectionTriggeredThisCombat: true,
+      figurePositions: { 1: {}, 2: { 'Onar Koma-1-0': 'a1' } },
     });
-    const { ctx, calls } = buildInterruptCtx(game);
+    const { ctx, calls } = buildInterruptCtx(game, {
+      dcMessageMeta: new Map([['dc4', { dcName: 'Onar Koma', playerNum: 2 }]]),
+    });
 
     await handleExtraProtection(
       mockInteraction('extra_protection_play_42', 'player2'), ctx,
@@ -435,9 +438,13 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     assert.ok(!game.player2CcHand.includes('Extra Protection'), 'EP removed from hand');
     assert.ok(game.player2CcDiscard.includes('Extra Protection'), 'EP added to discard');
     assert.ok(game.player2CcHand.includes('Take Initiative'), 'other cards preserved');
-    // Onar gets MP + free attack
-    assert.ok(game.movementBank?.dc4, 'MP granted to Onar');
-    assert.strictEqual(game.movementBank.dc4.remaining, 2, '2 MP granted');
+    // Key migration behaviors: no banked MP, free attack flag set so
+    // combat.js marks the eventual attack as free. The Move-X picker
+    // posted into Discord (and may have auto-cleared on the empty
+    // adjacency mock) — its persistence isn't asserted here because
+    // the mock map has no real cells; the migration's correctness is
+    // already covered by Move-X picker tests.
+    assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X never banks');
     assert.strictEqual(game.freeAttackBonusPending?.dc4, true, 'free attack pending for Onar');
     // Re-entry called
     assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');

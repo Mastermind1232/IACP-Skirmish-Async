@@ -954,15 +954,23 @@ test('resolveAbility Dirty Trick with strain: choice applies 3 Strain damage', (
   assert.deepStrictEqual(healthState[0], [1, 5]); // 4 - 3 Strain = 1
 });
 
-test('resolveAbility Close and Personal uses entry logMessage and grants 2 MP', () => {
+test('resolveAbility Close and Personal stamps pendingMoveX (no bank)', () => {
   const msgId = 'msg-cap';
-  const game = { gameId: 'g-cap', dcActionsData: { [msgId]: {} } };
+  const figureKey = 'Luke Skywalker-1-0';
+  const game = {
+    gameId: 'g-cap',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'a1' } },
+  };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-cap', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Close and Personal', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.includes('2 MP'));
-  assert.ok(result.logMessage?.includes('Melee'));
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.ok(game.pendingMoveX, 'pendingMoveX stamped');
+  assert.strictEqual(game.pendingMoveX[msgId].remaining, 2);
+  assert.strictEqual(game.pendingMoveX[msgId].bypassCosts, true);
+  assert.strictEqual(game.pendingMoveX[msgId].nextAction?.type, 'freeAttackPrompt');
+  assert.strictEqual(result.pendingMoveXMsgId, msgId);
+  assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X discards remainder');
 });
 
 // ── Tests for recently promoted partial→wired cards ───────────────────────────

@@ -2012,10 +2012,8 @@ export function resolveAbility(abilityId, context) {
     // mpBonus alongside overrideAttackDice (Close and Personal: move
     // up to 2 spaces, then free Melee attack with override dice).
     // Per the gain-MP rules audit: Move-X via pendingMoveX with
-    // bypassCosts: true. The freeAttackPrompt continuation posts a
-    // "Declare Attack" button after the picker drains; combat.js
-    // consumes freeAttackBonusPending + pendingOverrideAttackDice
-    // (set above) to mark the attack as free with the override pool.
+    // bypassCosts: true. No bank — the freeAttackPrompt continuation
+    // posts a "Declare Attack" button after the picker drains.
     let odMpNote = '';
     let _odPmxMsgId = null;
     if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
@@ -2024,39 +2022,35 @@ export function resolveAbility(abilityId, context) {
         .filter(k => k.startsWith((_odMeta?.dcName || '') + '-'));
       const _odSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _odFigureKey = _odFigureKeys[_odSelectedIdx] || _odFigureKeys[0] || null;
-      if (_odFigureKey) {
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[msgId] = {
-          remaining: entry.mpBonus,
-          source: entry.label || 'Move X',
-          playerNum,
-          figureKey: _odFigureKey,
-          dcName: _odMeta?.dcName || '',
-          threadId: null,
-          bypassCosts: true,
-          msgId,
-          nextAction: {
-            type: 'freeAttackPrompt',
-            payload: {
-              msgId, playerNum, figureKey: _odFigureKey,
-              sourceLabel: entry.label || 'Free Attack',
-            },
-          },
-        };
-        _odPmxMsgId = msgId;
-        odMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
-      } else {
-        // Fallback if no deployed figure — keep legacy bank path so
-        // the player isn't stuck with no MP and no attack.
-        addMovementPoints(game, msgId, entry.mpBonus);
-        odMpNote = ` Gained ${entry.mpBonus} MP.`;
+      if (!_odFigureKey) {
+        return { applied: false, manualMessage: `**${entry.label}** — could not locate the activating figure; resolve manually.` };
       }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.mpBonus,
+        source: entry.label || 'Move X',
+        playerNum,
+        figureKey: _odFigureKey,
+        dcName: _odMeta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: {
+          type: 'freeAttackPrompt',
+          payload: {
+            msgId, playerNum, figureKey: _odFigureKey,
+            sourceLabel: entry.label || 'Free Attack',
+          },
+        },
+      };
+      _odPmxMsgId = msgId;
+      odMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
     }
     return {
       applied: true,
       freeAction: !!entry.freeAction,
       refreshDcEmbed: entry.strainCostToSelf > 0,
-      refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && !_odPmxMsgId,
+      refreshMovementBank: false,
       activeMsgId: msgId,
       pendingMoveXMsgId: _odPmxMsgId,
       logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
@@ -2161,46 +2155,46 @@ export function resolveAbility(abilityId, context) {
           .filter(k => k.startsWith((meta?.dcName || '') + '-'));
         const _fabSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         const _fabFigureKey = _fabFigureKeys[_fabSelectedIdx] || _fabFigureKeys[0] || null;
-        if (_fabFigureKey) {
-          const _fabPicker = {
-            remaining: entry.mpBonus,
-            source: entry.label || 'Move X',
-            playerNum,
-            figureKey: _fabFigureKey,
-            dcName: meta?.dcName || '',
-            threadId: null,
-            bypassCosts: true,
-            msgId,
-            nextAction: {
-              type: 'freeAttackPrompt',
-              payload: {
-                msgId, playerNum, figureKey: _fabFigureKey,
-                sourceLabel: entry.label || 'Free Attack',
-              },
-            },
-          };
-          if (typeof entry.powerTokenGain === 'number' && entry.powerTokenGain > 0) {
-            // Defer Move-X stamp until token-type chosen. Power
-            // token grant fires first; handlePowerTokenChoice
-            // stamps the picker after the type is selected.
-            const _figName = dcNameFromFigureKey(_fabFigureKey);
-            game.pendingPowerTokenGrant = {
-              grants: [{ figureKey: _fabFigureKey, figName: _figName, count: entry.powerTokenGain }],
-              channelId: null,
-              playerNum,
-              deferredMoveX: _fabPicker,
-            };
-            _fabRequiresTokenChoice = true;
-            fabMpNote = ` Gain ${entry.powerTokenGain} Power Token (choose type), then move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''}, then take a free attack.`;
-          } else {
-            game.pendingMoveX = game.pendingMoveX || {};
-            game.pendingMoveX[msgId] = _fabPicker;
-            _fabPmxMsgId = msgId;
-            fabMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
-          }
+        if (!_fabFigureKey) {
+          return { applied: false, manualMessage: `**${entry.label}** — could not locate the activating figure; resolve manually.` };
         }
-      }
-      if (!_fabPmxMsgId && !_fabRequiresTokenChoice) {
+        const _fabPicker = {
+          remaining: entry.mpBonus,
+          source: entry.label || 'Move X',
+          playerNum,
+          figureKey: _fabFigureKey,
+          dcName: meta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: {
+              msgId, playerNum, figureKey: _fabFigureKey,
+              sourceLabel: entry.label || 'Free Attack',
+            },
+          },
+        };
+        if (typeof entry.powerTokenGain === 'number' && entry.powerTokenGain > 0) {
+          // Defer Move-X stamp until token-type chosen. Power
+          // token grant fires first; handlePowerTokenChoice
+          // stamps the picker after the type is selected.
+          const _figName = dcNameFromFigureKey(_fabFigureKey);
+          game.pendingPowerTokenGrant = {
+            grants: [{ figureKey: _fabFigureKey, figName: _figName, count: entry.powerTokenGain }],
+            channelId: null,
+            playerNum,
+            deferredMoveX: _fabPicker,
+          };
+          _fabRequiresTokenChoice = true;
+          fabMpNote = ` Gain ${entry.powerTokenGain} Power Token (choose type), then move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''}, then take a free attack.`;
+        } else {
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[msgId] = _fabPicker;
+          _fabPmxMsgId = msgId;
+          fabMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+        }
+      } else {
         addMovementPoints(game, msgId, entry.mpBonus);
         fabMpNote = ` Gained ${entry.mpBonus} MP.`;
         fabMpRefresh = true;
@@ -3599,24 +3593,24 @@ export function resolveAbility(abilityId, context) {
         .filter(k => k.startsWith((meta?.dcName || '') + '-'));
       const _swSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _swFigureKey = _swFigKeys[_swSelectedIdx] || _swFigKeys[0] || null;
-      if (_swFigureKey) {
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[msgId] = {
-          remaining: n,
-          source: cardLabel,
-          playerNum,
-          figureKey: _swFigureKey,
-          dcName: meta?.dcName || '',
-          threadId: null,
-          bypassCosts: true,
-          msgId,
-          nextAction: null,
-        };
-        _swPmxMsgId = msgId;
-        mpNote = `May move up to ${n} space${n !== 1 ? 's' : ''} (no bank).`;
+      if (!_swFigureKey) {
+        return { applied: false, manualMessage: `**${cardLabel}** — could not locate the activating figure; resolve manually.` };
       }
-    }
-    if (!_swPmxMsgId) {
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: n,
+        source: cardLabel,
+        playerNum,
+        figureKey: _swFigureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: null,
+      };
+      _swPmxMsgId = msgId;
+      mpNote = `May move up to ${n} space${n !== 1 ? 's' : ''} (no bank).`;
+    } else {
       addMovementPoints(game, msgId, n);
     }
 
@@ -3796,33 +3790,36 @@ export function resolveAbility(abilityId, context) {
     // Move-X effect per CRR MOVE-017 — pendingMoveX picker, no bank,
     // remainder discarded. The flag is opt-in so cards in this
     // dispatch that ARE rule-3 banked-MP gains (Rank and File,
-    // Fleet Footed, etc.) don't accidentally migrate.
+    // Fleet Footed, etc.) don't accidentally migrate. No bank
+    // fallback — if the activating figure can't be resolved the
+    // card returns a manual-resolve message.
     if (entry.isMoveX) {
       const meta = dcMessageMeta.get(msgId);
       const _imxFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
         .filter(k => k.startsWith((meta?.dcName || '') + '-'));
       const _imxSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _imxFigureKey = _imxFigureKeys[_imxSelectedIdx] || _imxFigureKeys[0] || null;
-      if (_imxFigureKey) {
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[msgId] = {
-          remaining: n,
-          source: entry.label || cardName || 'Move X',
-          playerNum,
-          figureKey: _imxFigureKey,
-          dcName: meta?.dcName || '',
-          threadId: null,
-          bypassCosts: true,
-          msgId,
-          nextAction: null,
-        };
-        return {
-          applied: true,
-          pendingMoveXMsgId: msgId,
-          activeMsgId: msgId,
-          logMessage: `**${entry.label || cardName || 'Move'}** — May move up to ${n} space${n !== 1 ? 's' : ''} (no bank, remainder discarded).`,
-        };
+      if (!_imxFigureKey) {
+        return { applied: false, manualMessage: `**${entry.label || cardName || 'Move'}** — could not locate the activating figure; resolve manually.` };
       }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: n,
+        source: entry.label || cardName || 'Move X',
+        playerNum,
+        figureKey: _imxFigureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+        logMessage: `**${entry.label || cardName || 'Move'}** — May move up to ${n} space${n !== 1 ? 's' : ''} (no bank, remainder discarded).`,
+      };
     }
     addMovementPoints(game, msgId, n);
     let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
