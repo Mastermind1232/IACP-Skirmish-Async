@@ -2628,19 +2628,35 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       source: 'Lure of the Dark Side',
     });
   }
-  // Hit and Run: add pending MP when attack resolves
+  // Hit and Run: stamp Move-X picker after the attack resolves. Per
+  // rule 2 (in-activation special-action MP grant) — spend at once,
+  // remainder discarded (no banking). The card text reads "gain N
+  // movement points" (not "move X spaces"), so bypassCosts is FALSE
+  // — each step honors +1 difficult terrain / +1 hostile-figure
+  // adders, with the figure's movement profile (Mobile / Massive /
+  // Efficient Travel) overriding via getMovementProfile.
   const pending = game.hitAndRunPendingMp;
   if (pending && pending.msgId === combat.attackerMsgId && pending.amount > 0) {
     const n = pending.amount;
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[pending.msgId] || { total: 0, remaining: 0 };
-    bank.total = (bank.total ?? 0) + n;
-    bank.remaining = (bank.remaining ?? 0) + n;
-    game.movementBank[pending.msgId] = bank;
-    const ownerId = getPlayerId(game, combat.attackerPlayerNum);
-    await logGameAction(game, client, `Hit and Run: <@${ownerId}> gained **${n}** movement point${n === 1 ? '' : 's'} after the attack.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
-    await ensureMovementBankMessage(game, pending.msgId, client);
     delete game.hitAndRunPendingMp;
+    if (combat.attackerFigureKey) {
+      try {
+        const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
+          msgId: pending.msgId,
+          figureKey: combat.attackerFigureKey,
+          playerNum: combat.attackerPlayerNum,
+          spaces: n,
+          source: 'Hit and Run',
+          threadId: combat.combatThreadId,
+          bypassCosts: false,
+        });
+        const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+        await logGameAction(game, client, `Hit and Run: <@${ownerId}> gains **${n}** MP after the attack — spend at once, remainder lost.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
+      } catch (err) {
+        console.error('[combat-bridge] Hit and Run picker stamp failed:', err?.message ?? err);
+      }
+    }
   }
   // --- Post-combat ability prompts (before clearing pendingCombat) ---
   const pcAttEff = getDcEffect(combat.attackerDcName);

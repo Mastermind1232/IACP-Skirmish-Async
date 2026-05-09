@@ -55,7 +55,7 @@ const BATCH = [
   ['Tough Luck',            ['setsToughLuck']],
   ['Toxic Dart',            ['chooseAdjacentHostileThen']],
   ['Trandoshan Terror',     ['attackBonusDice', 'attackBonusDiceColor']],
-  ['Urgency',               ['mpBonusFromSpeed', 'mustSpendAll']],
+  ['Urgency',               ['mpBonusFromSpeed']],
   ['Vanish',                ['vanishImmunityUntilNextActivation', 'nextActivationMpBonus']],
   ['Veteran Instincts',     ['powerTokenGain', 'vetInstinctsActiveThisActivation']],
   ['Wild Attack',           ['attackBonusDice', 'attackBonusDiceColor', 'defenseBonusDiceFromAttacker', 'defenseBonusDiceFromAttackerColor']],

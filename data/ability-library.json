@@ -5203,9 +5203,8 @@
     },
     "Urgency": {
       "type": "ccEffect",
-      "label": "Gain movement points equal to Speed +2",
+      "label": "Gain movement points equal to Speed +2 (spend at once, remainder lost)",
       "mpBonusFromSpeed": 2,
-      "mustSpendAll": true,
       "wiredStatus": "wired"
     },
     "Utinni!": {

@@ -3392,39 +3392,39 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
-    // Rule 2 (special-action MP gain — Urgency etc.): always route
-    // through pendingMoveX. Player spends MP immediately, no bank.
-    // Player MAY spend less than all (the picker's "Stop (discard
-    // remaining)" button discards leftovers). Urgency forbids
-    // banking — there is no bank fallback.
-    //
-    // Other cards in this dispatch (On the Lam etc.) lack the
-    // mustSpendAll flag and still bank via addMovementPoints — those
-    // are rule-3 in-activation gains.
-    if (entry.mustSpendAll) {
-      const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
-        .filter(k => k.startsWith(meta.dcName + '-'));
-      const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const figureKey = figureKeys[selectedIdx] || figureKeys[0] || null;
-      if (!figureKey) {
-        return { applied: false, manualMessage: `**${entry.label || 'Urgency'}** — no deployed figure for **${meta.dcName}**; resolve manually.` };
-      }
-      game.pendingMoveX = game.pendingMoveX || {};
-      game.pendingMoveX[msgId] = {
-        remaining: n, source: entry.label || 'Urgency',
-        playerNum: meta.playerNum, figureKey, dcName: meta.dcName,
-        threadId: null, bypassCosts: false, msgId,
-      };
-      const msg = `**${entry.label || 'Urgency'}** — gains ${n} MP (spend immediately, remainder discarded).`;
-      return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
+    // Every card hitting this dispatch (Urgency, On the Lam, Slippery
+    // Target) is either special-action timing (Urgency, rule 2) or
+    // out-of-activation reactive (On the Lam, Slippery Target, rule
+    // 1). Both rules forbid banking — MP is spent at once, remainder
+    // lost. Always route through the pendingMoveX picker. bypassCosts
+    // is FALSE: the card text grants "MP" not "spaces", so each step
+    // honors +1 difficult terrain / +1 hostile-pass-through adders
+    // (movement profile keywords still bypass via getMovementProfile).
+    const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+      .filter(k => k.startsWith(meta.dcName + '-'));
+    const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const figureKey = figureKeys[selectedIdx] || figureKeys[0] || null;
+    if (!figureKey) {
+      return { applied: false, manualMessage: `**${entry.label || context.cardName || 'Move'}** — no deployed figure for **${meta.dcName}**; resolve manually.` };
     }
-    addMovementPoints(game, msgId, n);
     // C4: On the Lam — flag for post-move LOS recheck (attack misses if target moves out of LOS)
     if (context.cardName === 'On the Lam' && game.pendingCombat) {
       game.onTheLamActive = true;
     }
-    const msg = n === 1 ? `Gained 1 movement point.` : `Gained ${n} movement points.`;
-    return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
+    game.pendingMoveX = game.pendingMoveX || {};
+    game.pendingMoveX[msgId] = {
+      remaining: n,
+      source: entry.label || context.cardName || 'Move',
+      playerNum: meta.playerNum,
+      figureKey,
+      dcName: meta.dcName,
+      threadId: null,
+      bypassCosts: false,
+      msgId,
+      nextAction: null,
+    };
+    const msg = `**${context.cardName || entry.label || 'Move'}** — gains ${n} MP (spend at once, remainder lost).`;
+    return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
   }
 
   // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory, Worth Every Credit

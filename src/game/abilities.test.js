@@ -165,7 +165,7 @@ test('resolveAbility Urgency (Speed+2) with active activation stamps pendingMove
   const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.match(result.logMessage, /gains 7 MP \(spend immediately, remainder discarded\)/);
+  assert.match(result.logMessage, /gains 7 MP \(spend at once, remainder lost\)/);
   // No bank — pendingMoveX is the only place the budget lives.
   assert.strictEqual(game.movementBank, undefined);
   assert.ok(game.pendingMoveX, 'pendingMoveX should be stamped');
