@@ -3814,11 +3814,16 @@ export function resolveAbility(abilityId, context) {
         msgId,
         nextAction: null,
       };
+      if (entry.mobileMovement) {
+        game.mobileMovementActive = game.mobileMovementActive || {};
+        game.mobileMovementActive[msgId] = true;
+      }
+      const _imxMobileSuffix = entry.mobileMovement ? ' MOBILE movement active — treat doors and figures as open terrain.' : '';
       return {
         applied: true,
         pendingMoveXMsgId: msgId,
         activeMsgId: msgId,
-        logMessage: `**${entry.label || cardName || 'Move'}** — May move up to ${n} space${n !== 1 ? 's' : ''} (no bank, remainder discarded).`,
+        logMessage: `**${entry.label || cardName || 'Move'}** — May move up to ${n} space${n !== 1 ? 's' : ''} (no bank, remainder discarded).${_imxMobileSuffix}`,
       };
     }
     addMovementPoints(game, msgId, n);

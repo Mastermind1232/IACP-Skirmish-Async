@@ -1980,9 +1980,10 @@
     },
     "Force Jump": {
       "type": "ccEffect",
-      "label": "Gain 5 MP (MOBILE movement)",
+      "label": "Move 5 spaces (MOBILE)",
       "mpBonus": 5,
-      "logMessage": "Gained **5 MP** with MOBILE movement — treat doors and other figures as if they do not exist during this move; cannot end in blocking terrain.",
+      "isMoveX": true,
+      "logMessage": "**Force Jump** — Move up to 5 spaces with MOBILE movement (treat doors and figures as open terrain; cannot end in blocking terrain).",
       "wiredStatus": "wired",
       "mobileMovement": true
     },
