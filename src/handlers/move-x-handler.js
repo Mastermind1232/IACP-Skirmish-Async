@@ -1052,7 +1052,16 @@ async function _runMassiveDisplacement(game, ctx, pending) {
   const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcName) || '1x1';
   const footprintSet = new Set(getNormalizedFootprint(pos, size));
   const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
-  if (!dispPending) return;
+  if (!dispPending) {
+    // Diagnostic: log that the MASSIVE displacement check ran but
+    // found no overlaps. Helps debug bug reports like "AT-DP moved
+    // 3 spaces but didn't push" — confirms whether the trigger fired
+    // at all vs. there were genuinely no figures in the final footprint.
+    await logGameAction?.(game, client,
+      `🦿 **MASSIVE check** — **${pending.dcName || dcName}** at ${String(pos).toUpperCase()} (footprint ${size}): no smaller figures in final footprint, no displacement.`,
+      { phase: 'ROUND', icon: 'move' });
+    return;
+  }
   const result = resolveNextDisplacements(game, dispPending);
   for (const r of result.autoResolved) {
     const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';
