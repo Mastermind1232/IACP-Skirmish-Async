@@ -143,6 +143,79 @@ async function fireSlippery(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Cleave N (CRR-CLV-005): each Cleave-X source independently picks
+ * its own target from the eligible set. The step-8 queue surfaces
+ * one button per accumulating source (passive Cleave, Surge: Cleave,
+ * Krayt Dragon Fury, Darksaber Blast→Cleave conversion, etc.); each
+ * click posts a target picker for THAT source's value alone, and the
+ * existing handleCleaveTarget applies damage + defeat finalization
+ * via _applyDamage.
+ *
+ * Per the user's correction: Blast SUMS multiple sources into one
+ * splash event (handled by fireBlast); Cleave does NOT sum — each
+ * source resolves separately with its own target choice.
+ */
+async function fireCleave(thread, game, combat, effect, ctx) {
+  const { client, logGameAction } = ctx;
+  const amount = Number(effect.payload?.amount ?? 0);
+  if (amount <= 0 || !combat?.target?.figureKey) return;
+  const sourceLabel = effect.payload?.sourceLabel || `Cleave ${amount}`;
+  const defenderPlayerNum = combat.defenderPlayerNum
+    ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+  // Use the engine's existing cleave-eligibility helper + button
+  // builder + pendingCleave state so the click flow matches the
+  // legacy inline path exactly. The only difference: cleaveQueue is
+  // empty here — each source is its own queued effect, so
+  // handleCleaveTarget returns to the step-8 window when this source
+  // resolves rather than chaining to a "next source" reprompt.
+  let computeCleaveEligibleTargets, getCleaveTargetButtons, deps;
+  try {
+    ({ computeCleaveEligibleTargets } = await import('../engine/combat-bridge.js'));
+    deps = ctx.deps || ctx;
+    getCleaveTargetButtons = deps?.getCleaveTargetButtons || ctx?.getCleaveTargetButtons;
+  } catch (err) {
+    console.error('[after-attack-fire] fireCleave import failed:', err?.message ?? err);
+    return;
+  }
+  if (!computeCleaveEligibleTargets || !getCleaveTargetButtons) return;
+  const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps);
+  if (cleaveTargets.length === 0) {
+    if (logGameAction && thread) {
+      await logGameAction(game, client, `**${sourceLabel}** — no eligible targets in range; effect skipped.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    }
+    return;
+  }
+  const { setPendingCleave } = await import('../game/interrupts.js');
+  const ownerId = game[`player${combat.attackerPlayerNum}Id`];
+  setPendingCleave(game, {
+    gameId: game.gameId,
+    combatThreadId: combat.combatThreadId,
+    surgeCleave: amount,
+    sourceLabel,
+    // Empty queue: each source is its own step-8 effect entry, so
+    // handleCleaveTarget should NOT chain to a next source — it
+    // should return to the post-resolve window for the next button.
+    cleaveQueue: [],
+    attackerPlayerNum: combat.attackerPlayerNum,
+    defenderPlayerNum,
+    ownerId,
+    targets: cleaveTargets,
+    resultText: combat._step7ResultText || '',
+    combat,
+    initialEmbedRefreshMsgIds: [],
+    fromStep8Queue: true,
+  });
+  const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
+  if (thread) {
+    await thread.send({
+      content: `**${sourceLabel}** — <@${ownerId}>, choose one eligible target to apply Cleave damage:`,
+      components: cleaveRows,
+      allowedMentions: { users: [ownerId] },
+    }).catch(discordCatch);
+  }
+}
+
+/**
  * Vader's Finest (Attack+Move special action) — attacker after-resolve:
  * 1-space Move-X picker, bypassCosts true. The attack already fired
  * via freeAttackBonusPending; this is the move that follows.
@@ -183,6 +256,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'vaders_finest_move':
       await fireVadersFinestMove(thread, game, combat, effect, ctx);
+      return;
+    case 'cleave':
+      await fireCleave(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

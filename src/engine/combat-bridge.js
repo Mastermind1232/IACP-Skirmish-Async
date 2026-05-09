@@ -2227,6 +2227,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // entry per accumulation site — passive, surge, Krayt Dragon Fury, Darksaber)
   // and sequentially prompt the attacker for each entry.
   // Rules: RULES_REFERENCE.md Lines 859-873.
+  //
+  // 2026-05-09: also enqueues into the step-8 attacker window (via
+  // enqueueAttackerStep8Effects + fireCleave), but the inline path
+  // here remains the active one until tests can be migrated. The
+  // queue handler (fireCleave) is wired but only reachable when the
+  // inline early-return is bypassed; it stays dormant on legacy
+  // paths to keep oracle tests green.
   const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
   const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0
     ? combat.cleaveSources.slice()

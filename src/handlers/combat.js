@@ -7259,6 +7259,26 @@ export async function handleCleaveTarget(interaction, ctx) {
   } catch {}
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   if (cleaveMsgId) embedRefreshMsgIds.add(cleaveMsgId);
+  // 2026-05-09 migration: when invoked from the step-8 queue
+  // (fromStep8Queue: true on pendingCleave), each cleave source is
+  // its own queued effect and DOES NOT chain to a next source — the
+  // remaining sources will surface as their own buttons in the
+  // post-resolve window. Skip the chain block + finishCombatResolution
+  // and let the step-8 window handle the next click.
+  if (pending.fromStep8Queue) {
+    clearPendingCleave(game);
+    saveGames(game.gameId);
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      const cThread = await fetchCombatThread(client, pending.combat.combatThreadId);
+      if (cThread && postPostResolveWindow) {
+        await postPostResolveWindow(cThread, game, pending.combat, 'attacker', { ...ctx, client });
+      }
+    } catch (err) {
+      console.error('[handleCleaveTarget] step-8 reopen failed:', err?.message ?? err);
+    }
+    return;
+  }
   // CRR-CLV-005: if more Cleave sources remain, re-prompt with the next
   // source's value and a fresh eligible-target list (defeated figures drop out
   // naturally; surviving prior-cleaved targets remain eligible since each
