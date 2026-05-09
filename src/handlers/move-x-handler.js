@@ -35,7 +35,29 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { splitCustomId } from '../discord/custom-id.js';
 
 /**
- * Begin a Move-X effect. Sets pendingMoveX state and posts the picker.
+ * Synchronously stamp pendingMoveX state (no Discord side effects).
+ * For sync ability-dispatch paths that can't await the picker post.
+ * The caller must follow up with postMoveXPicker to surface the UI.
+ */
+export function stampPendingMoveX(game, opts) {
+  const { msgId, figureKey, playerNum, spaces, source, threadId } = opts;
+  if (!msgId || !figureKey || !playerNum || !spaces || spaces <= 0) return false;
+  game.pendingMoveX = game.pendingMoveX || {};
+  game.pendingMoveX[msgId] = {
+    remaining: spaces,
+    source,
+    playerNum,
+    figureKey,
+    dcName: dcNameFromFigureKey(figureKey),
+    threadId: threadId || null,
+  };
+  return true;
+}
+
+/**
+ * Begin a Move-X effect end-to-end: stamp state, post the picker,
+ * persist. Async wrapper around stampPendingMoveX + postMoveXPicker
+ * for callers that already have ctx.client and can await UI.
  *
  * @param {object} game
  * @param {object} ctx - { client, logGameAction, saveGames }
@@ -48,18 +70,8 @@ import { splitCustomId } from '../discord/custom-id.js';
  * @param {string} [opts.threadId] - combat thread id, if posting there
  */
 export async function setupPendingMoveX(game, ctx, opts) {
-  const { msgId, figureKey, playerNum, spaces, source, threadId } = opts;
-  if (!msgId || !figureKey || !playerNum || !spaces || spaces <= 0) return;
-  game.pendingMoveX = game.pendingMoveX || {};
-  game.pendingMoveX[msgId] = {
-    remaining: spaces,
-    source,
-    playerNum,
-    figureKey,
-    dcName: dcNameFromFigureKey(figureKey),
-    threadId: threadId || null,
-  };
-  await postMoveXPicker(game, ctx, msgId);
+  if (!stampPendingMoveX(game, opts)) return;
+  await postMoveXPicker(game, ctx, opts.msgId);
   ctx.saveGames?.(game.gameId);
 }
 
