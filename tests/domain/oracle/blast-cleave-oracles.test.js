@@ -16,6 +16,35 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../../fixtures/game-builder.js';
+import { computeCleaveEligibleTargets } from '../../../src/engine/combat-bridge.js';
+
+// 2026-05-09 cleave migration: cleave is queued for the step-8 attacker
+// post-resolve window (one entry per source). The headless drain fires
+// fireCleave (which sets pendingCleave) and immediately advances to
+// combat-close, which clears pendingCleave. So tests probe two things:
+//   - combat._step8Snapshot.attacker captured pre-drain proves cleave
+//     was enqueued as a button-firing effect.
+//   - computeCleaveEligibleTargets is called directly to assert the
+//     eligible-target set the picker would have offered.
+function _hasCleaveEnqueued(combat) {
+  const snap = combat?._step8Snapshot?.attacker;
+  if (!Array.isArray(snap)) return false;
+  return snap.some((e) => e.type === 'cleave');
+}
+function _cleaveEligibleKeys(game, combat, defenderPN, deps) {
+  return computeCleaveEligibleTargets(game, combat, defenderPN, {
+    getFiguresAdjacentToCoord: deps.getFiguresAdjacentToCoord,
+    getMapData: deps.getMapData,
+    getEffectiveMapSpaces: deps.getEffectiveMapSpaces,
+    isWithinN: deps.isWithinN,
+    hasFigureLineOfSight: deps.hasFigureLineOfSight,
+    getFigureFootprint: deps.getFigureFootprint,
+    getFigureSize: deps.getFigureSize,
+    getFigureLabel: deps.getFigureLabel,
+    getDcEffect: deps.getDcEffect,
+    getLoadoutCards: deps.getLoadoutCards,
+  }).map((t) => t.figureKey);
+}
 
 /**
  * Build a minimal pendingCombat object.
@@ -253,9 +282,8 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    // pendingCleave should be set and include the bystander
-    assert.ok(game.pendingCleave, 'Cleave should trigger (pendingCleave should be set)');
-    const cleaveTargetKeys = (game.pendingCleave.targets || []).map(t => t.figureKey);
+    assert.ok(_hasCleaveEnqueued(combat), 'Cleave should be enqueued for the step-8 attacker window');
+    const cleaveTargetKeys = _cleaveEligibleKeys(game, combat, 2, deps);
     assert.ok(
       cleaveTargetKeys.includes(bystander.figKey),
       `Cleave should offer figure adjacent to ATTACKER (${bystander.figKey}). ` +
@@ -292,8 +320,8 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    assert.ok(game.pendingCleave, 'Ranged Cleave should trigger');
-    const cleaveTargetKeys = (game.pendingCleave.targets || []).map(t => t.figureKey);
+    assert.ok(_hasCleaveEnqueued(combat), 'Ranged Cleave should be enqueued');
+    const cleaveTargetKeys = _cleaveEligibleKeys(game, combat, 2, deps);
     assert.ok(
       cleaveTargetKeys.includes(bystander.figKey),
       `Ranged Cleave should offer figure within Accuracy of ATTACKER (${bystander.figKey}). ` +
@@ -333,8 +361,8 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    assert.ok(game.pendingCleave, 'Cleave should still trigger even when target is killed');
-    const cleaveTargetKeys = (game.pendingCleave.targets || []).map(t => t.figureKey);
+    assert.ok(_hasCleaveEnqueued(combat), 'Cleave should still enqueue even when target is killed');
+    const cleaveTargetKeys = _cleaveEligibleKeys(game, combat, 2, deps);
     assert.ok(
       cleaveTargetKeys.includes(bystander.figKey),
       `Cleave should offer bystander even when target killed. Offered: [${cleaveTargetKeys}]`
@@ -369,8 +397,8 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    assert.ok(game.pendingCleave, 'Cleave should trigger');
-    const cleaveTargetKeys = (game.pendingCleave.targets || []).map(t => t.figureKey);
+    assert.ok(_hasCleaveEnqueued(combat), 'Cleave should be enqueued');
+    const cleaveTargetKeys = _cleaveEligibleKeys(game, combat, 2, deps);
     const hasCrate = cleaveTargetKeys.some(k => k.includes('crate') || k.includes('a1'));
     assert.ok(
       hasCrate,

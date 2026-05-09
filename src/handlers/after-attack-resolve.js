@@ -231,6 +231,11 @@ export async function postPostResolveWindow(thread, game, combat, side, ctx) {
   //   - fake client (headless oracle/fixture tests)
   // Live human games keep the buttons + require a Done click.
   if (game.selfPlay || !thread || ctx?.client?._isFakeClient) {
+    // Snapshot the queue for this side before drain consumes it.
+    // Oracle/headless tests inspect combat._step8Snapshot[side] to verify
+    // what would have been offered as buttons; live play never reads it.
+    combat._step8Snapshot = combat._step8Snapshot || {};
+    combat._step8Snapshot[side] = getAfterAttackEffects(combat, side).map((e) => ({ ...e }));
     await _selfPlayDrain(thread, game, combat, side, ctx);
     return;
   }

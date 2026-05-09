@@ -177,7 +177,7 @@ async function fireCleave(thread, game, combat, effect, ctx) {
     console.error('[after-attack-fire] fireCleave import failed:', err?.message ?? err);
     return;
   }
-  if (!computeCleaveEligibleTargets || !getCleaveTargetButtons) return;
+  if (!computeCleaveEligibleTargets) return;
   const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps);
   if (cleaveTargets.length === 0) {
     if (logGameAction && thread) {
@@ -205,8 +205,8 @@ async function fireCleave(thread, game, combat, effect, ctx) {
     initialEmbedRefreshMsgIds: [],
     fromStep8Queue: true,
   });
-  const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
-  if (thread) {
+  if (thread && getCleaveTargetButtons) {
+    const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
     await thread.send({
       content: `**${sourceLabel}** — <@${ownerId}>, choose one eligible target to apply Cleave damage:`,
       components: cleaveRows,

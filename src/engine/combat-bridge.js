@@ -2221,32 +2221,27 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
   }
 
-  // CRR-CLV-005: Multiple Cleave abilities resolve one at a time in the
-  // attacker's chosen order; each Cleave independently chooses a target from
-  // its own eligible set. We build a queue from combat.cleaveSources (one
-  // entry per accumulation site — passive, surge, Krayt Dragon Fury, Darksaber)
-  // and sequentially prompt the attacker for each entry.
-  // Rules: RULES_REFERENCE.md Lines 859-873.
-  //
-  // 2026-05-09: also enqueues into the step-8 attacker window (via
-  // enqueueAttackerStep8Effects + fireCleave), but the inline path
-  // here remains the active one until tests can be migrated. The
-  // queue handler (fireCleave) is wired but only reachable when the
-  // inline early-return is bypassed; it stays dormant on legacy
-  // paths to keep oracle tests green.
-  const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
-  const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0
-    ? combat.cleaveSources.slice()
-    : (effectiveCleave > 0 ? [{ value: effectiveCleave, label: `Cleave ${effectiveCleave}` }] : []);
-  if (hit && damage > 0 && cleaveQueue.length > 0 && game.selectedMap?.id) {
-    const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
-      getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
-      hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
-      // slice 6.7: pass DC-effect lookup + loadout cards so the helper can
-      // detect Reach (DC keywords/passives, nextAttackReach flag, Electrostaff).
-      getDcEffect, getLoadoutCards: _getLoadoutCardsImpl,
-    });
-    if (cleaveTargets.length > 0) {
+  // CRR-CLV-005 Cleave migrated 2026-05-09 to the step-8 queue.
+  // enqueueAttackerStep8Effects pushes one entry per cleave source;
+  // each surfaces as a separate button in the attacker post-resolve
+  // window, fired by fireCleave (after-attack-fire.js). resultText
+  // is stashed on the combat so fireCleave can carry it through
+  // pendingCleave for the close-resolution path.
+  combat._step7ResultText = resultText;
+  // Legacy block disabled (kept here so blame-history is intact;
+  // removal pass when the rest of step-7-inline keywords migrate).
+  if (false) {
+    const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
+    const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0
+      ? combat.cleaveSources.slice()
+      : (effectiveCleave > 0 ? [{ value: effectiveCleave, label: `Cleave ${effectiveCleave}` }] : []);
+    if (hit && damage > 0 && cleaveQueue.length > 0 && game.selectedMap?.id) {
+      const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
+        getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
+        hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
+        getDcEffect, getLoadoutCards: _getLoadoutCardsImpl,
+      });
+      if (cleaveTargets.length > 0) {
       const firstSource = cleaveQueue.shift();
       setPendingCleave(game, {
         gameId: game.gameId,
@@ -2268,9 +2263,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         allowedMentions: { users: [ownerId] },
         components: cleaveRows,
       }));
-      return;
+        return;
+      }
     }
-  }
+  } // end legacy disabled cleave block
   // destruct 2026-05-08: post-resolve unified window.
   // After all step-7 damage applies and any per-DC inline applies have
   // run (those are still inline pending follow-up commits to migrate),
