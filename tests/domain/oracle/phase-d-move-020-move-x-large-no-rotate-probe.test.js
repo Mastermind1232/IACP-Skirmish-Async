@@ -1,22 +1,24 @@
 /**
- * Phase-D probe: during a "Move X spaces" effect, a Large figure's
- * base may not rotate (its footprint orientation is locked for the
- * duration of the Move-X).
+ * Phase-D probe: rotation rules during Move-X vs Push.
  *
- * PROBE-PD-MOVE-020: CRR MOVEMENT — "During a 'Move X spaces' effect,
- *   a Large figure's base cannot rotate."
+ * PROBE-PD-MOVE-020 (revised 2026-05-08): Earlier read of the rule
+ * was wrong. CRR MOVEMENT actually says:
+ *   - During a "Move X spaces" effect, Large/Massive figures CAN
+ *     rotate (rotation costs 1 space, prompts the player for the
+ *     pivot cell).
+ *   - During a Push, Large/Massive figures CANNOT rotate.
  *
  * Architecture (post-2026-05-08 refactor):
- *   - Move-X effects flow through the dedicated picker in
- *     src/handlers/move-x-handler.js. The picker only emits cardinal
- *     translations (N/S/E/W) of the figure's footprint via
- *     shiftCoord(pos, dx, dy). It never offers a rotation candidate,
- *     so MOVE-020 is enforced by construction — there is no path
- *     through the picker that produces a rotated footprint.
- *   - The legacy moveXBypassActive flag and its read sites in
- *     handlers/movement.js are gone; the rotation gate that lived
- *     there has been replaced by the picker's translation-only
- *     candidate set.
+ *   - The Move-X picker (src/handlers/move-x-handler.js) emits
+ *     rotation candidates for non-1x1 figures, keyed by (pivotCell,
+ *     direction). Each candidate keeps the chosen pivot cell at its
+ *     current world coordinate while rotating the rest of the
+ *     footprint 90° around it. The handleMoveXRotate handler applies
+ *     the rotation and decrements remaining by 1.
+ *   - The Push flow (src/handlers/movement.js handleMassivePushSpace
+ *     and friends) directly translates the displaced figure to a
+ *     chosen space — no rotation candidates are emitted, so MOVE-020
+ *     is enforced for Push by construction.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,29 +29,41 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
 const MX_SRC = readFileSync(resolve(ROOT, 'src/handlers/move-x-handler.js'), 'utf8');
+const MV_SRC = readFileSync(resolve(ROOT, 'src/handlers/movement.js'), 'utf8');
 
-describe('PROBE-PD-MOVE-020: Large figures cannot rotate during "Move X spaces"', () => {
-  it('020a: picker only emits cardinal translations (no rotation candidates)', () => {
-    // The candidate-generator iterates a hard-coded direction list of
-    // four cardinal vectors. Any rotation candidate would require an
-    // additional source line introducing a rotated size, which the
-    // picker module deliberately does not contain.
-    assert.match(MX_SRC, /\{ dx: 0, dy: -1 \}, \/\/ N/);
-    assert.match(MX_SRC, /\{ dx: 0, dy: 1 \},\s+\/\/ S/);
-    assert.match(MX_SRC, /\{ dx: 1, dy: 0 \},\s+\/\/ E/);
-    assert.match(MX_SRC, /\{ dx: -1, dy: 0 \}, \/\/ W/);
-    assert.doesNotMatch(MX_SRC, /rotateSizeString\b/,
-      'move-x picker must not invoke rotateSizeString — MOVE-020 forbids rotation during Move-X');
-    assert.doesNotMatch(MX_SRC, /\bcanRotate\b/,
-      'move-x picker must not consult canRotate — rotation is structurally absent from the candidate set');
+describe('PROBE-PD-MOVE-020: rotation rules — Move-X allows, Push forbids', () => {
+  it('020a: Move-X picker emits rotation candidates for Large/Massive figures', () => {
+    // Large detection (size has any axis > 1) gates the rotation
+    // candidate loop.
+    assert.match(MX_SRC, /const isLarge = String\(size\)\.split\('x'\)\.some\(n => Number\(n\) > 1\);/,
+      'Move-X picker must detect Large figures via the size string');
+    // Per-pivot rotation enumeration.
+    assert.match(MX_SRC, /for \(const pivotCell of oldCells\)/,
+      'Move-X picker must iterate over each cell of the current footprint as a pivot candidate — MOVE-020');
+    // CW + CCW directions for each pivot.
+    assert.match(MX_SRC, /for \(const direction of \['CW', 'CCW'\]\)/,
+      'Move-X picker must enumerate both CW and CCW rotation per pivot — MOVE-020');
+    // Rotated candidates carry kind: 'rotate' so the picker render
+    // path can distinguish them from translations.
+    assert.match(MX_SRC, /kind:\s*'rotate'/,
+      'rotation candidates must be marked with kind: "rotate" — MOVE-020');
   });
 
-  it('020b: candidate footprints derive from the figure\'s current size only (no rotated variant)', () => {
-    // getFootprintCells is called with the figure's saved size, never
-    // a rotated one — so candidate footprints share orientation with
-    // the current footprint.
-    const calls = [...MX_SRC.matchAll(/getFootprintCells\([^)]+,\s*size\)/g)];
-    assert.ok(calls.length >= 2,
-      `expected the picker to call getFootprintCells with the unchanged size at least twice (old + new footprint); found ${calls.length} — MOVE-020`);
+  it('020b: handleMoveXRotate applies rotation and decrements remaining', () => {
+    assert.match(MX_SRC, /export async function handleMoveXRotate\(interaction, ctx\)/,
+      'move-x-handler must export handleMoveXRotate');
+    assert.match(MX_SRC, /game\.figureOrientations\[pending\.figureKey\] = match\.rotatedSize;/,
+      'rotation must update figureOrientations to the rotated size — MOVE-020');
+    assert.match(MX_SRC, /pending\.remaining\s*-=\s*1;/,
+      'rotation must decrement remaining by 1 (rotation costs 1 space) — MOVE-020');
+  });
+
+  it('020c: Push flow does NOT emit rotation candidates (rotation forbidden during Push)', () => {
+    // The push handlers translate-only — there is no rotate button
+    // generator in the push code path.
+    assert.doesNotMatch(MV_SRC, /massive_push_rotate_/,
+      'push flow must not register a rotate button — MOVE-020');
+    assert.doesNotMatch(MV_SRC, /rotateSizeString\(/,
+      'push flow must not invoke rotateSizeString — MOVE-020');
   });
 });

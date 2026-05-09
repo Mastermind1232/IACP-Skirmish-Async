@@ -25,7 +25,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
-import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord } from '../game/coords.js';
+import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
@@ -189,8 +189,71 @@ function _computeValidNeighbors(game, msgId) {
       if (oldSet.has(nc)) continue;
       if (occupied.has(nc)) { passThrough = true; break; }
     }
-    candidates.push({ topLeft: newTopLeft, footprintCells: newCells, passThrough });
+    candidates.push({ kind: 'translate', topLeft: newTopLeft, footprintCells: newCells, passThrough });
   }
+
+  // Rotation candidates (Large/Massive figures). MOVE-020: rotation
+  // is allowed during Move-X (no-rotate applies to Push only). Each
+  // candidate is keyed by (pivotCell, direction): the chosen pivot
+  // cell stays at its current world coordinate, the rest of the
+  // footprint rotates 90° around it.
+  const isLarge = String(size).split('x').some(n => Number(n) > 1);
+  if (isLarge) {
+    const rotatedSize = rotateSizeString(size);
+    for (const pivotCell of oldCells) {
+      const pc = parseCoord(pivotCell);
+      for (const direction of ['CW', 'CCW']) {
+        // Compute rotated footprint cells: rotate each old offset 90°
+        // around the pivot.
+        const rotated = oldCells.map(c => {
+          const cell = parseCoord(c);
+          const dx = cell.col - pc.col;
+          const dy = cell.row - pc.row;
+          const ndx = direction === 'CW' ? -dy : dy;
+          const ndy = direction === 'CW' ? dx : -dx;
+          return normalizeCoord(colRowToCoord(pc.col + ndx, pc.row + ndy));
+        });
+        // Compute the new top-left for figurePositions storage:
+        // min(col), min(row) of the rotated cells.
+        let minCol = Infinity, minRow = Infinity;
+        for (const r of rotated) {
+          const p = parseCoord(r);
+          if (p.col < minCol) minCol = p.col;
+          if (p.row < minRow) minRow = p.row;
+        }
+        if (!Number.isFinite(minCol) || !Number.isFinite(minRow) || minCol < 0 || minRow < 0) continue;
+        const newTopLeft = normalizeCoord(colRowToCoord(minCol, minRow));
+        const newCells = rotated;
+        // Validate: every new cell on the map.
+        let ok = true;
+        for (const nc of newCells) {
+          if (!Object.prototype.hasOwnProperty.call(adjacency, nc)) { ok = false; break; }
+        }
+        if (!ok) continue;
+        // Passthrough = newly-entered cells overlap any other figure.
+        let passThrough = false;
+        for (const nc of newCells) {
+          if (oldSet.has(nc)) continue;
+          if (occupied.has(nc)) { passThrough = true; break; }
+        }
+        // De-dupe identical rotations (square footprints can produce
+        // duplicate (pivot, dir) outcomes).
+        const sig = newCells.slice().sort().join(',');
+        if (candidates.some(c => c.kind === 'rotate' && c.signature === sig)) continue;
+        candidates.push({
+          kind: 'rotate',
+          topLeft: newTopLeft,
+          footprintCells: newCells,
+          passThrough,
+          rotatedSize,
+          pivotCell,
+          direction,
+          signature: sig,
+        });
+      }
+    }
+  }
+
   return candidates;
 }
 
@@ -242,11 +305,22 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
 
-  const stepBtns = candidates.slice(0, 20).map(cand => new ButtonBuilder()
-    .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cand.topLeft}`)
-    .setLabel(cand.passThrough ? `${cand.topLeft.toUpperCase()} (pass-through)` : cand.topLeft.toUpperCase())
-    .setStyle(cand.passThrough ? ButtonStyle.Secondary : ButtonStyle.Primary),
-  );
+  const stepBtns = candidates.slice(0, 20).map(cand => {
+    if (cand.kind === 'rotate') {
+      const dirArrow = cand.direction === 'CW' ? '↻' : '↺';
+      const label = cand.passThrough
+        ? `Rotate ${dirArrow} pivot ${cand.pivotCell.toUpperCase()} (pass-through)`
+        : `Rotate ${dirArrow} pivot ${cand.pivotCell.toUpperCase()}`;
+      return new ButtonBuilder()
+        .setCustomId(`move_x_rotate_${game.gameId}_${msgId}_${cand.pivotCell}_${cand.direction}`)
+        .setLabel(label.slice(0, 80))
+        .setStyle(ButtonStyle.Success);
+    }
+    return new ButtonBuilder()
+      .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cand.topLeft}`)
+      .setLabel(cand.passThrough ? `${cand.topLeft.toUpperCase()} (pass-through)` : cand.topLeft.toUpperCase())
+      .setStyle(cand.passThrough ? ButtonStyle.Secondary : ButtonStyle.Primary);
+  });
   // Done button is hidden while the figure is overlapping another
   // figure — must move out before stopping.
   const buttons = [...stepBtns];
@@ -290,10 +364,12 @@ export async function handleMoveXStep(interaction, ctx) {
   if (!pending) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure\'s controller can step.')) return;
 
-  // Validate the chosen top-left is still a legal cardinal step for
-  // the figure's full footprint (multi-cell aware).
+  // Validate the chosen top-left is still a legal cardinal translation
+  // for the figure's full footprint (multi-cell aware). Translations
+  // and rotations are different button prefixes; this handler only
+  // serves translations (kind === 'translate').
   const candidates = _computeValidNeighbors(game, msgId);
-  const match = candidates.find(c => c.topLeft === space);
+  const match = candidates.find(c => c.kind === 'translate' && c.topLeft === space);
   if (!match) {
     await interaction.followUp({ content: `Step to ${space.toUpperCase()} is no longer legal.`, ephemeral: true }).catch(discordCatch);
     return;
@@ -310,6 +386,59 @@ export async function handleMoveXStep(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction?.(game, client,
     `🦿 **${pending.source}** — **${pending.dcName}** moves to **${match.topLeft.toUpperCase()}** (${pending.remaining} space(s) left).`,
+    { phase: 'ROUND', icon: 'attack' });
+
+  if (pending.remaining <= 0) {
+    clearPendingMoveX(game, msgId);
+    await logGameAction?.(game, client,
+      `🦿 **${pending.source}** — **${pending.dcName}** has used all granted spaces.`,
+      { phase: 'ROUND', icon: 'attack' });
+  } else {
+    await postMoveXPicker(game, ctx, msgId);
+  }
+  saveGames?.(gameId);
+}
+
+/**
+ * Rotate handler — customId: move_x_rotate_${gameId}_${msgId}_${pivotCell}_${direction}
+ * Rotates the figure 90° about the pivot cell, costs 1 space.
+ * Move-X allows rotation per CRR MOVE-020 (the no-rotate restriction
+ * applies to Push only).
+ */
+export async function handleMoveXRotate(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const parts = splitCustomId(interaction.customId, 'move_x_rotate_');
+  if (parts.length < 4) return;
+  const gameId = parts[0];
+  const msgId = parts[1];
+  const direction = parts[parts.length - 1];
+  const pivotCell = normalizeCoord(parts.slice(2, -1).join('_'));
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingMoveX?.[msgId];
+  if (!pending) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure\'s controller can rotate.')) return;
+
+  const candidates = _computeValidNeighbors(game, msgId);
+  const match = candidates.find(c => c.kind === 'rotate' && c.pivotCell === pivotCell && c.direction === direction);
+  if (!match) {
+    await interaction.followUp({ content: `Rotation about ${pivotCell.toUpperCase()} (${direction}) is no longer legal.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Apply rotation: update figurePositions top-left and figureOrientations size.
+  game.figurePositions = game.figurePositions || {};
+  game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
+  game.figurePositions[pending.playerNum][pending.figureKey] = match.topLeft;
+  game.figureOrientations = game.figureOrientations || {};
+  game.figureOrientations[pending.figureKey] = match.rotatedSize;
+
+  pending.remaining -= 1;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const dirArrow = direction === 'CW' ? '↻' : '↺';
+  await logGameAction?.(game, client,
+    `🦿 **${pending.source}** — **${pending.dcName}** rotates ${dirArrow} about **${pivotCell.toUpperCase()}** (${pending.remaining} space(s) left).`,
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {
