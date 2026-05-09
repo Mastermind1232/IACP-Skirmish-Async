@@ -8395,6 +8395,9 @@ export function resolveAbility(abilityId, context) {
     }
 
     // More hostiles to resolve? Re-prompt for the next one.
+    // Per CRR: controller of the figure suffering the ability picks —
+    // route the prompt to the target's controller (oppNum) via
+    // choiceForControllerPlayerNum.
     if (sp.remainingHostiles.length > 0) {
       const nextFk = sp.remainingHostiles[0];
       const nextName = dcNameFromFigureKey(nextFk);
@@ -8405,6 +8408,7 @@ export function resolveAbility(abilityId, context) {
           `${nextName}: 2 Strain`,
           `${nextName}: Weaken`,
         ],
+        choiceForControllerPlayerNum: oppNum,
       };
     }
 
