@@ -4099,19 +4099,33 @@ export async function handleShoulderRushFig(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
-  // Check if target is SMALL
+  // Check if target is SMALL AND push-eligible. Push-immune figures
+  // (snowtroopers via Spiked Boots; Take Position round-flagged) are
+  // immune to all push abilities except those from MASSIVE figures.
+  // The activating figure (Shoulder Rush user) is the pusher; if
+  // they're not MASSIVE the immunity blocks the push step (the
+  // attack still happens).
   const effects = getDcEffects();
   const targetDcName = dcNameFromFigureKey(targetFk);
   const targetEff = effects?.[targetDcName];
   const targetKw = (targetEff?.keywords || []).map(k => String(k).toUpperCase());
   const isSmall = !targetKw.includes('LARGE') && !targetKw.includes('MASSIVE');
-  if (!isSmall) {
-    // Not SMALL: grant free attack targeting this figure, no push
+  // Pusher = activating figure on Shoulder Rush msgId.
+  const activatorMeta = dcMessageMeta?.get?.(msgId);
+  const pusherEff = activatorMeta?.dcName ? effects?.[activatorMeta.dcName] : null;
+  const pusherIsMassive = (pusherEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE');
+  const targetSpikedBoots = (targetEff?.specialAbilityIds || []).includes('spiked_boots_snowtrooper');
+  const targetTakePosition = !!game.roundPushImmuneUnlessMassive?.[targetFk];
+  const pushImmune = (targetSpikedBoots || targetTakePosition) && !pusherIsMassive;
+  if (!isSmall || pushImmune) {
+    // Not SMALL or push-immune: grant free attack targeting this
+    // figure, no push.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
     game.forcedAttackTarget = game.forcedAttackTarget || {};
     game.forcedAttackTarget[msgId] = targetFk;
-    const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (not SMALL, no push). Attack that figure (free action).`;
+    const reason = !isSmall ? 'not SMALL' : 'push-immune';
+    const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (${reason}, no push). Attack that figure (free action).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
     clearPendingShoulderRush(game);

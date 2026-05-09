@@ -157,6 +157,25 @@ async function _finishPicker(game, ctx, msgId) {
   // Future continuation types plug in here.
 }
 
+/** Push-immunity check shared by every Move-X-then-push continuation
+ *  (Rush, Shoulder Rush, Ram, Headbutt, On a Mission, etc.).
+ *  Snowtroopers (Spiked Boots) and any figure with the round-scoped
+ *  Take Position immunity (game.roundPushImmuneUnlessMassive) cannot
+ *  be pushed — UNLESS the pusher is a MASSIVE figure. Returns true
+ *  if the targetFigureKey is push-immune relative to the pusher. */
+function _isPushImmune(game, pusherDcName, targetFigureKey) {
+  const dcEffects = getDcEffects() || {};
+  const targetDcName = dcNameFromFigureKey(targetFigureKey);
+  const targetEff = dcEffects[targetDcName];
+  const pusherEff = dcEffects[pusherDcName];
+  const pusherIsMassive = (pusherEff?.keywords || [])
+    .some(k => String(k).toUpperCase() === 'MASSIVE');
+  if (pusherIsMassive) return false; // Massive overrides all push-immunity
+  if ((targetEff?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) return true;
+  if (game.roundPushImmuneUnlessMassive?.[targetFigureKey]) return true;
+  return false;
+}
+
 /** Compute adjacent figures of a given side relative to the moving
  *  figure's current position. Returns [{ figureKey, dcName }]. */
 function _computeAdjacentFigures(game, pending, sideFilter /* 'hostile' | 'friendly' | 'any' */) {
@@ -195,8 +214,7 @@ async function _runRushPostMoveContinuation(game, ctx, pending) {
     const eff = dcEffects[t.dcName];
     const kw = (eff?.keywords || []).map(k => String(k).toUpperCase());
     if (kw.includes('LARGE') || kw.includes('MASSIVE')) continue;
-    if ((eff?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) continue;
-    if (game.roundPushImmuneUnlessMassive?.[t.figureKey]) continue;
+    if (_isPushImmune(game, pending.dcName, t.figureKey)) continue;
     rushTargets.push(t);
   }
   if (rushTargets.length === 0) {
