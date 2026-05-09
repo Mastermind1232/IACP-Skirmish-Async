@@ -3941,7 +3941,7 @@
     },
     "Retaliation": {
       "type": "ccEffect",
-      "label": "Choose one: Become Focused; Gain 2 Power Tokens; or Gain 2 MP",
+      "label": "Choose one: Become Focused; Gain 2 Power Tokens; or Move up to 2 spaces",
       "chooseOne": [
         {
           "label": "Become Focused",
@@ -3952,8 +3952,9 @@
           "powerTokenGain": 2
         },
         {
-          "label": "Gain 2 MP",
-          "mpBonus": 2
+          "label": "Move up to 2 spaces",
+          "mpBonus": 2,
+          "isMoveX": true
         }
       ],
       "wiredStatus": "wired"
