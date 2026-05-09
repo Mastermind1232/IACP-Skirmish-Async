@@ -95,24 +95,43 @@ export async function handleStillFaster(interaction, ctx) {
     if (!sftPending) { await interaction.followUp({ content: 'No pending Still Faster Than You.', ephemeral: true }).catch(discordCatch); return; }
     const { sftPlayerNum } = sftPending;
     if (!await requirePlayer(interaction, sftGame, interaction.user.id, sftPlayerNum, canActAsPlayer, 'Only the Still Faster Than You player may respond.')) return;
-    // Grant 2MP to the picked DC's movement bank and a free attack (excluding the activating hostile)
-    sftGame.movementBank = sftGame.movementBank || {};
-    const sftBank = sftGame.movementBank[sftPickedMsgId] || { total: 0, remaining: 0 };
-    sftBank.total = (sftBank.total ?? 0) + 2;
-    sftBank.remaining = (sftBank.remaining ?? 0) + 2;
-    sftGame.movementBank[sftPickedMsgId] = sftBank;
-    // Free attack: mark this DC with a free attack, excluding the activating hostile
+    // CRR MOVE-017: 2-space Move-X (no bank, ignores extra costs).
+    // Stamp the picker so the player walks 1 space at a time, then the
+    // freeAttackPrompt continuation surfaces the "Declare Attack" UI.
+    // Free-attack exclusion (must target a DIFFERENT hostile than the
+    // activating one) is set via stillFasterExcludeMsgId before the
+    // picker fires; handleAttackTarget reads it during the attack pass.
     sftGame.fellSwoopFreeAttack = sftGame.fellSwoopFreeAttack || {};
     sftGame.fellSwoopFreeAttack[sftPickedMsgId] = true;
-    // Store exclusion so handleAttackTarget can reject wrong target
     sftGame.stillFasterExcludeMsgId = sftActivatingMsgId;
-    // Clear the flag (once-per-round CC; clear so it can't be used again)
     sftGame.stillFasterPlayerNum = null;
     clearPendingStillFaster(sftGame);
     const sftMeta = dcMessageMeta.get(sftPickedMsgId);
     const sftLabel = sftMeta?.displayName || sftMeta?.dcName || sftPickedMsgId;
+    const sftPickerFigKeys = sftPlayerNum === 1
+      ? Object.keys(sftGame.figurePositions?.[1] || {}).filter(k => k.startsWith((sftMeta?.dcName || '') + '-'))
+      : Object.keys(sftGame.figurePositions?.[2] || {}).filter(k => k.startsWith((sftMeta?.dcName || '') + '-'));
+    const sftFigureKey = sftPickerFigKeys[0] || null;
+    if (!sftFigureKey) {
+      await interaction.deferUpdate().catch(discordCatch);
+      await interaction.followUp({ content: `**Still Faster Than You** — could not locate **${sftLabel}**'s figure; resolve manually.`, ephemeral: false }).catch(discordCatch);
+      saveGames(sftGame.gameId);
+      return;
+    }
+    const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+    stampPendingMoveX(sftGame, {
+      msgId: sftPickedMsgId,
+      figureKey: sftFigureKey,
+      playerNum: sftPlayerNum,
+      spaces: 2,
+      source: 'Still Faster Than You',
+      threadId: null,
+      bypassCosts: true,
+      nextAction: { type: 'freeAttackPrompt', payload: { msgId: sftPickedMsgId, label: 'Still Faster Than You', excludeMsgId: sftActivatingMsgId } },
+    });
     await interaction.deferUpdate().catch(discordCatch);
-    await interaction.followUp({ content: `**Still Faster Than You** — **${sftLabel}** gains 2 MP and a free Attack. The attack must target a **different hostile** than the one that just activated.`, ephemeral: false }).catch(discordCatch);
+    await interaction.followUp({ content: `**Still Faster Than You** — **${sftLabel}** moves up to 2 spaces, then gets a free Attack vs a **different hostile** than the one that just activated.`, ephemeral: false }).catch(discordCatch);
+    await postMoveXPicker(sftGame, { client, logGameAction, saveGames }, sftPickedMsgId);
     saveGames(sftGame.gameId);
     return;
   }

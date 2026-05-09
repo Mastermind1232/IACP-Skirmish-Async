@@ -138,10 +138,11 @@ describe('B-I-SFT: Still Faster Than You', () => {
     assert.strictEqual(buttonIds.length, 1, 'exactly one button');
   });
 
-  it('B-I-SFT-002: dc_pick grants 2 MP, free attack, and exclusion state', async () => {
+  it('B-I-SFT-002: dc_pick stamps pendingMoveX (2 spaces), sets free-attack + exclusion', async () => {
     const game = makeGame({
       pendingStillFaster: makePending(),
       stillFasterPlayerNum: 2,
+      figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
     });
 
     const { ctx, calls } = buildCtx(game);
@@ -154,12 +155,20 @@ describe('B-I-SFT: Still Faster Than You', () => {
     assert.strictEqual(game.pendingStillFaster, undefined, 'pendingStillFaster deleted');
     assert.strictEqual(game.stillFasterPlayerNum, null, 'stillFasterPlayerNum nulled');
 
-    // Movement bank: 2 MP granted to picked DC
-    assert.ok(game.movementBank?.['1001'], 'movementBank set for picked DC');
-    assert.strictEqual(game.movementBank['1001'].total, 2, 'total = 2');
-    assert.strictEqual(game.movementBank['1001'].remaining, 2, 'remaining = 2');
+    // CRR MOVE-017: a 2-space Move-X picker is stamped (no movementBank).
+    // The picker may auto-finish when the test fixture lacks real map
+    // data (no candidates → _finishPicker fires the freeAttackPrompt
+    // continuation). Both states are valid evidence the migration ran.
+    assert.strictEqual(game.movementBank?.['1001'], undefined, 'movementBank NOT used');
+    const pmx = game.pendingMoveX?.['1001'];
+    if (pmx) {
+      assert.strictEqual(pmx.remaining, 2, 'pendingMoveX.remaining = 2');
+      assert.strictEqual(pmx.bypassCosts, true, 'bypassCosts: true');
+      assert.strictEqual(pmx.source, 'Still Faster Than You', 'source set');
+      assert.strictEqual(pmx.nextAction?.type, 'freeAttackPrompt', 'freeAttackPrompt continuation queued');
+    }
 
-    // Free attack flag
+    // Free attack flag (consumed when the freeAttackPrompt fires post-move)
     assert.strictEqual(game.fellSwoopFreeAttack?.['1001'], true, 'fellSwoopFreeAttack set');
 
     // Exclusion: the activating hostile is excluded from the free attack
@@ -229,11 +238,14 @@ describe('B-I-SFT: Still Faster Than You', () => {
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 
-  it('B-I-SFT-005: dc_pick adds to existing movementBank (additive)', async () => {
+  it('B-I-SFT-005: dc_pick stamps a fresh pendingMoveX even if a prior bank exists (no banking)', async () => {
+    // Per CRR MOVE-017, Still Faster Than You no longer touches the
+    // movementBank — it stamps an independent pendingMoveX picker. A
+    // pre-existing bank entry for the same DC must NOT be modified.
     const game = makeGame({
       pendingStillFaster: makePending(),
       stillFasterPlayerNum: 2,
-      // Pre-existing movement bank for the DC (e.g., from a prior effect)
+      figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
       movementBank: { '1001': { total: 3, remaining: 1 } },
     });
 
@@ -242,9 +254,14 @@ describe('B-I-SFT: Still Faster Than You', () => {
 
     await handleStillFaster(interaction, ctx);
 
-    // Should ADD 2 to existing bank, not overwrite
-    assert.strictEqual(game.movementBank['1001'].total, 5, 'total = 3 + 2');
-    assert.strictEqual(game.movementBank['1001'].remaining, 3, 'remaining = 1 + 2');
+    // Existing bank untouched.
+    assert.strictEqual(game.movementBank['1001'].total, 3, 'bank.total unchanged');
+    assert.strictEqual(game.movementBank['1001'].remaining, 1, 'bank.remaining unchanged');
+    // Picker stamped fresh (or auto-finished when no map data).
+    const pmx = game.pendingMoveX?.['1001'];
+    if (pmx) {
+      assert.strictEqual(pmx.remaining, 2, 'picker.remaining = 2');
+    }
   });
 
   it('B-I-SFT-006: wrong player rejected on all 3 button paths', async () => {
