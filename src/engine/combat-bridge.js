@@ -1847,11 +1847,26 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     if (_sfSmallFriendlies.length === 1) {
-      // Auto-grant 2 MP to the only eligible friendly
+      // Auto-stamp picker on the only eligible friendly. Recipient
+      // ≠ attacker (filter excludes the attacker) → spend at once,
+      // no bank, bypassCosts: false.
       const _sfF = _sfSmallFriendlies[0];
-      grantMovementBank(game, _sfF.msgId, 2);
-      await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP**.`).catch(discordCatch);
-      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+      try {
+        const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
+          msgId: _sfF.msgId,
+          figureKey: _sfF.fk,
+          playerNum: attackerPlayerNum,
+          spaces: 2,
+          source: 'Suppressive Fire',
+          threadId: combat.combatThreadId,
+          bypassCosts: false,
+        });
+        await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP** — spend at once, no bank.`).catch(discordCatch);
+      } catch (err) {
+        console.error('[combat-bridge] Suppressive Fire auto-grant picker stamp failed:', err?.message ?? err);
+      }
+      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
     } else if (_sfSmallFriendlies.length > 1) {
       // Show picker buttons
       setPendingSuppressiveFireMp(game, { attackerPlayerNum });

@@ -828,9 +828,24 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
     break;
   }
   if (!targetMsgId) { await interaction.followUp({ content: 'Could not find DC for this figure.', ephemeral: true }).catch(discordCatch); return; }
-  grantMovementBank(game, targetMsgId, 2);
-  await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP**.`, components: [] }).catch(discordCatch);
-  await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+  // Recipient ≠ attacker (filtered) → spend at once, no bank.
+  // setupPendingMoveX with bypassCosts: false.
+  try {
+    const { setupPendingMoveX } = await import('./move-x-handler.js');
+    await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+      msgId: targetMsgId,
+      figureKey,
+      playerNum: attackerPlayerNum,
+      spaces: 2,
+      source: 'Suppressive Fire',
+      threadId: null,
+      bypassCosts: false,
+    });
+  } catch (err) {
+    console.error('[interrupts] Suppressive Fire picker stamp failed:', err?.message ?? err);
+  }
+  await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP** — spend at once, no bank.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
   saveGames(game.gameId); return;
 }
 

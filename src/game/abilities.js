@@ -8108,41 +8108,74 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: jundlandTerrorEffect (Jundland Terror) — grant 2 MP + free attack to Tusken Raider / Bantha Rider next activation
-  // G37/C21: max 1 copy per EOR phase
+  // ccEffect: jundlandTerrorEffect (Jundland Terror) — choose ONE
+  // friendly Tusken Raider / Bantha Rider; chosen figure gains 2 MP
+  // (end-of-round, out-of-activation → picker, no bank) and may
+  // interrupt to perform an attack (free-attack flag persists for
+  // their next activation).
+  // G37/C21: max 1 copy per EOR phase.
   if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    game.jundlandTerrorPlayedThisEor = true;
     const traits = ['Tusken Raider', 'Bantha Rider'];
     const dcEffects = getDcEffects();
-    const squadDcList = getSquad(game, playerNum)?.dcList || [];
-    const dcIds = getDcMessageIds(game, playerNum);
-    const matchingMsgIds = [];
-    const matchingNames = [];
-    for (let i = 0; i < squadDcList.length; i++) {
-      const entry = squadDcList[i];
-      const dcName = typeof entry === 'object' ? (entry.dcName || entry.displayName) : entry;
-      if (!dcName || !dcIds?.[i]) continue;
-      const dcBase = String(dcName).replace(/\s*\[.*\]\s*$/, '');
-      const eff = dcEffects[dcName] || dcEffects[dcBase] || {};
+    // Phase 2: chosen figure → stamp picker + free-attack flag.
+    if (chosenFigureKey) {
+      game.jundlandTerrorPlayedThisEor = true;
+      const targetMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      const targetName = dcNameFromFigureKey(chosenFigureKey);
+      if (!targetMsgId) {
+        return { applied: false, manualMessage: `**Jundland Terror** — could not locate **${targetName}**'s play area; resolve manually.` };
+      }
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[targetMsgId] = true;
+      // Out-of-activation 2-MP grant on a non-activating friendly →
+      // setupPendingMoveX, bypassCosts: false. Free attack stays
+      // banked for the figure's next activation interrupt.
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[targetMsgId] = {
+        remaining: 2,
+        source: 'Jundland Terror',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName: targetName,
+        threadId: null,
+        bypassCosts: false,
+        msgId: targetMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: targetMsgId,
+        activeMsgId: targetMsgId,
+        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and may interrupt to perform an attack on their next activation.`,
+      };
+    }
+    // Phase 1: enumerate friendly Tusken / Bantha figures on the board.
+    const validKeys = [];
+    const validLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const dcBase = String(dcN).replace(/\s*\[.*\]\s*$/, '');
+      const eff = dcEffects[dcN] || dcEffects[dcBase] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
       const matchesTrait = traits.some((t) => kws.includes(t.toUpperCase()) || dcBase.toUpperCase().includes(t.toUpperCase()));
       if (matchesTrait) {
-        matchingMsgIds.push(dcIds[i]);
-        matchingNames.push(dcBase);
+        validKeys.push(fk);
+        validLabels.push(dcN);
       }
     }
-    if (matchingMsgIds.length === 0) {
-      return { applied: false, manualMessage: 'Resolve manually: no friendly Tusken Raider or Bantha Rider found.' };
+    if (validKeys.length === 0) {
+      return { applied: false, manualMessage: 'Resolve manually: no friendly Tusken Raider or Bantha Rider on the board.' };
     }
-    game.pendingMpBonus = game.pendingMpBonus || {};
-    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    for (const mid of matchingMsgIds) {
-      game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + 2;
-      game.freeAttackBonusPending[mid] = true;
-    }
-    return { applied: true, logMessage: `**Jundland Terror** — **${matchingNames.join(', ')}**: next activation +2 MP and 1 free attack.` };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: validLabels.map(n => `Target: ${n}`),
+      choiceValues: validKeys,
+      manualMessage: '**Jundland Terror** — choose one Tusken Raider or Bantha Rider figure.',
+    };
   }
 
   // ccEffect: foreseeEffect (Foresee) — look at top 2 of opponent's deck, discard 1; if cost ≤1, draw 1 from own deck
@@ -8691,8 +8724,12 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Push & attack: ${n}`), choiceValues: hostileKeys };
   }
 
-  // ccEffect: stimulantsEffect — you or an adjacent friendly suffers 1 Damage; gain 1 MP and become Focused
-  // Phase 1: pick self or adjacent friendly; Phase 2: apply 1 damage to chosen + grant 1 MP + Focus
+  // ccEffect: stimulantsEffect — adjacent figure suffers 1 Damage,
+  // then gains 1 MP and becomes Focused. Per canonical card text the
+  // ADJACENT FIGURE is the one that takes damage AND gains MP/Focus —
+  // not the activator. Recipient ≠ activator → MP via picker (rule 1,
+  // bypassCosts: false). Activator path retained for the legacy
+  // self-target case (no adj friendly).
   if (entry.type === 'ccEffect' && entry.stimulantsEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -8703,12 +8740,7 @@ export function resolveAbility(abilityId, context) {
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
-    // Apply 1 MP + Focus to activating figure (used in both phases)
-    const applyMpAndFocus = () => {
-      addMovementPoints(game, msgId, 1);
-      applyCondition(game, activatorFk, 'Focus');
-    };
-    // Phase 2: apply damage to chosen (chosenFigureKey = 'self' or a friendly figure key)
+    // Phase 2: apply damage to chosen, grant MP/Focus to chosen.
     if (chosenFigureKey) {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
       const targetIsActivator = chosenFigureKey === 'self' || chosenFigureKey === activatorFk;
@@ -8724,11 +8756,40 @@ export function resolveAbility(abilityId, context) {
         dcHealthState.set(damageMsgId, targetHs);
         syncHealthStateToList(game, playerNum, damageMsgId, targetHs);
       }
-      applyMpAndFocus();
+      applyCondition(game, damageFk, 'Focus');
       const targetName = targetIsActivator ? (meta.displayName || meta.dcName) : dcNameFromFigureKey(damageFk);
       const refreshIds = [msgId];
       if (damageMsgId && !refreshIds.includes(damageMsgId)) refreshIds.push(damageMsgId);
-      return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'] };
+      // MP grant: activator-self → bank (rule 3); other recipient → picker (rule 1).
+      if (targetIsActivator) {
+        addMovementPoints(game, msgId, 1);
+        return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };
+      }
+      // Recipient ≠ activator → setupPendingMoveX on their msgId.
+      if (!damageMsgId) {
+        return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage and gained Focus; resolve their 1 MP manually (could not locate play area).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'] };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[damageMsgId] = {
+        remaining: 1,
+        source: 'Stimulants',
+        playerNum,
+        figureKey: damageFk,
+        dcName: dcNameFromFigureKey(damageFk),
+        threadId: null,
+        bypassCosts: false,
+        msgId: damageMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: damageMsgId,
+        activeMsgId: damageMsgId,
+        logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained Focus; gains 1 MP — spend at once, no bank.`,
+        refreshDcEmbed: true,
+        refreshDcEmbedMsgIds: refreshIds,
+        conditionCardsToPost: ['Focus'],
+      };
     }
     // Phase 1: find adjacent friendly figures to offer as damage targets
     const mapId = game.selectedMap?.id;
@@ -8744,7 +8805,7 @@ export function resolveAbility(abilityId, context) {
       }
     }
     if (adjFriendlyKeys.length === 0) {
-      // No adjacent friendly — auto-apply to self
+      // No adjacent friendly — auto-apply to self (activator banks 1 MP per rule 3).
       if (dcHealthState) {
         const selfHs = (dcHealthState.get(msgId) || []).slice();
         const activatorIdx = activatingKeys.indexOf(activatorFk);
@@ -8756,8 +8817,9 @@ export function resolveAbility(abilityId, context) {
           syncHealthStateToList(game, playerNum, msgId, selfHs);
         }
       }
-      applyMpAndFocus();
-      return { applied: true, logMessage: `**Stimulants** — Suffered 1 Damage (self); gained 1 MP and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Focus'] };
+      addMovementPoints(game, msgId, 1);
+      applyCondition(game, activatorFk, 'Focus');
+      return { applied: true, logMessage: `**Stimulants** — Suffered 1 Damage (self); gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };
     }
     // Show choice: self or an adjacent friendly
     const selfName = meta.displayName || meta.dcName || 'self';
@@ -9009,14 +9071,32 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.fieldTacticianEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: grant move MP to chosen figure
+    // Phase 2: chosen friendly performs a move (MP=Speed, picker,
+    // out-of-activation grant on another figure → no bank,
+    // bypassCosts: false).
     if (chosenFigureKey) {
       const figMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply move manually.' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
-      addMovementPoints(game, figMsgId, figSpeed);
-      return { applied: true, logMessage: `**Field Tactician** — **${dcName}** gains ${figSpeed} MP (interrupt move). Use their Move button.` };
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[figMsgId] = {
+        remaining: figSpeed,
+        source: 'Field Tactician',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName,
+        threadId: null,
+        bypassCosts: false,
+        msgId: figMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: figMsgId,
+        activeMsgId: figMsgId,
+        logMessage: `**Field Tactician** — **${dcName}** performs a move (up to ${figSpeed} MP, spend at once, no bank).`,
+      };
     }
     // Phase 1: any friendly within 2
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -10005,7 +10085,13 @@ export function resolveAbility(abilityId, context) {
       const chosenDcName = String(chosenOption ?? '').replace(/^Watch:\s*/, '');
       game.findsmanMeditationTarget = game.findsmanMeditationTarget || {};
       game.findsmanMeditationTarget[playerNum] = chosenDcName;
-      return { applied: true, logMessage: `**Findsman Meditation** — Zuckuss will interrupt when **${chosenDcName}** activates this round. Before their first action, announce the interrupt: Zuckuss may move up to 2 spaces or perform an attack.` };
+      // TODO follow-up: hook into opponent activation-start to auto-
+      // post the move/attack picker. Currently the player must
+      // manually announce. When the picker is wired, the Move branch
+      // should stamp pendingMoveX (Zuckuss's msgId, MP=Speed,
+      // bypassCosts: false, no bank — out-of-activation grant) and
+      // the Attack branch should post a granted attack button.
+      return { applied: true, logMessage: `**Findsman Meditation** — Zuckuss will interrupt when **${chosenDcName}** activates this round. Before their first action, announce the interrupt: Zuckuss may **move up to Speed MP** (no bank, spend at once) **or perform an attack**.` };
     }
     const oppIds = getDcMessageIds(game, oppNum) || [];
     const oppList = getDcList(game, oppNum) || [];
