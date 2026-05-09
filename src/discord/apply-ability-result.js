@@ -124,6 +124,34 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Move-X picker (single figure) ---
+  // Abilities that stamp pendingMoveX synchronously surface the msgId
+  // via result.pendingMoveXMsgId. Post the picker now (async, needs
+  // client + logGameAction). Mirror of the dc-play-area consumer.
+  if (result.applied && result.pendingMoveXMsgId) {
+    try {
+      const { postMoveXPicker } = await import('../handlers/move-x-handler.js');
+      const { saveGames, logGameAction } = ctx || {};
+      await postMoveXPicker(game, { client, logGameAction, saveGames }, result.pendingMoveXMsgId);
+    } catch (err) {
+      console.error('Failed to post Move-X picker:', err?.message ?? err);
+    }
+  }
+
+  // --- Move-X sequence (multi figure) ---
+  // Abilities that need to orchestrate multiple figures (e.g. Pack
+  // Alpha) return a payload describing the sequence. Stand it up now
+  // so the order picker is posted.
+  if (result.applied && result.pendingMoveXSequenceSetup) {
+    try {
+      const { setupPendingMoveXSequence } = await import('../handlers/move-x-handler.js');
+      const { saveGames, logGameAction } = ctx || {};
+      await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, result.pendingMoveXSequenceSetup);
+    } catch (err) {
+      console.error('Failed to set up Move-X sequence:', err?.message ?? err);
+    }
+  }
+
   // --- Refresh movement bank ---
   if (result.applied && result.refreshMovementBank && result.activeMsgId) {
     if (ensureMovementBankMessage) {

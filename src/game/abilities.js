@@ -8843,14 +8843,60 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: `**Pack Alpha** — **${dcName}**: ${dmgNote}. (${adjacentCreatures.map(([fk]) => dcNameFromFigureKey(fk)).join(', ')} adjacent)`, refreshDcEmbed: !!figMsgId };
     }
-    // Phase 1: hostile figure picker (move CREATUREs first manually)
-    const hostileKeys = [];
-    const hostileLabels = [];
-    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
-      hostileKeys.push(fk); hostileLabels.push(dcNameFromFigureKey(fk));
+    // Phase 1: stamp a Move-X sequence for up to 3 friendly CREATUREs
+    // within 3 spaces of the activator. afterAction=packAlphaTarget
+    // posts the hostile-target picker (Phase 2) once every CREATURE's
+    // picker has drained. Each picker is bypassCosts:true (3-space
+    // budget under MOVE-017 — no banking).
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    const actorKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const actorPositions = actorKeys
+      .map((fk) => game.figurePositions?.[playerNum]?.[fk])
+      .filter(Boolean);
+    if (actorPositions.length === 0) {
+      return { applied: false, manualMessage: '**Pack Alpha** — could not locate the activating figure; resolve manually.' };
     }
-    if (!hostileKeys.length) return { applied: false, manualMessage: 'No hostile figures to target.' };
-    return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Target: ${n} (move CREATUREs first)`), choiceValues: hostileKeys };
+    const friendlyCreatureFigs = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!kws.includes('CREATURE')) continue;
+      // Within 3 spaces of any of the activator's footprint cells.
+      let withinThree = false;
+      for (const aPos of actorPositions) {
+        if (countGameSpaces(game, aPos, pos) <= 3) { withinThree = true; break; }
+      }
+      if (!withinThree) continue;
+      const fkMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      if (!fkMsgId) continue;
+      friendlyCreatureFigs.push({ msgId: fkMsgId, figureKey: fk, dcName: dcN });
+    }
+    if (friendlyCreatureFigs.length === 0) {
+      return { applied: false, manualMessage: '**Pack Alpha** — no friendly CREATUREs within 3 spaces; resolve manually.' };
+    }
+    // "Up to 3" — cap to 3 figures. The picker's Stop button lets the
+    // player decline a move per figure, so passing the top 3 is fine.
+    const seqFigures = friendlyCreatureFigs.slice(0, 3).map((f) => ({
+      msgId: f.msgId,
+      figureKey: f.figureKey,
+      playerNum,
+      spaces: 3,
+      dcName: f.dcName,
+    }));
+    return {
+      applied: true,
+      pendingMoveXSequenceSetup: {
+        figures: seqFigures,
+        source: 'Pack Alpha',
+        threadId: null,
+        bypassCosts: true,
+        afterAction: { type: 'packAlphaTarget', playerNum },
+      },
+      logMessage: `**Pack Alpha** — ${seqFigures.length} friendly CREATURE${seqFigures.length === 1 ? '' : 's'} may each move up to 3 spaces; pick order. After all moves, choose a hostile target.`,
+    };
   }
 
   // ccEffect: coordinatedAttackEffect (Coordinated Attack) — pick friendly within 3; grant both Loku and that figure 1 free attack
