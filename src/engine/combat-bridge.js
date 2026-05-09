@@ -3061,8 +3061,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Wanton Destruction (Saw Gerrera): after ANY friendly attack resolves, discard 1 CC → up to 2 figures (not defender) within 2 of target suffer 1 Damage
-  if (combat.target?.figureKey && game.selectedMap?.id) {
+  // Wanton Destruction inline disabled 2026-05-09 → fireWantonDestruction
+  // (step-8 attacker button). Click handlers don't close combat directly,
+  // so no fromStep8Queue bypass needed.
+  if (false && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
     const _wdAtkPN = combat.attackerPlayerNum;
     const _wdDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(_wdAtkPN);
     const _wdDcList = getDcList(game, _wdAtkPN) || [];

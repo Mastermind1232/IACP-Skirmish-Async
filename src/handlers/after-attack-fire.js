@@ -32,7 +32,9 @@ import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
   setPendingFightingKnife, setPendingSpreadThePain,
+  setPendingWantonDestruction,
 } from '../game/interrupts.js';
+import { getCcHand } from '../game/player-helpers.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -1171,6 +1173,65 @@ async function fireSpreadThePain(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Wanton Destruction (Saw Gerrera): "after any friendly attack resolves,
+ * discard 1 CC → up to 2 figures (not defender) within 2 of target
+ * suffer 1 Damage." Army-wide trigger gated on Saw being alive on the
+ * board + player having ≥1 CC in hand. The existing handleWantonUse /
+ * CcPick / Pick / Done / Skip flow doesn't call finishCombatResolution,
+ * so no fromStep8Queue bypass is needed.
+ */
+async function fireWantonDestruction(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  if (!thread || !combat.target?.figureKey || !game.selectedMap?.id) return;
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(atkPN);
+  const dcList = getDcList(game, atkPN) || [];
+  const effects = getDcEffects?.() || {};
+  let sawDc = null;
+  for (const dc of dcList) {
+    if (!dc || dc.defeated) continue;
+    const eff = effects[dc.dcName];
+    if (!((eff?.specialAbilityIds || []).includes('wanton_destruction_saw'))) continue;
+    const figs = game.figurePositions?.[atkPN] || {};
+    const alive = Object.keys(figs).some((fk) => fk.startsWith(dc.dcName + '-') && figs[fk]);
+    if (alive) { sawDc = dc; break; }
+  }
+  if (!sawDc) return;
+  if ((getCcHand(game, atkPN) || []).length === 0) return;
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey] || combat._blastTargetCoord;
+  if (!targetPos) return;
+  const eligible = [];
+  for (const pn of [1, 2]) {
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!pos || fk === combat.target.figureKey) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
+        dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+      });
+      eligible.push({ figureKey: fk, playerNum: pn, label });
+    }
+  }
+  if (eligible.length === 0) return;
+  const ownerId = getPlayerId(game, atkPN);
+  setPendingWantonDestruction(game, {
+    gameId: game.gameId,
+    ownerPlayerNum: atkPN,
+    combatThreadId: combat.combatThreadId,
+    targets: eligible,
+    chosen: [],
+    maxPicks: 2,
+  });
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Wanton Destruction** — **${sawDc.dcName}**: Discard 1 CC to deal 1 Damage to up to 2 figures within 2 spaces of the target?`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`wanton_use_${game.gameId}`).setLabel('Use (discard 1 CC)').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`wanton_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    )],
+  })).catch(discordCatch);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -1259,6 +1320,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'spread_the_pain':
       await fireSpreadThePain(thread, game, combat, effect, ctx);
+      return;
+    case 'wanton_destruction':
+      await fireWantonDestruction(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

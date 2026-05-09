@@ -380,6 +380,20 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: `Spread the Pain: apply ${combat.spreadThePainConditions.length} condition${combat.spreadThePainConditions.length > 1 ? 's' : ''}`,
     });
   }
+  // Wanton Destruction (Saw Gerrera, army-wide): triggers after ANY
+  // friendly attack. Eligibility (Saw alive + CC in hand + adjacent
+  // figures within 2 of target) re-validated at fire time.
+  if (combat.target?.figureKey) {
+    const _wdDcList = deps?.getDcList?.(game, combat.attackerPlayerNum) || [];
+    const _wdEffects = getDcEffects?.() || {};
+    if (_wdDcList.some((dc) => !!dc && !dc.defeated && (_wdEffects[dc.dcName]?.specialAbilityIds || []).includes('wanton_destruction_saw'))) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'wanton_destruction',
+        label: 'Wanton Destruction: discard 1 CC → splash',
+      });
+    }
+  }
 }
 
 /**
