@@ -27,7 +27,7 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
-import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint } from '../game/movement.js';
+import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
 import { setPendingMassivePush } from '../game/interrupts.js';
 import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
@@ -43,7 +43,7 @@ import { splitCustomId } from '../discord/custom-id.js';
  * The caller must follow up with postMoveXPicker to surface the UI.
  */
 export function stampPendingMoveX(game, opts) {
-  const { msgId, figureKey, playerNum, spaces, source, threadId } = opts;
+  const { msgId, figureKey, playerNum, spaces, source, threadId, bypassCosts } = opts;
   if (!msgId || !figureKey || !playerNum || !spaces || spaces <= 0) return false;
   game.pendingMoveX = game.pendingMoveX || {};
   game.pendingMoveX[msgId] = {
@@ -53,6 +53,15 @@ export function stampPendingMoveX(game, opts) {
     figureKey,
     dcName: dcNameFromFigureKey(figureKey),
     threadId: threadId || null,
+    // bypassCosts: true (default) for Move-X effects per CRR MOVE-017 —
+    //   each step consumes 1 budget regardless of terrain/figure cost.
+    // bypassCosts: false for regular MP-gain effects (Slippery, Smooth
+    //   Landing, etc.) — each step consumes 1 + difficult adder + hostile
+    //   adder, honoring the figure's profile (Mobile / Massive / Efficient
+    //   Travel keywords still bypass via getMovementProfile flags). The
+    //   cost-aware step calculation lands in a follow-up commit; this
+    //   field is wired through now so callers can declare intent.
+    bypassCosts: bypassCosts !== false,
   };
   return true;
 }
@@ -107,11 +116,137 @@ async function _finishPicker(game, ctx, msgId) {
   if (_isMovingFigureMassive(game, pending.figureKey)) {
     await _runMassiveDisplacement(game, ctx, pending);
   }
+  // Multi-figure MP-gain orchestration: if a sequence is active and
+  // this figure was the current one, mark it complete and advance
+  // (post the next order-pick if more figures remain, else clear).
+  if (game.pendingMoveXSequence && game.pendingMoveXSequence.currentMsgId === msgId) {
+    await _advanceMoveXSequence(game, ctx);
+  }
   if (!nextAction) return;
   if (nextAction.type === 'rollOneDieSpacePick') {
     await _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+// ── Multi-figure MP-gain sequencing ──────────────────────────────────
+//
+// Some effects grant MP to multiple figures at once (Smooth Landing:
+// Bodhi + each adjacent friendly; Strike Team: Cassian + chosen
+// adjacent friendly; etc.). Per the gain-MP rules audit, the MP must
+// be spent immediately by each figure in turn — and the player must
+// be prompted to choose the ORDER, since earlier figures may move
+// out of the way / into spaces that change what later figures can do.
+//
+// State: game.pendingMoveXSequence = {
+//   gameId, source, threadId,
+//   queue: [{ msgId, figureKey, playerNum, spaces, dcName }, ...],
+//   completed: [figureKey, ...],
+//   currentMsgId: string | null,  // the figure currently in their picker
+// }
+
+/**
+ * Begin a multi-figure MP-gain sequence. Posts the order-pick prompt;
+ * the player chooses which figure goes first, that figure's picker
+ * runs to completion, then the prompt re-posts with remaining
+ * figures, and so on.
+ */
+export async function setupPendingMoveXSequence(game, ctx, opts) {
+  const { figures, source, threadId, bypassCosts } = opts;
+  if (!Array.isArray(figures) || figures.length === 0) return;
+  game.pendingMoveXSequence = {
+    gameId: game.gameId,
+    source,
+    threadId: threadId || null,
+    queue: figures.map(f => ({ ...f })),
+    completed: [],
+    currentMsgId: null,
+    bypassCosts: bypassCosts !== false,
+  };
+  await _postSequenceOrderPicker(game, ctx);
+  ctx.saveGames?.(game.gameId);
+}
+
+async function _postSequenceOrderPicker(game, ctx) {
+  const seq = game.pendingMoveXSequence;
+  if (!seq || seq.queue.length === 0) {
+    delete game.pendingMoveXSequence;
+    return;
+  }
+  if (seq.queue.length === 1) {
+    // Only one figure left — auto-pick, no prompt.
+    const f = seq.queue[0];
+    seq.currentMsgId = f.msgId;
+    await setupPendingMoveX(game, ctx, {
+      msgId: f.msgId, figureKey: f.figureKey, playerNum: f.playerNum,
+      spaces: f.spaces, source: seq.source, threadId: seq.threadId,
+      bypassCosts: seq.bypassCosts,
+    });
+    return;
+  }
+  const { client, logGameAction } = ctx;
+  const ownerPN = seq.queue[0].playerNum; // sequence is single-player
+  const ownerId = getPlayerId(game, ownerPN);
+  const btns = seq.queue.slice(0, 20).map(f => new ButtonBuilder()
+    .setCustomId(`move_x_seq_pick_${game.gameId}_${f.figureKey}`)
+    .setLabel(`${f.dcName || dcNameFromFigureKey(f.figureKey)} (${f.spaces} sp)`.slice(0, 80))
+    .setStyle(ButtonStyle.Primary));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const content = `<@${ownerId}> 🦿 **${seq.source}** — ${seq.queue.length} figure(s) remaining. Pick which figure resolves next:`;
+  if (seq.threadId) {
+    const thread = await fetchCombatThread(client, seq.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+}
+
+async function _advanceMoveXSequence(game, ctx) {
+  const seq = game.pendingMoveXSequence;
+  if (!seq) return;
+  // Mark current as completed, drop from queue.
+  if (seq.currentMsgId) {
+    seq.queue = seq.queue.filter(f => f.msgId !== seq.currentMsgId);
+    seq.completed.push(seq.currentMsgId);
+    seq.currentMsgId = null;
+  }
+  if (seq.queue.length === 0) {
+    delete game.pendingMoveXSequence;
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
+  await _postSequenceOrderPicker(game, ctx);
+  ctx.saveGames?.(game.gameId);
+}
+
+/** Order-pick handler — customId: move_x_seq_pick_${gameId}_${figureKey}
+ *  Player picks which figure resolves their MP gain next. */
+export async function handleMoveXSeqPick(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const parts = splitCustomId(interaction.customId, 'move_x_seq_pick_');
+  if (parts.length < 2) return;
+  const [gameId, ...fkParts] = parts;
+  const figureKey = fkParts.join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const seq = game.pendingMoveXSequence;
+  if (!seq) return;
+  const entry = seq.queue.find(f => f.figureKey === figureKey);
+  if (!entry) {
+    await interaction.followUp({ content: 'That figure is no longer in the sequence.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, entry.playerNum, canActAsPlayer, 'Only the owning player can choose order.')) return;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  seq.currentMsgId = entry.msgId;
+  await setupPendingMoveX(game, ctx, {
+    msgId: entry.msgId, figureKey: entry.figureKey, playerNum: entry.playerNum,
+    spaces: entry.spaces, source: seq.source, threadId: seq.threadId,
+  });
+  saveGames?.(gameId);
 }
 
 /**
@@ -296,6 +431,36 @@ function _computeValidNeighbors(game, msgId) {
   const oldSet = new Set(oldCells);
   const occupied = _computeOccupancy(game, figureKey);
 
+  // Cost mode: bypassCosts=true (Move-X effects per MOVE-017) → every
+  // step costs 1; bypassCosts=false (regular MP gain — Slippery,
+  // Smooth Landing, etc.) → 1 + (entering difficult ? +1 : 0) +
+  // (entering hostile ? +1 : 0), with the figure's profile flags
+  // (Mobile/Massive/Efficient Travel/Survivalist) overriding the
+  // adders via getMovementProfile.
+  const bypassCosts = pending.bypassCosts !== false;
+  let profile = null;
+  let board = null;
+  if (!bypassCosts) {
+    try {
+      profile = getMovementProfile(dcName, figureKey, game);
+      board = getBoardStateForMovement(game, figureKey);
+    } catch { /* fall back to bypass if profile fails */ }
+  }
+  const _stepCostFor = (newCells) => {
+    if (bypassCosts || !profile || !board) return 1;
+    const entering = newCells.filter(c => !oldSet.has(c));
+    if (entering.length === 0) return 1;
+    let cost = 1;
+    const enteringDifficult = !profile.ignoreDifficult &&
+      entering.some(c => (board.terrain?.[c] || 'normal') === 'difficult');
+    if (enteringDifficult) cost += 1;
+    if (!profile.ignoreFigureCost) {
+      const hostileSet = board.hostileOccupiedSet || board.occupiedSet;
+      if (hostileSet && entering.some(c => hostileSet.has(c))) cost += 1;
+    }
+    return cost;
+  };
+
   const candidates = [];
   const directions = [
     { dx: 0, dy: -1 }, // N
@@ -331,7 +496,9 @@ function _computeValidNeighbors(game, msgId) {
       if (oldSet.has(nc)) continue;
       if (occupied.has(nc)) { passThrough = true; break; }
     }
-    candidates.push({ kind: 'translate', topLeft: newTopLeft, footprintCells: newCells, passThrough });
+    const stepCost = _stepCostFor(newCells);
+    if (stepCost > pending.remaining) continue; // can't afford this step
+    candidates.push({ kind: 'translate', topLeft: newTopLeft, footprintCells: newCells, passThrough, stepCost });
   }
 
   // Rotation candidates (Large/Massive figures). MOVE-020: rotation
@@ -382,6 +549,8 @@ function _computeValidNeighbors(game, msgId) {
         // duplicate (pivot, dir) outcomes).
         const sig = newCells.slice().sort().join(',');
         if (candidates.some(c => c.kind === 'rotate' && c.signature === sig)) continue;
+        const stepCost = _stepCostFor(newCells);
+        if (stepCost > pending.remaining) continue;
         candidates.push({
           kind: 'rotate',
           topLeft: newTopLeft,
@@ -390,6 +559,7 @@ function _computeValidNeighbors(game, msgId) {
           rotatedSize,
           pivotCell,
           direction,
+          stepCost,
           signature: sig,
         });
       }
@@ -445,14 +615,15 @@ export async function postMoveXPicker(game, ctx, msgId) {
   const overlapping = !isMassive && _isCurrentlyOverlapping(game, msgId);
   const ownerId = getPlayerId(game, pending.playerNum);
 
-  // Pass-through filter: if remaining > 1, both clean and pass-through
-  // candidates are legal. If remaining === 1, only clean candidates
-  // are legal — the next step is the figure's final stop. Massive
-  // figures can end on an occupied cell (displacement at finish), so
-  // pass-through candidates remain legal at remaining === 1.
-  const candidates = (isMassive || pending.remaining > 1)
+  // Pass-through filter: if the figure has more budget than this
+  // step's cost, both clean and pass-through candidates are legal
+  // (the figure can step out next click). If remaining === stepCost,
+  // only clean candidates are legal — that step is the figure's
+  // final stop. Massive figures can end on an occupied cell
+  // (displacement at finish), so pass-through remains legal.
+  const candidates = isMassive
     ? allCandidates
-    : allCandidates.filter(c => !c.passThrough);
+    : allCandidates.filter(c => !c.passThrough || pending.remaining > (c.stepCost ?? 1));
 
   if (candidates.length === 0) {
     // No legal destinations — close the budget and tell the player.
@@ -465,20 +636,21 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
 
+  const _costSuffix = (cand) => (cand.stepCost && cand.stepCost > 1) ? ` [${cand.stepCost} MP]` : '';
   const stepBtns = candidates.slice(0, 20).map(cand => {
     if (cand.kind === 'rotate') {
       const dirArrow = cand.direction === 'CW' ? '↻' : '↺';
-      const label = cand.passThrough
-        ? `Rotate ${dirArrow} pivot ${cand.pivotCell.toUpperCase()} (pass-through)`
-        : `Rotate ${dirArrow} pivot ${cand.pivotCell.toUpperCase()}`;
+      const ptSuffix = cand.passThrough ? ' (pass-through)' : '';
+      const label = `Rotate ${dirArrow} pivot ${cand.pivotCell.toUpperCase()}${_costSuffix(cand)}${ptSuffix}`;
       return new ButtonBuilder()
         .setCustomId(`move_x_rotate_${game.gameId}_${msgId}_${cand.pivotCell}_${cand.direction}`)
         .setLabel(label.slice(0, 80))
         .setStyle(ButtonStyle.Success);
     }
+    const ptSuffix = cand.passThrough ? ' (pass-through)' : '';
     return new ButtonBuilder()
       .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cand.topLeft}`)
-      .setLabel(cand.passThrough ? `${cand.topLeft.toUpperCase()} (pass-through)` : cand.topLeft.toUpperCase())
+      .setLabel(`${cand.topLeft.toUpperCase()}${_costSuffix(cand)}${ptSuffix}`.slice(0, 80))
       .setStyle(cand.passThrough ? ButtonStyle.Secondary : ButtonStyle.Primary);
   });
   // Done button is hidden while the figure is overlapping another
@@ -493,7 +665,8 @@ export async function postMoveXPicker(game, ctx, msgId) {
 
   const rows = chunkButtonsToRows(buttons).slice(0, 5);
   const overlapNote = overlapping ? ' — **must keep moving** (currently overlapping another figure)' : '';
-  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** space(s) remaining${overlapNote}. Click an adjacent space to move 1 step:`;
+  const unitLabel = pending.bypassCosts === false ? 'MP' : 'space(s)';
+  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** ${unitLabel} remaining${overlapNote}. Click an adjacent space to move 1 step:`;
   const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' };
 
   if (pending.threadId) {
@@ -542,15 +715,17 @@ export async function handleMoveXStep(interaction, ctx) {
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
   game.figurePositions[pending.playerNum][pending.figureKey] = match.topLeft;
 
-  pending.remaining -= 1;
+  const cost = match.stepCost ?? 1;
+  pending.remaining = Math.max(0, pending.remaining - cost);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const costNote = cost > 1 ? ` (cost ${cost} MP)` : '';
   await logGameAction?.(game, client,
-    `🦿 **${pending.source}** — **${pending.dcName}** moves to **${match.topLeft.toUpperCase()}** (${pending.remaining} space(s) left).`,
+    `🦿 **${pending.source}** — **${pending.dcName}** moves to **${match.topLeft.toUpperCase()}**${costNote} (${pending.remaining} left).`,
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {
     await logGameAction?.(game, client,
-      `🦿 **${pending.source}** — **${pending.dcName}** has used all granted spaces.`,
+      `🦿 **${pending.source}** — **${pending.dcName}** has used all granted MP.`,
       { phase: 'ROUND', icon: 'attack' });
     await _finishPicker(game, ctx, msgId);
   } else {
@@ -594,16 +769,18 @@ export async function handleMoveXRotate(interaction, ctx) {
   game.figureOrientations = game.figureOrientations || {};
   game.figureOrientations[pending.figureKey] = match.rotatedSize;
 
-  pending.remaining -= 1;
+  const cost = match.stepCost ?? 1;
+  pending.remaining = Math.max(0, pending.remaining - cost);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const dirArrow = direction === 'CW' ? '↻' : '↺';
+  const costNote = cost > 1 ? ` (cost ${cost} MP)` : '';
   await logGameAction?.(game, client,
-    `🦿 **${pending.source}** — **${pending.dcName}** rotates ${dirArrow} about **${pivotCell.toUpperCase()}** (${pending.remaining} space(s) left).`,
+    `🦿 **${pending.source}** — **${pending.dcName}** rotates ${dirArrow} about **${pivotCell.toUpperCase()}**${costNote} (${pending.remaining} left).`,
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {
     await logGameAction?.(game, client,
-      `🦿 **${pending.source}** — **${pending.dcName}** has used all granted spaces.`,
+      `🦿 **${pending.source}** — **${pending.dcName}** has used all granted MP.`,
       { phase: 'ROUND', icon: 'attack' });
     await _finishPicker(game, ctx, msgId);
   } else {

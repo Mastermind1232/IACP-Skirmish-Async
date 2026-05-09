@@ -405,6 +405,7 @@ const ROUND_NULL_FLAGS = [
   'whenDefeatHostileWithin3GainBlockTokens',
   'pendingRushPush',
   'pendingMassivePush',
+  'pendingMoveXSequence',
   'pendingEmperorInterrupt',
   'pendingExecutiveOrder',
   'pendingBombardmentSorin',

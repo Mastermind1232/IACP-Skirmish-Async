@@ -54,8 +54,8 @@ describe('PROBE-PD-MOVE-020: rotation rules — Move-X allows, Push forbids', ()
       'move-x-handler must export handleMoveXRotate');
     assert.match(MX_SRC, /game\.figureOrientations\[pending\.figureKey\] = match\.rotatedSize;/,
       'rotation must update figureOrientations to the rotated size — MOVE-020');
-    assert.match(MX_SRC, /pending\.remaining\s*-=\s*1;/,
-      'rotation must decrement remaining by 1 (rotation costs 1 space) — MOVE-020');
+    assert.match(MX_SRC, /pending\.remaining\s*=\s*Math\.max\(0,\s*pending\.remaining\s*-\s*cost\);/,
+      'rotation must decrement remaining by the step cost — MOVE-020');
   });
 
   it('020c: Push flow does NOT emit rotation candidates (rotation forbidden during Push)', () => {

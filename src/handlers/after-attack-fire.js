@@ -124,9 +124,13 @@ async function fireSlippery(thread, game, combat, effect, ctx) {
   if (!msgId || !figureKey || !playerNum) return;
   if (logGameAction && thread) {
     await logGameAction(game, client,
-      `\u{1F3C3} **Slippery** — **${effect.payload?.defenderDcName || combat.target?.label}** may move up to 2 spaces (interrupt; remaining discarded).`,
+      `\u{1F3C3} **Slippery** — **${effect.payload?.defenderDcName || combat.target?.label}** gains 2 MP to spend immediately (interrupt; remaining discarded).`,
       { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
+  // Slippery is a regular MP gain (not Move-X) — bypassCosts: false
+  // makes the picker honor +1 difficult-terrain and +1 hostile-figure
+  // adders, with the figure's profile (Mobile / Massive / Efficient
+  // Travel) overriding via getMovementProfile.
   await setupPendingMoveX(game, ctx, {
     msgId,
     figureKey,
@@ -134,6 +138,7 @@ async function fireSlippery(thread, game, combat, effect, ctx) {
     spaces: 2,
     source: 'Slippery',
     threadId,
+    bypassCosts: false,
   });
 }
 

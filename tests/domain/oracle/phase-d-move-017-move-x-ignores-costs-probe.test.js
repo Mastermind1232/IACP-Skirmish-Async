@@ -38,12 +38,17 @@ describe('PROBE-PD-MOVE-017: Move-X effects bypass MP costs via pendingMoveX pic
       `expected at least 2 abilities.js sites that stamp game.pendingMoveX from entry.freeMoveBonus; found ${grantSites.length} — CRR-MOVE-017`);
   });
 
-  it('017b: source — pendingMoveX picker is the MOVE-017 enforcement (1 space per click)', () => {
-    // Picker decrements `pending.remaining -= 1;` per step → each step
-    // costs exactly 1 space, ignoring terrain/figure surcharges by
-    // construction.
-    assert.match(MX_SRC, /pending\.remaining\s*-=\s*1;/,
-      'move-x picker must decrement remaining by exactly 1 per step — CRR-MOVE-017');
+  it('017b: source — pendingMoveX picker is the MOVE-017 enforcement (bypassCosts=true → step cost 1)', () => {
+    // Step-cost helper short-circuits to 1 when the budget is in
+    // bypass mode (Move-X effects). Regular MP-gain budgets
+    // (bypassCosts=false) honor the +1 difficult / +1 hostile
+    // adders and the figure's profile flags via getMovementProfile.
+    assert.match(MX_SRC, /if \(bypassCosts \|\| !profile \|\| !board\) return 1;/,
+      'move-x picker must return cost=1 when bypassCosts is true — CRR-MOVE-017');
+    // Each step decrement uses match.stepCost — Move-X candidates
+    // always have stepCost=1 by virtue of the helper above.
+    assert.match(MX_SRC, /pending\.remaining\s*=\s*Math\.max\(0,\s*pending\.remaining\s*-\s*cost\);/,
+      'move-x picker must decrement remaining by the step cost — CRR-MOVE-017');
     // Picker exposes setupPendingMoveX (async) and stampPendingMoveX
     // (sync) so both async and sync callers can route through.
     assert.match(MX_SRC, /export\s+(async\s+)?function\s+setupPendingMoveX\b/,
