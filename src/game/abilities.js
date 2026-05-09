@@ -10079,22 +10079,37 @@ export function resolveAbility(abilityId, context) {
       };
     }
 
-    // Phase 1: enumerate reachable spaces within headbuttMove
-    const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
-    if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
-    const boardState = getBoardStateForMovement(game, activatingFigureKey);
-    if (!boardState?.mapSpaces) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
-    const occ = boardState.occupiedSet;
-    const occArr = occ instanceof Set ? [...occ] : (occ || []);
-    const reachable = getReachableSpaces(activatingPos, entry.headbuttMove, boardState.mapSpaces, occArr);
-    // Include current position (move 0 spaces)
-    const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
-    const validSpaces = [...validSet];
-    if (validSpaces.length === 0) return { applied: false, manualMessage: `No valid spaces for **${entry.label}**.` };
+    // Phase 1: stamp pendingMoveX (2-space picker per CRR MOVE-017) +
+    // headbuttRoll continuation. After the picker drains, the
+    // continuation enumerates adjacent hostiles from the figure's
+    // post-move position and either auto-rolls (1 hostile) or posts a
+    // target picker (2+ hostiles); 0 → effect fizzles.
+    game.pendingMoveX = game.pendingMoveX || {};
+    game.pendingMoveX[msgId] = {
+      remaining: entry.headbuttMove,
+      source: entry.label || 'Headbutt',
+      playerNum,
+      figureKey: activatingFigureKey,
+      dcName: meta?.dcName || '',
+      threadId: null,
+      bypassCosts: true,
+      msgId,
+      nextAction: {
+        type: 'headbuttRoll',
+        payload: {
+          msgId,
+          playerNum,
+          figureKey: activatingFigureKey,
+          dieColor: entry.headbuttDie || 'red',
+          label: entry.label || 'Headbutt',
+        },
+      },
+    };
     return {
-      requiresSpaceChoice: true,
-      validSpaces,
-      spaceChoiceLabel: `**${entry.label}** — Move up to ${entry.headbuttMove} spaces:`,
+      applied: true,
+      pendingMoveXMsgId: msgId,
+      activeMsgId: msgId,
+      logMessage: `**${entry.label}** — Move up to ${entry.headbuttMove} space${entry.headbuttMove === 1 ? '' : 's'}, then choose an adjacent hostile and roll 1 ${entry.headbuttDie || 'red'} die.`,
     };
   }
 

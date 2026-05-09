@@ -161,8 +161,91 @@ async function _finishPicker(game, ctx, msgId) {
     await _runGrantPowerTokenContinuation(game, ctx, pending, nextAction);
   } else if (nextAction.type === 'whistlingBirdsRoll') {
     await _runWhistlingBirdsRollContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'headbuttRoll') {
+    await _runHeadbuttRollContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Headbutt post-move: roll 1 die against an adjacent hostile (auto-pick
+ * if exactly one, prompt if multiple). Damage = # Hits.
+ */
+async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
+  const payload = next.payload || {};
+  const { client, logGameAction, dcMessageMeta, dcHealthState } = ctx;
+  const playerNum = payload.playerNum || pending.playerNum;
+  const figureKey = payload.figureKey || pending.figureKey;
+  const dieColor = (payload.dieColor || 'red').toLowerCase();
+  const label = payload.label || 'Headbutt';
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const mapId = game.selectedMap?.id;
+  if (!mapId) {
+    await logGameAction?.(game, client, `**${label}** — no map data; resolve attack manually.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const { getFiguresAdjacentToTarget } = await import('../game/spatial.js').catch(() => ({}));
+  if (typeof getFiguresAdjacentToTarget !== 'function') return;
+  const adj = getFiguresAdjacentToTarget(game, figureKey, mapId);
+  const hostiles = adj.filter(f => f.playerNum === oppNum);
+  if (hostiles.length === 0) {
+    await logGameAction?.(game, client, `**${label}** — no adjacent hostile; effect fizzles.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const rollAndApply = async (targetFigureKey) => {
+    const { getDiceData: gdLazy } = await import('../data-loader.js');
+    const faces = gdLazy()?.attack?.[dieColor] || [];
+    if (!faces.length) {
+      await logGameAction?.(game, client, `**${label}** — Roll 1 ${dieColor} die against **${dcNameFromFigureKey(targetFigureKey)}** manually.`, { phase: 'ROUND', icon: 'card' });
+      return;
+    }
+    const face = faces[Math.floor(Math.random() * faces.length)];
+    const hits = face.dmg ?? 0;
+    const dieParts = [];
+    if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+    if (face.surge) dieParts.push(`${face.surge} Surge${face.surge !== 1 ? 's' : ''}`);
+    const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+    let resPart = '';
+    if (hits > 0) {
+      const { findMsgIdForFigureKey, syncHealthStateToList } = await import('../game/index.js').catch(() => ({}));
+      const targetMsgId = typeof findMsgIdForFigureKey === 'function' ? findMsgIdForFigureKey(game, oppNum, targetFigureKey, dcMessageMeta) : null;
+      if (targetMsgId && dcHealthState) {
+        const hs = dcHealthState.get(targetMsgId) || [];
+        const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const hp = hs[figIdx];
+        if (hp) {
+          const [cur, max] = hp;
+          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
+          dcHealthState.set(targetMsgId, hs);
+          if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, targetMsgId, hs);
+          resPart = ` — ${hits} Damage (HP: ${cur ?? max} → ${Math.max(0, (cur ?? max) - hits)})`;
+        }
+      }
+    }
+    await logGameAction?.(game, client, `**${label}** — Rolled 1 ${dieColor} die: **${diceResult}**. **${dcNameFromFigureKey(targetFigureKey)}**${resPart}.`, { phase: 'ROUND', icon: 'card' });
+  };
+  if (hostiles.length === 1) {
+    await rollAndApply(hostiles[0].figureKey);
+    return;
+  }
+  // Multiple adjacent hostiles → target picker via pendingCcChoice.
+  const ownerId = getPlayerId(game, playerNum);
+  const choiceOptions = hostiles.map(h => `Target: ${dcNameFromFigureKey(h.figureKey)}`);
+  game.pendingCcChoice = {
+    gameId: game.gameId,
+    playerNum,
+    cardName: label,
+    abilityId: 'headbutt_tauntaun',
+    choiceOptions,
+    choiceValues: hostiles.map(h => h.figureKey),
+  };
+  const btns = choiceOptions.slice(0, 20).map((lbl) => new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_${lbl}`)
+    .setLabel(lbl.length > 80 ? lbl.slice(0, 77) + '…' : lbl)
+    .setStyle(ButtonStyle.Danger));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  await logGameAction?.(game, client, `<@${ownerId}> 🐂 **${label}** — choose an adjacent hostile to ram:`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
 }
 
 /**
