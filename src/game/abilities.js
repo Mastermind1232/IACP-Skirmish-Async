@@ -2578,16 +2578,44 @@ export function resolveAbility(abilityId, context) {
       const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
       const validSpaces = [...validSet];
       if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
-      // freeMoveBonus (Mortar Launcher): grant MP before the space pick so player can move first.
-      // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures; tag the bank
-      // with moveXBypassActive so the commit path sets ignoreDifficult / ignoreFigureCost.
+      // freeMoveBonus + rollOneDie (Mortar Launcher): the figure may
+      // move up to N spaces and then pick a target space within range
+      // for the dice roll. The Move-X portion now stamps pendingMoveX
+      // so the picker is the budget; the rollOneDie target-space
+      // picker is posted alongside via the existing requiresSpaceChoice
+      // result flag (player can move via the picker first, then pick
+      // the target — or pick the target first and move after, which
+      // matches prior banked-MP behavior).
+      let _pmxMsgId = null;
       if (entry.freeMoveBonus > 0 && msgId) {
-        addMovementPoints(game, msgId, entry.freeMoveBonus);
-        game.moveXBypassActive = game.moveXBypassActive || {};
-        game.moveXBypassActive[msgId] = true;
+        const _meta = context.meta;
+        const _rdpn = _meta?.playerNum ?? context.playerNum;
+        const _rdFigureKeys = Object.keys(game.figurePositions?.[_rdpn] || {})
+          .filter(k => k.startsWith((_meta?.dcName || '') + '-'));
+        const _rdSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const _rdFigureKey = _rdFigureKeys[_rdSelectedIdx] || _rdFigureKeys[0] || null;
+        if (_rdFigureKey && _rdpn) {
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[msgId] = {
+            remaining: entry.freeMoveBonus,
+            source: entry.label || 'Move X',
+            playerNum: _rdpn,
+            figureKey: _rdFigureKey,
+            dcName: _meta?.dcName || '',
+            threadId: null,
+          };
+          _pmxMsgId = msgId;
+        }
       }
-      const moveNote = entry.freeMoveBonus > 0 ? ` (Move up to ${entry.freeMoveBonus} spaces first, then choose a target space.)` : '';
-      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`, refreshMovementBank: entry.freeMoveBonus > 0, activeMsgId: msgId };
+      const moveNote = entry.freeMoveBonus > 0 ? ` (Use the Move-X picker for up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''} first, then choose a target space.)` : '';
+      return {
+        requiresSpaceChoice: true,
+        validSpaces,
+        spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:${moveNote}`,
+        refreshMovementBank: false,
+        activeMsgId: msgId,
+        pendingMoveXMsgId: _pmxMsgId,
+      };
     }
 
     // ── Plain rollOneDie: report results only (Slam, Smash) ──

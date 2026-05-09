@@ -348,14 +348,11 @@ export async function handleMoveMp(interaction, ctx) {
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
   }
-  // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs
-  // from terrain + hostile figures, but still respect non-cost restrictions.
-  // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.
-  if (game.moveXBypassActive?.[msgId]) {
-    profile.ignoreFigureCost = true;
-    profile.ignoreDifficult = true;
-    if (profile.isLarge) profile.canRotate = false;
-  }
+  // CRR MOVE-017 / MOVE-020 are now enforced structurally by the
+  // Move-X picker (src/handlers/move-x-handler.js): each step costs
+  // exactly 1 space regardless of terrain/figure cost, and the
+  // picker only emits cardinal translations so Large figures cannot
+  // rotate during Move-X. The legacy moveXBypassActive flag is gone.
   moveState.boardState = boardState;
   moveState.movementProfile = profile;
   const startCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];

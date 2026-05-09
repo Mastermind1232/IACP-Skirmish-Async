@@ -2713,6 +2713,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const payload = { content: `${spacePickLabel}\nChoose a row:`, components: _allComponents.slice(0, 5), ephemeral: false, fetchReply: true };
       if (mapAttachment) payload.files = [mapAttachment];
       await interaction.followUp(payload).catch(discordCatch);
+      // Compound rollOneDie + freeMoveBonus (Mortar Launcher etc.):
+      // also post the Move-X picker so the figure can move first.
+      if (resolveResult.pendingMoveXMsgId) {
+        await postMoveXPicker(game, { client, logGameAction, saveGames }, resolveResult.pendingMoveXMsgId);
+      }
       saveGames(game.gameId);
       return;
     }
