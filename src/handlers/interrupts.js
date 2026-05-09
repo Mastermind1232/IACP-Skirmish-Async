@@ -295,7 +295,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
 // destruct 2026-05-06 corrections honored: damage only (no strain), each
 // adjacent figure (friendly + hostile, IG-11 excluded), move-first wired.
 
-async function _runSelfDestructExplode(game, pending, ctx) {
+export async function _runSelfDestructExplode(game, pending, ctx) {
   const { client, dcMessageMeta, dcHealthState, logGameAction, getDiceData, getMapData, applyDamageAndFinishCombat, processFigureDefeat, saveGames } = ctx;
   const combat = game.pendingCombat;
   const diceData = getDiceData ? getDiceData() : null;
@@ -414,97 +414,50 @@ export async function handleSelfDestructProtocol(interaction, ctx) {
     saveGames(_sdcpGame.gameId); return;
   }
 
-  // Use → first prompt destination picker (cells reachable within 3 MP).
+  // Use → route through the unified Move-X picker. The picker's
+  // "Stop (discard remaining)" button replaces the legacy
+  // "Stay (explode here)" affordance. After the picker drains
+  // (exhaust budget OR Stop), the sdpExplode continuation runs
+  // _runSelfDestructExplode at IG-11's current position.
   const _sdcpCombat = _sdcpGame.pendingCombat;
   const _sdcpFigKey = _sdcpCombat?.target?.figureKey;
-  const _sdcpDcName = _sdcpFigKey ? dcNameFromFigureKey(_sdcpFigKey) : null;
-  const _sdcpPos = _sdcpFigKey ? _sdcpGame.figurePositions?.[_sdcpPending.defenderPlayerNum]?.[_sdcpFigKey] : null;
-  let _sdcpDestinations = [];
-  if (_sdcpPos && _sdcpGame.selectedMap?.id && getBoardStateForMovement && getMovementProfile && (computeSpacesReachable || computeMovementCache)) {
-    const _sdcpBoard = getBoardStateForMovement(_sdcpGame, _sdcpFigKey);
-    if (_sdcpBoard) {
-      const _sdcpProfile = getMovementProfile(_sdcpDcName, _sdcpFigKey, _sdcpGame);
-      // SDP card text: "you may move up to 3 spaces" — spaces semantics, not
-      // MP. computeSpacesReachable forces ignoreDifficult + ignoreFigureCost
-      // so each cell costs exactly 1 of the 3-space budget. Falls back to
-      // computeMovementCache for older ctx wiring.
-      const _sdcpCache = (computeSpacesReachable || computeMovementCache)(_sdcpPos, 3, _sdcpBoard, _sdcpProfile);
-      for (const [coord, node] of _sdcpCache.cells.entries()) {
-        if (!node.canEnd) continue;
-        if (coord === String(_sdcpPos).toLowerCase()) continue;
-        _sdcpDestinations.push(coord);
-      }
-    }
-  }
-  // Migrate pending state — same payload, separate slot so the original
-  // "use/skip" flag stays cleared and can't fire twice.
   clearPendingSelfDestruct(_sdcpGame);
-  _sdcpGame.pendingSelfDestructMove = { ..._sdcpPending };
-
-  const _sdcpButtons = [];
-  // Cap destination buttons to 20 (Discord row limit ≈ 5 rows × 5 buttons,
-  // minus the Stay button = 24). Sort by coord for determinism.
-  const _sdcpSortedDests = _sdcpDestinations.sort();
-  for (const coord of _sdcpSortedDests.slice(0, 23)) {
-    _sdcpButtons.push(
-      new ButtonBuilder()
-        .setCustomId(`sdp_move_pick_${_sdcpGame.gameId}_${coord}`)
-        .setLabel(coord.toUpperCase())
-        .setStyle(ButtonStyle.Primary)
-    );
+  if (!_sdcpFigKey) {
+    await logGameAction(_sdcpGame, client, `**Self-Destruct Protocol** — figure missing; resolving manually.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(_sdcpGame.gameId);
+    return;
   }
-  _sdcpButtons.push(
-    new ButtonBuilder()
-      .setCustomId(`sdp_move_skip_${_sdcpGame.gameId}`)
-      .setLabel('Stay (explode here)')
-      .setStyle(ButtonStyle.Secondary)
-  );
-  const _sdcpRows = chunkButtonsToRows(_sdcpButtons).slice(0, 5);
-  const _sdcpOwnerId = _sdcpGame[`player${_sdcpPending.defenderPlayerNum}Id`];
-  const _sdcpLabel = _sdcpCombat?.target?.label || _sdcpDcName || 'Figure';
-  if (_sdcpDestinations.length === 0) {
-    await logGameAction(_sdcpGame, client, `<@${_sdcpOwnerId}> **Self-Destruct Protocol** — **${_sdcpLabel}** has no reachable destinations within 3 MP. Click below to explode in place.`, { components: _sdcpRows, allowedMentions: { users: [_sdcpOwnerId] } });
-  } else {
-    await logGameAction(_sdcpGame, client, `<@${_sdcpOwnerId}> **Self-Destruct Protocol** — **${_sdcpLabel}** may move up to 3 spaces before exploding. Pick a destination or Stay:`, { components: _sdcpRows, allowedMentions: { users: [_sdcpOwnerId] } });
-  }
+  const _sdcpFigIdxMatch = String(_sdcpFigKey).match(/-(\d+)-(\d+)$/);
+  const _sdcpFigIdx = _sdcpFigIdxMatch ? parseInt(_sdcpFigIdxMatch[2], 10) : 0;
+  // Stamp pendingMoveX with the sdpExplode continuation BEFORE
+  // posting the picker — postMoveXPicker may auto-finish on zero
+  // legal destinations, which now routes through _finishPicker so
+  // the continuation still fires (figure stays put, explodes).
+  const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+  stampPendingMoveX(_sdcpGame, {
+    msgId: _sdcpPending.targetMsgId,
+    figureKey: _sdcpFigKey,
+    playerNum: _sdcpPending.defenderPlayerNum,
+    spaces: 3,
+    source: 'Self-Destruct Protocol',
+    threadId: null,
+    nextAction: {
+      type: 'sdpExplode',
+      payload: {
+        defenderPlayerNum: _sdcpPending.defenderPlayerNum,
+        attackerPlayerNum: _sdcpPending.attackerPlayerNum,
+        targetMsgId: _sdcpPending.targetMsgId,
+        targetFigIndex: _sdcpFigIdx,
+      },
+    },
+  });
+  await postMoveXPicker(_sdcpGame, { client, logGameAction, saveGames, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, getDiceData: ctx.getDiceData, getMapData: ctx.getMapData, processFigureDefeat: ctx.processFigureDefeat, applyDamageAndFinishCombat: ctx.applyDamageAndFinishCombat }, _sdcpPending.targetMsgId);
   saveGames(_sdcpGame.gameId);
 }
 
-export async function handleSelfDestructMovePick(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
-  const isPick = interaction.customId.startsWith('sdp_move_pick_');
-  const buttonKey = isPick ? 'sdp_move_pick_' : 'sdp_move_skip_';
-  await interaction.deferUpdate().catch(discordCatch);
-  const _suffix = parseCustomId(interaction.customId, buttonKey);
-  const _parts = _suffix.split('_');
-  const _gameId = _parts[0];
-  const _destCoord = isPick ? _parts.slice(1).join('_').toLowerCase() : null;
-  const _game = await requireGame(interaction, getGame, _gameId, { silent: true });
-  if (!_game) return;
-  const _pending = _game.pendingSelfDestructMove;
-  if (!_pending) {
-    await interaction.followUp({ content: 'No pending Self-Destruct movement.', ephemeral: true }).catch(discordCatch); return;
-  }
-  if (!await requirePlayer(interaction, _game, interaction.user.id, _pending.defenderPlayerNum, canActAsPlayer, 'Only the DC owner may pick.')) return;
-
-  const _combat = _game.pendingCombat;
-  const _figKey = _combat?.target?.figureKey;
-  const _dcLabel = _combat?.target?.label || (_figKey ? dcNameFromFigureKey(_figKey) : 'Figure');
-
-  if (isPick && _destCoord && _figKey) {
-    // Move IG-11 to the chosen destination.
-    if (!_game.figurePositions) _game.figurePositions = { 1: {}, 2: {} };
-    if (!_game.figurePositions[_pending.defenderPlayerNum]) _game.figurePositions[_pending.defenderPlayerNum] = {};
-    _game.figurePositions[_pending.defenderPlayerNum][_figKey] = _destCoord;
-    await logGameAction(_game, client, `🚶 **Self-Destruct Protocol** — **${_dcLabel}** moves to **${_destCoord.toUpperCase()}** before exploding.`, { phase: 'ROUND', icon: 'card' });
-  } else {
-    await logGameAction(_game, client, `**Self-Destruct Protocol** — **${_dcLabel}** stays in place.`, { phase: 'ROUND', icon: 'card' });
-  }
-
-  // Run the explosion at IG-11's CURRENT position (may have been updated above).
-  delete _game.pendingSelfDestructMove;
-  await _runSelfDestructExplode(_game, _pending, ctx);
-}
+// handleSelfDestructMovePick removed — destination picker is now the
+// unified Move-X picker (move_x_step_ / move_x_done_) and the
+// explosion fires from move-x-handler's `sdpExplode` continuation.
 
 // ── 5b. You Have Something I Want (Moff Gideon) ────────────────────────────
 export async function handleYHSIW(interaction, ctx) {

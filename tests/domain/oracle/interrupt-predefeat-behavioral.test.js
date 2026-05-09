@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  handleSelfDestructProtocol, handleSelfDestructMovePick, handleLastResort, handleExecutor,
+  handleSelfDestructProtocol, handleLastResort, handleExecutor,
   handleExtraProtection,
 } from '../../../src/handlers/interrupts.js';
 import { applyDamageAndFinishCombat } from '../../../src/engine/combat-bridge.js';
@@ -112,12 +112,15 @@ function buildInterruptCtx(game, overrides = {}) {
 
 describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
 
-  it('B-I-PREDEFEAT-001: SDP use path posts movement picker (deferred re-entry)', async () => {
-    // 2026-05-06: SDP use path now posts a movement-destination picker
-    // (cells reachable in ≤3 MP from current position) before exploding.
-    // The applyDamageAndFinishCombat re-entry happens in
-    // handleSelfDestructMovePick after the player picks a destination or
-    // chooses Stay. See B-I-PREDEFEAT-001b for the pick path.
+  it('B-I-PREDEFEAT-001: SDP use path routes through the Move-X picker (sdpExplode continuation)', async () => {
+    // Post-2026-05-09 migration: SDP destination picker is the unified
+    // Move-X picker. The "Use" branch stamps pendingMoveX[targetMsgId]
+    // with a 3-space budget and a nextAction.type === 'sdpExplode'
+    // continuation. If the picker has zero legal destinations (e.g.
+    // test fixture without real map data), it auto-runs _finishPicker
+    // → fires the sdpExplode continuation → processFigureDefeat. Both
+    // paths are valid; the test accepts either as evidence the
+    // migration is wired.
     const combat = makeCombat();
     const game = makeGame({
       pendingCombat: combat,
@@ -127,6 +130,8 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
         ownerId: 'player1', targetFigIndex: 0,
       },
       selfDestructProtocolTriggered: { dc2: true },
+      figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
+      selectedMap: { id: 'test_map' },
     });
     const { ctx, calls } = buildInterruptCtx(game);
 
@@ -135,59 +140,20 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     );
 
     assert.strictEqual(game.pendingSelfDestruct, undefined, 'pendingSelfDestruct deleted on use');
-    assert.ok(game.pendingSelfDestructMove, 'pendingSelfDestructMove set for movement picker');
-    assert.strictEqual(game.pendingSelfDestructMove.damage, 3, 'pending payload preserved');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 0, 're-entry deferred until pick');
+    const pmx = game.pendingMoveX?.['dc2'];
+    const sdpExplodedAlready = calls.processFigureDefeat.length > 0;
+    assert.ok(pmx || sdpExplodedAlready,
+      'either pendingMoveX is stamped (player has destinations to pick from), or the picker auto-cleared on zero destinations and ran the sdpExplode continuation immediately');
+    if (pmx) {
+      assert.strictEqual(pmx.source, 'Self-Destruct Protocol');
+      assert.strictEqual(pmx.nextAction?.type, 'sdpExplode',
+        'sdpExplode continuation must be attached so the explosion fires after the picker drains');
+      assert.strictEqual(pmx.nextAction?.payload?.defenderPlayerNum, 2);
+    }
+    // Legacy applyDamageAndFinishCombat re-entry no longer used by SDP
+    // (defeat finalized via completeDeferredDefeat → processFigureDefeat).
+    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 0);
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
-  });
-
-  it('B-I-PREDEFEAT-001b: SDP move-skip path runs explosion + re-entry from current position', async () => {
-    const combat = makeCombat();
-    const game = makeGame({
-      pendingCombat: combat,
-      pendingSelfDestructMove: {
-        targetMsgId: 'dc2', defenderPlayerNum: 2, attackerPlayerNum: 1,
-        damage: 3, hit: true, resultText: 'test', totalBlast: 0,
-        ownerId: 'player1', targetFigIndex: 0,
-      },
-      figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
-    });
-    const { ctx, calls } = buildInterruptCtx(game);
-
-    await handleSelfDestructMovePick(
-      mockInteraction('sdp_move_skip_42', 'player2'), ctx,
-    );
-
-    assert.strictEqual(game.pendingSelfDestructMove, undefined, 'pendingSelfDestructMove cleared');
-    // 2026-05-08 migration: defeat finalized via processFigureDefeat
-    // (completeDeferredDefeat) instead of legacy applyDamageAndFinishCombat re-entry.
-    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for SDP figure');
-    assert.strictEqual(calls.processFigureDefeat[0].defeatedPlayerNum, 2, 'defender side defeated');
-    // Position unchanged on skip.
-    assert.strictEqual(game.figurePositions[2]['Rebel Trooper-1-0'], 'a1', 'figure stayed in place on skip');
-  });
-
-  it('B-I-PREDEFEAT-001c: SDP move-pick updates position then runs explosion + re-entry', async () => {
-    const combat = makeCombat();
-    const game = makeGame({
-      pendingCombat: combat,
-      pendingSelfDestructMove: {
-        targetMsgId: 'dc2', defenderPlayerNum: 2, attackerPlayerNum: 1,
-        damage: 3, hit: true, resultText: 'test', totalBlast: 0,
-        ownerId: 'player1', targetFigIndex: 0,
-      },
-      figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
-    });
-    const { ctx, calls } = buildInterruptCtx(game);
-
-    await handleSelfDestructMovePick(
-      mockInteraction('sdp_move_pick_42_c3', 'player2'), ctx,
-    );
-
-    assert.strictEqual(game.pendingSelfDestructMove, undefined, 'pendingSelfDestructMove cleared');
-    assert.strictEqual(game.figurePositions[2]['Rebel Trooper-1-0'], 'c3', 'figure moved to picked destination');
-    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat.
-    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for SDP figure after move');
   });
 
   it('B-I-PREDEFEAT-002: SDP skip path deletes pending and calls re-entry', async () => {

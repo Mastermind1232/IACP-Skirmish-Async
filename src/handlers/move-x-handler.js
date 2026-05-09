@@ -43,7 +43,7 @@ import { splitCustomId } from '../discord/custom-id.js';
  * The caller must follow up with postMoveXPicker to surface the UI.
  */
 export function stampPendingMoveX(game, opts) {
-  const { msgId, figureKey, playerNum, spaces, source, threadId, bypassCosts } = opts;
+  const { msgId, figureKey, playerNum, spaces, source, threadId, bypassCosts, nextAction } = opts;
   if (!msgId || !figureKey || !playerNum || !spaces || spaces <= 0) return false;
   game.pendingMoveX = game.pendingMoveX || {};
   game.pendingMoveX[msgId] = {
@@ -58,10 +58,15 @@ export function stampPendingMoveX(game, opts) {
     // bypassCosts: false for regular MP-gain effects (Slippery, Smooth
     //   Landing, etc.) — each step consumes 1 + difficult adder + hostile
     //   adder, honoring the figure's profile (Mobile / Massive / Efficient
-    //   Travel keywords still bypass via getMovementProfile flags). The
-    //   cost-aware step calculation lands in a follow-up commit; this
-    //   field is wired through now so callers can declare intent.
+    //   Travel keywords still bypass via getMovementProfile flags).
     bypassCosts: bypassCosts !== false,
+    msgId,
+    // Optional typed continuation that fires after the picker drains
+    // (handleMoveXStep when remaining=0, handleMoveXDone, or
+    // postMoveXPicker's no-candidates auto-finish). Drives compound
+    // abilities — rollOneDieSpacePick (Mortar Launcher), sdpExplode
+    // (IG-11 Self-Destruct), etc.
+    nextAction: nextAction || null,
   };
   return true;
 }
@@ -125,6 +130,17 @@ async function _finishPicker(game, ctx, msgId) {
   if (!nextAction) return;
   if (nextAction.type === 'rollOneDieSpacePick') {
     await _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, nextAction);
+  } else if (nextAction.type === 'sdpExplode') {
+    // Self-Destruct Protocol (IG-11): roll 1 red die at the figure's
+    // current position, damage adjacents, then finalize defeat. The
+    // existing _runSelfDestructExplode owns the dice + adjacency +
+    // defeat finalization; we just hand it the payload.
+    try {
+      const { _runSelfDestructExplode } = await import('./interrupts.js');
+      await _runSelfDestructExplode(game, nextAction.payload || {}, ctx);
+    } catch (err) {
+      console.error('[move-x] sdpExplode failed:', err?.message ?? err);
+    }
   }
   // Future continuation types plug in here.
 }
@@ -706,13 +722,15 @@ export async function postMoveXPicker(game, ctx, msgId) {
     : allCandidates.filter(c => !c.passThrough || pending.remaining > (c.stepCost ?? 1));
 
   if (candidates.length === 0) {
-    // No legal destinations — close the budget and tell the player.
-    // (If the figure is mid-pass-through and stuck, this leaves them
-    // overlapping a friendly; manual resolution may be required.)
+    // No legal destinations — close the budget and run any chained
+    // continuation. (For SDP and similar "must do something even if
+    // I can't move" effects, the continuation needs to fire even
+    // when the figure has nowhere to go.) _finishPicker handles
+    // both the clear and the continuation dispatch.
     await logGameAction?.(game, client,
       `🦿 **${pending.source}** — **${pending.dcName}** has no legal destinations; remaining ${pending.remaining} space(s) discarded.`,
       { phase: 'ROUND', icon: 'attack' });
-    clearPendingMoveX(game, msgId);
+    await _finishPicker(game, ctx, msgId);
     return;
   }
 

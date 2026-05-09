@@ -100,6 +100,9 @@ const CONTEXT_GROUPS = {
 
   moveX: [
     'getGame', 'saveGames', 'client', 'logGameAction', 'dcMessageMeta',
+    // sdpExplode continuation needs the damage / dice / defeat helpers.
+    'dcHealthState', 'getDiceData', 'getMapData', 'processFigureDefeat',
+    'applyDamageAndFinishCombat',
   ],
 
   combat: COMBAT_DEPS,
