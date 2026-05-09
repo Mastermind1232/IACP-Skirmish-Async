@@ -163,8 +163,84 @@ async function _finishPicker(game, ctx, msgId) {
     await _runWhistlingBirdsRollContinuation(game, ctx, pending, nextAction);
   } else if (nextAction.type === 'headbuttRoll') {
     await _runHeadbuttRollContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'dbhForceChoke') {
+    await _runDbhForceChokeContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * [Driven by Hatred] post-move Force Choke target picker. Mirrors the
+ * Lord of the Sith Force Choke phase: presents adjacent-hostile
+ * picker computed against the figure's NEW position, applies 2 Dmg +
+ * 1 Strain on selection.
+ */
+async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
+  const { client, logGameAction, dcMessageMeta, dcHealthState } = ctx;
+  const playerNum = next.payload?.playerNum || pending.playerNum;
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const pos = game.figurePositions?.[playerNum]?.[pending.figureKey];
+  if (!pos) return;
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapData(mapId) : null;
+  const adjSet = new Set((ms?.adjacency?.[String(pos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+  const hostiles = [];
+  for (const [fk, fpos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+    if (!fpos || !adjSet.has(String(fpos).toLowerCase())) continue;
+    hostiles.push(fk);
+  }
+  if (hostiles.length === 0) {
+    await logGameAction?.(game, client, `**Driven by Hatred** — no adjacent hostile after the move; Force Choke fizzles.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  // Auto-apply when only one adjacent hostile (matches LotS phase).
+  const apply = async (targetFigureKey) => {
+    const { findMsgIdForFigureKey, syncHealthStateToList } = await import('../game/index.js').catch(() => ({}));
+    const tMsgId = typeof findMsgIdForFigureKey === 'function'
+      ? findMsgIdForFigureKey(game, oppNum, targetFigureKey, dcMessageMeta)
+      : null;
+    let dmgNote = '2 Damage + 1 Strain manually';
+    if (tMsgId && dcHealthState) {
+      const hs = dcHealthState.get(tMsgId) || [];
+      const fkM = targetFigureKey.match(/-(\d+)-(\d+)$/);
+      const fi = fkM ? parseInt(fkM[2], 10) : 0;
+      const hp = hs[fi];
+      if (hp) {
+        const [cur, max] = hp;
+        const newCur = Math.max(0, (cur ?? max) - 3);
+        hs[fi] = [newCur, max ?? newCur];
+        dcHealthState.set(tMsgId, hs);
+        if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, tMsgId, hs);
+        dmgNote = `2 Damage + 1 Strain (HP: ${cur ?? max} → ${newCur})`;
+      }
+    }
+    await logGameAction?.(game, client, `**Driven by Hatred** — Force Choke **${dcNameFromFigureKey(targetFigureKey)}**: ${dmgNote}.`, { phase: 'ROUND', icon: 'card' });
+  };
+  if (hostiles.length === 1) {
+    await apply(hostiles[0]);
+    return;
+  }
+  // Multiple adjacent → cc_choice picker; 'Driven by Hatred' isn't an
+  // ability-library entry so we synthesize a one-shot pendingCcChoice
+  // that resolves right back here through a direct ability dispatch
+  // — easiest path is to reuse Lord of the Sith Phase 3 since the
+  // damage shape is identical (2 Dmg + 1 Strain, post-move adj).
+  const ownerId = getPlayerId(game, playerNum);
+  const labels = hostiles.map(fk => `Force Choke: ${dcNameFromFigureKey(fk)}`);
+  game.pendingCcChoice = {
+    gameId: game.gameId,
+    playerNum,
+    cardName: 'Driven by Hatred',
+    abilityId: 'Lord of the Sith',
+    choiceOptions: labels,
+    choiceValues: hostiles,
+  };
+  const btns = labels.slice(0, 20).map((label) => new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_${label}`)
+    .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
+    .setStyle(ButtonStyle.Danger));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  await logGameAction?.(game, client, `<@${ownerId}> 🩸 **Driven by Hatred** — choose an adjacent hostile to Force Choke (2 Dmg + 1 Strain):`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
 }
 
 /**

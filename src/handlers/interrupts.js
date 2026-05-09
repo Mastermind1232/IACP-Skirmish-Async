@@ -918,25 +918,61 @@ export async function handleDrivenByHatred(interaction, ctx) {
 
   if (buttonKey === 'dbh_skip_') {
     await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** skipped end-of-round move + attack.`, { phase: 'ROUND', icon: 'card' });
-  } else {
-    // Grant 2 MP for movement
-    grantMovementBank(_dbhGame, _dbhMsgId, 2);
-
-    if (buttonKey === 'dbh_force_choke_') {
-      // Flag that Vader should use Force Choke after moving (manual resolution — player uses Force Choke special action button)
-      _dbhGame.drivenByHatredForceChoke = _dbhGame.drivenByHatredForceChoke || {};
-      _dbhGame.drivenByHatredForceChoke[_dbhMsgId] = true;
-      await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** gains 2 MP. After moving, use the **Force Choke** special action button.`, { phase: 'ROUND', icon: 'card' });
-    } else {
-      // dbh_attack_: Grant free attack with -1 die (remove weakest die from pool)
-      _dbhGame.drivenByHatredAttackPenalty = _dbhGame.drivenByHatredAttackPenalty || {};
-      _dbhGame.drivenByHatredAttackPenalty[_dbhMsgId] = true;
-      _dbhGame.freeAttackBonusPending = _dbhGame.freeAttackBonusPending || {};
-      _dbhGame.freeAttackBonusPending[_dbhMsgId] = true;
-      await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** gains 2 MP. After moving, use the **Attack** button (1 die will be removed from the attack pool).`, { phase: 'ROUND', icon: 'card' });
-    }
+    saveGames(_dbhGame.gameId);
+    return;
   }
-  saveGames(_dbhGame.gameId); return;
+  // 2-space Move-X picker per CRR MOVE-017 (no banking, bypassCosts
+  // true). Continuation depends on which option the player chose:
+  //   force_choke → lordOfSithChoice (auto-pre-selects choke branch)
+  //   attack      → freeAttackPrompt + per-msgId -1 die debuff
+  const _dbhFigKeys = Object.keys(_dbhGame.figurePositions?.[_dbhMeta.playerNum] || {})
+    .filter(k => k.startsWith((_dbhMeta.dcName || '') + '-'));
+  const _dbhFigKey = _dbhFigKeys[0] || null;
+  if (!_dbhFigKey) {
+    await logGameAction(_dbhGame, client, `**Driven by Hatred** — could not locate **${_dbhDisplayName}**'s figure; resolve manually.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(_dbhGame.gameId);
+    return;
+  }
+  const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+  if (buttonKey === 'dbh_force_choke_') {
+    stampPendingMoveX(_dbhGame, {
+      msgId: _dbhMsgId,
+      figureKey: _dbhFigKey,
+      playerNum: _dbhMeta.playerNum,
+      spaces: 2,
+      source: 'Driven by Hatred',
+      threadId: null,
+      bypassCosts: true,
+      // dbhForceChoke continuation posts the Force Choke target picker
+      // after the picker drains; same target/damage shape as Lord of
+      // the Sith (2 Damage + 1 Strain, adjacent hostile, post-move
+      // adjacency).
+      nextAction: { type: 'dbhForceChoke', payload: { msgId: _dbhMsgId, playerNum: _dbhMeta.playerNum } },
+    });
+    await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** moves up to 2 spaces, then resolves Force Choke on an adjacent hostile.`, { phase: 'ROUND', icon: 'card' });
+    await postMoveXPicker(_dbhGame, { client, logGameAction, saveGames }, _dbhMsgId);
+  } else {
+    // dbh_attack_: stamp picker + freeAttackPrompt + −1 die penalty.
+    _dbhGame.freeAttackBonusPending = _dbhGame.freeAttackBonusPending || {};
+    _dbhGame.freeAttackBonusPending[_dbhMsgId] = true;
+    _dbhGame.attackDicePenaltyForMsgId = _dbhGame.attackDicePenaltyForMsgId || {};
+    _dbhGame.attackDicePenaltyForMsgId[_dbhMsgId] = 1;
+    _dbhGame.attackDicePenaltyLabel = 'Driven by Hatred';
+    stampPendingMoveX(_dbhGame, {
+      msgId: _dbhMsgId,
+      figureKey: _dbhFigKey,
+      playerNum: _dbhMeta.playerNum,
+      spaces: 2,
+      source: 'Driven by Hatred',
+      threadId: null,
+      bypassCosts: true,
+      nextAction: { type: 'freeAttackPrompt', payload: { msgId: _dbhMsgId, label: 'Driven by Hatred' } },
+    });
+    await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** moves up to 2 spaces, then takes a free attack (−1 attack die).`, { phase: 'ROUND', icon: 'card' });
+    await postMoveXPicker(_dbhGame, { client, logGameAction, saveGames }, _dbhMsgId);
+  }
+  saveGames(_dbhGame.gameId);
+  return;
 }
 
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
