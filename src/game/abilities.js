@@ -6386,36 +6386,32 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: Chaotic Force — roll 1 green die, all figures on both sides suffer Strain = Accuracy
+  // Strain queues via pendingStrain[] so apply-ability-result.js routes
+  // it through applyStrain (Fireproof / Headhunter / per-strain choice /
+  // Under Duress / Paz). Each figure's controller gets their own per-
+  // strain prompt.
   if (entry.type === 'ccEffect' && entry.chaoticForceEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
-    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
     const faces = getDiceData().attack?.green || [];
     if (!faces.length) return { applied: false, manualMessage: 'Roll 1 green die manually.' };
     const face = faces[Math.floor(Math.random() * faces.length)];
     const acc = face.acc ?? 0;
     if (acc === 0) return { applied: true, logMessage: '**Chaotic Force** — Rolled 1 green die: **0 Accuracy** — no Strain applied.' };
-    const refreshIds = [];
-    const parts = [];
+    const pendingStrain = [];
+    const targetNames = [];
     for (const pn of [1, 2]) {
       for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!coord) continue;
-        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
-        if (!fMsgId) continue;
-        const hs = dcHealthState.get(fMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          hs[figIdx] = [Math.max(0, (cur ?? max) - acc), max];
-          dcHealthState.set(fMsgId, hs);
-          syncHealthStateToList(game, pn, fMsgId, hs);
-          parts.push(`${dcNameFromFigureKey(fk)}: ${cur ?? max}→${Math.max(0, (cur ?? max) - acc)}`);
-          if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
-        }
+        pendingStrain.push({ figureKey: fk, controllerPlayerNum: pn, amount: acc, source: 'Chaotic Force' });
+        targetNames.push(dcNameFromFigureKey(fk));
       }
     }
-    return { applied: true, logMessage: `**Chaotic Force** — Rolled 1 green die: **${acc} Accuracy** → ${acc} Strain to all figures.\n${parts.join(', ')}`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+    return {
+      applied: true,
+      logMessage: `**Chaotic Force** — Rolled 1 green die: **${acc} Accuracy** → ${acc} Strain to all figures (queued via applyStrain).`,
+      pendingStrain,
+    };
   }
 
   // ccEffect: Corrupting Force — roll 1 blue die, all figures on both sides suffer Damage = Hits
@@ -7083,14 +7079,25 @@ export function resolveAbility(abilityId, context) {
     game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded);
     const eff = getCcEffect(discarded);
     const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
-    game.figureStrain = game.figureStrain || {};
-    const msgId = context.msgId;
-    const strainKey = msgId ? `msg:${msgId}` : `p${playerNum}`;
-    game.figureStrain[strainKey] = (game.figureStrain[strainKey] || 0) + cost;
+    // Self-strain via pendingStrain[] (queues through applyStrain so
+    // Fireproof / Headhunter / per-strain choice / Under Duress / Paz
+    // gate correctly on the activating SPY).
+    const _ilDcMessageMeta = context.dcMessageMeta;
+    const _ilActMsgId = _ilDcMessageMeta ? findActiveActivationMsgId(game, playerNum, _ilDcMessageMeta) : null;
+    const _ilActMeta = _ilActMsgId ? _ilDcMessageMeta.get(_ilActMsgId) : null;
+    const _ilActKeys = _ilActMeta ? getFigureKeysForDcMsg(game, playerNum, _ilActMeta) : [];
+    const _ilSelfFk = _ilActKeys[0] || null;
+    const _ilPendingStrain = (cost > 0 && _ilSelfFk) ? [{
+      figureKey: _ilSelfFk,
+      controllerPlayerNum: playerNum,
+      amount: cost,
+      source: 'Intelligence Leak',
+    }] : [];
     return {
       applied: true,
-      logMessage: `Discarded **${discarded}** from opponent's hand; you suffer ${cost} Strain.`,
+      logMessage: `Discarded **${discarded}** from opponent's hand; you suffer ${cost} Strain (queued).`,
       refreshOpponentHand: true,
+      ...(_ilPendingStrain.length ? { pendingStrain: _ilPendingStrain } : {}),
     };
   }
 
@@ -8222,30 +8229,16 @@ export function resolveAbility(abilityId, context) {
         ],
       };
     }
-    const applyStrain = choiceIndex === 0;
+    // choiceIndex 0 = strain branch (queue via applyStrain pipeline);
+    // choiceIndex 1 = weaken branch (synchronous condition apply).
+    const isStrainBranch = choiceIndex === 0;
     const results = [];
+    const pendingStrain = [];
     for (const fk of hostiles) {
       const dcName = dcNameFromFigureKey(fk);
-      if (applyStrain) {
-        const figMsgId = dcHealthState ? findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta) : null;
-        if (figMsgId && dcHealthState) {
-          const hs = dcHealthState.get(figMsgId) || [];
-          const figMatch = fk.match(/-(\d+)-(\d+)$/);
-          const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-          const hp = hs[figIdx];
-          if (hp) {
-            const [cur, max] = hp;
-            const newCur = Math.max(0, (cur ?? max) - 2);
-            hs[figIdx] = [newCur, max ?? newCur];
-            dcHealthState.set(figMsgId, hs);
-            syncHealthStateToList(game, oppNum, figMsgId, hs);
-            results.push(`**${dcName}** 2 Strain (${cur ?? max}→${newCur})`);
-          } else {
-            results.push(`**${dcName}** 2 Strain (apply manually)`);
-          }
-        } else {
-          results.push(`**${dcName}** 2 Strain (apply manually)`);
-        }
+      if (isStrainBranch) {
+        pendingStrain.push({ figureKey: fk, controllerPlayerNum: oppNum, amount: 2, source: 'Static Pulse' });
+        results.push(`**${dcName}** 2 Strain (queued)`);
       } else {
         if (isConditionImmune(game, fk)) {
           results.push(`**${dcName}** immune to Weaken`);
@@ -8255,7 +8248,12 @@ export function resolveAbility(abilityId, context) {
         }
       }
     }
-    return { applied: true, logMessage: `**Static Pulse** — ${results.join(', ')}.`, refreshDcEmbed: true };
+    return {
+      applied: true,
+      logMessage: `**Static Pulse** — ${results.join(', ')}.`,
+      refreshDcEmbed: true,
+      ...(pendingStrain.length ? { pendingStrain } : {}),
+    };
   }
 
   // ccEffect: terminalProtocolEffect (Terminal Protocol) — roll 1 green die, adjacent figures suffer Damage = result, self is defeated
@@ -8798,34 +8796,40 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: overheatedEffect (Overheated) — Strain 4; override next attack(s) to Melee; 2 total attacks if originally Ranged
+  // Self-strain via pendingStrainCost so apply-ability-result.js routes
+  // it through applyStrain (Fireproof / Headhunter / per-strain choice /
+  // Under Duress / Paz). Strain fires BEFORE the attack queue is set up
+  // — the existing attack-override / freeAttackBonusPending flags still
+  // get stamped synchronously so the multi-attack chain happens after
+  // strain resolves.
   if (entry.type === 'ccEffect' && entry.overheatedEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Apply 4 Strain to activating figure
-    let strainNote = '4 Strain applied manually (HP not found)';
-    if (dcHealthState) {
-      const actData = game.dcActionsData?.[msgId];
-      const figIdx = actData?.selectedFigure ?? 0;
-      const hs = dcHealthState.get(msgId) || [];
-      if (hs[figIdx]) {
-        const [cur, max] = hs[figIdx];
-        const newCur = Math.max(0, (cur ?? max) - 4);
-        hs[figIdx] = [newCur, max ?? newCur];
-        dcHealthState.set(msgId, hs);
-        syncHealthStateToList(game, playerNum, msgId, hs);
-        strainNote = `4 Strain (HP: ${cur ?? max}→${newCur})`;
-      }
-    }
+    const actData = game.dcActionsData?.[msgId];
+    const figIdx = actData?.selectedFigure ?? 0;
+    const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIndex = dgMatch ? dgMatch[1] : '1';
+    const selfFk = `${meta.dcName}-${dgIndex}-${figIdx}`;
     // Override next attack to melee (with -1 Hit); grant 1 free attack (for 2 total)
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { type: 'melee', bonusHits: -1 };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[msgId] = true;
-    return { applied: true, logMessage: `**Overheated** — **${meta.dcName}**: ${strainNote}. 2 Melee attacks queued; −1 Hit applied automatically per attack.`, refreshDcEmbed: true };
+    return {
+      applied: true,
+      logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Melee attacks queued; −1 Hit applied automatically per attack.`,
+      refreshDcEmbed: true,
+      pendingStrainCost: {
+        figureKey: selfFk,
+        controllerPlayerNum: playerNum,
+        amount: 4,
+        source: 'Overheated',
+      },
+    };
   }
 
   // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors
