@@ -3591,8 +3591,34 @@ export function resolveAbility(abilityId, context) {
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const n = entry.mpBonus;
-    addMovementPoints(game, msgId, n);
-    const mpNote = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    let _swPmxMsgId = null;
+    let mpNote = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
+    if (entry.isMoveX) {
+      const meta = dcMessageMeta?.get?.(msgId);
+      const _swFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+      const _swSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _swFigureKey = _swFigKeys[_swSelectedIdx] || _swFigKeys[0] || null;
+      if (_swFigureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: n,
+          source: cardLabel,
+          playerNum,
+          figureKey: _swFigureKey,
+          dcName: meta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: null,
+        };
+        _swPmxMsgId = msgId;
+        mpNote = `May move up to ${n} space${n !== 1 ? 's' : ''} (no bank).`;
+      }
+    }
+    if (!_swPmxMsgId) {
+      addMovementPoints(game, msgId, n);
+    }
 
     // Attempt to swap the combat target to the activating figure
     const combat = game.pendingCombat || game.combat;
@@ -3713,12 +3739,12 @@ export function resolveAbility(abilityId, context) {
       if (cancelledEffects.length > 0) {
         const cancelNote = ` Cancelled prior defender CC effects: ${cancelledEffects.join(', ')}.`;
         const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}${cancelNote}`;
-        return { applied: true, logMessage: swapLog, refreshMovementBank: true, activeMsgId: msgId };
+        return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
       }
     }
 
     const swapLog = `${mpNote} **${cardLabel}** — Attack target swapped from **${originalLabel}** to **${swapperLabel}**.${adjacencyNote}`;
-    return { applied: true, logMessage: swapLog, refreshMovementBank: true, activeMsgId: msgId };
+    return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
   }
 
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)

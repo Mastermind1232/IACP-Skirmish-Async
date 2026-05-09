@@ -2254,11 +2254,12 @@
     },
     "Get Behind Me!": {
       "type": "ccEffect",
-      "label": "Gain 3 MP; attack targets you instead of friendly",
+      "label": "Move up to 3 spaces; attack targets you instead of friendly",
       "mpBonus": 3,
+      "isMoveX": true,
       "attackTargetSwap": true,
       "getsBehindMe": true,
-      "logMessage": "Gained **3 MP**. Move into position; the incoming attack targets you instead. Inform your opponent, then proceed with you as the target.",
+      "logMessage": "May move up to 3 spaces (no bank). Move into position; the incoming attack targets you instead.",
       "wiredStatus": "wired"
     },
     "get_down_onar": {
