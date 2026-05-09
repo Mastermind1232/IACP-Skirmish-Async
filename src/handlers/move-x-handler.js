@@ -157,8 +157,40 @@ async function _finishPicker(game, ctx, msgId) {
     await _runLordOfSithChoiceContinuation(game, ctx, pending);
   } else if (nextAction.type === 'cahTargetPick') {
     await _runCahTargetPickContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'grantPowerToken') {
+    await _runGrantPowerTokenContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Power-token grant continuation. Used when a Move-X ability also
+ * grants a Power Token (Looking for a Fight). After the picker drains,
+ * sets pendingPowerTokenGrant + posts the token-type prompt so the
+ * player picks Block / Evade / Damage / Surge.
+ */
+async function _runGrantPowerTokenContinuation(game, ctx, pending, next) {
+  const payload = next.payload || {};
+  const grantFigureKey = payload.figureKey || pending.figureKey;
+  const playerNum = payload.playerNum || pending.playerNum;
+  const count = payload.count || 1;
+  if (!grantFigureKey || !playerNum) return;
+  game.pendingPowerTokenGrant = {
+    grants: [{ figureKey: grantFigureKey, figName: dcNameFromFigureKey(grantFigureKey), count }],
+    channelId: null,
+    playerNum,
+  };
+  try {
+    const { client } = ctx;
+    const thread = await fetchCombatThread(client, game).catch(() => null);
+    if (thread) {
+      game.pendingPowerTokenGrant.channelId = thread.id;
+      const { sendPowerTokenChoicePrompt } = await import('./combat.js');
+      await sendPowerTokenChoicePrompt(thread, game.gameId, game.pendingPowerTokenGrant.grants);
+    }
+  } catch (err) {
+    console.error('[move-x] grantPowerToken continuation failed:', err?.message ?? err);
+  }
 }
 
 /**

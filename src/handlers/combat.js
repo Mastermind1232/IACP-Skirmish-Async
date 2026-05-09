@@ -4995,7 +4995,7 @@ function applyTokenBonus(combat, type, isAttacker, opts = {}) {
 }
 
 /** Send a 4-button prompt asking the player to choose a power token type (Hit/Surge/Block/Evade) */
-async function sendPowerTokenChoicePrompt(thread, gameId, grants) {
+export async function sendPowerTokenChoicePrompt(thread, gameId, grants) {
   const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
   const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
   const countLabel = totalCount > 1 ? `${totalCount} tokens` : '1 token';

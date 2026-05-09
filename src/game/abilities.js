@@ -8594,15 +8594,33 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: _lffLogMsg, refreshBoard: true, requiresPowerTokenChoice: !!lffTokenFk };
     }
-    // Phase 2a: Move 2 spaces
+    // Phase 2a: Move 2 spaces — pendingMoveX picker per CRR MOVE-017,
+    // with a grantPowerToken continuation so the deferred Power Token
+    // grant prompt fires AFTER the move completes (matching the prior
+    // ordering: Move first, then token-type pick).
     if (chosenFigureKey === 'move2') {
-      addMovementPoints(game, msgId, 2);
       const lffTokenFk = game._lffPendingTokenFigureKey;
       delete game._lffPendingTokenFigureKey;
-      if (lffTokenFk) {
-        game.pendingPowerTokenGrant = { grants: [{ figureKey: lffTokenFk, figName: dcNameFromFigureKey(lffTokenFk), count: 1 }], channelId: null, playerNum };
-      }
-      return { applied: true, logMessage: `**Looking for a Fight** — Chose to move 2 spaces.`, refreshMovementBank: true, activeMsgId: msgId, requiresPowerTokenChoice: !!lffTokenFk };
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: 2,
+        source: 'Looking for a Fight',
+        playerNum,
+        figureKey: activatorFk,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: lffTokenFk
+          ? { type: 'grantPowerToken', payload: { figureKey: lffTokenFk, playerNum, count: 1 } }
+          : null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+        logMessage: `**Looking for a Fight** — Chose to move 2 spaces.${lffTokenFk ? ' Power Token prompt will follow the move.' : ''}`,
+      };
     }
     // Phase 2b: Push hostile — find spaces adjacent to the chosen hostile
     if (chosenFigureKey && chosenFigureKey !== 'move2' && !chosenSpace) {
