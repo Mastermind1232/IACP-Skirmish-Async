@@ -9179,15 +9179,51 @@ export function resolveAbility(abilityId, context) {
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       return { applied: true, logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`, refreshDcEmbed: !!figMsgId };
     }
-    // Grant 2 MP to Vader
-    addMovementPoints(game, msgId, 2);
     if (choiceIndex !== undefined && choiceIndex !== null) {
       if (choiceIndex === 1) {
-        // Free melee attack
+        // Free Melee attack — Vader moves up to 2 spaces first, then
+        // gets the "Declare Attack" prompt via freeAttackPrompt.
+        // Move-X via pendingMoveX (no bank, remainder discarded).
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[msgId] = true;
-        return { applied: true, logMessage: '**Lord of the Sith** — Darth Vader moves up to 2 spaces (MP added). Free Melee attack granted — use the Attack button.' };
+        const meta = dcMessageMeta?.get?.(msgId);
+        const _losFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+          .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+        const _losSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const _losFigureKey = _losFigKeys[_losSelectedIdx] || _losFigKeys[0] || null;
+        if (!_losFigureKey) {
+          return { applied: false, manualMessage: '**Lord of the Sith** — could not locate the activating figure; resolve manually.' };
+        }
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: 2,
+          source: 'Lord of the Sith',
+          playerNum,
+          figureKey: _losFigureKey,
+          dcName: meta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: {
+              msgId, playerNum, figureKey: _losFigureKey,
+              sourceLabel: 'Lord of the Sith',
+            },
+          },
+        };
+        return {
+          applied: true,
+          pendingMoveXMsgId: msgId,
+          activeMsgId: msgId,
+          logMessage: '**Lord of the Sith** — Darth Vader may move up to 2 spaces, then take a free Melee attack.',
+        };
       }
+      // Force Choke path: 2 MP gained as bank (pre-Move-X behavior
+      // preserved — target picker computes adjacents from current
+      // position; migrating Force Choke to post-move target pick
+      // requires a new continuation type and is deferred).
+      addMovementPoints(game, msgId, 2);
       // Force Choke: pick adjacent hostile
       const meta = dcMessageMeta.get(msgId);
       const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
