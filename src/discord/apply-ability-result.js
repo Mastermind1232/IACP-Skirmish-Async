@@ -232,6 +232,38 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // Granted Move-X button: companion to grantedAttackButton for cards
+  // (Executive Order, etc.) that also offer the grantee a free move.
+  // Posts in the source's activation thread alongside the attack
+  // button; clicking stamps pendingMoveX on the grantee with
+  // bypassCosts: false so the picker honors terrain/figure adders.
+  if (result.applied && result.grantedMoveXButton) {
+    const gmx = result.grantedMoveXButton;
+    if (gmx.granteeMsgId && gmx.granteeFigureKey && msgId) {
+      try {
+        const _gmxModule = await import('discord.js');
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = _gmxModule;
+        const _gmxBtn = new ButtonBuilder()
+          .setCustomId(`granted_move_x_${game.gameId}_${gmx.granteeMsgId}_${gmx.spaces}`)
+          .setLabel(`Move (up to ${gmx.spaces} MP) — ${gmx.granteeName || 'grantee'}`)
+          .setStyle(ButtonStyle.Success);
+        const _gmxRow = new ActionRowBuilder().addComponents(_gmxBtn);
+        const data = game.dcActionsData?.[msgId];
+        if (data?.threadId) {
+          const thread = await fetchGameChannel(client, data.threadId);
+          if (thread) {
+            await withDiscordRetry(() => thread.send({
+              content: enforceContentLimit(`\u{1F9BF} **${gmx.sourceLabel || 'Granted Move'}** — click below to take a free move with **${gmx.granteeName || 'the grantee'}** (up to ${gmx.spaces} MP, no bank, remainder discarded).`),
+              components: [_gmxRow],
+            })).catch(discordCatch);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to post granted-move-x button:', err);
+      }
+    }
+  }
+
   // --- Post condition card images to game log ---
   if (result.applied && result.conditionCardsToPost?.length && getConditionCardPath && logGameAction) {
     const seen = new Set();

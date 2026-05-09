@@ -1034,10 +1034,18 @@ export function resolveAbility(abilityId, context) {
         setPendingExecutiveOrder(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
+      // The "move" branch grants the chosen figure a full move = speed
+      // MP (rule 2 — special-action MP gain, no bank). Per the gain-MP
+      // audit, the move side now uses the unified pendingMoveX picker.
+      const chosenSpeed = getStatsForDc(chosenName)?.speed ?? 4;
       return {
         applied: true,
-        logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move or attack (no action cost).`,
+        logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move (up to ${chosenSpeed} MP) or attack.`,
         grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Executive Order' } : null,
+        grantedMoveXButton: chosenMsgId ? {
+          granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName,
+          sourceLabel: 'Executive Order', spaces: chosenSpeed, playerNum,
+        } : null,
       };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -3239,12 +3247,39 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
+    // Rule 2 (special-action MP gain — Urgency etc.): route through
+    // pendingMoveX so the player spends MP immediately, no bank. The
+    // player MAY choose to spend less than all granted MP — clicking
+    // "Stop (discard remaining)" discards the leftover (Urgency does
+    // NOT force you to spend every MP, it only forbids banking).
+    // Other cards in this dispatch (On the Lam etc.) lack the data
+    // flag and still bank — those are rule-3 in-activation gains.
+    if (entry.mustSpendAll) {
+      const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+        .filter(k => k.startsWith(meta.dcName + '-'));
+      const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const figureKey = figureKeys[selectedIdx] || figureKeys[0] || null;
+      if (figureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: n, source: entry.label || 'Urgency',
+          playerNum: meta.playerNum, figureKey, dcName: meta.dcName,
+          threadId: null, bypassCosts: false, msgId,
+        };
+        const msg = `**${entry.label || 'Urgency'}** — gains ${n} MP (spend immediately, no bank; remainder discarded).`;
+        return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
+      }
+    }
     addMovementPoints(game, msgId, n);
     // C4: On the Lam — flag for post-move LOS recheck (attack misses if target moves out of LOS)
     if (context.cardName === 'On the Lam' && game.pendingCombat) {
       game.onTheLamActive = true;
     }
-    // C77: Urgency requires all MP to be spent at once
+    // Bank fallback path (only reached if pendingMoveX couldn't resolve
+    // an active figureKey — typically test fixtures without
+    // figurePositions). Preserve the legacy "must spend all at once"
+    // suffix for mustSpendAll cards so the urgencyMustSpendAll gate in
+    // handleMoveMp still applies under the fallback.
     if (entry.mustSpendAll) {
       game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
       game.urgencyMustSpendAll[msgId] = true;

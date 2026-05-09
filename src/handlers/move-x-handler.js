@@ -263,6 +263,44 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
   console.warn(`[move-x] unknown sequence afterAction type "${afterAction.type}"; dropping`);
 }
 
+/**
+ * Granted Move-X handler — customId: granted_move_x_${gameId}_${granteeMsgId}_${spaces}
+ * Posted by apply-ability-result for cards that grant a free move
+ * (Executive Order, etc.). Clicking it stamps pendingMoveX on the
+ * grantee with bypassCosts: false (rule 2 — special-action MP gain)
+ * and posts the picker in the grantee's flow.
+ */
+export async function handleGrantedMoveX(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, dcMessageMeta } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const parts = splitCustomId(interaction.customId, 'granted_move_x_');
+  if (parts.length < 3) return;
+  const [gameId, granteeMsgId, spacesStr] = parts;
+  const spaces = parseInt(spacesStr, 10);
+  if (!Number.isFinite(spaces) || spaces <= 0) return;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta?.get?.(granteeMsgId);
+  if (!meta) return;
+  const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+    .filter(k => k.startsWith(meta.dcName + '-'));
+  const figureKey = figureKeys[0];
+  if (!figureKey) {
+    await interaction.followUp({ content: 'Grantee has no deployed figure.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the grantee\'s controller can take the free move.')) return;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  // Clear any pendingExecutiveOrder gate (the move side resolves it).
+  if (game.pendingExecutiveOrder?.forMsgId === granteeMsgId) {
+    delete game.pendingExecutiveOrder;
+  }
+  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+    msgId: granteeMsgId, figureKey, playerNum: meta.playerNum,
+    spaces, source: 'Executive Order', threadId: null, bypassCosts: false,
+  });
+}
+
 /** Order-pick handler — customId: move_x_seq_pick_${gameId}_${figureKey}
  *  Player picks which figure resolves their MP gain next. */
 export async function handleMoveXSeqPick(interaction, ctx) {

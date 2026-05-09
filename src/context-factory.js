@@ -99,7 +99,7 @@ const CONTEXT_GROUPS = {
   ],
 
   moveX: [
-    'getGame', 'saveGames', 'client', 'logGameAction',
+    'getGame', 'saveGames', 'client', 'logGameAction', 'dcMessageMeta',
   ],
 
   combat: COMBAT_DEPS,
