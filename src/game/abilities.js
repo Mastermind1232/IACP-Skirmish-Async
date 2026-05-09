@@ -3830,6 +3830,88 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
   }
 
+  // ccEffect: advanceWarningEffect (Advance Warning) — activator + an
+  // adjacent friendly figure each gain 1 MP. Activator banks (rule 3,
+  // in-activation grant on activator); chosen adjacent friendly gets
+  // a 1-space picker (rule 1, out-of-activation grant on another
+  // figure; bypassCosts: false).
+  if (entry.type === 'ccEffect' && entry.advanceWarningEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const activeMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!activeMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const activeMeta = dcMessageMeta.get(activeMsgId);
+    const activeKeys = getFigureKeysForDcMsg(game, playerNum, activeMeta);
+    const selectedFig = game.dcActionsData?.[activeMsgId]?.selectedFigure ?? 0;
+    const activeFigKey = activeKeys[selectedFig] || activeKeys[0];
+    const activePos = activeFigKey ? game.figurePositions?.[playerNum]?.[activeFigKey] : null;
+    if (!activePos) return { applied: false, manualMessage: 'Resolve manually: activated figure has no position.' };
+    // Phase 2: chosen friendly → bank activator + picker on chosen.
+    if (chosenFigureKey) {
+      const recipMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      // Activator banks 1 MP.
+      addMovementPoints(game, activeMsgId, 1);
+      if (!recipMsgId) {
+        return {
+          applied: true,
+          logMessage: `**Advance Warning** — Activator banks 1 MP. Chosen friendly (${dcNameFromFigureKey(chosenFigureKey)}) — could not locate play area; resolve their 1 MP manually.`,
+          refreshMovementBank: true,
+          activeMsgId,
+        };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[recipMsgId] = {
+        remaining: 1,
+        source: 'Advance Warning',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName: dcNameFromFigureKey(chosenFigureKey),
+        threadId: null,
+        bypassCosts: false,
+        msgId: recipMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: recipMsgId,
+        activeMsgId,
+        logMessage: `**Advance Warning** — Activator banks **1 MP**. **${dcNameFromFigureKey(chosenFigureKey)}** gains **1 MP** — spend at once, no bank.`,
+        refreshMovementBank: true,
+      };
+    }
+    // Phase 1: enumerate adjacent friendly figures.
+    const mapId = game.selectedMap?.id;
+    const ms = mapId ? getMapData(mapId) : null;
+    const adjSet = new Set((ms?.adjacency?.[String(activePos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+    const adjFriendlyKeys = [];
+    const adjFriendlyLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos || fk === activeFigKey) continue;
+      if (!adjSet.has(String(pos).toLowerCase())) continue;
+      adjFriendlyKeys.push(fk);
+      adjFriendlyLabels.push(dcNameFromFigureKey(fk));
+    }
+    if (adjFriendlyKeys.length === 0) {
+      // No adjacent friendly — activator still banks 1 MP per the
+      // "you and an adjacent friendly each" wording (player keeps
+      // their share even if no recipient is in range).
+      addMovementPoints(game, activeMsgId, 1);
+      return {
+        applied: true,
+        logMessage: `**Advance Warning** — Activator banks **1 MP**. No adjacent friendly to receive the second MP.`,
+        refreshMovementBank: true,
+        activeMsgId,
+      };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: adjFriendlyLabels.map(n => `MP recipient: ${n}`),
+      choiceValues: adjFriendlyKeys,
+      manualMessage: '**Advance Warning** — Choose an adjacent friendly figure to share the 1 MP with.',
+    };
+  }
+
   // ccEffect: kuilSplitMode (the "Kuiil-defeated alt path" CC).
   // Canonical text on the card:
   //   move-up-to-6-spaces is the live path while your Kuiil is in play.
@@ -7627,7 +7709,12 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
   }
 
-  // ccEffect: grantMpToFriendliesWithin2 (Forward March) — grant N MP to each friendly DC within 2 spaces of activated figure
+  // ccEffect: grantMpToFriendliesWithin2 (Forward March) — activator
+  // and each friendly figure within 2 spaces gain N MP. Mixed bank/
+  // picker by recipient: activator banks (rule 3, in-activation),
+  // others get picker (rule 1, out-of-activation grant on another
+  // figure). Multi-figure sequence with player-chosen order for the
+  // non-activator pickers.
   if (entry.type === 'ccEffect' && typeof entry.grantMpToFriendliesWithin2 === 'number' && entry.grantMpToFriendliesWithin2 > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -7640,34 +7727,41 @@ export function resolveAbility(abilityId, context) {
     const activePos = activeFigKey ? game.figurePositions?.[playerNum]?.[activeFigKey] : null;
     if (!activePos) return { applied: false, manualMessage: 'Resolve manually: activated figure has no position.' };
     const n = entry.grantMpToFriendliesWithin2;
-    const grantedNames = [];
-    game.pendingMpBonus = game.pendingMpBonus || {};
+    // Activator banks immediately (rule 3).
+    addMovementPoints(game, activeMsgId, n);
+    // Build sequence of OTHER friendlies within 2 (graph distance).
+    const seqFigures = [];
     for (const [mid, meta] of dcMessageMeta) {
       if (meta.playerNum !== playerNum || meta.gameId !== game.gameId || mid === activeMsgId) continue;
       const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-      let anyWithin = false;
       for (const fk of figKeys) {
         const pos = game.figurePositions?.[playerNum]?.[fk];
         if (!pos) continue;
-        try {
-          const pa = parseCoord(activePos);
-          const pb = parseCoord(pos);
-          if (Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row) <= 2) { anyWithin = true; break; }
-        } catch { continue; }
+        if (countGameSpaces(game, activePos, pos) > 2) continue;
+        seqFigures.push({ msgId: mid, figureKey: fk, playerNum, spaces: n, dcName: meta.dcName });
       }
-      if (!anyWithin) continue;
-      // If already activated (bank exists and has a thread), add directly; otherwise store as pending
-      const existingBank = game.movementBank?.[mid];
-      if (existingBank?.threadId) {
-        existingBank.total = (existingBank.total || 0) + n;
-        existingBank.remaining = (existingBank.remaining || 0) + n;
-      } else {
-        game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + n;
-      }
-      grantedNames.push(meta.displayName || meta.dcName);
     }
-    if (grantedNames.length === 0) return { applied: true, logMessage: `**Forward March** — No other friendly figures within 2 spaces.` };
-    return { applied: true, logMessage: `**Forward March** — Granted +${n} MP to **${grantedNames.length}** friendly figure(s): ${grantedNames.join(', ')}.`, refreshMovementBank: true };
+    if (seqFigures.length === 0) {
+      return {
+        applied: true,
+        logMessage: `**Forward March** — Activator gains ${n} MP. No other friendly figures within 2 spaces.`,
+        refreshMovementBank: true,
+        activeMsgId,
+      };
+    }
+    return {
+      applied: true,
+      pendingMoveXSequenceSetup: {
+        figures: seqFigures,
+        source: 'Forward March',
+        threadId: null,
+        bypassCosts: false,
+        afterAction: null,
+      },
+      logMessage: `**Forward March** — Activator gains ${n} MP (banked). ${seqFigures.length} other friendly figure(s) within 2 spaces each gain ${n} MP — pick order; spend at once, no bank.`,
+      refreshMovementBank: true,
+      activeMsgId,
+    };
   }
 
   // ccEffect: grantMpToFriendliesByKeyword (Close the Gap) — Move-X

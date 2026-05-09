@@ -333,17 +333,22 @@ test('resolveAbility Blitz during surge step adds to surgeRemaining', () => {
   assert.strictEqual(combat.surgeRemaining, 3);
 });
 
-test('resolveAbility Advance Warning (cc:advance_warning) with active activation applies +2 MP', () => {
+test('resolveAbility Advance Warning — no adj friendly: activator banks 1 MP, no chooser', () => {
+  // Migration 2026-05-09: Advance Warning routes through a custom
+  // dispatch (advanceWarningEffect). When no adjacent friendly is in
+  // range, the activator banks their share and the second MP is
+  // skipped (no recipient).
   const msgId = 'msg-aw';
   const game = {
     gameId: 'g-aw',
-    dcActionsData: { [msgId]: {} },
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
     movementBank: {},
+    figurePositions: { 1: { 'C-3PO-1-0': 'a1' }, 2: {} },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-aw', playerNum: 1, dcName: 'C-3PO', displayName: 'C-3PO [Group 1]' }]]);
   const result = resolveAbility('cc:advance_warning', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
+  assert.match(result.logMessage, /Activator banks/);
 });
 
 test('resolveAbility Rally discards HARMFUL conditions from activating figures', () => {

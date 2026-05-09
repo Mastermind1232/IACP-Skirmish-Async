@@ -28,7 +28,7 @@ const BATCH = [
   ['Capture the Weary',    ['chooseAdjacentHostileThen']],
   ['Cavalry Charge',       ['roundDefenseBonusBlock', 'trooperRoundAttackHitBonus']],
   ['cc:adrenaline',        ['timing', 'adrenalineEffect']],
-  ['cc:advance_warning',   ['mpBonus']],
+  ['cc:advance_warning',   ['advanceWarningEffect']],
   ['cc:dioxis_fumes',      ['dioxisFumesEffect']],
   ['cc:fleet_footed',      ['mpBonus']],
   ['Celebration',          ['celebrationVp']],

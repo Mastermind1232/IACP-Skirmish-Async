@@ -640,7 +640,7 @@
     "cc:advance_warning": {
       "type": "ccEffect",
       "label": "You and an adjacent friendly figure each gain 1 movement point",
-      "mpBonus": 2,
+      "advanceWarningEffect": true,
       "wiredStatus": "wired"
     },
     "cc:against_the_odds": {
