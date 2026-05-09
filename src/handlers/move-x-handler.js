@@ -199,7 +199,7 @@ async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
     const tMsgId = typeof findMsgIdForFigureKey === 'function'
       ? findMsgIdForFigureKey(game, oppNum, targetFigureKey, dcMessageMeta)
       : null;
-    let dmgNote = '2 Damage + 1 Strain manually';
+    let dmgNote = '2 Damage manually';
     if (tMsgId && dcHealthState) {
       const hs = dcHealthState.get(tMsgId) || [];
       const fkM = targetFigureKey.match(/-(\d+)-(\d+)$/);
@@ -207,13 +207,23 @@ async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
       const hp = hs[fi];
       if (hp) {
         const [cur, max] = hp;
-        const newCur = Math.max(0, (cur ?? max) - 3);
+        // Damage applies sync; strain via applyStrain pipeline below.
+        const newCur = Math.max(0, (cur ?? max) - 2);
         hs[fi] = [newCur, max ?? newCur];
         dcHealthState.set(tMsgId, hs);
         if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, tMsgId, hs);
-        dmgNote = `2 Damage + 1 Strain (HP: ${cur ?? max} → ${newCur})`;
+        dmgNote = `2 Damage (HP: ${cur ?? max} → ${newCur}) + 1 Strain (queued)`;
       }
     }
+    // Route 1 Strain through applyStrain (Fireproof / Headhunter / per-
+    // strain choice / Under Duress / Paz).
+    const { applyStrain } = await import('./strain-handler.js');
+    await applyStrain(game, ctx, {
+      figureKey: targetFigureKey,
+      controllerPlayerNum: oppNum,
+      amount: 1,
+      source: 'Driven by Hatred — Force Choke',
+    });
     await logGameAction?.(game, client, `**Driven by Hatred** — Force Choke **${dcNameFromFigureKey(targetFigureKey)}**: ${dmgNote}.`, { phase: 'ROUND', icon: 'card' });
   };
   if (hostiles.length === 1) {

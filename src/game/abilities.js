@@ -363,12 +363,27 @@ export function resolveAbility(abilityId, context) {
         const _warnList = _pushWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _pushLogMsg += `\n⚠️ Exits adjacency to: ${_warnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      // Strain cost (deferred from Phase 1 — see comment there) queued
+      // via pendingStrainCost so applyStrain pipeline routes it.
+      let _ptwrPhase3StrainPayload = null;
+      if (entry.strainCostToSelf > 0 && meta?.dcName) {
+        const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIdx = dgM ? dgM[1] : '1';
+        const _ptwrSelectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        _ptwrPhase3StrainPayload = {
+          figureKey: `${meta.dcName}-${dgIdx}-${_ptwrSelectedFig}`,
+          controllerPlayerNum: playerNum,
+          amount: entry.strainCostToSelf,
+          source: `${entry.label || 'ability'} cost`,
+        };
+      }
       return {
         applied: true,
         logMessage: _pushLogMsg,
         refreshBoard: true,
         refreshMovementBank: !!entry.mpCostToActivate,
         activeMsgId: msgId,
+        ...(_ptwrPhase3StrainPayload ? { pendingStrainCost: _ptwrPhase3StrainPayload } : {}),
       };
     }
 
@@ -444,41 +459,19 @@ export function resolveAbility(abilityId, context) {
       validTargets.push(fk);
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: `**${label}** — no valid SMALL targets in range. Resolve manually if applicable.` };
-    // Deduct strain cost on activation (paid when ability is triggered, not when target is resolved)
-    let strainApplied = false;
-    // Slice 6.13 ext: track self-defeat from strain (rare; self-damage paths
-    // may need defeat-trigger firing too — Adrenaline-style abilities).
-    const _strainCostDefeated = [];
-    if (entry.strainCostToSelf > 0 && dcHealthState && msgId) {
-      const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const healthState = dcHealthState.get(msgId) || [];
-      if (healthState[selectedFig]) {
-        const [cur, max] = healthState[selectedFig];
-        const prevCur = cur ?? max;
-        const newCur = Math.max(0, prevCur - entry.strainCostToSelf);
-        healthState[selectedFig] = [newCur, max ?? newCur];
-        dcHealthState.set(msgId, healthState);
-        syncHealthStateToList(game, playerNum, msgId, healthState);
-        strainApplied = true;
-        if (newCur <= 0 && prevCur > 0 && meta?.dcName) {
-          const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-          const dgIdx = dgM ? dgM[1] : '1';
-          _strainCostDefeated.push({
-            figureKey: `${meta.dcName}-${dgIdx}-${selectedFig}`,
-            defeatedPlayerNum: playerNum,
-            attackerPlayerNum: null, // self-inflicted: VP not awarded (per defeat-handler awardVp default)
-            source: `${entry.label || 'ability'} strain cost`,
-          });
-        }
-      }
-    }
+    // Strain cost: deferred to AFTER target pick. The Phase 3 branch
+    // (targetFigureKey + chosenSpace set) reads entry.strainCostToSelf
+    // and queues it via pendingStrainCost there so the canonical
+    // applyStrain pipeline routes it (Fireproof / Headhunter / per-
+    // strain choice / Under Duress / Paz). Strictly per CRR cost-first
+    // would prefer pre-pick, but the pipeline doesn't compose with a
+    // synchronous requiresChoice; deferring is the smallest correct
+    // alternative.
     return {
       applied: false,
       requiresChoice: true,
       choiceOptions: figureChoiceLabels(validTargets),
       targetFigureKeys: validTargets,
-      refreshDcEmbed: strainApplied,
-      ...(_strainCostDefeated.length > 0 ? { defeatedFigures: _strainCostDefeated, refreshBoard: true } : {}),
     };
   }
 
@@ -10165,26 +10158,37 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
-    // Phase 3: Force Choke chosen figure (deal 2 Dmg + 2 Strain)
+    // Phase 3: Force Choke chosen figure — 2 Damage applies sync, 2
+    // Strain queues via pendingStrain[] for applyStrain pipeline.
     if (chosenFigureKey) {
       const oppNum = opponentPlayerNum(playerNum);
       const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
-      let dmgNote = 'apply 2 Dmg + 2 Strain manually';
+      let dmgNote = 'apply 2 Dmg manually';
       if (figMsgId && dcHealthState) {
         const hs = dcHealthState.get(figMsgId) || [];
         const fkM = chosenFigureKey.match(/-(\d+)-(\d+)$/);
         const fi = fkM ? parseInt(fkM[2], 10) : 0;
         if (hs[fi]) {
           const [cur, max] = hs[fi];
-          const newCur = Math.max(0, (cur ?? max) - 4); // 2 dmg + 2 strain = 4 total
+          const newCur = Math.max(0, (cur ?? max) - 2);
           hs[fi] = [newCur, max ?? newCur];
           dcHealthState.set(figMsgId, hs);
           syncHealthStateToList(game, oppNum, figMsgId, hs);
-          dmgNote = `2 Dmg + 2 Strain (HP: ${cur ?? max}→${newCur})`;
+          dmgNote = `2 Dmg (HP: ${cur ?? max}→${newCur}) + 2 Strain (queued)`;
         }
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`, refreshDcEmbed: !!figMsgId };
+      return {
+        applied: true,
+        logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`,
+        refreshDcEmbed: !!figMsgId,
+        pendingStrain: [{
+          figureKey: chosenFigureKey,
+          controllerPlayerNum: oppNum,
+          amount: 2,
+          source: 'Lord of the Sith — Force Choke',
+        }],
+      };
     }
     // Phase 0: card resolves → stamp pendingMoveX (2 MP, no choice
     // yet). The lordOfSithChoice continuation posts a "Force Choke /
@@ -10476,28 +10480,26 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: navigationUpgradeEffect (Navigation Upgrade) — Strain 1 to self; choose friendly DROID for +1 MP
+  // Strain queues via pendingStrainCost so applyStrain pipeline routes
+  // it (Fireproof / Headhunter / per-strain choice / Under Duress / Paz).
   if (entry.type === 'ccEffect' && entry.navigationUpgradeEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta.get(msgId) : null;
-    const applyStrain = () => {
-      let strainNote = 'apply 1 Strain manually';
-      if (msgId && dcHealthState) {
-        const hs = dcHealthState.get(msgId) || [];
-        if (hs[0]) {
-          const [cur, max] = hs[0];
-          const newCur = Math.max(0, (cur ?? max) - 1);
-          hs[0] = [newCur, max ?? newCur];
-          dcHealthState.set(msgId, hs);
-          syncHealthStateToList(game, playerNum, msgId, hs);
-          strainNote = `1 Strain (HP: ${cur ?? max}→${newCur})`;
-        }
-      }
-      return strainNote;
-    };
+    const _navStrainPayload = (() => {
+      if (!meta?.dcName) return null;
+      const dgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const dgIdx = dgM ? dgM[1] : '1';
+      const selFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      return {
+        figureKey: `${meta.dcName}-${dgIdx}-${selFig}`,
+        controllerPlayerNum: playerNum,
+        amount: 1,
+        source: 'Navigation Upgrade cost',
+      };
+    })();
     if (choiceIndex !== undefined && choiceIndex !== null) {
-      const strainNote = applyStrain();
       let mpNote = '';
       if (chosenFigureKey) {
         const droidMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
@@ -10506,7 +10508,12 @@ export function resolveAbility(abilityId, context) {
           mpNote = ` **${dcNameFromFigureKey(chosenFigureKey)}** gains 1 MP.`;
         }
       }
-      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}.${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP.`, refreshDcEmbed: true };
+      return {
+        applied: true,
+        logMessage: `**Navigation Upgrade** — 1 Strain (queued).${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP.`,
+        refreshDcEmbed: true,
+        ...(_navStrainPayload ? { pendingStrainCost: _navStrainPayload } : {}),
+      };
     }
     const dcEffects = getDcEffects();
     const droidFks = [];

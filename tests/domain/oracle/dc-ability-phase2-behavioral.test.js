@@ -630,16 +630,32 @@ describe('B-DCPUSH-001: Force Throw Phase 1 — target enumeration', () => {
       'Spiked Boots target excluded — non-MASSIVE pusher');
   });
 
-  it('001e: strain deducted on Phase 1 activation', () => {
+  it('001e: strain cost deferred to Phase 3 — Phase 1 leaves HP unchanged', () => {
+    // Migration 2026-05-09: strain cost now queued via pendingStrainCost
+    // in Phase 3 (after target+space picked) instead of raw HP mutation
+    // in Phase 1. Avoids paying cost when the player cancels the picker.
     const { context, dcHealthState } = buildForceThrowContext({
       attackerPos: 'a1',
       enemyPositions: { 'Imperial Officer-1-0': 'a2' },
     });
-    const result = resolveAbility('force_throw', context);
+    resolveAbility('force_throw', context);
 
     const healthAfter = dcHealthState.get('msg_kanan');
-    assert.strictEqual(healthAfter[0][0], 7,
-      'HP reduced 8→7 (1 strain cost paid on Phase 1)');
+    assert.strictEqual(healthAfter[0][0], 8, 'HP unchanged in Phase 1 (strain deferred to Phase 3)');
+  });
+
+  it('001e2: strain cost queued via pendingStrainCost on Phase 3', () => {
+    const { context } = buildForceThrowContext({
+      attackerPos: 'a1',
+      enemyPositions: { 'Imperial Officer-1-0': 'a2' },
+      targetFigureKey: 'Imperial Officer-1-0',
+      chosenSpace: 'a3',
+    });
+    const result = resolveAbility('force_throw', context);
+    assert.strictEqual(result.applied, true);
+    assert.ok(result.pendingStrainCost, 'pendingStrainCost queued for applyStrain pipeline');
+    assert.strictEqual(result.pendingStrainCost.amount, 1);
+    assert.strictEqual(result.pendingStrainCost.controllerPlayerNum, 1);
   });
 
   it('001f: Phase 1 does not mutate figurePositions', () => {

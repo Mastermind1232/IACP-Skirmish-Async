@@ -3467,20 +3467,16 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   // Lure skip: hostile suffers 2 strain anyway (per card rules, strain happens regardless)
   if (choice === 'skip') {
     if (fo.isLure && fo.postAttackStrain > 0) {
-      // Apply Lure strain directly via dcHealthState
-      const _lureMsgId = ctx.findDcMessageIdForFigure?.(game.gameId, controlledPlayerNum, controlledFigureKey);
-      if (_lureMsgId) {
-        const _lureFigMatch = controlledFigureKey.match(/-(\d+)-(\d+)$/);
-        const _lureFigIdx = _lureFigMatch ? parseInt(_lureFigMatch[2], 10) : 0;
-        const _lureHs = ctx.dcHealthState?.get(_lureMsgId) || [];
-        const _lureEntry = _lureHs[_lureFigIdx];
-        if (_lureEntry) {
-          const [_lureCur, _lureMax] = _lureEntry;
-          _lureHs[_lureFigIdx] = [Math.max(0, _lureCur - fo.postAttackStrain), _lureMax];
-          ctx.dcHealthState.set(_lureMsgId, _lureHs);
-        }
-      }
-      await interaction.followUp({ content: `**Lure of the Dark Side** — Skipped attack. **${controlledName}** suffers ${fo.postAttackStrain} Strain.`, ephemeral: false }).catch(discordCatch);
+      // Route Lure post-attack strain through applyStrain (Fireproof /
+      // Headhunter / per-strain choice / Under Duress / Paz).
+      const { applyStrain } = await import('./strain-handler.js');
+      await applyStrain(game, ctx, {
+        figureKey: controlledFigureKey,
+        controllerPlayerNum: controlledPlayerNum,
+        amount: fo.postAttackStrain,
+        source: 'Lure of the Dark Side',
+      });
+      await interaction.followUp({ content: `**Lure of the Dark Side** — Skipped attack. **${controlledName}** suffers ${fo.postAttackStrain} Strain (queued).`, ephemeral: false }).catch(discordCatch);
     } else {
       await interaction.followUp({ content: `Skipped.`, ephemeral: false }).catch(discordCatch);
     }
