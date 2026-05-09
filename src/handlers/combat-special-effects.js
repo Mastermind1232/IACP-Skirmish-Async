@@ -457,6 +457,16 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}\u21AF` : ''}`;
   await logGameAction(game, client, `**Fighting Knife** — ${target.label}: rolled 1 red die (${dieDesc}), dealt **${hits}** damage`, { phase: 'ROUND', icon: 'attack' });
   await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} \u2192 **${hits} Damage**.`).catch(discordCatch);
+  if (pending.fromStep8Queue) {
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      if (thread) await postPostResolveWindow(thread, game, pending.combat, 'attacker', { ...ctx, client });
+    } catch (err) {
+      console.error('[handleFightingKnifeTarget] step-8 reopen failed:', err?.message ?? err);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames(game.gameId);
 }
@@ -471,7 +481,19 @@ export async function handleFightingKnifeSkip(interaction, ctx) {
   const pending = game.pendingFightingKnife;
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const fromStep8Queue = !!pending.fromStep8Queue;
   clearPendingFightingKnife(game);
+  if (fromStep8Queue) {
+    try {
+      const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+      const cThread = await fetchCombatThread(client, pending.combatThreadId);
+      if (cThread) await postPostResolveWindow(cThread, game, pending.combat, 'attacker', { ...ctx, client });
+    } catch (err) {
+      console.error('[handleFightingKnifeSkip] step-8 reopen failed:', err?.message ?? err);
+    }
+    saveGames(game.gameId);
+    return;
+  }
   const embedRefreshMsgIds = new Set(pending.initialEmbedRefreshMsgIds || []);
   await finishCombatResolution(game, pending.combat, pending.resultText, embedRefreshMsgIds, client);
   saveGames(game.gameId);

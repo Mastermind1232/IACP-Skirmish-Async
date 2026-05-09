@@ -360,6 +360,16 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Concussive Bolt: push target 1 space',
     });
   }
+  // Fighting Knife (Verena Talos surge): hit-gated, requires adjacent
+  // hostile. fireFightingKnife re-validates at click time and skips if
+  // there are none.
+  if (combat.surgeFightingKnife && combat._step7Hit && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'fighting_knife',
+      label: 'Fighting Knife: roll 1 red die on adjacent',
+    });
+  }
 }
 
 /**

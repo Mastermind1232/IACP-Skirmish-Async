@@ -2291,7 +2291,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
 
   const hit = !resultText.includes('**Miss**');
   // Fighting Knife (Verena Talos): after non-miss, choose adjacent hostile, roll 1 red die, apply hits
-  if (hit && combat.surgeFightingKnife && combat.attackerFigureKey && game.selectedMap?.id) {
+  // Fighting Knife inline disabled 2026-05-09 → fireFightingKnife
+  // (step-8 attacker button + fromStep8Queue bypass on click handlers).
+  if (false && hit && combat.surgeFightingKnife && combat.attackerFigureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
     const adjHostiles = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id)
       .filter((c) => c.playerNum === defenderPlayerNum);
     if (adjHostiles.length > 0) {

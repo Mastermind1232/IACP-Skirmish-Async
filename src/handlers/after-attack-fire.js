@@ -31,6 +31,7 @@ import { sanitizeMentions } from '../discord/channel-helpers.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
+  setPendingFightingKnife,
 } from '../game/interrupts.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
@@ -1079,6 +1080,49 @@ async function fireConcussiveBolt(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Fighting Knife (Verena Talos): on hit, choose an adjacent hostile,
+ * roll 1 red die, apply Hits as damage. Stores fromStep8Queue: true so
+ * handleFightingKnifeTarget / Skip return to the attacker post-resolve
+ * window instead of closing combat.
+ */
+async function fireFightingKnife(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder, deps } = ctx;
+  if (!thread || !combat.attackerFigureKey || !game.selectedMap?.id) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const getFiguresAdjacentToTarget = deps?.getFiguresAdjacentToTarget;
+  if (!getFiguresAdjacentToTarget) return;
+  const adjHostiles = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id)
+    .filter((c) => c.playerNum === defPN);
+  if (adjHostiles.length === 0) return;
+  const targets = adjHostiles.map((c) => {
+    const { msgId, label } = getFigureLabel(game, c.playerNum, c.figureKey, undefined, 80, {
+      dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+    });
+    return { figureKey: c.figureKey, playerNum: c.playerNum, label, msgId };
+  });
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  setPendingFightingKnife(game, {
+    gameId: game.gameId,
+    combatThreadId: combat.combatThreadId,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    ownerId,
+    targets,
+    resultText: combat._step7ResultText || '',
+    combat,
+    initialEmbedRefreshMsgIds: [],
+    fromStep8Queue: true,
+  });
+  const btns = targets.slice(0, 4).map((t, i) =>
+    new ButtonBuilder().setCustomId(`fighting_knife_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder().setCustomId(`fighting_knife_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -1161,6 +1205,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'concussive_bolt':
       await fireConcussiveBolt(thread, game, combat, effect, ctx);
+      return;
+    case 'fighting_knife':
+      await fireFightingKnife(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline
