@@ -3861,6 +3861,27 @@ export async function handleOrderMoveSpacePick(interaction, ctx) {
   }
   clearPendingOrderedMove(game);
 
+  // Massive end-of-movement displacement (per user 2026-05-09 bug
+  // report — ATDP with Scavenged Walker finishing post-deploy move
+  // didn't trigger the push). If the moving figure has the MASSIVE
+  // keyword and its final footprint overlaps any smaller figure,
+  // route those overlaps through the existing pendingMassivePush
+  // flow — same path move-x-handler uses at end of Move-X.
+  try {
+    const _mvKws = (getDcEffects()[dcName] || getDcEffects()[dcName?.replace(/\s*\[.*\]\s*$/, '')])?.keywords || [];
+    if (_mvKws.some((k) => String(k).toUpperCase() === 'MASSIVE')) {
+      const { runMassiveDisplacement } = await import('./move-x-handler.js');
+      await runMassiveDisplacement(game, { client, logGameAction }, {
+        playerNum: pending.playerNum,
+        figureKey,
+        dcName,
+        msgId: targetMsgId,
+      });
+    }
+  } catch (_mvDispErr) {
+    console.error('[ordered-move] massive displacement failed:', _mvDispErr?.message ?? _mvDispErr);
+  }
+
   // Detect post-move interrupts on the path (Parting Blow, Dirty Trick,
   // Disengage, Overwatch). Mirrors the activation-move flow at
   // src/handlers/movement.js:1366+.

@@ -1031,6 +1031,9 @@ export async function handleMoveXSeqPick(interaction, ctx) {
  * pendingMassivePush + posts the existing space picker if any
  * displaced figure has 2+ valid spaces (needs a controller choice).
  */
+export async function runMassiveDisplacement(game, ctx, pending) {
+  return _runMassiveDisplacement(game, ctx, pending);
+}
 async function _runMassiveDisplacement(game, ctx, pending) {
   const { client, logGameAction } = ctx;
   const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
@@ -1443,7 +1446,13 @@ export async function postMoveXPicker(game, ctx, msgId) {
   const rows = chunkButtonsToRows(buttons).slice(0, 5);
   const overlapNote = overlapping ? ' — **must keep moving** (currently overlapping another figure)' : '';
   const unitLabel = pending.bypassCosts === false ? 'MP' : 'space(s)';
-  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** ${unitLabel} remaining${overlapNote}. Click an adjacent space to move 1 step:`;
+  // Multi-cell figure footprint clarifier: button labels show the
+  // top-left cell of the candidate footprint. Adding a footnote so the
+  // player knows which cell of the figure the coordinate refers to.
+  const _figSize = game.figureOrientations?.[pending.figureKey] || getFigureSize(pending.dcName) || '1x1';
+  const _isMultiCell = _figSize !== '1x1';
+  const _anchorNote = _isMultiCell ? '\n_(coordinates show the **top-left** cell of the figure\'s footprint.)_' : '';
+  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** ${unitLabel} remaining${overlapNote}. Click an adjacent space to move 1 step:${_anchorNote}`;
   const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' };
 
   if (pending.threadId) {
