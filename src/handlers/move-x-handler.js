@@ -141,8 +141,51 @@ async function _finishPicker(game, ctx, msgId) {
     } catch (err) {
       console.error('[move-x] sdpExplode failed:', err?.message ?? err);
     }
+  } else if (nextAction.type === 'freeAttackPrompt') {
+    // Generic "after the move, take a free attack" continuation.
+    // Used by Executor, Leaping Slash, Tonfa Strike, Fell Swoop,
+    // Sidewinder, etc. The figure already has freeAttackBonusPending
+    // set in abilities.js / fire-handler dispatch; this just posts
+    // the explicit "Declare Attack" prompt so the player gets the
+    // continuation as a click instead of a side-channel flag.
+    await _runFreeAttackPromptContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * "Declare Attack" prompt continuation. Posts a single button in the
+ * figure's combat thread (or game-log channel as fallback) that
+ * routes through the standard granted-attack pipeline. The free-
+ * attack flag (freeAttackBonusPending / fellSwoopFreeAttack /
+ * pendingExecutiveOrder) is already set by the originating dispatch
+ * — combat.js consumes it to mark the attack as free.
+ */
+async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
+  const { client, logGameAction } = ctx;
+  const payload = next.payload || {};
+  const granteeMsgId = payload.msgId || pending.msgId;
+  const granteeFigureKey = payload.figureKey || pending.figureKey;
+  const sourceLabel = payload.sourceLabel || pending.source || 'Free Attack';
+  const granteeName = pending.dcName || dcNameFromFigureKey(granteeFigureKey);
+  if (!granteeMsgId || !granteeFigureKey) return;
+  const _gabFkMatch = String(granteeFigureKey).match(/-(\d+)-(\d+)$/);
+  const _gabFigIdx = _gabFkMatch ? _gabFkMatch[2] : '0';
+  const btn = new ButtonBuilder()
+    .setCustomId(`granted_attack_${game.gameId}_${granteeMsgId}_f${_gabFigIdx}`)
+    .setLabel(`Declare Attack (${granteeName})`)
+    .setStyle(ButtonStyle.Danger);
+  const row = new ActionRowBuilder().addComponents(btn);
+  const ownerId = getPlayerId(game, pending.playerNum);
+  const content = `<@${ownerId}> ⚔\u{FE0F} **${sourceLabel}** — click below to declare the free attack with **${granteeName}**.`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: [row], allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
 }
 
 // ── Multi-figure MP-gain sequencing ──────────────────────────────────

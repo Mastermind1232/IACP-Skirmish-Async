@@ -2869,6 +2869,22 @@ export function resolveAbility(abilityId, context) {
       .filter(k => k.startsWith((meta?.dcName || '') + '-'));
     const _selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const _figureKey = _figureKeys[_selectedIdx] || _figureKeys[0] || null;
+    // Pick the chained continuation that fires when the picker
+    // drains. Cards with a free-attack follow-up (Executor, Leaping
+    // Slash, Tonfa Strike, Fell Swoop, etc.) get a freeAttackPrompt
+    // continuation so the player gets an explicit "Declare Attack"
+    // button immediately after the move; rushPostMovePush /
+    // shoulderRushPostMove get their own continuation types so the
+    // post-move push + attack fires from the picker exit instead of
+    // the legacy handleMovePick MP-bank exhaustion path.
+    let _nextAction = null;
+    if (entry.rushPostMovePush) {
+      _nextAction = { type: 'rushPostMove', payload: { msgId, playerNum: _pn, figureKey: _figureKey } };
+    } else if (entry.shoulderRushPostMove) {
+      _nextAction = { type: 'shoulderRushPostMove', payload: { msgId, playerNum: _pn, figureKey: _figureKey } };
+    } else if (entry.freeAttackBonus) {
+      _nextAction = { type: 'freeAttackPrompt', payload: { msgId, playerNum: _pn, figureKey: _figureKey, sourceLabel: entry.label || 'Free Attack' } };
+    }
     // Stamp pendingMoveX state synchronously; the caller posts the
     // picker UI when it sees pendingMoveXMsgId on the result.
     if (_figureKey && _pn) {
@@ -2880,9 +2896,13 @@ export function resolveAbility(abilityId, context) {
         figureKey: _figureKey,
         dcName: meta?.dcName || '',
         threadId: null,
+        msgId,
+        nextAction: _nextAction,
       };
     }
-    // Also grant free attack if specified (e.g. Executor)
+    // Free-attack flag still needed: the granted-attack button (if
+    // posted by the freeAttackPrompt continuation) reads
+    // freeAttackBonusPending in combat.js to mark the attack as free.
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = true;
@@ -2891,16 +2911,6 @@ export function resolveAbility(abilityId, context) {
     if (entry.mobileMovement) {
       game.mobileMovementActive = game.mobileMovementActive || {};
       game.mobileMovementActive[msgId] = true;
-    }
-    // Rush (Onar): after movement MP are exhausted, trigger adjacent SMALL push + mutual damage
-    if (entry.rushPostMovePush) {
-      game.rushPending = game.rushPending || {};
-      game.rushPending[msgId] = true;
-    }
-    // Shoulder Rush (KX-Series Security Droid): after movement MP exhausted, choose adjacent hostile → push if SMALL + enter space → free attack
-    if (entry.shoulderRushPostMove) {
-      game.shoulderRushPending = game.shoulderRushPending || {};
-      game.shoulderRushPending[msgId] = { playerNum: _pn };
     }
     return {
       applied: true,

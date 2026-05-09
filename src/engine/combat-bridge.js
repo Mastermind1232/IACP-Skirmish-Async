@@ -2479,14 +2479,28 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
       const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
       await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**, then make a free attack.`).catch(discordCatch);
-      await _setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+      // Stamp pendingMoveX with the freeAttackPrompt continuation so
+      // the player gets an explicit "Declare Attack" button after
+      // the move picker drains.
+      const { stampPendingMoveX, postMoveXPicker } = await import('../handlers/move-x-handler.js');
+      stampPendingMoveX(game, {
         msgId: combat.attackerMsgId,
         figureKey: combat.attackerFigureKey,
         playerNum: combat.attackerPlayerNum,
         spaces: 2,
         source: 'Fell Swoop',
         threadId: combat.combatThreadId,
+        nextAction: {
+          type: 'freeAttackPrompt',
+          payload: {
+            msgId: combat.attackerMsgId,
+            playerNum: combat.attackerPlayerNum,
+            figureKey: combat.attackerFigureKey,
+            sourceLabel: 'Fell Swoop',
+          },
+        },
       });
+      await postMoveXPicker(game, { client, logGameAction, saveGames }, combat.attackerMsgId);
     }
   }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
