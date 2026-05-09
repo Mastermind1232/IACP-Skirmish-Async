@@ -35,6 +35,7 @@ import {
   WHEN_DAMAGED_HOOKS,
   BEFORE_DEFEATED_HOOKS,
   WHEN_DEFEATED_HOOKS,
+  _registerDcEffectsResolver,
 } from './damage-pipeline.js';
 import { getDcList, getDcMessageIds, opponentPlayerNum, vpKey, getActivatedDcIndices, dcAttachmentsKey } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
@@ -46,6 +47,11 @@ import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
 import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt } from './interrupts.js';
 import { cardNameIncludes } from './card-names.js';
+
+// Wire dc-effects resolver into damage-pipeline so its
+// isImmuneToDirectDefeat helper can read special-ability ids without
+// taking a static circular import on data-loader.
+_registerDcEffectsResolver(() => getDcEffects());
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 

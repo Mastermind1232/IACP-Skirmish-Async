@@ -7,7 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
-import { applyDamageSync } from './damage-pipeline.js';
+import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -8475,7 +8475,10 @@ export function resolveAbility(abilityId, context) {
         }],
       };
     }
-    // Phase 1: find friendly figures within 2 spaces (not self)
+    // Phase 1: find friendly figures within 2 spaces (not self).
+    // Per IACP, figures with active "cannot be defeated" (Maul/SBR,
+    // Fifth Brother/YWNDM) are NOT selectable — "cannot" overrides
+    // the direct-defeat ability.
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingPos = activatingKeys.length ? game.figurePositions?.[playerNum]?.[activatingKeys[0]] : null;
     if (!activatingPos) return { applied: false, manualMessage: 'Resolve manually: activating figure has no position.' };
@@ -8485,10 +8488,11 @@ export function resolveAbility(abilityId, context) {
       if (!pos || activatingKeys.includes(fk)) continue;
       const dcName = dcNameFromFigureKey(fk);
       if (countGameSpaces(game, activatingPos, pos) > 2) continue;
+      if (isImmuneToDirectDefeat(game, playerNum, fk)) continue;
       friendlyFigureKeys.push(fk);
       friendlyLabels.push(dcName);
     }
-    if (friendlyFigureKeys.length === 0) return { applied: false, manualMessage: 'No friendly figures within 2 spaces to evacuate.' };
+    if (friendlyFigureKeys.length === 0) return { applied: false, manualMessage: 'No friendly figures within 2 spaces to evacuate (or all eligible targets cannot be defeated).' };
     return { requiresChoice: true, choiceOptions: friendlyLabels.map((n) => `Defeat ${n}`), choiceValues: friendlyFigureKeys };
   }
 

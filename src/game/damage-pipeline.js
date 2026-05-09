@@ -368,6 +368,71 @@ export function applyDamageSync(game, ctx, opts) {
 }
 
 /**
+ * Cannot-be-defeated guard for direct-defeat target pickers.
+ *
+ * Per IACP: a "cannot be defeated" effect overrides direct-defeat
+ * ability text. So Maul (while Sustained by Rage's no-activation
+ * condition is met) and Fifth Brother (while You Will Not Deny Me is
+ * attached & active) are NOT selectable as targets by IWBA, Voracious,
+ * Evacuate, or any other direct-defeat ability. Note: Second Chance is
+ * NOT a "cannot" effect — it triggers on defeat to recover, so SC-
+ * protected figures ARE selectable; the SC hook handles the heal at
+ * apply time.
+ *
+ * @returns {boolean} true if this figure currently cannot be defeated
+ *   and should be filtered out of direct-defeat target pickers.
+ */
+export function isImmuneToDirectDefeat(game, controllerPlayerNum, figureKey) {
+  if (!game || !controllerPlayerNum || !figureKey) return false;
+  // You Will Not Deny Me (Fifth Brother): active while the CC is
+  // attached and youWillNotDenyMeActive flags it for this side.
+  if (game.youWillNotDenyMeActive?.playerNum === controllerPlayerNum) {
+    const dcName = String(figureKey).split('-')[0] || '';
+    if (dcName.toLowerCase().includes('fifth')) return true;
+  }
+  // Sustained by Rage (Maul): active while the DC has not resolved an
+  // activation this round.
+  try {
+    const dcName = String(figureKey).split('-')[0] || '';
+    const eff = (typeof getDcEffectsModule === 'function' ? getDcEffectsModule() : null)?.[dcName];
+    if ((eff?.specialAbilityIds || []).includes('sustained_by_rage')) {
+      // Find the figure's DC index via figureKey → dcName matching the
+      // controller's dcList. If the index is NOT in activatedDcIndices,
+      // SBR is active.
+      const list = controllerPlayerNum === 1 ? game.p1DcList : game.p2DcList;
+      const ids = controllerPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const activated = controllerPlayerNum === 1 ? (game.p1ActivatedDcIndices || []) : (game.p2ActivatedDcIndices || []);
+      if (Array.isArray(list)) {
+        const idx = list.findIndex(d => (d?.dcName || d) === dcName);
+        if (idx >= 0 && !activated.includes(idx) && (ids?.[idx])) return true;
+      }
+    }
+  } catch { /* fail-open: don't crash the picker */ }
+  return false;
+}
+
+// Local resolver for getDcEffects so the helper above doesn't import
+// the data-loader at module-load time (avoid circular ESM init).
+let _cachedDcEffectsResolver = null;
+function getDcEffectsModule() {
+  if (_cachedDcEffectsResolver) return _cachedDcEffectsResolver();
+  // Lazy-init: dynamic-require pattern via Function constructor would
+  // be over-engineering. Instead, import at call time and cache.
+  // (Sync require is unavailable in ESM; this returns null on the
+  // first call — caller handles undefined effects gracefully.)
+  return null;
+}
+
+/**
+ * Test/init helper to wire the dc-effects resolver lazily. Called
+ * from the damage-pipeline-hooks loader so isImmuneToDirectDefeat can
+ * read keyword data without static imports.
+ */
+export function _registerDcEffectsResolver(fn) {
+  _cachedDcEffectsResolver = fn;
+}
+
+/**
  * Direct-defeat path. Some abilities defeat a figure WITHOUT the
  * figure suffering damage (Cassian's "It Will Be Alright", Rancor's
  * "Voracious", the "Evacuate" CC, etc.). Per IACP, those abilities

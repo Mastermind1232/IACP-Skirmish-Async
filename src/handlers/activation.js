@@ -2366,12 +2366,17 @@ export async function handleItWillBeAlrightUse(interaction, ctx) {
   const selfPos = game.figurePositions?.[meta.playerNum]?.[selfFk];
 
   // Find eligible targets within 2 spaces (within 3 if ACS attached).
+  // Per IACP, figures with an active "cannot be defeated" effect
+  // (Maul / Sustained by Rage, Fifth Brother / YWNDM) are NOT
+  // selectable — "cannot" overrides the direct-defeat ability text.
+  const { isImmuneToDirectDefeat } = await import('../game/damage-pipeline.js');
   const _iwbaAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   const _iwbaMaxRange = cardNameIncludes(_iwbaAtts, 'Advanced Com Systems') ? 3 : 2;
   const targets = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[meta.playerNum] || {})) {
     if (!pos || fk === selfFk) continue;
     if (countGameSpaces(game, selfPos, pos) > _iwbaMaxRange) continue;
+    if (isImmuneToDirectDefeat(game, meta.playerNum, fk)) continue;
     const fkDcName = dcNameFromFigureKey(fk);
     const fkMsgId = ctx.findDcMessageIdForFigure(gameId, meta.playerNum, fk);
     if (!fkMsgId) continue;

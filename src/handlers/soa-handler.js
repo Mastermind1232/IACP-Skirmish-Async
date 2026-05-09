@@ -275,9 +275,14 @@ export async function handleSoaPick(interaction, ctx) {
     if (rPn && rPos) {
       const friendlyPos = game.figurePositions?.[rPn] || {};
       const { countGameSpaces } = await import('../game/board-helpers.js');
+      const { isImmuneToDirectDefeat } = await import('../game/damage-pipeline.js');
       for (const [fk, fp] of Object.entries(friendlyPos)) {
         if (!fp || fk === rFk) continue;
         if (countGameSpaces(game, rPos, fp) > 2) continue;
+        // Per IACP, "cannot be defeated" effects (Maul/SBR while no
+        // activation, Fifth Brother/YWNDM while attached) override
+        // direct-defeat ability text — skip those targets.
+        if (isImmuneToDirectDefeat(game, rPn, fk)) continue;
         _vrEligible.push(fk);
       }
     }
