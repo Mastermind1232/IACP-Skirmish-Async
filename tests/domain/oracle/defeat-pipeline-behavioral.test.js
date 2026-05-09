@@ -363,77 +363,54 @@ describe('B-DEFEAT-009: processFigureDefeat triggers win condition check', () =>
 // E2E TEST: Dioxis Fumes → defeatedFigures → processFigureDefeat
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-DEFEAT-E2E-001: Dioxis Fumes → processFigureDefeat end-to-end', () => {
-  it('ability resolution + processFigureDefeat produces correct game state', async () => {
-    // Build a game where Dioxis Fumes will kill a figure at 1 HP.
-    // Use the game builder for proper headless wiring, then manually reduce HP.
-    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+describe('B-DEFEAT-E2E-001: Dioxis Fumes pendingStrain[] shape', () => {
+  it('ability resolution returns pendingStrain[] for each non-DROID figure', async () => {
+    // 2026-05-09 migration: Dioxis Fumes used to return defeatedFigures[]
+    // and inline-mutate HP. It now returns pendingStrain[] which
+    // apply-ability-result.js routes through the canonical applyStrain
+    // pipeline. Defeats happen INSIDE applyStrain when the player
+    // chooses the damage branch — no longer determined synchronously.
+    const { game, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Jabba the Hutt' }])
       .withPlayer2Army([{ dcName: 'Imperial Officer' }])
       .inRound(1)
       .build();
 
-    // Reduce Imperial Officer to 1 HP so Dioxis Fumes kills it
     const officerMsgId = findMsgId(dcMessageMeta, 2, 'Imperial Officer');
     assert.ok(officerMsgId, 'found Imperial Officer msgId');
     const healthArr = dcHealthState.get(officerMsgId);
-    assert.ok(healthArr, 'health state exists');
-    healthArr[0][0] = 1; // set current HP to 1
+    healthArr[0][0] = 1;
 
     const officerFigKey = Object.keys(game.figurePositions[2]).find(fk => fk.startsWith('Imperial Officer-'));
     assert.ok(officerFigKey, 'Imperial Officer figure exists');
     assert.ok(game.figurePositions[2][officerFigKey], 'figure has position');
 
-    const vpBefore = game.player1VP.total;
-
-    // Step 1: Resolve Dioxis Fumes ability (same as abilities.js does)
     const result = resolveAbility('cc:dioxis_fumes', {
       game,
-      playerNum: 1,  // P1 plays the card
+      playerNum: 1,
       dcMessageMeta,
       dcHealthState,
     });
 
     assert.ok(result.applied, 'Dioxis Fumes resolved');
-    assert.ok(result.defeatedFigures?.length > 0, 'defeatedFigures returned');
+    assert.ok(Array.isArray(result.pendingStrain), 'pendingStrain[] returned');
+    assert.ok(result.pendingStrain.length > 0, 'at least one strain entry queued');
 
-    // Figure should still be in figurePositions (not removed inline)
+    // Officer is non-DROID — must appear in the pendingStrain queue.
+    const officerEntry = result.pendingStrain.find(ps => ps.figureKey === officerFigKey);
+    assert.ok(officerEntry, 'Imperial Officer queued for strain');
+    assert.equal(officerEntry.amount, 1);
+    assert.equal(officerEntry.controllerPlayerNum, 2);
+    assert.equal(officerEntry.source, 'Dioxis Fumes');
+
+    // Position NOT removed inline — strain pipeline applies later.
     assert.ok(
       game.figurePositions[2][officerFigKey],
       'figure NOT removed inline by abilities.js'
     );
 
-    // Step 2: Process defeated figures — mimics headless-cc-play.js processDefeatedFigures
-    for (const df of result.defeatedFigures) {
-      await deps.processFigureDefeat(game, {
-        defeatedPlayerNum: df.defeatedPlayerNum,
-        figureKey: df.figureKey,
-        attackerPlayerNum: df.attackerPlayerNum,
-        source: df.source || '',
-      });
-    }
-
-    // Step 3: Assert all side effects
-    // 3a. Position removed
-    assert.equal(
-      game.figurePositions[2][officerFigKey], undefined,
-      'E2E: figure position removed after processFigureDefeat'
-    );
-
-    // 3b. VP awarded to attacker (P1)
-    assert.ok(
-      game.player1VP.total > vpBefore,
-      `E2E: VP awarded (was ${vpBefore}, now ${game.player1VP.total})`
-    );
-
-    // 3c. Nefarious Gains — Jabba is on P1, hostile figure defeated → +1 objective VP
-    assert.ok(
-      game.player1VP.objectives > 0,
-      `E2E: Nefarious Gains fired (objectives VP = ${game.player1VP.objectives})`
-    );
-
-    // 3d. Win condition fired — P2 has no figures → elimination
-    assert.ok(game.ended, 'E2E: game ended by elimination win condition');
+    // roundDioxisActive flag set — non-DROID figures cannot recover Strain.
+    assert.equal(game.roundDioxisActive, true);
   });
 });
 

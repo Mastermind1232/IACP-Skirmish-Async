@@ -210,23 +210,20 @@ export async function handleInteractChoice(interaction, ctx) {
   // Post-action Bleed strain (Interact resolves): centralized via
   // triggerBleedAfterAction (destruct 2026-05-07).
   await triggerBleedAfterAction(game, ctx, figureKey, playerNum);
-  // Curious (Loth-cat E/R): after interact, suffer 1 Strain (= 1 HP damage)
+  // Curious (Loth-cat E/R): after interact, suffer 1 Strain. Routes
+  // through the canonical applyStrain pipeline (Fireproof / Headhunter /
+  // per-strain choice / Under Duress / Paz). Fix 2026-05-09: was raw HP
+  // mutation that fully bypassed the strain pipeline.
   if (ctx.getDcEffects) {
     const _curEff = ctx.getDcEffects()?.[meta.dcName];
     if ((_curEff?.passives || []).includes('Curious')) {
-      const _curMsgId = msgId;
-      const _curHS = ctx.dcHealthState?.get(_curMsgId);
-      if (_curHS?.[figureIndex]) {
-        const [_curCur, _curMax] = _curHS[figureIndex];
-        const _curNew = Math.max(0, (_curCur || 0) - 1);
-        _curHS[figureIndex] = [_curNew, _curMax || _curCur];
-        ctx.dcHealthState?.set(_curMsgId, _curHS);
-        const dcList = getDcList(game, playerNum);
-        const dcIds = getDcMessageIds(game, playerNum) || [];
-        const _curIdx = dcIds.indexOf(_curMsgId);
-        if (_curIdx >= 0 && dcList?.[_curIdx]) dcList[_curIdx].healthState = [..._curHS];
-        await logGameAction(game, interaction.client, `😿 **Curious** — **${shortName}** suffers 1 Strain after interacting.`, { phase: 'ROUND', icon: 'activate' });
-      }
+      const { applyStrain } = await import('./strain-handler.js');
+      await applyStrain(game, ctx, {
+        figureKey,
+        controllerPlayerNum: playerNum,
+        amount: 1,
+        source: 'Curious',
+      });
     }
   }
   saveGames(game.gameId);

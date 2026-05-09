@@ -4413,48 +4413,36 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `${allKeys.length} figure(s) became Focused.`, refreshBoard: true };
   }
 
-  // ccEffect: dioxisFumesEffect — each non-DROID figure suffers 1 Strain (damage); set round flag
+  // ccEffect: dioxisFumesEffect — each non-DROID figure suffers 1 Strain;
+  // set round flag for "non-DROID figures cannot recover Strain this round."
+  // Fix 2026-05-09: was raw HP mutation that bypassed applyStrain pipeline.
+  // Now returns pendingStrain[] which apply-ability-result.js routes through
+  // applyStrain (Fireproof / Headhunter / per-strain choice / Under Duress /
+  // Paz fire correctly per figure).
   if (entry.type === 'ccEffect' && entry.dioxisFumesEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
-    if (!game || !playerNum || !dcMessageMeta || !dcHealthState) return { applied: false, manualMessage: '**Dioxis Fumes** — Each non-DROID figure suffers 1 Strain. Non-DROID figures cannot recover Strain this round. Resolve manually.' };
-    const parts = [];
-    const refreshMsgIds = [];
-    let anyDefeated = false;
-    const defeatedFigures = [];
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: '**Dioxis Fumes** — Each non-DROID figure suffers 1 Strain. Non-DROID figures cannot recover Strain this round. Resolve manually.' };
+    const pendingStrain = [];
+    const affected = [];
     for (const pn of [1, 2]) {
       const poses = game.figurePositions?.[pn] || {};
       for (const fk of Object.keys(poses)) {
         const dcName = dcNameFromFigureKey(fk);
         const stats = getStatsForDc(dcName);
-        const isDroid = (stats?.keywords || []).some(k => /^droid$/i.test(k));
+        const isDroid = (stats?.keywords || []).some((k) => /^droid$/i.test(k));
         if (isDroid) continue;
-        const tMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
-        if (!tMsgId) continue;
-        const hs = dcHealthState.get(tMsgId) || [];
-        const { figureIndex: fIdx } = parseFigureKey(fk);
-        const hpE = hs[fIdx];
-        if (!Array.isArray(hpE) || hpE.length < 1) continue;
-        const [cur, max] = hpE;
-        const newCur = Math.max(0, (cur ?? max) - 1);
-        hs[fIdx] = [newCur, max ?? cur];
-        dcHealthState.set(tMsgId, hs);
-        syncHealthStateToList(game, pn, tMsgId, hs);
-        if (newCur <= 0) {
-          parts.push(`**${dcName}** (${cur ?? max}→0, DEFEATED)`);
-          anyDefeated = true;
-          defeatedFigures.push({ figureKey: fk, defeatedPlayerNum: pn, attackerPlayerNum: opponentPlayerNum(pn), source: 'Dioxis Fumes' });
-        } else {
-          parts.push(`**${dcName}** (${cur ?? max}→${newCur})`);
-        }
-        if (!refreshMsgIds.includes(tMsgId)) refreshMsgIds.push(tMsgId);
+        pendingStrain.push({ figureKey: fk, controllerPlayerNum: pn, amount: 1, source: 'Dioxis Fumes' });
+        affected.push(`**${dcName}**`);
       }
     }
-    // Set round flag: non-DROID figures cannot recover Strain this round
+    // Set round flag: non-DROID figures cannot recover Strain this round.
     game.roundDioxisActive = true;
-    const affected = parts.length > 0 ? parts.join(', ') : 'no non-DROID figures on the board';
-    const dioxisResult = { applied: true, logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affected}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshMsgIds, refreshBoard: anyDefeated };
-    if (defeatedFigures.length > 0) dioxisResult.defeatedFigures = defeatedFigures;
-    return dioxisResult;
+    const affectedStr = affected.length > 0 ? affected.join(', ') : 'no non-DROID figures on the board';
+    return {
+      applied: true,
+      logMessage: `**Dioxis Fumes** — 1 Strain to each non-DROID: ${affectedStr}.\n⚠️ Non-DROID figures cannot recover Strain for the rest of this round.`,
+      pendingStrain,
+    };
   }
 
   // ccEffect: vpGainSelf + vpGainOpponent (e.g. Dangerous Bargains — start of round, if self VP ≤ N, both gain VP)
@@ -6225,7 +6213,11 @@ export function resolveAbility(abilityId, context) {
       // Phase 2: Player chose the hostile figure — set up Lure attack delegation
       const hostilePos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       if (!hostilePos) return { applied: false, manualMessage: 'Hostile figure has no position.' };
-      // Grant +2 Hit power tokens to the hostile figure
+      // Grant +2 Damage power tokens to the hostile figure. Per IACP
+      // power-token system, only 'Block' / 'Evade' / 'Damage' / 'Surge'
+      // exist as token types — there is no separate 'Hit' token. The
+      // card text says "Hit Tokens" but that maps to 'Damage' tokens
+      // in the codebase (each grants +1 Hit when spent during attack).
       grantPowerTokens(game, chosenFigureKey, 'Damage', 2);
       // Set up Lure attack (analogous to False Orders)
       setPendingLure(game, {
@@ -6238,7 +6230,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: true,
         lureActionPick: true,
-        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Damage Tokens. ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
+        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Hit Tokens (Damage). ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
       };
     }
 

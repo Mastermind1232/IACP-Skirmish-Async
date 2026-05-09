@@ -48,9 +48,14 @@ function buildDioxisGame() {
   return { game, dcMessageMeta, dcHealthState, stormMsgId, rebelMsgId };
 }
 
-// ── ORACLE-DIOXIS-001: Dioxis Fumes returns defeatedFigures for processFigureDefeat ──
-describe('ORACLE-DIOXIS-001: Dioxis Fumes defeat routes through processFigureDefeat', () => {
-  it('001a: figure at 1 HP returns defeatedFigures with correct metadata', () => {
+// ── ORACLE-DIOXIS-001: Dioxis Fumes routes strain through applyStrain pipeline ──
+// 2026-05-09 migration: Dioxis Fumes used to do raw HP mutation + return
+// defeatedFigures[]. It now returns pendingStrain[] which apply-ability-result
+// routes through applyStrain (Fireproof / Headhunter / per-strain choice /
+// Under Duress / Paz). Defeats happen inside the strain pipeline when the
+// player picks the damage branch — no longer determined synchronously.
+describe('ORACLE-DIOXIS-001: Dioxis Fumes routes strain through applyStrain', () => {
+  it('001a: returns pendingStrain[] with one entry per non-DROID figure', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
     const result = resolveAbility('cc:dioxis_fumes', {
@@ -59,17 +64,18 @@ describe('ORACLE-DIOXIS-001: Dioxis Fumes defeat routes through processFigureDef
     });
 
     assert.equal(result.applied, true, 'Dioxis Fumes should resolve');
-    assert.ok(result.defeatedFigures, 'Result should include defeatedFigures array');
-    assert.equal(result.defeatedFigures.length, 1, 'Exactly one figure defeated (Stormtrooper at 1 HP)');
-
-    const df = result.defeatedFigures[0];
-    assert.equal(df.figureKey, 'Stormtrooper (Regular)-1-0');
-    assert.equal(df.defeatedPlayerNum, 1);
-    assert.equal(df.attackerPlayerNum, 2, 'Opponent gets credit for defeat');
-    assert.equal(df.source, 'Dioxis Fumes');
+    assert.ok(Array.isArray(result.pendingStrain), 'Result must include pendingStrain array');
+    // Six non-DROID figures (3 Stormtroopers + 3 Rebel Troopers); none are DROIDs.
+    assert.equal(result.pendingStrain.length, 6, 'Exactly 6 strain events queued (one per non-DROID figure)');
+    for (const ps of result.pendingStrain) {
+      assert.equal(ps.amount, 1);
+      assert.equal(ps.source, 'Dioxis Fumes');
+      assert.ok(ps.figureKey);
+      assert.ok(ps.controllerPlayerNum === 1 || ps.controllerPlayerNum === 2);
+    }
   });
 
-  it('001b: figure position is NOT removed inline (deferred to processFigureDefeat)', () => {
+  it('001b: figure position is NOT removed inline (deferred to applyStrain → applyDamage pipeline)', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
     resolveAbility('cc:dioxis_fumes', {
@@ -77,36 +83,22 @@ describe('ORACLE-DIOXIS-001: Dioxis Fumes defeat routes through processFigureDef
       dcMessageMeta, dcHealthState,
     });
 
-    // Figure should still be in figurePositions — processFigureDefeat handles removal
+    // Figure should still be in figurePositions — defeat happens inside
+    // applyStrain when the player picks the damage branch.
     assert.ok(
       game.figurePositions[1]['Stormtrooper (Regular)-1-0'],
-      'Defeated figure should remain in figurePositions until processFigureDefeat runs'
+      'Figure should remain in figurePositions until applyStrain → applyDamage runs'
     );
   });
 
-  it('001c: no defeatedFigures when all figures survive', () => {
-    const { game, dcMessageMeta, dcHealthState, stormMsgId } = buildDioxisGame();
-
-    // Set all stormtroopers to full HP — all survive
-    dcHealthState.set(stormMsgId, [[3, 3], [3, 3], [3, 3]]);
-
-    const result = resolveAbility('cc:dioxis_fumes', {
-      game, playerNum: 1,
-      dcMessageMeta, dcHealthState,
-    });
-
-    assert.equal(result.applied, true);
-    assert.ok(!result.defeatedFigures, 'No defeatedFigures when all survive');
-  });
-
-  it('001d: refreshBoard true only when a defeat occurs', () => {
+  it('001c: roundDioxisActive flag is set so non-DROID figures cannot recover Strain this round', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
-    const result = resolveAbility('cc:dioxis_fumes', {
+    resolveAbility('cc:dioxis_fumes', {
       game, playerNum: 1,
       dcMessageMeta, dcHealthState,
     });
 
-    assert.equal(result.refreshBoard, true, 'refreshBoard should be true when defeat occurs');
+    assert.equal(game.roundDioxisActive, true, 'roundDioxisActive must be set');
   });
 });
