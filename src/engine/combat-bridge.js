@@ -803,12 +803,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
         game.conditionalFocusIfDamagedGte = null;
       }
-      // Stun Batons (Riot Trooper E/R): after attack, if target suffered damage, target suffers 1 Strain.
-      // Card text wording differs slightly between Elite ("any Damage") and Regular
-      // ("any Hit results"). Both interpretations resolve to "target took ≥1 damage"
-      // — targets don't literally "suffer hit results", they suffer damage from hits.
-      // Treating them identically until/unless a CRR designer clarification states otherwise.
-      if (damage > 0) {
+      // Stun Batons inline disabled 2026-05-09 → fireStunBatons (already
+      // wired in the dispatcher; enqueue probe lives in
+      // enqueueAttackerPerDcEffects and routes through applyStrain so
+      // Fireproof / Headhunter / when-damaged hooks fire uniformly).
+      if (false && damage > 0) { // eslint-disable-line no-constant-condition
         const _sbAttDcName = combat.attackerDcName || '';
         const _sbAttEff = getDcEffects()?.[_sbAttDcName];
         if ((_sbAttEff?.passives || []).includes('Stun Batons')) {

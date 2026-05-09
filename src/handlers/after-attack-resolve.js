@@ -159,12 +159,20 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
     delete game.vadersFinestPostAttackMove[combat.attackerMsgId];
     if (Object.keys(game.vadersFinestPostAttackMove).length === 0) delete game.vadersFinestPostAttackMove;
   }
-  // Stun Batons enqueue probe REVERTED — fire handler exists but the
-  // inline auto-apply in combat-bridge.js wasn't successfully removed
-  // this session (character-encoding mismatch on the strain log line).
-  // Re-enabling the enqueue now would double-fire the strain. Lands
-  // in the next commit alongside the inline removal + the centralized
-  // "when figure suffers damage" pipeline (task #165).
+  // Stun Batons (Riot Trooper E/R attacker passive): on damage, target
+  // suffers 1 Strain. Enqueue probe enabled 2026-05-09 alongside the
+  // inline removal in combat-bridge.js. Routes through applyStrain so
+  // Fireproof / Headhunter / Under Duress / when-damaged hooks fire.
+  if (combat._step7Hit && combat._step7Damage > 0 && combat.attackerDcName && combat.target?.figureKey) {
+    const _sbAttEff = getDcEffects?.()?.[combat.attackerDcName];
+    if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'stun_batons',
+        label: 'Stun Batons: target suffers 1 Strain',
+      });
+    }
+  }
   // Stalk Prey (CC, attacker side): triggered by combat.surgeStalkPrey
   // set when the CC was played. Hit-gated.
   if (combat.surgeStalkPrey && combat._step7Hit && combat.attackerMsgId && combat.attackerFigureKey) {
