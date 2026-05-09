@@ -75,19 +75,45 @@ export function isPendingMoveX(game, msgId) {
 
 /**
  * Compute the legal 1-space cardinal translations of a figure's
- * footprint. Returns a list of { topLeft, footprintCells } — one entry
- * per legal direction (N/S/E/W).
+ * footprint. Returns a list of { topLeft, footprintCells, passThrough }
+ * — one entry per legal direction (N/S/E/W).
  *
  * MOVE-020: Large figures cannot rotate during a Move-X effect, so
- * only translations are considered. Validations:
+ * only translations are considered.
+ *
+ * Occupancy semantics (per IA / destruct ruling):
+ *   - Hostile figures BLOCK movement: a candidate destination whose
+ *     newly-entered cells overlap a hostile figure is excluded.
+ *     (Mobile would override; not implemented here yet — TODO.)
+ *   - Friendly figures CAN be passed through: a candidate whose
+ *     newly-entered cells overlap a friendly is allowed but flagged
+ *     `passThrough: true`. Pass-through is only a legal choice when
+ *     the figure has remaining > 1 budget (so it can move out before
+ *     the final stop) — that gate is enforced at picker-render time.
+ *   - Massive figures additionally allow ending on an occupied cell
+ *     via displacement (TODO).
+ *
+ * Other validations:
  *   (a) every cell of the new footprint exists on the map.
  *   (b) every "leading" edge between the old footprint and the cells
- *       newly entered must be in the adjacency map and not blocked
- *       by a closed door.
- *   (c) every newly-entered cell must be unoccupied.
- *
- * For 1x1 figures the loop reduces to the obvious 4 neighbors.
+ *       newly entered must be in adjacency and not blocked by a
+ *       closed door.
  */
+function _computeOccupancyByTeam(game, movingFigureKey, movingPlayerNum) {
+  const friendly = new Set();
+  const hostile = new Set();
+  for (const pn of [1, 2]) {
+    for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!otherPos || otherFk === movingFigureKey) continue;
+      const otherDc = dcNameFromFigureKey(otherFk);
+      const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(otherDc) || '1x1';
+      const target = (pn === movingPlayerNum) ? friendly : hostile;
+      for (const c of getFootprintCells(otherPos, otherSize)) target.add(normalizeCoord(c));
+    }
+  }
+  return { friendly, hostile };
+}
+
 function _computeValidNeighbors(game, msgId) {
   const pending = game.pendingMoveX?.[msgId];
   if (!pending) return [];
@@ -99,7 +125,6 @@ function _computeValidNeighbors(game, msgId) {
   const adjacency = ms?.adjacency || {};
   if (Object.keys(adjacency).length === 0) return [];
 
-  // Door edges closed for movement.
   const allDoors = mapId ? (getMapTokensData()?.[mapId]?.doors || []) : [];
   const opened = new Set((game.openedDoors || []).map(k => String(k).toLowerCase()));
   const closedDoorEdges = new Set(
@@ -111,23 +136,11 @@ function _computeValidNeighbors(game, msgId) {
       .map(e => edgeKey(e[0], e[1])),
   );
 
-  // Old footprint of the figure (cells it currently occupies).
   const dcName = dcNameFromFigureKey(figureKey);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName) || '1x1';
   const oldCells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
   const oldSet = new Set(oldCells);
-
-  // Set of every cell occupied by other figures (for occupancy filter).
-  const occupied = new Set();
-  for (const pn of [1, 2]) {
-    for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[pn] || {})) {
-      if (!otherPos) continue;
-      if (otherFk === figureKey) continue;
-      const otherDc = dcNameFromFigureKey(otherFk);
-      const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(otherDc) || '1x1';
-      for (const c of getFootprintCells(otherPos, otherSize)) occupied.add(normalizeCoord(c));
-    }
-  }
+  const { friendly, hostile } = _computeOccupancyByTeam(game, figureKey, playerNum);
 
   const candidates = [];
   const directions = [
@@ -145,27 +158,47 @@ function _computeValidNeighbors(game, msgId) {
       if (!Object.prototype.hasOwnProperty.call(adjacency, nc)) { ok = false; break; }
     }
     if (!ok) continue;
-    // (b) every leading edge — between an old cell and its
-    //     same-direction-shifted neighbor that's NOT in old footprint —
-    //     must be in adjacency and not closed by a door.
+    // (b) every leading edge between old footprint and newly-entered
+    //     cells must be in adjacency and not closed by a door.
     for (const oc of oldCells) {
       const corresponding = normalizeCoord(shiftCoord(oc, dx, dy));
-      if (oldSet.has(corresponding)) continue; // moved into own old cell, no boundary crossed
-      // Must be a real adjacency between oc and corresponding.
+      if (oldSet.has(corresponding)) continue; // own old cell — no edge crossed
       const ocAdj = (adjacency[oc] || []).map(normalizeCoord);
       if (!ocAdj.includes(corresponding)) { ok = false; break; }
       if (closedDoorEdges.has(edgeKey(oc, corresponding))) { ok = false; break; }
     }
     if (!ok) continue;
-    // (c) newly-entered cells must be unoccupied (own old cells are fine).
+    // (c) hostile-occupied cells block; friendly-occupied cells flag
+    //     pass-through. Only newly-entered cells matter — own old
+    //     cells are fine to "re-enter."
+    let passThrough = false;
     for (const nc of newCells) {
       if (oldSet.has(nc)) continue;
-      if (occupied.has(nc)) { ok = false; break; }
+      if (hostile.has(nc)) { ok = false; break; }
+      if (friendly.has(nc)) passThrough = true;
     }
     if (!ok) continue;
-    candidates.push({ topLeft: newTopLeft, footprintCells: newCells });
+    candidates.push({ topLeft: newTopLeft, footprintCells: newCells, passThrough });
   }
   return candidates;
+}
+
+/** True when the moving figure currently overlaps another figure
+ *  (i.e., is mid-pass-through and must keep moving before stopping). */
+function _isCurrentlyOverlapping(game, msgId) {
+  const pending = game.pendingMoveX?.[msgId];
+  if (!pending) return false;
+  const { figureKey, playerNum } = pending;
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return false;
+  const dcName = dcNameFromFigureKey(figureKey);
+  const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName) || '1x1';
+  const cells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
+  const { friendly, hostile } = _computeOccupancyByTeam(game, figureKey, playerNum);
+  for (const c of cells) {
+    if (friendly.has(c) || hostile.has(c)) return true;
+  }
+  return false;
 }
 
 /** Render-from-state: post the move-X picker with current valid cells. */
@@ -176,11 +209,21 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
   const { client, logGameAction } = ctx;
-  const candidates = _computeValidNeighbors(game, msgId);
+  const allCandidates = _computeValidNeighbors(game, msgId);
+  const overlapping = _isCurrentlyOverlapping(game, msgId);
   const ownerId = getPlayerId(game, pending.playerNum);
+
+  // Pass-through filter: if remaining > 1, both clean and pass-through
+  // candidates are legal. If remaining === 1, only clean candidates
+  // are legal — the next step is the figure's final stop.
+  const candidates = pending.remaining > 1
+    ? allCandidates
+    : allCandidates.filter(c => !c.passThrough);
 
   if (candidates.length === 0) {
     // No legal destinations — close the budget and tell the player.
+    // (If the figure is mid-pass-through and stuck, this leaves them
+    // overlapping a friendly; manual resolution may be required.)
     await logGameAction?.(game, client,
       `🦿 **${pending.source}** — **${pending.dcName}** has no legal destinations; remaining ${pending.remaining} space(s) discarded.`,
       { phase: 'ROUND', icon: 'attack' });
@@ -188,24 +231,26 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
 
-  // Each candidate's button label shows the new top-left of the
-  // figure's footprint. For 1x1 that IS the destination cell.
   const stepBtns = candidates.slice(0, 20).map(cand => new ButtonBuilder()
     .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cand.topLeft}`)
-    .setLabel(cand.topLeft.toUpperCase())
-    .setStyle(ButtonStyle.Primary),
+    .setLabel(cand.passThrough ? `${cand.topLeft.toUpperCase()} (pass-through)` : cand.topLeft.toUpperCase())
+    .setStyle(cand.passThrough ? ButtonStyle.Secondary : ButtonStyle.Primary),
   );
-  const doneBtn = new ButtonBuilder()
-    .setCustomId(`move_x_done_${game.gameId}_${msgId}`)
-    .setLabel('Stop (discard remaining)')
-    .setStyle(ButtonStyle.Secondary);
+  // Done button is hidden while the figure is overlapping another
+  // figure — must move out before stopping.
+  const buttons = [...stepBtns];
+  if (!overlapping) {
+    buttons.push(new ButtonBuilder()
+      .setCustomId(`move_x_done_${game.gameId}_${msgId}`)
+      .setLabel('Stop (discard remaining)')
+      .setStyle(ButtonStyle.Secondary));
+  }
 
-  const rows = chunkButtonsToRows([...stepBtns, doneBtn]).slice(0, 5);
-  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** space(s) remaining. Click an adjacent space to move 1 step:`;
+  const rows = chunkButtonsToRows(buttons).slice(0, 5);
+  const overlapNote = overlapping ? ' — **must keep moving** (currently overlapping another figure)' : '';
+  const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** space(s) remaining${overlapNote}. Click an adjacent space to move 1 step:`;
   const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' };
 
-  // Prefer the combat thread if we have one (after-attack abilities);
-  // otherwise post into the game's main channel via logGameAction.
   if (pending.threadId) {
     const thread = await fetchCombatThread(client, pending.threadId);
     if (thread) {
