@@ -81,17 +81,19 @@ export function isPendingMoveX(game, msgId) {
  * MOVE-020: Large figures cannot rotate during a Move-X effect, so
  * only translations are considered.
  *
- * Occupancy semantics (per IA / destruct ruling):
- *   - Hostile figures BLOCK movement: a candidate destination whose
- *     newly-entered cells overlap a hostile figure is excluded.
- *     (Mobile would override; not implemented here yet — TODO.)
- *   - Friendly figures CAN be passed through: a candidate whose
- *     newly-entered cells overlap a friendly is allowed but flagged
- *     `passThrough: true`. Pass-through is only a legal choice when
- *     the figure has remaining > 1 budget (so it can move out before
- *     the final stop) — that gate is enforced at picker-render time.
- *   - Massive figures additionally allow ending on an occupied cell
- *     via displacement (TODO).
+ * Occupancy semantics (per IA / destruct ruling): MOVE-017 says
+ * "Move X spaces" ignores extra MP for both friendly AND hostile
+ * figures, so during a Move-X step ANY occupied cell can be passed
+ * through. The only restriction is the FINAL stopping cell — it
+ * must be unoccupied for non-Massive figures (Massive figures can
+ * end on an occupied cell via the existing displacement flow,
+ * TODO).
+ *
+ * A candidate whose newly-entered cells overlap any other figure is
+ * therefore flagged `passThrough: true`. Pass-through is only a
+ * legal choice when remaining > 1 (so the figure can step out
+ * before its final stop). That gate is enforced at picker-render
+ * time.
  *
  * Other validations:
  *   (a) every cell of the new footprint exists on the map.
@@ -99,19 +101,17 @@ export function isPendingMoveX(game, msgId) {
  *       newly entered must be in adjacency and not blocked by a
  *       closed door.
  */
-function _computeOccupancyByTeam(game, movingFigureKey, movingPlayerNum) {
-  const friendly = new Set();
-  const hostile = new Set();
+function _computeOccupancy(game, movingFigureKey) {
+  const occupied = new Set();
   for (const pn of [1, 2]) {
     for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[pn] || {})) {
       if (!otherPos || otherFk === movingFigureKey) continue;
       const otherDc = dcNameFromFigureKey(otherFk);
       const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(otherDc) || '1x1';
-      const target = (pn === movingPlayerNum) ? friendly : hostile;
-      for (const c of getFootprintCells(otherPos, otherSize)) target.add(normalizeCoord(c));
+      for (const c of getFootprintCells(otherPos, otherSize)) occupied.add(normalizeCoord(c));
     }
   }
-  return { friendly, hostile };
+  return occupied;
 }
 
 function _computeValidNeighbors(game, msgId) {
@@ -140,7 +140,7 @@ function _computeValidNeighbors(game, msgId) {
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName) || '1x1';
   const oldCells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
   const oldSet = new Set(oldCells);
-  const { friendly, hostile } = _computeOccupancyByTeam(game, figureKey, playerNum);
+  const occupied = _computeOccupancy(game, figureKey);
 
   const candidates = [];
   const directions = [
@@ -168,16 +168,15 @@ function _computeValidNeighbors(game, msgId) {
       if (closedDoorEdges.has(edgeKey(oc, corresponding))) { ok = false; break; }
     }
     if (!ok) continue;
-    // (c) hostile-occupied cells block; friendly-occupied cells flag
-    //     pass-through. Only newly-entered cells matter — own old
-    //     cells are fine to "re-enter."
+    // (c) MOVE-017: any occupied cell (friendly OR hostile) is
+    //     pass-through during a Move-X step. The figure can step
+    //     onto it but cannot STOP there — pass-through gating
+    //     happens at picker-render time (refused when remaining=1).
     let passThrough = false;
     for (const nc of newCells) {
       if (oldSet.has(nc)) continue;
-      if (hostile.has(nc)) { ok = false; break; }
-      if (friendly.has(nc)) passThrough = true;
+      if (occupied.has(nc)) { passThrough = true; break; }
     }
-    if (!ok) continue;
     candidates.push({ topLeft: newTopLeft, footprintCells: newCells, passThrough });
   }
   return candidates;
@@ -194,9 +193,9 @@ function _isCurrentlyOverlapping(game, msgId) {
   const dcName = dcNameFromFigureKey(figureKey);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName) || '1x1';
   const cells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
-  const { friendly, hostile } = _computeOccupancyByTeam(game, figureKey, playerNum);
+  const occupied = _computeOccupancy(game, figureKey);
   for (const c of cells) {
-    if (friendly.has(c) || hostile.has(c)) return true;
+    if (occupied.has(c)) return true;
   }
   return false;
 }
