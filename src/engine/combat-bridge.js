@@ -2678,8 +2678,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       })).catch(discordCatch);
     }
   }
-  // Boltslinger (Vinto Hreeda): deal 1 Dmg to another hostile within 3 after attack
-  if (pcAttIds.includes('boltslinger') && game.selectedMap?.id && combat.attackerFigureKey) {
+  // Boltslinger inline disabled 2026-05-09 → fireBoltslinger.
+  if (false && pcAttIds.includes('boltslinger') && game.selectedMap?.id && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
     const blDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     const defFigs = game.figurePositions?.[blDefPlayerNum] || {};
@@ -2707,7 +2707,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // each OTHER figure within 2 spaces of target (other than the defender
   // AND other than Bossk himself) suffers Damage = Hits and Strain = Surges
   // on that die. Per destruct 2026-05-08: Bossk excluded.
-  if (pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
+  // Indiscriminate Fire inline disabled 2026-05-09 → fireIndiscriminateFire.
+  if (false && pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
     const ifDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
     const targetPos = game.figurePositions?.[ifDefPlayerNum]?.[combat.target.figureKey];
     const rolledDice = combat.attackRoll?.dice || [];
@@ -2741,11 +2742,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Heavy Fire (Skirmish Upgrade): after a friendly VEHICLE or HEAVY WEAPON resolves an attack,
-  // for each die in that figure's printed attack pool, you may choose 1 hostile figure within 2 spaces
-  // of the target space. Each chosen figure suffers 1 Damage. Then, for each chosen figure, the
-  // figure that attacked gains 1 HARMFUL condition of your opponent's choice.
-  if (game.selectedMap?.id && combat.target?.figureKey && combat.attackerDcName) {
+  // Heavy Fire inline disabled 2026-05-09 → fireHeavyFire.
+  if (false && game.selectedMap?.id && combat.target?.figureKey && combat.attackerDcName) { // eslint-disable-line no-constant-condition
     const _hfPlayerNum = combat.attackerPlayerNum;
     const _hfDcList = getDcList(game, _hfPlayerNum) || [];
     const _hfDcMsgIds = getDcMessageIds(game, _hfPlayerNum) || [];
@@ -2808,7 +2806,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // 1 Strain to choose up to 2 figures within 2 spaces of the target
   // space in LOS, who suffer 1 Damage. The original target IS eligible
   // to be re-picked (per ruling) — only the attacker is excluded.
-  if (pcAttIds.includes('havoc_shot') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) {
+  // Havoc Shot inline disabled 2026-05-09 → fireHavocShot.
+  if (false && pcAttIds.includes('havoc_shot') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
     const _hsTargetPos = game.figurePositions?.[combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)]?.[combat.target.figureKey] || combat._savedTargetPos;
     const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
     if (_hsTargetPos && _hsAtkPos) {

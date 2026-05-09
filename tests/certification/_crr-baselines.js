@@ -62,7 +62,7 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // use (no specialAbilityIds pointer for ACS, equality on attachment
 // name is correct shape).
 export const DD_BASELINE = {
-  dcName_equality: 61,
+  dcName_equality: 63,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 95,
@@ -72,6 +72,12 @@ export const DD_BASELINE = {
 // WOOKIEE Focus check moved with it. Same `dc.dcName === '[Fury of
 // Kashyyyk]'` shape as the existing combat-bridge site (no specialAbilityIds
 // pointer exists for CC attachments).
+// 2026-05-09: dcName_equality 61→63. Heavy Fire migrated to step-8
+// fireHeavyFire (after-attack-fire.js). The army-wide [Heavy Fire]
+// Skirmish Upgrade is detected by dcName equality + the `dc.dcName ===
+// '[Heavy Fire]'` index lookup mirrors the original combat-bridge inline
+// site; Boltslinger/IndiscriminateFire/HavocShot use specialAbilityIds
+// already, but the [Heavy Fire] DC has no ability id pointer.
 // 2026-05-08: dcName_equality 58→59. Damage-pipeline hook for Fury
 // of Kashyyyk needs to detect the [Fury of Kashyyyk] CC attachment
 // in the figure controller's army; like the existing combat-bridge

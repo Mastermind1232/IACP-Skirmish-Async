@@ -21,9 +21,17 @@ import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
 import {
   grantMovementBank, grantPowerTokens, opponentPlayerNum,
-  parseFigureKey, dcNameFromFigureKey,
+  parseFigureKey, dcNameFromFigureKey, getDcEffect,
   applyCondition, isConditionImmune, HARMFUL_CONDITIONS,
 } from '../game/index.js';
+import { isWithinN } from '../engine/utils.js';
+import { getFigureLabel } from '../engine/game-readers.js';
+import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from '../game/spatial.js';
+import { sanitizeMentions } from '../discord/channel-helpers.js';
+import {
+  setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
+  setPendingIndiscriminateFire,
+} from '../game/interrupts.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -816,6 +824,213 @@ async function fireSidewinder(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Boltslinger (Vinto Hreeda): after attack, deal 1 Damage to a hostile
+ * within 3 spaces. Posts the existing target picker; the click handler
+ * (handleBoltslingerTarget) does the apply + defeat handling and does
+ * NOT close combat, so no fromStep8Queue bypass needed.
+ */
+async function fireBoltslinger(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  if (!thread || !ButtonBuilder || !ActionRowBuilder) return;
+  if (!combat.attackerFigureKey || !game.selectedMap?.id) return;
+  const defPN = opponentPlayerNum(combat.attackerPlayerNum);
+  const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+  if (!atkPos) return;
+  const targets = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
+    if (fk === combat.target?.figureKey) continue;
+    if (!isWithinN(atkPos, pos, 3, game.selectedMap.id)) continue;
+    const { label } = getFigureLabel(game, defPN, fk, undefined, 80, {
+      dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+    });
+    targets.push({ figureKey: fk, playerNum: defPN, label });
+  }
+  if (targets.length === 0) return;
+  setPendingBoltslinger(game, {
+    gameId: game.gameId,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    combatThreadId: combat.combatThreadId,
+    targets,
+  });
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  const btns = targets.slice(0, 4).map((t, i) =>
+    new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+}
+
+/**
+ * Indiscriminate Fire (Bossk): on hit, choose 1 non-red attack die;
+ * each OTHER figure within 2 spaces of target (excluding defender +
+ * Bossk himself) suffers Damage = Hits and Strain = Surges on that die.
+ * If only one non-red die was rolled, the splash auto-applies via the
+ * existing applyIndiscriminateFireSplash helper (no decision needed);
+ * otherwise the die-picker prompt fires.
+ */
+async function fireIndiscriminateFire(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder, deps } = ctx;
+  if (!thread || !game.selectedMap?.id || !combat.target?.figureKey) return;
+  const defPN = opponentPlayerNum(combat.attackerPlayerNum);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+  if (!targetPos) return;
+  const rolledDice = combat.attackRoll?.dice || [];
+  const nonRedDice = rolledDice.filter((d) => (d.color || '').toLowerCase() !== 'red');
+  if (nonRedDice.length === 0) return;
+  const splashTargets = [];
+  for (const pn of [1, 2]) {
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (fk === combat.target.figureKey) continue;
+      if (fk === combat.attackerFigureKey) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
+        dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+      });
+      splashTargets.push({ figureKey: fk, playerNum: pn, label });
+    }
+  }
+  const applyIndiscriminateFireSplash = deps?.applyIndiscriminateFireSplash || ctx.applyIndiscriminateFireSplash;
+  if (nonRedDice.length === 1 && applyIndiscriminateFireSplash) {
+    await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
+    return;
+  }
+  setPendingIndiscriminateFire(game, {
+    attackerPlayerNum: combat.attackerPlayerNum,
+    combatThreadId: combat.combatThreadId,
+    targets: splashTargets,
+    availableDice: nonRedDice,
+  });
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  const btns = nonRedDice.slice(0, 5).map((d, i) =>
+    new ButtonBuilder()
+      .setCustomId(`indiscriminate_die_${game.gameId}_${i}`)
+      .setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}↯)`)
+      .setStyle(ButtonStyle.Secondary));
+  btns.push(new ButtonBuilder().setCustomId(`indiscriminate_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+}
+
+/**
+ * Heavy Fire (Skirmish Upgrade): if the attacker is a friendly VEHICLE
+ * or HEAVY WEAPON and the [Heavy Fire] DC is in the army and not
+ * exhausted, the attacker may deal 1 Damage to up to N hostiles within
+ * 2 of target (where N = printed attack-pool dice count). For each
+ * chosen target, attacker gains 1 HARMFUL condition picked by opponent.
+ */
+async function fireHeavyFire(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder, dcExhaustedState } = ctx;
+  if (!thread || !game.selectedMap?.id || !combat.target?.figureKey || !combat.attackerDcName) return;
+  const playerNum = combat.attackerPlayerNum;
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const hfIdx = dcList.findIndex((dc) => dc.dcName === '[Heavy Fire]');
+  if (hfIdx < 0) return;
+  const hfMsgId = dcMsgIds[hfIdx];
+  if (!hfMsgId) return;
+  if (dcExhaustedState?.get?.(hfMsgId)) return;
+  const atkKws = (ctx.getDcKeywords?.(game) || {})[combat.attackerDcName] || [];
+  // Note: getDcKeywords is imported, but ctx may also pass it; use either.
+  const upper = atkKws.map((k) => String(k).toUpperCase());
+  if (!upper.includes('VEHICLE') && !upper.includes('HEAVY WEAPON')) return;
+  const attEff = getDcEffect(combat.attackerDcName);
+  const printed = attEff?.attack?.dice || [];
+  const diceCount = printed.length;
+  if (diceCount === 0) return;
+  const defPN = opponentPlayerNum(playerNum);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey] || combat._blastTargetCoord;
+  if (!targetPos) return;
+  const hostiles = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
+    if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+    const { label } = getFigureLabel(game, defPN, fk, undefined, 80, {
+      dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+    });
+    hostiles.push({ figureKey: fk, playerNum: defPN, label });
+  }
+  if (hostiles.length === 0) return;
+  setPendingHeavyFire(game, {
+    attackerPlayerNum: playerNum,
+    attackerFigureKey: combat.attackerFigureKey,
+    attackerDcName: combat.attackerDcName,
+    attackerMsgId: combat.attackerMsgId,
+    combatThreadId: combat.combatThreadId,
+    hfMsgId,
+    diceCount,
+    hostiles,
+    chosenTargets: [],
+    conditionsOwed: 0,
+  });
+  const ownerId = getPlayerId(game, playerNum);
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${diceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${diceCount} hostile figure${diceCount !== 1 ? 's' : ''} within 2 spaces of the target. Then, for each chosen figure, **${combat.attackerDcName}** gains 1 HARMFUL condition of your opponent's choice.`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`heavy_fire_use_${game.gameId}`).setLabel(`Use Heavy Fire (${diceCount} target${diceCount !== 1 ? 's' : ''})`).setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`heavy_fire_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    )],
+  })).catch(discordCatch);
+}
+
+/**
+ * Havoc Shot (Fenn Signis): on hit, suffer 1 Strain to deal 1 Damage to
+ * up to 2 figures within 2 of target in attacker's LOS. Original target
+ * IS eligible to be re-picked (per ruling); only attacker is excluded.
+ */
+async function fireHavocShot(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  if (!thread || !game.selectedMap?.id || !combat.target?.figureKey || !combat.attackerFigureKey) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey] || combat._blastTargetCoord;
+  const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+  if (!targetPos || !atkPos) return;
+  const ms = ctx.getMapData?.(game.selectedMap.id);
+  if (!ms) return;
+  const allFp = getAllFigureFootprints(game, getFigureSize);
+  const atkFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
+  const eligible = [];
+  for (const pn of [1, 2]) {
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!pos || fk === combat.attackerFigureKey) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      const candFp = getFigureFootprint(game, pn, fk, getFigureSize);
+      if (!hasFigureLineOfSight(atkFp, candFp, ms, allFp)) continue;
+      const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
+        dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+      });
+      eligible.push({ figureKey: fk, playerNum: pn, label });
+    }
+  }
+  if (eligible.length === 0) return;
+  setPendingHavocShot(game, {
+    gameId: game.gameId,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    attackerMsgId: combat.attackerMsgId,
+    attackerFigureKey: combat.attackerFigureKey,
+    attackerFigureIndex: combat.attackerFigureIndex ?? 0,
+    combatThreadId: combat.combatThreadId,
+    targets: eligible,
+    chosen: [],
+    maxPicks: 2,
+  });
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Havoc Shot** — Suffer 1 Strain to deal 1 Damage to up to 2 figures within 2 spaces of the target in your LOS?`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`havoc_shot_use_${game.gameId}`).setLabel('Use Havoc Shot (1 Strain)').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`havoc_shot_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    )],
+  })).catch(discordCatch);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -883,6 +1098,18 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'sidewinder':
       await fireSidewinder(thread, game, combat, effect, ctx);
+      return;
+    case 'boltslinger':
+      await fireBoltslinger(thread, game, combat, effect, ctx);
+      return;
+    case 'indiscriminate_fire':
+      await fireIndiscriminateFire(thread, game, combat, effect, ctx);
+      return;
+    case 'heavy_fire':
+      await fireHeavyFire(thread, game, combat, effect, ctx);
+      return;
+    case 'havoc_shot':
+      await fireHavocShot(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

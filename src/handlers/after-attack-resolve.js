@@ -309,6 +309,47 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       });
     }
   }
+  // Boltslinger (Vinto Hreeda): always enqueued when the ability is on
+  // the attacker DC; eligibility (within-3 hostiles) is re-checked at
+  // fire time and the fire handler returns early if no targets.
+  if (_atkIds.includes('boltslinger') && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'boltslinger',
+      label: 'Boltslinger: 1 Damage to nearby hostile',
+    });
+  }
+  // Indiscriminate Fire (Bossk): hit-gated. Eligibility deeper checks
+  // (non-red dice exist + adjacent figures) re-validated at fire time.
+  if (_atkIds.includes('indiscriminate_fire') && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'indiscriminate_fire',
+      label: 'Indiscriminate Fire: splash from non-red die',
+    });
+  }
+  // Heavy Fire (Skirmish Upgrade, army-wide): the [Heavy Fire] DC must
+  // be in the army and not exhausted, attacker must be VEHICLE or
+  // HEAVY WEAPON. fireHeavyFire re-validates and returns early otherwise.
+  if (combat.attackerDcName && combat.attackerFigureKey) {
+    const _hfDcList = deps?.getDcList?.(game, combat.attackerPlayerNum) || [];
+    if (_hfDcList.some((dc) => dc?.dcName === '[Heavy Fire]')) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'heavy_fire',
+        label: 'Heavy Fire: 1 Damage to N hostiles',
+      });
+    }
+  }
+  // Havoc Shot (Fenn Signis): hit-gated. Eligibility (LOS to splash
+  // candidates) re-validated at fire time.
+  if (_atkIds.includes('havoc_shot') && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'havoc_shot',
+      label: 'Havoc Shot: 1 Strain → splash up to 2',
+    });
+  }
 }
 
 /**
