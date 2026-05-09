@@ -2009,18 +2009,56 @@ export function resolveAbility(abilityId, context) {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to self manually.)`;
       }
     }
-    // mpBonus alongside overrideAttackDice (Close and Personal: move + override attack)
+    // mpBonus alongside overrideAttackDice (Close and Personal: move
+    // up to 2 spaces, then free Melee attack with override dice).
+    // Per the gain-MP rules audit: Move-X via pendingMoveX with
+    // bypassCosts: true. The freeAttackPrompt continuation posts a
+    // "Declare Attack" button after the picker drains; combat.js
+    // consumes freeAttackBonusPending + pendingOverrideAttackDice
+    // (set above) to mark the attack as free with the override pool.
     let odMpNote = '';
+    let _odPmxMsgId = null;
     if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-      addMovementPoints(game, msgId, entry.mpBonus);
-      odMpNote = ` Gained ${entry.mpBonus} MP.`;
+      const _odMeta = dcMessageMeta?.get?.(msgId);
+      const _odFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((_odMeta?.dcName || '') + '-'));
+      const _odSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _odFigureKey = _odFigureKeys[_odSelectedIdx] || _odFigureKeys[0] || null;
+      if (_odFigureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: entry.mpBonus,
+          source: entry.label || 'Move X',
+          playerNum,
+          figureKey: _odFigureKey,
+          dcName: _odMeta?.dcName || '',
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: {
+              msgId, playerNum, figureKey: _odFigureKey,
+              sourceLabel: entry.label || 'Free Attack',
+            },
+          },
+        };
+        _odPmxMsgId = msgId;
+        odMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+      } else {
+        // Fallback if no deployed figure — keep legacy bank path so
+        // the player isn't stuck with no MP and no attack.
+        addMovementPoints(game, msgId, entry.mpBonus);
+        odMpNote = ` Gained ${entry.mpBonus} MP.`;
+      }
     }
     return {
       applied: true,
       freeAction: !!entry.freeAction,
       refreshDcEmbed: entry.strainCostToSelf > 0,
-      refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0,
+      refreshMovementBank: typeof entry.mpBonus === 'number' && entry.mpBonus > 0 && !_odPmxMsgId,
       activeMsgId: msgId,
+      pendingMoveXMsgId: _odPmxMsgId,
       logMessage: (entry.logMessage || `**${entry.label}** — Click Attack to proceed.`) + strainNote + odMpNote,
     };
   }
