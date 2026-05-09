@@ -98,17 +98,21 @@ export function enqueueAttackerStep8Effects(combat) {
     }
   }
 
-  // Surge-conditions: each condition queued by surge / passive / CC
-  // becomes its own button (attacker decides whether to apply each).
-  // Per destruct, conditions are damage-gated (already enforced inside
-  // fireCondition handler).
-  const condList = Array.isArray(combat.bonusConditions) ? combat.bonusConditions : [];
-  for (const cond of condList) {
+  // Step-8 conditions: every surge / passive / CC condition becomes its
+  // own button — attacker clicks to apply (or skips). Damage-gating +
+  // recipient routing already happened in combat-bridge.js when
+  // _step8Conditions was assembled. fireCondition handles immunity +
+  // Fireproof + Punishing Strike at click time.
+  const condList = Array.isArray(combat._step8Conditions) ? combat._step8Conditions : [];
+  for (const entry of condList) {
+    const cond = entry?.condition;
+    if (!cond) continue;
+    const recipient = entry.recipient || (cond === 'Focus' || cond === 'Hide' ? 'attacker' : 'target');
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'condition',
-      label: `Apply ${cond}`,
-      payload: { condition: cond },
+      label: `Apply ${cond}${recipient === 'attacker' ? ' (self)' : ''}`,
+      payload: { condition: cond, recipient },
     });
   }
 }

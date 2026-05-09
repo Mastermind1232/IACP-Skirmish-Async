@@ -764,12 +764,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // guard as defense-in-depth so conditions are never applied if damage is 0.
       // Also skip on Extra Protection re-entry since conditions were already applied.
       if (damage > 0 && !_epReentry) {
+        // Conditions migrated 2026-05-09: every condition (surge / bonus /
+        // passive) is queued as a step-8 attacker button rather than
+        // auto-applied. fireCondition (after-attack-fire.js) handles
+        // immunity, Fireproof, application, and Punishing Strike at click
+        // time. Per destruct 2026-05-08: nothing auto in step 8.
         let allConditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
-        // Passive condition application (Gaarkhan Bleed, Riot Trooper
-        // Elite Weaken) — every attack auto-applies the listed condition
-        // to defender, no surge cost. Per destruct 2026-05-08. Reads
-        // attacker DC's passives — generalizes to any DC with a
-        // condition name in passives ("Bleed", "Weaken").
         const _passiveAttackerEff = getDcEffect(combat.attackerDcName);
         const _passiveAttackerCondNames = (_passiveAttackerEff?.passives || []).map((p) => String(p));
         for (const _passiveCondName of ['Bleed', 'Weaken']) {
@@ -777,61 +777,22 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             allConditions.push(_passiveCondName);
           }
         }
-        // CRR p.13 (ATTACKING OBJECTS): "Conditions cannot be applied to objects,
-        // and objects cannot suffer Strain." Crates (and other object targets) are
-        // skipped here — NPC FIGURES like Thugs / Krykna are still condition-eligible.
+        // CRR p.13 (ATTACKING OBJECTS): conditions never apply to objects.
+        // Skip them at queue time rather than enqueue + log "skipped" buttons.
         const _targetIsObject = combat.target?.isCrate || combat.target?.npcType === 'crate';
-        if (_targetIsObject && allConditions.length) {
-          await logGameAction(game, client, `🪵 **Object target** — Conditions skipped (objects cannot have conditions per CRR).`, { phase: 'ROUND', icon: 'card' });
+        if (_targetIsObject) {
+          if (allConditions.length) {
+            await logGameAction(game, client, `🪵 **Object target** — Conditions skipped (objects cannot have conditions per CRR).`, { phase: 'ROUND', icon: 'card' });
+          }
           allConditions = [];
         }
-        // Condition Immunity: filter out harmful conditions for immune figures
-        if (allConditions.length && isConditionImmune(game, combat.target.figureKey)) {
-          const blocked = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
-          allConditions = allConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
-          if (blocked.length) {
-            await logGameAction(game, client, `**Condition Immunity** — **${combat.target.label}** is immune to ${blocked.join(', ')}.`, { phase: 'ROUND', icon: 'card' });
-          }
-        }
-        // I30 Fireproof: Flame Trooper figures cannot be Bleeding
-        if (allConditions.includes('Bleed') && combat.defenderFireproof) {
-          allConditions = allConditions.filter(c => c !== 'Bleed');
-          await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Bleed.`, { phase: 'ROUND', icon: 'card' });
-        }
-        // Combat-pipeline rebuild (slice 6.1): per CRR p.21 Condition Keywords,
-        // BENEFICIAL conditions (Focus, Hide) are applied to the ATTACKER, not
-        // the target. HARMFUL conditions (Bleed, Stun, Weaken) go to target.
-        // Both gated on damage>0 (this block is already inside `if (damage > 0)`).
-        // The previous code applied all conditions to the target; verified bug
-        // per destruct's 2026-05-05 audit and Explore-agent confirmation that
-        // surge:focus/surge:hide actually fire from card data.
-        const _attackerFigureKey = combat.attackerFigureKey;
-        for (const _ac of allConditions) {
-          const _isHarmful = HARMFUL_CONDITIONS.includes(_ac);
-          const _recipientKey = _isHarmful ? combat.target.figureKey : _attackerFigureKey;
-          if (_recipientKey) _applyCondition(game, _recipientKey, _ac);
-        }
-        // Punishing Strike (Skirmish Upgrade): when one of your figures applies a HARMFUL condition,
-        // exhaust to discard that condition and apply a different HARMFUL condition instead.
-        const _psHarmful = allConditions.filter((c) => HARMFUL_CONDITIONS.includes(c));
-        if (_psHarmful.length > 0) {
-          const _psAtkDcList = getDcList(game, attackerPlayerNum) || [];
-          const _psHasPS = _psAtkDcList.some(dc => dc.dcName === '[Punishing Strike]');
-          const _psExhKey = `ps_army_p${attackerPlayerNum}`;
-          const _psAlreadyExhausted = cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_psExhKey], 'Punishing Strike');
-          if (_psHasPS && !_psAlreadyExhausted) {
-            // Show prompt for each harmful condition applied (use first one)
-            const _psCond = _psHarmful[0];
-            const _psOtherConds = HARMFUL_CONDITIONS.filter(c => c !== _psCond);
-            const _psBtns = _psOtherConds.map(c =>
-              new ButtonBuilder().setCustomId(`ps_replace_${game.gameId}_${combat.target.figureKey}_${_psCond}_${c}`).setLabel(`Replace with ${c}`).setStyle(ButtonStyle.Primary)
-            );
-            _psBtns.push(new ButtonBuilder().setCustomId(`ps_replace_${game.gameId}_${combat.target.figureKey}_${_psCond}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-            const _psRow = new ActionRowBuilder().addComponents(_psBtns);
-            setPendingPunishingStrike(game, { attackerPlayerNum, targetFigureKey: combat.target.figureKey, originalCondition: _psCond });
-            await thread.send({ content: `**Punishing Strike** — **${combat.target.label}** was applied **${_psCond}**. Exhaust Punishing Strike to replace it with a different harmful condition?`, components: [_psRow] }).catch(discordCatch);
-          }
-        }
+        // Stash for fireCondition. Each entry carries the recipient class
+        // (harmful → target, beneficial → attacker per CRR p.21). Immunity
+        // and Fireproof are evaluated when the attacker clicks the button.
+        combat._step8Conditions = allConditions.map((c) => ({
+          condition: c,
+          recipient: HARMFUL_CONDITIONS.includes(c) ? 'target' : 'attacker',
+        }));
       }
       // Skip post-damage effects on Extra Protection re-entry — they already fired in the first pass.
       if (!_epReentry) {

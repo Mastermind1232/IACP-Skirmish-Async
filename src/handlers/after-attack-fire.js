@@ -32,6 +32,7 @@ import { applyNpcDamageToFigure } from '../engine/combat-bridge.js';
 import { getFiguresAdjacentToCoord } from '../game/movement.js';
 import { getFiguresOnOrAdjacentToSpace } from '../game/board-helpers.js';
 import { getDcKeywords, getDcEffects } from '../data-loader.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { applyStrain } from './strain-handler.js';
 import { setupPendingMoveX } from './move-x-handler.js';
 
@@ -156,6 +157,86 @@ async function fireBlast(thread, game, combat, effect, ctx) {
         }
         if (checkWinConditions) await checkWinConditions(game, client);
       }
+    }
+  }
+}
+
+/**
+ * Apply 1 condition (CRR step 8). One queue entry per condition source
+ * (surge, CC bonus, passive); each click applies that single condition,
+ * routed to attacker (Focus/Hide — beneficial) or target (Bleed/Stun/
+ * Weaken — harmful). At apply time fireCondition checks Condition Immunity
+ * (Onar, Snowtrooper) + Fireproof (Flame Trooper Bleed) and triggers the
+ * Punishing Strike replacement prompt when a harmful condition lands.
+ *
+ * Per destruct 2026-05-08: even "auto-dealt" conditions (Gaarkhan Bleed,
+ * Riot Trooper Weaken passives) flow through this path so Punishing
+ * Strike has a chance to fire.
+ */
+async function fireCondition(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, ButtonBuilder, ButtonStyle, ActionRowBuilder, deps } = ctx;
+  const cond = effect.payload?.condition;
+  if (!cond) return;
+  const recipient = effect.payload?.recipient || (HARMFUL_CONDITIONS.includes(cond) ? 'target' : 'attacker');
+  const recipientFigKey = recipient === 'target'
+    ? combat.target?.figureKey
+    : combat.attackerFigureKey;
+  if (!recipientFigKey) return;
+  const recipientLabel = recipient === 'target'
+    ? (combat.target?.label || dcNameFromFigureKey(recipientFigKey))
+    : (combat.attackerDcName || dcNameFromFigureKey(recipientFigKey));
+  // Condition Immunity (Onar, Snowtrooper, etc.) — only filters HARMFUL.
+  if (HARMFUL_CONDITIONS.includes(cond) && isConditionImmune(game, recipientFigKey)) {
+    if (logGameAction) {
+      await logGameAction(game, client, `**Condition Immunity** — **${recipientLabel}** is immune to ${cond}.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    }
+    return;
+  }
+  // Fireproof (Flame Trooper) — cannot Bleed.
+  if (cond === 'Bleed' && combat.defenderFireproof && recipient === 'target') {
+    if (logGameAction) {
+      await logGameAction(game, client, `**Fireproof** — **${recipientLabel}** is immune to Bleed.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    }
+    return;
+  }
+  const applied = applyCondition(game, recipientFigKey, cond);
+  if (logGameAction) {
+    const verb = recipient === 'attacker' ? 'gains' : 'is now';
+    await logGameAction(game, client, `**${cond}** — **${recipientLabel}** ${verb} **${cond}**.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+  // Punishing Strike (Skirmish Upgrade): when one of your figures applies
+  // a HARMFUL condition, exhaust to discard that condition and apply a
+  // different harmful condition instead. Only prompts when condition
+  // actually landed (applied=true) on a target.
+  if (applied && HARMFUL_CONDITIONS.includes(cond) && recipient === 'target') {
+    const psAtkDcList = getDcList(game, combat.attackerPlayerNum) || [];
+    const psHasPS = psAtkDcList.some((dc) => dc.dcName === '[Punishing Strike]');
+    const psExhKey = `ps_army_p${combat.attackerPlayerNum}`;
+    const psAlreadyExhausted = cardNameIncludes(game.exhaustedSkirmishUpgrades?.[psExhKey], 'Punishing Strike');
+    if (psHasPS && !psAlreadyExhausted && thread && ButtonBuilder && ActionRowBuilder) {
+      const { setPendingPunishingStrike } = await import('../game/interrupts.js');
+      const otherConds = HARMFUL_CONDITIONS.filter((c) => c !== cond);
+      const psBtns = otherConds.map((c) =>
+        new ButtonBuilder()
+          .setCustomId(`ps_replace_${game.gameId}_${recipientFigKey}_${cond}_${c}`)
+          .setLabel(`Replace with ${c}`)
+          .setStyle(ButtonStyle.Primary),
+      );
+      psBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`ps_replace_${game.gameId}_${recipientFigKey}_${cond}_skip`)
+          .setLabel('Skip')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      setPendingPunishingStrike(game, {
+        attackerPlayerNum: combat.attackerPlayerNum,
+        targetFigureKey: recipientFigKey,
+        originalCondition: cond,
+      });
+      await thread.send({
+        content: `**Punishing Strike** — **${recipientLabel}** was applied **${cond}**. Exhaust Punishing Strike to replace it with a different harmful condition?`,
+        components: [new ActionRowBuilder().addComponents(psBtns)],
+      }).catch(discordCatch);
     }
   }
 }
@@ -380,6 +461,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'blast':
       await fireBlast(thread, game, combat, effect, ctx);
+      return;
+    case 'condition':
+      await fireCondition(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline
