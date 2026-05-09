@@ -6918,7 +6918,11 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: allParts.join(' ') || 'Effect applied to all hostiles in range.', refreshDcEmbed: true, refreshDcEmbedMsgIds: allMsgIds };
     }
-    // orStunInstead: present "N Strain" vs "Stun" choices (combined with target if multiple hostiles)
+    // orStunInstead (Dirty Trick): per CRR card text, "That figure
+    // MUST CHOOSE" — the choice belongs to the TARGET'S CONTROLLER
+    // (the opponent of the card player), not the card player. The
+    // prompt is routed via choiceForControllerPlayerNum so cc-hand
+    // posts the buttons in the target controller's hand channel.
     if (cah.orStunInstead) {
       const strainN = (cah.strain || 0);
       const strainDesc = strainN > 0 ? `${strainN} Strain` : 'Strain effect';
@@ -6931,7 +6935,13 @@ export function resolveAbility(abilityId, context) {
         combLabels.push(hostiles.length > 1 ? `Stun ${lbl}` : 'Stun');
         combValues.push(`stun:${fk}`);
       }
-      return { applied: false, requiresChoice: true, choiceOptions: combLabels, choiceValues: combValues };
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: combLabels,
+        choiceValues: combValues,
+        choiceForControllerPlayerNum: oppNum,
+      };
     }
     if (hostiles.length === 1) return applyToFigureKey(hostiles[0]);
     // Multiple hostiles in range: prompt player to pick one

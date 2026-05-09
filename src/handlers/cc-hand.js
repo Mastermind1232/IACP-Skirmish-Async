@@ -648,13 +648,34 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
       await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
       if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      setPendingCcChoice(game, { abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) });
+      // choiceForControllerPlayerNum (Dirty Trick): per CRR, the choice
+      // belongs to the TARGET'S CONTROLLER (opponent of the card player).
+      // Route the prompt to that player's hand channel and stamp
+      // clickerPlayerNum so the click handler validates against the
+      // opponent rather than the card player.
+      const _clickerPN = result.choiceForControllerPlayerNum ?? playerNum;
+      const _isOpponentChoice = _clickerPN !== playerNum;
+      setPendingCcChoice(game, {
+        abilityId,
+        choiceOptions: result.choiceOptions,
+        gameId,
+        playerNum,
+        card,
+        ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
+        ...(_isOpponentChoice ? { clickerPlayerNum: _clickerPN } : {}),
+      });
       const btns = result.choiceOptions.map((opt) => {
         const label = String(opt).slice(0, 80);
         return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
       });
       const rows = chunkButtonsToRows(btns);
-      await handChannel.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
+      const _promptChannel = _isOpponentChoice
+        ? await fetchGameChannel(interaction.client, _clickerPN === 1 ? game.p1HandId : game.p2HandId).catch(() => handChannel)
+        : handChannel;
+      const _promptHeader = _isOpponentChoice
+        ? `**${card}** — your figure was targeted; choose one:`
+        : `**Choose one** (for **${card}**):`;
+      await _promptChannel.send({ content: _promptHeader, components: rows }).catch(discordCatch);
       // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
       // combat snapshot so CD-cancel can revert combat-flag mutations.
       await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
@@ -1135,7 +1156,15 @@ export async function handleCcChoice(interaction, ctx) {
     return;
   }
   const playerNum = pending.playerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
+  // clickerPlayerNum (Dirty Trick orStunInstead): when the choice was
+  // routed to the target's controller, validate clicks against that
+  // player. resolveAbility still runs with `playerNum` (original card
+  // player) so the figure-owner math stays correct.
+  const _clickerPN = pending.clickerPlayerNum ?? playerNum;
+  const _clickerErrMsg = pending.clickerPlayerNum
+    ? "Only the targeted figure's controller can choose."
+    : 'Only the player who played the card can choose.';
+  if (!await requirePlayer(interaction, game, interaction.user.id, _clickerPN, canActAsPlayer, _clickerErrMsg)) return;
   // Match by label (new-style) or fall back to numeric index (old buttons still in flight)
   let choiceIndex = pending.choiceOptions?.findIndex(opt => String(opt) === chosenLabel);
   if (choiceIndex < 0 && /^\d+$/.test(chosenLabel)) {
