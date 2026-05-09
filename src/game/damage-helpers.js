@@ -199,78 +199,15 @@ export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureInd
   return { ...result, defeatRecord };
 }
 
-/**
- * Apply Strain to a figure (skirmish semantics).
- *
- * Per CRR p.58 + destruct 2026-05-06: "every ability with a strain cost,
- * and bleed, should trigger the same way that strain is dealt with."
- * Centralizes the strain-as-damage conversion + defeat check so every
- * strain-cost ability (Brutal Cleave, Stimulants, Adrenaline-style, etc.)
- * and Bleed end-of-action damage flows through one helper.
- *
- * Skirmish strain (CRR p.58): strain converts to an equal amount of damage.
- * The controlling player MAY prevent any of this damage by discarding 1 CC
- * from the top of their deck per strain prevented. Paz Vizsla special case:
- * returns CCs from his own discard pile to game box instead. Under Duress:
- * doubles the prevention cost; deplete transfers choice to opposing player.
- *
- * Current implementation: routes unprevented strain through
- * applyDamageWithDefeatCheck. Prevention UI (top-of-deck discard prompt) is
- * a future enhancement — queued per destruct 2026-05-06. For now, callers
- * applying strain skip the prevention path; the helper exists so the future
- * UI integration is one place.
- *
- * @param {Map} dcHealthState
- * @param {object} game
- * @param {string} msgId
- * @param {number} figureIndex
- * @param {number} amount - strain amount
- * @param {number} playerNum
- * @param {object} opts
- * @param {string} [opts.sourceLabel='Strain']    - e.g. "Bleed", "Brutal Cleave cost"
- * @param {number|null} [opts.attackerPlayerNum=null]
- * @returns {{ newHp: number, prevHp: number, wasDefeated: boolean, defeatRecord: object | null, prevented: number, applied: number }}
- */
-/**
- * @deprecated 2026-05-09 — bypasses the applyStrain pipeline (no
- * Fireproof / Headhunter / Under Duress / Paz / top-of-deck-discard
- * prompts). Callers must migrate to async applyStrain
- * (src/handlers/strain-handler.js) — typically by returning a
- * `pendingStrainCost` or `pendingStrain` payload from a dispatch and
- * letting applyAbilityResult fire it. Not currently called from any
- * ability dispatch; retained as @deprecated until a final delete pass.
- */
-export function suffersStrain(dcHealthState, game, msgId, figureIndex, amount, playerNum, opts = {}) {
-  const { sourceLabel = 'Strain', attackerPlayerNum = null } = opts;
-  // TODO (slice 8.5+): wire prevention path — top-of-deck CC discard, Paz
-  // exception, Under Duress cost-modifier + deplete choice-transfer. For now,
-  // unprevented strain converts directly to damage via the same helper used
-  // by other damage paths.
-  const prevented = 0;
-  const damageEquiv = Math.max(0, amount - prevented);
-  if (damageEquiv === 0) {
-    const cur = getDamageState(dcHealthState, msgId, figureIndex);
-    const curHp = cur ? Math.max(0, cur.health - cur.damage) : 0;
-    return {
-      newHp: curHp,
-      prevHp: curHp,
-      maxHp: cur ? cur.health : 0,
-      wasDefeated: false,
-      defeatRecord: null,
-      prevented: amount,
-      applied: 0,
-    };
-  }
-  const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureIndex, damageEquiv, playerNum, {
-    sourceLabel: `Strain (${sourceLabel})`,
-    attackerPlayerNum,
-  });
-  return {
-    ...dmgRes,
-    prevented,
-    applied: damageEquiv,
-  };
-}
+// suffersStrain (sync helper) deleted 2026-05-09. Strain now routes
+// exclusively through src/handlers/strain-handler.js → applyStrain,
+// which handles Fireproof / Headhunter / Under Duress / Paz / top-of-
+// deck-discard prompts. Ability dispatches that need to deal strain
+// return a `pendingStrainCost` (single payload) or `pendingStrain`
+// (array) on their result; applyAbilityResult fires applyStrain on
+// each, with cost-strain firing BEFORE other side effects per the
+// IACP "if an ability costs strain, the strain is dealt before
+// resolving the ability" rule.
 
 /**
  * Resolve a figureKey from (msgId, figureIndex). Internal helper for
