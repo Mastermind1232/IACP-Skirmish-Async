@@ -2637,7 +2637,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         content: `<@${pcOwnerId}> **Sidewinder** — Suffer 1 Strain to move up to 2 spaces? (once per round)`,
         allowedMentions: { users: [pcOwnerId] },
         components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain \u2192 +2 MP').setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain \u2192 Move up to 2 spaces').setStyle(ButtonStyle.Secondary),
           new ButtonBuilder().setCustomId(`sidewinder_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
         )],
       })).catch(discordCatch);

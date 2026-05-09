@@ -16,6 +16,7 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction, clearPendingHavocShot, clearPendingFightingKnife, clearPendingSpreadThePain, clearPendingDeflect, clearPendingDurasteelFistPush, clearPendingIndiscriminateFire, clearPendingConcussiveBolt } from '../game/interrupts.js';
+import { setupPendingMoveX } from './move-x-handler.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -274,21 +275,24 @@ export async function handleSidewinderApply(interaction, ctx) {
     amount: 1, controllerPlayerNum: meta.playerNum,
     source: 'Sidewinder', viaStrain: true,
   });
-  // Grant 2 MP
-  game.movementBank = game.movementBank || {};
-  const bank = game.movementBank[attackerMsgId] || { total: 0, remaining: 0 };
-  bank.total = (bank.total ?? 0) + 2;
-  bank.remaining = (bank.remaining ?? 0) + 2;
-  game.movementBank[attackerMsgId] = bank;
-  // Mark used this round
+  // Mark used this round so a second after-attack within the same
+  // round does not re-offer Sidewinder.
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
   game.roundFigureAbilityUsed[swKey] = true;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await interaction.message.channel.send('**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.');
-  await logGameAction(game, client, `**Sidewinder** — Jyn Odan suffered 1 Strain and gained +2 MP.`, { phase: 'ROUND', icon: 'card' });
-  await ensureMovementBankMessage(game, attackerMsgId, client);
+  await logGameAction(game, client,
+    `\u{1F578}\u{FE0F} **Sidewinder** — Jyn Odan suffered 1 Strain and may move up to 2 spaces.`,
+    { phase: 'ROUND', icon: 'card' });
   await updateDcCardMessage(client, game, attackerMsgId, ctx, { errorContext: 'Failed to refresh Sidewinder DC embed:' });
-  saveGames(game.gameId);
+  // "Move 2 spaces" effect (CRR MOVE-017): pendingMoveX with bypass.
+  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+    msgId: attackerMsgId,
+    figureKey,
+    playerNum: meta.playerNum,
+    spaces: 2,
+    source: 'Sidewinder',
+    threadId: interaction.message?.channelId || null,
+  });
 }
 
 export async function handleSidewinderSkip(interaction, ctx) {
