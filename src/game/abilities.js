@@ -5732,6 +5732,44 @@ export function resolveAbility(abilityId, context) {
     // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Move-X path (Ambush etc.): stamp pendingMoveX with the
+    // cahTargetPick continuation so the adjacent-hostile target
+    // picker fires AFTER the move drains. Adjacents recompute from
+    // the figure's NEW position, not the pre-move one.
+    if (entry.isMoveX) {
+      const _cahMeta = dcMessageMeta.get(msgId);
+      const _cahFigKeys = _cahMeta ? getFigureKeysForDcMsg(game, playerNum, _cahMeta) : [];
+      const _cahFigureKey = _cahFigKeys[0] || null;
+      if (!_cahFigureKey) {
+        return { applied: false, manualMessage: `**${entry.label || context.cardName}** — could not locate the activating figure; resolve manually.` };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.mpBonus,
+        source: entry.label || context.cardName || 'Move X',
+        playerNum,
+        figureKey: _cahFigureKey,
+        dcName: _cahMeta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: {
+          type: 'cahTargetPick',
+          payload: {
+            cardName: context.cardName || entry.label,
+            playerNum,
+            damage,
+            strain,
+          },
+        },
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+        logMessage: `**${entry.label || context.cardName}** — May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''}, then choose an adjacent hostile to deal ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''}.`,
+      };
+    }
     addMovementPoints(game, msgId, entry.mpBonus);
     if (totalDamage <= 0) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const meta = dcMessageMeta.get(msgId);

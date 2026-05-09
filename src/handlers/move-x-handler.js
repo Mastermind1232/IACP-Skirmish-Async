@@ -155,8 +155,74 @@ async function _finishPicker(game, ctx, msgId) {
     await _runShoulderRushPostMoveContinuation(game, ctx, pending);
   } else if (nextAction.type === 'lordOfSithChoice') {
     await _runLordOfSithChoiceContinuation(game, ctx, pending);
+  } else if (nextAction.type === 'cahTargetPick') {
+    await _runCahTargetPickContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * "Choose adjacent hostile, then" target picker continuation.
+ * Used by Ambush, Force Surge, and any Move-X CC that follows the
+ * move with an adjacent-hostile damage/strain effect. Recomputes
+ * adjacent hostiles from the figure's NEW post-move position and
+ * posts the target picker via game.pendingCcChoice → handleCcChoice
+ * → resolveAbility(cardName, { chosenFigureKey }) for the existing
+ * Phase-2 damage application.
+ */
+async function _runCahTargetPickContinuation(game, ctx, pending, next) {
+  const { client, logGameAction } = ctx;
+  const payload = next.payload || {};
+  const cardName = payload.cardName;
+  const playerNum = payload.playerNum;
+  if (!cardName || !playerNum) return;
+  const pos = game.figurePositions?.[playerNum]?.[pending.figureKey];
+  if (!pos) return;
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapData(mapId) : null;
+  const adjacency = ms?.adjacency || {};
+  const adjSet = new Set((adjacency[String(pos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+  const oppNum = playerNum === 1 ? 2 : 1;
+  const hostiles = [];
+  const hostileLabels = [];
+  for (const [fk, fpos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+    if (!fpos || !adjSet.has(String(fpos).toLowerCase())) continue;
+    hostiles.push(fk);
+    hostileLabels.push(dcNameFromFigureKey(fk));
+  }
+  if (hostiles.length === 0) {
+    await logGameAction?.(game, client, `**${cardName}** — no adjacent hostile after the move; effect skipped.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  const ownerId = getPlayerId(game, playerNum);
+  // Set up pendingCcChoice so handleCcChoice can route the click back
+  // through resolveAbility with chosenFigureKey for damage application.
+  game.pendingCcChoice = {
+    gameId: game.gameId,
+    playerNum,
+    cardName,
+    choiceOptions: hostileLabels,
+    choiceValues: hostiles,
+  };
+  const btns = hostileLabels.map((label, i) => new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_${label}`)
+    .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
+    .setStyle(ButtonStyle.Danger));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const dmgNote = (payload.damage || 0) > 0 && (payload.strain || 0) > 0
+    ? `${payload.damage} Damage + ${payload.strain} Strain`
+    : (payload.damage || 0) > 0 ? `${payload.damage} Damage`
+    : (payload.strain || 0) > 0 ? `${payload.strain} Strain`
+    : 'effect';
+  const content = `<@${ownerId}> **${cardName}** — choose an adjacent hostile to deal ${dmgNote}:`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
 }
 
 /**
