@@ -1089,13 +1089,30 @@ async function buildAndSendAttackTargets(
   // attackerSize needed both for figureBlockingCoords exclusion and for multi-cell LOS.
   const attackerSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
   const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
-  // Marksman CC card: figures do not block LOS for this attack
+  // Marksman CC card: figures do not block LOS for this attack.
+  // Two states matter:
+  //   - marksmanActive: card was already played (flag set) — figures don't block.
+  //   - marksmanInHand: card is in the player's hand and could be played — also
+  //     compute the no-figures-block LOS so figures-out-of-LOS can be offered
+  //     as Marksman targets (button labeled [Marksman]; clicking auto-plays
+  //     the card before resolving the attack). Ranged-only per card text.
   const marksmanActive = game.nextAttackIgnoreFigureLOS?.[msgId];
-  if (marksmanActive) delete game.nextAttackIgnoreFigureLOS[msgId];
+  // Note: nextAttackIgnoreFigureLOS is consumed by handleDcAttackTarget on the
+  // actual attack, not here at target-render time. Re-rendering must not
+  // wipe it. (The previous delete here is a known bug; deferring its fix to
+  // the attack-target click handler.)
+  const _ccHand = game[ccHandKey(playerNum)] || [];
+  const marksmanInHand = !marksmanActive
+    && (stats?.attack?.type === 'range' || (game.pendingOverrideAttackDice?.[msgId]?.type === 'range'))
+    && cardNameIncludes(_ccHand, 'Marksman');
   const allFigureBlockingCoords = buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, {
     marksmanActive,
     ignoreBlocking: attackerIgnoresFigureBlocking,
   });
+  // Alternate LOS coords when Marksman would be played: figures don't block.
+  const marksmanLOSCoords = marksmanInHand
+    ? buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, { marksmanActive: true })
+    : null;
   const targets = [];
   const poses = game.figurePositions?.[enemyPlayerNum] || {};
   const dcList = getSquad(game, enemyPlayerNum)?.dcList || [];
@@ -1149,6 +1166,22 @@ async function buildAndSendAttackTargets(
         if (hasLineOfSight(ac, tc, effectiveMs, losCoords)) { los = true; break outer; }
       }
     }
+    // Marksman-in-hand path: also probe LOS with figures NOT blocking, so
+    // figures-out-of-LOS can still be offered as Marksman targets. Walls /
+    // doors / shields still block (Marksman only ignores figure-blocking).
+    let losWithMarksman = false;
+    if (marksmanInHand && !los) {
+      let losCoordsMM = marksmanLOSCoords;
+      if (losCoordsMM) {
+        const targetFpMM = new Set(cells.map(c => String(c).toLowerCase()));
+        losCoordsMM = new Set([...losCoordsMM].filter(c => !targetFpMM.has(c)));
+      }
+      mmOuter: for (const ac of attackerFpCells) {
+        for (const tc of cells) {
+          if (hasLineOfSight(ac, tc, effectiveMs, losCoordsMM)) { losWithMarksman = true; break mmOuter; }
+        }
+      }
+    }
     // Fire Mission: LOS from any figure in the group (not just acting figure)
     if (!los && game.fireMissionActive?.[msgId]) {
       const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1188,7 +1221,7 @@ async function buildAndSendAttackTargets(
     const fi = m ? parseInt(m[2], 10) : 0;
     const figCount = getDcStats(dcName).figures ?? 1;
     const label = figCount > 1 ? `${dg}${FIGURE_LETTERS[fi] || 'a'}` : (totals[dcName] > 1 ? `${dcName} [Group ${dg}]` : dcName);
-    targets.push({ figureKey: k, coord, label, hasLOS: los, dist, droidArmLOS });
+    targets.push({ figureKey: k, coord, label, hasLOS: los, dist, droidArmLOS, requiresMarksman: !los && losWithMarksman });
   }
   // Missile Salvo: filter out already-targeted figures
   if (excludeFigureKeys?.length) {
@@ -1296,13 +1329,17 @@ async function buildAndSendAttackTargets(
   const _arcActive = game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar;
   const targetBtns = targets.map((t, targetIndex) => {
     const noLOS = t.hasLOS === false;
+    const marksmanTag = t.requiresMarksman ? ' [Marksman]' : '';
     const daTag = t.droidArmLOS ? ' [Droid Arm]' : '';
     const arcTag = (_arcActive && t.arcingShotValid === false) ? ' [No Arc]' : '';
+    // Marksman-only targets are selectable: clicking will auto-play Marksman
+    // before resolving the attack (handleDcAttackTarget consumes the card).
+    const selectable = !noLOS || t.requiresMarksman;
     return new ButtonBuilder()
       .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
-      .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? ' [No LOS]' : daTag}${arcTag}`.slice(0, 80))
-      .setStyle(noLOS ? ButtonStyle.Secondary : (arcTag ? ButtonStyle.Secondary : ButtonStyle.Danger))
-      .setDisabled(noLOS);
+      .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? (t.requiresMarksman ? marksmanTag : ' [No LOS]') : daTag}${arcTag}`.slice(0, 80))
+      .setStyle(t.requiresMarksman ? ButtonStyle.Primary : (noLOS ? ButtonStyle.Secondary : (arcTag ? ButtonStyle.Secondary : ButtonStyle.Danger)))
+      .setDisabled(!selectable);
   });
   const targetRows = chunkButtonsToRows(targetBtns);
   game.attackTargets = game.attackTargets || {};

@@ -1237,9 +1237,28 @@ export async function handleAttackTarget(interaction, ctx) {
       .map(e => edgeKey(e[0], e[1]))
   );
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the owner can attack.')) return;
-  if (target.hasLOS === false) {
+  if (target.hasLOS === false && !target.requiresMarksman) {
     await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(discordCatch);
     return;
+  }
+  // Marksman auto-play: target was rendered as [Marksman] (no normal LOS,
+  // but figures-don't-block LOS exists). Move the card from hand to discard
+  // and arm nextAttackIgnoreFigureLOS so the attack resolves with no
+  // figure-blocking. Single-use, consumed by handleAttackTarget below.
+  if (target.requiresMarksman) {
+    const _mmHand = game[ccHandKey(attackerPlayerNum)] || [];
+    const _mmIdx = _mmHand.indexOf('Marksman');
+    if (_mmIdx < 0) {
+      await interaction.followUp({ content: '🚫 Marksman is no longer in your hand.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    _mmHand.splice(_mmIdx, 1);
+    game[ccHandKey(attackerPlayerNum)] = _mmHand;
+    const _mmDiscardKey = ccDiscardKey(attackerPlayerNum);
+    game[_mmDiscardKey] = [...(game[_mmDiscardKey] || []), 'Marksman'];
+    game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
+    game.nextAttackIgnoreFigureLOS[msgId] = true;
+    await logGameAction(game, client, `🎯 **Marksman** played — figures do not block LOS for this Ranged attack.`, { phase: 'ROUND', icon: 'card' });
   }
   // Etiquette and Protocol: block attacks between paired figures this round
   const etiqPairs = game.etiquetteBlockPairs || [];

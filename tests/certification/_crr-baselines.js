@@ -65,12 +65,17 @@ export const DD_BASELINE = {
   dcName_equality: 63,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 96,
+  cardNameIncludes: 97,
 };
 // 2026-05-09: cardNameIncludes 95→96. Return Fire migrated to step-8
 // fireReturnFire (after-attack-fire.js); the Han Solo damage-gate
 // branch checks for the 'Rogue Smuggler' upgrade — same shape as the
 // original combat-bridge inline site.
+// 2026-05-09: cardNameIncludes 96→97. Marksman pre-play target-picker
+// detection in dc-play-area.js — checks cardNameIncludes(_ccHand,
+// 'Marksman') so figures-out-of-LOS can be offered as Marksman
+// targets when the card is in hand. CC-name equality is the correct
+// shape (no specialAbilityIds pointer for CCs in hand).
 // 2026-05-09: dcName_equality 60→61. Blast splash migrated to step-8
 // fireBlast handler (after-attack-fire.js); the Fury of Kashyyyk friendly
 // WOOKIEE Focus check moved with it. Same `dc.dcName === '[Fury of
