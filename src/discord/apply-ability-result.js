@@ -255,6 +255,26 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Direct defeats (Cassian IWBA, Voracious, Evacuate, etc.) ---
+  // Per IACP, these abilities skip WHEN_DAMAGED + BEFORE_DEFEATED
+  // entirely (the figure does NOT suffer damage). applyDirectDefeat
+  // records HP=0, fires WHEN_DEFEATED hooks, and finalizes via
+  // processFigureDefeat. Each entry: { figureKey, msgId, figIndex,
+  // controllerPlayerNum, attackerPlayerNum?, dcName?, displayName?, source }.
+  if (result.applied && Array.isArray(result.directDefeats) && result.directDefeats.length > 0) {
+    try {
+      const { applyDirectDefeat } = await import('../game/damage-pipeline.js');
+      for (const dd of result.directDefeats) {
+        if (!dd || !dd.figureKey || !dd.msgId) continue;
+        if (_seenDefeats.has(dd.figureKey)) continue;
+        _seenDefeats.add(dd.figureKey);
+        await applyDirectDefeat(game, ctx, dd);
+      }
+    } catch (err) {
+      console.error('[apply-ability-result] directDefeats failed:', err?.message ?? err);
+    }
+  }
+
   // --- Granted attack button (Emperor / Executive Order / Battlefield Leadership / Order Hit) ---
   // Per destruct 2026-05-07: granted attacks fire IMMEDIATELY in the source's
   // activation thread; clicking spawns a new combat thread for the grantee.

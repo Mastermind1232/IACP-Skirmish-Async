@@ -951,7 +951,11 @@ export async function handleSoaFire(interaction, ctx) {
       if (ctx.dcExhaustedState) {
         ctx.dcExhaustedState.set(rancorMsgId, false);
       }
-      // Defeat the chosen friendly via processFigureDefeat
+      // Direct-defeat: per IACP these abilities skip WHEN_DAMAGED and
+      // BEFORE_DEFEATED. applyDirectDefeat records HP=0, fires
+      // WHEN_DEFEATED hooks (Last Stand, Bounty, etc.), and finalizes
+      // via processFigureDefeat. Self-inflicted: attacker = controller
+      // so no VP is awarded.
       const targetFkParsed = String(targetFk).match(/-(\d+)-(\d+)$/);
       const targetFigIdx = targetFkParsed ? parseInt(targetFkParsed[2], 10) : 0;
       let targetMsgId = null;
@@ -964,11 +968,16 @@ export async function handleSoaFire(interaction, ctx) {
           }
         }
       }
-      if (ctx.processFigureDefeat && rancorPn) {
-        await ctx.processFigureDefeat(game, {
-          defeatedPlayerNum: rancorPn,
+      if (rancorPn && targetMsgId) {
+        const { applyDirectDefeat } = await import('../game/damage-pipeline.js');
+        await applyDirectDefeat(game, ctx, {
           figureKey: targetFk,
-          attackerPlayerNum: rancorPn,  // self-inflicted (no VP)
+          msgId: targetMsgId,
+          figIndex: targetFigIdx,
+          controllerPlayerNum: rancorPn,
+          attackerPlayerNum: rancorPn,
+          dcName: targetDcName,
+          displayName: targetDcName,
           source: 'Voracious',
         });
       }

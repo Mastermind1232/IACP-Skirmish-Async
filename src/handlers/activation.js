@@ -2459,30 +2459,22 @@ export async function handleItWillBeAlrightPick(interaction, ctx) {
   const playerNum = pending.playerNum;
   const oppNum = opponentPlayerNum(playerNum);
 
-  // Defeat the figure: set HP to 0
-  const hs = dcHealthState?.get(targetMsgId);
-  const prevHp = hs?.[targetFigIdx]?.[0] ?? 0;
-  if (prevHp > 0) {
-    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-      figureKey, msgId: targetMsgId, figIndex: targetFigIdx,
-      amount: prevHp, controllerPlayerNum: playerNum,
-      source: "It Will Be Alright",
-    });
-  }
-
-  // Route through centralized defeat handler (VP, CC attachments, passive redraws,
-  // Heroic Effort, Scavenged Weaponry, Hunt Dissent, activation decrement, win conditions)
-  if (processFigureDefeat) {
-    await processFigureDefeat(game, {
-      defeatedPlayerNum: playerNum,
-      figureKey,
-      attackerPlayerNum: oppNum,
-      msgId: targetMsgId,
-      dcName: targetDcName,
-      displayName: targetDcName,
-      source: 'It Will Be Alright',
-    });
-  }
+  // Direct-defeat: per IACP these abilities skip WHEN_DAMAGED and
+  // BEFORE_DEFEATED entirely (the figure does NOT suffer damage). Use
+  // applyDirectDefeat which records HP=0, fires WHEN_DEFEATED hooks
+  // (Last Stand, Bounty, Apex Predator, etc.), and finalizes via
+  // processFigureDefeat.
+  const { applyDirectDefeat } = await import('../game/damage-pipeline.js');
+  await applyDirectDefeat(game, { dcHealthState, logGameAction, client, processFigureDefeat, dcMessageMeta }, {
+    figureKey,
+    msgId: targetMsgId,
+    figIndex: targetFigIdx,
+    controllerPlayerNum: playerNum,
+    attackerPlayerNum: oppNum,
+    dcName: targetDcName,
+    displayName: targetDcName,
+    source: 'It Will Be Alright',
+  });
 
   // Offer free move or attack
   const cassianMsgId = pending.cassianMsgId;

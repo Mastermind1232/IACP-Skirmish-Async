@@ -8421,19 +8421,17 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: defeat chosen figure
+    // Phase 2: defeat chosen figure via the direct-defeat path.
+    // Per IACP this skips WHEN_DAMAGED + BEFORE_DEFEATED (the figure
+    // does NOT suffer damage). The actual defeat (WHEN_DEFEATED hooks
+    // + processFigureDefeat) fires from applyAbilityResult via
+    // result.directDefeats[]. Sync dispatch can't await async defeat,
+    // so we surface a payload for the consumer.
     if (chosenFigureKey) {
       const targetMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       if (!targetMsgId || !dcHealthState) return { applied: false, manualMessage: 'Resolve manually: could not locate chosen figure.' };
-      const hs = dcHealthState.get(targetMsgId) || [];
       const figMatch = chosenFigureKey.match(/-(\d+)-(\d+)$/);
       const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-      if (hs[figIdx]) {
-        const [cur, max] = hs[figIdx];
-        hs[figIdx] = [0, max ?? cur];
-        dcHealthState.set(targetMsgId, hs);
-        syncHealthStateToList(game, playerNum, targetMsgId, hs);
-      }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const baseCost = getDcEffects()[dcName]?.cost ?? 0;
       // IACP ruling: halve (base + positive attachments) **rounded down**
@@ -8461,7 +8459,21 @@ export function resolveAbility(abilityId, context) {
       }
       const halfVp = Math.max(0, Math.floor((baseCost + posAttCost) / 2) + negAttCost);
       const _hadAtts = (Array.isArray(_evCcAtts) && _evCcAtts.length) || (Array.isArray(_evDcAtts) && _evDcAtts.length);
-      return { applied: true, logMessage: `**Evacuate** — **${dcName}** is defeated. Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (_hadAtts ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`, refreshDcEmbed: true };
+      return {
+        applied: true,
+        logMessage: `**Evacuate** — **${dcName}** is defeated (direct defeat, no damage). Opponent gains ${halfVp > 0 ? halfVp + ' VP (half the deployment cost' + (_hadAtts ? ' incl. attachments' : '') + ' — use `/editvp -' + halfVp + '` to adjust)' : 'no VP'} from this defeat.`,
+        refreshDcEmbed: true,
+        directDefeats: [{
+          figureKey: chosenFigureKey,
+          msgId: targetMsgId,
+          figIndex: figIdx,
+          controllerPlayerNum: playerNum,
+          attackerPlayerNum: opponentPlayerNum(playerNum),
+          dcName,
+          displayName: dcName,
+          source: 'Evacuate',
+        }],
+      };
     }
     // Phase 1: find friendly figures within 2 spaces (not self)
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);

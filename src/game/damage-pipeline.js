@@ -368,6 +368,99 @@ export function applyDamageSync(game, ctx, opts) {
 }
 
 /**
+ * Direct-defeat path. Some abilities defeat a figure WITHOUT the
+ * figure suffering damage (Cassian's "It Will Be Alright", Rancor's
+ * "Voracious", the "Evacuate" CC, etc.). Per IACP, those abilities
+ * skip the damage triggers entirely:
+ *   - No WHEN_DAMAGED hooks (figure didn't suffer damage)
+ *   - No BEFORE_DEFEATED hooks (no "would-be-defeated by damage"
+ *     interrupts — Last Resort, YWNDM, Second Chance, SDP, etc. do
+ *     not fire)
+ *   - WHEN_DEFEATED hooks DO fire (Last Stand, Bounty, Apex Predator,
+ *     This is the Way, Useful Hide, etc. — these are "when this
+ *     figure is defeated" triggers regardless of cause)
+ *   - processFigureDefeat finalizes (VP, board cleanup, activation
+ *     decrement, attachment cleanup, passive redraws, defeat log,
+ *     win conditions)
+ *
+ * State change: HP is recorded as 0 via reduceHp(prevHp) so the
+ * dcHealthState mirrors the death.
+ *
+ * @param {object} game
+ * @param {object} ctx — same shape as applyDamage's ctx (dcHealthState,
+ *   logGameAction, client, processFigureDefeat, dcMessageMeta, etc.)
+ * @param {object} opts
+ * @param {string} opts.figureKey
+ * @param {string} opts.msgId
+ * @param {number} opts.figIndex
+ * @param {number} opts.controllerPlayerNum
+ * @param {number|null} [opts.attackerPlayerNum=null] — null for
+ *   self-inflicted (Voracious, IWBA, Evacuate); set when "directly
+ *   defeats" is from an opposing source for VP attribution.
+ * @param {string} [opts.source=''] — card name for logs.
+ */
+export async function applyDirectDefeat(game, ctx, opts) {
+  await _ensureHooksLoaded();
+  if (!opts || !opts.figureKey || !opts.msgId) {
+    throw new Error('applyDirectDefeat: figureKey + msgId required');
+  }
+  // Snapshot position BEFORE state mutations (WHEN_DEFEATED hooks
+  // with spatial probes need the pre-cleanup position).
+  const defeatedPos = opts.controllerPlayerNum
+    ? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey] || null
+    : null;
+  // Record HP=0. Compute current HP and reduce by exactly that amount.
+  const hs = ctx.dcHealthState?.get?.(opts.msgId) || [];
+  const figHp = hs[opts.figIndex];
+  const curHp = Array.isArray(figHp) ? Math.max(0, figHp[0] ?? 0) : 0;
+  if (curHp > 0) {
+    reduceHp(ctx.dcHealthState, game, opts.msgId, opts.figIndex, curHp, opts.controllerPlayerNum);
+  }
+  // WHEN_DEFEATED hooks. Async first, then sync, mirroring the
+  // applyDamage path. Skip WHEN_DAMAGED and BEFORE_DEFEATED entirely
+  // — figures defeated this way did NOT suffer damage.
+  const defeatedOpts = {
+    ...opts,
+    amount: curHp,
+    prevHp: curHp,
+    newHp: 0,
+    defeatedPos,
+    directDefeat: true,
+  };
+  for (const hook of WHEN_DEFEATED_HOOKS) {
+    if (!hook.probe || !hook.apply) continue;
+    if (!hook.probe(game, defeatedOpts)) continue;
+    try {
+      await hook.apply(game, defeatedOpts, ctx);
+    } catch (err) {
+      console.error(`[damage-pipeline] direct-defeat WHEN_DEFEATED hook ${hook.id} threw:`, err?.message ?? err);
+    }
+  }
+  await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
+    contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
+  });
+  // processFigureDefeat (VP, removeFromBoard, attachment cleanup,
+  // activation decrement, passive redraws, defeat log, win conditions).
+  if (typeof ctx?.processFigureDefeat === 'function') {
+    await ctx.processFigureDefeat(game, {
+      defeatedPlayerNum: opts.controllerPlayerNum,
+      figureKey: opts.figureKey,
+      attackerPlayerNum: opts.attackerPlayerNum ?? null,
+      msgId: opts.msgId,
+      dcName: opts.dcName ?? undefined,
+      displayName: opts.displayName ?? undefined,
+      source: opts.source || 'direct defeat',
+    });
+  }
+  return {
+    figureKey: opts.figureKey,
+    prevHp: curHp,
+    newHp: 0,
+    wasDefeated: true,
+  };
+}
+
+/**
  * Test-helper: clear all registries. Used by unit tests to isolate
  * pipeline behavior from migration drift.
  */
