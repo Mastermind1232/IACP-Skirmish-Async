@@ -153,20 +153,26 @@ test('resolveAbility Force Rush with active activation applies +2 MP', () => {
   assert.strictEqual(game.movementBank[msgId].total, 6);
 });
 
-test('resolveAbility Urgency (Speed+2) with active activation applies MP', () => {
+test('resolveAbility Urgency (Speed+2) with active activation stamps pendingMoveX (no bank)', () => {
   const msgId = 'msg789';
+  const figureKey = 'Luke Skywalker-1-0';
   const game = {
     gameId: 'g3',
-    dcActionsData: { [msgId]: { remaining: 1 } },
-    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+    dcActionsData: { [msgId]: { remaining: 1, selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'a1' } },
   };
   // Luke Skywalker has speed 5 in dc-stats → 5+2=7 MP
   const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(result.logMessage, 'Gained 7 movement points (must spend all at once).');
-  assert.strictEqual(game.movementBank[msgId].remaining, 9);
-  assert.strictEqual(game.movementBank[msgId].total, 11);
+  assert.match(result.logMessage, /gains 7 MP \(spend immediately, remainder discarded\)/);
+  // No bank — pendingMoveX is the only place the budget lives.
+  assert.strictEqual(game.movementBank, undefined);
+  assert.ok(game.pendingMoveX, 'pendingMoveX should be stamped');
+  assert.strictEqual(game.pendingMoveX[msgId].remaining, 7);
+  assert.strictEqual(game.pendingMoveX[msgId].bypassCosts, false);
+  assert.strictEqual(game.pendingMoveX[msgId].figureKey, figureKey);
+  assert.strictEqual(result.pendingMoveXMsgId, msgId);
 });
 
 test("resolveAbility Officer's Training with LEADER (during attack) draws 1", () => {

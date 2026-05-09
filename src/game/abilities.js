@@ -1024,54 +1024,89 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // executive_order (Imperial Officer Elite): choose an Imperial figure within 2 spaces; it interrupts to move or attack
+  // executive_order (Imperial Officer Elite): two-stage flow — Officer
+  // first picks ACTION (Move or Attack), then picks TARGET (Imperial
+  // figure within 2 / 3 with ACS attached). Phase mapping by context:
+  //   Phase 0 (no choiceIndex): post the action picker.
+  //   Phase 1 (choiceIndex set, no targetFigureKey): action chosen,
+  //     stash on game.pendingExecutiveOrderAction[msgId], post target
+  //     picker filtered to Imperial figures within range.
+  //   Phase 2 (choiceIndex + targetFigureKey set): target chosen,
+  //     route to grantedAttackButton (attack) or grantedMoveXButton
+  //     (move).
   if (abilityId === 'executive_order') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Executive Order** manually.' };
+
+    // Phase 2: target picked → resolve.
     if (choiceIndex != null && targetFigureKey) {
+      const action = game.pendingExecutiveOrderAction?.[msgId] || 'attack';
+      if (game.pendingExecutiveOrderAction) {
+        delete game.pendingExecutiveOrderAction[msgId];
+        if (Object.keys(game.pendingExecutiveOrderAction).length === 0) delete game.pendingExecutiveOrderAction;
+      }
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      const chosenName = dcNameFromFigureKey(targetFigureKey);
       if (chosenMsgId) {
         setPendingExecutiveOrder(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
-      const chosenName = dcNameFromFigureKey(targetFigureKey);
-      // The "move" branch grants the chosen figure a full move = speed
-      // MP (rule 2 — special-action MP gain, no bank). Per the gain-MP
-      // audit, the move side now uses the unified pendingMoveX picker.
-      const chosenSpeed = getStatsForDc(chosenName)?.speed ?? 4;
+      if (action === 'move') {
+        const chosenSpeed = getStatsForDc(chosenName)?.speed ?? 4;
+        return {
+          applied: true,
+          logMessage: `**Executive Order** — **${chosenName}** takes a free move (up to ${chosenSpeed} MP).`,
+          grantedMoveXButton: chosenMsgId ? {
+            granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName,
+            sourceLabel: 'Executive Order', spaces: chosenSpeed, playerNum,
+          } : null,
+        };
+      }
       return {
         applied: true,
-        logMessage: `**Executive Order** — **${chosenName}** may interrupt to perform a free move (up to ${chosenSpeed} MP) or attack.`,
+        logMessage: `**Executive Order** — **${chosenName}** declares a free attack.`,
         grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Executive Order' } : null,
-        grantedMoveXButton: chosenMsgId ? {
-          granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName,
-          sourceLabel: 'Executive Order', spaces: chosenSpeed, playerNum,
-        } : null,
       };
     }
-    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
-    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
-    if (!activatingPos) return { applied: false, manualMessage: '**Executive Order** — No position on the board. Resolve manually.' };
-    // ACS extends "within 2" → "within 3" when attached to this DC.
-    const _eoAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    const _eoMaxRange = cardNameIncludes(_eoAtts, 'Advanced Com Systems') ? 3 : 2;
-    const validTargets = [];
-    const dcEffects = typeof getEff === 'function' ? getEff() : null;
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > _eoMaxRange) continue;
-      // Must be Imperial affiliation
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = dcEffects?.[fkDcName];
-      if (fkEff?.affiliation && fkEff.affiliation !== 'Imperial') continue;
-      validTargets.push(fk);
+
+    // Phase 1: action chosen, gather targets and post target picker.
+    if (choiceIndex != null && !targetFigureKey) {
+      const action = choiceIndex === 0 ? 'move' : 'attack';
+      const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+      const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+      if (!activatingPos) return { applied: false, manualMessage: '**Executive Order** — No position on the board. Resolve manually.' };
+      // ACS extends "within 2" → "within 3" when attached to this DC.
+      const _eoAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _eoMaxRange = cardNameIncludes(_eoAtts, 'Advanced Com Systems') ? 3 : 2;
+      const validTargets = [];
+      const dcEffects = typeof getEff === 'function' ? getEff() : null;
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (fk === activatingKey || !pos) continue;
+        if (countGameSpaces(game, activatingPos, pos) > _eoMaxRange) continue;
+        // Must be Imperial affiliation
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = dcEffects?.[fkDcName];
+        if (fkEff?.affiliation && fkEff.affiliation !== 'Imperial') continue;
+        validTargets.push(fk);
+      }
+      if (validTargets.length === 0) return { applied: false, manualMessage: `**Executive Order** — No friendly Imperial figures within ${_eoMaxRange} spaces.` };
+      // Stash the chosen action so phase 2 can route correctly.
+      game.pendingExecutiveOrderAction = game.pendingExecutiveOrderAction || {};
+      game.pendingExecutiveOrderAction[msgId] = action;
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: figureChoiceLabels(validTargets),
+        targetFigureKeys: validTargets,
+      };
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: `**Executive Order** — No friendly Imperial figures within ${_eoMaxRange} spaces.` };
+
+    // Phase 0: present action picker (Move / Attack).
     return {
       applied: false,
       requiresChoice: true,
-      choiceOptions: figureChoiceLabels(validTargets),
-      targetFigureKeys: validTargets,
+      choiceOptions: ['Move (free)', 'Attack (free)'],
+      targetFigureKeys: null,
     };
   }
 
@@ -3247,45 +3282,38 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
-    // Rule 2 (special-action MP gain — Urgency etc.): route through
-    // pendingMoveX so the player spends MP immediately, no bank. The
-    // player MAY choose to spend less than all granted MP — clicking
-    // "Stop (discard remaining)" discards the leftover (Urgency does
-    // NOT force you to spend every MP, it only forbids banking).
-    // Other cards in this dispatch (On the Lam etc.) lack the data
-    // flag and still bank — those are rule-3 in-activation gains.
+    // Rule 2 (special-action MP gain — Urgency etc.): always route
+    // through pendingMoveX. Player spends MP immediately, no bank.
+    // Player MAY spend less than all (the picker's "Stop (discard
+    // remaining)" button discards leftovers). Urgency forbids
+    // banking — there is no bank fallback.
+    //
+    // Other cards in this dispatch (On the Lam etc.) lack the
+    // mustSpendAll flag and still bank via addMovementPoints — those
+    // are rule-3 in-activation gains.
     if (entry.mustSpendAll) {
       const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
         .filter(k => k.startsWith(meta.dcName + '-'));
       const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const figureKey = figureKeys[selectedIdx] || figureKeys[0] || null;
-      if (figureKey) {
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[msgId] = {
-          remaining: n, source: entry.label || 'Urgency',
-          playerNum: meta.playerNum, figureKey, dcName: meta.dcName,
-          threadId: null, bypassCosts: false, msgId,
-        };
-        const msg = `**${entry.label || 'Urgency'}** — gains ${n} MP (spend immediately, no bank; remainder discarded).`;
-        return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
+      if (!figureKey) {
+        return { applied: false, manualMessage: `**${entry.label || 'Urgency'}** — no deployed figure for **${meta.dcName}**; resolve manually.` };
       }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: n, source: entry.label || 'Urgency',
+        playerNum: meta.playerNum, figureKey, dcName: meta.dcName,
+        threadId: null, bypassCosts: false, msgId,
+      };
+      const msg = `**${entry.label || 'Urgency'}** — gains ${n} MP (spend immediately, remainder discarded).`;
+      return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
     }
     addMovementPoints(game, msgId, n);
     // C4: On the Lam — flag for post-move LOS recheck (attack misses if target moves out of LOS)
     if (context.cardName === 'On the Lam' && game.pendingCombat) {
       game.onTheLamActive = true;
     }
-    // Bank fallback path (only reached if pendingMoveX couldn't resolve
-    // an active figureKey — typically test fixtures without
-    // figurePositions). Preserve the legacy "must spend all at once"
-    // suffix for mustSpendAll cards so the urgencyMustSpendAll gate in
-    // handleMoveMp still applies under the fallback.
-    if (entry.mustSpendAll) {
-      game.urgencyMustSpendAll = game.urgencyMustSpendAll || {};
-      game.urgencyMustSpendAll[msgId] = true;
-    }
-    const allNote = entry.mustSpendAll ? ' (must spend all at once)' : '';
-    const msg = n === 1 ? `Gained 1 movement point${allNote}.` : `Gained ${n} movement points${allNote}.`;
+    const msg = n === 1 ? `Gained 1 movement point.` : `Gained ${n} movement points.`;
     return { applied: true, logMessage: msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 

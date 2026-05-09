@@ -406,6 +406,7 @@ const ROUND_NULL_FLAGS = [
   'pendingRushPush',
   'pendingMassivePush',
   'pendingMoveXSequence',
+  'pendingExecutiveOrderAction',
   'pendingEmperorInterrupt',
   'pendingExecutiveOrder',
   'pendingBombardmentSorin',
