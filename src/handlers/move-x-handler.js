@@ -732,21 +732,46 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
   }
   if (afterAction.type === 'triangulateTarget') {
     // Triangulate: after up to 3 DROIDs have each moved 1 space, post
-    // the hostile-target picker. Phase 2 (resolveAbility chosenFigureKey)
-    // applies damage via the existing triangulateEffect dispatch.
+    // the hostile-target picker. Target list is restricted to hostiles
+    // within 5 spaces of *and* LOS from at least one moved DROID. The
+    // moved-figureKeys snapshot is parked on game.pendingTriangulate
+    // so Phase 2 (resolveAbility chosenFigureKey) computes damage as
+    // # of moved DROIDs with LOS to the chosen target.
     try {
       const { client, logGameAction } = ctx;
       const playerNum = afterAction.playerNum;
       const oppNum = playerNum === 1 ? 2 : 1;
+      const movedFigKeys = Array.isArray(afterAction.movedFigKeys) ? afterAction.movedFigKeys : [];
+      const mapId = game.selectedMap?.id;
+      const ms = mapId ? getMapData(mapId) : null;
+      // Snapshot the moved figureKeys for Phase 2 LOS-count.
+      game.pendingTriangulate = { movedFigKeys, playerNum };
+      const { hasLineOfSightByCoord } = await import('../game/spatial.js').catch(() => ({}));
+      const { countGameSpaces } = await import('../game/board-helpers.js').catch(() => ({}));
       const hostileKeys = [];
       const hostileLabels = [];
       for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
         if (!pos) continue;
+        // Eligibility: at least one moved DROID within 5 + LOS to this
+        // hostile. If LOS lookup is unavailable, fall back to within-5.
+        let eligible = false;
+        for (const dfk of movedFigKeys) {
+          const dPos = game.figurePositions?.[playerNum]?.[dfk];
+          if (!dPos) continue;
+          if (typeof countGameSpaces === 'function' && countGameSpaces(game, dPos, pos) > 5) continue;
+          if (typeof hasLineOfSightByCoord === 'function' && ms) {
+            if (!hasLineOfSightByCoord(game, dPos, pos, ms, getFigureSize)) continue;
+          }
+          eligible = true;
+          break;
+        }
+        if (!eligible) continue;
         hostileKeys.push(fk);
         hostileLabels.push(dcNameFromFigureKey(fk));
       }
       if (hostileKeys.length === 0) {
-        await logGameAction?.(game, client, `**Triangulate** — no hostile figures on the board; effect skipped.`, { phase: 'ROUND', icon: 'card' });
+        await logGameAction?.(game, client, `**Triangulate** — no hostile in range/LOS of any moved DROID; effect skipped.`, { phase: 'ROUND', icon: 'card' });
+        delete game.pendingTriangulate;
         return;
       }
       const ownerId = getPlayerId(game, playerNum);
@@ -764,7 +789,7 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
         .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
         .setStyle(ButtonStyle.Danger));
       const rows = chunkButtonsToRows(btns).slice(0, 5);
-      const content = `<@${ownerId}> 📡 **Triangulate** — choose a hostile figure (within 5 + LOS). Damage = # of those moved DROIDs with LOS.`;
+      const content = `<@${ownerId}> 📡 **Triangulate** — choose a hostile (within 5 + LOS of at least one moved DROID). Damage = # of those DROIDs with LOS to the target.`;
       await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
     } catch (err) {
       console.error('[move-x] triangulateTarget failed:', err?.message ?? err);

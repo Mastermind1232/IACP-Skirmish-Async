@@ -8851,20 +8851,54 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt: ${n}`), choiceValues: validKeys };
   }
 
-  // ccEffect: triangulateEffect (Triangulate) — move DROIDs manually; pick hostile; deal damage = # friendly DROIDs in play
+  // ccEffect: triangulateEffect (Triangulate) — up to 3 friendly DROIDs
+  // each move 1 space; choose a hostile within 5 + LOS; damage = # of
+  // those moved DROIDs that have LOS to the target (post-move).
   if (entry.type === 'ccEffect' && entry.triangulateEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey, hasLineOfSightByCoord: losCheck, getMapData: getMs, getFigureSize: gfs } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const dcEffects = getDcEffects();
-    // Phase 2: apply damage to chosen hostile = # friendly DROIDs in play
+    // Phase 2: apply damage to chosen hostile.
+    // Damage = # of *moved* DROIDs that have LOS to the target.
     if (chosenFigureKey) {
       const oppNum = opponentPlayerNum(playerNum);
-      const droidCount = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
-        const dcN = dcNameFromFigureKey(fk);
-        const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
-        return kws.includes('DROID');
-      }).length;
-      if (!droidCount) return { applied: false, manualMessage: 'No friendly DROIDs in play to deal damage.' };
+      const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      // Read the moved-figureKey list snapshotted at sequence-end via
+      // pendingTriangulate. If the snapshot is missing (test fixtures,
+      // stale state), fall back to "all friendly DROIDs in play" so
+      // the dispatch still completes.
+      const movedFigKeys = Array.isArray(game.pendingTriangulate?.movedFigKeys)
+        ? game.pendingTriangulate.movedFigKeys
+        : Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
+            const dcN = dcNameFromFigureKey(fk);
+            const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+            return kws.includes('DROID');
+          });
+      let droidCount = 0;
+      const mapId = game.selectedMap?.id;
+      const mapSpaces = mapId && typeof getMs === 'function' ? getMs(mapId) : (mapId ? getMapData(mapId) : null);
+      if (targetPos && mapSpaces) {
+        for (const fk of movedFigKeys) {
+          const dPos = game.figurePositions?.[playerNum]?.[fk];
+          if (!dPos) continue;
+          // Range: within 5 spaces.
+          if (countGameSpaces(game, dPos, targetPos) > 5) continue;
+          // LOS: from this DROID's current position to the target.
+          if (typeof losCheck === 'function') {
+            if (!losCheck(game, dPos, targetPos, mapSpaces, gfs)) continue;
+          }
+          droidCount++;
+        }
+      }
+      // Defensive: if LOS lookup unavailable in this dispatch context,
+      // fall back to count = movedFigKeys.length within 5 (no LOS gate).
+      if (droidCount === 0 && (!losCheck || !mapSpaces)) {
+        droidCount = movedFigKeys.length;
+      }
+      if (game.pendingTriangulate) delete game.pendingTriangulate;
+      if (!droidCount) {
+        return { applied: true, logMessage: `**Triangulate** — **${dcNameFromFigureKey(chosenFigureKey)}**: 0 DROIDs have LOS within 5 — no damage applied.` };
+      }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
       let dmgNote = `${droidCount} Dmg to ${dcName}`;
@@ -8881,7 +8915,7 @@ export function resolveAbility(abilityId, context) {
           dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
         }
       }
-      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (Max = ${droidCount} DROIDs in play.)`, refreshDcEmbed: !!figMsgId };
+      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (${droidCount} DROID${droidCount === 1 ? '' : 's'} with LOS within 5.)`, refreshDcEmbed: !!figMsgId };
     }
     // Phase 1: stamp a Move-X sequence for up to 3 friendly DROIDs
     // (each picker grants 1 space, bypassCosts: true per MOVE-017).
@@ -8909,6 +8943,7 @@ export function resolveAbility(abilityId, context) {
       spaces: 1,
       dcName: f.dcName,
     }));
+    const movedFigKeys = seqFigures.map(f => f.figureKey);
     return {
       applied: true,
       pendingMoveXSequenceSetup: {
@@ -8916,9 +8951,9 @@ export function resolveAbility(abilityId, context) {
         source: 'Triangulate',
         threadId: null,
         bypassCosts: true,
-        afterAction: { type: 'triangulateTarget', playerNum },
+        afterAction: { type: 'triangulateTarget', playerNum, movedFigKeys },
       },
-      logMessage: `**Triangulate** — ${seqFigures.length} friendly DROID${seqFigures.length === 1 ? '' : 's'} may each move up to 1 space; pick order. After all moves, choose a hostile target.`,
+      logMessage: `**Triangulate** — ${seqFigures.length} friendly DROID${seqFigures.length === 1 ? '' : 's'} may each move up to 1 space; pick order. After all moves, choose a hostile within 5 + LOS. Damage = # of those DROIDs with LOS to the target.`,
     };
   }
 
