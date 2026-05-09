@@ -23,19 +23,22 @@ function readSrc(relPath) {
 
 // ── ORACLE-BMDEFEAT-001: Black Market uses reduceHp, not raw dcHealthState ──
 describe('ORACLE-BMDEFEAT-001: Black Market strain uses canonical HP path', () => {
-  it('handleBlackMarket applies strain damage via the centralized damage pipeline', () => {
-    // destruct 2026-05-08 migration: reduceHp call sites moved to
-    // applyDamage. Black Market routes through _applyDamage with
-    // viaStrain=true so the strain → damage layering is preserved.
+  it('handleBlackMarket applies strain via the canonical applyStrain pipeline', () => {
+    // 2026-05-09: migrated from `_applyDamage(viaStrain:true)` direct call
+    // to the `applyStrain` pipeline, so Fireproof / Headhunter / per-strain
+    // choice / Under Duress / Paz interactions fire correctly. The
+    // damage branch still routes through _applyDamage internally (via
+    // _applyDamageFromStrain) — the call from the handler itself is now
+    // applyStrain.
     const src = readSrc('src/handlers/interrupts.js');
     const bmIdx = src.indexOf('function handleBlackMarket');
     assert.ok(bmIdx > 0, 'handleBlackMarket found');
     const fnEnd = src.indexOf('\nexport ', bmIdx + 1);
     const block = src.slice(bmIdx, fnEnd > bmIdx ? fnEnd : bmIdx + 3000);
-    assert.ok(/_applyDamage\(game,[\s\S]*?msgId: smugglerMsgId/.test(block),
-      'Black Market must apply damage via the centralized pipeline (smugglerMsgId)');
+    assert.ok(/applyStrain\(game,[\s\S]*?figureKey: smugglerFk/.test(block),
+      'Black Market must apply strain via the applyStrain pipeline (smugglerFk)');
     assert.ok(block.includes("source: 'Black Market'"),
-      'Black Market damage must be tagged with source: "Black Market"');
+      'Black Market strain must be tagged with source: "Black Market"');
   });
 
   it('handleBlackMarket no longer mutates dcHealthState directly', () => {

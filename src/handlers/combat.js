@@ -7082,13 +7082,17 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
 
   if (deck.length === 0) {
     if (strainMsgId && dcHealthState) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-        figureKey, msgId: strainMsgId, figIndex: strainFigIdx,
-        amount: 1, controllerPlayerNum: atkPN,
-        source: 'Krennic Strain (empty deck)', viaStrain: true,
+      // Even with no CCs to absorb, strain still routes through the
+      // canonical applyStrain pipeline so Fireproof / Headhunter /
+      // Under Duress / Paz interactions fire correctly.
+      await applyStrain(game, ctx, {
+        figureKey,
+        controllerPlayerNum: atkPN,
+        amount: 1,
+        source: 'Unhinged Director Strain (empty deck)',
       });
     }
-    await thread.send(`**Unhinged Director Strain** — **${strainDcName}** suffers 1 Damage (no CCs in deck to absorb).`).catch(discordCatch);
+    await thread.send(`**Unhinged Director Strain** — **${strainDcName}** must suffer 1 Strain (no CCs in deck to absorb).`).catch(discordCatch);
     await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
     saveGames(game.gameId);
     return;
@@ -7171,13 +7175,14 @@ export async function handleUnhingedStrainAbsorb(interaction, ctx) {
     if (deck.length === 0) {
       // Race / state inconsistency — fall through to HP damage.
       if (pending.attackerMsgId && dcHealthState) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
-          figureKey: figKey, msgId: pending.attackerMsgId, figIndex: pending.attackerFigureIndex ?? 0,
-          amount: 1, controllerPlayerNum: atkPN,
-          source: 'Unhinged Director Strain (empty deck)', viaStrain: true,
+        await applyStrain(game, { ...ctx, client: interaction.client }, {
+          figureKey: figKey,
+          controllerPlayerNum: atkPN,
+          amount: 1,
+          source: 'Unhinged Director Strain (empty deck)',
         });
       }
-      await thread.send(`**Unhinged Director Strain** — Deck empty, **${figName}** takes 1 Damage instead.`).catch(discordCatch);
+      await thread.send(`**Unhinged Director Strain** — Deck empty, **${figName}** must suffer 1 Strain.`).catch(discordCatch);
     } else {
       const top = deck.shift();
       game[deckKey] = deck;
@@ -7186,15 +7191,20 @@ export async function handleUnhingedStrainAbsorb(interaction, ctx) {
       logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — Discarded **${top}** to absorb 1 Strain.`, { phase: 'ROUND', icon: 'card' });
     }
   } else {
-    // HP damage path
+    // Player chose the damage branch of the Unhinged custom prompt.
+    // Route through applyStrain so Fireproof / Headhunter / Under Duress
+    // / Paz still fire — applyStrain will normally re-prompt for the
+    // CC-vs-damage choice, but with a 0-card hand or already-discarded
+    // path the player still gets correct rules treatment.
     if (pending.attackerMsgId && dcHealthState) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
-        figureKey: figKey, msgId: pending.attackerMsgId, figIndex: pending.attackerFigureIndex ?? 0,
-        amount: 1, controllerPlayerNum: atkPN,
-        source: 'Unhinged Director Strain', viaStrain: true,
+      await applyStrain(game, { ...ctx, client: interaction.client }, {
+        figureKey: figKey,
+        controllerPlayerNum: atkPN,
+        amount: 1,
+        source: 'Unhinged Director Strain',
       });
     }
-    await thread.send(`**Unhinged Director Strain** — **${figName}** suffers 1 Damage.`).catch(discordCatch);
+    await thread.send(`**Unhinged Director Strain** — **${figName}** must suffer 1 Strain.`).catch(discordCatch);
     logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — **${figName}** suffered 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
   }
 

@@ -17,6 +17,9 @@ import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discor
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { clearPendingBoltslinger, clearPendingHeavyFire, clearPendingWantonDestruction, clearPendingHavocShot, clearPendingFightingKnife, clearPendingSpreadThePain, clearPendingDeflect, clearPendingDurasteelFistPush, clearPendingIndiscriminateFire, clearPendingConcussiveBolt } from '../game/interrupts.js';
 import { setupPendingMoveX } from './move-x-handler.js';
+import { applyStrain } from './strain-handler.js';
+import { cardNameIncludes } from '../game/card-names.js';
+import { filterCondition } from '../game/conditions.js';
 
 // ── Internal helpers ─────────────────────────────
 
@@ -177,7 +180,6 @@ export async function handleBleedResolve(interaction, ctx) {
     getGame, saveGames, client, dcMessageMeta, dcHealthState, dcExhaustedState,
     findDcMessageIdForFigure, renderDcEmbed, logGameAction, calculateKillVp,
     decrementActivationIfGroupDefeated, checkWinConditions, canActAsPlayer,
-    filterCondition,
     updateHandVisualMessage, updateDiscardPileMessage,
     processFigureDefeat,
   } = ctx;
@@ -201,6 +203,17 @@ export async function handleBleedResolve(interaction, ctx) {
 
   if (action === 'accept') {
     if (msgId) {
+      // Fireproof check before damage applies — Flame Trooper attachment
+      // immune to Strain (and Bleeding strain in particular).
+      const _bAtts = (playerNum === 1 ? game.p1DcAttachments : game.p2DcAttachments)?.[msgId] || [];
+      if (cardNameIncludes(_bAtts, 'Flame Trooper')) {
+        await logGameAction(game, interaction.client, `**Fireproof** — **${dcName}** is immune to Bleeding strain.`, { phase: 'ROUND', icon: 'card' });
+        filterCondition(game, figureKey, 'Bleed');
+        delete game.pendingBleeding;
+        await interaction.message.edit({ components: [] }).catch(discordCatch);
+        saveGames(game.gameId);
+        return;
+      }
       const { newHp, wasDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
         figureKey, msgId, figIndex: figureIndex,
         amount: 1, controllerPlayerNum: playerNum,
@@ -300,31 +313,60 @@ export async function handleSidewinderApply(interaction, ctx) {
     return;
   }
   await interaction.deferUpdate().catch(discordCatch);
-  // Apply 1 Strain
-  await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
-    figureKey, msgId: attackerMsgId, figIndex: figureIndex,
-    amount: 1, controllerPlayerNum: meta.playerNum,
-    source: 'Sidewinder', viaStrain: true,
-  });
-  // Mark used this round so a second after-attack within the same
-  // round does not re-offer Sidewinder.
+  // Mark used + edit prompt before strain (so the click feels responsive).
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
   game.roundFigureAbilityUsed[swKey] = true;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await logGameAction(game, client,
-    `\u{1F578}\u{FE0F} **Sidewinder** — Jyn Odan suffered 1 Strain and may move up to 2 spaces.`,
-    { phase: 'ROUND', icon: 'card' });
-  await updateDcCardMessage(client, game, attackerMsgId, ctx, { errorContext: 'Failed to refresh Sidewinder DC embed:' });
-  // "Move 2 spaces" effect (CRR MOVE-017): pendingMoveX with bypass.
-  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
-    msgId: attackerMsgId,
+  // Strain via the canonical applyStrain pipeline (Fireproof / Headhunter
+  // / per-strain choice / Under Duress / Paz). Move 2 picker runs as the
+  // sidewinder_move followup AFTER the player resolves the strain.
+  await applyStrain(game, ctx, {
     figureKey,
-    playerNum: meta.playerNum,
-    spaces: 2,
+    controllerPlayerNum: meta.playerNum,
+    amount: 1,
     source: 'Sidewinder',
-    threadId: interaction.message?.channelId || null,
+    followup: {
+      type: 'sidewinder_move',
+      payload: { msgId: attackerMsgId, figureKey, playerNum: meta.playerNum, threadId: interaction.message?.channelId || null },
+    },
   });
 }
+
+// Strain followup for Sidewinder: after the player resolves the 1 Strain
+// (damage or CC discard), open the Move 2 picker.
+import { registerStrainFollowup } from './strain-handler.js';
+registerStrainFollowup('havoc_shot_pick', async (game, ctx, payload) => {
+  const { client, logGameAction } = ctx;
+  const hs = game.pendingHavocShot;
+  if (!hs) return;
+  const thread = await fetchCombatThread(client, hs.combatThreadId);
+  if (!thread) return;
+  const btns = hs.targets.slice(0, 4).map((t, i) =>
+    new ButtonBuilder().setCustomId(`havoc_shot_pick_${payload.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${payload.gameId}`).setLabel('Done (skip remaining)').setStyle(ButtonStyle.Secondary));
+  await thread.send({
+    content: `**Havoc Shot** — strain resolved. Choose up to ${hs.maxPicks} figure(s) to deal 1 Damage:`,
+    components: chunkButtonsToRows(btns),
+  }).catch(discordCatch);
+  if (logGameAction) {
+    await logGameAction(game, client, `**Havoc Shot** — strain resolved; figure picker posted.`, { phase: 'ROUND', icon: 'attack' });
+  }
+});
+
+registerStrainFollowup('sidewinder_move', async (game, ctx, payload) => {
+  const { client, logGameAction, saveGames } = ctx;
+  await logGameAction?.(game, client,
+    `\u{1F578}\u{FE0F} **Sidewinder** — strain resolved; **${dcNameFromFigureKey(payload.figureKey)}** may move up to 2 spaces.`,
+    { phase: 'ROUND', icon: 'card' });
+  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+    msgId: payload.msgId,
+    figureKey: payload.figureKey,
+    playerNum: payload.playerNum,
+    spaces: 2,
+    source: 'Sidewinder',
+    threadId: payload.threadId,
+  });
+});
 
 export async function handleSidewinderSkip(interaction, ctx) {
   const { saveGames } = ctx;
@@ -995,26 +1037,25 @@ export async function handleHavocShotUse(interaction, ctx) {
   if (!game?.pendingHavocShot) return;
   const hs = game.pendingHavocShot;
   if (!await requirePlayer(interaction, game, interaction.user.id, hs.attackerPlayerNum, canActAsPlayer, 'Only the attacker can use Havoc Shot.')) return;
-  // Suffer 1 Strain (HP damage) to attacker
+  // Suffer 1 Strain via the canonical applyStrain pipeline (Fireproof /
+  // Headhunter / per-strain choice / Under Duress / Paz). The figure
+  // picker fires after strain resolves, via the havoc_shot_pick followup.
   const atkMsgId = hs.attackerMsgId;
   if (atkMsgId) {
-    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-      figureKey: hs.attackerFigureKey, msgId: atkMsgId, figIndex: hs.attackerFigureIndex,
-      amount: 1, controllerPlayerNum: hs.attackerPlayerNum,
-      source: 'Havoc Shot', viaStrain: true,
+    await applyStrain(game, ctx, {
+      figureKey: hs.attackerFigureKey,
+      controllerPlayerNum: hs.attackerPlayerNum,
+      amount: 1,
+      source: 'Havoc Shot',
+      followup: {
+        type: 'havoc_shot_pick',
+        payload: { gameId: game.gameId, channelId: interaction.message?.channelId || null, messageId: interaction.message?.id || null },
+      },
     });
-    // Refresh attacker embed
-    await updateDcCardMessage(client, game, atkMsgId, ctx);
   }
-  // Show figure picker
-  const btns = hs.targets.slice(0, 4).map((t, i) =>
-    new ButtonBuilder().setCustomId(`havoc_shot_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
-  );
-  btns.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${game.gameId}`).setLabel('Done (skip remaining)').setStyle(ButtonStyle.Secondary));
-  const rows = chunkButtonsToRows(btns);
   await interaction.message.edit({
-    content: `**Havoc Shot** — Suffered 1 Strain. Choose up to ${hs.maxPicks} figure(s) to deal 1 Damage:`,
-    components: rows,
+    content: `**Havoc Shot** — strain resolving; figure picker next.`,
+    components: [],
   }).catch(discordCatch);
   await logGameAction(game, client, `**Havoc Shot** — **${dcNameFromFigureKey(hs.attackerFigureKey)}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
   saveGames(game.gameId);

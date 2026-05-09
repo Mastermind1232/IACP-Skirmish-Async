@@ -1394,10 +1394,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
-      await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-        figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: combat.attackerFigureIndex ?? 0,
-        amount: combat.superchargeStrainAfterAttackCount || 0, controllerPlayerNum: combat.attackerPlayerNum,
-        source: 'Supercharge', viaStrain: true, combat,
+      // Supercharge / Sustained by Rage post-attack strain: route through
+      // the canonical applyStrain pipeline (Fireproof / Headhunter /
+      // per-strain choice / Under Duress / Paz).
+      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+        figureKey: combat.attackerFigureKey,
+        controllerPlayerNum: combat.attackerPlayerNum,
+        amount: combat.superchargeStrainAfterAttackCount || 0,
+        source: 'Supercharge',
       });
     }
     // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack
@@ -1876,32 +1880,17 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     if (damage > 0 && targetMsgId) {
       // Fireproof: target immune to Strain if it also has Flame Trooper attachment
       const _ftTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-      if (cardNameIncludes(_ftTargetUpgrades, 'Flame Trooper')) {
-        await thread.send('**Incinerate** — Target is **Fireproof**, immune to Strain.').catch(discordCatch);
-      } else {
-        const _ftHsBefore = dcHealthState.get(targetMsgId);
-        if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
-            const { newHp: _ftNew, wasDefeated: _ftDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-              figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
-              amount: 1, controllerPlayerNum: defenderPlayerNum,
-              attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-              source: 'Flame Trooper Incinerate', viaStrain: true, combat,
-            });
-            await thread.send(`**Incinerate** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`).catch(discordCatch);
-            if (_ftDefeated || _ftNew <= 0) {
-              const { idx: _ftIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
-              await processFigureDefeat(game, {
-                defeatedPlayerNum: defenderPlayerNum,
-                figureKey: combat.target.figureKey,
-                attackerPlayerNum,
-                attackerFigureKey: combat.attackerFigureKey,
-                msgId: targetMsgId,
-                dcIdx: _ftIdx,
-                dcName: combat.defenderDcName,
-                source: 'Incinerate',
-              }, deps);
-            }
-        }
+      // Fireproof + per-strain choice + Headhunter handled by applyStrain.
+      // Defeat finalization on the damage branch is handled inside the
+      // strain pipeline (applyStrain → _applyDamageFromStrain).
+      const _ftHsBefore = dcHealthState.get(targetMsgId);
+      if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+          figureKey: combat.target.figureKey,
+          controllerPlayerNum: defenderPlayerNum,
+          amount: 1,
+          source: 'Flame Trooper Incinerate',
+        });
       }
     }
     // Blast damage also triggers Incinerate Strain on adjacent damaged figures — auto-apply
@@ -1911,39 +1900,26 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
         : [];
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
-        // Fireproof: skip friendly figures with Flame Trooper attachment
+        // Fireproof self-skip: own Incinerate Blast doesn't strain own
+        // Flame Trooper figures (per the attacker's Fireproof passive).
+        // applyStrain handles the TARGET-side Fireproof check below.
         if (_ftBlastPn === attackerPlayerNum && cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper')) continue;
         const _ftBlastMsgId = findDcMessageIdForFigure(game.gameId, _ftBlastPn, _ftBlastFk);
         if (!_ftBlastMsgId) continue;
-        // Fireproof: target immune to Strain if it also has Flame Trooper attachment
-        const _ftBlastUpgrades = game.p1DcAttachments?.[_ftBlastMsgId] || game.p2DcAttachments?.[_ftBlastMsgId] || [];
-        if (cardNameIncludes(_ftBlastUpgrades, 'Flame Trooper')) continue;
-        const { figureIndex: _ftBlastFigIdx } = parseFigureKey(_ftBlastFk);
         const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
-        if (!_ftBlastHsBefore?.[_ftBlastFigIdx] || _ftBlastHsBefore[_ftBlastFigIdx][0] <= 0) continue;
-        const { newHp: _ftBlastNew, wasDefeated: _ftBlastDied } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-          figureKey: _ftBlastFk, msgId: _ftBlastMsgId, figIndex: _ftBlastFigIdx,
-          amount: 1, controllerPlayerNum: _ftBlastPn,
-          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-          source: 'Incinerate Blast', viaStrain: true, combat,
+        if (!_ftBlastHsBefore?.[parseFigureKey(_ftBlastFk).figureIndex] || _ftBlastHsBefore[parseFigureKey(_ftBlastFk).figureIndex][0] <= 0) continue;
+        // Strain via the canonical applyStrain pipeline (Fireproof /
+        // Headhunter / per-strain choice / Under Duress / Paz).
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+          figureKey: _ftBlastFk,
+          controllerPlayerNum: _ftBlastPn,
+          amount: 1,
+          source: 'Incinerate Blast',
         });
-        const _ftBlastName = dcNameFromFigureKey(_ftBlastFk);
-        await thread.send(`**Incinerate** — **${_ftBlastName}** suffers 1 Strain from Blast.`).catch(discordCatch);
         _ftBlastRefreshMsgIds.push(_ftBlastMsgId);
-        if (_ftBlastDied || _ftBlastNew <= 0) {
-          const _ftBlastVpRecipient = _ftBlastPn === attackerPlayerNum ? defenderPlayerNum : attackerPlayerNum;
-          const { idx: _ftBlastIdx } = lookupFigureDcIndex(game, _ftBlastPn, _ftBlastFk);
-          await processFigureDefeat(game, {
-            defeatedPlayerNum: _ftBlastPn,
-            figureKey: _ftBlastFk,
-            attackerPlayerNum: _ftBlastVpRecipient,
-            attackerFigureKey: combat.attackerFigureKey,
-            msgId: _ftBlastMsgId,
-            dcIdx: _ftBlastIdx,
-            dcName: _ftBlastName,
-            source: 'Incinerate (Blast)',
-          }, deps);
-        }
+        // Defeat finalization on the damage branch is handled inside
+        // applyStrain → _applyDamageFromStrain → applyDamage's pipeline
+        // (which fires WHEN_DEFEATED hooks + post-defeat orchestration).
       }
     }
     // Place Rubble token in target space (if attack didn't miss)

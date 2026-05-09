@@ -1953,12 +1953,13 @@ export async function handleCtfPick(interaction, ctx) {
         if ((_ctfDcList[i]?.dcName || _ctfDcList[i]) === fuName) { _ctfFigMsgId = _ctfDcMsgIds[i]; break; }
       }
       if (_ctfFigMsgId && dcHealthState) {
-        const figMatch = fk.match(/-(\d+)$/);
-        const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-          figureKey: fk, msgId: _ctfFigMsgId, figIndex: figIdx,
-          amount: cost, controllerPlayerNum: playerNum,
-          source: 'Cantina Brawl strain', viaStrain: true,
+        // Strain via the canonical applyStrain pipeline.
+        const { applyStrain: _applyStrainCb } = await import('./strain-handler.js');
+        await _applyStrainCb(game, ctx, {
+          figureKey: fk,
+          controllerPlayerNum: playerNum,
+          amount: cost,
+          source: 'Channel the Force',
         });
       }
       await logGameAction(game, client,
@@ -2021,12 +2022,13 @@ export async function handleCtfStrain(interaction, ctx) {
     if ((_ctsDcList[i]?.dcName || _ctsDcList[i]) === fig.dcName) { _ctsFigMsgId = _ctsDcMsgIds[i]; break; }
   }
   if (_ctsFigMsgId && dcHealthState) {
-    const figMatch = fig.fk.match(/-(\d+)$/);
-    const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-    await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-      figureKey: fig.fk, msgId: _ctsFigMsgId, figIndex: figIdx,
-      amount: pending.cost, controllerPlayerNum: playerNum,
-      source: 'Channel the Force strain', viaStrain: true,
+    // Strain via the canonical applyStrain pipeline.
+    const { applyStrain: _applyStrainCtf } = await import('./strain-handler.js');
+    await _applyStrainCtf(game, ctx, {
+      figureKey: fig.fk,
+      controllerPlayerNum: playerNum,
+      amount: pending.cost,
+      source: 'Channel the Force',
     });
   }
   clearPendingChannelTheForceStrain(game);

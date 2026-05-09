@@ -1139,22 +1139,17 @@ export async function handleBlackMarket(interaction, ctx) {
     return;
   }
 
-  // Apply 1 Strain (= 1 HP damage) to the SMUGGLER via the centralized
-  // damage pipeline (viaStrain=true so when-damaged hooks distinguish).
-  const { prevHp: _bmPrevHp, newHp: _bmNewHp } = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-    figureKey: smugglerFk, msgId: smugglerMsgId, figIndex: smugglerFigIdx,
-    amount: 1, controllerPlayerNum: _bmPn,
-    source: 'Black Market', viaStrain: true,
+  // Apply 1 Strain to the SMUGGLER via the canonical applyStrain
+  // pipeline (Fireproof / Headhunter / per-strain choice prompt /
+  // Under Duress / Paz). applyStrain handles defeat finalization
+  // through the damage pipeline if the player picks the damage branch.
+  const { applyStrain } = await import('./strain-handler.js');
+  await applyStrain(game, ctx, {
+    figureKey: smugglerFk,
+    controllerPlayerNum: _bmPn,
+    amount: 1,
+    source: 'Black Market',
   });
-  const _bmDefeatNote = _bmNewHp <= 0 ? ' **(defeated)**' : '';
-  if (_bmNewHp <= 0 && processFigureDefeat) {
-    await processFigureDefeat(game, {
-      defeatedPlayerNum: _bmPn,
-      figureKey: smugglerFk,
-      attackerPlayerNum: opponentPlayerNum(_bmPn),
-      source: 'Black Market strain',
-    });
-  }
 
   // Remove top card from deck (it was only peeked before)
   const deck = game[deckKey] || [];
@@ -1170,7 +1165,7 @@ export async function handleBlackMarket(interaction, ctx) {
     }
     const handKey = _bmPn === 1 ? 'player1CcHand' : 'player2CcHand';
     game[handKey] = [...(game[handKey] || []), topCard];
-    resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
+    resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
   } else if (_bmChoice === 'discard') {
     // Discard the card, gain VP equal to cost
     const discardKey = _bmPn === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
@@ -1178,11 +1173,11 @@ export async function handleBlackMarket(interaction, ctx) {
     if (cardCost > 0) {
       awardObjectiveVp(game, _bmPn, cardCost);
     }
-    resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
+    resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
   } else if (_bmChoice === 'return') {
     // Return card to top of deck (put it back)
     deck.unshift(topCard);
-    resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain (HP: ${_bmPrevHp}→${_bmNewHp})${_bmDefeatNote}.`;
+    resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain.`;
   }
 
   delete game.pendingBlackMarket[_bmPn];

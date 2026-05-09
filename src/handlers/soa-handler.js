@@ -727,18 +727,22 @@ export async function handleSoaFire(interaction, ctx) {
       const hand = getCcHand(game, ownerPlayerNum) || [];
       if (hand.length <= 2) {
         const figureKeys = Object.keys(game.figurePositions?.[ownerPlayerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
+        // Madness (Taron Malicos) — strain routes through applyStrain so
+        // Fireproof / Headhunter / per-strain choice prompt fire correctly.
+        // Focus is applied first (auto, no choice); then strain is queued.
+        const { applyStrain } = await import('./strain-handler.js');
         for (const fk of figureKeys) {
           applyCondition(game, fk, 'Focus');
           if (dcHealthState) {
-            const fkIdx = parseFigureKey(fk).figureIndex;
-            await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-              figureKey: fk, msgId: desc.sourceMsgId, figIndex: fkIdx,
-              amount: 1, controllerPlayerNum: ownerPlayerNum,
-              source: 'Madness', viaStrain: true,
+            await applyStrain(game, ctx, {
+              figureKey: fk,
+              controllerPlayerNum: ownerPlayerNum,
+              amount: 1,
+              source: 'Madness',
             });
           }
         }
-        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** suffered **1 Strain** and became **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);
+        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** must suffer **1 Strain** and became **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F4A2} **Madness** — ${displayName} suffered 1 strain + Focus.`, { phase: 'ROUND', icon: 'card' });
       } else {
         await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Hand size is ${hand.length} (>2); no effect.`, components: [] }).catch(discordCatch);

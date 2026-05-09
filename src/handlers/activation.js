@@ -1206,13 +1206,17 @@ export async function handleActPassive(interaction, ctx) {
       const condFk = fullSuffix.slice(0, lastUnderscore);
       const condName = fullSuffix.slice(lastUnderscore + 1);
       filterCondition(game, condFk, condName);
-      // Apply 1 Strain to the activating figure
+      // Apply 1 Strain to the activating figure via the canonical
+      // applyStrain pipeline (Fireproof / Headhunter / per-strain
+      // choice prompt / Under Duress / Paz).
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const selfFk = `${meta.dcName}-${dgIndex}-0`;
-      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-        figureKey: selfFk, msgId, figIndex: 0,
-        amount: 1, controllerPlayerNum: meta.playerNum,
-        source: 'Calming Presence', viaStrain: true,
+      const { applyStrain: _applyStrainCp } = await import('./strain-handler.js');
+      await _applyStrainCp(game, ctx, {
+        figureKey: selfFk,
+        controllerPlayerNum: meta.playerNum,
+        amount: 1,
+        source: 'Calming Presence',
       });
       const condFkName = dcNameFromFigureKey(condFk);
       await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(discordCatch);
@@ -1262,12 +1266,14 @@ export async function handleActPassive(interaction, ctx) {
         // Apply 1 Strain to the chosen figure
         const targetMsgId = ctx.findDcMessageIdForFigure?.(gameId, meta.playerNum, targetFk);
         if (targetMsgId) {
-          const figMatch = targetFk.match(/-(\d+)$/);
-          const figIdx = figMatch ? parseInt(figMatch[1], 10) : 0;
-          await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-            figureKey: targetFk, msgId: targetMsgId, figIndex: figIdx,
-            amount: 1, controllerPlayerNum: meta.playerNum,
-            source: 'Unshakable', viaStrain: true,
+          // Strain via the canonical applyStrain pipeline (Fireproof /
+          // Headhunter / per-strain choice / Under Duress / Paz).
+          const { applyStrain: _applyStrainUs } = await import('./strain-handler.js');
+          await _applyStrainUs(game, ctx, {
+            figureKey: targetFk,
+            controllerPlayerNum: meta.playerNum,
+            amount: 1,
+            source: 'Unshakable',
           });
         }
         // Exhaust Unshakable
