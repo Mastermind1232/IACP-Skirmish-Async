@@ -153,8 +153,43 @@ async function _finishPicker(game, ctx, msgId) {
     await _runRushPostMoveContinuation(game, ctx, pending);
   } else if (nextAction.type === 'shoulderRushPostMove') {
     await _runShoulderRushPostMoveContinuation(game, ctx, pending);
+  } else if (nextAction.type === 'lordOfSithChoice') {
+    await _runLordOfSithChoiceContinuation(game, ctx, pending);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Lord of the Sith post-move continuation: present a 2-button picker
+ * (Force Choke / Free Melee Attack) that routes back through
+ * handleCcChoice → resolveAbility('Lord of the Sith', { choiceIndex }).
+ * Force Choke target picker fires from Vader's NEW position; the
+ * adjacency rules are computed at choice-resolution time.
+ */
+async function _runLordOfSithChoiceContinuation(game, ctx, pending) {
+  const { client, logGameAction } = ctx;
+  const ownerId = getPlayerId(game, pending.playerNum);
+  const choiceOptions = ['Force Choke adjacent hostile (2 Dmg + 2 Strain)', 'Perform free Melee attack'];
+  game.pendingCcChoice = {
+    gameId: game.gameId,
+    playerNum: pending.playerNum,
+    cardName: 'Lord of the Sith',
+    choiceOptions,
+  };
+  const btns = choiceOptions.map(opt => new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_${opt}`)
+    .setLabel(opt.length > 80 ? opt.slice(0, 77) + '…' : opt)
+    .setStyle(ButtonStyle.Primary));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const content = `<@${ownerId}> ⚔\u{FE0F} **Lord of the Sith** — choose:`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
 }
 
 /** Push-immunity check shared by every Move-X-then-push continuation

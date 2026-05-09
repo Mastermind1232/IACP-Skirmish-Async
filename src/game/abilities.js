@@ -9179,51 +9179,61 @@ export function resolveAbility(abilityId, context) {
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       return { applied: true, logMessage: `**Lord of the Sith** — Force Choke **${dcName}**: ${dmgNote}. (2 MP already added)`, refreshDcEmbed: !!figMsgId };
     }
+    // Phase 0: card resolves → stamp pendingMoveX (2 MP, no choice
+    // yet). The lordOfSithChoice continuation posts a "Force Choke /
+    // Free Attack" picker after the move-x picker drains. Player's
+    // choice routes back through this dispatch as a phase-1 call.
+    if (choiceIndex === undefined || choiceIndex === null) {
+      const meta = dcMessageMeta?.get?.(msgId);
+      const _losFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+      const _losSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _losFigureKey = _losFigKeys[_losSelectedIdx] || _losFigKeys[0] || null;
+      if (!_losFigureKey) {
+        return { applied: false, manualMessage: '**Lord of the Sith** — could not locate the activating figure; resolve manually.' };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: 2,
+        source: 'Lord of the Sith',
+        playerNum,
+        figureKey: _losFigureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: {
+          type: 'lordOfSithChoice',
+          payload: { msgId, playerNum, figureKey: _losFigureKey },
+        },
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+        logMessage: '**Lord of the Sith** — Darth Vader may move up to 2 spaces. After the move, choose Force Choke or Free Melee Attack.',
+      };
+    }
     if (choiceIndex !== undefined && choiceIndex !== null) {
       if (choiceIndex === 1) {
-        // Free Melee attack — Vader moves up to 2 spaces first, then
-        // gets the "Declare Attack" prompt via freeAttackPrompt.
-        // Move-X via pendingMoveX (no bank, remainder discarded).
+        // Free Melee attack — picker has already drained (continuation
+        // path). Set the free-attack flag and post the prompt via the
+        // freeAttackPrompt-style fallback.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[msgId] = true;
-        const meta = dcMessageMeta?.get?.(msgId);
-        const _losFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
-          .filter(k => k.startsWith((meta?.dcName || '') + '-'));
-        const _losSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-        const _losFigureKey = _losFigKeys[_losSelectedIdx] || _losFigKeys[0] || null;
-        if (!_losFigureKey) {
-          return { applied: false, manualMessage: '**Lord of the Sith** — could not locate the activating figure; resolve manually.' };
-        }
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[msgId] = {
-          remaining: 2,
-          source: 'Lord of the Sith',
-          playerNum,
-          figureKey: _losFigureKey,
-          dcName: meta?.dcName || '',
-          threadId: null,
-          bypassCosts: true,
-          msgId,
-          nextAction: {
-            type: 'freeAttackPrompt',
-            payload: {
-              msgId, playerNum, figureKey: _losFigureKey,
-              sourceLabel: 'Lord of the Sith',
-            },
-          },
-        };
         return {
           applied: true,
-          pendingMoveXMsgId: msgId,
           activeMsgId: msgId,
-          logMessage: '**Lord of the Sith** — Darth Vader may move up to 2 spaces, then take a free Melee attack.',
+          grantedAttackButton: {
+            granteeMsgId: msgId,
+            granteeFigureKey: (Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith((dcMessageMeta?.get?.(msgId)?.dcName || '') + '-'))) || null,
+            granteeName: dcMessageMeta?.get?.(msgId)?.dcName || 'Vader',
+            sourceLabel: 'Lord of the Sith',
+          },
+          logMessage: '**Lord of the Sith** — Darth Vader takes a free Melee attack.',
         };
       }
-      // Force Choke path: 2 MP gained as bank (pre-Move-X behavior
-      // preserved — target picker computes adjacents from current
-      // position; migrating Force Choke to post-move target pick
-      // requires a new continuation type and is deferred).
-      addMovementPoints(game, msgId, 2);
+      // Force Choke path:
       // Force Choke: pick adjacent hostile
       const meta = dcMessageMeta.get(msgId);
       const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
