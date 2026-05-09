@@ -785,6 +785,37 @@ async function fireWildFury(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Sidewinder (Jyn Odan): "after this attack, suffer 1 Strain to move
+ * up to 2 spaces. Limit once per round." Posts the same yes/skip prompt
+ * the inline path used to auto-post after combat close. Existing
+ * handleSidewinderApply / handleSidewinderSkip (combat-special-effects.js)
+ * own the click flow — no combat-close coupling, so the step-8 wrap is
+ * a clean lift.
+ */
+async function fireSidewinder(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  if (!thread || !ButtonBuilder || !ActionRowBuilder) return;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  const swKey = combat.attackerFigureKey + '_sidewinder';
+  if (game.roundFigureAbilityUsed?.[swKey]) return;
+  const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+  await thread.send({
+    content: `<@${ownerId}> **Sidewinder** — Suffer 1 Strain to move up to 2 spaces? (once per round)`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`)
+        .setLabel('Suffer 1 Strain → Move up to 2 spaces')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`sidewinder_skip_${game.gameId}`)
+        .setLabel('Skip')
+        .setStyle(ButtonStyle.Primary),
+    )],
+  }).catch(discordCatch);
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -849,6 +880,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'wild_fury':
       await fireWildFury(thread, game, combat, effect, ctx);
+      return;
+    case 'sidewinder':
+      await fireSidewinder(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

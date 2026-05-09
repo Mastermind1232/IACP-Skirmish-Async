@@ -296,6 +296,19 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Wild Fury: Apply post-activation conditions',
     });
   }
+  // Sidewinder (Jyn Odan): "after this attack, suffer 1 Strain to move
+  // up to 2 spaces. Limit once per round." Fire handler posts the
+  // existing yes/skip prompt; handleSidewinderApply handles the rest.
+  if (_atkIds.includes('sidewinder') && combat.attackerMsgId && combat.attackerFigureKey) {
+    const swKey = combat.attackerFigureKey + '_sidewinder';
+    if (!game?.roundFigureAbilityUsed?.[swKey]) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'sidewinder',
+        label: 'Sidewinder: 1 Strain → Move 2',
+      });
+    }
+  }
 }
 
 /**

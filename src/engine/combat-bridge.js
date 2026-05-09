@@ -2663,8 +2663,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   const pcAttEff = getDcEffect(combat.attackerDcName);
   const pcAttIds = pcAttEff?.specialAbilityIds || [];
   const pcOwnerId = getPlayerId(game, combat.attackerPlayerNum);
-  // Sidewinder (Jyn Odan): suffer 1 Strain to move 2 after attack (once/round)
-  if (pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) {
+  // Sidewinder inline disabled 2026-05-09 → fireSidewinder (step-8
+  // attacker button posts the same yes/skip prompt).
+  if (false && pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) { // eslint-disable-line no-constant-condition
     const swKey = combat.attackerFigureKey + '_sidewinder';
     if (!game.roundFigureAbilityUsed?.[swKey]) {
       await thread.send(sanitizeMentions({
