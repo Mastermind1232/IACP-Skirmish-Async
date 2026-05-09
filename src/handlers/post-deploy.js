@@ -836,17 +836,36 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       break;
     }
     case 'infiltration': {
+      // Infiltration: each Pathfinder in the deployed group may move
+      // up to 6 spaces post-deploy. Move-X per CRR MOVE-017 — picker
+      // walks 1 space at a time, bypassCosts true, no banking. Player
+      // picks resolution order via the multi-figure orchestrator.
       const figures = ability.figureKeys || [ability.figureKey];
-      game.postDeployQueue.activeAbility = {
-        abilityId: 'infiltration',
-        abilityLabel: 'Infiltration',
-        moveFigures: figures.map(fk => ({ figureKey: fk, dcName: dcNameFromFigureKey(fk), mp: ability.mpPerFigure || 6 })),
-        currentFigureIdx: 0,
-        playerNum: ability.playerNum,
-        dcName: ability.dcName,
-      };
-      // Start movement for first figure
-      await _startNextMovement(game, gameId, client, ctx);
+      const seqFigures = [];
+      for (const fk of figures) {
+        const dn = dcNameFromFigureKey(fk);
+        let mid = null;
+        for (const [m, meta] of dcMessageMeta) {
+          if (meta.dcName === dn && meta.playerNum === ability.playerNum) { mid = m; break; }
+        }
+        if (mid) seqFigures.push({ msgId: mid, figureKey: fk, playerNum: ability.playerNum, spaces: ability.mpPerFigure || 6, dcName: dn });
+      }
+      if (seqFigures.length === 0) {
+        await logGameAction(game, client, `🥾 **Infiltration** — no eligible figures resolved.`, { phase: 'ROUND', icon: 'deployed' });
+        game.postDeployQueue.activeAbility = null;
+        await postAbilityPicker(game, gameId, client, logGameAction, saveGames);
+        break;
+      }
+      await logGameAction(game, client, `🥾 **Infiltration** — ${seqFigures.length} **${ability.dcName}** figure${seqFigures.length === 1 ? '' : 's'} may each move up to ${ability.mpPerFigure || 6} spaces. Pick order.`, { phase: 'ROUND', icon: 'deployed' });
+      game.postDeployQueue.activeAbility = { abilityId: 'infiltration', abilityLabel: 'Infiltration', playerNum: ability.playerNum };
+      const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+      await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+        figures: seqFigures,
+        source: 'Infiltration',
+        threadId: null,
+        bypassCosts: true,
+        afterAction: { type: 'postDeployAdvance' },
+      });
       break;
     }
     case 'extra_armor': {
