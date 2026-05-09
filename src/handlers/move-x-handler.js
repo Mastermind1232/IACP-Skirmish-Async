@@ -25,7 +25,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
-import { getFootprintCells, normalizeCoord, edgeKey } from '../game/coords.js';
+import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
@@ -74,12 +74,19 @@ export function isPendingMoveX(game, msgId) {
 }
 
 /**
- * Compute the set of cells a figure could legally end a 1-space move on.
- * Move-X bypass: ignore difficult-terrain extra cost (no-op for 1-space
- * step since cost-bypass is moot at 1 space) and friendly pass-through
- * (also moot — destination occupancy is checked separately). The real
- * filters are: (a) door edges that are closed, (b) cells already
- * occupied by any figure, (c) new footprint must fit on the board.
+ * Compute the legal 1-space cardinal translations of a figure's
+ * footprint. Returns a list of { topLeft, footprintCells } — one entry
+ * per legal direction (N/S/E/W).
+ *
+ * MOVE-020: Large figures cannot rotate during a Move-X effect, so
+ * only translations are considered. Validations:
+ *   (a) every cell of the new footprint exists on the map.
+ *   (b) every "leading" edge between the old footprint and the cells
+ *       newly entered must be in the adjacency map and not blocked
+ *       by a closed door.
+ *   (c) every newly-entered cell must be unoccupied.
+ *
+ * For 1x1 figures the loop reduces to the obvious 4 neighbors.
  */
 function _computeValidNeighbors(game, msgId) {
   const pending = game.pendingMoveX?.[msgId];
@@ -104,12 +111,13 @@ function _computeValidNeighbors(game, msgId) {
       .map(e => edgeKey(e[0], e[1])),
   );
 
-  // Footprint of the current figure (cells it occupies).
+  // Old footprint of the figure (cells it currently occupies).
   const dcName = dcNameFromFigureKey(figureKey);
   const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName) || '1x1';
-  const fpCells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
+  const oldCells = getFootprintCells(pos, size).map(c => normalizeCoord(c));
+  const oldSet = new Set(oldCells);
 
-  // Set of every cell occupied by any figure (for end-on filter).
+  // Set of every cell occupied by other figures (for occupancy filter).
   const occupied = new Set();
   for (const pn of [1, 2]) {
     for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[pn] || {})) {
@@ -121,26 +129,43 @@ function _computeValidNeighbors(game, msgId) {
     }
   }
 
-  // Candidate destinations: cells adjacent to ANY footprint cell.
-  // For 1x1 this collapses to the obvious neighbors. For multi-cell
-  // figures we'd also need to verify the entire moved footprint fits;
-  // current Move-X carriers (Leg Hydraulics, Fell Swoop) are 1x1, so
-  // we keep this simple — multi-cell extension is a follow-up.
-  const candidates = new Set();
-  for (const c of fpCells) {
-    const neighbors = adjacency[c] || [];
-    for (const n of neighbors) {
-      const ne = normalizeCoord(n);
-      // Skip if part of own footprint (no self-overlap).
-      if (fpCells.includes(ne)) continue;
-      // Skip if door edge is closed between c and ne.
-      if (closedDoorEdges.has(edgeKey(c, ne))) continue;
-      // Skip if occupied by another figure.
-      if (occupied.has(ne)) continue;
-      candidates.add(ne);
+  const candidates = [];
+  const directions = [
+    { dx: 0, dy: -1 }, // N
+    { dx: 0, dy: 1 },  // S
+    { dx: 1, dy: 0 },  // E
+    { dx: -1, dy: 0 }, // W
+  ];
+  for (const { dx, dy } of directions) {
+    const newTopLeft = normalizeCoord(shiftCoord(pos, dx, dy));
+    const newCells = getFootprintCells(newTopLeft, size).map(c => normalizeCoord(c));
+    let ok = true;
+    // (a) every new cell exists on the map.
+    for (const nc of newCells) {
+      if (!Object.prototype.hasOwnProperty.call(adjacency, nc)) { ok = false; break; }
     }
+    if (!ok) continue;
+    // (b) every leading edge — between an old cell and its
+    //     same-direction-shifted neighbor that's NOT in old footprint —
+    //     must be in adjacency and not closed by a door.
+    for (const oc of oldCells) {
+      const corresponding = normalizeCoord(shiftCoord(oc, dx, dy));
+      if (oldSet.has(corresponding)) continue; // moved into own old cell, no boundary crossed
+      // Must be a real adjacency between oc and corresponding.
+      const ocAdj = (adjacency[oc] || []).map(normalizeCoord);
+      if (!ocAdj.includes(corresponding)) { ok = false; break; }
+      if (closedDoorEdges.has(edgeKey(oc, corresponding))) { ok = false; break; }
+    }
+    if (!ok) continue;
+    // (c) newly-entered cells must be unoccupied (own old cells are fine).
+    for (const nc of newCells) {
+      if (oldSet.has(nc)) continue;
+      if (occupied.has(nc)) { ok = false; break; }
+    }
+    if (!ok) continue;
+    candidates.push({ topLeft: newTopLeft, footprintCells: newCells });
   }
-  return [...candidates];
+  return candidates;
 }
 
 /** Render-from-state: post the move-X picker with current valid cells. */
@@ -151,10 +176,10 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
   const { client, logGameAction } = ctx;
-  const cells = _computeValidNeighbors(game, msgId);
+  const candidates = _computeValidNeighbors(game, msgId);
   const ownerId = getPlayerId(game, pending.playerNum);
 
-  if (cells.length === 0) {
+  if (candidates.length === 0) {
     // No legal destinations — close the budget and tell the player.
     await logGameAction?.(game, client,
       `🦿 **${pending.source}** — **${pending.dcName}** has no legal destinations; remaining ${pending.remaining} space(s) discarded.`,
@@ -163,9 +188,11 @@ export async function postMoveXPicker(game, ctx, msgId) {
     return;
   }
 
-  const stepBtns = cells.slice(0, 20).map(cell => new ButtonBuilder()
-    .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cell}`)
-    .setLabel(cell.toUpperCase())
+  // Each candidate's button label shows the new top-left of the
+  // figure's footprint. For 1x1 that IS the destination cell.
+  const stepBtns = candidates.slice(0, 20).map(cand => new ButtonBuilder()
+    .setCustomId(`move_x_step_${game.gameId}_${msgId}_${cand.topLeft}`)
+    .setLabel(cand.topLeft.toUpperCase())
     .setStyle(ButtonStyle.Primary),
   );
   const doneBtn = new ButtonBuilder()
@@ -207,22 +234,26 @@ export async function handleMoveXStep(interaction, ctx) {
   if (!pending) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the figure\'s controller can step.')) return;
 
-  // Validate the chosen space is still a legal neighbor.
-  const valid = new Set(_computeValidNeighbors(game, msgId));
-  if (!valid.has(space)) {
-    await interaction.followUp({ content: `Space ${space.toUpperCase()} is no longer a legal step.`, ephemeral: true }).catch(discordCatch);
+  // Validate the chosen top-left is still a legal cardinal step for
+  // the figure's full footprint (multi-cell aware).
+  const candidates = _computeValidNeighbors(game, msgId);
+  const match = candidates.find(c => c.topLeft === space);
+  if (!match) {
+    await interaction.followUp({ content: `Step to ${space.toUpperCase()} is no longer legal.`, ephemeral: true }).catch(discordCatch);
     return;
   }
 
-  // Move the figure.
+  // Move the figure (top-left moves; footprint follows because we
+  // store top-left in figurePositions and downstream consumers read
+  // the size from figureOrientations / dc-effects).
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
-  game.figurePositions[pending.playerNum][pending.figureKey] = space;
+  game.figurePositions[pending.playerNum][pending.figureKey] = match.topLeft;
 
   pending.remaining -= 1;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction?.(game, client,
-    `🦿 **${pending.source}** — **${pending.dcName}** moves to **${space.toUpperCase()}** (${pending.remaining} space(s) left).`,
+    `🦿 **${pending.source}** — **${pending.dcName}** moves to **${match.topLeft.toUpperCase()}** (${pending.remaining} space(s) left).`,
     { phase: 'ROUND', icon: 'attack' });
 
   if (pending.remaining <= 0) {

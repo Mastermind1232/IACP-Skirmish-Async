@@ -5,6 +5,7 @@
 
 import { processFigureDefeat } from './defeat-handler.js';
 import { applyStrain as _applyStrain, triggerBleedAfterAction as _triggerBleedAfterAction } from '../handlers/strain-handler.js';
+import { setupPendingMoveX as _setupPendingMoveX } from '../handlers/move-x-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
@@ -2465,27 +2466,27 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   // Hidden, move up to 2 spaces, then perform an attack. Limit once
   // per round."
   //
-  // The "move up to 2 spaces" is Move-X-shaped (CRR MOVE-017): each
-  // granted point buys 1 space regardless of difficult terrain — so
-  // we grant 2 MP and tag moveXBypassActive. Prior implementation
-  // banked raw MP, which under-delivered into difficult terrain
-  // (2 MP bought 1 space when entry cost was 2).
+  // Move-X 2-space budget: routes through pendingMoveX (immediate,
+  // per-effect, no bank). Hide + free-attack flag fire alongside; the
+  // free attack is gated separately by fellSwoopFreeAttack[msgId].
   if (combat.surgeFellSwoop && combat.attackerFigureKey) {
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
     if (!game.roundFigureAbilityUsed[fsKey]) {
       game.roundFigureAbilityUsed[fsKey] = true;
       _applyCondition(game, combat.attackerFigureKey, 'Hide');
-      grantMovementBank(game, combat.attackerMsgId, 2);
-      game.moveXBypassActive = game.moveXBypassActive || {};
-      game.moveXBypassActive[combat.attackerMsgId] = true;
-      if (game.movementBank?.[combat.attackerMsgId]) {
-        updateMovementBankMessage(game, combat.attackerMsgId, client).catch(discordCatch);
-      }
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
       const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
-      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**. Use Move in the DC thread, then click Attack for a free Fell Swoop attack (costs no action).`).catch(discordCatch);
+      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**, then make a free attack.`).catch(discordCatch);
+      await _setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+        msgId: combat.attackerMsgId,
+        figureKey: combat.attackerFigureKey,
+        playerNum: combat.attackerPlayerNum,
+        spaces: 2,
+        source: 'Fell Swoop',
+        threadId: combat.combatThreadId,
+      });
     }
   }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.

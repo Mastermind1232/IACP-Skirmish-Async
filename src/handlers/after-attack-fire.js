@@ -21,6 +21,7 @@ import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
 import { grantMovementBank, grantPowerTokens, opponentPlayerNum } from '../game/index.js';
 import { applyStrain } from './strain-handler.js';
+import { setupPendingMoveX } from './move-x-handler.js';
 
 /**
  * Recover N — heals the attacker by N HP. Applies even on a miss
@@ -45,24 +46,20 @@ async function fireRecover(thread, game, combat, effect, ctx) {
  * Leg Hydraulics (Tress Hacnua) — attacker after-resolve: "After you
  * resolve an attack, move up to 1 space."
  *
- * Implemented as the freeMoveBonus pattern (1 free MP + moveXBypass)
- * which makes the granted point cost 1 per space regardless of
- * difficult terrain — matching the canonical "1 space of movement"
- * semantics under CRR MOVE-017. Without the bypass flag the prior
- * "1 MP" implementation under-delivered into difficult terrain (1 MP
- * doesn't reach an adjacent space when entry costs 2 MP).
+ * Move-X effect: per-effect 1-space budget, no MP banked. Routes
+ * through pendingMoveX so the bypass (MOVE-017 + MOVE-020) is scoped
+ * to the budget being consumed and discarded when complete or stopped.
  */
 async function fireLegHydraulics(thread, game, combat, effect, ctx) {
-  const { logGameAction, client } = ctx;
-  if (combat.attackerMsgId == null) return;
-  grantMovementBank(game, combat.attackerMsgId, 1);
-  game.moveXBypassActive = game.moveXBypassActive || {};
-  game.moveXBypassActive[combat.attackerMsgId] = true;
-  if (logGameAction && thread) {
-    await logGameAction(game, client,
-      `\u{1F9BF} **Leg Hydraulics** — **${combat.attackerDcName}** may move up to 1 space after attacking.`,
-      { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-  }
+  if (combat.attackerMsgId == null || !combat.attackerFigureKey) return;
+  await setupPendingMoveX(game, ctx, {
+    msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
+    playerNum: combat.attackerPlayerNum,
+    spaces: 1,
+    source: 'Leg Hydraulics',
+    threadId: combat.combatThreadId,
+  });
 }
 
 /**
