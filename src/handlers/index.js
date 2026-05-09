@@ -162,7 +162,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
@@ -558,6 +558,7 @@ register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
 register('dbh_force_choke_', handleDrivenByHatred, 'interrupts');
 register('dbh_attack_', handleDrivenByHatred, 'interrupts');
 register('dbh_skip_', handleDrivenByHatred, 'interrupts');
+register('findsman_med_', handleFindsmanMeditation, 'interrupts');
 register('on_diplomatic_', handleOnDiplomatic, 'interrupts');
 register('bel_reorder_1_', handleBelReorder, 'interrupts');
 register('bel_reorder_2_', handleBelReorder, 'interrupts');

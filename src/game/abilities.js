@@ -3830,6 +3830,59 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: swapLog, refreshMovementBank: !_swPmxMsgId, activeMsgId: msgId, pendingMoveXMsgId: _swPmxMsgId };
   }
 
+  // ccEffect: disengageEffect (Disengage) — out-of-activation reactive
+  // grant when a hostile enters a space within 3 of "you". Player
+  // picks which friendly figure is "you", that figure gets a 3-MP
+  // picker (bypassCosts: false; rule 1: spend at once, no bank).
+  if (entry.type === 'ccEffect' && entry.disengageEffect) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const n = entry.mpBonus || 3;
+    if (chosenFigureKey) {
+      const recipMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      if (!recipMsgId) {
+        return { applied: false, manualMessage: `**Disengage** — could not locate **${dcNameFromFigureKey(chosenFigureKey)}**'s play area; resolve manually.` };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[recipMsgId] = {
+        remaining: n,
+        source: 'Disengage',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName: dcNameFromFigureKey(chosenFigureKey),
+        threadId: null,
+        bypassCosts: false,
+        msgId: recipMsgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: recipMsgId,
+        activeMsgId: recipMsgId,
+        logMessage: `**Disengage** — **${dcNameFromFigureKey(chosenFigureKey)}** gains ${n} MP — spend at once, no bank.`,
+      };
+    }
+    // Phase 1: present friendly-figure picker. Out-of-activation
+    // timing means we have no activator context — list every friendly
+    // on the board so the player can name which "you" is the one
+    // adjacent-3 to the triggering hostile.
+    const friendlyKeys = [];
+    const friendlyLabels = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      friendlyKeys.push(fk);
+      friendlyLabels.push(dcNameFromFigureKey(fk));
+    }
+    if (friendlyKeys.length === 0) return { applied: false, manualMessage: '**Disengage** — no friendly figures on the board.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: friendlyLabels.map(n => `Recipient: ${n}`),
+      choiceValues: friendlyKeys,
+      manualMessage: '**Disengage** — pick the friendly figure within 3 spaces of the triggering hostile to gain 3 MP.',
+    };
+  }
+
   // ccEffect: advanceWarningEffect (Advance Warning) — activator + an
   // adjacent friendly figure each gain 1 MP. Activator banks (rule 3,
   // in-activation grant on activator); chosen adjacent friendly gets

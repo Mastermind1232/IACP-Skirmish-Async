@@ -990,6 +990,69 @@ export async function handleDrivenByHatred(interaction, ctx) {
   return;
 }
 
+// ── Findsman Meditation (Zuckuss) ──────────────────────────────────────────
+// At start of an opponent's marked activation, Zuckuss's controller
+// chose Move / Attack / Skip. customId:
+//   findsman_med_${gameId}_${zuckussMsgId}_${move|attack|skip}
+export async function handleFindsmanMeditation(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^findsman_med_([^_]+)_(.+)_(move|attack|skip)$/);
+  if (!m) return;
+  const [, gameId, zuckussMsgId, action] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta?.get(zuckussMsgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'Zuckuss DC not found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, "Only Zuckuss's controller may respond.")) return;
+  // Once-per-round: clear the marker on first resolution so it
+  // doesn't re-fire on subsequent activations of the same group.
+  if (game.findsmanMeditationTarget?.[meta.playerNum]) {
+    delete game.findsmanMeditationTarget[meta.playerNum];
+    if (Object.keys(game.findsmanMeditationTarget).length === 0) delete game.findsmanMeditationTarget;
+  }
+  const zuckussFigKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+    .filter(k => k.startsWith('Zuckuss-'));
+  const zuckussFk = zuckussFigKeys[0] || null;
+  if (action === 'skip') {
+    await interaction.message.edit({ content: '**Findsman Meditation** — Skipped.', components: [] }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  if (!zuckussFk) {
+    await interaction.message.edit({ content: '**Findsman Meditation** — Zuckuss is not on the board; cannot resolve interrupt.', components: [] }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  if (action === 'move') {
+    const speed = ctx.getDcStats?.('Zuckuss')?.speed ?? 4;
+    const { setupPendingMoveX } = await import('./move-x-handler.js');
+    await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+      msgId: zuckussMsgId,
+      figureKey: zuckussFk,
+      playerNum: meta.playerNum,
+      spaces: speed,
+      source: 'Findsman Meditation',
+      threadId: null,
+      bypassCosts: false,
+    });
+    await interaction.message.edit({ content: `**Findsman Meditation** — **Zuckuss** performs a move (up to ${speed} MP, spend at once, no bank).`, components: [] }).catch(discordCatch);
+    await logGameAction?.(game, client, `**Findsman Meditation** — Zuckuss performs a move (${speed} MP, spend immediately).`, { phase: 'ROUND', icon: 'card' });
+    saveGames(game.gameId);
+    return;
+  }
+  // action === 'attack'
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[zuckussMsgId] = { from: 'Findsman Meditation' };
+  await interaction.message.edit({ content: '**Findsman Meditation** — **Zuckuss** performs an attack. Use the Attack button.', components: [] }).catch(discordCatch);
+  await logGameAction?.(game, client, '**Findsman Meditation** — Zuckuss performs an interrupt attack.', { phase: 'ROUND', icon: 'card' });
+  saveGames(game.gameId);
+  return;
+}
+
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
 export async function handleSubmitOrFight(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);

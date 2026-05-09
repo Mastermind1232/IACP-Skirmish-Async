@@ -285,6 +285,37 @@ export async function finalizeActivation({
   // [C] INTERRUPT-TIMING EFFECTS — other figures reacting to activation
   // ═══════════════════════════════════════════════════════════════════════════
 
+  // C0. Findsman Meditation (Zuckuss): at start of an opponent's
+  // activation matching the marked group, post Zuckuss's controller a
+  // move-or-attack picker. Move → Speed-MP picker (rule 1, no bank).
+  // Attack → granted attack. Skip → no-op. Once-per-round (cleared on
+  // first resolution this round).
+  {
+    const _fmOpponentPN = opponentPlayerNum(playerNum);
+    const _fmTarget = game.findsmanMeditationTarget?.[_fmOpponentPN];
+    if (_fmTarget && (_fmTarget === dcName || _fmTarget === dcName?.replace(/\s*\[.*\]\s*$/, ''))) {
+      // Locate Zuckuss on the opponent's side.
+      let _fmZuckussFk = null;
+      for (const fk of Object.keys(game.figurePositions?.[_fmOpponentPN] || {})) {
+        if (fk.startsWith('Zuckuss-')) { _fmZuckussFk = fk; break; }
+      }
+      if (_fmZuckussFk) {
+        const _fmZuckussMsgId = findDcMessageIdForFigure(gameId, _fmOpponentPN, _fmZuckussFk);
+        if (_fmZuckussMsgId) {
+          const _fmOwnerId = getPlayerId(game, _fmOpponentPN);
+          const _fmRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`findsman_med_${gameId}_${_fmZuckussMsgId}_move`).setLabel('Move (Speed MP)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`findsman_med_${gameId}_${_fmZuckussMsgId}_attack`).setLabel('Attack').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`findsman_med_${gameId}_${_fmZuckussMsgId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await logGameAction(game, client,
+            `<@${_fmOwnerId}> **Findsman Meditation** — **${displayName}** is activating. **Zuckuss** may interrupt to perform a move or an attack:`,
+            { phase: 'ACTIVATION', icon: 'card', allowedMentions: { users: [_fmOwnerId] }, components: [_fmRow] });
+        }
+      }
+    }
+  }
+
   // C1. Hair Trigger (Jyn Odan): at start of hostile activation, interrupt to attack
   {
     const _htOpponentPN = opponentPlayerNum(playerNum);
