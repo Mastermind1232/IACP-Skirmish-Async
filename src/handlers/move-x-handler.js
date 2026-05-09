@@ -294,6 +294,7 @@ async function _runCahTargetPickContinuation(game, ctx, pending, next) {
     gameId: game.gameId,
     playerNum,
     cardName,
+    abilityId: cardName,
     choiceOptions: hostileLabels,
     choiceValues: hostiles,
   };
@@ -333,6 +334,7 @@ async function _runLordOfSithChoiceContinuation(game, ctx, pending) {
     gameId: game.gameId,
     playerNum: pending.playerNum,
     cardName: 'Lord of the Sith',
+    abilityId: 'Lord of the Sith',
     choiceOptions,
   };
   const btns = choiceOptions.map(opt => new ButtonBuilder()

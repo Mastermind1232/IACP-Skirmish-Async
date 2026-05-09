@@ -2045,6 +2045,29 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('⚠️ **No Cheating** is active — 1 attack die removed.').catch(discordCatch);
   }
 
+  // Lord of the Sith / [Driven by Hatred]: when the granted free
+  // attack declares, remove 1 die from the attack pool. Per-msgId
+  // one-shot flag — cleared on consumption so subsequent attacks
+  // are unaffected.
+  if (game.attackDicePenaltyForMsgId?.[msgId] > 0) {
+    const dice = [...(game.pendingCombat.attackInfo.dice || [])];
+    const removeOrder = ['yellow', 'green', 'blue', 'red'];
+    let toRemove = game.attackDicePenaltyForMsgId[msgId];
+    const removed = [];
+    for (const color of removeOrder) {
+      if (toRemove <= 0) break;
+      const idx = dice.indexOf(color);
+      if (idx !== -1) { dice.splice(idx, 1); removed.push(color); toRemove--; }
+    }
+    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
+    delete game.attackDicePenaltyForMsgId[msgId];
+    if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
+    if (removed.length) {
+      await thread.send(`⚠️ **${game.attackDicePenaltyLabel || 'Attack penalty'}** — ${removed.length} attack die removed (${removed.join(', ')}).`).catch(discordCatch);
+    }
+    delete game.attackDicePenaltyLabel;
+  }
+
   // --- Passive-auto ability wiring ---
   const atkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];

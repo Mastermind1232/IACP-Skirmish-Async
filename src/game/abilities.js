@@ -9447,9 +9447,14 @@ export function resolveAbility(abilityId, context) {
       if (choiceIndex === 1) {
         // Free Melee attack — picker has already drained (continuation
         // path). Set the free-attack flag and post the prompt via the
-        // freeAttackPrompt-style fallback.
+        // freeAttackPrompt-style fallback. Per canonical card text,
+        // this attack removes 1 die from the attacker's pool — set the
+        // one-shot per-msgId penalty so handleCombatReady consumes it.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[msgId] = true;
+        game.attackDicePenaltyForMsgId = game.attackDicePenaltyForMsgId || {};
+        game.attackDicePenaltyForMsgId[msgId] = 1;
+        game.attackDicePenaltyLabel = 'Lord of the Sith';
         return {
           applied: true,
           activeMsgId: msgId,
@@ -9459,7 +9464,7 @@ export function resolveAbility(abilityId, context) {
             granteeName: dcMessageMeta?.get?.(msgId)?.dcName || 'Vader',
             sourceLabel: 'Lord of the Sith',
           },
-          logMessage: '**Lord of the Sith** — Darth Vader takes a free Melee attack.',
+          logMessage: '**Lord of the Sith** — Darth Vader takes a free Melee attack (−1 attack die).',
         };
       }
       // Force Choke path:

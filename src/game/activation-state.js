@@ -288,6 +288,10 @@ const ROUND_OBJECT_FLAGS = [
   'pendingSlingBarrage',
   'nextAttackReach',
   'fellSwoopFreeAttack',
+  // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
+  // from this msgId's next attack pool" one-shot debuff. Cleared on
+  // consumption in handleCombatReady (see combat.js attack-pool block).
+  'attackDicePenaltyForMsgId',
   'roundAttackSurgeBonus',
   'overrunThisActivation',
   'roundFigureAbilityUsed',

@@ -1206,6 +1206,41 @@ export async function handleCcChoice(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
+  // Chained requiresChoice: a previous CC choice resolved into another
+  // requiresChoice (e.g. Lord of the Sith → Force Choke → adjacent
+  // hostile picker). Stand up a fresh pendingCcChoice and post the
+  // next button row so the player can complete the chain.
+  if (!aarResult.handled && aarResult.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
+    setPendingCcChoice(game, {
+      abilityId: pending.abilityId,
+      gameId,
+      playerNum,
+      card: pending.card,
+      choiceOptions: result.choiceOptions,
+      ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
+    });
+    const nextHandChannelId = getHandChannelId(game, playerNum);
+    const nextHandCh = nextHandChannelId ? await fetchGameChannel(client, nextHandChannelId) : null;
+    if (nextHandCh) {
+      const nextBtns = result.choiceOptions.map((opt) => {
+        const label = String(opt).slice(0, 80);
+        return new ButtonBuilder()
+          .setCustomId(`cc_choice_${gameId}_${opt}`)
+          .setLabel(label)
+          .setStyle(ButtonStyle.Secondary);
+      });
+      const nextRows = chunkButtonsToRows(nextBtns).slice(0, 5);
+      await nextHandCh.send({
+        content: `**Choose one** (for **${pending.card ?? pending.abilityId}**):`,
+        components: nextRows,
+      }).catch(discordCatch);
+    }
+    try {
+      await interaction.message.edit({ content: 'Choice resolved — pick the next option above.', components: [] }).catch(discordCatch);
+    } catch {}
+    saveGames(game.gameId);
+    return;
+  }
   // Power token type-choice prompt (e.g. Looking for a Fight grants 1 token after Move/Push choice)
   if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
     const handChannelId2 = getHandChannelId(game, playerNum);
