@@ -1433,20 +1433,30 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         source: 'Supercharge', viaStrain: true, combat,
       });
     }
-    // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack (before blast applies)
-    let effectiveBlast = totalBlast;
+    // The Darksaber: convert Blast X → Cleave X during Darksaber Strike attack
+    // (before blast queues). Stays inline because the conversion mutates the
+    // surgeBlast/surgeCleave inputs that enqueueAttackerStep8Effects reads.
     if (combat.darksaberBlastToCleave && (combat.surgeBlast || 0) > 0) {
       const _dsCv = combat.surgeBlast;
       combat.surgeCleave = (combat.surgeCleave || 0) + _dsCv;
       (combat.cleaveSources = combat.cleaveSources || []).push({ value: _dsCv, label: `Cleave ${_dsCv} (Darksaber Blast→Cleave)` });
       const _dsConvertedBlast = combat.surgeBlast;
       combat.surgeBlast = 0;
-      effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
       await logGameAction(game, client, `**The Darksaber** — Blast ${_dsConvertedBlast} converted to Cleave ${_dsConvertedBlast}.`, { phase: 'ROUND', icon: 'card' });
     }
-    // Flame Trooper attachment upgrades (for Blast Fireproof check below; also computed at function level for Incinerate)
+    // Stash context fireBlast (after-attack-fire.js) reads when the attacker
+    // clicks the step-8 Blast button. Per CRR step 8 the splash uses the
+    // target's pre-defeat footprint, so we capture coord + size here while
+    // the target is still on the board (snapshot earlier in this fn). The
+    // Flame Trooper friendly-skip rule needs the attacker's upgrades too.
     const _ftAtkUpgradesBlast = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
-    if (effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) {
+    combat._blastTargetCoord = _targetCoordBeforeDefeat;
+    combat._blastTargetSize = _targetSizeBeforeDefeat;
+    combat._blastFireproofFriendly = _ftAtkUpgradesBlast.includes('Flame Trooper');
+    let effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
+    // Blast splash migrated 2026-05-09 to step-8 fireBlast handler. Legacy
+    // inline block disabled (preserved for blame; removed in a follow-up).
+    if (false && effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
       // Wave 3 + CRR step 8: Use saved target coord+size (target may be defeated/removed by now,
       // and multi-cell targets need full-footprint adjacency).
       const adjacent = _targetCoordBeforeDefeat

@@ -19,7 +19,19 @@
  */
 import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
-import { grantMovementBank, grantPowerTokens, opponentPlayerNum } from '../game/index.js';
+import {
+  grantMovementBank, grantPowerTokens, opponentPlayerNum,
+  parseFigureKey, dcNameFromFigureKey,
+  applyCondition, isConditionImmune, HARMFUL_CONDITIONS,
+} from '../game/index.js';
+import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
+import { applyDamage } from '../game/damage-pipeline.js';
+import { processFigureDefeat } from '../engine/defeat-handler.js';
+import { lookupFigureDcIndex } from '../engine/game-readers.js';
+import { applyNpcDamageToFigure } from '../engine/combat-bridge.js';
+import { getFiguresAdjacentToCoord } from '../game/movement.js';
+import { getFiguresOnOrAdjacentToSpace } from '../game/board-helpers.js';
+import { getDcKeywords, getDcEffects } from '../data-loader.js';
 import { applyStrain } from './strain-handler.js';
 import { setupPendingMoveX } from './move-x-handler.js';
 
@@ -39,6 +51,112 @@ async function fireRecover(thread, game, combat, effect, ctx) {
   combat.surgeRecover = 0;
   if (logGameAction && thread) {
     await logGameAction(game, client, `\u{1F49A} **Recover ${amount}** — **${combat.attackerDcName}** healed ${amount} HP.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Blast N (CRR step 8): all figures and objects on or adjacent to the
+ * target's pre-defeat space suffer N damage. Multiple Blast sources sum
+ * into one splash event (CRR-BST-010); enqueueAttackerStep8Effects pushes
+ * a single 'blast' entry with the summed amount.
+ *
+ * Reads combat._blastTargetCoord / combat._blastTargetSize / combat._blastFireproofFriendly
+ * (stashed by applyDamageAndFinishCombat before the queue ran).
+ */
+async function fireBlast(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, dcMessageMeta, findDcMessageIdForFigure, getMapData, deps } = ctx;
+  const amount = Number(effect.payload?.amount ?? 0);
+  if (amount <= 0) return;
+  if (!combat._blastTargetCoord || !game.selectedMap?.id) return;
+  const attackerPlayerNum = combat.attackerPlayerNum;
+  const ftFireproofFriendly = !!combat._blastFireproofFriendly;
+  const adjacent = getFiguresAdjacentToCoord(
+    game,
+    combat._blastTargetCoord,
+    game.selectedMap.id,
+    combat.target?.figureKey,
+    combat._blastTargetSize,
+  );
+  const dCtx = { dcHealthState, logGameAction, client, deps, thread };
+  for (const { figureKey, playerNum } of adjacent) {
+    if (playerNum === attackerPlayerNum && ftFireproofFriendly) continue;
+    const msgId = findDcMessageIdForFigure?.(game.gameId, playerNum, figureKey);
+    if (!msgId) continue;
+    const { figureIndex } = parseFigureKey(figureKey);
+    const { newHp, wasDefeated } = await applyDamage(game, dCtx, {
+      figureKey, msgId, figIndex: figureIndex,
+      amount, controllerPlayerNum: playerNum,
+      attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
+      source: 'Blast', combat,
+    });
+    const { dcList: bDcList, idx: bIdx } = lookupFigureDcIndex(game, playerNum, figureKey, {
+      dcMessageMeta, getDcMessageIds, getDcList,
+    });
+    // Fury of Kashyyyk (army-wide passive on a CC): friendly WOOKIEE
+    // suffering 3+ damage becomes Focused.
+    if (amount >= 3 && newHp > 0) {
+      const fokDcList = getDcList(game, playerNum) || [];
+      if (fokDcList.some((dc) => dc.dcName === '[Fury of Kashyyyk]')) {
+        const fokName = dcNameFromFigureKey(figureKey);
+        const fokKws = (getDcKeywords(game)[fokName] || []).map((k) => String(k).toUpperCase());
+        if (fokKws.includes('WOOKIEE') && applyCondition(game, figureKey, 'Focus')) {
+          if (logGameAction) {
+            await logGameAction(game, client, `**Fury of Kashyyyk** — **${fokName}** became **Focused** (suffered ${amount} Blast Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+          }
+        }
+      }
+    }
+    if (wasDefeated) {
+      const blastLabel = bDcList[bIdx]?.displayName || figureKey;
+      const blastDcName = bDcList[bIdx]?.dcName;
+      await processFigureDefeat(game, {
+        defeatedPlayerNum: playerNum,
+        figureKey,
+        attackerPlayerNum,
+        attackerFigureKey: combat.attackerFigureKey,
+        msgId,
+        dcIdx: bIdx,
+        dcName: blastDcName,
+        displayName: blastLabel,
+        source: 'Blast',
+      }, { ...(deps || {}), client });
+      if (combat.attackerMsgId) {
+        game.activationKills = game.activationKills || {};
+        game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
+      }
+    }
+  }
+  // Crate splash (CRR step 8 also hits adjacent objects).
+  if (game.cratePositions && getMapData) {
+    const rawMs = getMapData(game.selectedMap.id);
+    const adjacency = rawMs?.adjacency || {};
+    const targetNorm = String(combat._blastTargetCoord).toLowerCase();
+    const adjSet = new Set((adjacency[targetNorm] || []).map((c) => String(c).toLowerCase()));
+    adjSet.add(targetNorm);
+    const checkWinConditions = deps?.checkWinConditions || ctx.checkWinConditions;
+    for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
+      const crateNorm = String(curCoord).toLowerCase();
+      if (!adjSet.has(crateNorm)) continue;
+      game.crateHealth = game.crateHealth || {};
+      if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
+      game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - amount);
+      if (logGameAction) {
+        await logGameAction(game, client, `\u{1F4A5} **Blast ${amount}** — Crate @ ${String(curCoord).toUpperCase()} suffers ${amount} damage (${game.crateHealth[origCoord]}/5 HP).`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+      }
+      if (game.crateHealth[origCoord] <= 0) {
+        delete game.cratePositions[origCoord];
+        const bcCurLow = String(curCoord).toLowerCase();
+        if (logGameAction) {
+          await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast! All figures on or adjacent suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+        }
+        for (const pn of [1, 2]) {
+          for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, bcCurLow, game.selectedMap?.id)) {
+            await applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion (Blast)', logGameAction, client, dcHealthState, dcMessageMeta);
+          }
+        }
+        if (checkWinConditions) await checkWinConditions(game, client);
+      }
+    }
   }
 }
 
@@ -259,6 +377,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'cleave':
       await fireCleave(thread, game, combat, effect, ctx);
+      return;
+    case 'blast':
+      await fireBlast(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

@@ -65,8 +65,13 @@ describe('PROBE-PD-OBJ-005: object damage in skirmish only flows to crates (the 
         forbidden.push(p.replace(ROOT + '/', ''));
       }
     }
-    assert.deepEqual(crateDmgSites, ['src/engine/combat-bridge.js'],
-      'only combat-bridge.js may apply damage to objects — CRR-OBJ-005');
+    // 2026-05-09: Blast splash migrated from combat-bridge inline to
+    // after-attack-fire.js fireBlast (step-8 button-fired). Both sites are
+    // legitimate crate-damage callers under CRR-OBJ-005.
+    assert.deepEqual(
+      crateDmgSites.sort(),
+      ['src/engine/combat-bridge.js', 'src/handlers/after-attack-fire.js'].sort(),
+      'only combat-bridge.js + after-attack-fire.js (fireBlast) may apply damage to objects — CRR-OBJ-005');
     assert.deepEqual(forbidden, [],
       'no src file may apply Math.max(0, -) damage decrement to any non-crate object container — CRR-OBJ-005');
   });

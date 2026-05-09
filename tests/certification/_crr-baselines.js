@@ -62,11 +62,16 @@ import { createTestGame } from '../fixtures/game-builder.js';
 // use (no specialAbilityIds pointer for ACS, equality on attachment
 // name is correct shape).
 export const DD_BASELINE = {
-  dcName_equality: 60,
+  dcName_equality: 61,
   dcName_includes: 5,
   dcName_startsWith: 4,
   cardNameIncludes: 95,
 };
+// 2026-05-09: dcName_equality 60→61. Blast splash migrated to step-8
+// fireBlast handler (after-attack-fire.js); the Fury of Kashyyyk friendly
+// WOOKIEE Focus check moved with it. Same `dc.dcName === '[Fury of
+// Kashyyyk]'` shape as the existing combat-bridge site (no specialAbilityIds
+// pointer exists for CC attachments).
 // 2026-05-08: dcName_equality 58→59. Damage-pipeline hook for Fury
 // of Kashyyyk needs to detect the [Fury of Kashyyyk] CC attachment
 // in the figure controller's army; like the existing combat-bridge

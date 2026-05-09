@@ -123,6 +123,7 @@ const CONTEXT_GROUPS = {
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
     // After-attack-resolve fire handlers (slice 2b)
     'dcHealthState', 'logGameAction', 'replyIfGameEnded',
+    'dcMessageMeta', 'checkWinConditions',
   ],
 
   activation: [
