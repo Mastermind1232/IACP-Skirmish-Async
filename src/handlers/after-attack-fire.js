@@ -725,6 +725,66 @@ async function fireFellSwoop(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Bladestorm (CC effect): after attack, all hostiles within N spaces of
+ * the attacker suffer N AoE damage. Reads combat.postAttackAoeDamage +
+ * combat.postAttackAoeRange (set by the CC). Routes through the central
+ * damage pipeline so when-damaged / before-defeated / when-defeated
+ * hooks fire — this is an upgrade over the inline path which mutated
+ * dcHealthState directly and bypassed the hooks.
+ */
+async function fireBladestorm(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, findDcMessageIdForFigure, deps } = ctx;
+  const aoeDmg = combat.postAttackAoeDamage || 0;
+  const aoeRange = combat.postAttackAoeRange || 2;
+  combat.postAttackAoeDamage = 0;
+  if (aoeDmg <= 0) return;
+  const atkFk = combat.attackerFigureKey;
+  const atkPos = atkFk ? game.figurePositions?.[combat.attackerPlayerNum]?.[atkFk] : null;
+  const defPn = combat.defenderPlayerNum;
+  if (!atkPos || !defPn) return;
+  const lines = [];
+  for (const [fk, coord] of Object.entries(game.figurePositions?.[defPn] || {})) {
+    if (!coord || fk === combat.target?.figureKey) continue;
+    if (countGameSpaces(game, atkPos, coord) > aoeRange) continue;
+    const fMsgId = findDcMessageIdForFigure?.(game.gameId, defPn, fk);
+    if (!fMsgId) continue;
+    const { figureIndex } = parseFigureKey(fk);
+    const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+      figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
+      amount: aoeDmg, controllerPlayerNum: defPn,
+      attackerPlayerNum: combat.attackerPlayerNum,
+      attackerFigureKey: atkFk,
+      source: 'Bladestorm', combat,
+    });
+    lines.push(`**${dcNameFromFigureKey(fk)}** ${aoeDmg} Dmg (${prevHp}→${newHp})`);
+  }
+  if (lines.length && thread) {
+    await thread.send(`**Bladestorm** — Hostiles within ${aoeRange} spaces: ${lines.join(', ')}`).catch(discordCatch);
+  }
+}
+
+/**
+ * Wild Fury (post-activation conditions): apply queued conditions to the
+ * attacker figure. Condition Immunity filters harmful out per CRR.
+ */
+async function fireWildFury(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  let conds = game.pendingPostAttackConditions?.[combat.attackerMsgId];
+  delete game.pendingPostAttackConditions?.[combat.attackerMsgId];
+  if (!Array.isArray(conds) || conds.length === 0) return;
+  if (isConditionImmune(game, combat.attackerFigureKey)) {
+    conds = conds.filter((c) => !HARMFUL_CONDITIONS.includes(c));
+  }
+  if (conds.length === 0) return;
+  for (const c of conds) applyCondition(game, combat.attackerFigureKey, c);
+  if (logGameAction) {
+    const dcName = dcNameFromFigureKey(combat.attackerFigureKey);
+    await logGameAction(game, client, `**Wild Fury** — **${dcName}** is now **${conds.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -783,6 +843,12 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'fell_swoop':
       await fireFellSwoop(thread, game, combat, effect, ctx);
+      return;
+    case 'bladestorm':
+      await fireBladestorm(thread, game, combat, effect, ctx);
+      return;
+    case 'wild_fury':
+      await fireWildFury(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

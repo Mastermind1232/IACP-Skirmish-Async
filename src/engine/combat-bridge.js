@@ -1972,8 +1972,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Wild Fury: after final free attack, apply postActivationConditions (Stun + Bleed) to attacker figure
-  if (game.pendingPostAttackConditions?.[combat.attackerMsgId] && combat.attackerFigureKey) {
+  // Wild Fury inline disabled 2026-05-09 → fireWildFury (step-8 attacker
+  // button). Routes through applyCondition with Condition Immunity filter.
+  if (false && game.pendingPostAttackConditions?.[combat.attackerMsgId] && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
     let _ppaConditions = game.pendingPostAttackConditions[combat.attackerMsgId];
     delete game.pendingPostAttackConditions[combat.attackerMsgId];
     if (Array.isArray(_ppaConditions) && _ppaConditions.length > 0) {
@@ -3186,8 +3187,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Bladestorm: after attack resolves, all hostiles within N spaces of attacker suffer AoE damage
-  if (combat.postAttackAoeDamage > 0 && combat.hit) {
+  // Bladestorm inline disabled 2026-05-09 → fireBladestorm (step-8 attacker
+  // button, routes through applyDamage so when-damaged hooks fire).
+  if (false && combat.postAttackAoeDamage > 0 && combat.hit) { // eslint-disable-line no-constant-condition
     const aoeDmg = combat.postAttackAoeDamage;
     const aoeRange = combat.postAttackAoeRange || 2;
     const atkFk = combat.attackerFigureKey;

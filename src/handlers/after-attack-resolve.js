@@ -278,6 +278,24 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       });
     }
   }
+  // Bladestorm (CC effect): after attack resolves, all hostiles within N
+  // spaces of the attacker suffer N AoE damage. Triggered by combat.postAttackAoeDamage > 0.
+  if (combat.postAttackAoeDamage > 0 && combat._step7Hit && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'bladestorm',
+      label: `Bladestorm: AoE ${combat.postAttackAoeDamage} damage`,
+    });
+  }
+  // Wild Fury (post-activation conditions): after the attacker's final
+  // free attack of the chain, apply Stun + Bleed to attacker figure.
+  if (combat.attackerMsgId && Array.isArray(game?.pendingPostAttackConditions?.[combat.attackerMsgId]) && game.pendingPostAttackConditions[combat.attackerMsgId].length > 0 && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'wild_fury',
+      label: 'Wild Fury: Apply post-activation conditions',
+    });
+  }
 }
 
 /**
