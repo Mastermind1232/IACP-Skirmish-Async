@@ -240,9 +240,13 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     assert.strictEqual(game.movementBank.dc3.remaining, 2, '2 MP granted');
     // Free attack granted
     assert.strictEqual(game.freeAttackBonusPending?.dc3, true, 'free attack pending');
-    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat.
-    assert.strictEqual(calls.processFigureDefeat.length, 1, 'processFigureDefeat called for friendly defeat');
-    assert.strictEqual(calls.processFigureDefeat[0].source, 'Executor (RGC)', 'source labeled');
+    // 2026-05-09 migration: Executor moved BEFORE_DEFEATED → WHEN_DEFEATED.
+    // The friendly's defeat is finalized by processFigureDefeat BEFORE
+    // RGC's button click (in the pipeline's WHEN_DEFEATED + CC-play
+    // window + processFigureDefeat block). handleExecutor no longer
+    // calls completeDeferredDefeat — it just grants the MP + free
+    // attack and clears the pending state.
+    assert.strictEqual(calls.processFigureDefeat.length, 0, 'processFigureDefeat not invoked from handleExecutor (defeat already finalized upstream)');
   });
 
   it('B-I-PREDEFEAT-005: triggered-once guards prevent re-trigger on re-entry', async () => {
@@ -300,8 +304,10 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     // Verify no MP/attack granted on skip
     assert.strictEqual(game2.movementBank, undefined, 'no MP granted on skip');
     assert.strictEqual(game2.freeAttackBonusPending, undefined, 'no free attack on skip');
-    // 2026-05-08 migration: completeDeferredDefeat → processFigureDefeat finalizes friendly defeat.
-    assert.strictEqual(calls2.processFigureDefeat.length, 1, 'processFigureDefeat called even on skip');
+    // 2026-05-09 migration: Executor moved to WHEN_DEFEATED. Friendly's
+    // defeat is finalized upstream; handleExecutor no longer calls
+    // processFigureDefeat on either Use or Skip.
+    assert.strictEqual(calls2.processFigureDefeat.length, 0, 'processFigureDefeat not invoked from handleExecutor on skip');
   });
 });
 

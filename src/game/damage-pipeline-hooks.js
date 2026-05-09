@@ -201,17 +201,24 @@ BEFORE_DEFEATED_HOOKS.push({
  * spaces is defeated, you may interrupt to move up to 2 spaces and
  * perform an attack. Limit once per round."
  *
+ * WHEN_DEFEATED timing per canonical wording "When a friendly figure
+ * is defeated" — the trigger fires AFTER the friendly's defeat is
+ * confirmed. The "interrupt to move + attack" is RGC's reaction to
+ * the defeat; it does not prevent or pause the defeat itself.
+ *
  * Trigger side: the side OWNING the dying friendly figure (which is
  * the same as opts.controllerPlayerNum). RGC must be on that same
- * side, alive, within 3 of the dying figure, and not yet used Executor
- * this round (`game.roundFigureAbilityUsed[`${rgcFigKey}_executor`]`).
+ * side, alive, within 3 of the dying figure (snapshot via
+ * defeatedPos), and not yet used Executor this round
+ * (`game.roundFigureAbilityUsed[`${rgcFigKey}_executor`]`). The
+ * friendly is removed from the board by processFigureDefeat AFTER
+ * this hook fires; RGC's button click is independent.
  *
- * Returns preventDefeat=true; sets pendingExecutorInterrupt. Handler
- * (handleExecutor in interrupts.js) grants RGC 2 MP + free attack
- * flag, then calls completeDeferredDefeat to finalize the original
- * friendly figure's defeat.
+ * Sets pendingExecutorInterrupt + posts the Use/Skip prompt. The
+ * handler (handleExecutor in interrupts.js) grants RGC 2 MP and a
+ * free attack flag.
  */
-BEFORE_DEFEATED_HOOKS.push({
+WHEN_DEFEATED_HOOKS.push({
   id: 'executor_rgc',
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
