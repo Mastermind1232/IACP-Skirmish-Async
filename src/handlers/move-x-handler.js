@@ -27,7 +27,9 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
-import { getReachableSpaces } from '../game/movement.js';
+import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint } from '../game/movement.js';
+import { setPendingMassivePush } from '../game/interrupts.js';
+import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
@@ -98,11 +100,64 @@ async function _finishPicker(game, ctx, msgId) {
   if (!pending) return;
   const nextAction = pending.nextAction || null;
   clearPendingMoveX(game, msgId);
+  // Massive end-of-movement displacement: if the moving figure has
+  // the MASSIVE keyword and its final footprint overlaps any other
+  // figure, route those overlapping figures through the existing
+  // pendingMassivePush flow.
+  if (_isMovingFigureMassive(game, pending.figureKey)) {
+    await _runMassiveDisplacement(game, ctx, pending);
+  }
   if (!nextAction) return;
   if (nextAction.type === 'rollOneDieSpacePick') {
     await _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Massive end-of-movement displacement. Computes the moving figure's
+ * current footprint, calls initMassiveDisplacement to gather overlaps,
+ * iteratively resolves auto cases (0/1 valid space), and stashes
+ * pendingMassivePush + posts the existing space picker if any
+ * displaced figure has 2+ valid spaces (needs a controller choice).
+ */
+async function _runMassiveDisplacement(game, ctx, pending) {
+  const { client, logGameAction } = ctx;
+  const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  if (!pos) return;
+  const dcName = dcNameFromFigureKey(pending.figureKey);
+  const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcName) || '1x1';
+  const footprintSet = new Set(getNormalizedFootprint(pos, size));
+  const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
+  if (!dispPending) return;
+  const result = resolveNextDisplacements(game, dispPending);
+  for (const r of result.autoResolved) {
+    const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';
+    const to = r.newPos ? String(r.newPos).toUpperCase() : '?';
+    const suffix = r.bfs ? ' (no adjacent spaces)' : '';
+    await logGameAction?.(game, client,
+      `**${r.entry.dcName}** displaced **${from}** → **${to}** by **${pending.dcName}**${suffix}.`,
+      { icon: 'move', phase: 'ROUND' });
+  }
+  if (result.done) return;
+  // Interactive resolution remains — store pending state and post
+  // the figure/space picker. handleMassivePushFigure /
+  // handleMassivePushSpace pick up the customId clicks and continue
+  // iterating resolveNextDisplacements until done.
+  setPendingMassivePush(game, { ...dispPending, gameId: game.gameId });
+  const pendingMpush = game.pendingMassivePush;
+  if (result.needsFigurePick) {
+    pendingMpush._currentControllerPlayerNum = result.needsFigurePick.controllerPlayerNum;
+    pendingMpush._currentPickable = result.needsFigurePick.pickable.map(e => ({
+      figureKey: e.figureKey, dcName: e.dcName, playerNum: e.playerNum,
+    }));
+    pendingMpush._currentValidSpaces = null;
+    await renderMassivePushFigurePrompt(game, client);
+  } else if (result.needsChoice) {
+    pendingMpush._currentControllerPlayerNum = result.needsChoice.controllerPlayerNum;
+    pendingMpush._currentValidSpaces = result.needsChoice.validSpaces;
+    await renderMassivePushSpacePrompt(game, client);
+  }
 }
 
 /**
@@ -344,8 +399,20 @@ function _computeValidNeighbors(game, msgId) {
   return candidates;
 }
 
+/** True when the moving figure has the MASSIVE keyword. Massive
+ *  figures can end movement on an occupied cell — the occupants are
+ *  displaced via the existing pendingMassivePush flow. */
+function _isMovingFigureMassive(game, figureKey) {
+  if (!figureKey) return false;
+  const dcName = dcNameFromFigureKey(figureKey);
+  const keywords = getMovementKeywords(dcName, game);
+  return keywords?.has?.('massive') === true;
+}
+
 /** True when the moving figure currently overlaps another figure
- *  (i.e., is mid-pass-through and must keep moving before stopping). */
+ *  (i.e., is mid-pass-through and must keep moving before stopping).
+ *  Massive figures are exempt — they can stop wherever and the
+ *  displacement flow resolves the overlaps. */
 function _isCurrentlyOverlapping(game, msgId) {
   const pending = game.pendingMoveX?.[msgId];
   if (!pending) return false;
@@ -371,13 +438,19 @@ export async function postMoveXPicker(game, ctx, msgId) {
   }
   const { client, logGameAction } = ctx;
   const allCandidates = _computeValidNeighbors(game, msgId);
-  const overlapping = _isCurrentlyOverlapping(game, msgId);
+  const isMassive = _isMovingFigureMassive(game, pending.figureKey);
+  // Massive figures can end on occupied cells (displacement runs in
+  // _finishPicker). They're never "stuck" mid-pass-through, so the
+  // overlap gate doesn't apply and the Done button is always offered.
+  const overlapping = !isMassive && _isCurrentlyOverlapping(game, msgId);
   const ownerId = getPlayerId(game, pending.playerNum);
 
   // Pass-through filter: if remaining > 1, both clean and pass-through
   // candidates are legal. If remaining === 1, only clean candidates
-  // are legal — the next step is the figure's final stop.
-  const candidates = pending.remaining > 1
+  // are legal — the next step is the figure's final stop. Massive
+  // figures can end on an occupied cell (displacement at finish), so
+  // pass-through candidates remain legal at remaining === 1.
+  const candidates = (isMassive || pending.remaining > 1)
     ? allCandidates
     : allCandidates.filter(c => !c.passThrough);
 
