@@ -2046,26 +2046,40 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Lord of the Sith / [Driven by Hatred]: when the granted free
-  // attack declares, remove 1 die from the attack pool. Per-msgId
-  // one-shot flag — cleared on consumption so subsequent attacks
-  // are unaffected.
+  // attack declares, prompt the player to remove 1 die from the
+  // attack pool. Reuses the existing pendingDbhDiePick + handleDbhPickDie
+  // flow so the player picks WHICH die to drop (not auto-removed).
   if (game.attackDicePenaltyForMsgId?.[msgId] > 0) {
-    const dice = [...(game.pendingCombat.attackInfo.dice || [])];
-    const removeOrder = ['yellow', 'green', 'blue', 'red'];
-    let toRemove = game.attackDicePenaltyForMsgId[msgId];
-    const removed = [];
-    for (const color of removeOrder) {
-      if (toRemove <= 0) break;
-      const idx = dice.indexOf(color);
-      if (idx !== -1) { dice.splice(idx, 1); removed.push(color); toRemove--; }
+    const _adpLabel = game.attackDicePenaltyLabel || 'Attack penalty';
+    const _adpDice = [...(game.pendingCombat.attackInfo.dice || [])];
+    const _adpToRemove = game.attackDicePenaltyForMsgId[msgId];
+    if (_adpDice.length === 0 || _adpToRemove <= 0) {
+      delete game.attackDicePenaltyForMsgId[msgId];
+      if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
+      delete game.attackDicePenaltyLabel;
+    } else {
+      const _adpCounts = _adpDice.reduce((m, c) => (m[c] = (m[c] || 0) + 1, m), {});
+      const _adpUnique = Object.keys(_adpCounts);
+      const _adpBtns = _adpUnique.map((color) => {
+        const count = _adpCounts[color];
+        const label = count > 1 ? `${color} (×${count})` : color;
+        return new ButtonBuilder()
+          .setCustomId(`dbh_pick_die_${game.gameId}_${color}`)
+          .setLabel(label.charAt(0).toUpperCase() + label.slice(1))
+          .setStyle(ButtonStyle.Primary);
+      });
+      // pendingDbhDiePick gates the roll until the player picks.
+      game.pendingDbhDiePick = { msgId, attackerPlayerNum, dice: _adpDice };
+      delete game.attackDicePenaltyForMsgId[msgId];
+      if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
+      delete game.attackDicePenaltyLabel;
+      const _adpAtkOwnerId = game[`player${attackerPlayerNum}Id`];
+      await thread.send({
+        content: `<@${_adpAtkOwnerId}> **${_adpLabel}** — choose 1 die to remove from your attack pool. (You cannot roll until you pick.)`,
+        components: [new ActionRowBuilder().addComponents(_adpBtns)],
+        allowedMentions: { users: [_adpAtkOwnerId] },
+      }).catch(discordCatch);
     }
-    game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
-    delete game.attackDicePenaltyForMsgId[msgId];
-    if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
-    if (removed.length) {
-      await thread.send(`⚠️ **${game.attackDicePenaltyLabel || 'Attack penalty'}** — ${removed.length} attack die removed (${removed.join(', ')}).`).catch(discordCatch);
-    }
-    delete game.attackDicePenaltyLabel;
   }
 
   // --- Passive-auto ability wiring ---
