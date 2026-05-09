@@ -1356,17 +1356,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
                 try {
                   const _fvMsgId = deps.findDcMessageIdForFigure(game.gameId, defenderPlayerNum, rgFk);
                   if (!_fvMsgId) continue;
-                  const { grantMovementBank: _grantMv } = await import('../game/game-helpers.js');
-                  _grantMv(game, _fvMsgId, 1);
-                  const _fvFkMatch = String(rgFk).match(/-(\d+)-(\d+)$/);
-                  const _fvFigIdx = _fvFkMatch ? _fvFkMatch[2] : '0';
-                  const _fvBtn = new deps.ButtonBuilder()
-                    .setCustomId(`granted_move_${game.gameId}_${_fvMsgId}_f${_fvFigIdx}`)
-                    .setLabel(`Forward Vengeance Move (Royal Guard (Elite))`)
-                    .setStyle(deps.ButtonStyle.Primary);
+                  // Move-X picker (1 space, bypassCosts true) — replaces
+                  // the legacy grantMovementBank + granted_move button.
+                  const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
+                  await setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
+                    msgId: _fvMsgId,
+                    figureKey: rgFk,
+                    playerNum: defenderPlayerNum,
+                    spaces: 1,
+                    source: 'Forward Vengeance',
+                    threadId: thread?.id || null,
+                    bypassCosts: true,
+                  });
                   await thread.send({
-                    content: `⚔️ **Forward Vengeance** — **Royal Guard (Elite)** may move **1 space**:`,
-                    components: [new deps.ActionRowBuilder().addComponents(_fvBtn)],
+                    content: `⚔️ **Forward Vengeance** — **Royal Guard (Elite)** may move **1 space** (picker posted).`,
                   }).catch(() => {});
                 } catch {}
               }
