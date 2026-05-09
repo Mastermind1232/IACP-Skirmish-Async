@@ -4629,12 +4629,41 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const playerNum = meta.playerNum;
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Add MP to movement bank
-    addMovementPoints(game, msgId, entry.mpBonus);
-    // Apply Focus to all figures in group
+    // Apply Focus to all figures in group (auto, before/with the move).
     for (const fk of figureKeys) {
       applyCondition(game, fk, 'Focus');
     }
+    // isMoveX (Get into Position): Move-X picker per CRR MOVE-017 — no
+    // banking, bypassCosts true. Focus is applied immediately above.
+    if (entry.isMoveX) {
+      const _gipSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _gipFigureKey = figureKeys[_gipSelectedIdx] || figureKeys[0] || null;
+      if (!_gipFigureKey) {
+        return { applied: true, logMessage: `Became Focused. (Could not locate activating figure for the move; resolve movement manually.)`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.mpBonus,
+        source: 'Get into Position',
+        playerNum,
+        figureKey: _gipFigureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        bypassCosts: true,
+        msgId,
+        nextAction: null,
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+        logMessage: `**Get into Position** — May move up to ${entry.mpBonus} space${entry.mpBonus === 1 ? '' : 's'}. Became Focused.`,
+        refreshDcEmbed: true,
+        refreshDcEmbedMsgIds: [msgId],
+        refreshBoard: true,
+      };
+    }
+    addMovementPoints(game, msgId, entry.mpBonus);
     return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
 
