@@ -3339,8 +3339,10 @@
     },
     "On a Mission": {
       "type": "ccEffect",
-      "label": "Gain 5 MP (push SMALL when entering space — resolve at move end)",
+      "label": "Move up to 5 spaces; on entering a space containing a SMALL figure, may push it 1 space",
       "mpBonus": 5,
+      "isMoveX": true,
+      "onEnterPushSmall": true,
       "wiredStatus": "wired"
     },
     "On the Lam": {
