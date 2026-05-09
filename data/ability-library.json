@@ -2015,8 +2015,9 @@
     },
     "Force Surge": {
       "type": "ccEffect",
-      "label": "Gain 1 MP; one adjacent hostile suffers 2 Damage and 1 Strain",
+      "label": "Move 1 space; one adjacent hostile suffers 2 Damage and 1 Strain",
       "mpBonus": 1,
+      "isMoveX": true,
       "chooseAdjacentHostileThen": {
         "damage": 2,
         "strain": 1
