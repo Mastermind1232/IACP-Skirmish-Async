@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
+import { postMoveXPicker } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -2826,6 +2827,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   // Log resolved special outcome to game-logs channel
   if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
     await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+  }
+  // Move-X picker — abilities.js stamped pendingMoveX synchronously
+  // and surfaced the msgId via resolveResult.pendingMoveXMsgId. Post
+  // the picker now (async, needs ctx.client + logGameAction).
+  if (resolveResult.pendingMoveXMsgId) {
+    await postMoveXPicker(game, { client, logGameAction, saveGames }, resolveResult.pendingMoveXMsgId);
   }
   // Post-action Bleed strain (DC Special resolves): centralized via
   // triggerBleedAfterAction.

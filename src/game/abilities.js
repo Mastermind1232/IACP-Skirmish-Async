@@ -2751,14 +2751,30 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // dcSpecial: freeMoveBonus standalone (I'm One With the Force, Executor, etc.) — add N free MP; optionally also grant free attack
+  // dcSpecial: freeMoveBonus standalone (I'm One With the Force, Executor, etc.) — Move-X picker; optionally also grant free attack
   if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits) {
-    const { game, msgId } = context;
+    const { game, msgId, meta, playerNum } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    addMovementPoints(game, msgId, entry.freeMoveBonus);
-    // CRR MOVE-017: "Move X spaces" effects ignore MP costs from terrain/figures.
-    game.moveXBypassActive = game.moveXBypassActive || {};
-    game.moveXBypassActive[msgId] = true;
+    // Resolve the active figure key for the picker (selectedFigure
+    // index into the DC's deployed figures by dcName prefix).
+    const _pn = meta?.playerNum ?? playerNum;
+    const _figureKeys = Object.keys(game.figurePositions?.[_pn] || {})
+      .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+    const _selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _figureKey = _figureKeys[_selectedIdx] || _figureKeys[0] || null;
+    // Stamp pendingMoveX state synchronously; the caller posts the
+    // picker UI when it sees pendingMoveXMsgId on the result.
+    if (_figureKey && _pn) {
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.freeMoveBonus,
+        source: entry.label || 'Move X',
+        playerNum: _pn,
+        figureKey: _figureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+      };
+    }
     // Also grant free attack if specified (e.g. Executor)
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -2777,9 +2793,15 @@ export function resolveAbility(abilityId, context) {
     // Shoulder Rush (KX-Series Security Droid): after movement MP exhausted, choose adjacent hostile → push if SMALL + enter space → free attack
     if (entry.shoulderRushPostMove) {
       game.shoulderRushPending = game.shoulderRushPending || {};
-      game.shoulderRushPending[msgId] = { playerNum: context.playerNum };
+      game.shoulderRushPending[msgId] = { playerNum: _pn };
     }
-    return { applied: true, freeAction: !!entry.freeAction, logMessage: entry.logMessage || `**${entry.label}** — Gained ${entry.freeMoveBonus} free movement points.`, refreshMovementBank: true, activeMsgId: msgId };
+    return {
+      applied: true,
+      freeAction: !!entry.freeAction,
+      logMessage: entry.logMessage || `**${entry.label}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}.`,
+      pendingMoveXMsgId: _figureKey ? msgId : null,
+      activeMsgId: msgId,
+    };
   }
 
   // dcSpecial: freeMoveBonus + nextAttacksBonusHits (On the Hunt — gain free MP, next attack gets +N Hit)
