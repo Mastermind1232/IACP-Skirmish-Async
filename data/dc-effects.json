@@ -918,7 +918,7 @@
       ]
     },
     "Alliance Smuggler (Regular)": {
-      "abilityText": "Special Action (Smuggler's Instincts): Perform an attack, then move up to 2 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
+      "abilityText": "Special Action (Smuggler's Instincts): Perform an interact, then move up to 2 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
       "keywords": [
         "SMUGGLER"
       ],

@@ -4524,10 +4524,10 @@
     "smugglers_instincts": {
       "type": "dcSpecial",
       "label": "Smuggler's Instincts",
-      "description": "Perform an attack, then move up to 2 spaces.",
+      "description": "Perform an interact, then move up to 2 spaces.",
+      "freeAction": true,
       "freeMoveBonus": 2,
-      "freeAttackBonus": true,
-      "logMessage": "**Smuggler's Instincts** — Gained 2 free MP. Your next attack costs no action. *(Attack first, then use the MP.)*",
+      "logMessage": "**Smuggler's Instincts** — Perform your Interact action, then use the Move-X picker for up to 2 spaces.",
       "wiredStatus": "wired"
     },
     "sniper": {
