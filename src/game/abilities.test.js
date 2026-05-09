@@ -986,15 +986,26 @@ test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
   assert.ok(game.figureConditions['Darth Vader-1-0']?.includes('Focus'));
 });
 
-test('resolveAbility Dying Lunge grants 2 MP and uses entry logMessage', () => {
+test('resolveAbility Dying Lunge stamps pendingMoveX (Move-X) when figure deployed', () => {
   const msgId = 'msg-dl';
-  const game = { gameId: 'g-dl', dcActionsData: { [msgId]: {} } };
+  const figureKey = 'Luke Skywalker-1-0';
+  const game = {
+    gameId: 'g-dl',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'a1' } },
+  };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-dl', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Dying Lunge', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
-  assert.ok(result.logMessage?.includes('2 MP'));
-  assert.ok(result.logMessage?.includes('defeated') || result.logMessage?.includes('Melee'));
+  // Move-X path: pendingMoveX with bypassCosts: true, no bank.
+  assert.ok(game.pendingMoveX, 'pendingMoveX stamped');
+  assert.strictEqual(game.pendingMoveX[msgId].remaining, 2);
+  assert.strictEqual(game.pendingMoveX[msgId].bypassCosts, true);
+  assert.strictEqual(game.pendingMoveX[msgId].nextAction?.type, 'freeAttackPrompt');
+  assert.strictEqual(result.pendingMoveXMsgId, msgId);
+  assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X discards remainder');
+  // selfDefeatsAfterAttack still flagged for the post-attack defeat.
+  assert.ok(game.selfDefeatsAfterAttackMsgId?.[msgId]);
 });
 
 test('resolveAbility Out of Time applies strain = round number via scaleStrainToRound', () => {

@@ -2138,18 +2138,62 @@ export function resolveAbility(abilityId, context) {
       game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
       game.nextAttackBonusAccuracy[playerNum] = (game.nextAttackBonusAccuracy[playerNum] || 0) + entry.nextAttackBonusAccuracy;
     }
-    // mpBonus alongside freeAttackBonus (Face to Face, Final Stand: gain MP + free attack)
+    // mpBonus alongside freeAttackBonus (Face to Face, Final Stand,
+    // Dying Lunge, Lord of the Sith: move + free attack). Cards
+    // tagged `isMoveX: true` route through pendingMoveX with a
+    // freeAttackPrompt continuation; the "Declare Attack" button
+    // posts after the picker drains. Cards without the flag stay
+    // on the legacy banked-MP path until classified.
     let fabMpNote = '';
     let fabMpRefresh = false;
+    let _fabPmxMsgId = null;
     if (typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
-      addMovementPoints(game, msgId, entry.mpBonus);
-      fabMpNote = ` Gained ${entry.mpBonus} MP.`;
-      fabMpRefresh = true;
+      if (entry.isMoveX) {
+        const meta = dcMessageMeta?.get?.(msgId);
+        const _fabFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+          .filter(k => k.startsWith((meta?.dcName || '') + '-'));
+        const _fabSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const _fabFigureKey = _fabFigureKeys[_fabSelectedIdx] || _fabFigureKeys[0] || null;
+        if (_fabFigureKey) {
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[msgId] = {
+            remaining: entry.mpBonus,
+            source: entry.label || 'Move X',
+            playerNum,
+            figureKey: _fabFigureKey,
+            dcName: meta?.dcName || '',
+            threadId: null,
+            bypassCosts: true,
+            msgId,
+            nextAction: {
+              type: 'freeAttackPrompt',
+              payload: {
+                msgId, playerNum, figureKey: _fabFigureKey,
+                sourceLabel: entry.label || 'Free Attack',
+              },
+            },
+          };
+          _fabPmxMsgId = msgId;
+          fabMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+        }
+      }
+      if (!_fabPmxMsgId) {
+        addMovementPoints(game, msgId, entry.mpBonus);
+        fabMpNote = ` Gained ${entry.mpBonus} MP.`;
+        fabMpRefresh = true;
+      }
     }
     const label = entry.label || 'Heroic';
     const countNote = (entry.freeAttackBonusCount ?? 1) > 1 ? ` (${entry.freeAttackBonusCount} times, each targeting a different figure)` : '';
     const accNote = entry.nextAttackBonusAccuracy ? ` +${entry.nextAttackBonusAccuracy} Accuracy.` : '';
-    return { applied: true, freeAction: true, refreshMovementBank: fabMpRefresh, activeMsgId: msgId, logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action.${accNote} Click Attack when ready.` + fabMpNote) };
+    return {
+      applied: true,
+      freeAction: true,
+      refreshMovementBank: fabMpRefresh,
+      activeMsgId: msgId,
+      pendingMoveXMsgId: _fabPmxMsgId,
+      logMessage: entry.logMessage || (`**${label}** — Your next attack${countNote} costs no action.${accNote} Click Attack when ready.` + fabMpNote),
+    };
   }
 
   // dcSpecial: spendMpForBlockToken (Shield Gauntlets) — spend N MP to gain 1 Block power token

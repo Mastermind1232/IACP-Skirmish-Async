@@ -1471,10 +1471,11 @@
     },
     "Dying Lunge": {
       "type": "ccEffect",
-      "label": "When at full damage: gain 2 MP + free Melee attack; then defeated",
+      "label": "When at full damage: move up to 2 spaces + free Melee attack; then defeated",
       "mpBonus": 2,
+      "isMoveX": true,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 MP**. Perform a Melee attack without spending an action; this figure is defeated after the attack resolves.",
+      "logMessage": "May move up to 2 spaces, then perform a Melee attack without spending an action; this figure is defeated after the attack resolves.",
       "freeAttackBonus": true,
       "selfDefeatsAfterAttack": true,
       "overrideAttackType": "Melee"
