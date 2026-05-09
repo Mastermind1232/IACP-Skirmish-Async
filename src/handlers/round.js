@@ -1104,12 +1104,29 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const sIds = eff?.specialAbilityIds || [];
 
-        // Brush (Ezra Bridger): gain 4 MP at start of round
+        // Brush (Ezra Bridger): "Move up to 4 spaces" at start of
+        // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
+        // 4-space budget, no banking. Out-of-activation timing per
+        // rule 1: spent immediately.
         if (sIds.includes('brush_ezra')) {
           const mid = msgIds[i];
           if (mid) {
-            grantMovementBank(game, mid, 4);
-            await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+            const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+              .filter(k => k.startsWith((dc.dcName || '') + '-'));
+            const fk = figKeys[0] || null;
+            if (fk) {
+              const { setupPendingMoveX } = await import('./move-x-handler.js');
+              await setupPendingMoveX(game, { client, logGameAction, saveGames: ctx?.saveGames }, {
+                msgId: mid,
+                figureKey: fk,
+                playerNum,
+                spaces: 4,
+                source: 'Brush',
+                threadId: null,
+                bypassCosts: true,
+              });
+              await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+            }
           }
         }
 
@@ -1380,12 +1397,29 @@ export async function handleEndStartOfRound(interaction, ctx) {
         const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const sIds = eff?.specialAbilityIds || [];
 
-        // Brush (Ezra Bridger): gain 4 MP at start of round
+        // Brush (Ezra Bridger): "Move up to 4 spaces" at start of
+        // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
+        // 4-space budget, no banking. Out-of-activation timing per
+        // rule 1: spent immediately.
         if (sIds.includes('brush_ezra')) {
           const mid = msgIds[i];
           if (mid) {
-            grantMovementBank(game, mid, 4);
-            await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** gains **4 MP** at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+            const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+              .filter(k => k.startsWith((dc.dcName || '') + '-'));
+            const fk = figKeys[0] || null;
+            if (fk) {
+              const { setupPendingMoveX } = await import('./move-x-handler.js');
+              await setupPendingMoveX(game, { client, logGameAction, saveGames: ctx?.saveGames }, {
+                msgId: mid,
+                figureKey: fk,
+                playerNum,
+                spaces: 4,
+                source: 'Brush',
+                threadId: null,
+                bypassCosts: true,
+              });
+              await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+            }
           }
         }
 

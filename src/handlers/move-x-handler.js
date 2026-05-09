@@ -1342,59 +1342,54 @@ export async function handleMoveXStep(interaction, ctx) {
     { phase: 'ROUND', icon: 'attack' });
 
   // On a Mission per-step hook: if the activator's new footprint
-  // contains another figure (any allegiance, SMALL only), reuse the
-  // existing Massive-push displacement pipeline — Chopper is treated
-  // as massive for the duration of this push. The pipeline gives the
-  // controller an 8-direction space picker (cardinals + diagonals) on
-  // the displaced SMALL figure. When the displacement completes, the
-  // movement.js _dispatchNextMassivePush "done" arm checks
-  // game.pendingOnAMissionPush and resumes/finishes this picker.
+  // contains a SMALL figure, suspend the picker and post a 1-space
+  // push prompt. The valid push destinations come from the same
+  // 8-direction `mapSpaces.adjacency` lookup other CC pushes use
+  // (Looking for a Fight, Force Push, etc.) — filtered to spaces not
+  // occupied by another figure. handleOnAMissionPush resolves the
+  // chosen space (or skip) and resumes the picker.
   if (pending.onEnterPushSmall) {
     const targetSmall = _findSmallInFootprint(game, pending);
     if (targetSmall) {
-      const dcName = pending.dcName || dcNameFromFigureKey(pending.figureKey);
-      const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcName) || '1x1';
-      const footprintSet = new Set(getNormalizedFootprint(game.figurePositions[pending.playerNum][pending.figureKey], size));
-      const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
-      if (dispPending) {
-        const result = resolveNextDisplacements(game, dispPending);
-        for (const r of result.autoResolved) {
-          const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';
-          const to = r.newPos ? String(r.newPos).toUpperCase() : '?';
-          const suffix = r.bfs ? ' (no adjacent spaces)' : '';
-          await logGameAction?.(game, client, `🦿 **On a Mission** — **${r.entry.dcName}** displaced **${from}** → **${to}** by **${pending.dcName}**${suffix}.`, { phase: 'ROUND', icon: 'attack' });
-        }
-        if (!result.done) {
-          // Mark a resume token so _dispatchNextMassivePush's done
-          // arm knows to re-post our picker after the displacement
-          // controller finishes their pick.
-          game.pendingOnAMissionPush = game.pendingOnAMissionPush || {};
-          game.pendingOnAMissionPush[msgId] = {
-            msgId,
-            sourceLabel: 'On a Mission',
-            playerNum: pending.playerNum,
-          };
-          setPendingMassivePush(game, { ...dispPending, gameId: game.gameId });
-          const pendingMpush = game.pendingMassivePush;
-          if (result.needsFigurePick) {
-            pendingMpush._currentControllerPlayerNum = result.needsFigurePick.controllerPlayerNum;
-            pendingMpush._currentPickable = result.needsFigurePick.pickable.map(e => ({
-              figureKey: e.figureKey, dcName: e.dcName, playerNum: e.playerNum,
-            }));
-            pendingMpush._currentValidSpaces = null;
-            await renderMassivePushFigurePrompt(game, client);
-          } else if (result.needsChoice) {
-            pendingMpush._currentControllerPlayerNum = result.needsChoice.controllerPlayerNum;
-            pendingMpush._currentValidSpaces = result.needsChoice.validSpaces;
-            await renderMassivePushSpacePrompt(game, client);
-          }
-          saveGames?.(gameId);
-          return;
-        }
-        // result.done with only auto-resolved figures — fall through
-        // to the normal post-step continuation below (re-post picker
-        // or finish if remaining is exhausted).
+      const targetPos = game.figurePositions?.[targetSmall.playerNum]?.[targetSmall.figureKey];
+      const mapId = game.selectedMap?.id;
+      const ms = mapId ? getMapData(mapId) : null;
+      const adjRaw = (ms?.adjacency?.[String(targetPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+      const occupiedSet = new Set([
+        ...Object.values(game.figurePositions?.[1] || {}),
+        ...Object.values(game.figurePositions?.[2] || {}),
+      ].filter(Boolean).map(s => String(s).toLowerCase()));
+      occupiedSet.delete(String(targetPos).toLowerCase());
+      const validSpaces = adjRaw.filter(s => !occupiedSet.has(s));
+      game.pendingOnAMissionPush = game.pendingOnAMissionPush || {};
+      game.pendingOnAMissionPush[msgId] = {
+        smallFigureKey: targetSmall.figureKey,
+        smallPlayerNum: targetSmall.playerNum,
+        msgId,
+        validSpaces,
+      };
+      const ownerId = getPlayerId(game, pending.playerNum);
+      const smallName = dcNameFromFigureKey(targetSmall.figureKey);
+      const btns = validSpaces.slice(0, 24).map(sp => new ButtonBuilder()
+        .setCustomId(`on_a_mission_push_${game.gameId}_${msgId}_${sp}`)
+        .setLabel(sp.toUpperCase().slice(0, 80))
+        .setStyle(ButtonStyle.Primary));
+      btns.push(new ButtonBuilder()
+        .setCustomId(`on_a_mission_push_${game.gameId}_${msgId}_skip`)
+        .setLabel('Skip push')
+        .setStyle(ButtonStyle.Secondary));
+      const rows = chunkButtonsToRows(btns).slice(0, 5);
+      const content = validSpaces.length === 0
+        ? `<@${ownerId}> 🦿 **On a Mission** — entered space containing **${smallName}** (SMALL), but no valid push space; press Skip to continue.`
+        : `<@${ownerId}> 🦿 **On a Mission** — entered space containing **${smallName}** (SMALL). May push 1 space:`;
+      if (pending.threadId) {
+        const thread = await fetchCombatThread(client, pending.threadId);
+        if (thread) await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      } else {
+        await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
       }
+      saveGames?.(gameId);
+      return;
     }
   }
 
@@ -1439,32 +1434,47 @@ function _findSmallInFootprint(game, pending) {
 }
 
 /**
- * Resume hook for the On a Mission per-step push: invoked from
- * movement.js's _dispatchNextMassivePush done-arm when a per-step
- * displacement completes. Re-posts the picker (or finishes it when
- * remaining MP have been exhausted).
+ * Handler for the On a Mission per-step push prompt.
+ * customId: on_a_mission_push_${gameId}_${msgId}_${space|'skip'}
  */
-export async function resumeOnAMissionPushIfPending(game, ctx) {
-  if (!game.pendingOnAMissionPush) return false;
-  const entries = Object.entries(game.pendingOnAMissionPush);
-  if (entries.length === 0) {
-    delete game.pendingOnAMissionPush;
-    return false;
-  }
-  let resumed = false;
-  for (const [msgId] of entries) {
-    const pending = game.pendingMoveX?.[msgId];
+export async function handleOnAMissionPush(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const parts = splitCustomId(interaction.customId, 'on_a_mission_push_');
+  if (parts.length < 3) return;
+  const gameId = parts[0];
+  const msgId = parts[1];
+  const choice = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pendingPush = game.pendingOnAMissionPush?.[msgId];
+  const pending = game.pendingMoveX?.[msgId];
+  if (!pendingPush || !pending) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activator can resolve the push.')) return;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (choice === 'skip') {
     delete game.pendingOnAMissionPush[msgId];
-    if (!pending) continue;
-    if (pending.remaining <= 0) {
-      await _finishPicker(game, ctx, msgId);
-    } else {
-      await postMoveXPicker(game, ctx, msgId);
+    if (Object.keys(game.pendingOnAMissionPush).length === 0) delete game.pendingOnAMissionPush;
+    await logGameAction?.(game, client, `🦿 **On a Mission** — push skipped.`, { phase: 'ROUND', icon: 'attack' });
+  } else {
+    const valid = (pendingPush.validSpaces || []).map(s => String(s).toLowerCase());
+    if (!valid.includes(String(choice).toLowerCase())) {
+      await interaction.followUp({ content: 'Invalid push space.', ephemeral: true }).catch(discordCatch);
+      return;
     }
-    resumed = true;
+    const { pushFigure } = await import('../game/player-helpers.js');
+    pushFigure(game, pendingPush.smallPlayerNum, pendingPush.smallFigureKey, choice);
+    const smallName = dcNameFromFigureKey(pendingPush.smallFigureKey);
+    await logGameAction?.(game, client, `🦿 **On a Mission** — pushed **${smallName}** to **${String(choice).toUpperCase()}**.`, { phase: 'ROUND', icon: 'attack' });
+    delete game.pendingOnAMissionPush[msgId];
+    if (Object.keys(game.pendingOnAMissionPush).length === 0) delete game.pendingOnAMissionPush;
   }
-  if (Object.keys(game.pendingOnAMissionPush).length === 0) delete game.pendingOnAMissionPush;
-  return resumed;
+  if (pending.remaining <= 0) {
+    await _finishPicker(game, ctx, msgId);
+  } else {
+    await postMoveXPicker(game, ctx, msgId);
+  }
+  saveGames?.(gameId);
 }
 
 /**
