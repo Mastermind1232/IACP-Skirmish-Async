@@ -31,7 +31,9 @@ import { lookupFigureDcIndex } from '../engine/game-readers.js';
 import { applyNpcDamageToFigure } from '../engine/combat-bridge.js';
 import { getFiguresAdjacentToCoord } from '../game/movement.js';
 import { getFiguresOnOrAdjacentToSpace } from '../game/board-helpers.js';
-import { getDcKeywords, getDcEffects } from '../data-loader.js';
+import { getDcKeywords, getDcEffects, getFigureSize } from '../data-loader.js';
+import { getFootprintCells } from '../game/coords.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { applyStrain } from './strain-handler.js';
 import { setupPendingMoveX } from './move-x-handler.js';
@@ -433,6 +435,174 @@ async function fireVadersFinestMove(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Burst Fire (Imperial Loadout): on damage, every figure adjacent to the
+ * target's pre-defeat space (excluding target) is Stunned. Condition
+ * Immunity blocks the Stun. Reads combat._blastTargetCoord/_blastTargetSize
+ * (stashed at step-7 close, same as Blast).
+ */
+async function fireBurstFire(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, getMapData } = ctx;
+  if (combat.attackerMsgId && game.burstFirePendingMsgId?.[combat.attackerMsgId]) {
+    delete game.burstFirePendingMsgId[combat.attackerMsgId];
+  }
+  if (!combat._blastTargetCoord || !game.selectedMap?.id) return;
+  const ms = getMapData?.(game.selectedMap.id);
+  if (!ms) return;
+  const targetSize = combat._blastTargetSize || (combat.target?.figureKey ? getFigureSize(dcNameFromFigureKey(combat.target.figureKey)) : null) || '1x1';
+  const targetCells = getFootprintCells(combat._blastTargetCoord, targetSize);
+  const adjSet = new Set();
+  for (const cell of targetCells) {
+    for (const a of (ms.adjacency?.[cell] || [])) adjSet.add(a);
+  }
+  for (const cell of targetCells) adjSet.delete(cell);
+  for (const pn of [1, 2]) {
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      const fkSize = getFigureSize(dcNameFromFigureKey(fk)) || '1x1';
+      const fkCells = getFootprintCells(pos, fkSize);
+      if (!fkCells.some((c) => adjSet.has(c))) continue;
+      if (fk === combat.target?.figureKey) continue;
+      if (isConditionImmune(game, fk)) continue;
+      if (applyCondition(game, fk, 'Stun') && logGameAction) {
+        await logGameAction(game, client, `\u{1F4A5} **Burst Fire** — **${dcNameFromFigureKey(fk)}** (adjacent) is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+      }
+    }
+  }
+}
+
+/**
+ * Crippling Blow (Imperial Loadout): on hit, defender is Stunned.
+ * Condition Immunity logs and skips.
+ */
+async function fireCripplingBlow(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  if (combat.attackerMsgId && game.cripplingBlowPending?.[combat.attackerMsgId]) {
+    delete game.cripplingBlowPending[combat.attackerMsgId];
+  }
+  const fk = combat.target?.figureKey;
+  if (!fk) return;
+  const label = combat.target.label || dcNameFromFigureKey(fk);
+  if (isConditionImmune(game, fk)) {
+    if (logGameAction) {
+      await logGameAction(game, client, `**Crippling Blow** — **${label}** is immune to Stun.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    }
+    return;
+  }
+  if (applyCondition(game, fk, 'Stun') && logGameAction) {
+    await logGameAction(game, client, `⚡ **Crippling Blow** — **${label}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Disruptor Rifle (Imperial Loadout): if attack hit and defender currently
+ * at exactly 1 HP, deal 1 more damage. The HP read is at click time so
+ * other step-8 effects (e.g. Bleed apply) that lowered HP don't double-fire.
+ */
+async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, deps } = ctx;
+  if (combat.attackerMsgId && game.disruptorRiflePending?.[combat.attackerMsgId]) {
+    delete game.disruptorRiflePending[combat.attackerMsgId];
+  }
+  const fk = combat.target?.figureKey;
+  const targetMsgId = combat.target?.msgId;
+  if (!fk || !targetMsgId) return;
+  const { figureIndex } = parseFigureKey(fk);
+  const hs = dcHealthState?.get?.(targetMsgId) || [];
+  const entry = hs[figureIndex];
+  if (!entry) return;
+  const [cur] = entry;
+  if (cur !== 1) {
+    if (logGameAction) {
+      await logGameAction(game, client, `**Disruptor Rifle** — **${combat.target.label}** is not at 1 HP; effect skipped.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    }
+    return;
+  }
+  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    figureKey: fk, msgId: targetMsgId, figIndex: figureIndex,
+    amount: 1, controllerPlayerNum: combat.defenderPlayerNum,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    attackerFigureKey: combat.attackerFigureKey,
+    source: 'Disruptor Rifle', combat,
+  });
+  if (logGameAction) {
+    await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target.label}** had 1 HP — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+  const { idx } = lookupFigureDcIndex(game, combat.defenderPlayerNum, fk, {
+    dcMessageMeta: ctx.dcMessageMeta,
+    getDcMessageIds, getDcList,
+  });
+  await processFigureDefeat(game, {
+    defeatedPlayerNum: combat.defenderPlayerNum,
+    figureKey: fk,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    attackerFigureKey: combat.attackerFigureKey,
+    msgId: targetMsgId,
+    dcIdx: idx,
+    dcName: dcNameFromFigureKey(fk),
+    displayName: combat.target.label,
+    source: 'Disruptor Rifle',
+  }, { ...(deps || {}), client });
+}
+
+/**
+ * Electro-pulse (Electrohammer post-attack): each other figure adjacent
+ * to the target space suffers 1 Damage. Source PT is excluded; target
+ * itself takes the splash too (CRR slice 6.11 destruct fix).
+ */
+async function fireElectroPulse(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, findDcMessageIdForFigure, deps } = ctx;
+  combat.loadoutPostAttack = null;
+  const targetFk = combat.target?.figureKey;
+  if (!targetFk) return;
+  const targetPos = game.figurePositions?.[combat.defenderPlayerNum]?.[targetFk] || combat._blastTargetCoord;
+  if (!targetPos) return;
+  const lines = [];
+  for (const pNum of [1, 2]) {
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pNum] || {})) {
+      if (pNum === combat.attackerPlayerNum && fk === combat.attackerFigureKey) continue;
+      if (countGameSpaces(game, pos, targetPos) > 1) continue;
+      const msgId = findDcMessageIdForFigure?.(game.gameId, pNum, fk);
+      if (!msgId) continue;
+      const { figureIndex } = parseFigureKey(fk);
+      await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+        figureKey: fk, msgId, figIndex: figureIndex,
+        amount: 1, controllerPlayerNum: pNum,
+        attackerPlayerNum: combat.attackerPlayerNum,
+        attackerFigureKey: combat.attackerFigureKey,
+        source: 'Electro-pulse', combat,
+      });
+      lines.push(`**${dcNameFromFigureKey(fk)}** suffers 1 Damage`);
+    }
+  }
+  if (lines.length && logGameAction) {
+    await logGameAction(game, client, `⚡ **Electro-pulse** — Adjacent figures:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Quick Strike (Electrostaff post-attack): if defender modified dice
+ * (rerolled or +/-N), defender suffers 1 Damage. Hit-gating already
+ * happened at queue time.
+ */
+async function fireQuickStrike(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, deps } = ctx;
+  combat.loadoutPostAttack = null;
+  const fk = combat.target?.figureKey;
+  const targetMsgId = combat.target?.msgId;
+  if (!fk || !targetMsgId) return;
+  const { figureIndex } = parseFigureKey(fk);
+  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    figureKey: fk, msgId: targetMsgId, figIndex: figureIndex,
+    amount: 1, controllerPlayerNum: combat.defenderPlayerNum,
+    attackerPlayerNum: combat.attackerPlayerNum,
+    attackerFigureKey: combat.attackerFigureKey,
+    source: 'Quick Strike', combat,
+  });
+  if (logGameAction) {
+    await logGameAction(game, client, `⚡ **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
@@ -464,6 +634,21 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'condition':
       await fireCondition(thread, game, combat, effect, ctx);
+      return;
+    case 'burst_fire':
+      await fireBurstFire(thread, game, combat, effect, ctx);
+      return;
+    case 'crippling_blow':
+      await fireCripplingBlow(thread, game, combat, effect, ctx);
+      return;
+    case 'disruptor_rifle':
+      await fireDisruptorRifle(thread, game, combat, effect, ctx);
+      return;
+    case 'electro_pulse':
+      await fireElectroPulse(thread, game, combat, effect, ctx);
+      return;
+    case 'quick_strike':
+      await fireQuickStrike(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

@@ -1559,8 +1559,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     filterCondition(game, combat.target.figureKey, 'Hide');    // Defender loses Hidden after being attacked
     if (_defHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.target.label}** \u2014 was targeted by an attack.`, { phase: 'ROUND', icon: 'attack' });
   }
-  // Burst Fire: apply Stun to all figures adjacent to target if target suffered damage
-  if (game.burstFirePendingMsgId?.[combat.attackerMsgId]) {
+  // Burst Fire / Crippling Blow / Disruptor Rifle / Electro-pulse /
+  // Quick Strike all migrated 2026-05-09 to step-8 fire handlers
+  // (after-attack-fire.js). Legacy inline blocks disabled below.
+  if (false && game.burstFirePendingMsgId?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     const _bfPending = game.burstFirePendingMsgId[combat.attackerMsgId];
     delete game.burstFirePendingMsgId[combat.attackerMsgId];
     if (damage > 0 && combat.target?.figureKey) {
@@ -1596,8 +1598,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Crippling Blow: Stun defender if attack didn't miss
-  if (game.cripplingBlowPending?.[combat.attackerMsgId]) {
+  // Crippling Blow inline disabled 2026-05-09 → fireCripplingBlow.
+  if (false && game.cripplingBlowPending?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.cripplingBlowPending[combat.attackerMsgId];
     if (hit && combat.target?.figureKey) {
       if (!isConditionImmune(game, combat.target.figureKey)) {
@@ -1609,8 +1611,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Disruptor Rifle: if attack didn't miss and defender at exactly 1 HP, deal 1 more damage
-  if (game.disruptorRiflePending?.[combat.attackerMsgId]) {
+  // Disruptor Rifle inline disabled 2026-05-09 → fireDisruptorRifle.
+  if (false && game.disruptorRiflePending?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.disruptorRiflePending[combat.attackerMsgId];
     if (hit && targetMsgId) {
       const _drHS = dcHealthState.get(targetMsgId) || [];
@@ -1665,11 +1667,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     game.barrageDefenseBonus[combat.attackerMsgId] = true;
     await thread.send('**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.');
   }
-  // Imperial Loadout post-attack effects
+  // Imperial Loadout post-attack effects.
+  // Electro-pulse + Quick Strike migrated 2026-05-09 to step-8 fire
+  // handlers (after-attack-fire.js); their inline branches gate on `false`.
+  // Flurry of Blows is a chain-attack ability; that migration lands with
+  // the rest of the chain-attack effects in a separate slice.
   if (combat.loadoutPostAttack) {
     const _lpa = combat.loadoutPostAttack;
     // Electro-pulse (Electrohammer): each other figure adjacent to target suffers 1 Damage
-    if (_lpa === 'electro_pulse' && combat.target?.figureKey) {
+    if (false && _lpa === 'electro_pulse' && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
       const _epTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
       if (_epTargetPos) {
         const _epLines = [];
@@ -1705,8 +1711,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
     }
-    // Quick Strike (Electrostaff): if defender rerolled/modified dice, defender suffers 1 Damage
-    if (_lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) {
+    // Quick Strike (Electrostaff): if defender rerolled/modified dice, defender suffers 1 Damage.
+    // Inline disabled 2026-05-09 → fireQuickStrike.
+    if (false && _lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) { // eslint-disable-line no-constant-condition
       const _qsModified = combat.defenderRerolledOrModified;
       if (_qsModified) {
         await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {

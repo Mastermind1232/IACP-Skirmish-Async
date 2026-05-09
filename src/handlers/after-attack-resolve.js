@@ -174,6 +174,54 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Stalk Prey: +2 MP + 1 Damage Token',
     });
   }
+  // Burst Fire (Imperial Loadout): on damage, stun all figures adjacent
+  // to the target (excluding target). Per-msgId pre-attack flag from
+  // game.burstFirePendingMsgId; consumed by fireBurstFire.
+  if (game?.burstFirePendingMsgId?.[combat.attackerMsgId] && combat._step7Hit && combat._step7Damage > 0) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'burst_fire',
+      label: 'Burst Fire: Stun all adjacent to target',
+    });
+  }
+  // Crippling Blow (Imperial Loadout): if attack didn't miss, stun the
+  // defender. Hit-gated; damage not required.
+  if (game?.cripplingBlowPending?.[combat.attackerMsgId] && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'crippling_blow',
+      label: 'Crippling Blow: Stun defender',
+    });
+  }
+  // Disruptor Rifle (Imperial Loadout): if attack hit AND defender at
+  // exactly 1 HP, deal 1 more damage (defeat). Eligibility re-checked at
+  // fire time because step-8 effects may have lowered HP further.
+  if (game?.disruptorRiflePending?.[combat.attackerMsgId] && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'disruptor_rifle',
+      label: 'Disruptor Rifle: Execute (1 HP)',
+    });
+  }
+  // Electro-pulse (Electrohammer post-attack): each other figure adjacent
+  // to the target's space suffers 1 Damage. Source PT excluded; target
+  // included (CRR slice 6.11 destruct fix).
+  if (combat.loadoutPostAttack === 'electro_pulse' && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'electro_pulse',
+      label: 'Electro-pulse: 1 Damage to adjacent',
+    });
+  }
+  // Quick Strike (Electrostaff post-attack): if defender modified dice
+  // (rerolled, +1, etc.), defender suffers 1 Damage. Hit-gated.
+  if (combat.loadoutPostAttack === 'quick_strike' && combat._step7Hit && combat.defenderRerolledOrModified && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'quick_strike',
+      label: 'Quick Strike: 1 Damage to defender',
+    });
+  }
 }
 
 /**

@@ -264,13 +264,17 @@ describe('ORACLE-DEFEAT-007: combat-bridge.js main defeat path uses processFigur
     );
   });
 
-  it('Disruptor Rifle defeat calls processFigureDefeat', () => {
-    const drIdx = src.indexOf('Disruptor Rifle');
-    assert.ok(drIdx > 0, 'Disruptor Rifle section found');
-    const drBlock = src.slice(drIdx, drIdx + 1500);
+  it('Disruptor Rifle defeat calls processFigureDefeat (now in fireDisruptorRifle)', () => {
+    // 2026-05-09: Disruptor Rifle migrated from inline step-7 to step-8
+    // fireDisruptorRifle (after-attack-fire.js). Probe both files; the
+    // canonical defeat call is wherever the live execute lives.
+    const fireSrc = readSrc('src/handlers/after-attack-fire.js');
+    const fireDrIdx = fireSrc.indexOf('Disruptor Rifle');
+    assert.ok(fireDrIdx > 0, 'Disruptor Rifle handler found in after-attack-fire.js');
+    const fireDrBlock = fireSrc.slice(fireDrIdx, fireDrIdx + 2000);
     assert.ok(
-      drBlock.includes('processFigureDefeat'),
-      'Disruptor Rifle must call processFigureDefeat when figure is defeated'
+      fireDrBlock.includes('processFigureDefeat'),
+      'fireDisruptorRifle must call processFigureDefeat when figure is defeated'
     );
   });
 
