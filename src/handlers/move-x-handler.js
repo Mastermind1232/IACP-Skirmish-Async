@@ -28,7 +28,7 @@ import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../da
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
-import { setPendingMassivePush } from '../game/interrupts.js';
+import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
 import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
 import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
@@ -149,8 +149,127 @@ async function _finishPicker(game, ctx, msgId) {
     // the explicit "Declare Attack" prompt so the player gets the
     // continuation as a click instead of a side-channel flag.
     await _runFreeAttackPromptContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'rushPostMove') {
+    await _runRushPostMoveContinuation(game, ctx, pending);
+  } else if (nextAction.type === 'shoulderRushPostMove') {
+    await _runShoulderRushPostMoveContinuation(game, ctx, pending);
   }
   // Future continuation types plug in here.
+}
+
+/** Compute adjacent figures of a given side relative to the moving
+ *  figure's current position. Returns [{ figureKey, dcName }]. */
+function _computeAdjacentFigures(game, pending, sideFilter /* 'hostile' | 'friendly' | 'any' */) {
+  const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  if (!pos) return [];
+  const mapId = game.selectedMap?.id;
+  const ms = mapId ? getMapData(mapId) : null;
+  const adjacency = ms?.adjacency || {};
+  const adjSpaces = new Set((adjacency[String(pos).toLowerCase()] || []).map(s => String(s).toLowerCase()));
+  const oppNum = pending.playerNum === 1 ? 2 : 1;
+  const out = [];
+  const sides = sideFilter === 'hostile' ? [oppNum] : sideFilter === 'friendly' ? [pending.playerNum] : [1, 2];
+  for (const pn of sides) {
+    for (const [fk, fpos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!fpos) continue;
+      if (pn === pending.playerNum && fk === pending.figureKey) continue;
+      if (!adjSpaces.has(String(fpos).toLowerCase())) continue;
+      out.push({ figureKey: fk, dcName: dcNameFromFigureKey(fk), playerNum: pn });
+    }
+  }
+  return out;
+}
+
+/**
+ * Rush (Onar Koma) post-move continuation: prompt for adjacent
+ * SMALL hostile to push 1 space; both figures suffer 1 Damage.
+ * Posts the existing rush_push_fig_ buttons that hand off to the
+ * existing handleRushPushFig flow.
+ */
+async function _runRushPostMoveContinuation(game, ctx, pending) {
+  const { client, logGameAction } = ctx;
+  const adj = _computeAdjacentFigures(game, pending, 'hostile');
+  const dcEffects = getDcEffects() || {};
+  const rushTargets = [];
+  for (const t of adj) {
+    const eff = dcEffects[t.dcName];
+    const kw = (eff?.keywords || []).map(k => String(k).toUpperCase());
+    if (kw.includes('LARGE') || kw.includes('MASSIVE')) continue;
+    if ((eff?.specialAbilityIds || []).includes('spiked_boots_snowtrooper')) continue;
+    if (game.roundPushImmuneUnlessMassive?.[t.figureKey]) continue;
+    rushTargets.push(t);
+  }
+  if (rushTargets.length === 0) {
+    await logGameAction?.(game, client, `**Rush** — **${pending.dcName}** ends movement; no adjacent SMALL hostile to push.`, { phase: 'ROUND', icon: 'attack' });
+    return;
+  }
+  const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  setPendingRushPush(game, {
+    msgId: pending.msgId,
+    playerNum: pending.playerNum,
+    activatorFigureKey: pending.figureKey,
+    activatorPos: pos,
+    targets: rushTargets.map(t => t.figureKey),
+  });
+  const btns = rushTargets.map((t, i) => new ButtonBuilder()
+    .setCustomId(`rush_push_fig_${game.gameId}_${pending.msgId}_${i}`)
+    .setLabel(t.dcName.replace(/_/g, ' '))
+    .setStyle(ButtonStyle.Primary));
+  btns.push(new ButtonBuilder()
+    .setCustomId(`rush_push_skip_${game.gameId}_${pending.msgId}`)
+    .setLabel('Skip Rush Push')
+    .setStyle(ButtonStyle.Secondary));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const content = `**Rush** — Push an adjacent SMALL hostile 1 space? Both suffer 1 Damage.`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack' });
+}
+
+/**
+ * Shoulder Rush (KX-Series Security Droid Elite) post-move
+ * continuation: prompt for adjacent hostile, push if SMALL + enter
+ * vacated space, then declare a free attack against that figure.
+ * Posts the existing shoulder_rush_fig_ buttons.
+ */
+async function _runShoulderRushPostMoveContinuation(game, ctx, pending) {
+  const { client, logGameAction } = ctx;
+  const adj = _computeAdjacentFigures(game, pending, 'hostile');
+  if (adj.length === 0) {
+    await logGameAction?.(game, client, `**Shoulder Rush** — **${pending.dcName}** ends movement; no adjacent hostile to target.`, { phase: 'ROUND', icon: 'attack' });
+    return;
+  }
+  const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  setPendingShoulderRush(game, {
+    msgId: pending.msgId,
+    playerNum: pending.playerNum,
+    activatorFigureKey: pending.figureKey,
+    activatorPos: pos,
+    targets: adj.map(t => t.figureKey),
+  });
+  const btns = adj.map((t, i) => new ButtonBuilder()
+    .setCustomId(`shoulder_rush_fig_${game.gameId}_${pending.msgId}_${i}`)
+    .setLabel(t.dcName.replace(/_/g, ' '))
+    .setStyle(ButtonStyle.Primary));
+  btns.push(new ButtonBuilder()
+    .setCustomId(`shoulder_rush_skip_${game.gameId}_${pending.msgId}`)
+    .setLabel('Skip (No Target)')
+    .setStyle(ButtonStyle.Secondary));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const content = `**Shoulder Rush** — Choose an adjacent hostile figure to target:`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack' });
 }
 
 /**
