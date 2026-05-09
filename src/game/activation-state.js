@@ -29,6 +29,12 @@ const ACTIVATION_MSGID_FLAGS = [
   'closeQuartersActive',
   'mobileMovementActive',
   'pendingMoveX',
+  // On a Mission per-step push prompt: pauses the picker between steps
+  // so the player can push a SMALL figure 1 space (or skip).
+  'pendingOnAMissionPush',
+  // Lord of the Sith / [Driven by Hatred]: per-msgId one-shot dice
+  // penalty consumed at handleCombatReady.
+  'attackDicePenaltyForMsgId',
   'rushPending',
   'shoulderRushPending',
   'forcedAttackTarget',
@@ -292,6 +298,10 @@ const ROUND_OBJECT_FLAGS = [
   // from this msgId's next attack pool" one-shot debuff. Cleared on
   // consumption in handleCombatReady (see combat.js attack-pool block).
   'attackDicePenaltyForMsgId',
+  // On a Mission per-step push state: msgId-keyed snapshot of the
+  // SMALL figure currently being prompted for a 1-space push. Cleared
+  // by handleOnAMissionPush (direction or skip).
+  'pendingOnAMissionPush',
   'roundAttackSurgeBonus',
   'overrunThisActivation',
   'roundFigureAbilityUsed',

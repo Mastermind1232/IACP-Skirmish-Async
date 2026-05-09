@@ -3906,6 +3906,10 @@ export function resolveAbility(abilityId, context) {
         bypassCosts: true,
         msgId,
         nextAction: null,
+        // On a Mission per-step hook: when set, after each step the
+        // picker scans the new footprint for a SMALL figure to offer
+        // an optional 1-space push.
+        onEnterPushSmall: !!entry.onEnterPushSmall,
       };
       if (entry.mobileMovement) {
         game.mobileMovementActive = game.mobileMovementActive || {};

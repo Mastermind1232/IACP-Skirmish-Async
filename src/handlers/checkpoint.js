@@ -396,7 +396,7 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     // would never match this remap.
     'roundFigureAbilityUsed', // keys may be msgId_<ability>
     'rushPending', 'shoulderRushPending',
-    'mobileMovementActive', 'pendingMoveX',
+    'mobileMovementActive', 'pendingMoveX', 'pendingOnAMissionPush', 'attackDicePenaltyForMsgId',
     'movementBank',
     // figurePowerTokens removed: keyed by figureKey (e.g. "Trooper-1-0"), not
     // msgId, so it survives cross-lobby intact and never matched here anyway.
