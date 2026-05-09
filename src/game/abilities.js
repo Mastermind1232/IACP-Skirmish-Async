@@ -7455,39 +7455,43 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Forward March** — Granted +${n} MP to **${grantedNames.length}** friendly figure(s): ${grantedNames.join(', ')}.`, refreshMovementBank: true };
   }
 
-  // ccEffect: grantMpToFriendliesByKeyword (Close the Gap) — grant N MP to each friendly DC with a given keyword
+  // ccEffect: grantMpToFriendliesByKeyword (Close the Gap) — Move-X
+  // sequence per friendly figure with the given keyword (BRAWLER), then
+  // grant the keyword token (Block) to those within 4 spaces of any
+  // hostile after the moves resolve. Player picks the order.
   if (entry.type === 'ccEffect' && entry.grantMpToFriendliesByKeyword) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const { keyword, mp, grantBlockToken } = entry.grantMpToFriendliesByKeyword;
     const dcEffects = getDcEffects();
-    const grantedNames = [];
-    game.pendingMpBonus = game.pendingMpBonus || {};
+    const seqFigures = [];
     for (const [mid, meta] of dcMessageMeta) {
       if (meta.playerNum !== playerNum || meta.gameId !== game.gameId) continue;
       const eff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
       const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
       if (!kws.includes(keyword.toUpperCase())) continue;
-      // Grant MP
-      const existingBank = game.movementBank?.[mid];
-      if (existingBank?.threadId) {
-        existingBank.total = (existingBank.total || 0) + mp;
-        existingBank.remaining = (existingBank.remaining || 0) + mp;
-      } else {
-        game.pendingMpBonus[mid] = (game.pendingMpBonus[mid] || 0) + mp;
+      const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+      for (const fk of figKeys) {
+        if (!game.figurePositions?.[playerNum]?.[fk]) continue;
+        seqFigures.push({ msgId: mid, figureKey: fk, playerNum, spaces: mp, dcName: meta.dcName });
       }
-      // Grant Block Token (stand-in for Armor Token)
-      if (grantBlockToken) {
-        const figKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-        for (const fk of figKeys) {
-          grantPowerTokens(game, fk, 'Block', 1);
-        }
-      }
-      grantedNames.push(meta.displayName || meta.dcName);
     }
-    if (grantedNames.length === 0) return { applied: true, logMessage: `**${entry.label || 'Close the Gap'}** — No friendly ${keyword} figures found.` };
-    const tokenNote = grantBlockToken ? ' and gained a Block Token (Armor Token)' : '';
-    return { applied: true, logMessage: `**Close the Gap** — Granted +${mp} MP${tokenNote} to **${grantedNames.length}** friendly ${keyword} figure(s): ${grantedNames.join(', ')}.`, refreshMovementBank: true };
+    if (seqFigures.length === 0) {
+      return { applied: true, logMessage: `**${entry.label || 'Close the Gap'}** — No friendly ${keyword} figures found.` };
+    }
+    return {
+      applied: true,
+      pendingMoveXSequenceSetup: {
+        figures: seqFigures,
+        source: 'Close the Gap',
+        threadId: null,
+        bypassCosts: true,
+        afterAction: grantBlockToken
+          ? { type: 'closeTheGapBlockTokens', playerNum, keyword, withinSpaces: 4 }
+          : null,
+      },
+      logMessage: `**Close the Gap** — ${seqFigures.length} friendly ${keyword}${seqFigures.length === 1 ? '' : 's'} may each move up to ${mp} space${mp === 1 ? '' : 's'}; pick order. After all moves, ${keyword}s within 4 spaces of any hostile gain 1 Block Token.`,
+    };
   }
 
   // ccEffect: roundEfficientTravel (Efficient Travel CC) — until end of round all friendly figures ignore Difficult Terrain and hostile figure entry costs

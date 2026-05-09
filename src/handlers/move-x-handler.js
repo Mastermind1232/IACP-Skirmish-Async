@@ -692,6 +692,42 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
     }
     return;
   }
+  if (afterAction.type === 'closeTheGapBlockTokens') {
+    // Close the Gap: after all friendly BRAWLERs have moved, grant 1
+    // Block Token to each BRAWLER within 4 spaces of any hostile
+    // figure (recomputed against post-move positions).
+    try {
+      const { client, logGameAction } = ctx;
+      const playerNum = afterAction.playerNum;
+      const oppNum = playerNum === 1 ? 2 : 1;
+      const keyword = String(afterAction.keyword || '').toUpperCase();
+      const within = afterAction.withinSpaces || 4;
+      const { getDcEffects } = await import('../data-loader.js').catch(() => ({}));
+      const { countGameSpaces } = await import('../game/movement.js').catch(() => ({}));
+      const { grantPowerTokens } = await import('../game/index.js').catch(() => ({}));
+      const dcEffects = typeof getDcEffects === 'function' ? getDcEffects() : {};
+      const grantedNames = [];
+      const hostilePositions = Object.values(game.figurePositions?.[oppNum] || {}).filter(Boolean);
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (!pos) continue;
+        const dcN = dcNameFromFigureKey(fk);
+        const eff = dcEffects[dcN] || dcEffects[dcN?.replace(/\s*\[.*\]\s*$/, '')];
+        const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+        if (!kws.includes(keyword)) continue;
+        const closeEnough = hostilePositions.some(hp => typeof countGameSpaces === 'function' && countGameSpaces(game, pos, hp) <= within);
+        if (!closeEnough) continue;
+        if (typeof grantPowerTokens === 'function') grantPowerTokens(game, fk, 'Block', 1);
+        grantedNames.push(dcN);
+      }
+      const msg = grantedNames.length
+        ? `**Close the Gap** — granted **1 Block Token** to: ${grantedNames.join(', ')}.`
+        : `**Close the Gap** — no friendly ${keyword} ended within ${within} spaces of a hostile; no tokens granted.`;
+      await logGameAction?.(game, client, msg, { phase: 'ROUND', icon: 'card' });
+    } catch (err) {
+      console.error('[move-x] closeTheGapBlockTokens failed:', err?.message ?? err);
+    }
+    return;
+  }
   if (afterAction.type === 'triangulateTarget') {
     // Triangulate: after up to 3 DROIDs have each moved 1 space, post
     // the hostile-target picker. Phase 2 (resolveAbility chosenFigureKey)
