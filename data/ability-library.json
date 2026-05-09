@@ -1715,9 +1715,10 @@
     },
     "Face to Face": {
       "type": "ccEffect",
-      "label": "Gain 2 MP + free Melee attack on adjacent figure",
+      "label": "Move up to 2 spaces, then free Melee attack on adjacent hostile",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP**. Perform a Melee attack targeting an adjacent figure without spending an action.",
+      "isMoveX": true,
+      "logMessage": "May move up to 2 spaces, then perform a Melee attack targeting an adjacent figure without spending an action.",
       "wiredStatus": "wired",
       "freeAttackBonus": true,
       "overrideAttackType": "Melee"
