@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingUnhingedStrain, clearPendingUnhingedStrain } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -7080,138 +7080,40 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
   const _figMatch = figureKey.match(/-(\d+)-(\d+)$/);
   const strainFigIdx = _figMatch ? parseInt(_figMatch[2], 10) : 0;
 
-  if (deck.length === 0) {
-    if (strainMsgId && dcHealthState) {
-      // Even with no CCs to absorb, strain still routes through the
-      // canonical applyStrain pipeline so Fireproof / Headhunter /
-      // Under Duress / Paz interactions fire correctly.
-      await applyStrain(game, ctx, {
-        figureKey,
-        controllerPlayerNum: atkPN,
-        amount: 1,
-        source: 'Unhinged Director Strain (empty deck)',
-      });
-    }
-    await thread.send(`**Unhinged Director Strain** — **${strainDcName}** must suffer 1 Strain (no CCs in deck to absorb).`).catch(discordCatch);
-    await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
-    saveGames(game.gameId);
-    return;
-  }
-
-  // Has CCs — prompt: discard top CC, or take HP damage?
-  setPendingUnhingedStrain(game, {
-    gameId,
-    atkPlayerNum: atkPN,
+  // Single applyStrain call handles BOTH the empty-deck and per-strain
+  // choice cases — the canonical pipeline posts the CC-vs-damage prompt
+  // (or auto-applies damage if hand is empty), runs Fireproof / Headhunter
+  // / Under Duress / Paz, and chains the token-phase advance via the
+  // 'unhinged_director_resume' followup.
+  await applyStrain(game, ctx, {
     figureKey,
-    attackerMsgId: strainMsgId,
-    attackerFigureIndex: strainFigIdx,
+    controllerPlayerNum: atkPN,
+    amount: 1,
+    source: 'Unhinged Director',
+    followup: {
+      type: 'unhinged_director_resume',
+      payload: { combatThreadId: combat.combatThreadId, gameId },
+    },
   });
-  const _udsRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`unhinged_strain_${gameId}_cc`)
-      .setLabel(`Discard top CC (${deck.length} in deck)`)
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`unhinged_strain_${gameId}_hp`)
-      .setLabel(`Take 1 Damage`)
-      .setStyle(ButtonStyle.Danger),
-  );
-  const ownerId = getPlayerId(game, atkPN);
-  await thread.send({
-    content: `<@${ownerId}> — **Unhinged Director Strain** — **${strainDcName}** suffers 1 Strain. Discard the top card of your CC deck to absorb, or take 1 Damage?`,
-    components: [_udsRow],
-    allowedMentions: { users: [ownerId].filter(Boolean) },
-  }).catch(discordCatch);
   saveGames(game.gameId);
 }
 
-/**
- * Krennic / Unhinged Director Strain absorb — handle the CC-discard vs
- * HP-damage choice after the player picks +2. Either outcome resolves
- * the 1 Strain and resumes the token phase.
- *
- * customId shape: `unhinged_strain_<gameId>_<cc|hp>`
- */
-export async function handleUnhingedStrainAbsorb(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames, logGameAction, dcHealthState } = ctx;
-  const m = interaction.customId.match(/^unhinged_strain_(.+?)_(cc|hp)$/);
-  if (!m) return;
-  const [, gameId, choice] = m;
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (await replyIfGameEnded(game, interaction)) return;
-  const combat = game.pendingCombat;
-  const pending = game.pendingUnhingedStrain;
-  if (!combat || combat.gameId !== gameId || !pending) {
-    await interaction.followUp({ content: 'No pending Unhinged Director Strain choice.', ephemeral: true }).catch(discordCatch);
-    return;
+// Strain followup for Unhinged Director: after the strain choice
+// resolves, advance the token-spend phase. (Replaces the old custom
+// pendingUnhingedStrain absorb prompt.)
+registerStrainFollowup('unhinged_director_resume', async (game, ctx, payload) => {
+  const _udThread = await fetchCombatThread(ctx.client, payload.combatThreadId);
+  const _udCombat = game.pendingCombat;
+  if (_udThread && _udCombat) {
+    await advanceTokenPhase(_udThread, game, _udCombat, 'attacker', ctx);
   }
-  const atkPN = pending.atkPlayerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, atkPN, canActAsPlayer, 'Only the attacker may resolve the Strain choice.')) return;
+});
 
-  // Visual: disable both, highlight chosen.
-  try {
-    const newRows = (interaction.message?.components || []).map((row) => {
-      const newRow = new ActionRowBuilder();
-      for (const c of row.components) {
-        const btn = ButtonBuilder.from(c);
-        btn.setDisabled(true);
-        if (c.customId === interaction.customId) btn.setStyle(ButtonStyle.Success);
-        newRow.addComponents(btn);
-      }
-      return newRow;
-    });
-    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
-  } catch (_e) { /* non-fatal */ }
-
-  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  const figKey = pending.figureKey;
-  const figName = dcNameFromFigureKey(figKey);
-
-  if (choice === 'cc') {
-    const deckKey = ccDeckKey(atkPN);
-    const discKey = ccDiscardKey(atkPN);
-    const deck = game[deckKey] || [];
-    if (deck.length === 0) {
-      // Race / state inconsistency — fall through to HP damage.
-      if (pending.attackerMsgId && dcHealthState) {
-        await applyStrain(game, { ...ctx, client: interaction.client }, {
-          figureKey: figKey,
-          controllerPlayerNum: atkPN,
-          amount: 1,
-          source: 'Unhinged Director Strain (empty deck)',
-        });
-      }
-      await thread.send(`**Unhinged Director Strain** — Deck empty, **${figName}** must suffer 1 Strain.`).catch(discordCatch);
-    } else {
-      const top = deck.shift();
-      game[deckKey] = deck;
-      game[discKey] = (game[discKey] || []).concat([top]);
-      await thread.send(`**Unhinged Director Strain** — **${figName}** absorbed the Strain by discarding **${top}** from the top of the CC deck.`).catch(discordCatch);
-      logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — Discarded **${top}** to absorb 1 Strain.`, { phase: 'ROUND', icon: 'card' });
-    }
-  } else {
-    // Player chose the damage branch of the Unhinged custom prompt.
-    // Route through applyStrain so Fireproof / Headhunter / Under Duress
-    // / Paz still fire — applyStrain will normally re-prompt for the
-    // CC-vs-damage choice, but with a 0-card hand or already-discarded
-    // path the player still gets correct rules treatment.
-    if (pending.attackerMsgId && dcHealthState) {
-      await applyStrain(game, { ...ctx, client: interaction.client }, {
-        figureKey: figKey,
-        controllerPlayerNum: atkPN,
-        amount: 1,
-        source: 'Unhinged Director Strain',
-      });
-    }
-    await thread.send(`**Unhinged Director Strain** — **${figName}** must suffer 1 Strain.`).catch(discordCatch);
-    logGameAction?.(game, interaction.client, `🎯 **Unhinged Director Strain** — **${figName}** suffered 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
-  }
-
-  clearPendingUnhingedStrain(game);
-  await advanceTokenPhase(thread, game, combat, 'attacker', ctx);
-  saveGames(game.gameId);
-}
+// handleUnhingedStrainAbsorb RETIRED 2026-05-09 — the custom CC-vs-damage
+// prompt was a duplicate of applyStrain's per-strain choice. Strain now
+// flows through the canonical applyStrain pipeline at the +2 click site
+// (handleUnhingedDirectorChoice → applyStrain with 'unhinged_director_resume'
+// followup that advances the token phase).
 
 /**
  * F6 Cleave: Apply cleave damage to chosen target in melee; finish combat resolution.

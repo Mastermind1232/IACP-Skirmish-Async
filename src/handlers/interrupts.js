@@ -1139,53 +1139,56 @@ export async function handleBlackMarket(interaction, ctx) {
     return;
   }
 
-  // Apply 1 Strain to the SMUGGLER via the canonical applyStrain
-  // pipeline (Fireproof / Headhunter / per-strain choice prompt /
-  // Under Duress / Paz). applyStrain handles defeat finalization
-  // through the damage pipeline if the player picks the damage branch.
-  const { applyStrain } = await import('./strain-handler.js');
+  // Apply 1 Strain via the canonical applyStrain pipeline. The CC
+  // draw/discard/return + VP changes happen AFTER the strain choice
+  // resolves (so a "discard top of deck" strain choice doesn't race
+  // with the Black Market deck-top consumption). Wired via
+  // registerStrainFollowup('black_market_resolve').
+  const { applyStrain, registerStrainFollowup: _bmRegFu } = await import('./strain-handler.js');
+  delete game.pendingBlackMarket[_bmPn];
+  await interaction.message.edit({ content: `**[Black Market]** — strain resolving; effect applies after the strain choice.`, components: [] }).catch(discordCatch);
   await applyStrain(game, ctx, {
     figureKey: smugglerFk,
     controllerPlayerNum: _bmPn,
     amount: 1,
     source: 'Black Market',
+    followup: {
+      type: 'black_market_resolve',
+      payload: { playerNum: _bmPn, choice: _bmChoice, topCard, cardCost, smugglerName },
+    },
   });
+  saveGames(game.gameId);
+}
 
-  // Remove top card from deck (it was only peeked before)
+// Black Market followup — run the CC draw/discard/return + VP swap
+// AFTER the strain choice resolves.
+import { registerStrainFollowup as _bmRegisterFollowup } from './strain-handler.js';
+_bmRegisterFollowup('black_market_resolve', async (game, ctx, payload) => {
+  const { client, logGameAction, saveGames, checkWinConditions } = ctx;
+  const { playerNum, choice, topCard, cardCost, smugglerName } = payload;
+  const deckKey = playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck';
   const deck = game[deckKey] || [];
-  if (deck.length > 0 && deck[0] === topCard) {
-    deck.shift();
-  }
-
+  // Top card was only peeked at trigger time; consume now if still present.
+  if (deck.length > 0 && deck[0] === topCard) deck.shift();
   let resultMsg = '';
-  if (_bmChoice === 'draw') {
-    // Spend VP equal to cost, draw the card
-    if (cardCost > 0) {
-      deductVp(game, _bmPn, cardCost);
-    }
-    const handKey = _bmPn === 1 ? 'player1CcHand' : 'player2CcHand';
+  if (choice === 'draw') {
+    if (cardCost > 0) deductVp(game, playerNum, cardCost);
+    const handKey = playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
     game[handKey] = [...(game[handKey] || []), topCard];
     resultMsg = `Drew **${topCard}** (spent ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
-  } else if (_bmChoice === 'discard') {
-    // Discard the card, gain VP equal to cost
-    const discardKey = _bmPn === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
+  } else if (choice === 'discard') {
+    const discardKey = playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
     game[discardKey] = [...(game[discardKey] || []), topCard];
-    if (cardCost > 0) {
-      awardObjectiveVp(game, _bmPn, cardCost);
-    }
+    if (cardCost > 0) awardObjectiveVp(game, playerNum, cardCost);
     resultMsg = `Discarded **${topCard}** (gained ${cardCost} VP). **${smugglerName}** suffered 1 Strain.`;
-  } else if (_bmChoice === 'return') {
-    // Return card to top of deck (put it back)
+  } else if (choice === 'return') {
     deck.unshift(topCard);
     resultMsg = `Returned **${topCard}** to top of deck. **${smugglerName}** suffered 1 Strain.`;
   }
-
-  delete game.pendingBlackMarket[_bmPn];
-  await interaction.message.edit({ content: `**[Black Market]** — ${resultMsg}`, components: [] }).catch(discordCatch);
-  await logGameAction(game, client, `**[Black Market]** — ${resultMsg}`, { phase: 'ROUND', icon: 'card' });
-  await checkWinConditions(game, client);
-  saveGames(game.gameId);
-}
+  await logGameAction?.(game, client, `**[Black Market]** — ${resultMsg}`, { phase: 'ROUND', icon: 'card' });
+  await checkWinConditions?.(game, client);
+  saveGames?.(game.gameId);
+});
 
 // ── Punishing Strike (Skirmish Upgrade) ─────────────────────────────────────
 // ps_replace_{gameId}_{targetFigureKey}_{originalCondition}_{newCondition|skip}

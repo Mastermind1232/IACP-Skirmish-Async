@@ -1205,18 +1205,18 @@ export async function handleActPassive(interaction, ctx) {
       const lastUnderscore = fullSuffix.lastIndexOf('_');
       const condFk = fullSuffix.slice(0, lastUnderscore);
       const condName = fullSuffix.slice(lastUnderscore + 1);
-      filterCondition(game, condFk, condName);
-      // Apply 1 Strain to the activating figure via the canonical
-      // applyStrain pipeline (Fireproof / Headhunter / per-strain
-      // choice prompt / Under Duress / Paz).
+      // Calming Presence (Yoda): strain via applyStrain pipeline,
+      // followed by harmful-condition removal once strain resolves.
+      // Per CRR + user 2026-05-09: post-strain effects are followups.
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const selfFk = `${meta.dcName}-${dgIndex}-0`;
-      const { applyStrain: _applyStrainCp } = await import('./strain-handler.js');
-      await _applyStrainCp(game, ctx, {
+      const { applyStrain } = await import('./strain-handler.js');
+      await applyStrain(game, ctx, {
         figureKey: selfFk,
         controllerPlayerNum: meta.playerNum,
         amount: 1,
         source: 'Calming Presence',
+        followup: { type: 'calming_presence_remove', payload: { condFk, condName } },
       });
       const condFkName = dcNameFromFigureKey(condFk);
       await interaction.message.edit({ content: `🧘 **Calming Presence** — Removed **${condName}** from **${condFkName}**. **${displayName}** suffered **1 Strain**.`, components: [] }).catch(discordCatch);
@@ -1262,35 +1262,34 @@ export async function handleActPassive(interaction, ctx) {
       const harmful = conds.filter(c => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[targetFk]));
       if (harmful.length > 0) {
         const removedCond = harmful[0];
-        filterCondition(game, targetFk, removedCond);
-        // Apply 1 Strain to the chosen figure
+        // Unshakable (per CRR + user 2026-05-09): strain via applyStrain
+        // pipeline; harmful-condition removal + card exhaust happen
+        // AS THE FOLLOWUP after strain resolves.
         const targetMsgId = ctx.findDcMessageIdForFigure?.(gameId, meta.playerNum, targetFk);
         if (targetMsgId) {
-          // Strain via the canonical applyStrain pipeline (Fireproof /
-          // Headhunter / per-strain choice / Under Duress / Paz).
-          const { applyStrain: _applyStrainUs } = await import('./strain-handler.js');
-          await _applyStrainUs(game, ctx, {
+          // Look up the [Unshakable] card msgId for the followup's exhaust step.
+          let _usMsgId = null;
+          const _usDcList2 = getDcList(game, meta.playerNum) || [];
+          const _usDcMsgIds2 = getDcMessageIds(game, meta.playerNum) || [];
+          for (let i = 0; i < _usDcList2.length; i++) {
+            if ((_usDcList2[i]?.dcName || _usDcList2[i]) === '[Unshakable]') {
+              _usMsgId = _usDcMsgIds2[i];
+              break;
+            }
+          }
+          const { applyStrain } = await import('./strain-handler.js');
+          await applyStrain(game, ctx, {
             figureKey: targetFk,
             controllerPlayerNum: meta.playerNum,
             amount: 1,
             source: 'Unshakable',
+            followup: {
+              type: 'unshakable_remove',
+              payload: { targetFk, removedCond, usMsgId: _usMsgId },
+            },
           });
         }
-        // Exhaust Unshakable
-        const _usDcList2 = getDcList(game, meta.playerNum) || [];
-        const _usDcMsgIds2 = getDcMessageIds(game, meta.playerNum) || [];
-        for (let i = 0; i < _usDcList2.length; i++) {
-          if ((_usDcList2[i]?.dcName || _usDcList2[i]) === '[Unshakable]') {
-            const usMsgId2 = _usDcMsgIds2[i];
-            if (usMsgId2) {
-              game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-              game.exhaustedSkirmishUpgrades[usMsgId2] = [...(game.exhaustedSkirmishUpgrades[usMsgId2] || []), 'Unshakable'];
-            }
-            break;
-          }
-        }
-        await interaction.message.edit({ content: `**Unshakable** — Removed **${removedCond}** from **${targetDcName}**. That figure suffered **1 Strain**.`, components: [] }).catch(discordCatch);
-        await logGameAction?.(game, client, `**Unshakable** — Removed ${removedCond} from ${targetDcName}; suffered 1 Strain. (Exhausted)`, { phase: 'ACTIVATION', icon: 'condition' });
+        await interaction.message.edit({ content: `**Unshakable** — **${targetDcName}** must suffer **1 Strain**, then **${removedCond}** is removed.`, components: [] }).catch(discordCatch);
       } else {
         await interaction.message.edit({ content: `**Unshakable** — No harmful conditions to remove.`, components: [] }).catch(discordCatch);
       }

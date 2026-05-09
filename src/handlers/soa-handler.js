@@ -20,6 +20,45 @@ import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, de
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
 import { healHp, reduceHp } from '../game/damage-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
+import { registerStrainFollowup } from './strain-handler.js';
+import { applyCondition as _applyConditionGlobal } from '../game/conditions.js';
+
+// Strain followup: Madness Focus applied after the strain resolves.
+registerStrainFollowup('madness_focus', async (game, ctx, payload) => {
+  if (!payload?.figureKey) return;
+  _applyConditionGlobal(game, payload.figureKey, 'Focus');
+  await ctx.logGameAction?.(game, ctx.client,
+    `\u{1F4A2} **Madness** — **${dcNameFromFigureKey(payload.figureKey)}** is now **Focused** (post-strain).`,
+    { phase: 'ROUND', icon: 'card' });
+});
+
+// Strain followup: Calming Presence harmful-condition removal after strain.
+registerStrainFollowup('calming_presence_remove', async (game, ctx, payload) => {
+  if (!payload?.condFk || !payload?.condName) return;
+  const { filterCondition } = await import('../game/conditions.js');
+  filterCondition(game, payload.condFk, payload.condName);
+  await ctx.logGameAction?.(game, ctx.client,
+    `🧘 **Calming Presence** — Removed **${payload.condName}** from **${dcNameFromFigureKey(payload.condFk)}** (post-strain).`,
+    { phase: 'ACTIVATION', icon: 'condition' });
+});
+
+// Strain followup: Unshakable harmful-condition removal + exhaust after strain.
+registerStrainFollowup('unshakable_remove', async (game, ctx, payload) => {
+  if (!payload?.targetFk || !payload?.removedCond) return;
+  const { filterCondition } = await import('../game/conditions.js');
+  filterCondition(game, payload.targetFk, payload.removedCond);
+  // Exhaust Unshakable card (caller already provided usMsgId).
+  if (payload.usMsgId) {
+    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+    const _existing = game.exhaustedSkirmishUpgrades[payload.usMsgId] || [];
+    if (!_existing.includes('Unshakable')) {
+      game.exhaustedSkirmishUpgrades[payload.usMsgId] = [..._existing, 'Unshakable'];
+    }
+  }
+  await ctx.logGameAction?.(game, ctx.client,
+    `**Unshakable** — Removed **${payload.removedCond}** from **${dcNameFromFigureKey(payload.targetFk)}** (post-strain). Card exhausted.`,
+    { phase: 'ACTIVATION', icon: 'condition' });
+});
 import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand, getDcList } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { applyCondition } from '../game/conditions.js';
@@ -727,23 +766,22 @@ export async function handleSoaFire(interaction, ctx) {
       const hand = getCcHand(game, ownerPlayerNum) || [];
       if (hand.length <= 2) {
         const figureKeys = Object.keys(game.figurePositions?.[ownerPlayerNum] || {}).filter(fk => fk.startsWith('Taron Malicos-'));
-        // Madness (Taron Malicos) — strain routes through applyStrain so
-        // Fireproof / Headhunter / per-strain choice prompt fire correctly.
-        // Focus is applied first (auto, no choice); then strain is queued.
+        // Madness (Taron Malicos): strain via applyStrain pipeline,
+        // followed by Focus once strain resolves. Per CRR + user
+        // 2026-05-09: post-strain effects use registerStrainFollowup.
         const { applyStrain } = await import('./strain-handler.js');
         for (const fk of figureKeys) {
-          applyCondition(game, fk, 'Focus');
           if (dcHealthState) {
             await applyStrain(game, ctx, {
               figureKey: fk,
               controllerPlayerNum: ownerPlayerNum,
               amount: 1,
               source: 'Madness',
+              followup: { type: 'madness_focus', payload: { figureKey: fk } },
             });
           }
         }
-        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** must suffer **1 Strain** and became **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);
-        if (logGameAction) await logGameAction(game, client, `\u{1F4A2} **Madness** — ${displayName} suffered 1 strain + Focus.`, { phase: 'ROUND', icon: 'card' });
+        await interaction.message.edit({ content: `\u{1F4A2} **Madness** — **${displayName}** must suffer **1 Strain**, then become **Focused** (hand size ${hand.length}).`, components: [] }).catch(discordCatch);
       } else {
         await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Hand size is ${hand.length} (>2); no effect.`, components: [] }).catch(discordCatch);
       }
