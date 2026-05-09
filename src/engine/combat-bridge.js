@@ -796,8 +796,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
       // Skip post-damage effects on Extra Protection re-entry — they already fired in the first pass.
       if (!_epReentry) {
-      // Furious Charge: if defender's player played this CC, and suffered >= threshold damage, grant Focus
-      if (game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) {
+      // Furious Charge inline disabled 2026-05-09 → fireFuriousCharge
+      // (defender step-8 button).
+      if (false && game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) { // eslint-disable-line no-constant-condition
         if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
           await logGameAction(game, client, `**Furious Charge** — **${combat.target.label}** is now **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
         }
@@ -1018,9 +1019,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // case 'set_your_sights'). Card text is "At the start of the
       // mission, place a Recon token on a unique hostile figure";
       // the prior after-attack placement was incorrect timing.
-      // Force Deflection (Yoda): after attack targeting Yoda or adjacent friendly REBEL resolves,
-      // attacker suffers Damage = number of attack dice rolled. Limit once per round.
-      {
+      // Force Deflection inline disabled 2026-05-09 → fireForceDeflection
+      // (defender step-8 button).
+      if (false) { // eslint-disable-line no-constant-condition
         const _fdDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
         const _fdDefEff = getDcEffects()?.[_fdDefDcName];
         const _fdDefIsTarget = (_fdDefEff?.specialAbilityIds || []).includes('force_deflection_yoda');
@@ -1085,9 +1086,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Distracting Fire (Rebel Pathfinder Elite): after an attack resolves, if any enemy
-      // Rebel Pathfinder with distracting_fire has LOS to the attacker, deal 1 Damage to attacker.
-      {
+      // Distracting Fire inline disabled 2026-05-09 → fireDistractingFire
+      // (attacker step-8 button per user 2026-05-09 categorization).
+      if (false) { // eslint-disable-line no-constant-condition
         const _dfAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
         if (_dfAtkPos && combat.attackerMsgId && game.selectedMap?.id) {
           const _dfMapSp = getEffectiveMapSpaces(game, getMapData(game.selectedMap.id));
@@ -2110,11 +2111,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     await _triggerBleedAfterAction(game, { ...deps, client, processFigureDefeat },
       combat.attackerFigureKey, combat.attackerPlayerNum);
   }
-  // Deflection: after attack resolves, attacker suffers N damage
-  // unconditional = always fires after attack; conditional (legacy) = only if defender took 0 damage
+  // Deflection inline disabled 2026-05-09 → fireDeflection (defender step-8).
   const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
   const deflectUnconditional = game.deflectionUnconditional?.[defenderPlayerNum];
-  if (deflectDmg && deflectDmg > 0 && hit && (deflectUnconditional || damage === 0)) {
+  if (false && deflectDmg && deflectDmg > 0 && hit && (deflectUnconditional || damage === 0)) { // eslint-disable-line no-constant-condition
     delete game.deflectionPending[defenderPlayerNum];
     delete game.deflectionUnconditional?.[defenderPlayerNum];
     const attMsgId = combat.attackerMsgId;
@@ -2855,8 +2855,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Deflect (Luke Skywalker JK): after ranged attack resolves, hostile in LOS suffers 1 Damage
-  if (combat.isRanged && combat.target?.figureKey && game.selectedMap?.id) {
+  // Deflect inline disabled 2026-05-09 → fireDeflect (defender step-8 button).
+  if (false && combat.isRanged && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
     const _dflDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     const _dflAtkPN = combat.attackerPlayerNum;
     // Check defender and adjacent friendlies for deflect
@@ -2982,8 +2982,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     console.error('Post-attack reaction prompt error:', _postAtkErr?.message ?? _postAtkErr);
   }
 
-  // Return Fire (Han Solo / Migs Mayfeld): after attack targeting this figure resolves, interrupt free attack
-  {
+  // Return Fire inline disabled 2026-05-09 → fireReturnFire (defender
+  // CHAIN attack — staged on combat._pendingDefenderChainAttacks which
+  // _finishCombatResolution runs BEFORE attacker chain queue per user
+  // 2026-05-09 priority spec).
+  if (false) { // eslint-disable-line no-constant-condition
     const _rfDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
     const _rfDefFk = combat.target?.figureKey;
     const _rfDefDcName = _rfDefFk ? dcNameFromFigureKey(_rfDefFk) : null;
@@ -3281,15 +3284,13 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const { completeDeferredDefeat } = await import('../handlers/parting-shot.js');
     await completeDeferredDefeat(game, deps);
   }
-  // Chain-attack queue (Tonfa Strike / Barrage / Flurry of Blows / Fell
-  // Swoop): step-8 fire handlers stage chain-attack configs onto
-  // combat._pendingChainAttacks during the attacker window. Per the user
-  // 2026-05-09 spec the new attack only fires AFTER the defender's step-8
-  // window has closed — which is here, at combat-close. Each entry sets
-  // its pending flag (freeAttackBonusPending / fellSwoopFreeAttack) and
-  // posts the prompt so the player can declare the next attack.
+  // Chain-attack queues: defender chain attacks (Return Fire, etc.)
+  // resolve FIRST, then attacker chain attacks (Tonfa / Barrage / Flurry /
+  // Fell Swoop), per user 2026-05-09: "the defense side return fire
+  // takes precedence over a second attack from the attacker."
+  const _pdca = Array.isArray(combat._pendingDefenderChainAttacks) ? combat._pendingDefenderChainAttacks : [];
   const _pca = Array.isArray(combat._pendingChainAttacks) ? combat._pendingChainAttacks : [];
-  for (const _entry of _pca) {
+  for (const _entry of [..._pdca, ..._pca]) {
     if (!_entry?.msgId) continue;
     if (_entry.flagKey === 'freeAttackBonusPending') {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -3309,6 +3310,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     if (_entry.barrageDefenseBonus) {
       game.barrageDefenseBonus = game.barrageDefenseBonus || {};
       game.barrageDefenseBonus[_entry.msgId] = true;
+    }
+    // Return Fire (defender chain) forces target onto the original attacker.
+    if (_entry.forcedTargetFigureKey) {
+      game.forcedAttackTarget = game.forcedAttackTarget || {};
+      game.forcedAttackTarget[_entry.msgId] = _entry.forcedTargetFigureKey;
     }
     if (_entry.message && thread) {
       await thread.send(_entry.message).catch(discordCatch);

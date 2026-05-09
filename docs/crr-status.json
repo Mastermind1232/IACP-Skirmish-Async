@@ -29,12 +29,12 @@
     "ccCount": 292
   },
   "directDetectionCensus": {
-    "baselineTotal": 167,
+    "baselineTotal": 168,
     "perFamily": {
       "dcName_equality": 63,
       "dcName_includes": 5,
       "dcName_startsWith": 4,
-      "cardNameIncludes": 95
+      "cardNameIncludes": 96
     }
   },
   "roundFlagsCompleteness": {

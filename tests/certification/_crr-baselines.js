@@ -65,8 +65,12 @@ export const DD_BASELINE = {
   dcName_equality: 63,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 95,
+  cardNameIncludes: 96,
 };
+// 2026-05-09: cardNameIncludes 95→96. Return Fire migrated to step-8
+// fireReturnFire (after-attack-fire.js); the Han Solo damage-gate
+// branch checks for the 'Rogue Smuggler' upgrade — same shape as the
+// original combat-bridge inline site.
 // 2026-05-09: dcName_equality 60→61. Blast splash migrated to step-8
 // fireBlast handler (after-attack-fire.js); the Fury of Kashyyyk friendly
 // WOOKIEE Focus check moved with it. Same `dc.dcName === '[Fury of

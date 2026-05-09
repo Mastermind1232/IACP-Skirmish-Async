@@ -32,7 +32,7 @@ import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
   setPendingFightingKnife, setPendingSpreadThePain,
-  setPendingWantonDestruction,
+  setPendingWantonDestruction, setPendingDeflect,
 } from '../game/interrupts.js';
 import { getCcHand } from '../game/player-helpers.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
@@ -1210,6 +1210,274 @@ async function fireWantonDestruction(thread, game, combat, effect, ctx) {
   })).catch(discordCatch);
 }
 
+// ── DEFENDER-SIDE FIRE HANDLERS ─────────────────────────────────────────────
+
+/**
+ * Furious Charge (CC, defender side): defender becomes Focused on the
+ * attack that triggered the threshold. Damage threshold is gate at
+ * enqueue time; this handler just applies + clears the queued state.
+ */
+async function fireFuriousCharge(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  const fk = combat.target?.figureKey;
+  if (!fk) return;
+  if (game.conditionalFocusIfDamagedGte) game.conditionalFocusIfDamagedGte = null;
+  if (isConditionImmune(game, fk)) return;
+  if (applyCondition(game, fk, 'Focus') && logGameAction) {
+    await logGameAction(game, client, `**Furious Charge** — **${combat.target.label || dcNameFromFigureKey(fk)}** is now **Focused** (suffered ${combat._step7Damage || 0} Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Force Deflection (Yoda CC): attacker suffers Damage = number of
+ * attack dice rolled. Eligibility (Yoda is target OR adjacent to
+ * friendly REBEL target) verified here at fire time. Limit once per
+ * round, tracked by figureKey_force_deflection key.
+ */
+async function fireForceDeflection(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, deps, findDcMessageIdForFigure } = ctx;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const targetFk = combat.target?.figureKey;
+  if (!targetFk) return;
+  const targetDcName = dcNameFromFigureKey(targetFk);
+  const targetEff = getDcEffect(targetDcName);
+  const targetIsYoda = (targetEff?.specialAbilityIds || []).includes('force_deflection_yoda');
+  let yodaFigKey = null;
+  if (targetIsYoda) {
+    yodaFigKey = targetFk;
+  } else if ((targetEff?.affiliation || '') === 'Rebel') {
+    const friendly = game.figurePositions?.[defPN] || {};
+    const targetCoord = friendly[targetFk];
+    if (targetCoord) {
+      for (const [fk, pos] of Object.entries(friendly)) {
+        if (fk === targetFk) continue;
+        const dcN = dcNameFromFigureKey(fk);
+        const e = getDcEffect(dcN);
+        if (!(e?.specialAbilityIds || []).includes('force_deflection_yoda')) continue;
+        if (isWithinN(pos, targetCoord, 1, game.selectedMap?.id)) { yodaFigKey = fk; break; }
+      }
+    }
+  }
+  if (!yodaFigKey) return;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  const fdKey = `${yodaFigKey}_force_deflection`;
+  if (game.roundFigureAbilityUsed[fdKey]) return;
+  game.roundFigureAbilityUsed[fdKey] = true;
+  const diceCount = combat.attackDiceResults?.length || 0;
+  if (diceCount === 0) return;
+  const atkFigIdx = combat.attackerFigureIndex ?? 0;
+  const { newHp, prevHp, wasDefeated } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: atkFigIdx,
+    amount: diceCount, controllerPlayerNum: combat.attackerPlayerNum,
+    source: 'Force Deflection', combat,
+  });
+  if (prevHp <= 0) return;
+  const yodaDcName = dcNameFromFigureKey(yodaFigKey);
+  if (logGameAction) {
+    await logGameAction(game, client, `🔵 **Force Deflection** — **${yodaDcName}** deflects! **${combat.attackerDcName}** suffers **${diceCount} Damage** (${diceCount} attack dice rolled). HP: ${prevHp} → ${newHp}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+  if (wasDefeated) {
+    const dcIds = getDcMessageIds(game, combat.attackerPlayerNum) || [];
+    const dcIdx = dcIds.indexOf(combat.attackerMsgId);
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: combat.attackerPlayerNum,
+      figureKey: combat.attackerFigureKey,
+      attackerPlayerNum: defPN,
+      attackerFigureKey: targetFk,
+      msgId: combat.attackerMsgId,
+      dcIdx,
+      dcName: combat.attackerDcName,
+      source: 'Force Deflection',
+    }, { ...(deps || {}), client });
+  }
+}
+
+/**
+ * Distracting Fire (Rebel Pathfinder Elite): per card text
+ * "if the attack did not miss, you may force the defender's group to go
+ * next." Force-activation effect (NO damage). Reuses the
+ * forceVisionNextActivation mechanism (Kanan), which gates the
+ * opponent's next group activation against a named DC. Hit-gated.
+ *
+ * The trigger DC is the attacker (Pathfinder Elite); the group forced
+ * is the defender's group (combat.target's DC name).
+ */
+async function fireDistractingFire(thread, game, combat, effect, ctx) {
+  const { logGameAction, client } = ctx;
+  if (!combat._step7Hit) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const targetDcName = combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null;
+  if (!targetDcName) return;
+  game.forceVisionNextActivation = { playerNum: defPN, dcName: targetDcName };
+  if (logGameAction) {
+    await logGameAction(game, client, `🎯 **Distracting Fire** — **${combat.attackerDcName}** forces **${targetDcName}**'s group to activate next, if able.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Deflection (CC, defender): attacker suffers N damage. Hit-gated;
+ * legacy variant requires defender took 0 damage; unconditional variant
+ * always fires. Pulls amount from game.deflectionPending[defenderPN].
+ */
+async function fireDeflection(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, deps } = ctx;
+  if (!combat.attackerMsgId) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const deflectDmg = game.deflectionPending?.[defPN];
+  if (!deflectDmg || deflectDmg <= 0) return;
+  delete game.deflectionPending[defPN];
+  if (game.deflectionUnconditional?.[defPN]) delete game.deflectionUnconditional[defPN];
+  const atkFigIdx = combat.attackerFigureIndex ?? 0;
+  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: atkFigIdx,
+    amount: deflectDmg, controllerPlayerNum: combat.attackerPlayerNum,
+    source: 'Deflection', combat,
+  });
+  if (logGameAction) {
+    const ownerId = getPlayerId(game, defPN);
+    await logGameAction(game, client, `<@${ownerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage**.`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+}
+
+/**
+ * Deflect (Luke Skywalker JK + variants): ranged-only. Defender (or
+ * adjacent friendly with the ability) chooses 1 hostile in LOS, that
+ * hostile suffers 1 damage. If only one hostile in LOS, auto-applies.
+ */
+async function fireDeflect(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, deps, ButtonBuilder, ButtonStyle, ActionRowBuilder, getMapData, findDcMessageIdForFigure } = ctx;
+  if (!combat.isRanged || !combat.target?.figureKey || !game.selectedMap?.id || !thread) return;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const atkPN = combat.attackerPlayerNum;
+  const ms = getMapData?.(game.selectedMap.id);
+  const allFp = getAllFigureFootprints(game, getFigureSize);
+  const targetPos = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+  if (!targetPos) return;
+  const candidates = [];
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
+    if (!pos) continue;
+    const dName = dcNameFromFigureKey(fk);
+    const e = getDcEffect(dName);
+    if (!(e?.specialAbilityIds || []).includes('deflect')) continue;
+    const isSelf = fk === combat.target.figureKey;
+    const isAdj = !isSelf && isWithinN(pos, targetPos, 1, game.selectedMap.id);
+    if (!isSelf && !isAdj) continue;
+    candidates.push({ figureKey: fk, dcName: dName });
+  }
+  for (const cand of candidates) {
+    const candFp = getFigureFootprint(game, defPN, cand.figureKey, getFigureSize);
+    const hostiles = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[atkPN] || {})) {
+      if (!pos) continue;
+      const candFpA = getFigureFootprint(game, atkPN, fk, getFigureSize);
+      if (!hasFigureLineOfSight(candFp, candFpA, ms, allFp)) continue;
+      const { label } = getFigureLabel(game, atkPN, fk, undefined, 80, {
+        dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
+      });
+      hostiles.push({ figureKey: fk, playerNum: atkPN, label });
+    }
+    if (hostiles.length === 0) continue;
+    if (hostiles.length === 1) {
+      const tgt = hostiles[0];
+      const tgtMsgId = findDcMessageIdForFigure?.(game.gameId, tgt.playerNum, tgt.figureKey);
+      if (tgtMsgId) {
+        const { figureIndex } = parseFigureKey(tgt.figureKey);
+        await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+          figureKey: tgt.figureKey, msgId: tgtMsgId, figIndex: figureIndex,
+          amount: 1, controllerPlayerNum: tgt.playerNum,
+          source: 'Deflect (Luke)', combat,
+        });
+      }
+      await thread.send(`**Deflect** — **${cand.dcName}**: **${tgt.label}** suffers 1 Damage.`).catch(discordCatch);
+      if (logGameAction) {
+        await logGameAction(game, client, `**Deflect** — **${cand.dcName}** redirects 1 Damage to **${tgt.label}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+      }
+    } else {
+      setPendingDeflect(game, {
+        gameId: game.gameId,
+        deflectorPlayerNum: defPN,
+        deflectorFigureKey: cand.figureKey,
+        deflectorDcName: cand.dcName,
+        combatThreadId: combat.combatThreadId,
+        hostiles,
+      });
+      const ownerId = getPlayerId(game, defPN);
+      const btns = hostiles.slice(0, 4).map((t, i) =>
+        new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger));
+      btns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      await thread.send(sanitizeMentions({
+        content: `<@${ownerId}> **Deflect** — **${cand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
+        allowedMentions: { users: [ownerId] },
+        components: [new ActionRowBuilder().addComponents(btns)],
+      })).catch(discordCatch);
+    }
+    break; // Only one Deflect trigger per attack
+  }
+}
+
+/**
+ * Return Fire (Han Solo / Migs Mayfeld): defender's CHAIN ATTACK on
+ * the original attacker. Per user 2026-05-09, this resolves BEFORE any
+ * attacker chain attack — staged on combat._pendingDefenderChainAttacks
+ * which _finishCombatResolution iterates first.
+ *
+ * Han's variant requires defender took 0 damage UNLESS they have the
+ * Rogue Smuggler upgrade. Both variants block on Stun (CRR p.58 — a
+ * stunned figure can't declare an attack); YWNDM-Fifth-Brother
+ * suppression bypasses the Stun gate.
+ */
+async function fireReturnFire(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, findDcMessageIdForFigure } = ctx;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const fk = combat.target?.figureKey;
+  if (!fk) return;
+  const dcN = dcNameFromFigureKey(fk);
+  const eff = getDcEffect(dcN);
+  const ids = eff?.specialAbilityIds || [];
+  const hasReturnFire = ids.includes('return_fire') || ids.includes('return_fire_migs');
+  if (!hasReturnFire) return;
+  if (!game.figurePositions?.[defPN]?.[fk]) return;
+  const rfKey = `returnFire_${fk}`;
+  if (game.roundFigureAbilityUsed?.[rfKey]) return;
+  // Han Solo variant: requires 0 damage taken unless Rogue Smuggler upgrade.
+  let canFire = true;
+  if (ids.includes('return_fire') && !ids.includes('return_fire_migs')) {
+    const damage = combat._appliedDamage ?? combat._step7Damage ?? 0;
+    const defMsgId = findDcMessageIdForFigure?.(game.gameId, defPN, fk);
+    const upgrades = defMsgId ? (game.p1DcAttachments?.[defMsgId] || game.p2DcAttachments?.[defMsgId] || []) : [];
+    if (damage > 0 && !cardNameIncludes(upgrades, 'Rogue Smuggler')) canFire = false;
+  }
+  // Stun blocks declaration (CRR p.58) unless YWNDM-Fifth-Brother suppression.
+  const conds = game.figureConditions?.[fk] || [];
+  const { areConditionEffectsSuppressed } = await import('../game/conditions.js');
+  const suppressed = areConditionEffectsSuppressed(game, fk);
+  if (canFire && conds.includes('Stun') && !suppressed) {
+    canFire = false;
+    if (logGameAction) {
+      await logGameAction(game, client, `**Return Fire** suppressed — **${dcN}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+    }
+  }
+  if (!canFire) return;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[rfKey] = true;
+  const defMsgId = findDcMessageIdForFigure?.(game.gameId, defPN, fk);
+  if (!defMsgId) return;
+  const ownerId = getPlayerId(game, defPN);
+  const label = ids.includes('return_fire_migs') ? 'Return Fire (Migs)' : 'Return Fire';
+  // Stage on the DEFENDER chain queue — runs first in _finishCombatResolution.
+  combat._pendingDefenderChainAttacks = combat._pendingDefenderChainAttacks || [];
+  combat._pendingDefenderChainAttacks.push({
+    source: label,
+    msgId: defMsgId,
+    flagKey: 'freeAttackBonusPending',
+    flagValue: true,
+    forcedTargetMsgId: combat.attackerMsgId,
+    forcedTargetFigureKey: combat.attackerFigureKey,
+    message: `<@${ownerId}> **${label}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Use the **Attack** button on your DC card.`,
+  });
+}
+
 /**
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
@@ -1299,6 +1567,24 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'wanton_destruction':
       await fireWantonDestruction(thread, game, combat, effect, ctx);
+      return;
+    case 'distracting_fire':
+      await fireDistractingFire(thread, game, combat, effect, ctx);
+      return;
+    case 'furious_charge':
+      await fireFuriousCharge(thread, game, combat, effect, ctx);
+      return;
+    case 'force_deflection':
+      await fireForceDeflection(thread, game, combat, effect, ctx);
+      return;
+    case 'deflection':
+      await fireDeflection(thread, game, combat, effect, ctx);
+      return;
+    case 'deflect':
+      await fireDeflect(thread, game, combat, effect, ctx);
+      return;
+    case 'return_fire':
+      await fireReturnFire(thread, game, combat, effect, ctx);
       return;
     // 'blast', 'cleave', 'condition', and per-DC types land in
     // follow-up commits. For now they fall through; the inline

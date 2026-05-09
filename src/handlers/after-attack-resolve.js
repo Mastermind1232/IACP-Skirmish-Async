@@ -377,6 +377,28 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: `Spread the Pain: apply ${combat.spreadThePainConditions.length} condition${combat.spreadThePainConditions.length > 1 ? 's' : ''}`,
     });
   }
+  // Distracting Fire (Rebel Pathfinder Elite passive): hostile with LOS
+  // to attacker deals 1 damage to attacker. Per user 2026-05-09 this is
+  // categorized as ATTACKER step-8 (the outcome targets the attacker so
+  // the attacker's window owns the click). Eligibility re-checked at
+  // fire time.
+  if (combat.attackerFigureKey && game?.selectedMap?.id) {
+    const oppPN = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+    const friendlyFigs = game.figurePositions?.[oppPN] || {};
+    let hasDistr = false;
+    for (const fk of Object.keys(friendlyFigs)) {
+      const dcN = deps?.dcNameFromFigureKey?.(fk);
+      const e = dcN ? deps?.getDcEffects?.()?.[dcN] : null;
+      if ((e?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder')) { hasDistr = true; break; }
+    }
+    if (hasDistr) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'distracting_fire',
+        label: 'Distracting Fire: 1 Damage to attacker',
+      });
+    }
+  }
   // Wanton Destruction (Saw Gerrera, army-wide): triggers after ANY
   // friendly attack. Eligibility (Saw alive + CC in hand + adjacent
   // figures within 2 of target) re-validated at fire time.
@@ -416,11 +438,14 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
   const findDcMessageIdForFigure = deps?.findDcMessageIdForFigure;
   if (!getDcEffects || !findDcMessageIdForFigure) return;
   const dcNameFromFigureKey = deps.dcNameFromFigureKey;
-  const _slipDcName = dcNameFromFigureKey?.(combat.target.figureKey);
-  const _slipEff = _slipDcName ? getDcEffects()?.[_slipDcName] : null;
-  const _slipIds = _slipEff?.specialAbilityIds || [];
-  if (_slipIds.includes('slippery_smuggler_elite') || _slipIds.includes('slippery_smuggler_reg')) {
-    const _slipMsgId = findDcMessageIdForFigure(game.gameId, combat.defenderPlayerNum ?? null, combat.target.figureKey);
+  const defPN = combat.defenderPlayerNum ?? null;
+  const _defDcName = dcNameFromFigureKey?.(combat.target.figureKey);
+  const _defEff = _defDcName ? getDcEffects()?.[_defDcName] : null;
+  const _defIds = _defEff?.specialAbilityIds || [];
+
+  // Slippery (Alliance Smuggler E/R): defender gains 2 MP after attack.
+  if (_defIds.includes('slippery_smuggler_elite') || _defIds.includes('slippery_smuggler_reg')) {
+    const _slipMsgId = findDcMessageIdForFigure(game.gameId, defPN, combat.target.figureKey);
     if (_slipMsgId) {
       enqueueAfterAttackEffect(combat, {
         side: 'defender',
@@ -428,11 +453,90 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
         label: 'Slippery: gain 2 MP',
         payload: {
           msgId: _slipMsgId,
-          defenderDcName: _slipDcName,
+          defenderDcName: _defDcName,
           figureKey: combat.target.figureKey,
-          playerNum: combat.defenderPlayerNum ?? null,
+          playerNum: defPN,
           threadId: combat.combatThreadId,
         },
+      });
+    }
+  }
+  // Furious Charge (CC): if defender's player played the Furious Charge
+  // CC and defender suffered ≥ threshold damage, defender becomes Focused.
+  // Damage-gated; eligibility re-checked in fireFuriousCharge.
+  if (game?.conditionalFocusIfDamagedGte?.playerNum === defPN
+    && (combat._step7Damage || 0) >= (game.conditionalFocusIfDamagedGte.threshold || 0)) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'defender',
+      type: 'furious_charge',
+      label: 'Furious Charge: defender becomes Focused',
+    });
+  }
+  // Force Deflection (Yoda CC): defender + attacker dice. Eligibility
+  // (Yoda is target OR adjacent friendly REBEL) re-checked at fire time.
+  if (combat.attackerMsgId && combat.attackerFigureKey) {
+    const friendlyFigs = game.figurePositions?.[defPN] || {};
+    let hasYoda = false;
+    for (const fk of Object.keys(friendlyFigs)) {
+      const dcN = dcNameFromFigureKey?.(fk);
+      const e = dcN ? getDcEffects()?.[dcN] : null;
+      if ((e?.specialAbilityIds || []).includes('force_deflection_yoda')) { hasYoda = true; break; }
+    }
+    if (hasYoda) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'defender',
+        type: 'force_deflection',
+        label: 'Force Deflection: deflect to attacker',
+      });
+    }
+  }
+  // Distracting Fire moved out of defender side per user 2026-05-09:
+  // categorized as attacker step-8 (enqueued in
+  // enqueueAttackerPerDcEffects below).
+  // Deflect (Luke JK): ranged-only. Eligibility (target or adjacent
+  // friendly with deflect) re-checked at fire time.
+  if (combat.isRanged) {
+    const friendlyFigs = game.figurePositions?.[defPN] || {};
+    let hasDeflect = false;
+    for (const fk of Object.keys(friendlyFigs)) {
+      const dcN = dcNameFromFigureKey?.(fk);
+      const e = dcN ? getDcEffects()?.[dcN] : null;
+      if ((e?.specialAbilityIds || []).includes('deflect')) { hasDeflect = true; break; }
+    }
+    if (hasDeflect) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'defender',
+        type: 'deflect',
+        label: 'Deflect: 1 Damage to a hostile in LOS',
+      });
+    }
+  }
+  // Deflection (CC, defender): "after attack resolves, attacker suffers
+  // N damage" (unconditional, or only if defender took 0 damage in the
+  // legacy variant). Hit-gated. Pulls game.deflectionPending.
+  if (combat._step7Hit && game?.deflectionPending?.[defPN] && game.deflectionPending[defPN] > 0) {
+    const isUncond = !!game.deflectionUnconditional?.[defPN];
+    if (isUncond || (combat._step7Damage || 0) === 0) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'defender',
+        type: 'deflection',
+        label: `Deflection: attacker suffers ${game.deflectionPending[defPN]} Damage`,
+      });
+    }
+  }
+  // Return Fire (Han / Migs): defender chain attack on the attacker.
+  // Per user 2026-05-09 spec: defender chain attacks resolve BEFORE
+  // attacker chain attacks. fireReturnFire stages on
+  // combat._pendingDefenderChainAttacks which _finishCombatResolution
+  // runs first.
+  const _rfHasReturnFire = _defIds.includes('return_fire') || _defIds.includes('return_fire_migs');
+  if (_rfHasReturnFire) {
+    const _rfKey = `returnFire_${combat.target.figureKey}`;
+    if (!game?.roundFigureAbilityUsed?.[_rfKey]) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'defender',
+        type: 'return_fire',
+        label: '🔫 Return Fire: chain attack →',
       });
     }
   }
