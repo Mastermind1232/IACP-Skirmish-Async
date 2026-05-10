@@ -723,7 +723,12 @@ export async function handleIllicitArms(interaction, ctx) {
   if (isSkip) {
     if (thread) await thread.send('**Illicit Arms** — Declined.').catch(discordCatch);
     clearPendingIllicitArms(game);
+    if (game.pendingCombat) game.pendingCombat.illicitArmsResolved = true;
     saveGames(game.gameId);
+    if (thread && game.pendingCombat) {
+      const { proceedAfterRerolls } = await import('./combat.js');
+      await proceedAfterRerolls(thread, game, game.pendingCombat, ctx);
+    }
     return;
   }
 
@@ -799,7 +804,12 @@ export async function handleIllicitArms(interaction, ctx) {
     }
 
     clearPendingIllicitArms(game);
+    if (game.pendingCombat) game.pendingCombat.illicitArmsResolved = true;
     saveGames(game.gameId);
+    if (thread && game.pendingCombat) {
+      const { proceedAfterRerolls } = await import('./combat.js');
+      await proceedAfterRerolls(thread, game, game.pendingCombat, ctx);
+    }
     return;
   }
 }

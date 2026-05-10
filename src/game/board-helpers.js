@@ -340,6 +340,29 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
   }
 
+  // Retrieve The Child (Clan of Two): a UNIQUE figure may interact with
+  // The Child or its incapacitated token to gain 1 VP. Per alexanbv
+  // 2026-05-09: trigger is the Child being incapacitated (host need not
+  // be defeated). Either player's UNIQUE figure can retrieve. Removes
+  // The Child from the board and awards 1 VP to the retriever's player.
+  if (figPos && game.childIncapacitated) {
+    const _retrIntDcName = dcNameFromFigureKey(figureKey);
+    const _retrIntEff = getDcEffects()?.[_retrIntDcName];
+    if (_retrIntEff?.unique) {
+      for (const ownerPN of [1, 2]) {
+        const _childPoses = game.figurePositions?.[ownerPN] || {};
+        const _childFk = Object.keys(_childPoses).find((fk) => dcNameFromFigureKey(fk) === 'The Child');
+        if (!_childFk) continue;
+        const _childCoord = _childPoses[_childFk];
+        if (!_childCoord) continue;
+        const _childCoordLower = normalizeCoord(_childCoord);
+        if (isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, new Set([_childCoordLower]))) {
+          options.push({ id: `retrieve_child_${ownerPN}`, label: 'Retrieve The Child (+1 VP)', missionSpecific: false });
+        }
+      }
+    }
+  }
+
   // M11 Gaining Favor (Anchorhead Cantina Bar A): figure can interact with
   // a patron it CONTROLS to mark it with one of its player's mission tokens.
   // Per destruct 2026-05-08: control = standard space control (player has

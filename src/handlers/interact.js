@@ -174,6 +174,34 @@ export async function handleInteractChoice(interaction, ctx) {
     game.anchorheadTokensRemaining = game.anchorheadTokensRemaining || { 1: 4, 2: 4 };
     game.anchorheadTokensRemaining[playerNum] = Math.max(0, (game.anchorheadTokensRemaining[playerNum] ?? 4) - 1);
     logMsg = await logGameAction(game, interaction.client, `🍻 **${pLabel}: ${figLabel}** marked patron at **${_patronCoord.toUpperCase()}** (${game.anchorheadTokensRemaining[playerNum]} token${game.anchorheadTokensRemaining[playerNum] !== 1 ? 's' : ''} left).`, { phase: 'ROUND', icon: 'deploy' });
+  } else if (optionId.startsWith('retrieve_child_')) {
+    // Retrieve The Child (Clan of Two): UNIQUE figure removes The Child
+    // from the board and gains 1 VP. Per alexanbv 2026-05-09: trigger is
+    // The Child being incapacitated; either player's UNIQUE figure may
+    // retrieve. Removes the child figure, clears childIncapacitated +
+    // companionHostMap entry, awards 1 objective VP.
+    const childOwnerPN = parseInt(optionId.replace('retrieve_child_', ''), 10);
+    const _childPoses = game.figurePositions?.[childOwnerPN] || {};
+    const childFk = Object.keys(_childPoses).find((fk) => dcNameFromFigureKey(fk) === 'The Child');
+    if (childFk) {
+      delete game.figurePositions[childOwnerPN][childFk];
+      if (game.figureConditions?.[childFk]) delete game.figureConditions[childFk];
+      if (game.figurePowerTokens?.[childFk]) delete game.figurePowerTokens[childFk];
+      if (game.companionHostMap) {
+        for (const k of Object.keys(game.companionHostMap)) {
+          if (k.startsWith('The Child-') && game.companionHostMap[k]?.playerNum === childOwnerPN) {
+            delete game.companionHostMap[k];
+          }
+        }
+      }
+      game.childIncapacitated = false;
+      const { awardObjectiveVp } = await import('../game/index.js');
+      awardObjectiveVp(game, playerNum, 1);
+      logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** retrieved **The Child** — gained **+1 VP** (Clan of Two).`, { phase: 'ROUND', icon: 'deploy' });
+      if (ctx.checkWinConditions) await ctx.checkWinConditions(game, interaction.client);
+    } else {
+      logMsg = await logGameAction(game, interaction.client, `**${pLabel}: ${figLabel}** — Retrieve The Child failed (no Child figure on board).`, { phase: 'ROUND', icon: 'deploy' });
+    }
   } else if (optionId.startsWith('open_door_')) {
     // Door ID may contain multiple comma-separated edge keys for multi-space doors
     const edgeKeys = optionId.replace('open_door_', '').split(',');

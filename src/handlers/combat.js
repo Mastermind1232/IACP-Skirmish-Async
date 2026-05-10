@@ -2884,41 +2884,10 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } }));
   }
 
-  // Illicit Arms (Bib Fortuna): while a friendly figure is attacking, if army affiliation is SCUM,
-  // may discard 1 CC from hand to apply +1 Hit. Limit once per attack.
-  // Guard: skip if already prompted this attack (prevents double-fire).
-  if (!game.pendingIllicitArms) {
-    const friendlyPosIA = game.figurePositions?.[attackerPlayerNum] || {};
-    let bibFound = false;
-    for (const [fk, pos] of Object.entries(friendlyPosIA)) {
-      if (bibFound) break;
-      if (!pos) continue;
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-      if (!isIllicitArmsEligibleFigure(fkEff)) continue;
-      // Bib is alive — check if owner has CCs in hand
-      const bibOwnerHand = getCcHand(game, attackerPlayerNum) || [];
-      if (bibOwnerHand.length === 0) {
-        await thread.send(`**Illicit Arms** (${fkDcName}) — No Command cards in hand to discard.`).catch(discordCatch);
-        bibFound = true;
-        break;
-      }
-      const atkOwnerId = getPlayerId(game, attackerPlayerNum);
-      setPendingIllicitArms(game, {
-        gameId: game.gameId,
-        playerNum: attackerPlayerNum,
-        bibFigureKey: fk,
-        bibDcName: fkDcName,
-        combatThreadId: thread.id,
-      });
-      const iaRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send(sanitizeMentions({ content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — You may discard 1 Command card from your hand to apply **+1 Hit** to this attack. Use this ability?`, components: [iaRow], allowedMentions: { users: [atkOwnerId] } }));
-      bibFound = true;
-    }
-  } // end pendingIllicitArms guard
+  // Illicit Arms (Bib Fortuna): MOVED to proceedAfterRerolls (step-4
+  // attacker modifier) per alexanbv 2026-05-09 — was incorrectly firing at
+  // attack-declare. The +1 Hit applies as a step-4 modifier alongside
+  // Pulse Cannon / Negotiate / Call the Shots / Heavy Repeater.
 
   // Force Exhaustion (The Child / Clan of Two): when attack targets The Child or a figure with Clan of Two,
   // The Child's owner may choose to incapacitate The Child to remove 1 attack die and Weaken the attacker.
@@ -5749,6 +5718,48 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       return;
     }
     combat.heavyRepeaterResolved = true;
+  }
+
+  // Illicit Arms (Bib Fortuna): step-4 attacker modifier — while a friendly
+  // figure with Illicit Arms is in the attacker's army, attacker may
+  // discard 1 CC from hand to apply +1 Hit to this attack. Limit once per
+  // attack. Moved here from attack-declare per alexanbv 2026-05-09.
+  if (!combat.illicitArmsResolved && !game.pendingIllicitArms) {
+    const _iaDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const friendlyPosIA = game.figurePositions?.[combat.attackerPlayerNum] || {};
+    let bibFound = false;
+    for (const [fk, pos] of Object.entries(friendlyPosIA)) {
+      if (bibFound) break;
+      if (!pos) continue;
+      const fkDcName = dcNameFromFigureKey(fk);
+      const fkEff = _iaDcEff[fkDcName] || _iaDcEff[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (!isIllicitArmsEligibleFigure(fkEff)) continue;
+      const bibOwnerHand = getCcHand(game, combat.attackerPlayerNum) || [];
+      if (bibOwnerHand.length === 0) {
+        combat.illicitArmsResolved = true;
+        bibFound = true;
+        break;
+      }
+      const atkOwnerId = getPlayerId(game, combat.attackerPlayerNum);
+      setPendingIllicitArms(game, {
+        gameId: game.gameId,
+        playerNum: combat.attackerPlayerNum,
+        bibFigureKey: fk,
+        bibDcName: fkDcName,
+        combatThreadId: thread.id,
+      });
+      const iaRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send(sanitizeMentions({
+        content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — Step 4 modifier: discard 1 Command card to apply **+1 Hit** to this attack?`,
+        components: [iaRow],
+        allowedMentions: { users: [atkOwnerId] },
+      })).catch(discordCatch);
+      saveGames?.(game.gameId);
+      return;
+    }
   }
 
   // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
