@@ -175,6 +175,7 @@ import {
   handlePlayDefeatCcPrompt, handleSkipDefeatCcPrompt,
   handleDefeatCcTargetPick, handleDefeatCcModePick,
 } from './defeat-cc-prompts.js';
+import { handleFastLearnerPickNamed, handleFastLearnerPickMara } from './fast-learner-picker.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
@@ -443,6 +444,8 @@ register('ike_keep_', handleIKnowEverythingKeep, 'ccHand');
 register('cc_play_', handleCcPlay, 'ccHand');
 register('cc_confirm_play_', handleCcConfirmPlay, 'ccHand');
 register('cc_cancel_play_', handleCcCancelPlay, 'ccHand');
+register('cc_fl_pick_named_', handleFastLearnerPickNamed, 'ccHand');
+register('cc_fl_pick_mara_', handleFastLearnerPickMara, 'ccHand');
 register('cc_draw_', handleCcDraw, 'ccHand');
 register('cc_search_discard_', handleCcSearchDiscard, 'ccHand');
 register('cc_close_discard_', handleCcCloseDiscard, 'ccHand');

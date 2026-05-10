@@ -408,6 +408,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     return;
   }
   const { playerNum, card } = game.pendingCcConfirmation;
+  // Capture FL picker outcome BEFORE clearing pendingCcConfirmation. Re-entry
+  // from the Fast Learner picker re-establishes pendingCcConfirmation with
+  // _flResolved set to 'named' or 'mara' so this body skips the picker and
+  // routes FL consumption accordingly.
+  const _flResolved = game.pendingCcConfirmation._flResolved || null;
   // 5H: Verify the interacting user is the player who initiated this CC play
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
   clearPendingCcConfirmation(game);
@@ -464,6 +469,20 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
+  // Mara Jade Fast Learner picker: when both the named figure AND Mara are
+  // in army with FL unused this round, the player must choose who plays the
+  // CC. Re-entry from the picker has _flResolved set; skip on re-entry.
+  if (!_flResolved) {
+    const { getFastLearnerPickerEligibility } = await import('../game/unique-figure-ccs.js');
+    const eligibility = getFastLearnerPickerEligibility(game, playerNum, card);
+    if (eligibility.shouldPrompt) {
+      const { presentFastLearnerPicker } = await import('./fast-learner-picker.js');
+      await presentFastLearnerPicker(interaction, game, playerNum, card, eligibility);
+      saveGames(game.gameId);
+      return;
+    }
+  }
+
   // Assassinate / mutual-exclude CC lock: block further CCs during this attack
   const _cbt = game.combat || game.pendingCombat;
   if (_cbt?.ccLockedOut) {
@@ -543,8 +562,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }
     }
   }
-  // Fast Learner (Mara Jade): if CC was played via Fast Learner bypass, mark ability as used for the round
-  if (restriction.fastLearner) {
+  // Fast Learner (Mara Jade): mark FL used when either (a) the legality
+  // check granted FL bypass (named figure NOT in army, Mara substituted) or
+  // (b) the picker resolved to Mara when both figures were in army.
+  if (restriction.fastLearner || _flResolved === 'mara') {
     const dcList2 = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
     for (const dc of dcList2) {
       const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;

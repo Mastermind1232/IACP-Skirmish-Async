@@ -224,6 +224,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingMiracleWorker',
   'pendingPreservationProtocol',
   'pendingDefeatCcPrompt',
+  'pendingFastLearnerPick',
   'pendingBELReorder',
   'pendingUnhingedDirector',
   'pendingUnhingedStrain',

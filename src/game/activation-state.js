@@ -601,6 +601,7 @@ const ROUND_NULL_FLAGS = [
   'pendingMiracleWorker',
   'pendingPreservationProtocol',
   'pendingDefeatCcPrompt',
+  'pendingFastLearnerPick',
   'pendingCcConfirmation',
   'pendingNegation',
   'pendingCommDisruptionPrompt',

@@ -137,6 +137,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   MIRACLE_WORKER:        'miracle-worker',
   PRESERVATION_PROTOCOL: 'preservation-protocol',
   DEFEAT_CC_PROMPT:      'defeat-cc-prompt',
+  FAST_LEARNER_PICK:     'fast-learner-pick',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -611,6 +612,9 @@ export function clearPendingPreservationProtocol(game) { _clearDual(game, 'pendi
 
 export function setPendingDefeatCcPrompt(game, payload) { _setDual(game, 'pendingDefeatCcPrompt', INTERRUPT_TYPES.DEFEAT_CC_PROMPT, payload); }
 export function clearPendingDefeatCcPrompt(game) { _clearDual(game, 'pendingDefeatCcPrompt', INTERRUPT_TYPES.DEFEAT_CC_PROMPT); }
+
+export function setPendingFastLearnerPick(game, payload) { _setDual(game, 'pendingFastLearnerPick', INTERRUPT_TYPES.FAST_LEARNER_PICK, payload); }
+export function clearPendingFastLearnerPick(game) { _clearDual(game, 'pendingFastLearnerPick', INTERRUPT_TYPES.FAST_LEARNER_PICK); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }

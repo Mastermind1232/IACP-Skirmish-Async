@@ -1,0 +1,110 @@
+/**
+ * Mara Jade Fast Learner picker — `cc_fl_pick_named_*` / `cc_fl_pick_mara_*`.
+ *
+ * When a unique-figure CC is played AND Mara is in the army with Fast Learner
+ * unused this round AND the named figure is ALSO in army, the player must
+ * choose which figure plays the CC. Picking Mara consumes her once-per-round
+ * Fast Learner ability.
+ *
+ * Excluded by data: Arcing Shot (explicit FL exclusion), You Will Not Deny Me
+ * (always retargets to 5th Brother regardless of player).
+ */
+
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { parseCustomId } from '../discord/custom-id.js';
+import { discordCatch, withDiscordRetry } from '../error-handling.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { getHandChannelId } from '../game/player-helpers.js';
+import { requireGame, requirePlayer } from '../utils/guards.js';
+import { canActAsPlayer } from '../utils/can-act-as-player.js';
+import {
+  setPendingFastLearnerPick,
+  clearPendingFastLearnerPick,
+  setPendingCcConfirmation,
+} from '../game/interrupts.js';
+
+const PICK_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Posts the named/Mara picker to the player's hand channel and stashes
+ * pending state. Caller (handleCcConfirmPlay) bails after this.
+ */
+export async function presentFastLearnerPicker(interaction, game, playerNum, card, eligibility) {
+  const gameId = game.gameId;
+  const namedLabel = eligibility.namedFigures.map(f => f.displayName).join(' / ');
+  const maraLabel = eligibility.maraDc.displayName;
+
+  setPendingFastLearnerPick(game, {
+    playerNum,
+    card,
+    ts: Date.now(),
+    namedFigures: eligibility.namedFigures.map(f => ({ dcName: f.dcName, displayName: f.displayName })),
+    maraDc: { dcName: eligibility.maraDc.dcName, displayName: eligibility.maraDc.displayName },
+  });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`cc_fl_pick_named_${gameId}`).setLabel(`Play as ${namedLabel}`).setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`cc_fl_pick_mara_${gameId}`).setLabel(`Play via Fast Learner (${maraLabel})`).setStyle(ButtonStyle.Secondary),
+  );
+
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.delete().catch(discordCatch);
+  const handId = getHandChannelId(game, playerNum);
+  const handChannel = await fetchGameChannel(interaction.client, handId);
+  await withDiscordRetry(() => handChannel.send({
+    content: `Both **${namedLabel}** and **${maraLabel}** can play **${card}**. Choose who plays it — picking Mara Jade consumes her Fast Learner ability this round.`,
+    components: [row],
+  }));
+}
+
+async function _resolvePick(interaction, ctx, choice) {
+  const prefix = choice === 'mara' ? 'cc_fl_pick_mara_' : 'cc_fl_pick_named_';
+  const { getGame, saveGames } = ctx;
+  const gameId = parseCustomId(interaction.customId, prefix);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pick = game.pendingFastLearnerPick;
+  if (!pick) {
+    await interaction.followUp({ content: 'No pending Fast Learner choice — picker may have expired.', ephemeral: true }).catch(discordCatch);
+    await interaction.message.delete().catch(discordCatch);
+    return;
+  }
+  if (Date.now() - (pick.ts || 0) > PICK_TTL_MS) {
+    clearPendingFastLearnerPick(game);
+    saveGames(game.gameId);
+    await interaction.followUp({ content: 'Choice expired — replay the card from your hand.', ephemeral: true }).catch(discordCatch);
+    await interaction.message.delete().catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pick.playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
+
+  const { playerNum, card } = pick;
+  clearPendingFastLearnerPick(game);
+
+  // Re-establish pendingCcConfirmation with the picker outcome encoded.
+  // handleCcConfirmPlay reads `_flResolved` before clearing the pending
+  // confirmation and uses it to skip the picker check + drive FL marking.
+  setPendingCcConfirmation(game, { playerNum, card, ts: Date.now(), _flResolved: choice });
+  saveGames(game.gameId);
+
+  // Synthesize an interaction whose customId looks like a PLAY CARD click,
+  // so handleCcConfirmPlay can parse gameId normally. Object.create chains
+  // through the real interaction for everything except customId.
+  const synthetic = Object.create(interaction);
+  Object.defineProperty(synthetic, 'customId', {
+    value: `cc_confirm_play_${gameId}`,
+    configurable: true,
+    enumerable: true,
+  });
+
+  const { handleCcConfirmPlay } = await import('./cc-hand.js');
+  await handleCcConfirmPlay(synthetic, ctx);
+}
+
+export async function handleFastLearnerPickNamed(interaction, ctx) {
+  await _resolvePick(interaction, ctx, 'named');
+}
+
+export async function handleFastLearnerPickMara(interaction, ctx) {
+  await _resolvePick(interaction, ctx, 'mara');
+}
