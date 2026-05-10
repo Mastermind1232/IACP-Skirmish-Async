@@ -375,6 +375,7 @@ export function isActivationActionInProgress(game, msgId) {
  * Object flags are reset to {}; null flags to null; array flags to [].
  */
 const ROUND_OBJECT_FLAGS = [
+  'aphraExcavationOptions',
   'roundDefenseBonusBlock',
   // Generic named-CC per-timing-instance tracker (destruct 2026-05-07).
   // Reset to {} at round start so SOR/EOR/status buckets clear naturally;
@@ -524,6 +525,7 @@ const ROUND_OBJECT_FLAGS = [
 ];
 
 const ROUND_NULL_FLAGS = [
+  'aphraExcavationTarget',
   'hitAndRunPendingMp',
   'nextAttacksBonusHits',
   'nextAttackBonusSurgeAbilities',

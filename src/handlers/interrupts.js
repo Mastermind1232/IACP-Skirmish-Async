@@ -873,38 +873,72 @@ export async function handleForceSlowPick(interaction, ctx) {
 }
 
 // ── 13. Excavation pick ────────────────────────────────────────────────────
-// NEW PREFIX: excavation_pick_ — add to router.js
+// NEW PREFIX: excavation_pick_ / excavation_skip_ — add to router.js
+//
+// Per Aphra's "Excavation" rule: card stays in its discard pile. Aphra's
+// player may play it once this round directly from the discard (handled by
+// the play surface, not here); after play it goes to game box. If anything
+// redraws the card out of discard before play, Aphra loses the option.
 export async function handleExcavationPick(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, logGameAction, updateHandChannelMessages } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
-  // excavation_pick_{gameId}_{playerNum}_{cardIndex}
-  const suffix = parseCustomId(interaction.customId, 'excavation_pick_');
+  const isSkip = interaction.customId.startsWith('excavation_skip_');
+  // pick: excavation_pick_{gameId}_{aphraPN}_{sourcePN}_{optionIdx}
+  // skip: excavation_skip_{gameId}_{aphraPN}
+  const suffix = isSkip
+    ? parseCustomId(interaction.customId, 'excavation_skip_')
+    : parseCustomId(interaction.customId, 'excavation_pick_');
   const parts = suffix.split('_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const cardIndex = parseInt(parts[2], 10);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may choose.')) return;
-  // Rest in Peace: block discard-pile retrieval
   if (game.restInPeaceActive) {
     await interaction.message.edit({ content: '**Excavation** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).', components: [] }).catch(discordCatch);
+    if (game.aphraExcavationOptions) delete game.aphraExcavationOptions[playerNum];
+    await resolveStartOfRoundEffect(game, ctx);
+    saveGames(game.gameId);
     return;
   }
-  const discardKey = ccDiscardKey(playerNum);
-  const handKey = ccHandKey(playerNum);
-  const discard = game[discardKey] || [];
-  if (cardIndex < 0 || cardIndex >= discard.length) {
-    await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch); return;
+  if (isSkip) {
+    await interaction.message.edit({ content: `⛏️ **Excavation** — skipped (no card marked this round).`, components: [] }).catch(discordCatch);
+    await logGameAction(game, client, `⛏️ **Excavation** — skipped.`, { phase: 'ROUND', icon: 'round' });
+    if (game.aphraExcavationOptions) delete game.aphraExcavationOptions[playerNum];
+    await resolveStartOfRoundEffect(game, ctx);
+    saveGames(game.gameId);
+    return;
   }
-  const cardName = discard[cardIndex];
-  // Move card from discard to hand
-  game[discardKey] = discard.filter((_, i) => i !== cardIndex);
-  game[handKey] = game[handKey] || [];
-  game[handKey].push(cardName);
-  await interaction.message.edit({ content: `⛏️ **Excavation** — **${cardName}** moved from discard to hand.`, components: [] }).catch(discordCatch);
-  await logGameAction(game, client, `⛏️ **Excavation** — retrieved **${cardName}** from discard pile.`, { phase: 'ROUND', icon: 'round' });
-  if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
+  const sourcePN = parseInt(parts[2], 10);
+  const optIdx = parseInt(parts[3], 10);
+  const options = game.aphraExcavationOptions?.[playerNum] || [];
+  const choice = options[optIdx];
+  if (!choice || choice.sourcePN !== sourcePN) {
+    await interaction.followUp({ content: 'Invalid Excavation selection (state expired).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Validate the card is still in the source's discard pile (defends against
+  // race with other start-of-round redraws).
+  const sourceDiscardKey = ccDiscardKey(sourcePN);
+  const sourceDiscard = game[sourceDiscardKey] || [];
+  if (!sourceDiscard.includes(choice.name)) {
+    await interaction.message.edit({ content: `⛏️ **Excavation** — **${choice.name}** is no longer in P${sourcePN}'s discard pile. Pick again.`, components: [] }).catch(discordCatch);
+    return;
+  }
+  // Set marker — card stays in discard; play surface handles the actual play.
+  game.aphraExcavationTarget = {
+    excavatorPN: playerNum,
+    sourcePN,
+    cardName: choice.name,
+    used: false,
+  };
+  if (game.aphraExcavationOptions) delete game.aphraExcavationOptions[playerNum];
+  const sourceLabel = sourcePN === playerNum ? 'your' : `P${sourcePN}'s`;
+  await interaction.message.edit({
+    content: `⛏️ **Excavation** — **${choice.name}** marked for play from ${sourceLabel} discard pile this round. Play it once during the round; it returns to the game box after.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client, `⛏️ **Excavation** — <@${interaction.user.id}> marked **${choice.name}** (in ${sourceLabel} discard) for play this round.`, { phase: 'ROUND', icon: 'round' });
   await resolveStartOfRoundEffect(game, ctx);
   saveGames(game.gameId); return;
 }

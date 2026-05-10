@@ -568,6 +568,7 @@ register('sf_mp_pick_', handleSuppressiveFireMpPick, 'interrupts');
 register('ps_replace_', handlePunishingStrike, 'interrupts');
 register('force_slow_pick_', handleForceSlowPick, 'interrupts');
 register('excavation_pick_', handleExcavationPick, 'interrupts');
+register('excavation_skip_', handleExcavationPick, 'interrupts');
 register('bm_draw_', handleBlackMarket, 'interrupts');
 register('bm_discard_', handleBlackMarket, 'interrupts');
 register('bm_return_', handleBlackMarket, 'interrupts');

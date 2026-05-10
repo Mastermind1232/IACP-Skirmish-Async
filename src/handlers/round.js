@@ -1579,37 +1579,45 @@ async function _postExcavationPicker(game, gameId, playerNum, dc, logGameAction,
     return;
   }
   const ownerId = getPlayerId(game, playerNum);
-  const discard = getCcDiscard(game, playerNum) || [];
-  // Filter to cost <= 1 cards
+  // Per card text: "any discard pile" — scan both. Exclude "Take Initiative".
+  // Card stays in discard; Aphra's player may play it from discard once this
+  // round, then it returns to the game box. If something redraws it out of
+  // discard before play, Aphra cannot use it.
   const eligible = [];
-  for (let i = 0; i < discard.length; i++) {
-    const ccData = getCcEffect(discard[i]);
-    const cost = ccData?.cost ?? 99;
-    if (cost <= 1) eligible.push({ name: discard[i], index: i });
+  for (const sourcePN of [1, 2]) {
+    const discard = getCcDiscard(game, sourcePN) || [];
+    for (let i = 0; i < discard.length; i++) {
+      const cardName = discard[i];
+      if (cardName === 'Take Initiative') continue;
+      const ccData = getCcEffect(cardName);
+      const cost = ccData?.cost ?? 99;
+      if (cost <= 1) eligible.push({ name: cardName, sourcePN });
+    }
   }
   if (eligible.length === 0) {
-    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}**: no Command Cards with cost 1 or less in discard pile.`, { phase: 'ROUND', icon: 'round' });
+    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}**: no eligible Command Cards (cost ≤1, excluding "Take Initiative") in any discard pile.`, { phase: 'ROUND', icon: 'round' });
     return;
   }
-  if (eligible.length === 1) {
-    // Auto-select the only eligible card
-    const cardName = eligible[0].name;
-    const discardKey = ccDiscardKey(playerNum);
-    const handKey = ccHandKey(playerNum);
-    game[discardKey] = discard.filter((_, i) => i !== eligible[0].index);
-    game[handKey] = game[handKey] || [];
-    game[handKey].push(cardName);
-    await logGameAction(game, client, `⛏️ **Excavation** — **${dc.displayName || dc.dcName}** retrieved **${cardName}** from discard pile (only eligible card).`, { phase: 'ROUND', icon: 'round' });
-    return;
-  }
-  // Multiple eligible — show picker (block activation until resolved)
+  // Always show the picker — never auto-pick — because Aphra is committing to
+  // ONE specific card for the round and the player may want to skip if all
+  // options are unfavorable.
   game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
-  const btns = eligible.map(({ name, index }) =>
-    new ButtonBuilder().setCustomId(`excavation_pick_${gameId}_${playerNum}_${index}`).setLabel(name.slice(0, 80)).setStyle(ButtonStyle.Primary)
-  );
+  const btns = eligible.map(({ name, sourcePN }, i) => {
+    const label = sourcePN === playerNum ? name : `${name} (P${sourcePN})`;
+    return new ButtonBuilder()
+      .setCustomId(`excavation_pick_${gameId}_${playerNum}_${sourcePN}_${i}`)
+      .setLabel(label.slice(0, 80))
+      .setStyle(ButtonStyle.Primary);
+  });
+  btns.push(new ButtonBuilder().setCustomId(`excavation_skip_${gameId}_${playerNum}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
   _stashSorActions(game, btns, 'Excavation', playerNum);
+  // Stash the eligible list so the click handler can resolve sourcePN/cardName
+  // by index without re-scanning (defends against discard mutations between
+  // picker post and click).
+  game.aphraExcavationOptions = game.aphraExcavationOptions || {};
+  game.aphraExcavationOptions[playerNum] = eligible;
   const rows = chunkButtonsToRows(btns);
-  await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card (cost ≤1) from your discard pile to add to hand:`, {
+  await logGameAction(game, client, `⛏️ **Excavation** — <@${ownerId}>, choose a Command Card (cost ≤1, any discard pile, except "Take Initiative") to mark for play this round. The card stays in its discard pile; you may play it once this round, then it returns to the game box.`, {
     phase: 'ROUND', icon: 'round',
     components: rows,
     allowedMentions: { users: [ownerId] },
