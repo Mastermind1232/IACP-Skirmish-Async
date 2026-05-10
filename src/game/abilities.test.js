@@ -1206,15 +1206,17 @@ test('resolveAbility Disable with chosenOption adds to disabledFigures', () => {
   assert.ok(result.logMessage?.includes('Nexu'));
 });
 
-test('resolveAbility Beatdown sets nextAttacksBonusHits for 2 attacks +1 Hit', () => {
+test('resolveAbility Beatdown sets groupNextAttacksBonusHits for 2 attacks +1 Hit (group scope)', () => {
   const msgId = 'msg-bd';
   const game = { gameId: 'g-bd', p1ActivatedDcIndices: [], dcActionsData: { [msgId]: { selectedFigure: 0 } } };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee Warrior [Group 1]' }]]);
   _registerDcMessageMeta(dcMessageMeta);
   const result = resolveAbility('Beatdown', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
-  assert.deepStrictEqual(game.nextAttacksBonusHits['Wookiee Warrior-1-0'], { count: 2, bonus: 1 });
+  // 2026-05-09: Beatdown is the one exception to the per-figure rule —
+  // applies to "your group's activation" per CRR. Stored in
+  // groupNextAttacksBonusHits[playerNum].
+  assert.deepStrictEqual(game.groupNextAttacksBonusHits[1], { count: 2, bonus: 1 });
   assert.ok(result.logMessage?.includes('2') && result.logMessage?.includes('+1 Hit'));
 });
 

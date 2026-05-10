@@ -163,20 +163,32 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'nextAttackBonusSurgeAbilities',
   'nextAttackBonusPierce',
   'nextAttackBonusAccuracy',
-  'vetInstinctsActiveThisActivation',
+  // vetInstinctsActiveThisActivation REMOVED 2026-05-09 — Veteran
+  // Instincts is a one-time token distributor, not a per-activation
+  // bonus flag. Card text grants 2 tokens (1 Hit/Surge + 1 Block/Evade)
+  // and that's it. No persistent active flag.
+  //
+  // 2026-05-09: nextAttacksBonusHits + nextAttacksBonusConditions also
+  // listed under ACTIVATION_PLAYERNUM_FLAGS below — Beatdown keys by
+  // playerNum (group-activation scope per IACP), other abilities by
+  // figureKey. Both cleanup routes apply.
 ];
 
 /**
  * Per-activation flags keyed by playerNum.
  * Deleted for the activating player at end of activation.
  *
- * Empty 2026-05-09 — last surviving entries (next-attack bonuses + Vet
- * Instincts) migrated to ACTIVATION_FIGKEY_FLAGS for the multifigure-
- * independent-activation rule. Kept as an explicit empty list so the
- * cleanup loop in cleanupActivation stays inert without code changes
- * if a future flag reintroduces the playerNum-keyed shape.
+ * 2026-05-09: groupNextAttacksBonusHits + groupNextAttacksBonusConditions
+ * for Beatdown's group-activation scope (per user clarification:
+ * "Beatdown is one exception because it applies to 'group activation'
+ * explicitly"). Per-figure scoped variants use nextAttacksBonusHits +
+ * nextAttacksBonusConditions instead and are cleaned via
+ * ACTIVATION_FIGKEY_FLAGS.
  */
-const ACTIVATION_PLAYERNUM_FLAGS = [];
+const ACTIVATION_PLAYERNUM_FLAGS = [
+  'groupNextAttacksBonusHits',
+  'groupNextAttacksBonusConditions',
+];
 
 /**
  * Per-activation scalar flags (deleted outright).
@@ -454,7 +466,8 @@ const ROUND_OBJECT_FLAGS = [
   'pendingCombatResupply',
   'pendingPostAttackConditions',
   'nextActivationFreeAttack',
-  'vetInstinctsActiveThisActivation',
+  // vetInstinctsActiveThisActivation REMOVED 2026-05-09 (one-time
+  // token distributor, no persistent flag).
   'surgeDoublingActive',
   'optimalBombardmentBlastBonus',
   'recoverOnHostileDefeat',

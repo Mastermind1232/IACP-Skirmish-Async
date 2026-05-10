@@ -324,11 +324,12 @@
     },
     "Beatdown": {
       "type": "ccEffect",
-      "label": "+1 Hit to next 2 attacks",
+      "label": "+1 Hit to next 2 attacks (group activation scope)",
       "nextAttacksBonusHits": {
         "count": 2,
         "bonus": 1
       },
+      "groupActivationScope": true,
       "wiredStatus": "wired"
     },
     "Behind Enemy Lines": {
@@ -5245,11 +5246,10 @@
     },
     "Veteran Instincts": {
       "type": "ccEffect",
-      "label": "Gain 2 Power Tokens (prompted to add +1 Hit/Surge or Block/Evade each roll)",
+      "label": "Gain 1 Hit/Surge token + 1 Block/Evade token",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens**. This activation: you will be prompted to add +1 Hit or Surge on each attack roll, and +1 Block or Evade on each defense roll.",
-      "vetInstinctsActiveThisActivation": true
+      "logMessage": "Gained **2 Power Tokens** (1 Hit/Surge + 1 Block/Evade — choose types)."
     },
     "voracious_rancor": {
       "type": "dcSpecial",

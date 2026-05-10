@@ -492,7 +492,6 @@ register('tough_luck_skip_', handleToughLuck, 'combatReactions');
 register('there_is_no_try_die_', handleThereIsNoTry, 'combatReactions');
 register('there_is_no_try_face_', handleThereIsNoTry, 'combatReactions');
 register('there_is_no_try_skip_', handleThereIsNoTry, 'combatReactions');
-register('vet_instincts_pick_', handleVetInstincts, 'combatReactions');
 register('hunter_protocol_trigger_', handleHunterProtocol, 'combatReactions');
 register('hunter_protocol_skip_', handleHunterProtocol, 'combatReactions');
 register('strike_me_down_yes_', handleStrikeMeDown, 'combatReactions');

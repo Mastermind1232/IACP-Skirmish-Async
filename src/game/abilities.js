@@ -4407,13 +4407,11 @@ export function resolveAbility(abilityId, context) {
     if (toAdd <= 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
     game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
     const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
-    // Veteran Instincts: set activation-long flag so attacker/defender may add +1 Hit/Surge or Block/Evade
-    // Per-figure 2026-05-09: keyed by the figure that received the Veteran Instincts power-token grant
-    // (the figure carrying the buff), so it does not bleed to other figures in a multifigure group.
-    if (entry.vetInstinctsActiveThisActivation && fk) {
-      game.vetInstinctsActiveThisActivation = game.vetInstinctsActiveThisActivation || {};
-      game.vetInstinctsActiveThisActivation[fk] = true;
-    }
+    // Veteran Instincts: per user clarification 2026-05-09, this is a
+    // ONE-TIME token distributor only — gain 1 Hit/Surge token + 1
+    // Block/Evade token. The legacy "active during attacks/defenses"
+    // flag was an over-implementation that didn't match card text.
+    // The flag and its check sites have been removed.
     return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
 
@@ -5646,22 +5644,40 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: nextAttacksBonusHits (Beatdown) — +N Hit to next M attacks by this player
+  // ccEffect: nextAttacksBonusHits — +N Hit to next M attacks.
+  //
+  // Two scoped variants share the structural field but route to
+  // different game-state slots so cleanup keying is unambiguous:
+  //   groupActivationScope: true (Beatdown) → groupNextAttacksBonusHits
+  //     [playerNum]; applies to ANY friendly figure's attack during
+  //     the activating group's activation. Cleaned via
+  //     ACTIVATION_PLAYERNUM_FLAGS at activation end.
+  //   default (Size Advantage, Maximum Firepower) →
+  //     nextAttacksBonusHits[figureKey]; applies only to that
+  //     figure's next attack. Cleaned via ACTIVATION_FIGKEY_FLAGS.
   const nb = entry.type === 'ccEffect' && entry.nextAttacksBonusHits;
   if (nb && typeof nb.count === 'number' && nb.count > 0 && typeof nb.bonus === 'number' && nb.bonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
-    const _bdFk = figureKeyForActivation(game, msgId);
-    if (!_bdFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
-    game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-    game.nextAttacksBonusHits[_bdFk] = { count: nb.count, bonus: nb.bonus };
     const nbc = entry.nextAttacksBonusConditions;
-    if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
-      game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
-      game.nextAttacksBonusConditions[_bdFk] = { count: nbc.count, conditions: nbc.conditions };
+    if (entry.groupActivationScope) {
+      game.groupNextAttacksBonusHits = game.groupNextAttacksBonusHits || {};
+      game.groupNextAttacksBonusHits[playerNum] = { count: nb.count, bonus: nb.bonus };
+      if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
+        game.groupNextAttacksBonusConditions = game.groupNextAttacksBonusConditions || {};
+        game.groupNextAttacksBonusConditions[playerNum] = { count: nbc.count, conditions: nbc.conditions };
+      }
+    } else {
+      const _nbFk = figureKeyForActivation(game, msgId);
+      if (!_nbFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
+      game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+      game.nextAttacksBonusHits[_nbFk] = { count: nb.count, bonus: nb.bonus };
+      if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
+        game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
+        game.nextAttacksBonusConditions[_nbFk] = { count: nbc.count, conditions: nbc.conditions };
+      }
     }
     const condPart = (nbc?.conditions?.length) ? ` and ${nbc.conditions.join(', ')}` : '';
     return {

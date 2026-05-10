@@ -218,22 +218,45 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   // here at function entry; finer-grained transitions are slice 6+ work.
   if (combat.currentStep === 'zillo-window') combat.currentStep = 'step6';
 
-  // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
-  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
-  const _nabhKey = combat.attackerFigureKey;
-  const pending = game.nextAttacksBonusHits?.[_nabhKey];
-  if (pending && pending.count > 0 && pending.bonus > 0) {
-    combat.bonusHits = (combat.bonusHits || 0) + pending.bonus;
-    pending.count -= 1;
-    if (pending.count <= 0) delete game.nextAttacksBonusHits[_nabhKey];
+  // Two scope variants:
+  //   nextAttacksBonusHits[figureKey] — per-figure (Size Advantage,
+  //     Maximum Firepower).
+  //   groupNextAttacksBonusHits[playerNum] — group-activation scope
+  //     (Beatdown). Per IACP "your group's activation" applies to any
+  //     friendly figure's attack during the activating group's cycle.
+  // Per-figure consumed first when both present; group bonus applies
+  // to any subsequent attack from any of the player's figures.
+  {
+    const pendingFig = game.nextAttacksBonusHits?.[combat.attackerFigureKey];
+    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0) {
+      combat.bonusHits = (combat.bonusHits || 0) + pendingFig.bonus;
+      pendingFig.count -= 1;
+      if (pendingFig.count <= 0) delete game.nextAttacksBonusHits[combat.attackerFigureKey];
+    } else {
+      const pendingGrp = game.groupNextAttacksBonusHits?.[combat.attackerPlayerNum];
+      if (pendingGrp && pendingGrp.count > 0 && pendingGrp.bonus > 0) {
+        combat.bonusHits = (combat.bonusHits || 0) + pendingGrp.bonus;
+        pendingGrp.count -= 1;
+        if (pendingGrp.count <= 0) delete game.groupNextAttacksBonusHits[combat.attackerPlayerNum];
+      }
+    }
   }
-  // Size Advantage / nextAttacksBonusConditions: consume and add conditions to defender
-  const condPending = game.nextAttacksBonusConditions?.[_nabhKey];
-  if (condPending && condPending.count > 0 && condPending.conditions?.length) {
-    combat.bonusConditions = combat.bonusConditions || [];
-    combat.bonusConditions.push(...condPending.conditions);
-    condPending.count -= 1;
-    if (condPending.count <= 0) delete game.nextAttacksBonusConditions[_nabhKey];
+  {
+    const condFig = game.nextAttacksBonusConditions?.[combat.attackerFigureKey];
+    if (condFig && condFig.count > 0 && condFig.conditions?.length) {
+      combat.bonusConditions = combat.bonusConditions || [];
+      combat.bonusConditions.push(...condFig.conditions);
+      condFig.count -= 1;
+      if (condFig.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerFigureKey];
+    } else {
+      const condGrp = game.groupNextAttacksBonusConditions?.[combat.attackerPlayerNum];
+      if (condGrp && condGrp.count > 0 && condGrp.conditions?.length) {
+        combat.bonusConditions = combat.bonusConditions || [];
+        combat.bonusConditions.push(...condGrp.conditions);
+        condGrp.count -= 1;
+        if (condGrp.count <= 0) delete game.groupNextAttacksBonusConditions[combat.attackerPlayerNum];
+      }
+    }
   }
   const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
   // Snapshot target position before damage resolution can remove it (used by Heavy Fire, etc.)

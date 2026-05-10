@@ -3773,20 +3773,10 @@ export async function handleCombatRoll(interaction, ctx) {
         return;
       }
     }
-    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window.
-    // Per-figure 2026-05-09: keyed by the defender's figureKey.
-    if (game.vetInstinctsActiveThisActivation?.[combat.target?.figureKey] && !combat.vetInstinctsDefenseApplied) {
-      combat.viPendingAtkRerolls = atkRerolls;
-      combat.viPendingDefRerolls = defRerolls;
-      const _viRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_block`).setLabel('+1 Block').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_evade`).setLabel('+1 Evade').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({ content: `**Veteran Instincts** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> add +1 Block or +1 Evade to the defense roll?`, components: [_viRow] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
+    // Veteran Instincts defense prompt REMOVED 2026-05-09: card is a
+    // one-time token distributor, not a per-attack/defense bonus
+    // opportunity. Tokens are granted on play; the legacy "active
+    // during attacks/defenses" flag was an over-implementation.
     // [Doubt] SU: defender may deplete to force 1 attack die reroll
     if (!combat.doubtRerollChecked) {
       const _dbtDcList = getDcList(game, defenderPlayerNum) || [];
@@ -5478,27 +5468,11 @@ export async function sendModsYn(thread, game, combat, role) {
     : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
 
-  // 2026-05-04 migration: Vet Instincts (attacker) and Guidance Systems
-  // are CRR step-4 modifiers — fire them HERE, not in the attack-roll
-  // block. Their handlers re-enter sendModsYn after resolving so the
-  // remaining checks / final mods_yn YES/NO can fire next. Guards prevent
-  // re-prompting once each ability has been applied/skipped.
+  // 2026-05-04 migration: Guidance Systems is a CRR step-4 modifier —
+  // fire it HERE, not in the attack-roll block. Its handler re-enters
+  // sendModsYn after resolving. Veteran Instincts attack-prompt was
+  // REMOVED 2026-05-09 (card is a one-time token distributor only).
   if (isAtk) {
-    // Per-figure 2026-05-09: VI keyed by the figure that received the buff.
-    const _viFk = isAtk ? combat.attackerFigureKey : combat.target?.figureKey;
-    if (game.vetInstinctsActiveThisActivation?.[_viFk] && !combat.vetInstinctsAttackApplied) {
-      const _viRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send({
-        content: `**Veteran Instincts** — <@${ownerId}> add +1 Damage or +1 Surge to the attack roll?`,
-        components: [_viRow],
-        allowedMentions: { users: [ownerId] },
-      }).catch(discordCatch);
-      return;
-    }
     if (combat.guidanceSystemsAvailable && !combat.guidanceSystemsCompleted) {
       combat.guidanceSystemsPrompted = true;
       const _gsRow = new ActionRowBuilder().addComponents(
