@@ -792,25 +792,11 @@ export async function finalizeActivation({
     const isElite = _abilityIds.includes('scrap_battalion_ugnaught_elite');
     game.companionActivatedBefore = game.companionActivatedBefore || {};
     game.companionActivatedBefore[msgId] = 'co-activate';
-    const _sbCompMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
-    const _sbDcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-    let _sbJunkDroidMsgId = null;
-    if (_sbCompMsgIds) {
-      for (let i = 0; i < _sbCompMsgIds.length; i++) {
-        if (_sbCompMsgIds[i] && _sbDcMsgIds?.[i] === msgId) {
-          _sbJunkDroidMsgId = _sbCompMsgIds[i];
-          break;
-        }
-      }
-    }
-    if (_sbJunkDroidMsgId) {
-      game.movementBank = game.movementBank || {};
-      game.movementBank[_sbJunkDroidMsgId] = { remaining: 4, total: 4, threadId: thread.id, messageId: null, displayName: 'Junk Droid' };
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      const _sbJdFk = figureKeyForActivation(game, _sbJunkDroidMsgId);
-      if (_sbJdFk) game.freeAttackBonusPending[_sbJdFk] = { from: 'Scrap Battalion' };
-    }
-    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group**.${_sbJunkDroidMsgId ? ' **4 MP** and **1 free attack** granted — use its Move/Attack buttons.' : ' Move and attack with it during this activation.'}\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
+    // Per alexanbv 2026-05-09: Junk Droid no longer gets pre-granted MP /
+    // free attack at start of co-activation. It activates with its own
+    // standard 2 actions (allocated when activation-setup runs for its
+    // own msgId) — no free stuff up front.
+    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group** (its own 2 actions, no pre-granted MP or free attack).\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
 
   // D35. Skirmish Upgrade attachment activation effects
