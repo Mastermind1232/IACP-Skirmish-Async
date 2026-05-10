@@ -96,9 +96,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'arcingShotActive',
   'wookieeAvengerSlamUsed',
   'specialActionUsedThisActivation',
-  'focusFireActive',
-  'multiFireActive',
-  'multiFireBlockedTarget',
+  // focusFireActive + multiFireActive + multiFireBlockedTarget moved
+  // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   'spotWeldPending',
   'pendingMissileSalvo',
   'pendingPounceSpaceChoice',
@@ -133,6 +132,9 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'boRifleStaffUsedThisActivation',
   'unstableDevicesUsedThisActivation',
   'saberOrbitAttacksRemaining',
+  'focusFireActive',
+  'multiFireActive',
+  'multiFireBlockedTarget',
 ];
 
 /**

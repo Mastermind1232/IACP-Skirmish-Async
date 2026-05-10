@@ -1812,15 +1812,23 @@ export function resolveAbility(abilityId, context) {
   }
 
   // Focus Fire (SC2-M2 Tank): Double Action — perform 2 attacks targeting the same figure
+  // Per IACP rule 2026-05-09: Focus Fire / Multi-Fire are per-FIGURE
+  // attack chains (not per-group). Key the state map by figureKey of
+  // the activating figure so other figures in a multifigure group
+  // get their own independent chains in their own activations.
   if (entry.type === 'dcSpecial' && entry.focusFireDoubleAttack) {
-    const { game, msgId } = context;
+    const { game, msgId, meta } = context;
     if (game && msgId) {
+      const _ffDgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _ffDgIdx = _ffDgMatch ? _ffDgMatch[1] : '1';
+      const _ffSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _ffFigureKey = `${meta?.dcName || 'unknown'}-${_ffDgIdx}-${_ffSelFig}`;
       // Grant a free attack for the second shot; after first attack resolves, grant another
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Focus Fire' };
       // Track that Focus Fire is active — second attack must target the same figure
       game.focusFireActive = game.focusFireActive || {};
-      game.focusFireActive[msgId] = { attacksRemaining: 2 };
+      game.focusFireActive[_ffFigureKey] = { attacksRemaining: 2 };
     }
     return {
       applied: true,
@@ -1830,8 +1838,12 @@ export function resolveAbility(abilityId, context) {
 
   // Multi-Fire (HK Assassin Droid): 2 attacks, different targets, -1 Hit each
   if (entry.type === 'dcSpecial' && entry.multiFireDoubleAttack) {
-    const { game, msgId } = context;
+    const { game, msgId, meta } = context;
     if (game && msgId) {
+      const _mfDgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _mfDgIdx = _mfDgMatch ? _mfDgMatch[1] : '1';
+      const _mfSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _mfFigureKey = `${meta?.dcName || 'unknown'}-${_mfDgIdx}-${_mfSelFig}`;
       // Grant a free attack for the second shot
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[msgId] = { from: 'Multi-Fire' };
@@ -1840,7 +1852,7 @@ export function resolveAbility(abilityId, context) {
       game.pendingOverrideAttackDice[msgId] = { bonusHits: -1 };
       // Track Multi-Fire state: second attack must target different figure
       game.multiFireActive = game.multiFireActive || {};
-      game.multiFireActive[msgId] = { attacksRemaining: 2, firstTargetFigureKey: null };
+      game.multiFireActive[_mfFigureKey] = { attacksRemaining: 2, firstTargetFigureKey: null };
     }
     return {
       applied: true,

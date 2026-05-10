@@ -1280,23 +1280,28 @@ export async function handleAttackTarget(interaction, ctx) {
       return;
     }
   }
+  // Compute the attacker's figureKey for per-figure once-per-activation
+  // gates (Focus Fire, Multi-Fire) per IACP rule 2026-05-09.
+  const _atkDgForGate = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _atkFkForGate = `${meta.dcName}-${_atkDgForGate}-${figureIndex}`;
+
   // Forced attack target validation (Mandalorian Whip, Focus Fire, etc.) — must target a specific figure
   if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
     if (target.figureKey !== game.forcedAttackTarget[msgId]) {
       const forcedName = dcNameFromFigureKey(game.forcedAttackTarget[msgId]);
-      const reason = game.focusFireActive?.[msgId] ? 'Focus Fire — must target the **same figure**' : 'You must target the specified figure';
+      const reason = game.focusFireActive?.[_atkFkForGate] ? 'Focus Fire — must target the **same figure**' : 'You must target the specified figure';
       await interaction.followUp({ content: `**${reason}** (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
       return;
     }
     delete game.forcedAttackTarget[msgId];
   }
   // Multi-Fire: second attack must target a DIFFERENT figure
-  if (game.multiFireBlockedTarget?.[msgId] && target.figureKey) {
-    if (target.figureKey === game.multiFireBlockedTarget[msgId]) {
+  if (game.multiFireBlockedTarget?.[_atkFkForGate] && target.figureKey) {
+    if (target.figureKey === game.multiFireBlockedTarget[_atkFkForGate]) {
       await interaction.followUp({ content: '**Multi-Fire** — Second attack must target a **different figure**.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    delete game.multiFireBlockedTarget[msgId];
+    delete game.multiFireBlockedTarget[_atkFkForGate];
   }
   // Brutality / Sarlacc Sweep (differentTargetsRequired): when a multi-attack
   // free-attack chain is active, each attack must target a different figure

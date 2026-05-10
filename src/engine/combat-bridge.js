@@ -3130,8 +3130,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
   }
   // Focus Fire: after first attack, enforce same target for second attack
-  if (game.focusFireActive?.[combat.attackerMsgId]) {
-    const ff = game.focusFireActive[combat.attackerMsgId];
+  if (game.focusFireActive?.[combat.attackerFigureKey]) {
+    const ff = game.focusFireActive[combat.attackerFigureKey];
     ff.attacksRemaining -= 1;
     if (ff.attacksRemaining > 0) {
       // Store first target — second attack must hit the same figure
@@ -3141,18 +3141,18 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Focus Fire' };
       await thread.send(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Use the Attack button.`).catch(discordCatch);
     } else {
-      delete game.focusFireActive[combat.attackerMsgId];
+      delete game.focusFireActive[combat.attackerFigureKey];
     }
   }
   // Multi-Fire: after first attack, enforce different target + apply -1 Hit for second attack
-  if (game.multiFireActive?.[combat.attackerMsgId]) {
-    const mf = game.multiFireActive[combat.attackerMsgId];
+  if (game.multiFireActive?.[combat.attackerFigureKey]) {
+    const mf = game.multiFireActive[combat.attackerFigureKey];
     mf.attacksRemaining -= 1;
     if (mf.attacksRemaining > 0) {
       mf.firstTargetFigureKey = combat.defenderFigureKey;
       // Block same target for second attack
       game.multiFireBlockedTarget = game.multiFireBlockedTarget || {};
-      game.multiFireBlockedTarget[combat.attackerMsgId] = combat.defenderFigureKey;
+      game.multiFireBlockedTarget[combat.attackerFigureKey] = combat.defenderFigureKey;
       // Apply -1 Hit to second attack too
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1 };
@@ -3160,8 +3160,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Multi-Fire' };
       await thread.send(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (\u22121 Hit). Use the Attack button.`).catch(discordCatch);
     } else {
-      delete game.multiFireActive[combat.attackerMsgId];
-      if (game.multiFireBlockedTarget?.[combat.attackerMsgId]) delete game.multiFireBlockedTarget[combat.attackerMsgId];
+      delete game.multiFireActive[combat.attackerFigureKey];
+      if (game.multiFireBlockedTarget?.[combat.attackerFigureKey]) delete game.multiFireBlockedTarget[combat.attackerFigureKey];
     }
   }
   // Overheated (Paz Vizsla): -1 Hit re-stamped for 2nd attack; attack
