@@ -28,19 +28,27 @@ export function hasKtpRegularAbility(specialAbilityIds) {
 }
 
 /**
- * Round-scoped once-per-figure usage key. Ties the limit to the
- * DC name + current round, matching the handler pattern at
- * combat.js:2066.
+ * Per IACP card text "Limit 1 'Keep the Peace' ability per group
+ * activation" — and per user clarification 2026-05-09: maximum once
+ * per ENEMY group activation. The limit is scoped to the attacking
+ * group's activation cycle, so different attacker groups in the
+ * same round can each trigger KTP once.
+ *
+ * Key shape: `${dcName}_ktp_${attackerMsgId}` — DC name + attacker
+ * group's msgId. roundFigureAbilityUsed is cleared at round start,
+ * so the entry only persists during the attacker's activation cycle
+ * and any subsequent same-msgId activations within the round (rare
+ * — typically a group activates once per round).
  */
-export function buildKtpRoundKey(dcName, currentRound) {
-  const round = currentRound || 0;
-  return `${dcName}_ktp_${round}`;
+export function buildKtpRoundKey(dcName, attackerMsgId) {
+  return `${dcName}_ktp_${attackerMsgId || 'unknown'}`;
 }
 
 /**
- * Has the elite ability already fired for this dcName this round?
+ * Has the elite ability already fired for this dcName during this
+ * attacker group's activation?
  */
-export function isKtpAlreadyUsed(roundFigureAbilityUsed, dcName, currentRound) {
+export function isKtpAlreadyUsed(roundFigureAbilityUsed, dcName, attackerMsgId) {
   if (!roundFigureAbilityUsed || typeof roundFigureAbilityUsed !== 'object') return false;
-  return !!roundFigureAbilityUsed[buildKtpRoundKey(dcName, currentRound)];
+  return !!roundFigureAbilityUsed[buildKtpRoundKey(dcName, attackerMsgId)];
 }

@@ -2486,13 +2486,16 @@ export async function handleAttackTarget(interaction, ctx) {
       const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
       const fkAbilityIds = fkEff?.specialAbilityIds || [];
       if (!adjToTargetKP.has(String(pos).toLowerCase())) continue;
-      // Elite: automatic, limit 1 per group activation. Routed through
-      // applyStrain so the attacker (strained party) gets the per-strain
-      // choice prompt + UD pre-prompt fires.
+      // Elite: automatic, limit 1 per ENEMY group activation (per user
+      // clarification 2026-05-09). Keyed by attacker's msgId so a
+      // second attacker group's activation in the same round can
+      // independently trigger KTP. Routed through applyStrain so the
+      // attacker (strained party) gets the per-strain choice prompt
+      // + UD pre-prompt fires.
       if (hasKtpEliteAbility(fkAbilityIds)) {
-        if (!isKtpAlreadyUsed(game.roundFigureAbilityUsed, fkDcName, game.currentRound)) {
+        if (!isKtpAlreadyUsed(game.roundFigureAbilityUsed, fkDcName, msgId)) {
           if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
-          game.roundFigureAbilityUsed[buildKtpRoundKey(fkDcName, game.currentRound)] = true;
+          game.roundFigureAbilityUsed[buildKtpRoundKey(fkDcName, msgId)] = true;
           await applyStrain(game, ctx, {
             figureKey: attackerFigureKey,
             controllerPlayerNum: attackerPlayerNum,

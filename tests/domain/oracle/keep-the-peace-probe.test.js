@@ -52,22 +52,24 @@ describe('PROBE-KTP-002: predicates', () => {
 });
 
 describe('PROBE-KTP-003: round key + usage gate', () => {
-  it('key format DCNAME_ktp_ROUND', () => {
-    assert.equal(buildKtpRoundKey('Royal Guard (Elite)', 3), 'Royal Guard (Elite)_ktp_3');
+  // Per IACP rule clarification 2026-05-09: KTP limit is "once per
+  // ENEMY group activation" — keyed by attackerMsgId, not currentRound.
+  it('key format DCNAME_ktp_ATTACKERMSGID', () => {
+    assert.equal(buildKtpRoundKey('Royal Guard (Elite)', 'msg_atk_42'), 'Royal Guard (Elite)_ktp_msg_atk_42');
   });
-  it('defaults round 0 when falsy', () => {
-    assert.equal(buildKtpRoundKey('X', 0), 'X_ktp_0');
-    assert.equal(buildKtpRoundKey('X', null), 'X_ktp_0');
-    assert.equal(buildKtpRoundKey('X', undefined), 'X_ktp_0');
+  it('defaults to "unknown" suffix when attackerMsgId is falsy', () => {
+    assert.equal(buildKtpRoundKey('X', undefined), 'X_ktp_unknown');
+    assert.equal(buildKtpRoundKey('X', null), 'X_ktp_unknown');
+    assert.equal(buildKtpRoundKey('X', ''), 'X_ktp_unknown');
   });
   it('isKtpAlreadyUsed: returns false when map empty / missing', () => {
-    assert.equal(isKtpAlreadyUsed({}, 'RG', 1), false);
-    assert.equal(isKtpAlreadyUsed(null, 'RG', 1), false);
+    assert.equal(isKtpAlreadyUsed({}, 'RG', 'msg_a'), false);
+    assert.equal(isKtpAlreadyUsed(null, 'RG', 'msg_a'), false);
   });
-  it('isKtpAlreadyUsed: true when flag set', () => {
-    const used = { 'RG_ktp_2': true };
-    assert.equal(isKtpAlreadyUsed(used, 'RG', 2), true);
-    assert.equal(isKtpAlreadyUsed(used, 'RG', 3), false);
+  it('isKtpAlreadyUsed: true when flag set for that attacker, false for a different attacker', () => {
+    const used = { 'RG_ktp_msg_a': true };
+    assert.equal(isKtpAlreadyUsed(used, 'RG', 'msg_a'), true);
+    assert.equal(isKtpAlreadyUsed(used, 'RG', 'msg_b'), false, 'different enemy group activation re-eligible for KTP');
   });
 });
 
