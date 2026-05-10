@@ -128,14 +128,14 @@ describe('ORACLE-TELEMOVE-001: Teleport sites set figureMoved', () => {
       'False Orders must set figureMoved[controlledFigureKey]');
   });
 
-  it('Ordered Move (dc-play-area.js) sets figureMoved near ordered movement bank clear', () => {
+  it('Ordered Move pipeline retired 2026-05-09 — migrated to pendingMoveX', () => {
+    // pendingOrderedMove → pendingMoveX migration: Officer Order /
+    // Tactical Maneuver / generic post-deploy moves now use the move-x
+    // picker (move-x-handler.js). figureMoved is set inside the
+    // move-x step handlers and end-of-move flow.
     const src = readSrc('src/handlers/dc-play-area.js');
-    // The Ordered Move space-choice handler writes figurePositions then figureMoved
-    // before clearing movement bank. Find the unique "all ordered MP are spent" comment.
-    const omIdx = src.indexOf('all ordered MP are spent');
-    assert.ok(omIdx > 0, 'Ordered Move space-choice site found');
-    const block = src.slice(Math.max(0, omIdx - 400), omIdx);
-    assert.ok(block.includes('figureMoved'), 'Ordered Move must set figureMoved before clearing MP');
+    assert.ok(!src.includes('handleOrderMove'),
+      'handleOrderMove should be deleted after migration to pendingMoveX');
   });
 });
 

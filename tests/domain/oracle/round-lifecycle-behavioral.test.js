@@ -326,7 +326,6 @@ describe('B-RNDLC-007: Stale pending flags from round N are gone after cleanupRo
       pendingShoulderRush: { msgId: '3001' },
       pendingDioFollow: { dioFigureKey: 'Dio-1-0' },
       pendingFalseOrders: { playerNum: 1 },
-      pendingOrderedMove: { figureKey: 'Trooper-1-0' },
       // Interrupt pendings that would stall the game
       pendingExecutiveOrder: { playerNum: 1 },
       pendingHunterProtocol: { playerNum: 2 },

@@ -101,8 +101,11 @@ describe('B-CLEANUP-003: Movement/activation pendings in ROUND_NULL_FLAGS', () =
   // Single-pending scalar fields (one pending object per game).
   // pendingEe3Carbine moved out 2026-05-05 — it's actually msgId-keyed
   // (game.pendingEe3Carbine[msgId] = ...) and belongs in ROUND_OBJECT_FLAGS.
+  // pendingOrderedMove RETIRED 2026-05-09 — migrated to pendingMoveX
+  // (single move pipeline). Kept out of MOVEMENT_PENDINGS so the
+  // cleanup test no longer asserts it.
   const MOVEMENT_PENDINGS = [
-    'pendingFalseOrders', 'pendingOrderedMove', 'pendingShoulderRush',
+    'pendingFalseOrders', 'pendingShoulderRush',
     'pendingDioFollow', 'pendingRightBackAtYa',
     'pendingBattlefieldLeadership', 'pendingScavengedWeaponryTransfer',
     'pendingHeroicEffortReturn',

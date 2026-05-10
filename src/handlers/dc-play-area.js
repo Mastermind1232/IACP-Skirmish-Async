@@ -17,7 +17,7 @@ import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrderedMove, clearPendingOrderedMove, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
+import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
@@ -3049,39 +3049,29 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
-  // Order / Tactical Maneuver: present "Move (Figure)" button for the ordered figure
-  // Migrated 2026-05-09: pendingOrderedMove → pendingMoveX. The
-  // intermediate "Move/Skip" prompt is preserved for UX; clicking
-  // Move triggers setupPendingMoveX (move-x picker with Stop button).
+  // Order / Tactical Maneuver: hand the ordered figure directly to
+  // the move-x picker (Phase 2 migration 2026-05-09 — skip the
+  // intermediate Move/Skip prompt; player can decline by clicking the
+  // picker's Stop button without moving).
   if (resolveResult.applied && resolveResult.orderMovePrompt) {
     const omp = resolveResult.orderMovePrompt;
-    setPendingOrderedMove(game, {
-      figureKey: omp.figureKey,
-      targetMsgId: omp.msgId,
-      playerNum,
-      mp: omp.mp,
-      label: omp.label || 'Order',
-    });
     // Deduct action
     const actionsData = game.dcActionsData?.[msgId];
     if (actionsData) {
       consumeActionForCurrentFigure(actionsData, 1);
       await updateDcActionsMessage(game, msgId, client);
     }
-    const moveBtn = new ButtonBuilder()
-      .setCustomId(`order_move_${gameId}_${msgId}`)
-      .setLabel(`Move — ${omp.name}`)
-      .setStyle(ButtonStyle.Primary);
-    const skipBtn = new ButtonBuilder()
-      .setCustomId(`special_done_${gameId}_${msgId}`)
-      .setLabel('Done (skip move)')
-      .setStyle(ButtonStyle.Secondary);
-    await interaction.followUp({
-      content: `**${omp.label}** — **${omp.name}** gained **${omp.mp} movement points**. Move them now or skip:`,
-      components: [new ActionRowBuilder().addComponents(moveBtn, skipBtn)],
-      ephemeral: false,
-    }).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+    const { setupPendingMoveX } = await import('./move-x-handler.js');
+    await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+      msgId: omp.msgId,
+      figureKey: omp.figureKey,
+      playerNum,
+      spaces: omp.mp,
+      source: omp.label || 'Order',
+      threadId: null,
+      bypassCosts: false,
+    });
     saveGames(game.gameId);
     return;
   }
@@ -3681,245 +3671,6 @@ export async function handleFalseOrdersMovePick(interaction, ctx) {
   };
   if (boardPayload?.files) replyPayload.files = boardPayload.files;
   await interaction.followUp(replyPayload).catch(discordCatch);
-  saveGames(game.gameId);
-}
-
-/**
- * Handle order_move_ button: player chose to move the ordered figure.
- * Computes reachable spaces and presents the space picker.
- * customId: order_move_{gameId}_{officerMsgId}
- */
-export async function handleOrderMove(interaction, ctx) {
-  const m = interaction.customId.match(/^order_move_([^_]+)_(.+)$/);
-  if (!m) return;
-  const [, gameId, officerMsgId] = m;
-  const { getGame, replyIfGameEnded, saveGames, client, logGameAction } = ctx;
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (await replyIfGameEnded(game, interaction)) return;
-  const pending = game.pendingOrderedMove;
-  if (!pending) {
-    await interaction.followUp({ content: 'No pending ordered move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
-
-  const { figureKey, targetMsgId, mp, label } = pending;
-  const pos = game.figurePositions?.[pending.playerNum]?.[figureKey];
-  if (!pos) {
-    const dcName = dcNameFromFigureKey(figureKey);
-    await interaction.followUp({ content: `**${dcName}** has no position on the board.`, ephemeral: false }).catch(discordCatch);
-    clearPendingOrderedMove(game);
-    saveGames(game.gameId);
-    return;
-  }
-
-  // Migrated 2026-05-09: pendingOrderedMove → pendingMoveX. Hand off
-  // to the move-x picker (step-by-step, Stop button, MASSIVE
-  // displacement at end via _finishPicker → _runMassiveDisplacement).
-  const dcName = dcNameFromFigureKey(figureKey);
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-  clearPendingOrderedMove(game);
-  const { setupPendingMoveX } = await import('./move-x-handler.js');
-  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
-    msgId: targetMsgId || officerMsgId,
-    figureKey,
-    playerNum: pending.playerNum,
-    spaces: mp,
-    source: label || 'Order',
-    threadId: null,
-    bypassCosts: false,
-    dcName,
-  });
-  saveGames(game.gameId);
-}
-
-// REMOVED 2026-05-09: handleOrderMoveSpacePick — pendingOrderedMove
-// migrated to pendingMoveX. handleOrderMove now hands off directly
-// to setupPendingMoveX (move-x picker step-by-step + Stop button).
-// Old handler body retained below as `_legacyHandleOrderMoveSpacePick_unused`
-// for git-blame visibility but never invoked.
-async function _legacyHandleOrderMoveSpacePick_unused(interaction, ctx) {
-  const m = interaction.customId.match(/^order_move_space_([^_]+)_([^_]+)_(.+)$/);
-  if (!m) return;
-  const [, gameId, officerMsgId, space] = m;
-  const chosenSpace = String(space).toLowerCase();
-  const { getGame, replyIfGameEnded, logGameAction, buildBoardMapPayload, saveGames, client,
-    getBoardStateForMovement, getMovementProfile, computeMovementCache, getMovementPath } = ctx;
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  cleanupSpacePick(game, `${gameId}_${officerMsgId}`);
-  if (await replyIfGameEnded(game, interaction)) return;
-  const pending = game.pendingOrderedMove;
-  if (!pending) {
-    await interaction.followUp({ content: 'No pending ordered move.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
-
-  const { figureKey, targetMsgId, label, mp } = pending;
-  const dcName = dcNameFromFigureKey(figureKey);
-  // Per destruct 2026-05-08: the granted-MP move pipeline must compute
-  // the figure's path so opponent abilities (Parting Blow, Dirty Trick,
-  // Disengage, Overwatch) can fire on path traversal.
-  const startPos = game.figurePositions?.[pending.playerNum]?.[figureKey];
-  let path = [];
-  try {
-    if (startPos && getBoardStateForMovement && getMovementProfile && computeMovementCache && getMovementPath) {
-      const _omBoardState = getBoardStateForMovement(game, figureKey);
-      if (_omBoardState) {
-        const _omProfile = getMovementProfile(dcName, figureKey, game);
-        const _omCache = computeMovementCache(startPos, mp || 99, _omBoardState, _omProfile);
-        const _omShortest = getMovementPath(_omCache, startPos, chosenSpace, _omProfile.size, _omProfile) || [];
-        // Per destruct 2026-05-08: prefer paths avoiding hostile-adjacent
-        // spaces. Build a hostile-adjacent set from opponent figure
-        // positions, then re-walk possible paths preferring lower
-        // hostile-adjacency count. Falls back to shortest if no
-        // alternative exists.
-        try {
-          const _omEnemyNum = pending.playerNum === 1 ? 2 : 1;
-          const _omEnemyPositions = game.figurePositions?.[_omEnemyNum] || {};
-          const _omAdj = _omBoardState.mapSpaces?.adjacency || _omBoardState.adjacency || {};
-          const _omHostileAdjSet = new Set();
-          for (const _omEp of Object.values(_omEnemyPositions)) {
-            if (!_omEp) continue;
-            const _omEpLc = String(_omEp).toLowerCase();
-            _omHostileAdjSet.add(_omEpLc);
-            for (const _omN of (_omAdj[_omEpLc] || [])) {
-              _omHostileAdjSet.add(String(_omN).toLowerCase());
-            }
-          }
-          // Score the shortest path; if it has 0 hostile-adjacent visits,
-          // accept it. Otherwise BFS for an equally-short path with fewer
-          // hostile-adjacent visits and pick that.
-          const _omScore = (p) => p.reduce((s, c) => s + (_omHostileAdjSet.has(String(c).toLowerCase()) ? 1 : 0), 0);
-          path = _omShortest;
-          const _omShortestScore = _omScore(_omShortest);
-          if (_omShortestScore > 0) {
-            // BFS all shortest paths from start to chosenSpace;
-            // pick min-hostile-adjacent. Cap to keep cost bounded.
-            const _omTargetLen = _omShortest.length;
-            const _omStartLc = String(startPos).toLowerCase();
-            const _omGoalLc = String(chosenSpace).toLowerCase();
-            const _omAllPaths = [];
-            const _omWalk = (cur, soFar, depth) => {
-              if (_omAllPaths.length >= 32) return;
-              if (depth >= _omTargetLen) {
-                if (cur === _omGoalLc) _omAllPaths.push([...soFar]);
-                return;
-              }
-              for (const _omN of (_omAdj[cur] || [])) {
-                const _omNlc = String(_omN).toLowerCase();
-                if (soFar.includes(_omNlc)) continue;
-                soFar.push(_omNlc);
-                _omWalk(_omNlc, soFar, depth + 1);
-                soFar.pop();
-              }
-            };
-            _omWalk(_omStartLc, [_omStartLc], 1);
-            if (_omAllPaths.length > 0) {
-              _omAllPaths.sort((a, b) => _omScore(a) - _omScore(b));
-              const _omBest = _omAllPaths[0];
-              if (_omScore(_omBest) < _omShortestScore) path = _omBest;
-            }
-          }
-        } catch (_omSafeErr) { /* fall back to shortest */ }
-      }
-    }
-  } catch (_omErr) { path = [startPos, chosenSpace].filter(Boolean); }
-
-  game.figurePositions = game.figurePositions || {};
-  game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
-  game.figurePositions[pending.playerNum][figureKey] = chosenSpace;
-  game.figureMoved = game.figureMoved || {};
-  game.figureMoved[figureKey] = true;
-
-  // Clear the movement bank since all ordered MP are spent
-  if (targetMsgId && game.movementBank?.[targetMsgId]) {
-    game.movementBank[targetMsgId].remaining = 0;
-  }
-  clearPendingOrderedMove(game);
-
-  // Massive end-of-movement displacement (per user 2026-05-09 bug
-  // report — ATDP with Scavenged Walker finishing post-deploy move
-  // didn't trigger the push). If the moving figure has the MASSIVE
-  // keyword and its final footprint overlaps any smaller figure,
-  // route those overlaps through the existing pendingMassivePush
-  // flow — same path move-x-handler uses at end of Move-X.
-  try {
-    const _mvKws = (getDcEffects()[dcName] || getDcEffects()[dcName?.replace(/\s*\[.*\]\s*$/, '')])?.keywords || [];
-    if (_mvKws.some((k) => String(k).toUpperCase() === 'MASSIVE')) {
-      const { runMassiveDisplacement } = await import('./move-x-handler.js');
-      await runMassiveDisplacement(game, { client, logGameAction }, {
-        playerNum: pending.playerNum,
-        figureKey,
-        dcName,
-        msgId: targetMsgId,
-      });
-    }
-  } catch (_mvDispErr) {
-    console.error('[ordered-move] massive displacement failed:', _mvDispErr?.message ?? _mvDispErr);
-  }
-
-  // Detect post-move interrupts on the path (Parting Blow, Dirty Trick,
-  // Disengage, Overwatch). Mirrors the activation-move flow at
-  // src/handlers/movement.js:1366+.
-  if (path.length >= 2) {
-    try {
-      const { detectPostMoveInterrupts } = await import('../game/movement-interrupts.js');
-      const triggers = detectPostMoveInterrupts(game, pending.playerNum, figureKey, path);
-      for (const trigger of triggers) {
-        const oppId = getPlayerId(game, trigger.candidatePlayerNum);
-        if (trigger.type === 'overwatch') {
-          const owBtns = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ow_interrupt_use_${game.gameId}_${trigger.owMsgId}`).setLabel('Use Overwatch (Interrupt Attack)').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`ow_interrupt_skip_${game.gameId}_${trigger.owMsgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await interaction.channel.send({ content: `⚠️ <@${oppId}> — ${trigger.description}`, components: [owBtns], allowedMentions: { users: oppId ? [oppId] : [] } }).catch(discordCatch);
-        } else {
-          const triggerBtns = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`).setLabel(`Play ${trigger.cardName}`).setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`mvint_skip_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await interaction.channel.send({ content: `⚠️ <@${oppId}> — ${trigger.description}`, components: [triggerBtns], allowedMentions: { users: oppId ? [oppId] : [] } }).catch(discordCatch);
-        }
-      }
-    } catch (_omIntErr) { /* fail-open */ }
-  }
-
-  if (logGameAction) await logGameAction(game, client, `🎯 **${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**.`, { phase: 'ROUND', icon: 'move' }).catch(discordCatch);
-
-  const doneRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`special_done_${gameId}_${officerMsgId}`)
-      .setLabel('Done')
-      .setStyle(ButtonStyle.Success)
-  );
-  let boardPayload = null;
-  if (buildBoardMapPayload) boardPayload = await buildBoardMapPayload(game).catch(() => null);
-  const replyPayload = {
-    content: `**${label}** — **${dcName}** moved to **${chosenSpace.toUpperCase()}**. Click Done when finished.`,
-    components: [doneRow],
-    ephemeral: false,
-  };
-  if (boardPayload?.files) replyPayload.files = boardPayload.files;
-  await interaction.followUp(replyPayload).catch(discordCatch);
-
-  // Per destruct 2026-05-08: if this ordered-move came from the post-deploy
-  // queue (Scavenged Walker / Smooth Landing / Strike Team / Forward
-  // Emplacement etc.), advance the queue to the next figure / next ability
-  // after the move applies. The unified pipeline replaces the legacy
-  // moveInProgress flow that was vulnerable to "Move session expired".
-  if (pending.postDeployReturn) {
-    try {
-      const { _advanceAfterFigure } = await import('./post-deploy.js')
-        .then((m) => ({ _advanceAfterFigure: m._advanceAfterFigure }));
-      if (_advanceAfterFigure) {
-        await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
-      }
-    } catch (_pdAdvErr) { /* non-fatal */ }
-  }
-
   saveGames(game.gameId);
 }
 

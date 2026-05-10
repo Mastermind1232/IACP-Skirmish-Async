@@ -181,7 +181,6 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingDurasteelFistPush',
   'pendingZilloDiscard',
   'pendingSurgeOverflow',
-  'pendingOrderedMove',
   'pendingWookSlamPush',
   'pendingToughLuck',
   'pendingRogueOneTokenPick',

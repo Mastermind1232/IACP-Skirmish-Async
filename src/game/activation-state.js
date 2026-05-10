@@ -565,7 +565,9 @@ const ROUND_NULL_FLAGS = [
   'slowOnTheDrawInterrupt',
   // Movement/activation pendings — safety net
   'pendingFalseOrders',
-  'pendingOrderedMove',
+  // pendingOrderedMove RETIRED 2026-05-09 — migrated to pendingMoveX
+  // (single move pipeline; ordered moves now use the move-x picker
+  // step-by-step + Stop button + end-of-move MASSIVE displacement).
   'pendingShoulderRush',
   'pendingDioFollow',
   // pendingEe3Carbine moved to ROUND_OBJECT_FLAGS 2026-05-05 — same
