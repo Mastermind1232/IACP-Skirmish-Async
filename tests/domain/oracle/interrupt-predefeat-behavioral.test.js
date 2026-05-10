@@ -321,12 +321,16 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     // Re-entry should NOT call reduceHp again.
     const dcHealthState = new Map();
     dcHealthState.set('dc2', { 0: [1, 4] }); // [currentHp, maxHp]
+    // Per alexanbv 2026-05-09: EP re-entry detection moved from a global
+    // flag (extraProtectionTriggeredThisCombat) to a per-frame marker
+    // (combat._damageApplied) set by combat-bridge after first-pass
+    // damage applies. Mirror that here to simulate the re-entry path.
     const combat = makeCombat({
       target: { figureKey: 'Rebel Trooper-1-0', label: 'Rebel Trooper', playerNum: 2, isNpc: false },
+      _damageApplied: true,
     });
     const game = makeGame({
       pendingCombat: combat,
-      extraProtectionTriggeredThisCombat: true,
       // pendingExtraProtection is null (deleted by handler before re-entry)
     });
 
@@ -361,10 +365,10 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
       target: { figureKey: 'Rebel Trooper-1-0', label: 'Rebel Trooper', playerNum: 2, isNpc: false },
       surgeConditions: ['Stun'],
       bonusConditions: ['Bleed'],
+      _damageApplied: true, // re-entry marker (per-combat) per alexanbv 2026-05-09
     });
     const game = makeGame({
       pendingCombat: combat,
-      extraProtectionTriggeredThisCombat: true,
       figureConditions: {},
     });
 
@@ -401,7 +405,6 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
         hit: true, resultText: '', totalBlast: 0,
         defenderPlayerNum: 2, attackerPlayerNum: 1, ownerId: 'player1',
       },
-      extraProtectionTriggeredThisCombat: true,
     });
     const { ctx, calls } = buildInterruptCtx(game);
 
@@ -428,7 +431,6 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
         hit: true, resultText: '', totalBlast: 0,
         defenderPlayerNum: 2, attackerPlayerNum: 1, ownerId: 'player1',
       },
-      extraProtectionTriggeredThisCombat: true,
       figurePositions: { 1: {}, 2: { 'Onar Koma-1-0': 'a1' } },
     });
     const { ctx, calls } = buildInterruptCtx(game, {

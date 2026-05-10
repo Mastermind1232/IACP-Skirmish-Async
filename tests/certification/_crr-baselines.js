@@ -134,7 +134,6 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'criticalHitBlockedPlayer',
   'powerfulInfluencePlayerNum',
   'restInPeaceActive',
-  'extraProtectionTriggeredThisCombat',
   'pendingMissionSorReveal',
   // Pending* consolidation (project_pending_consolidation_plan.md) —
   // these fields now go through setPending* / clearPending* helpers in

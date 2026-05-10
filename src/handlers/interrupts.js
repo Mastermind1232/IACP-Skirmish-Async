@@ -1437,8 +1437,9 @@ export async function handleExtraProtection(interaction, ctx) {
     await logGameAction(_epGame, client, `**Extra Protection** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
 
-  // Continue post-combat flow by re-calling applyDamageAndFinishCombat
-  // (extraProtectionTriggeredThisCombat flag prevents re-trigger)
+  // Continue post-combat flow by re-calling applyDamageAndFinishCombat.
+  // Re-entry is detected by combat._damageApplied (set in first pass at
+  // combat-bridge.js step-7), so re-applying damage is skipped.
   await applyDamageAndFinishCombat(_epGame, _epCombat, {
     damage: _epPending.damage, hit: _epPending.hit, resultText: _epPending.resultText,
     totalBlast: _epPending.totalBlast, defenderPlayerNum: _epPending.defenderPlayerNum,

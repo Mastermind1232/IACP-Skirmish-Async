@@ -593,7 +593,6 @@ const ROUND_NULL_FLAGS = [
   'restInPeaceActive',
   'pendingIllicitArms',
   'pendingExtraProtection',
-  'extraProtectionTriggeredThisCombat',
   'pendingExecutorInterrupt',
   'pendingDefeatPick',
   'pendingPartingShot',

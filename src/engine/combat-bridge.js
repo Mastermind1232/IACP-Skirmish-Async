@@ -729,10 +729,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
-    // Extra Protection re-entry guard: damage was already applied in the first pass.
-    // extraProtectionTriggeredThisCombat is set before the first-pass return;
-    // pendingExtraProtection is deleted by the handler before re-calling us.
-    const _epReentry = !!(game.extraProtectionTriggeredThisCombat && !game.pendingExtraProtection);
+    // Extra Protection re-entry guard (alexanbv 2026-05-09): damage was
+    // already applied in the first pass. Use a per-combat marker
+    // (combat._damageApplied) instead of a global flag, so the signal
+    // travels with the combat frame through nested-attack push/pop and
+    // doesn't pollute later combats in the same round.
+    const _epReentry = !!combat._damageApplied;
     let newCur;
     if (_epReentry) {
       const _epHpState = dcHealthState.get(targetMsgId)?.[targetFigIndex];
@@ -756,6 +758,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         combat,
       });
       newCur = _mdResult.newHp;
+      // Mark damage applied on the combat frame so a subsequent re-entry
+      // (handleExtraProtection → applyDamageAndFinishCombat) can detect
+      // first-pass-already-ran and skip re-applying damage. Per-combat
+      // marker, not a global flag — survives nested push/pop, doesn't
+      // leak across attacks.
+      combat._damageApplied = true;
       // BEFORE_DEFEATED hook (e.g. Parting Shot) may have deferred the
       // defeat. HP goes to 0 either way, but processFigureDefeat (the
       // post-defeat block below) must skip until completeDeferredDefeat
@@ -892,52 +900,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         }
       }
       } // end !_epReentry guard for post-damage effects
-      // Extra Protection inline disabled 2026-05-09 → moved to WHEN_DAMAGED
-      // hook in damage-pipeline-hooks.js (extra_protection_onar_koma).
-      // Old inline path was gated on `newCur > 0` (would NOT fire on lethal
-      // damage — bug per user spec) and ran AFTER _applyDamage so it fired
-      // AFTER BEFORE_DEFEATED hooks like Parting Shot — wrong pipeline order.
-      // The hook fires in WHEN_DAMAGED alongside Self-Preservation, BEFORE
-      // BEFORE_DEFEATED, and triggers on lethal damage too.
-      if (false && damage >= 3 && newCur > 0 && !game.extraProtectionTriggeredThisCombat) { // eslint-disable-line no-constant-condition
-        const _epHand = getCcHand(game, defenderPlayerNum) || [];
-        const _epCardIdx = _epHand.indexOf('Extra Protection');
-        if (_epCardIdx >= 0) {
-          // Check if Onar Koma is alive and within 2 spaces of the damaged figure
-          const _epTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-          if (_epTargetPos && game.selectedMap?.id) {
-            const _epFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
-            for (const [_epFk, _epPos] of Object.entries(_epFriendlyFigs)) {
-              if (_epFk === combat.target.figureKey) continue; // "another" friendly figure
-              const _epDcName = dcNameFromFigureKey(_epFk);
-              if (_epDcName !== 'Onar Koma') continue;
-              // Check within 2 spaces (BFS adjacency)
-              if (!isWithinN(_epPos, _epTargetPos, 2, game.selectedMap.id)) continue;
-              // Find Onar's msgId for movement grant
-              const _epOnarMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, _epFk);
-              if (!_epOnarMsgId) continue;
-              // All conditions met — prompt the player
-              game.extraProtectionTriggeredThisCombat = true;
-              setPendingExtraProtection(game, {
-                targetFigKey: combat.target.figureKey, targetMsgId, targetFigIndex,
-                damage, playerNum: defenderPlayerNum,
-                onarFigKey: _epFk, onarMsgId: _epOnarMsgId, onarDcName: _epDcName,
-                // Store combat flow state for re-entry
-                hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId,
-              });
-              const _epOwnerId = game[`player${defenderPlayerNum}Id`];
-              const _epDamagedLabel = combat.target.label || dcNameFromFigureKey(combat.target.figureKey);
-              const _epRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`extra_protection_play_${game.gameId}`).setLabel('Play Extra Protection (move 2 + attack)').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-              );
-              await logGameAction(game, client, `<@${_epOwnerId}> **Extra Protection** — **${_epDamagedLabel}** suffered ${damage} Damage. **${_epDcName}** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [_epRow], allowedMentions: { users: [_epOwnerId] } });
-              saveGames(game.gameId);
-              return;
-            }
-          }
-        }
-      }
       // Guerrilla — handled below in the post-defeat block (line ~1270) via
       // specialAbilityIds. Earlier abilityText fuzzy-match removed 2026-05-06
       // after destruct's audit confirmed Alliance Ranger Regular needed its

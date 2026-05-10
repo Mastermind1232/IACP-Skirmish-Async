@@ -267,21 +267,37 @@ describe('B-NA-EP: EP handler must reference inner-1 frame, not whatever is on t
       'handler resumes against inner-1 (Migs is attacker), not outer');
   });
 
-  it('B-NA-EP-004: extraProtectionTriggeredThisCombat must scope to ONE combat frame, not to the activation', () => {
-    // Current code uses `game.extraProtectionTriggeredThisCombat = true`
-    // (boolean on game). This blocks EP from firing again across ANY
-    // future combat in the same round (ROUND_NULL_FLAGS clears at SoR).
-    // Per "this combat" the flag should be SCOPED to the inner-1 frame
-    // and NOT prevent EP from firing in unrelated combats later in
-    // the activation/round.
-    const game = { extraProtectionTriggeredThisCombat: true };
-    // First combat (inner-1) finishes; new attack later in the round
-    // attempts EP. The boolean still says "triggered" so EP would NOT
-    // fire — likely wrong if "this combat" is per-attack.
-    assert.equal(game.extraProtectionTriggeredThisCombat, true);
-    // PROPOSED FIX: clear at resolvePendingCombat (per-frame) or store
-    // on combat.extraProtectionTriggered (per-frame).
-    // Test marks the issue.
+  it('B-NA-EP-004: no global once-per-combat flag — EP gating relies on hand check + pendingExtraProtection overlap guard', async () => {
+    // Per alexanbv 2026-05-09: EP is a single-use Command Card. Once
+    // played, it moves hand → discard. The hand check at probe time is
+    // the natural single-use gate; no separate flag needed.
+    // The probe additionally bails if pendingExtraProtection is already
+    // set, to avoid overlapping prompts in quick-succession damage
+    // events (e.g. Blast).
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/game/damage-pipeline-hooks.js', import.meta.url),
+      'utf8',
+    );
+    assert.doesNotMatch(src, /extraProtectionTriggeredThisCombat/,
+      'no once-per-combat flag in EP probe');
+    assert.match(src, /if \(game\.pendingExtraProtection\) return false/,
+      'overlap guard: skip probe while a prompt is already pending');
+  });
+
+  it('B-NA-EP-005: combat-bridge re-entry uses combat._damageApplied per-frame marker, not a game-level flag', async () => {
+    // The re-entry guard in applyDamageAndFinishCombat reads from the
+    // combat object itself so the signal travels with the frame through
+    // nested push/pop and doesn't pollute later combats in the round.
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/engine/combat-bridge.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /const _epReentry = !!combat\._damageApplied/,
+      're-entry detected via per-combat marker');
+    assert.match(src, /combat\._damageApplied = true/,
+      'combat-bridge sets the marker after applying damage in first pass');
   });
 });
 

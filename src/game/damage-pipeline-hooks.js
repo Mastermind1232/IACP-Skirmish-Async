@@ -116,17 +116,26 @@ WHEN_DAMAGED_HOOKS.push({
  * to move up to 2 spaces and perform an attack. Triggers on lethal
  * damage too — does NOT gate on survival. Fires before BEFORE_DEFEATED
  * so the prompt resolves before Parting Shot's window in the 7-damage-
- * lethal-on-Greedo scenario. Once-per-combat via
- * extraProtectionTriggeredThisCombat.
+ * lethal-on-Greedo scenario.
+ *
+ * No "once per combat" flag (alexanbv 2026-05-09): EP is a single-use
+ * Command Card. Once played, it moves hand → discard, so the hand-check
+ * below naturally prevents a second fire. The only re-fire path is
+ * Aphra excavating an opponent's discarded EP, which is rare and a
+ * legal second use anyway. The probe gates on `pendingExtraProtection`
+ * to avoid overlapping prompts when multiple damage events hit in
+ * quick succession (e.g. Blast spreading damage to several friendlies).
  */
 WHEN_DAMAGED_HOOKS.push({
   id: 'extra_protection_onar_koma',
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     if ((opts.amount || 0) < 3) return false;
-    if (game.extraProtectionTriggeredThisCombat) return false;
+    // Don't open a second EP prompt while one is already pending.
+    if (game.pendingExtraProtection) return false;
     const defPN = opts.controllerPlayerNum;
     const hand = getCcHand(game, defPN) || [];
+    // Single-use card: once played the hand check fails naturally.
     if (hand.indexOf('Extra Protection') < 0) return false;
     if (!game.selectedMap?.id) return false;
     const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
@@ -165,7 +174,6 @@ WHEN_DAMAGED_HOOKS.push({
     if (!onarFk) return null;
     const onarMsgId = findDcMessageIdForFigure(game.gameId, defPN, onarFk);
     if (!onarMsgId) return null;
-    game.extraProtectionTriggeredThisCombat = true;
     setPendingExtraProtection(game, {
       targetFigKey: opts.figureKey,
       targetMsgId: opts.msgId,
