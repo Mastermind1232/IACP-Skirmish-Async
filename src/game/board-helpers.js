@@ -59,19 +59,45 @@ export function getPlayerOccupiedCells(game, playerNum) {
 }
 
 /** Check if a figure should be excluded from control counting.
- *  - Salacious B. Crumb: always excluded (Indentured Jester).
- *  - The Child: excluded when incapacitated (game.childIncapacitated).
- *  - Dio: excluded while Iden Versio is alive (has a figure in figurePositions for the same player).
- *    When Iden is defeated (removed from figurePositions), Dio counts for control. */
+ *  Per canonical IACP rule (alexanbv 2026-05-09): companions count for
+ *  control by default; only specific abilities exclude them.
+ *
+ *  - BD-1: "Damaged Scomplink" on its own card — always excluded.
+ *  - The Child: "[Clan of Two]" attachment — excluded only while
+ *    `game.childIncapacitated` (Force Exhaustion).
+ *  - Dio: "ID10 Seeker Droid" on Iden Versio's card — excluded while
+ *    Iden Versio is alive. When Iden dies, the rule stops and Dio counts.
+ *  - J4X-7: "Droid Master" on Jarrod Kelvin's card — same pattern as Dio,
+ *    keyed on Jarrod Kelvin alive.
+ *  - Salacious B. Crumb: "[Indentured Jester]" attachment — excluded while
+ *    the host figure (recorded in companionHostMap) is alive. If no host
+ *    map entry exists (legacy state), fall back to always excluded.
+ */
 function _isExcludedFromControl(game, playerNum, figureKey) {
-  const dcName = dcNameFromFigureKey(figureKey).toLowerCase();
-  if (dcName === 'salacious b. crumb') return true;
-  if (dcName === 'the child' && game.childIncapacitated) return true;
-  if (dcName === 'dio') {
-    // Dio is excluded while its owner Iden Versio is alive (present in figurePositions)
+  const dcName = dcNameFromFigureKey(figureKey);
+  const lowerName = dcName.toLowerCase();
+  if (lowerName === 'bd-1') return true;
+  if (lowerName === 'the child' && game.childIncapacitated) return true;
+  const hostFigureName = lowerName === 'dio' ? 'Iden Versio'
+    : lowerName === 'j4x-7' ? 'Jarrod Kelvin'
+    : null;
+  if (hostFigureName) {
     const poses = game.figurePositions?.[playerNum] || {};
-    const idenAlive = Object.keys(poses).some((fk) => dcNameFromFigureKey(fk) === 'Iden Versio');
-    if (idenAlive) return true;
+    const hostAlive = Object.keys(poses).some((fk) => dcNameFromFigureKey(fk) === hostFigureName);
+    if (hostAlive) return true;
+    return false;
+  }
+  if (lowerName === 'salacious b. crumb') {
+    const hostMap = game.companionHostMap || {};
+    const poses = game.figurePositions?.[playerNum] || {};
+    const entry = Object.entries(hostMap).find(([k, v]) =>
+      v && v.playerNum === playerNum && k.startsWith(dcName + '-')
+    );
+    if (entry) {
+      const hostFigureKey = entry[1].hostFigureKey;
+      return !!(hostFigureKey && poses[hostFigureKey]);
+    }
+    return true;
   }
   return false;
 }
