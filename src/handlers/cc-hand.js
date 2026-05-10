@@ -1991,12 +1991,17 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   const removedCard = pending.cards[1 - keepIdx];
   const playerNum = pending.targetPlayerNum;
 
-  // Remove the unchosen card from the squad's CC list
+  // Remove the unchosen card from the squad's CC list and place it
+  // in the shared game box (per CRR: "return the other card to the
+  // game box"). Distinguishing discard pile from game box matters —
+  // game box = permanently out of game, NOT recoverable via reshuffle.
   const squad = getSquad(game, playerNum);
   if (squad?.ccList) {
     const rmIdx = squad.ccList.indexOf(removedCard);
     if (rmIdx >= 0) squad.ccList.splice(rmIdx, 1);
   }
+  game.gameBox = game.gameBox || [];
+  game.gameBox.push(removedCard);
 
   clearPendingIKnowEverything(game);
   game.iKnowEverythingResolved = true;
