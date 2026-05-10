@@ -69,14 +69,17 @@ export function getPlayerOccupiedCells(game, playerNum) {
  *    Iden Versio is alive. When Iden dies, the rule stops and Dio counts.
  *  - J4X-7: "Droid Master" on Jarrod Kelvin's card — same pattern as Dio,
  *    keyed on Jarrod Kelvin alive.
- *  - Salacious B. Crumb: "[Indentured Jester]" attachment — excluded while
- *    the host figure (recorded in companionHostMap) is alive. If no host
- *    map entry exists (legacy state), fall back to always excluded.
+ *  - Salacious B. Crumb: "[Indentured Jester]" attachment — always
+ *    excluded. Per alexanbv 2026-05-09: the upgrade's "not counted for
+ *    control" rule remains in effect even after the host figure is
+ *    defeated, unlike Dio / J4X-7 (whose rules live on the host's DC card
+ *    and stop when the host dies).
  */
 function _isExcludedFromControl(game, playerNum, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
   const lowerName = dcName.toLowerCase();
   if (lowerName === 'bd-1') return true;
+  if (lowerName === 'salacious b. crumb') return true;
   if (lowerName === 'the child' && game.childIncapacitated) return true;
   const hostFigureName = lowerName === 'dio' ? 'Iden Versio'
     : lowerName === 'j4x-7' ? 'Jarrod Kelvin'
@@ -86,18 +89,6 @@ function _isExcludedFromControl(game, playerNum, figureKey) {
     const hostAlive = Object.keys(poses).some((fk) => dcNameFromFigureKey(fk) === hostFigureName);
     if (hostAlive) return true;
     return false;
-  }
-  if (lowerName === 'salacious b. crumb') {
-    const hostMap = game.companionHostMap || {};
-    const poses = game.figurePositions?.[playerNum] || {};
-    const entry = Object.entries(hostMap).find(([k, v]) =>
-      v && v.playerNum === playerNum && k.startsWith(dcName + '-')
-    );
-    if (entry) {
-      const hostFigureKey = entry[1].hostFigureKey;
-      return !!(hostFigureKey && poses[hostFigureKey]);
-    }
-    return true;
   }
   return false;
 }
