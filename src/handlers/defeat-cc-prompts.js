@@ -67,6 +67,74 @@ const _NEEDS_TARGET_PICKER = new Set(['Debts Repaid', 'Retaliation']);
 const _CARD_TARGET_KEYWORD = {
   'Retaliation': 'GUARDIAN',
 };
+// Unique-figure CCs: playableBy is a specific NAMED figure (not a
+// keyword like TROOPER/GUARDIAN). Mara Jade can play these via Fast
+// Learner once per round. Map cardName → namedFigure for the picker.
+const _CARD_UNIQUE_FIGURE = {
+  'Debts Repaid': 'Chewbacca',
+};
+
+/**
+ * Look up a single named DC for a player. Returns
+ * { msgId, dcName, displayName, figureKey } or null if the named figure
+ * isn't in the army or is fully defeated.
+ */
+function _findNamedDc(game, playerNum, namedFigure) {
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const dcList = getDcList(game, playerNum) || [];
+  const figs = game.figurePositions?.[playerNum] || {};
+  const wantLower = String(namedFigure).toLowerCase();
+  for (let i = 0; i < dcMsgIds.length; i++) {
+    const dc = dcList[i];
+    if (!dc || dc.defeated) continue;
+    const dcName = (typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc) || '';
+    const dcBase = dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim().toLowerCase();
+    if (dcBase !== wantLower && dcName.toLowerCase() !== wantLower) continue;
+    const figureKey = Object.keys(figs).find(fk => fk.startsWith(dcName + '-'));
+    if (!figureKey) continue;
+    const displayName = (typeof dc === 'object' ? dc.displayName : dcName) || dcName;
+    return { msgId: dcMsgIds[i], dcName, displayName, figureKey };
+  }
+  return null;
+}
+
+/**
+ * Mara Jade's Fast Learner availability: returns Mara's DC info if
+ * she's alive on the player's side AND `${maraDcName}_fast_learner`
+ * hasn't been set in `game.roundFigureAbilityUsed`. Otherwise null.
+ */
+function _maraFastLearnerOption(game, playerNum) {
+  const dcList = getDcList(game, playerNum) || [];
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const figs = game.figurePositions?.[playerNum] || {};
+  const dcEffects = getDcEffects() || {};
+  for (let i = 0; i < dcList.length; i++) {
+    const dc = dcList[i];
+    const dcName = (typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc) || '';
+    const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+    if (!(eff?.specialAbilityIds || []).includes('fast_learner_mara_jade')) continue;
+    if (game.roundFigureAbilityUsed?.[`${dcName}_fast_learner`]) return null;
+    const figureKey = Object.keys(figs).find(fk => fk.startsWith(dcName + '-'));
+    if (!figureKey) return null;
+    const displayName = (typeof dc === 'object' ? dc.displayName : dcName) || dcName;
+    return { msgId: dcMsgIds[i], dcName, displayName, figureKey, viaFastLearner: true };
+  }
+  return null;
+}
+
+/**
+ * Unique-figure CC eligibility: returns [namedFigure, ...maraIfFL].
+ * Length 0 → restriction-check should've already blocked the play.
+ * Length 1 → auto-resolve, no picker. Length 2 → picker.
+ */
+function _uniqueFigurePlayers(game, playerNum, namedFigure) {
+  const out = [];
+  const named = _findNamedDc(game, playerNum, namedFigure);
+  if (named) out.push({ ...named, viaFastLearner: false });
+  const mara = _maraFastLearnerOption(game, playerNum);
+  if (mara && (!named || mara.dcName !== named.dcName)) out.push(mara);
+  return out;
+}
 
 export async function handleSkipDefeatCcPrompt(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
@@ -128,17 +196,59 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
 
   // Debts Repaid / Retaliation: post a friendly-DC target picker per
   // alexanbv 2026-05-10. These cards say "your Deployment card" /
-  // "you" — player chooses which DC the effect lands on. Retaliation
-  // additionally filters to GUARDIAN-keyword DCs per its playableBy
-  // restriction.
+  // "you" — player chooses which DC the effect lands on.
+  //
+  // Unique-figure CCs (Debts Repaid → Chewbacca): the eligible playing
+  // figure is the named figure, plus Mara via Fast Learner if she's in
+  // army and FL not yet used this round. If only one eligible option,
+  // auto-resolve (no picker). If both eligible, post picker.
+  //
+  // Keyword-restricted CCs (Retaliation → GUARDIAN): list all friendly
+  // GUARDIAN figures.
   if (_NEEDS_TARGET_PICKER.has(cardName)) {
+    const namedFigure = _CARD_UNIQUE_FIGURE[cardName];
     const keyword = _CARD_TARGET_KEYWORD[cardName] || null;
-    const options = _friendlyDcOptions(game, playerPN, keyword);
+    const options = namedFigure
+      ? _uniqueFigurePlayers(game, playerPN, namedFigure)
+      : _friendlyDcOptions(game, playerPN, keyword);
     if (options.length === 0) {
       clearPendingDefeatCcPrompt(game);
       if (typeof logGameAction === 'function' && client) {
-        const kwNote = keyword ? ` (no friendly ${keyword} on board)` : ' — no eligible friendly Deployment card on board.';
+        const kwNote = keyword ? ` (no friendly ${keyword} on board)` : ' — no eligible playing figure on board.';
         await logGameAction(game, client, `**${cardName}** — no eligible target${kwNote}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+      if (typeof saveGames === 'function') await saveGames(gameId);
+      return;
+    }
+    // Unique-figure CC with only the named figure eligible (no Mara
+    // FL): auto-resolve, skip picker. Saves a click in the common case.
+    if (namedFigure && options.length === 1) {
+      const opt = options[0];
+      clearPendingDefeatCcPrompt(game);
+      if (opt.viaFastLearner) {
+        // Defensive — shouldn't auto-resolve via FL (named figure was
+        // missing). Mark FL used since the play is going through.
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`${opt.dcName}_fast_learner`] = true;
+      }
+      if (typeof resolveAbility === 'function') {
+        const result = resolveAbility(cardName, {
+          game,
+          playerNum: playerPN,
+          cardName,
+          msgId: opt.msgId,
+          chosenFigureKey: opt.figureKey,
+          dcMessageMeta,
+          dcHealthState,
+          dcExhaustedState,
+          combat: game.pendingCombat,
+        });
+        if (result?.logMessage && typeof logGameAction === 'function' && client) {
+          const note = result.applied
+            ? `**${cardName}** — Played by **${opt.displayName}**. ${result.logMessage}`
+            : `**${cardName}** — Played by **${opt.displayName}**. ${result.manualMessage || result.logMessage}`;
+          await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+        }
       }
       if (typeof saveGames === 'function') await saveGames(gameId);
       return;
@@ -158,7 +268,9 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
       });
       const targetVerb = keyword
         ? `Choose a friendly **${keyword}** to play the card`
-        : 'Choose a friendly Deployment card to receive the effect';
+        : namedFigure
+          ? `Play with **${namedFigure}** or use **Mara Jade**'s Fast Learner`
+          : 'Choose a friendly Deployment card to receive the effect';
       await interaction.channel.send({
         content: `📜 **${cardName}** — ${targetVerb}:`,
         components: [row],
@@ -256,8 +368,13 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
   }
 
   // Single-effect cards (Debts Repaid): run resolveAbility with the
-  // chosen DC's msgId.
+  // chosen DC's msgId. If the chosen option is via Fast Learner (Mara
+  // picked instead of the named figure), mark FL used for the round.
   clearPendingDefeatCcPrompt(game);
+  if (opt.viaFastLearner) {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    game.roundFigureAbilityUsed[`${opt.dcName}_fast_learner`] = true;
+  }
   if (typeof resolveAbility === 'function') {
     const result = resolveAbility(pending.cardName, {
       game,
@@ -271,9 +388,10 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
       combat: game.pendingCombat,
     });
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
+      const flNote = opt.viaFastLearner ? ' (via Fast Learner)' : '';
       const note = result.applied
-        ? `**${pending.cardName}** — Target **${opt.displayName}**. ${result.logMessage}`
-        : `**${pending.cardName}** — Target **${opt.displayName}**. ${result.manualMessage || result.logMessage}`;
+        ? `**${pending.cardName}** — Target **${opt.displayName}**${flNote}. ${result.logMessage}`
+        : `**${pending.cardName}** — Target **${opt.displayName}**${flNote}. ${result.manualMessage || result.logMessage}`;
       await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
   }
