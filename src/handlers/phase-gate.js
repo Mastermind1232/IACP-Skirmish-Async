@@ -449,10 +449,30 @@ export async function advanceFromDeployment(game, ctx) {
   game.currentActivationTurnPlayerId = game.initiativePlayerId;
   if (clearPreGameSetup) await clearPreGameSetup(game, client);
 
-  const _sendCcPrompts = async () => {
-    await sendCcShuffleDrawPrompts(game, client, {
-      getCcShuffleDrawButton, getInitiativePlayerZoneLabel, saveGames,
-    });
+  // Per user 2026-05-09: auto-fire shuffle-and-draw for both players
+  // when post-deploy completes, instead of posting Shuffle & Draw
+  // buttons in each hand channel. Wookiee Avenger / Debts Repaid is
+  // already in the player's starting hand from attachment phase.
+  // Moff Gideon's I Know Everything prompt fires inline as part of
+  // shuffleAndDrawForPlayer; that's the only interactive step in
+  // this segment of the flow.
+  const _autoDrawBoth = async () => {
+    try {
+      const { shuffleAndDrawForPlayer } = await import('./cc-hand.js');
+      const { getInitiativePlayerNum } = await import('../game/player-helpers.js');
+      const initPN = getInitiativePlayerNum(game);
+      const otherPN = initPN === 1 ? 2 : 1;
+      // Initiative player draws first (deterministic ordering).
+      await shuffleAndDrawForPlayer(game, initPN, ctx);
+      await shuffleAndDrawForPlayer(game, otherPN, ctx);
+    } catch (err) {
+      console.error('advanceFromDeployment auto-draw failed; falling back to manual prompts', err);
+      // Safety net: if the auto-draw path errors, post the legacy
+      // Shuffle & Draw buttons so the game can still progress.
+      await sendCcShuffleDrawPrompts(game, client, {
+        getCcShuffleDrawButton, getInitiativePlayerZoneLabel, saveGames,
+      });
+    }
   };
 
   let postDeployActive = false;
@@ -461,10 +481,10 @@ export async function advanceFromDeployment(game, ctx) {
       logGameAction, saveGames,
       buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState, dcHealthState,
       getDcPlayAreaComponents, getNicknamesForDcMessage,
-    }, _sendCcPrompts);
+    }, _autoDrawBoth);
   }
   if (!postDeployActive) {
-    await _sendCcPrompts();
+    await _autoDrawBoth();
   }
   if (saveGames) saveGames(game.gameId);
 }

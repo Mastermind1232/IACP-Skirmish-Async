@@ -1718,6 +1718,103 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
   await interaction.followUp({ content: 'Your squad has been cleared. Paste your army list or upload a .vsav file in this thread to resubmit.', ephemeral: true }).catch(discordCatch);
 }
 
+/**
+ * Programmatic version of the shuffle-and-draw flow. Used by both:
+ *   - the legacy click handler (handleCcShuffleDraw, when an
+ *     interaction is present), and
+ *   - the auto-fire path on post-deploy completion (no interaction;
+ *     post the hand display in a fresh hand-channel message).
+ *
+ * If Moff Gideon is present, posts the I Know Everything choice
+ * prompt and returns; the player's hand is drawn after they respond
+ * via handleIKnowEverythingKeep.
+ */
+export async function shuffleAndDrawForPlayer(game, playerNum, ctx) {
+  const { shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, logGameAction, saveGames, client } = ctx;
+  const gameId = game.gameId;
+  const squad = getSquad(game, playerNum);
+  const ccList = squad?.ccList || [];
+  const drawnKey = ccDrawnKey(playerNum);
+  if (game[drawnKey]) return;
+  // I Know Everything (Moff Gideon): before drawing, opponent searches this player's deck
+  const oppNum = opponentPlayerNum(playerNum);
+  const oppDcList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+  const oppHasGideon = oppDcList.some(d => (d?.dcName || d) === 'Moff Gideon');
+  if (oppHasGideon && !game.iKnowEverythingResolved) {
+    const attachKey2 = ccAttachmentsKey(playerNum);
+    const placed2 = (attachKey2 && game[attachKey2] && Object.values(game[attachKey2]).flat()) || [];
+    const _ikeExistingHand = ((game[ccHandKey(playerNum)]) || []);
+    const availableCards = ccList.filter(c => !placed2.includes(c) && !_ikeExistingHand.includes(c));
+    if (availableCards.length >= 2) {
+      const shuffledCopy = [...availableCards];
+      shuffleArray(shuffledCopy);
+      const revealed = [shuffledCopy[0], shuffledCopy[1]];
+      setPendingIKnowEverything(game, { targetPlayerNum: playerNum, gideonPlayerNum: oppNum, cards: revealed, gameId });
+      const cardLabels = revealed.map((c, i) => `**${i + 1}.** ${c}`).join('\n');
+      const keepRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+      );
+      await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] } });
+      saveGames?.(gameId);
+      return;
+    }
+    game.iKnowEverythingResolved = true;
+  }
+
+  const attachKey = ccAttachmentsKey(playerNum);
+  const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
+  const handKey = ccHandKey(playerNum);
+  const _existingHand = (game[handKey] || []).slice();
+  const deck = ccList.filter((c) => !placed.includes(c) && !_existingHand.includes(c));
+  shuffleArray(deck);
+  const _drawCount = Math.max(0, 3 - (game.wookieeAvengerDrawPenalty || 0));
+  let hand = [..._existingHand, ...deck.splice(0, _drawCount)];
+  const deckKey = ccDeckKey(playerNum);
+  if (game.testScenarioPrimaryCard && playerNum === 1 && !hand.includes(game.testScenarioPrimaryCard)) {
+    const replaced = hand[hand.length - 1];
+    hand = [...hand.slice(0, hand.length - 1), game.testScenarioPrimaryCard].filter(Boolean);
+    if (replaced) deck.push(replaced);
+    const pcIdx = deck.indexOf(game.testScenarioPrimaryCard);
+    if (pcIdx >= 0) deck.splice(pcIdx, 1);
+  }
+  game[deckKey] = deck;
+  game[handKey] = hand;
+  game[drawnKey] = true;
+  const playerId = getPlayerId(game, playerNum);
+  const _waNote = (game.wookieeAvengerDrawPenalty || 0) > 0 ? ` (1 fewer per Wookiee Avenger; Debts Repaid pre-placed in hand)` : '';
+  await logGameAction(game, client, `<@${playerId}> shuffled and drew ${_drawCount} Command Cards${_waNote}.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
+  // Post the hand display to the player's hand channel.
+  const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
+  if (handChannelId) {
+    try {
+      const handChannel = await fetchGameChannel(client, handChannelId);
+      if (handChannel) {
+        const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
+        const sentMsg = await handChannel.send({
+          content: handPayload.content,
+          embeds: handPayload.embeds,
+          files: handPayload.files || [],
+          components: handPayload.components,
+        }).catch(() => null);
+        if (sentMsg) {
+          if (playerNum === 1) game.p1HandMessageId = sentMsg.id;
+          else game.p2HandMessageId = sentMsg.id;
+        }
+      }
+    } catch (err) {
+      console.error('shuffleAndDrawForPlayer: hand-channel post failed', err);
+    }
+  }
+  await updateHandVisualMessage(game, playerNum, client);
+  if (game.player1CcDrawn && game.player2CcDrawn) {
+    await updatePlayAreaDcButtons(game, client);
+    const { advanceFromCcDraw } = await import('./phase-gate.js');
+    await advanceFromCcDraw(game, ctx);
+  }
+  saveGames?.(gameId);
+}
+
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcShuffleDraw(interaction, ctx) {
   const { getGame, shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, logGameAction, saveGames, client } = ctx;
