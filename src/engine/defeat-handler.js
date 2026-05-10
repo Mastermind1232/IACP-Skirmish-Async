@@ -245,16 +245,19 @@ export async function processFigureDefeat(game, opts, deps) {
     }
   }
 
-  // 7. Nefarious Gains (Jabba: gain 1 VP when hostile defeated)
-  if (checkNefariousGains) {
-    await checkNefariousGains(game, defeatedPlayerNum, client);
-  }
+  // 7. Nefarious Gains (Jabba) — MIGRATED 2026-05-10 to WHEN_DEFEATED
+  // hook 'nefarious_gains_jabba' in damage-pipeline-hooks.js. The
+  // hook fires from the centralized WHEN_DEFEATED iteration in
+  // damage-pipeline.js's applyDamage path, so source-agnostic
+  // (attack, Bleed, Blast splash, strain→damage, etc.) — same
+  // coverage as before, just registered through the canonical
+  // pipeline instead of an inline call.
 
-  // 8. Hunt Dissent (Kallus) — REMOVED from defeat path. Per
-  // canonical card text Hunt Dissent fires when the OPPONENT plays
-  // a Command card, not on figure defeat. The previous defeat-trigger
-  // wiring was incorrect and is now disabled. Re-wire as a CC-play
-  // hook in a follow-up slice.
+  // 8. Hunt Dissent (Kallus) — CORRECT TIMING is on CC play, not
+  // defeat. Wired in cc-hand.js:910 via
+  // fireHuntDissentIfFirstCcOfRound (CC-play timing). The
+  // checkHuntDissent function in engine/win-conditions.js is
+  // deprecated.
 
   // 8d. This is the Way (The Armorer: another friendly defeats hostile → attacker gains Block token)
   if (attackerFigureKey && checkThisIsTheWay) {

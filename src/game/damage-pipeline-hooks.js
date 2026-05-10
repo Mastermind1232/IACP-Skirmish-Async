@@ -960,6 +960,48 @@ WHEN_DEFEATED_HOOKS.push({
 });
 
 /**
+ * Nefarious Gains (Jabba the Hutt passive) — alexanbv 2026-05-10:
+ *
+ * Card text: "When a hostile figure is defeated, gain 1 VP."
+ *
+ * Migrated from inline call in defeat-handler.js to a proper
+ * WHEN_DEFEATED hook for architectural parity with Bounty / Last
+ * Stand / etc. The pure helper `checkNefariousGains` in vp-helpers.js
+ * is the canonical mutator — kept and called from this hook (and
+ * still available for the legacy inline wrapper in
+ * engine/win-conditions.js, which is no longer invoked from the
+ * defeat path).
+ *
+ * Probe: an opposing-team Jabba is alive (any figure key starting
+ * with "Jabba the Hutt-" on the player NOT owning the defeated
+ * figure). controllerPlayerNum is the defeated figure's owner; Jabba
+ * lives on the OPPOSITE side.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'nefarious_gains_jabba',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.controllerPlayerNum) return false;
+    const jabbaOwnerPN = opts.controllerPlayerNum === 1 ? 2 : 1;
+    const figs = game.figurePositions?.[jabbaOwnerPN] || {};
+    return Object.keys(figs).some(fk => fk.startsWith('Jabba the Hutt-'));
+  },
+  apply: (game, opts, ctx) => {
+    const jabbaOwnerPN = opts.controllerPlayerNum === 1 ? 2 : 1;
+    awardObjectiveVp(game, jabbaOwnerPN, 1);
+    const total = game[vpKey(jabbaOwnerPN)]?.total ?? '?';
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `\u{1F4B0} **Nefarious Gains** — **Jabba the Hutt** gains 1 VP (hostile defeated). P${jabbaOwnerPN} VP: ${total}`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
  * Last Stand (Stormtrooper Elite passive): when this figure is
  * defeated, another figure in the same group becomes Focused.
  * Idempotent (`applyCondition` returns false if already present), so

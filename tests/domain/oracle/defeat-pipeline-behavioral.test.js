@@ -242,40 +242,51 @@ describe('B-DEFEAT-006: processFigureDefeat triggers passive CC redraws', () => 
 
 // ── B-DEFEAT-007: Nefarious Gains (Jabba VP) ───────────────────────────────
 
-describe('B-DEFEAT-007: processFigureDefeat triggers Nefarious Gains', () => {
-  it('Jabba owner gains 1 objective VP when hostile figure defeated', async () => {
+describe('B-DEFEAT-007: Nefarious Gains fires as a WHEN_DEFEATED hook', () => {
+  it('Jabba owner gains 1 objective VP when hostile figure defeated (hook fires from applyDirectDefeat)', async () => {
+    // Per alexanbv 2026-05-10 migration: Nefarious Gains moved from
+    // inline call in processFigureDefeat to a WHEN_DEFEATED hook in
+    // damage-pipeline-hooks.js. The hook fires via applyDamage /
+    // applyDirectDefeat, NOT via processFigureDefeat directly. Test
+    // drives through applyDirectDefeat so the hook executes.
     const { game, deps, dcMessageMeta } = createTestGame()
       .withPlayer1Army([{ dcName: 'Jabba the Hutt' }])
       .withPlayer2Army([{ dcName: 'Imperial Officer' }])
       .inRound(1)
       .build();
 
-    // Verify Jabba is alive on P1
     const jabbaAlive = Object.keys(game.figurePositions[1]).some(fk => fk.startsWith('Jabba the Hutt-'));
     assert.ok(jabbaAlive, 'Jabba is alive on P1');
 
-    const vpBefore = game.player1VP.total;
     const objBefore = game.player1VP.objectives;
 
     const figKey = Object.keys(game.figurePositions[2]).find(fk => fk.startsWith('Imperial Officer-'));
     const msgId = findMsgId(dcMessageMeta, 2, 'Imperial Officer');
-    const dcIdx = findDcIdx(game, 2, 'Imperial Officer');
 
-    await deps.processFigureDefeat(game, {
-      defeatedPlayerNum: 2,
+    // Drive through applyDirectDefeat which fires WHEN_DEFEATED hooks
+    // (Nefarious Gains lives there now).
+    const { applyDirectDefeat } = await import('../../../src/game/damage-pipeline.js');
+    await applyDirectDefeat(game, deps, {
       figureKey: figKey,
-      attackerPlayerNum: 1,
       msgId,
-      dcIdx,
+      figIndex: 0,
+      controllerPlayerNum: 2,
+      attackerPlayerNum: 1,
       source: 'Test',
     });
 
-    // Jabba gains 1 objective VP (from Nefarious Gains) + kill VP from the defeat itself
-    const killVp = game.player1VP.kills;
     assert.ok(
       game.player1VP.objectives > objBefore,
-      `Jabba should gain objective VP (was ${objBefore}, now ${game.player1VP.objectives})`
+      `Jabba should gain objective VP via WHEN_DEFEATED hook (was ${objBefore}, now ${game.player1VP.objectives})`
     );
+  });
+
+  it('hook is registered in WHEN_DEFEATED_HOOKS as nefarious_gains_jabba', async () => {
+    const { WHEN_DEFEATED_HOOKS } = await import('../../../src/game/damage-pipeline.js');
+    await import('../../../src/game/damage-pipeline-hooks.js');
+    const ids = WHEN_DEFEATED_HOOKS.map(h => h.id);
+    assert.ok(ids.includes('nefarious_gains_jabba'),
+      `expected 'nefarious_gains_jabba' in WHEN_DEFEATED_HOOKS; got: ${ids.join(', ')}`);
   });
 });
 
