@@ -450,21 +450,16 @@ export async function advanceFromDeployment(game, ctx) {
   if (clearPreGameSetup) await clearPreGameSetup(game, client);
 
   // Per user 2026-05-09: auto-fire shuffle-and-draw for both players
-  // when post-deploy completes, instead of posting Shuffle & Draw
-  // buttons in each hand channel. Wookiee Avenger / Debts Repaid is
-  // already in the player's starting hand from attachment phase.
-  // Moff Gideon's I Know Everything prompt fires inline as part of
-  // shuffleAndDrawForPlayer; that's the only interactive step in
-  // this segment of the flow.
+  // when post-deploy completes. Per user clarification: I Know
+  // Everything (Moff Gideon) must fire AND resolve BEFORE any
+  // shuffle-and-draw runs. autoDrawAllStartingHands handles both
+  // phases: triggers IKE first; if IKE is pending, waits for the
+  // IKE handler to call back; otherwise draws for both players in
+  // initiative order and advances to round 1 SoR.
   const _autoDrawBoth = async () => {
     try {
-      const { shuffleAndDrawForPlayer } = await import('./cc-hand.js');
-      const { getInitiativePlayerNum } = await import('../game/player-helpers.js');
-      const initPN = getInitiativePlayerNum(game);
-      const otherPN = initPN === 1 ? 2 : 1;
-      // Initiative player draws first (deterministic ordering).
-      await shuffleAndDrawForPlayer(game, initPN, ctx);
-      await shuffleAndDrawForPlayer(game, otherPN, ctx);
+      const { autoDrawAllStartingHands } = await import('./cc-hand.js');
+      await autoDrawAllStartingHands(game, ctx);
     } catch (err) {
       console.error('advanceFromDeployment auto-draw failed; falling back to manual prompts', err);
       // Safety net: if the auto-draw path errors, post the legacy

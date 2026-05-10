@@ -1719,49 +1719,63 @@ export async function handleDeckIllegalRedo(interaction, ctx) {
 }
 
 /**
- * Programmatic version of the shuffle-and-draw flow. Used by both:
- *   - the legacy click handler (handleCcShuffleDraw, when an
- *     interaction is present), and
- *   - the auto-fire path on post-deploy completion (no interaction;
- *     post the hand display in a fresh hand-channel message).
- *
- * If Moff Gideon is present, posts the I Know Everything choice
- * prompt and returns; the player's hand is drawn after they respond
- * via handleIKnowEverythingKeep.
+ * If Moff Gideon (or any IKE-applicable opponent) is on the board,
+ * post the I Know Everything choice prompt to whichever player's
+ * deck would be searched. Per user 2026-05-09: IKE must fire AND
+ * resolve BEFORE any shuffle-and-draw runs. Returns true if a
+ * prompt was posted (caller must wait); false otherwise.
  */
-export async function shuffleAndDrawForPlayer(game, playerNum, ctx) {
-  const { shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, updatePlayAreaDcButtons, logGameAction, saveGames, client } = ctx;
+export async function triggerStartingHandIke(game, ctx) {
+  const { shuffleArray, logGameAction, saveGames, client } = ctx;
   const gameId = game.gameId;
-  const squad = getSquad(game, playerNum);
-  const ccList = squad?.ccList || [];
+  if (game.iKnowEverythingResolved) return false;
+  if (game.pendingIKnowEverything) return true; // already pending
+
+  // Moff Gideon's IKE searches the OPPONENT's deck. So if player N
+  // has Moff, player N's opponent's deck is the search target.
+  for (const targetPN of [1, 2]) {
+    const oppNum = opponentPlayerNum(targetPN);
+    const oppDcList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
+    const oppHasGideon = oppDcList.some(d => (d?.dcName || d) === 'Moff Gideon');
+    if (!oppHasGideon) continue;
+
+    const squad = getSquad(game, targetPN);
+    const ccList = squad?.ccList || [];
+    const attachKey2 = ccAttachmentsKey(targetPN);
+    const placed2 = (attachKey2 && game[attachKey2] && Object.values(game[attachKey2]).flat()) || [];
+    const _ikeExistingHand = ((game[ccHandKey(targetPN)]) || []);
+    const availableCards = ccList.filter(c => !placed2.includes(c) && !_ikeExistingHand.includes(c));
+    if (availableCards.length < 2) continue;
+
+    const shuffledCopy = [...availableCards];
+    shuffleArray(shuffledCopy);
+    const revealed = [shuffledCopy[0], shuffledCopy[1]];
+    setPendingIKnowEverything(game, { targetPlayerNum: targetPN, gideonPlayerNum: oppNum, cards: revealed, gameId });
+    const cardLabels = revealed.map((c, i) => `**${i + 1}.** ${c}`).join('\n');
+    const keepRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
+    );
+    await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, targetPN)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, targetPN)}> — Choose which card to **keep** (the other is removed from the game). Cards will be drawn for both players after this resolves.`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, targetPN)] } });
+    saveGames?.(gameId);
+    return true;
+  }
+  game.iKnowEverythingResolved = true;
+  return false;
+}
+
+/**
+ * Draw the starting hand for one player (no IKE check; caller has
+ * already resolved IKE if applicable). Posts the hand display to
+ * the player's hand channel.
+ */
+export async function drawStartingHandForPlayer(game, playerNum, ctx) {
+  const { shuffleArray, buildHandDisplayPayload, updateHandVisualMessage, logGameAction, saveGames, client } = ctx;
+  const gameId = game.gameId;
   const drawnKey = ccDrawnKey(playerNum);
   if (game[drawnKey]) return;
-  // I Know Everything (Moff Gideon): before drawing, opponent searches this player's deck
-  const oppNum = opponentPlayerNum(playerNum);
-  const oppDcList = oppNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
-  const oppHasGideon = oppDcList.some(d => (d?.dcName || d) === 'Moff Gideon');
-  if (oppHasGideon && !game.iKnowEverythingResolved) {
-    const attachKey2 = ccAttachmentsKey(playerNum);
-    const placed2 = (attachKey2 && game[attachKey2] && Object.values(game[attachKey2]).flat()) || [];
-    const _ikeExistingHand = ((game[ccHandKey(playerNum)]) || []);
-    const availableCards = ccList.filter(c => !placed2.includes(c) && !_ikeExistingHand.includes(c));
-    if (availableCards.length >= 2) {
-      const shuffledCopy = [...availableCards];
-      shuffleArray(shuffledCopy);
-      const revealed = [shuffledCopy[0], shuffledCopy[1]];
-      setPendingIKnowEverything(game, { targetPlayerNum: playerNum, gideonPlayerNum: oppNum, cards: revealed, gameId });
-      const cardLabels = revealed.map((c, i) => `**${i + 1}.** ${c}`).join('\n');
-      const keepRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
-      );
-      await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] } });
-      saveGames?.(gameId);
-      return;
-    }
-    game.iKnowEverythingResolved = true;
-  }
-
+  const squad = getSquad(game, playerNum);
+  const ccList = squad?.ccList || [];
   const attachKey = ccAttachmentsKey(playerNum);
   const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
   const handKey = ccHandKey(playerNum);
@@ -1784,7 +1798,6 @@ export async function shuffleAndDrawForPlayer(game, playerNum, ctx) {
   const playerId = getPlayerId(game, playerNum);
   const _waNote = (game.wookieeAvengerDrawPenalty || 0) > 0 ? ` (1 fewer per Wookiee Avenger; Debts Repaid pre-placed in hand)` : '';
   await logGameAction(game, client, `<@${playerId}> shuffled and drew ${_drawCount} Command Cards${_waNote}.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
-  // Post the hand display to the player's hand channel.
   const handChannelId = playerNum === 1 ? game.p1HandId : game.p2HandId;
   if (handChannelId) {
     try {
@@ -1803,16 +1816,52 @@ export async function shuffleAndDrawForPlayer(game, playerNum, ctx) {
         }
       }
     } catch (err) {
-      console.error('shuffleAndDrawForPlayer: hand-channel post failed', err);
+      console.error('drawStartingHandForPlayer: hand-channel post failed', err);
     }
   }
   await updateHandVisualMessage(game, playerNum, client);
+  saveGames?.(gameId);
+}
+
+/**
+ * Top-level orchestrator: fire IKE first (if applicable), then draw
+ * for both players when IKE is resolved, then advance to round 1
+ * SoR. Called from advanceFromDeployment after post-deploy and from
+ * handleIKnowEverythingKeep after IKE resolves.
+ */
+export async function autoDrawAllStartingHands(game, ctx) {
+  const { updatePlayAreaDcButtons, client } = ctx;
+  // Phase 1: IKE before any draw (per user 2026-05-09).
+  const ikePending = await triggerStartingHandIke(game, ctx);
+  if (ikePending) return; // resume after IKE resolves via handleIKnowEverythingKeep
+  // Phase 2: draw for both players in initiative order.
+  const { getInitiativePlayerNum } = await import('../game/player-helpers.js');
+  const initPN = getInitiativePlayerNum(game);
+  const otherPN = initPN === 1 ? 2 : 1;
+  await drawStartingHandForPlayer(game, initPN, ctx);
+  await drawStartingHandForPlayer(game, otherPN, ctx);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
     const { advanceFromCcDraw } = await import('./phase-gate.js');
     await advanceFromCcDraw(game, ctx);
   }
-  saveGames?.(gameId);
+}
+
+/**
+ * Legacy export kept for compatibility — combines IKE + draw for
+ * one player. Used by tests / refresh recovery paths. The auto
+ * post-deploy path uses autoDrawAllStartingHands instead.
+ */
+export async function shuffleAndDrawForPlayer(game, playerNum, ctx) {
+  const ikePending = await triggerStartingHandIke(game, ctx);
+  if (ikePending) return;
+  await drawStartingHandForPlayer(game, playerNum, ctx);
+  if (game.player1CcDrawn && game.player2CcDrawn) {
+    const { updatePlayAreaDcButtons, client } = ctx;
+    await updatePlayAreaDcButtons(game, client);
+    const { advanceFromCcDraw } = await import('./phase-gate.js');
+    await advanceFromCcDraw(game, ctx);
+  }
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
@@ -1955,43 +2004,10 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   await logGameAction(game, client, `🕵️ **I Know Everything** — Kept **${keptCard}**. **${removedCard}** removed from the game.`, { phase: 'DEPLOYMENT', icon: 'card' });
   try { await interaction.message.edit({ components: [] }); } catch {}
 
-  // Now perform the shuffle and draw for the targeted player.
-  // WA fix: preserve any pre-placed cards (Debts Repaid) in hand, exclude
-  // them from the deck pool, and reduce draw count by drawPenalty.
-  const ccList = squad?.ccList || [];
-  const attachKey = ccAttachmentsKey(playerNum);
-  const placed = (game[attachKey] && Object.values(game[attachKey]).flat()) || [];
-  const handKey = ccHandKey(playerNum);
-  const _existingHand = (game[handKey] || []).slice();
-  const deck = ccList.filter(c => !placed.includes(c) && !_existingHand.includes(c));
-  shuffleArray(deck);
-  const _drawCount = Math.max(0, 3 - (game.wookieeAvengerDrawPenalty || 0));
-  let hand = [..._existingHand, ...deck.splice(0, _drawCount)];
-  const deckKey = ccDeckKey(playerNum);
-  game[deckKey] = deck;
-  game[handKey] = hand;
-  const drawnKey = ccDrawnKey(playerNum);
-  game[drawnKey] = true;
-  const playerId = getPlayerId(game, playerNum);
-  const _waNote = (game.wookieeAvengerDrawPenalty || 0) > 0 ? ` (1 fewer per Wookiee Avenger; Debts Repaid pre-placed in hand)` : '';
-  await logGameAction(game, client, `<@${playerId}> shuffled and drew ${_drawCount} Command Cards${_waNote}.`, { phase: 'DEPLOYMENT', icon: 'card', allowedMentions: { users: [playerId] } });
-
-  // Update hand display in the player's hand thread
-  const handChannelId = getHandChannelId(game, playerNum);
-  if (handChannelId) {
-    try {
-      const handChannel = await fetchGameChannel(client, handChannelId);
-      const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
-      await withDiscordRetry(() => handChannel.send(handPayload));
-    } catch {}
-  }
-  await updateHandVisualMessage(game, playerNum, client);
-  if (game.player1CcDrawn && game.player2CcDrawn) {
-    await updatePlayAreaDcButtons(game, client);
-    // Per user 2026-05-09: removed the cc_drawn ready check.
-    const { advanceFromCcDraw } = await import('./phase-gate.js');
-    await advanceFromCcDraw(game, ctx);
-  }
+  // Per user 2026-05-09: IKE resolves BEFORE any shuffle-and-draw.
+  // Now that IKE is resolved, draw starting hands for both players
+  // and advance to round 1 SoR.
+  await autoDrawAllStartingHands(game, ctx);
   saveGames(game.gameId);
 }
 
