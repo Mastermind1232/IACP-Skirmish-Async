@@ -269,6 +269,58 @@ export async function finalizeActivation({
     specialsUsed: [],
   };
 
+  // B12.5. Init companion banks (paired-but-separate)
+  // Per alexanbv 2026-05-10: companions activate with the host and get full
+  // parity with a normal activating figure — their own dcActionsData (2
+  // actions), movementBank, activationStartPositions, and per-figure
+  // SoA/EoA hooks. Lifecycle is paired (allocated on host activation, both
+  // cleared at activation end), but the action/movement banks are separate
+  // so each figure must complete its own 2 actions per multi-figure rules.
+  // Slice 1 (this commit): allocate banks. Slice 2 will post the UI.
+  {
+    const _hostAttachments = playerNum === 1
+      ? (game.p1DcAttachments?.[msgId] || [])
+      : (game.p2DcAttachments?.[msgId] || []);
+    const _compInfo = getCompanionForDc(dcName, _hostAttachments);
+    if (_compInfo) {
+      const _compMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+      const _hostMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+      const _hostIdx = (_hostMsgIds || []).indexOf(msgId);
+      const _companionMsgId = _hostIdx >= 0 ? _compMsgIds?.[_hostIdx] : null;
+      const _compPrefix = `${_compInfo.companionName}-`;
+      const _compInPlay = Object.keys(game.figurePositions?.[playerNum] || {})
+        .some((fk) => fk.startsWith(_compPrefix));
+      if (_companionMsgId && _compInPlay) {
+        const _compActions = DC_ACTIONS_PER_ACTIVATION;
+        game.dcActionsData[_companionMsgId] = {
+          remaining: _compActions,
+          total: _compActions,
+          perFigureRemaining: { 0: DC_ACTIONS_PER_ACTIVATION },
+          figureLocked: {},
+          figureSoaFired: {},
+          figureEoaFired: {},
+          messageId: null,
+          threadId: thread.id,
+          specialsUsed: [],
+          isCompanion: true,
+          hostMsgId: msgId,
+        };
+        const _compPendingMp = game.pendingMpBonus?.[_companionMsgId] ?? 0;
+        if (_compPendingMp) delete game.pendingMpBonus[_companionMsgId];
+        game.movementBank[_companionMsgId] = {
+          total: _compPendingMp,
+          remaining: _compPendingMp,
+          threadId: thread.id,
+          messageId: null,
+          displayName: _compInfo.companionName,
+        };
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+          if (fk.startsWith(_compPrefix)) game.activationStartPositions[fk] = pos;
+        }
+      }
+    }
+  }
+
   // B13. Send thread ping (actions buttons + minimap)
   const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(_b12Total, _b12Total)}`;
   const actMinimap = await getActivationMinimapAttachment(game, msgId);
