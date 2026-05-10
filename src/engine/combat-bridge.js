@@ -1944,15 +1944,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Incinerate Blast Strain embed refreshes (collected earlier)
   if (_ftBlastRefreshMsgIds?.length) for (const _mid of _ftBlastRefreshMsgIds) embedRefreshMsgIds.add(_mid);
 
-  // Concentrated Fire: apply Stun to the attacker figure after attack resolves
-  if (game.applySelfStunAfterAttackPlayerNum?.[attackerPlayerNum] && combat.attackerMsgId) {
-    delete game.applySelfStunAfterAttackPlayerNum[attackerPlayerNum];
-    const _cfaFigKey = combat.attackerFigureKey;
+  // Concentrated Fire (alexanbv 2026-05-09): apply Stun to the SUPPORTER
+  // figure (the non-attacker friendly Ranged TROOPER who played the CC),
+  // NOT the attacker. Resolver writes the chosen figureKey into
+  // game.applySelfStunAfterAttackFigureKey[playerNum].
+  if (game.applySelfStunAfterAttackFigureKey?.[attackerPlayerNum]) {
+    const _cfaFigKey = game.applySelfStunAfterAttackFigureKey[attackerPlayerNum];
+    delete game.applySelfStunAfterAttackFigureKey[attackerPlayerNum];
     if (_cfaFigKey && !isConditionImmune(game, _cfaFigKey)) {
       if (_applyCondition(game, _cfaFigKey, 'Stun')) {
         const _cfaDcName = dcNameFromFigureKey(_cfaFigKey);
         await logGameAction(game, client, `**Concentrated Fire** — **${_cfaDcName}** is now **Stunned**.`, { phase: 'ROUND', icon: 'card' });
-        embedRefreshMsgIds.add(combat.attackerMsgId);
+        const _cfaMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, _cfaFigKey);
+        if (_cfaMsgId) embedRefreshMsgIds.add(_cfaMsgId);
       }
     }
   }

@@ -43,9 +43,12 @@ describe('ORACLE-CFIRE-001: Die bonus granted when Ranged non-attacker exists', 
   });
 });
 
-// ── ORACLE-CFIRE-002: Die bonus blocked when all non-attackers are melee ──────
-describe('ORACLE-CFIRE-002: Die bonus blocked when all non-attackers are melee', () => {
-  it('002: no die added when only melee non-attacker figures exist', () => {
+// ── ORACLE-CFIRE-002: No effect when all non-attackers are melee ─────────────
+// Per alexanbv 2026-05-09: Concentrated Fire is PLAYED by the supporting
+// Ranged TROOPER. If no eligible supporter exists, the card cannot be played
+// (no die bonus, no Stun, no effect — the entire card whiffs).
+describe('ORACLE-CFIRE-002: No effect when no eligible Ranged TROOPER supporter', () => {
+  it('002: no die and no stun when only melee non-attacker figures exist', () => {
     const combat = {
       attackerPlayerNum: 1,
       attackerFigureKey: 'Stormtrooper (Elite)-1-0',
@@ -63,15 +66,20 @@ describe('ORACLE-CFIRE-002: Die bonus blocked when all non-attackers are melee',
 
     const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
 
-    assert.equal(result.applied, true, 'CC still resolves (stun applies)');
+    assert.equal(result.applied, true, 'CC resolves');
     assert.equal(combat.attackBonusDice, undefined, 'No die should be added');
-    assert.ok(result.logMessage.includes('skipped'), 'Log should indicate die was skipped');
+    assert.equal(game.applySelfStunAfterAttackFigureKey, undefined,
+      'No Stun without an eligible supporter to be Stunned');
+    assert.ok(result.logMessage.toLowerCase().includes('no ranged non-attacker'),
+      'Log should explain why the card has no effect');
   });
 });
 
-// ── ORACLE-CFIRE-003: Stun flag is unconditional (fires even when die blocked) ─
-describe('ORACLE-CFIRE-003: Stun is unconditional', () => {
-  it('003: applySelfStunAfterAttack is set even when die is blocked', () => {
+// ── ORACLE-CFIRE-003: Stun targets the supporter, not the attacker ───────────
+// Per alexanbv 2026-05-09: card text "you become Stunned" — "you" is the
+// supporting TROOPER who played the card, not the attacker.
+describe('ORACLE-CFIRE-003: Stun lands on the supporter figure, not the attacker', () => {
+  it('003: applySelfStunAfterAttackFigureKey records supporter figure when single eligible', () => {
     const combat = {
       attackerPlayerNum: 1,
       attackerFigureKey: 'Stormtrooper (Elite)-1-0',
@@ -81,20 +89,21 @@ describe('ORACLE-CFIRE-003: Stun is unconditional', () => {
       figurePositions: {
         1: {
           'Stormtrooper (Elite)-1-0': 'D4',
-          'Darth Vader-1-0': 'D5',  // melee only
+          'Stormtrooper (Elite)-1-1': 'D5',  // single eligible Ranged TROOPER
         },
       },
     };
 
     resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
 
-    assert.ok(
-      game.applySelfStunAfterAttackPlayerNum?.[1],
-      'Stun flag must be set even when die bonus is blocked'
+    assert.equal(
+      game.applySelfStunAfterAttackFigureKey?.[1],
+      'Stormtrooper (Elite)-1-1',
+      'Stun keyed on supporter figureKey, NOT attacker figureKey',
     );
   });
 
-  it('003b: applySelfStunAfterAttack is set when die is granted', () => {
+  it('003b: multiple eligible supporters → resolver returns requiresChoice', () => {
     const combat = {
       attackerPlayerNum: 1,
       attackerFigureKey: 'Stormtrooper (Elite)-1-0',
@@ -104,16 +113,48 @@ describe('ORACLE-CFIRE-003: Stun is unconditional', () => {
       figurePositions: {
         1: {
           'Stormtrooper (Elite)-1-0': 'D4',
-          'Stormtrooper (Elite)-1-1': 'D5',  // ranged non-attacker
+          'Stormtrooper (Elite)-1-1': 'D5',
+          'Stormtrooper (Elite)-1-2': 'D6',
         },
       },
     };
 
-    resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
+    const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
 
-    assert.ok(
-      game.applySelfStunAfterAttackPlayerNum?.[1],
-      'Stun flag must be set when die bonus is granted'
+    assert.equal(result.requiresChoice, true,
+      'multiple eligible supporters → picker required');
+    assert.equal(result.choiceValues?.length, 2,
+      'two non-attacker figures offered');
+    assert.equal(game.applySelfStunAfterAttackFigureKey, undefined,
+      'Stun not yet applied — waiting for player choice');
+  });
+
+  it('003c: chosenFigureKey resolves the play and stamps Stun on chosen supporter', () => {
+    const combat = {
+      attackerPlayerNum: 1,
+      attackerFigureKey: 'Stormtrooper (Elite)-1-0',
+      attackerMsgId: 'msg_storm',
+    };
+    const game = {
+      figurePositions: {
+        1: {
+          'Stormtrooper (Elite)-1-0': 'D4',
+          'Stormtrooper (Elite)-1-1': 'D5',
+          'Stormtrooper (Elite)-1-2': 'D6',
+        },
+      },
+    };
+
+    resolveAbility('Concentrated Fire', {
+      game, playerNum: 1, combat,
+      chosenFigureKey: 'Stormtrooper (Elite)-1-2',
+    });
+
+    assert.equal(combat.attackBonusDice, 1, 'die added');
+    assert.equal(
+      game.applySelfStunAfterAttackFigureKey?.[1],
+      'Stormtrooper (Elite)-1-2',
+      'Stun lands on the chosen supporter, not the attacker',
     );
   });
 });
@@ -143,9 +184,9 @@ describe('ORACLE-CFIRE-004: Mixed squad with Ranged and Melee non-attackers', ()
   });
 });
 
-// ── ORACLE-CFIRE-005b: Ranged non-TROOPER does NOT qualify for die bonus ──────
-describe('ORACLE-CFIRE-005b: Ranged non-TROOPER does not unlock die bonus', () => {
-  it('005b: die blocked when only non-attacker Ranged figure is non-TROOPER', () => {
+// ── ORACLE-CFIRE-005b: Ranged non-TROOPER is not an eligible supporter ───────
+describe('ORACLE-CFIRE-005b: Ranged non-TROOPER does not unlock the play', () => {
+  it('005b: card has no effect when only non-attacker Ranged figure is non-TROOPER', () => {
     const combat = {
       attackerPlayerNum: 1,
       attackerFigureKey: 'Stormtrooper (Elite)-1-0',
@@ -162,9 +203,12 @@ describe('ORACLE-CFIRE-005b: Ranged non-TROOPER does not unlock die bonus', () =
 
     const result = resolveAbility('Concentrated Fire', { game, playerNum: 1, combat });
 
-    assert.equal(result.applied, true, 'CC still resolves (stun applies)');
+    assert.equal(result.applied, true, 'CC resolves (no error)');
     assert.equal(combat.attackBonusDice, undefined, 'No die — Boba is not a TROOPER');
-    assert.ok(result.logMessage.includes('skipped'), 'Log should say die was skipped');
+    assert.equal(game.applySelfStunAfterAttackFigureKey, undefined,
+      'No Stun — no eligible supporter to be Stunned');
+    assert.ok(result.logMessage.toLowerCase().includes('no ranged non-attacker'),
+      'Log should explain why the card has no effect');
   });
 });
 

@@ -5939,47 +5939,77 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: attackBonusDice (Tools for the Job, Concentrated Fire) — add N dice to attack pool when declaring attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusDice === 'number' && entry.attackBonusDice > 0) {
-    const { game, playerNum, combat } = context;
+    const { game, playerNum, combat, chosenFigureKey } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
     }
-    // requireRangedAttackType gate (Concentrated Fire): die bonus only if a non-attacker
-    // friendly TROOPER has Ranged attack type. Card text: "If you have the Ranged attack
-    // type" — "you" is the supporting TROOPER playing the CC, so must be both TROOPER and Ranged.
-    let dieBlocked = false;
+    // requireRangedAttackType gate (Concentrated Fire, alexanbv 2026-05-09):
+    // card is played by ANOTHER friendly Ranged TROOPER (not the attacker).
+    // That figure becomes Stunned. Build the eligible-supporter list and,
+    // if multiple are available, post a picker so the player chooses
+    // which figure plays the card. The Stun lands on the CHOSEN figure,
+    // not the attacker.
+    let supporterFigureKey = null;
     if (entry.requireRangedAttackType) {
       const dcEffectsMap = getDcEffects() || {};
       const friendlyPositions = game.figurePositions?.[playerNum] || {};
       const attackerKey = cbt.attackerFigureKey;
-      const hasRangedTrooperNonAttacker = Object.keys(friendlyPositions).some(fk => {
+      const eligibleSupporters = Object.keys(friendlyPositions).filter((fk) => {
         if (fk === attackerKey) return false;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkStats = dcEffectsMap[fkDcName];
         const fkKws = (fkStats?.keywords || []).map(k => String(k).toUpperCase());
         return fkStats?.attack?.type === 'range' && fkKws.includes('TROOPER');
       });
-      if (!hasRangedTrooperNonAttacker) dieBlocked = true;
-    }
-    if (!dieBlocked) {
-      cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
-      if (entry.attackBonusDiceColor) {
-        cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
-        const color = String(entry.attackBonusDiceColor).toLowerCase();
-        for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
+      if (eligibleSupporters.length === 0) {
+        // No eligible supporter — die bonus and Stun both skip.
+        return {
+          applied: true,
+          logMessage: 'No Ranged non-attacker TROOPER available — Concentrated Fire has no effect.',
+        };
+      }
+      if (chosenFigureKey && eligibleSupporters.includes(chosenFigureKey)) {
+        supporterFigureKey = chosenFigureKey;
+      } else if (eligibleSupporters.length === 1) {
+        supporterFigureKey = eligibleSupporters[0];
+      } else {
+        // Multiple supporters — let the player pick.
+        const choiceOptions = eligibleSupporters.map((fk) => {
+          const dcName = dcNameFromFigureKey(fk);
+          const m = fk.match(/-(\d+)-(\d+)$/);
+          const dgIdx = m?.[1] ?? '1';
+          const figIdx = m?.[2] ?? '0';
+          return `${dcName} (${dgIdx}.${figIdx})`;
+        });
+        return {
+          requiresChoice: true,
+          choiceOptions,
+          choiceValues: eligibleSupporters,
+        };
       }
     }
-    // applySelfStunAfterAttack (Concentrated Fire): unconditional — stun applies regardless of die gate
-    if (entry.applySelfStunAfterAttack) {
-      game.applySelfStunAfterAttackPlayerNum = game.applySelfStunAfterAttackPlayerNum || {};
-      game.applySelfStunAfterAttackPlayerNum[playerNum] = combat.attackerMsgId || true;
+    cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
+    if (entry.attackBonusDiceColor) {
+      cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
+      const color = String(entry.attackBonusDiceColor).toLowerCase();
+      for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
     }
-    const dieMsg = dieBlocked
-      ? 'No Ranged non-attacker available — die bonus skipped.'
-      : `Added ${entry.attackBonusDice} attack die to the attack pool.`;
+    // applySelfStunAfterAttack (Concentrated Fire): the SUPPORTER (chosen
+    // figure) becomes Stunned, NOT the attacker. Per card text "you become
+    // Stunned" where "you" is the figure playing the CC.
+    if (entry.applySelfStunAfterAttack && supporterFigureKey) {
+      game.applySelfStunAfterAttackFigureKey = game.applySelfStunAfterAttackFigureKey || {};
+      game.applySelfStunAfterAttackFigureKey[playerNum] = supporterFigureKey;
+    }
+    const supporterLabel = supporterFigureKey ? dcNameFromFigureKey(supporterFigureKey) : null;
+    const dieMsg = `Added ${entry.attackBonusDice} attack die to the attack pool.`;
+    const stunMsg = supporterLabel
+      ? ` **${supporterLabel}** becomes Stunned after this attack resolves.`
+      : '';
     return {
       applied: true,
-      logMessage: dieMsg + (entry.applySelfStunAfterAttack ? ' You become Stunned after this attack resolves.' : ''),
+      logMessage: dieMsg + stunMsg,
     };
   }
 
