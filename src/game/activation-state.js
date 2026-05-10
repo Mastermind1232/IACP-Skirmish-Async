@@ -596,6 +596,7 @@ const ROUND_NULL_FLAGS = [
   'pendingExecutorInterrupt',
   'pendingDefeatPick',
   'pendingPartingShot',
+  'pendingFinalStand',
   'pendingCcConfirmation',
   'pendingNegation',
   'pendingCommDisruptionPrompt',

@@ -45,7 +45,7 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
-import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt, setPendingExtraProtection } from './interrupts.js';
+import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt, setPendingExtraProtection, setPendingFinalStand } from './interrupts.js';
 import { cardNameIncludes } from './card-names.js';
 import { getCcHand } from './player-helpers.js';
 import { isWithinN } from '../engine/utils.js';
@@ -613,6 +613,106 @@ BEFORE_DEFEATED_HOOKS.push({
       content: ownerId
         ? `<@${ownerId}> ⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`
         : `⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Final Stand (Baze Malbus CC) — alexanbv 2026-05-10:
+ *
+ * Card text: "Use when a friendly figure within 3 spaces has suffered
+ * damage equal to its Health, before it is defeated. Move up to 2 spaces,
+ * gain 1 Power Token, and then perform an attack. Then, that friendly
+ * figure is defeated."
+ *
+ * Migrated from `duringActivation`-only timing (cc-timing.js) to a real
+ * BEFORE_DEFEATED hook so the prompt fires when ANY friendly figure
+ * suffers damage = Health, regardless of whose activation is in
+ * progress (including the opponent's attack on the friendly).
+ *
+ * Mara Jade Fast Learner integration is INTENTIONALLY DEFERRED — for
+ * now Baze is the only eligible playing figure. Mara picker comes in a
+ * follow-up.
+ *
+ * Once-per-defeat guard: `finalStandTriggered[msgId]` prevents repeat
+ * prompts when a Blast splash applies multiple damage events to the same
+ * figure in the same frame.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'final_stand',
+  requiresDamage: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.finalStandTriggered?.[opts.msgId]) return false;
+    if (!game.selectedMap?.id) return false;
+    const ownerPN = opts.controllerPlayerNum;
+    const hand = getCcHand(game, ownerPN) || [];
+    if (hand.indexOf('Final Stand') < 0) return false;
+    // Baze must be alive AND within 3 spaces of the would-be-defeated figure.
+    const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
+    if (!targetPos) return false;
+    const friendlyFigs = game.figurePositions?.[ownerPN] || {};
+    for (const [fk, pos] of Object.entries(friendlyFigs)) {
+      if (fk === opts.figureKey) continue; // Final Stand triggers on a DIFFERENT friendly within 3
+      if (dcNameFromFigureKey(fk) !== 'Baze Malbus') continue;
+      if (!pos) continue;
+      if (isWithinN(pos, targetPos, 3, game.selectedMap.id)) return true;
+    }
+    return false;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    const ownerPN = opts.controllerPlayerNum;
+    const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
+    if (!targetPos) return null;
+    let bazeFigKey = null;
+    let bazePos = null;
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[ownerPN] || {})) {
+      if (fk === opts.figureKey) continue;
+      if (dcNameFromFigureKey(fk) !== 'Baze Malbus') continue;
+      if (!pos) continue;
+      if (!isWithinN(pos, targetPos, 3, game.selectedMap.id)) continue;
+      bazeFigKey = fk; bazePos = pos; break;
+    }
+    if (!bazeFigKey) return null;
+    const bazeMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, bazeFigKey);
+    if (!bazeMsgId) return null;
+    game.finalStandTriggered = game.finalStandTriggered || {};
+    game.finalStandTriggered[opts.msgId] = true;
+    setPendingFinalStand(game, {
+      gameId: game.gameId,
+      // The would-be-defeated figure that triggered the play:
+      targetFigureKey: opts.figureKey,
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+      controllerPlayerNum: ownerPN,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      // The figure that performs the Move + free attack:
+      playingFigureKey: bazeFigKey,
+      playingMsgId: bazeMsgId,
+      playingDcName: 'Baze Malbus',
+      active: false,
+    });
+    const ownerId = game[`player${ownerPN}Id`];
+    const targetDcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`final_stand_play_${game.gameId}_${opts.msgId}`).setLabel('Play Final Stand (Baze)').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`final_stand_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after Baze's attack.`
+        : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** intervene?`,
       components: [row],
       allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
     }).catch(() => {});

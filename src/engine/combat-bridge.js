@@ -3322,6 +3322,16 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const { completeDeferredDefeat } = await import('../handlers/parting-shot.js');
     await completeDeferredDefeat(game, deps);
   }
+  // Final Stand deferred-defeat resume (alexanbv 2026-05-10): if the
+  // attacker of THIS combat is Baze (the playing figure of an active
+  // Final Stand), Baze's free attack just resolved — finalize the
+  // ORIGINAL would-be-defeated figure's defeat. Note: Final Stand's
+  // target is a DIFFERENT figure than the attacker (unlike Parting Shot
+  // where the dying figure is also the attacker).
+  if (game.pendingFinalStand?.active && game.pendingFinalStand.playingFigureKey === combat.attackerFigureKey) {
+    const { completeDeferredDefeat: completeFinalStand } = await import('../handlers/final-stand.js');
+    await completeFinalStand(game, deps);
+  }
   // Chain-attack queues: defender chain attacks (Return Fire, etc.)
   // resolve FIRST, then attacker chain attacks (Tonfa / Barrage / Flurry /
   // Fell Swoop), per user 2026-05-09: "the defense side return fire

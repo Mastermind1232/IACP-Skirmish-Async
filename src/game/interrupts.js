@@ -132,6 +132,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   EXECUTOR_INTERRUPT:    'executor-interrupt',
   DEFEAT_PICK:           'defeat-pick',
   PARTING_SHOT:          'parting-shot',
+  FINAL_STAND:           'final-stand',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -591,6 +592,9 @@ export function clearPendingDefeatPick(game) { _clearDual(game, 'pendingDefeatPi
  */
 export function setPendingPartingShot(game, payload) { _setDual(game, 'pendingPartingShot', INTERRUPT_TYPES.PARTING_SHOT, payload); }
 export function clearPendingPartingShot(game) { _clearDual(game, 'pendingPartingShot', INTERRUPT_TYPES.PARTING_SHOT); }
+
+export function setPendingFinalStand(game, payload) { _setDual(game, 'pendingFinalStand', INTERRUPT_TYPES.FINAL_STAND, payload); }
+export function clearPendingFinalStand(game) { _clearDual(game, 'pendingFinalStand', INTERRUPT_TYPES.FINAL_STAND); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }

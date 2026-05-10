@@ -165,6 +165,7 @@ import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestruc
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
+import { handleFireFinalStand, handleSkipFinalStand } from './final-stand.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
@@ -583,6 +584,8 @@ register('defeat_pick_skip_', handleDefeatPick, 'interrupts');
 register('defeat_pick_', handleDefeatPick, 'interrupts');
 register('parting_shot_fire_', handleFirePartingShot, 'interrupts');
 register('parting_shot_skip_', handleSkipPartingShot, 'interrupts');
+register('final_stand_play_', handleFireFinalStand, 'interrupts');
+register('final_stand_skip_', handleSkipFinalStand, 'interrupts');
 
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');

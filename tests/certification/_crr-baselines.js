@@ -219,6 +219,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingExecutorInterrupt',
   'pendingDefeatPick',
   'pendingPartingShot',
+  'pendingFinalStand',
   'pendingBELReorder',
   'pendingUnhingedDirector',
   'pendingUnhingedStrain',
