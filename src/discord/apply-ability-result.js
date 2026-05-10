@@ -47,6 +47,21 @@ export async function applyAbilityResult(result, opts) {
     getConditionCardPath,
   } = ctx;
 
+  // --- Inline CC redraw (Rebel Graffiti when Sabine plays it) ---
+  // Per CRR 2026-05-09: certain CCs grant a redraw at end of their
+  // own resolution. result.pendingRedraw = { card, playerNum }.
+  if (result.applied && result.pendingRedraw?.card && result.pendingRedraw?.playerNum) {
+    try {
+      const { moveDiscardToHand } = await import('../game/cc-passive-redraw.js');
+      const _moved = moveDiscardToHand(game, result.pendingRedraw.playerNum, result.pendingRedraw.card);
+      if (_moved && logGameAction) {
+        await logGameAction(game, client, `**Passive Redraw** — **${result.pendingRedraw.card}** re-drawn from discard to hand.`, { phase: 'ROUND', icon: 'card' });
+      }
+    } catch (err) {
+      console.error('[apply-ability-result] pendingRedraw failed:', err?.message ?? err);
+    }
+  }
+
   // --- Unhandled routing: caller must set up pendingCcChoice/pendingCcSpaceChoice themselves ---
   if (!result.applied && result.requiresChoice && result.choiceOptions?.length > 0) {
     return { handled: false, requiresChoice: true, requiresSpaceChoice: false };

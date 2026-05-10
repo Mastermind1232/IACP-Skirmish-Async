@@ -199,6 +199,35 @@ export function checkStartOfRoundPassiveRedraws(game, playerNum) {
   return { redrawn };
 }
 
+/**
+ * Capitalize passive: while in discard, when a hostile figure with a
+ * harmful condition gains another harmful condition, the owner may
+ * re-draw the card. Per CRR card text + user clarification 2026-05-09.
+ *
+ * Trigger: applyCondition() pushes a HARMFUL onto a figure that already
+ * has at least one HARMFUL. The card's owner is the OPPONENT of the
+ * figure's controller (since "hostile figure" is relative to the card
+ * holder). Auto-redraws (treating "may" as opt-in default).
+ *
+ * @param {object} game
+ * @param {string} hostileFigureKey - figureKey of the figure that just gained a stacking harmful
+ * @param {number} hostileFigureOwnerPN - 1 or 2: controller of the figure
+ * @returns {{ redrawn: string[], beneficiaryPN: number|null }}
+ */
+export function checkCapitalizePassiveRedraw(game, hostileFigureKey, hostileFigureOwnerPN) {
+  const out = { redrawn: [], beneficiaryPN: null };
+  // Capitalize's owner = the OPPOSITE of the figure's controller.
+  const ownerPN = hostileFigureOwnerPN === 1 ? 2 : 1;
+  const dKey = ccDiscardKey(ownerPN);
+  const discard = game[dKey] || [];
+  if (!discard.includes('Capitalize')) return out;
+  if (moveDiscardToHand(game, ownerPN, 'Capitalize')) {
+    out.redrawn.push('Capitalize');
+    out.beneficiaryPN = ownerPN;
+  }
+  return out;
+}
+
 // ── De Wanna Wanga passive reshuffle ────────────────────────────────────────
 
 /**

@@ -938,13 +938,11 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
 
-  // CC Passive Redraw: start-of-round trigger (Rebel Graffiti — Sabine in army)
-  for (const _sorPn of [1, 2]) {
-    const _sorPrResult = checkStartOfRoundPassiveRedraws(game, _sorPn);
-    for (const _sorPrCard of _sorPrResult.redrawn) {
-      await logGameAction(game, client, `**Passive Redraw** — **${_sorPrCard}** re-drawn from discard at start of round.`, { phase: 'ROUND', icon: 'card' });
-    }
-  }
+  // CC Passive Redraw: start-of-round trigger REMOVED 2026-05-09.
+  // Rebel Graffiti now redraws inline at end-of-Sabine's-activation
+  // when she plays the card (via pendingRedraw on the ability result).
+  // checkStartOfRoundPassiveRedraws is kept exported for any future
+  // round-scoped redraw card; currently no SoR redraws are wired.
   // Run start-of-round DC effects (post-deploy for R1, DC abilities every round)
   const hasPendingSor = await runStartOfRoundDcEffects(game, gameId, client, { logGameAction, updateHandChannelMessages, checkWinConditions });
   await updateHandVisualMessage(game, 1, client);

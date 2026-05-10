@@ -4,6 +4,7 @@
  */
 import { getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { checkCapitalizePassiveRedraw } from './cc-passive-redraw.js';
 
 export const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
 
@@ -145,7 +146,19 @@ export function applyCondition(game, figureKey, cond) {
   game.figureConditions = game.figureConditions || {};
   game.figureConditions[figureKey] = game.figureConditions[figureKey] || [];
   if (game.figureConditions[figureKey].includes(cond)) return false;
+  // Capitalize passive trigger (per CRR 2026-05-09): if this is a
+  // HARMFUL condition AND the figure already has at least one OTHER
+  // harmful condition, fire the Capitalize redraw for the figure's
+  // OPPONENT (the player who would own Capitalize). Only fires once
+  // per stacking event; the actual redraw lives in cc-passive-redraw.
+  const _capIsHarmful = HARMFUL_CONDITIONS.includes(cond);
+  const _capPriorHarmful = _capIsHarmful && game.figureConditions[figureKey].some((c) => HARMFUL_CONDITIONS.includes(c));
   game.figureConditions[figureKey].push(cond);
+  if (_capPriorHarmful) {
+    const _capOwnerPN = game.figurePositions?.[1]?.[figureKey] != null ? 1
+      : game.figurePositions?.[2]?.[figureKey] != null ? 2 : null;
+    if (_capOwnerPN) checkCapitalizePassiveRedraw(game, figureKey, _capOwnerPN);
+  }
   return true;
 }
 

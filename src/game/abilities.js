@@ -7990,7 +7990,17 @@ export function resolveAbility(abilityId, context) {
     const vk = vpKey(playerNum);
     game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
     game[vk].total = (game[vk].total ?? 0) + entry.rebelGraffitiVp;
-    return { applied: true, logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; no adjacent hostiles verified).` };
+    // Per CRR + user clarification 2026-05-09: "Then, if you are
+    // 'Sabine Wren', you may re-draw this card." Returns a
+    // pendingRedraw flag so cc-hand's play handler can move the card
+    // from discard to hand AFTER the play resolves (the card lands in
+    // discard during play, so we redraw via moveDiscardToHand).
+    const _rgIsSabine = (meta?.dcName || '').includes('Sabine Wren');
+    return {
+      applied: true,
+      logMessage: `Gained ${entry.rebelGraffitiVp} VP (end of activation; no adjacent hostiles verified).${_rgIsSabine ? ' Sabine may re-draw Rebel Graffiti.' : ''}`,
+      ...(_rgIsSabine ? { pendingRedraw: { card: 'Rebel Graffiti', playerNum } } : {}),
+    };
   }
 
   // ccEffect: shuffleHandIntoDeckThenDraw (Strategic Shift) — chosen player shuffles hand into deck, then draws N; choiceIndex 0 = P1, 1 = P2
