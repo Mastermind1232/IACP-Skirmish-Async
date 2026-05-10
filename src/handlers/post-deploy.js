@@ -1608,53 +1608,10 @@ export async function handleStrikeTeamTokenDone(interaction, ctx) {
   saveGames(game.gameId);
 }
 
-/**
- * Post-deploy movement skip: player skips movement for a figure.
- */
-export async function handlePostDeployMoveSkip(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
-  const parts = splitCustomId(interaction.customId, 'pd_move_skip_');
-  const gameId = parts[0];
-  const playerNum = parseInt(parts[1], 10);
-  const moveKey = parts.slice(2).join('_');
-
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (canActAsPlayer && !canActAsPlayer(game, interaction.user.id, playerNum)) {
-    await interaction.followUp({ content: 'Only the owning player can skip.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-
-  // Read figureKey BEFORE cleaning up moveInProgress (needed for smooth_landing tracking)
-  const skippedFigureKey = game.moveInProgress?.[moveKey]?.figureKey || null;
-
-  // Clean up pendingSpacePick
-  cleanupSpacePick(game, `${gameId}_${moveKey}`);
-
-  // Clean up moveInProgress
-  if (game.moveInProgress?.[moveKey]) {
-    delete game.moveInProgress[moveKey];
-  }
-  // Clean up grid messages
-  if (game.moveGridMessageIds?.[moveKey]) {
-    for (const mid of game.moveGridMessageIds[moveKey]) {
-      try {
-        const ch = interaction.channel || await fetchGameChannel(client, game.generalId);
-        const msg = await ch.messages.fetch(mid).catch(() => null);
-        if (msg) await msg.edit({ components: [] }).catch(discordCatch);
-      } catch {}
-    }
-    delete game.moveGridMessageIds[moveKey];
-  }
-
-  const q = game.postDeployQueue;
-  if (!q) { saveGames(game.gameId); return; }
-
-  await _advanceAfterFigure(game, gameId, client, ctx, skippedFigureKey);
-  saveGames(game.gameId);
-}
+// REMOVED 2026-05-09: handlePostDeployMoveSkip — pendingOrderedMove
+// pipeline retired; post-deploy moves now go through the move-x
+// picker, whose Stop button covers the skip path. The pd_move_skip_
+// button prefix is no longer emitted by any UI.
 
 /**
  * Scavenged Walker: player starts the post-deploy move.

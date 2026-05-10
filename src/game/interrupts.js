@@ -93,7 +93,9 @@ export const INTERRUPT_TYPES = Object.freeze({
   DURASTEEL_FIST_PUSH:   'durasteel-fist-push',
   ZILLO_DISCARD:         'zillo-discard',
   SURGE_OVERFLOW:        'surge-overflow',
-  ORDERED_MOVE:          'ordered-move',
+  // ORDERED_MOVE removed 2026-05-09 — pipeline retired, all granted
+  // moves now use pendingMoveX. Saves from older lobbies that still
+  // have an 'ordered-move' interrupt frame are silently ignored.
   WOOK_SLAM_PUSH:        'wook-slam-push',
   TOUGH_LUCK:            'tough-luck',
   ROGUE_ONE_TOKEN_PICK:  'rogue-one-token-pick',
@@ -453,11 +455,6 @@ export function clearPendingZilloDiscard(game) { _clearDual(game, 'pendingZilloD
 
 export function setPendingSurgeOverflow(game, payload) { _setDual(game, 'pendingSurgeOverflow', INTERRUPT_TYPES.SURGE_OVERFLOW, payload); }
 export function clearPendingSurgeOverflow(game) { _clearDual(game, 'pendingSurgeOverflow', INTERRUPT_TYPES.SURGE_OVERFLOW); }
-
-// setPendingOrderedMove / clearPendingOrderedMove RETIRED 2026-05-09:
-// pendingOrderedMove migrated to pendingMoveX. INTERRUPT_TYPES.ORDERED_MOVE
-// kept in the enum for save-file compat (older saved games may have an
-// ordered-move interrupt frame; callers should ignore it).
 
 export function setPendingWookSlamPush(game, payload) { _setDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH, payload); }
 export function clearPendingWookSlamPush(game) { _clearDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH); }

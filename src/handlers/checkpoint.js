@@ -88,7 +88,6 @@ const INTERRUPT_GATE_MESSAGES = {
   [INTERRUPT_TYPES.DURASTEEL_FIST_PUSH]: 'a Durasteel Fist push prompt is open',
   [INTERRUPT_TYPES.ZILLO_DISCARD]: 'a Zillo discard prompt is open',
   [INTERRUPT_TYPES.SURGE_OVERFLOW]: 'a surge overflow prompt is open',
-  [INTERRUPT_TYPES.ORDERED_MOVE]: 'an ordered-move prompt is open',
   [INTERRUPT_TYPES.WOOK_SLAM_PUSH]: 'a Wookiee slam push prompt is open',
   [INTERRUPT_TYPES.TOUGH_LUCK]: 'a Tough Luck prompt is open',
   [INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK]: 'a Rogue One token pick is open',
