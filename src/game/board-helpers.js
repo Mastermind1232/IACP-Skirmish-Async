@@ -15,6 +15,7 @@ import {
   getDcEffects,
   getMissionCardsData,
   getFigureSize,
+  isDcCompanion,
 } from '../data-loader.js';
 
 /** Compute the set of edge keys for closed (not-yet-opened) doors on the current map. */
@@ -340,15 +341,16 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
   }
 
-  // Retrieve The Child (Clan of Two): a UNIQUE figure may interact with
-  // The Child or its incapacitated token to gain 1 VP. Per alexanbv
-  // 2026-05-09: trigger is the Child being incapacitated (host need not
-  // be defeated). Either player's UNIQUE figure can retrieve. Removes
-  // The Child from the board and awards 1 VP to the retriever's player.
+  // Retrieve The Child (Clan of Two): a UNIQUE non-companion figure may
+  // interact with The Child or its incapacitated token to gain 1 VP. Per
+  // alexanbv 2026-05-09: trigger is the Child being incapacitated (host
+  // need not be defeated); either player's UNIQUE figure can retrieve;
+  // companion figures (even unique ones — Dio, BD-1, J4X-7, Crumb) cannot
+  // retrieve because companions cannot interact (rules: COMPANIONS).
   if (figPos && game.childIncapacitated) {
     const _retrIntDcName = dcNameFromFigureKey(figureKey);
     const _retrIntEff = getDcEffects()?.[_retrIntDcName];
-    if (_retrIntEff?.unique) {
+    if (_retrIntEff?.unique && !isDcCompanion(_retrIntDcName)) {
       for (const ownerPN of [1, 2]) {
         const _childPoses = game.figurePositions?.[ownerPN] || {};
         const _childFk = Object.keys(_childPoses).find((fk) => dcNameFromFigureKey(fk) === 'The Child');
