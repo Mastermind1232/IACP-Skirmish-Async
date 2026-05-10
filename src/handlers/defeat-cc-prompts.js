@@ -25,32 +25,48 @@
  * return manualMessage. That's a separate resolver-side fix; the
  * auto-prompt itself is correct.
  */
-import { clearPendingDefeatCcPrompt } from '../game/interrupts.js';
+import { clearPendingDefeatCcPrompt, setPendingDefeatCcPrompt } from '../game/interrupts.js';
 import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList } from '../game/player-helpers.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { getDcEffects } from '../data-loader.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
 
 /**
- * Find the first friendly DC msgId for a player that has at least one
- * figure on the board. Used as the default target for out-of-activation
- * Debts Repaid / Retaliation plays. Not a picker — picker UX is a
- * follow-up; this unblocks the canonical "fires regardless of whose
- * activation" trigger so the card actually resolves.
+ * Enumerate alive friendly DCs for a player, optionally filtering by
+ * keyword (e.g. GUARDIAN for Retaliation). Returns
+ * { msgId, dcName, displayName, figureKey } for the FIRST figure of
+ * each matching DC. Used by Debts Repaid / Retaliation target
+ * picker per alexanbv 2026-05-10.
  */
-function _firstFriendlyDcMsgId(game, playerNum) {
+function _friendlyDcOptions(game, playerNum, requiredKeyword = null) {
+  const out = [];
   const dcMsgIds = getDcMessageIds(game, playerNum) || [];
   const dcList = getDcList(game, playerNum) || [];
   const figs = game.figurePositions?.[playerNum] || {};
+  const dcEffects = requiredKeyword ? (getDcEffects() || {}) : null;
   for (let i = 0; i < dcMsgIds.length; i++) {
     const dc = dcList[i];
     if (!dc || dc.defeated) continue;
     const dcName = (typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc) || '';
-    const hasFigure = Object.keys(figs).some(fk => fk.startsWith(dcName + '-'));
-    if (hasFigure) return dcMsgIds[i];
+    const displayName = (typeof dc === 'object' ? dc.displayName : dcName) || dcName;
+    const firstFig = Object.keys(figs).find(fk => fk.startsWith(dcName + '-'));
+    if (!firstFig) continue;
+    if (requiredKeyword && dcEffects) {
+      const eff = dcEffects[dcName] || dcEffects[dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+      const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
+      if (!kws.includes(String(requiredKeyword).toUpperCase())) continue;
+    }
+    out.push({ msgId: dcMsgIds[i], dcName, displayName, figureKey: firstFig });
   }
-  return null;
+  return out;
 }
+
+const _NEEDS_TARGET_PICKER = new Set(['Debts Repaid', 'Retaliation']);
+const _CARD_TARGET_KEYWORD = {
+  'Retaliation': 'GUARDIAN',
+};
 
 export async function handleSkipDefeatCcPrompt(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
@@ -77,6 +93,7 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   const {
     getGame, canActAsPlayer, saveGames, client, logGameAction,
     resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
+    ButtonBuilder, ButtonStyle, ActionRowBuilder,
   } = ctx;
   const parts = splitCustomId(interaction.customId, 'defeat_cc_play_');
   const gameId = parts[0];
@@ -108,25 +125,57 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(cardName);
+
+  // Debts Repaid / Retaliation: post a friendly-DC target picker per
+  // alexanbv 2026-05-10. These cards say "your Deployment card" /
+  // "you" — player chooses which DC the effect lands on. Retaliation
+  // additionally filters to GUARDIAN-keyword DCs per its playableBy
+  // restriction.
+  if (_NEEDS_TARGET_PICKER.has(cardName)) {
+    const keyword = _CARD_TARGET_KEYWORD[cardName] || null;
+    const options = _friendlyDcOptions(game, playerPN, keyword);
+    if (options.length === 0) {
+      clearPendingDefeatCcPrompt(game);
+      if (typeof logGameAction === 'function' && client) {
+        const kwNote = keyword ? ` (no friendly ${keyword} on board)` : ' — no eligible friendly Deployment card on board.';
+        await logGameAction(game, client, `**${cardName}** — no eligible target${kwNote}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+      if (typeof saveGames === 'function') await saveGames(gameId);
+      return;
+    }
+    if (ButtonBuilder && ButtonStyle && ActionRowBuilder && interaction.channel?.send) {
+      const buttons = options.slice(0, 5).map((opt, i) =>
+        new ButtonBuilder()
+          .setCustomId(`defeat_cc_target_${gameId}_${i}`)
+          .setLabel(String(opt.displayName).slice(0, 80))
+          .setStyle(ButtonStyle.Primary),
+      );
+      const row = new ActionRowBuilder().addComponents(buttons);
+      setPendingDefeatCcPrompt(game, {
+        ...pending,
+        phase: 'target-pick',
+        targetOptions: options,
+      });
+      const targetVerb = keyword
+        ? `Choose a friendly **${keyword}** to play the card`
+        : 'Choose a friendly Deployment card to receive the effect';
+      await interaction.channel.send({
+        content: `📜 **${cardName}** — ${targetVerb}:`,
+        components: [row],
+      }).catch(() => {});
+      if (typeof saveGames === 'function') await saveGames(gameId);
+      return;
+    }
+    // Discord components missing — fall through to immediate resolve.
+  }
+
   clearPendingDefeatCcPrompt(game);
 
   if (typeof resolveAbility === 'function') {
-    // Out-of-activation auto-targeting: per alexanbv 2026-05-10, Debts
-    // Repaid and Retaliation must work regardless of whose activation
-    // is in progress. When the controller isn't currently activating,
-    // their canonical resolvers (Focus + readyActiveDc, etc.) need an
-    // explicit target msgId. Pass the first friendly DC's msgId as the
-    // default target; the resolver honors context.msgId override (see
-    // abilities.js Focus resolver). Picker UX is a follow-up.
-    let _targetMsgId = null;
-    if (cardName === 'Debts Repaid' || cardName === 'Retaliation') {
-      _targetMsgId = _firstFriendlyDcMsgId(game, playerPN);
-    }
     const result = resolveAbility(cardName, {
       game,
       playerNum: playerPN,
       cardName,
-      msgId: _targetMsgId ?? undefined,
       dcMessageMeta,
       dcHealthState,
       dcExhaustedState,
@@ -136,6 +185,148 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
       const note = result.applied
         ? `**${cardName}** — ${result.logMessage}`
         : `**${cardName}** — ${result.manualMessage || result.logMessage}`;
+      await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+  }
+  if (typeof saveGames === 'function') await saveGames(gameId);
+}
+
+/**
+ * Handle target-DC pick for Debts Repaid / Retaliation. customId:
+ * `defeat_cc_target_${gameId}_${optionIdx}`. Reads pendingDefeatCcPrompt
+ * (phase='target-pick'), runs resolveAbility with the chosen DC's
+ * msgId in context, clears pending.
+ */
+export async function handleDefeatCcTargetPick(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client, logGameAction,
+    resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
+    ButtonBuilder, ButtonStyle, ActionRowBuilder,
+  } = ctx;
+  const customId = interaction.customId;
+  const m = customId.match(/^defeat_cc_target_([^_]+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid target pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const gameId = m[1];
+  const optionIdx = parseInt(m[2], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingDefeatCcPrompt;
+  if (!pending || pending.gameId !== gameId || pending.phase !== 'target-pick') {
+    await interaction.followUp({ content: 'No pending target pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.playerPN);
+  if (!ok) return;
+  await interaction.update({ components: [] }).catch(() => {});
+  const opt = (pending.targetOptions || [])[optionIdx];
+  if (!opt) {
+    clearPendingDefeatCcPrompt(game);
+    if (typeof logGameAction === 'function' && client) {
+      await logGameAction(game, client, `**${pending.cardName}** — invalid target index ${optionIdx}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+    if (typeof saveGames === 'function') await saveGames(gameId);
+    return;
+  }
+
+  // Retaliation: after the GUARDIAN is chosen, post a chooseOne mode
+  // picker (Focused / 2 Power Tokens / Move 2). The next click runs
+  // resolveAbility with msgId + choiceIndex.
+  if (pending.cardName === 'Retaliation' && ButtonBuilder && ButtonStyle && ActionRowBuilder && interaction.channel?.send) {
+    setPendingDefeatCcPrompt(game, {
+      ...pending,
+      phase: 'mode-pick',
+      pickedMsgId: opt.msgId,
+      pickedFigureKey: opt.figureKey,
+      pickedDisplayName: opt.displayName,
+    });
+    const buttons = [
+      new ButtonBuilder().setCustomId(`defeat_cc_mode_${gameId}_0`).setLabel('Become Focused').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`defeat_cc_mode_${gameId}_1`).setLabel('Gain 2 Power Tokens').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`defeat_cc_mode_${gameId}_2`).setLabel('Move up to 2 spaces').setStyle(ButtonStyle.Primary),
+    ];
+    await interaction.channel.send({
+      content: `📜 **Retaliation** — **${opt.displayName}** chosen. Pick the effect:`,
+      components: [new ActionRowBuilder().addComponents(buttons)],
+    }).catch(() => {});
+    if (typeof saveGames === 'function') await saveGames(gameId);
+    return;
+  }
+
+  // Single-effect cards (Debts Repaid): run resolveAbility with the
+  // chosen DC's msgId.
+  clearPendingDefeatCcPrompt(game);
+  if (typeof resolveAbility === 'function') {
+    const result = resolveAbility(pending.cardName, {
+      game,
+      playerNum: pending.playerPN,
+      cardName: pending.cardName,
+      msgId: opt.msgId,
+      chosenFigureKey: opt.figureKey,
+      dcMessageMeta,
+      dcHealthState,
+      dcExhaustedState,
+      combat: game.pendingCombat,
+    });
+    if (result?.logMessage && typeof logGameAction === 'function' && client) {
+      const note = result.applied
+        ? `**${pending.cardName}** — Target **${opt.displayName}**. ${result.logMessage}`
+        : `**${pending.cardName}** — Target **${opt.displayName}**. ${result.manualMessage || result.logMessage}`;
+      await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+  }
+  if (typeof saveGames === 'function') await saveGames(gameId);
+}
+
+/**
+ * Handle chooseOne-mode pick for Retaliation. customId:
+ * `defeat_cc_mode_${gameId}_${choiceIdx}`. Reads
+ * pendingDefeatCcPrompt (phase='mode-pick') for the previously-chosen
+ * target figure, then runs resolveAbility with msgId + choiceIndex.
+ */
+export async function handleDefeatCcModePick(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client, logGameAction,
+    resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
+  } = ctx;
+  const customId = interaction.customId;
+  const m = customId.match(/^defeat_cc_mode_([^_]+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid mode pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const gameId = m[1];
+  const choiceIdx = parseInt(m[2], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingDefeatCcPrompt;
+  if (!pending || pending.gameId !== gameId || pending.phase !== 'mode-pick') {
+    await interaction.followUp({ content: 'No pending mode pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.playerPN);
+  if (!ok) return;
+  await interaction.update({ components: [] }).catch(() => {});
+  clearPendingDefeatCcPrompt(game);
+  if (typeof resolveAbility === 'function') {
+    const result = resolveAbility(pending.cardName, {
+      game,
+      playerNum: pending.playerPN,
+      cardName: pending.cardName,
+      msgId: pending.pickedMsgId,
+      chosenFigureKey: pending.pickedFigureKey,
+      choiceIndex: choiceIdx,
+      dcMessageMeta,
+      dcHealthState,
+      dcExhaustedState,
+      combat: game.pendingCombat,
+    });
+    if (result?.logMessage && typeof logGameAction === 'function' && client) {
+      const note = result.applied
+        ? `**${pending.cardName}** — Target **${pending.pickedDisplayName}**. ${result.logMessage}`
+        : `**${pending.cardName}** — Target **${pending.pickedDisplayName}**. ${result.manualMessage || result.logMessage}`;
       await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
   }

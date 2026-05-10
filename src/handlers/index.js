@@ -173,6 +173,7 @@ import {
 } from './before-defeated-ccs.js';
 import {
   handlePlayDefeatCcPrompt, handleSkipDefeatCcPrompt,
+  handleDefeatCcTargetPick, handleDefeatCcModePick,
 } from './defeat-cc-prompts.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
@@ -602,6 +603,8 @@ register('preservation_protocol_play_', handlePlayPreservationProtocol, 'interru
 register('preservation_protocol_skip_', handleSkipPreservationProtocol, 'interrupts');
 register('defeat_cc_play_', handlePlayDefeatCcPrompt, 'interrupts');
 register('defeat_cc_skip_', handleSkipDefeatCcPrompt, 'interrupts');
+register('defeat_cc_target_', handleDefeatCcTargetPick, 'interrupts');
+register('defeat_cc_mode_', handleDefeatCcModePick, 'interrupts');
 
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');

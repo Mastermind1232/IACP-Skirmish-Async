@@ -4133,10 +4133,13 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)
+  // Per alexanbv 2026-05-10: honor explicit context.msgId so out-of-
+  // activation plays (Retaliation→Move via defeat-CC picker) target the
+  // chosen DC instead of relying on activation lookup.
   if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
     const { game, playerNum, dcMessageMeta, cardName, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     // Opportunistic (C66): playable outside activation when a hostile suffers damage.
     // Phase 1: show DC picker. Phase 2 (choiceIndex set): grant MP to chosen DC.
     if (!msgId) {
@@ -4341,7 +4344,10 @@ export function resolveAbility(abilityId, context) {
     && !entry.lookingForAFightChoice) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    // Per alexanbv 2026-05-10: honor explicit context.msgId so out-of-
+    // activation plays (e.g. Retaliation→Tokens via defeat-CC picker)
+    // can target a specific DC instead of relying on activation lookup.
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
