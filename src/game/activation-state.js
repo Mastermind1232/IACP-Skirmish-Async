@@ -86,7 +86,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
-  'unstableDevicesUsedThisActivation',
+  // unstableDevicesUsedThisActivation moved to ACTIVATION_FIGKEY_FLAGS
+  // 2026-05-09 (per-figure scope per IACP rule clarification).
   'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
@@ -131,6 +132,7 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // each figure's activation in a multifigure group, not the group.
   'heroicUsedThisActivation',
   'boRifleStaffUsedThisActivation',
+  'unstableDevicesUsedThisActivation',
 ];
 
 /**

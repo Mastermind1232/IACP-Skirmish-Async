@@ -530,9 +530,14 @@ export async function finalizeActivation({
 
   // D12. Unstable Devices (Saska Teft): NOT SoA per destruct 2026-05-07
   // — fires anytime during activation. Same pattern as Nemik's.
-  if (_abilityIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[msgId]) {
+  // Per IACP rule 2026-05-09: "once per activation" is per-figure
+  // (Saska Thorn is unique single-figure so the gate is per-figureKey
+  // rather than per-msgId).
+  const _udDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const _udSelFigForGate = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+  const _udFigureKeyForGate = `${dcName}-${_udDgIndex}-${_udSelFigForGate}`;
+  if (_abilityIds.includes('unstable_devices_saska') && !game.unstableDevicesUsedThisActivation?.[_udFigureKeyForGate]) {
     const _udMapSpaces = getMapDataFn(game.selectedMap?.id);
-    const _udDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _udSelfFk = `${dcName}-${_udDgIndex}-0`;
     const _udSelfPos = game.figurePositions?.[playerNum]?.[_udSelfFk];
     const _udAllFootprints = getAllFigureFootprints(game, getFigureSize);

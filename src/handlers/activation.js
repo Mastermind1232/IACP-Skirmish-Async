@@ -1990,8 +1990,16 @@ export async function handleActPassive(interaction, ctx) {
       const targetDcName = dcNameFromFigureKey(targetFk);
       game.deviceTokens = game.deviceTokens || {};
       game.deviceTokens[targetFk] = (game.deviceTokens[targetFk] || 0) + 1;
+      // Per IACP rule clarification 2026-05-09: "once per activation"
+      // applies to each FIGURE'S activation in a multifigure group,
+      // not the group as a whole. Key by figureKey of the activating
+      // figure (Saska Thorn).
+      const _udDgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _udDgIdx = _udDgMatch ? _udDgMatch[1] : '1';
+      const _udSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _udFigureKey = `${meta.dcName}-${_udDgIdx}-${_udSelFig}`;
       game.unstableDevicesUsedThisActivation = game.unstableDevicesUsedThisActivation || {};
-      game.unstableDevicesUsedThisActivation[msgId] = true;
+      game.unstableDevicesUsedThisActivation[_udFigureKey] = true;
       await interaction.message.edit({ content: `🔧 **Unstable Devices** — **${targetDcName}** gains **1 Device token** (now ${game.deviceTokens[targetFk]}).`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `🔧 **Unstable Devices** — **${targetDcName}** gains 1 Device token (now ${game.deviceTokens[targetFk]}).`, { phase: 'ACTIVATION', icon: 'activate' });
     }
