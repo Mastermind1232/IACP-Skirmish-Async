@@ -1585,7 +1585,7 @@ export async function handleDcEndFigure(interaction, ctx) {
  * once per activation, dice replaced with [Red, Red] melee.
  *
  * Sets:
- *   - game.boRifleStaffUsedThisActivation[msgId] = true (gate)
+ *   - game.boRifleStaffUsedThisActivation[figureKey] = true (gate)
  *   - game.freeAttackBonusPending[msgId] = true (zero-action follow-up)
  *   - game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red','red'], pierce: 0, bonusAccuracy: 0 }
  * Then rewrites customId to dc_attack_ and forwards to handleDcAction.
@@ -1611,12 +1611,19 @@ export async function handleDcBoRifleAttack(interaction, ctx) {
     await interaction.followUp({ content: 'This figure does not have Bo-Rifle Staff Strike.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (game.boRifleStaffUsedThisActivation?.[msgId]) {
+  // Once-per-figure-activation gate (per IACP rule clarification
+  // 2026-05-09): keyed by figureKey, not msgId, so other figures in
+  // the same multifigure group can use Bo-Rifle Staff Strike in their
+  // own activations.
+  const _brDgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const _brDgIdx = _brDgMatch ? _brDgMatch[1] : '1';
+  const _brFigureKey = `${meta.dcName}-${_brDgIdx}-${figureIndexStr}`;
+  if (game.boRifleStaffUsedThisActivation?.[_brFigureKey]) {
     await interaction.followUp({ content: '**Bo-Rifle Staff Strike** has already been used this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
   game.boRifleStaffUsedThisActivation = game.boRifleStaffUsedThisActivation || {};
-  game.boRifleStaffUsedThisActivation[msgId] = true;
+  game.boRifleStaffUsedThisActivation[_brFigureKey] = true;
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   game.freeAttackBonusPending[msgId] = true;
   game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};

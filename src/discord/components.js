@@ -996,14 +996,20 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // attack without spending an action." Surfaces as a sibling Primary/blue
   // Attack button alongside the regular Attack — NOT as a Special Action.
   // (destruct 2026-05-06.) Disabled when used this activation OR Stunned.
+  // Per IACP rule 2026-05-09: "once per activation" applies to the
+  // active figure's activation, not the whole multifigure group.
+  // Compute figureKey for the currently-selected figure; gate Heroic
+  // / Bo-Rifle Staff visibility against figureKey-keyed flag.
+  const _selFigForOncePerAct = selectedFigure ?? 0;
+  const _figureKeyForOncePerAct = `${dcName}-${dgIndex}-${_selFigForOncePerAct}`;
   const _hasHeroic = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('heroic');
-  const _heroicUsed = !!game?.heroicUsedThisActivation?.[msgId];
+  const _heroicUsed = !!game?.heroicUsedThisActivation?.[_figureKeyForOncePerAct];
   const _showHeroic = _hasHeroic && hasAttack && !_heroicUsed;
   // Bo-Rifle Staff Strike (Zeb Orrelios): parallel blue free-attack button.
   // Per destruct 2026-05-07. Once per activation; free action; replaces
   // attack dice with [Red, Red] melee. Surfaces same way as Heroic.
   const _hasBoRifleStaff = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('bo_rifle_staff_strike');
-  const _boRifleUsed = !!game?.boRifleStaffUsedThisActivation?.[msgId];
+  const _boRifleUsed = !!game?.boRifleStaffUsedThisActivation?.[_figureKeyForOncePerAct];
   const _showBoRifleStaff = _hasBoRifleStaff && hasAttack && !_boRifleUsed;
 
   const rows = [];
