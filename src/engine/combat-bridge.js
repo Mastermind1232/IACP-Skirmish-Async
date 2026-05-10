@@ -2582,7 +2582,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     const mePlayerNum = combat.attackerPlayerNum;
     const meDiscardKey = ccDiscardKey(mePlayerNum);
     const meDiscard = game[meDiscardKey] || [];
-    if (meDiscard.length === 0) {
+    if (game.restInPeaceActive) {
+      await thread.send('**Military Efficiency** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
+    } else if (meDiscard.length === 0) {
       await thread.send(`**Military Efficiency** — No cards in discard pile to return.`).catch(discordCatch);
     } else {
       setPendingMilitaryEfficiency(game, {
