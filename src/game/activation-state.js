@@ -600,6 +600,7 @@ const ROUND_NULL_FLAGS = [
   'pendingDyingLunge',
   'pendingMiracleWorker',
   'pendingPreservationProtocol',
+  'pendingDefeatCcPrompt',
   'pendingCcConfirmation',
   'pendingNegation',
   'pendingCommDisruptionPrompt',

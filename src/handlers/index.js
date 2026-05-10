@@ -171,6 +171,9 @@ import {
   handlePlayMiracleWorker, handleSkipMiracleWorker,
   handlePlayPreservationProtocol, handleSkipPreservationProtocol,
 } from './before-defeated-ccs.js';
+import {
+  handlePlayDefeatCcPrompt, handleSkipDefeatCcPrompt,
+} from './defeat-cc-prompts.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
@@ -597,6 +600,8 @@ register('miracle_worker_play_', handlePlayMiracleWorker, 'interrupts');
 register('miracle_worker_skip_', handleSkipMiracleWorker, 'interrupts');
 register('preservation_protocol_play_', handlePlayPreservationProtocol, 'interrupts');
 register('preservation_protocol_skip_', handleSkipPreservationProtocol, 'interrupts');
+register('defeat_cc_play_', handlePlayDefeatCcPrompt, 'interrupts');
+register('defeat_cc_skip_', handleSkipDefeatCcPrompt, 'interrupts');
 
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');

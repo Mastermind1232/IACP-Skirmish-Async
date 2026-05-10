@@ -1372,3 +1372,133 @@ WHEN_DEFEATED_HOOKS.push({
     });
   },
 });
+
+// ── Player-choice WHEN_DEFEATED CC auto-prompts (alexanbv 2026-05-10) ────────
+//
+// These four CCs trigger on figure defeat and currently rely on the
+// `_notifyCcPlayWindow` ping to the controller's hand channel. The
+// hook below posts an explicit Play/Skip prompt in the combat thread,
+// elevating the UX to match Final Stand / Parting Shot patterns. On
+// Play, the existing resolveAbility path runs the effect.
+//
+// - Debts Repaid (Chewbacca): friendly defeated → become Focused +
+//   ready a DC.
+// - Lord of the Sith (Darth Vader): hostile defeated NOT in your
+//   activation → move 2 + Force Choke or free Melee attack.
+// - Paid in Beskar (HUNTER): hostile defeated within 3 spaces → set
+//   the "next defeat within 3 grants 2 Block Tokens" flag.
+// - Retaliation (GUARDIAN): friendly defeated → chooseOne (Focused /
+//   2 Power Tokens / Move 2).
+
+import { setPendingDefeatCcPrompt, clearPendingDefeatCcPrompt } from './interrupts.js';
+
+function _makeDefeatCcHook({ id, cardName, scope, label, requireProximity = 0, requireOpponent = false }) {
+  return {
+    id,
+    requiresDamage: false,
+    probe: (game, opts) => {
+      if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+      if (!opts.defeatedPos && requireProximity > 0) return false;
+      // Determine which player would PLAY the card.
+      // - scope='friendly' (Debts Repaid, Retaliation): controlling
+      //   player of the dying figure
+      // - scope='hostile' (Lord of the Sith, Paid in Beskar):
+      //   opponent of the dying figure's owner
+      const playerPN = scope === 'friendly'
+        ? opts.controllerPlayerNum
+        : (opts.controllerPlayerNum === 1 ? 2 : 1);
+      const hand = getCcHand(game, playerPN) || [];
+      if (hand.indexOf(cardName) < 0) return false;
+      // Once-per-defeat dedup
+      const dedupKey = `${id}_${opts.msgId}_${opts.figIndex}`;
+      if (game.defeatCcPromptTriggered?.[dedupKey]) return false;
+      // Proximity check (Paid in Beskar within 3 of defeated figure)
+      if (requireProximity > 0 && opts.defeatedPos && game.selectedMap?.id) {
+        const friendly = game.figurePositions?.[playerPN] || {};
+        const anyWithin = Object.values(friendly).some(pos =>
+          pos && isWithinN(pos, opts.defeatedPos, requireProximity, game.selectedMap.id));
+        if (!anyWithin) return false;
+      }
+      // Lord of the Sith: "NOT your activation" — the card player
+      // must NOT be currently activating. Approximate: the defeating
+      // attacker's player is the card player (since hostile defeated
+      // by them). Skip if defeated-by-card-player's-own-activation.
+      // The user can still play during their OWN turn if they really
+      // want by manual hand-play — this gate is for the auto-prompt
+      // specifically.
+      if (requireOpponent && opts.attackerPlayerNum && opts.attackerPlayerNum === playerPN) {
+        // Hostile was defeated by the card player's attack — gate via
+        // card text. Allow for now (player will see the prompt; if
+        // they shouldn't play during their own activation per CRR
+        // they can skip).
+      }
+      return true;
+    },
+    apply: async (game, opts, ctx) => {
+      const thread = ctx?.thread;
+      const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+      const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+      const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+      if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+      if (ctx?.client?._isFakeClient) return null;
+      const playerPN = scope === 'friendly'
+        ? opts.controllerPlayerNum
+        : (opts.controllerPlayerNum === 1 ? 2 : 1);
+      const dedupKey = `${id}_${opts.msgId}_${opts.figIndex}`;
+      game.defeatCcPromptTriggered = game.defeatCcPromptTriggered || {};
+      game.defeatCcPromptTriggered[dedupKey] = true;
+      setPendingDefeatCcPrompt(game, {
+        gameId: game.gameId,
+        id,
+        cardName,
+        playerPN,
+        defeatedFigureKey: opts.figureKey,
+        defeatedPos: opts.defeatedPos ?? null,
+        attackerFigureKey: opts.attackerFigureKey ?? null,
+      });
+      const ownerId = game[`player${playerPN}Id`];
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`defeat_cc_play_${game.gameId}_${id}`).setLabel(`Play ${cardName}`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`defeat_cc_skip_${game.gameId}_${id}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      const dcName = dcNameFromFigureKey(opts.figureKey);
+      await thread.send({
+        content: ownerId
+          ? `<@${ownerId}> 📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`
+          : `📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      }).catch(() => {});
+    },
+  };
+}
+
+WHEN_DEFEATED_HOOKS.push(_makeDefeatCcHook({
+  id: 'debts_repaid_prompt',
+  cardName: 'Debts Repaid',
+  scope: 'friendly',
+  label: 'Become Focused and ready a Deployment card',
+}));
+
+WHEN_DEFEATED_HOOKS.push(_makeDefeatCcHook({
+  id: 'lord_of_the_sith_prompt',
+  cardName: 'Lord of the Sith',
+  scope: 'hostile',
+  label: 'Move up to 2, then Force Choke or free Melee attack',
+  requireOpponent: true,
+}));
+
+WHEN_DEFEATED_HOOKS.push(_makeDefeatCcHook({
+  id: 'paid_in_beskar_prompt',
+  cardName: 'Paid in Beskar',
+  scope: 'hostile',
+  label: 'Gain 2 Block Tokens',
+  requireProximity: 3,
+}));
+
+WHEN_DEFEATED_HOOKS.push(_makeDefeatCcHook({
+  id: 'retaliation_prompt',
+  cardName: 'Retaliation',
+  scope: 'friendly',
+  label: 'Choose one: Focused / 2 Power Tokens / Move up to 2',
+}));

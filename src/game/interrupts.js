@@ -136,6 +136,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   DYING_LUNGE:           'dying-lunge',
   MIRACLE_WORKER:        'miracle-worker',
   PRESERVATION_PROTOCOL: 'preservation-protocol',
+  DEFEAT_CC_PROMPT:      'defeat-cc-prompt',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -607,6 +608,9 @@ export function clearPendingMiracleWorker(game) { _clearDual(game, 'pendingMirac
 
 export function setPendingPreservationProtocol(game, payload) { _setDual(game, 'pendingPreservationProtocol', INTERRUPT_TYPES.PRESERVATION_PROTOCOL, payload); }
 export function clearPendingPreservationProtocol(game) { _clearDual(game, 'pendingPreservationProtocol', INTERRUPT_TYPES.PRESERVATION_PROTOCOL); }
+
+export function setPendingDefeatCcPrompt(game, payload) { _setDual(game, 'pendingDefeatCcPrompt', INTERRUPT_TYPES.DEFEAT_CC_PROMPT, payload); }
+export function clearPendingDefeatCcPrompt(game) { _clearDual(game, 'pendingDefeatCcPrompt', INTERRUPT_TYPES.DEFEAT_CC_PROMPT); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }
