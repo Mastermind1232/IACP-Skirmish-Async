@@ -133,6 +133,9 @@ export const INTERRUPT_TYPES = Object.freeze({
   DEFEAT_PICK:           'defeat-pick',
   PARTING_SHOT:          'parting-shot',
   FINAL_STAND:           'final-stand',
+  DYING_LUNGE:           'dying-lunge',
+  MIRACLE_WORKER:        'miracle-worker',
+  PRESERVATION_PROTOCOL: 'preservation-protocol',
   BEL_REORDER:           'bel-reorder',
   UNHINGED_DIRECTOR:     'unhinged-director',
   UNHINGED_STRAIN:       'unhinged-strain',
@@ -595,6 +598,15 @@ export function clearPendingPartingShot(game) { _clearDual(game, 'pendingParting
 
 export function setPendingFinalStand(game, payload) { _setDual(game, 'pendingFinalStand', INTERRUPT_TYPES.FINAL_STAND, payload); }
 export function clearPendingFinalStand(game) { _clearDual(game, 'pendingFinalStand', INTERRUPT_TYPES.FINAL_STAND); }
+
+export function setPendingDyingLunge(game, payload) { _setDual(game, 'pendingDyingLunge', INTERRUPT_TYPES.DYING_LUNGE, payload); }
+export function clearPendingDyingLunge(game) { _clearDual(game, 'pendingDyingLunge', INTERRUPT_TYPES.DYING_LUNGE); }
+
+export function setPendingMiracleWorker(game, payload) { _setDual(game, 'pendingMiracleWorker', INTERRUPT_TYPES.MIRACLE_WORKER, payload); }
+export function clearPendingMiracleWorker(game) { _clearDual(game, 'pendingMiracleWorker', INTERRUPT_TYPES.MIRACLE_WORKER); }
+
+export function setPendingPreservationProtocol(game, payload) { _setDual(game, 'pendingPreservationProtocol', INTERRUPT_TYPES.PRESERVATION_PROTOCOL, payload); }
+export function clearPendingPreservationProtocol(game) { _clearDual(game, 'pendingPreservationProtocol', INTERRUPT_TYPES.PRESERVATION_PROTOCOL); }
 
 export function setPendingBELReorder(game, payload) { _setDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER, payload); }
 export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReorder', INTERRUPT_TYPES.BEL_REORDER); }

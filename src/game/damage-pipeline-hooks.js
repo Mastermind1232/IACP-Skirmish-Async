@@ -45,7 +45,7 @@ import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { healHp } from './damage-helpers.js';
-import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt, setPendingExtraProtection, setPendingFinalStand } from './interrupts.js';
+import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, setPendingLastResort, setPendingExecutorInterrupt, setPendingExtraProtection, setPendingFinalStand, setPendingDyingLunge, setPendingMiracleWorker, setPendingPreservationProtocol } from './interrupts.js';
 import { cardNameIncludes } from './card-names.js';
 import { getCcHand } from './player-helpers.js';
 import { isWithinN } from '../engine/utils.js';
@@ -713,6 +713,209 @@ BEFORE_DEFEATED_HOOKS.push({
       content: ownerId
         ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after Baze's attack.`
         : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** intervene?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Dying Lunge (CC, playableBy: Any Figure) — alexanbv 2026-05-10:
+ *
+ * Card text: "Use when you have suffered Damage equal to your Health,
+ * before you are defeated. Move up to 2 spaces, then perform a Melee
+ * attack. Then, you are defeated."
+ *
+ * Same shape as Parting Shot but as a CC played by the dying figure's
+ * controller. The dying figure performs the Move + free attack itself,
+ * then is defeated. Once-per-defeat dedup via dyingLungeTriggered[msgId].
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'dying_lunge',
+  requiresDamage: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.dyingLungeTriggered?.[opts.msgId]) return false;
+    const ownerPN = opts.controllerPlayerNum;
+    const hand = getCcHand(game, ownerPN) || [];
+    if (hand.indexOf('Dying Lunge') < 0) return false;
+    return true;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    game.dyingLungeTriggered = game.dyingLungeTriggered || {};
+    game.dyingLungeTriggered[opts.msgId] = true;
+    setPendingDyingLunge(game, {
+      gameId: game.gameId,
+      figureKey: opts.figureKey,
+      msgId: opts.msgId,
+      figIndex: opts.figIndex,
+      controllerPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      active: false,
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`dying_lunge_play_${game.gameId}_${opts.msgId}`).setLabel('Play Dying Lunge').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`dying_lunge_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> ⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play to move up to 2 and perform a free Melee attack first?`
+        : `⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Miracle Worker (CC, playableBy: MHD-19) — alexanbv 2026-05-10:
+ *
+ * Card text: "Use when a friendly figure within 3 spaces of you has
+ * suffered damage equal to its Health. Instead of being defeated, it
+ * recovers 3 damage."
+ *
+ * Prevents-defeat shape. MHD-19 (the playing figure) heals a different
+ * friendly within 3 spaces by 3 damage, taking it back above 0 HP so
+ * completeDeferredDefeat sees curHp > 0 and exits with no defeat.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'miracle_worker',
+  requiresDamage: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.miracleWorkerTriggered?.[opts.msgId]) return false;
+    if (!game.selectedMap?.id) return false;
+    const ownerPN = opts.controllerPlayerNum;
+    const hand = getCcHand(game, ownerPN) || [];
+    if (hand.indexOf('Miracle Worker') < 0) return false;
+    const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
+    if (!targetPos) return false;
+    const friendlyFigs = game.figurePositions?.[ownerPN] || {};
+    for (const [fk, pos] of Object.entries(friendlyFigs)) {
+      if (fk === opts.figureKey) continue;
+      if (dcNameFromFigureKey(fk) !== 'MHD-19') continue;
+      if (!pos) continue;
+      if (isWithinN(pos, targetPos, 3, game.selectedMap.id)) return true;
+    }
+    return false;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    const ownerPN = opts.controllerPlayerNum;
+    const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
+    if (!targetPos) return null;
+    let mhdFigKey = null;
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[ownerPN] || {})) {
+      if (fk === opts.figureKey) continue;
+      if (dcNameFromFigureKey(fk) !== 'MHD-19') continue;
+      if (!pos) continue;
+      if (!isWithinN(pos, targetPos, 3, game.selectedMap.id)) continue;
+      mhdFigKey = fk; break;
+    }
+    if (!mhdFigKey) return null;
+    const mhdMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, mhdFigKey);
+    if (!mhdMsgId) return null;
+    game.miracleWorkerTriggered = game.miracleWorkerTriggered || {};
+    game.miracleWorkerTriggered[opts.msgId] = true;
+    setPendingMiracleWorker(game, {
+      gameId: game.gameId,
+      targetFigureKey: opts.figureKey,
+      targetMsgId: opts.msgId,
+      targetFigIndex: opts.figIndex,
+      controllerPlayerNum: ownerPN,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      mhdFigureKey: mhdFigKey,
+      mhdMsgId,
+      healAmount: 3,
+    });
+    const ownerId = game[`player${ownerPN}Id`];
+    const targetDcName = dcNameFromFigureKey(opts.figureKey);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`miracle_worker_play_${game.gameId}_${opts.msgId}`).setLabel('Play Miracle Worker (heal 3)').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`miracle_worker_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> ✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. **MHD-19** within 3 spaces — play to recover 3 Damage instead?`
+        : `✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. Play?`,
+      components: [row],
+      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+    }).catch(() => {});
+    return { preventDefeat: true };
+  },
+});
+
+/**
+ * Preservation Protocol (CC, playableBy: 4-LOM) — alexanbv 2026-05-10:
+ *
+ * Card text: "Use when you have suffered Damage equal to your Health.
+ * Instead of being defeated, recover 1 Damage. Until the end of the
+ * game, you lose 'Programming Override' and 'Shared Intuition'."
+ *
+ * Self-targeting prevents-defeat. The dying figure must be 4-LOM. Heals
+ * 1 Damage and stamps a permanent flag
+ * (game.preservationProtocolUsed[playerNum][figKey] = true) that the
+ * Programming Override + Shared Intuition resolvers can consult to
+ * suppress those abilities.
+ */
+BEFORE_DEFEATED_HOOKS.push({
+  id: 'preservation_protocol',
+  requiresDamage: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
+    if (game.preservationProtocolTriggered?.[opts.msgId]) return false;
+    if (dcNameFromFigureKey(opts.figureKey) !== '4-LOM') return false;
+    const ownerPN = opts.controllerPlayerNum;
+    const hand = getCcHand(game, ownerPN) || [];
+    if (hand.indexOf('Preservation Protocol') < 0) return false;
+    return true;
+  },
+  apply: async (game, opts, ctx) => {
+    const thread = ctx?.thread;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (ctx?.client?._isFakeClient) return null;
+    game.preservationProtocolTriggered = game.preservationProtocolTriggered || {};
+    game.preservationProtocolTriggered[opts.msgId] = true;
+    setPendingPreservationProtocol(game, {
+      gameId: game.gameId,
+      figureKey: opts.figureKey,
+      msgId: opts.msgId,
+      figIndex: opts.figIndex,
+      controllerPlayerNum: opts.controllerPlayerNum,
+      attackerPlayerNum: opts.attackerPlayerNum,
+      source: opts.source || 'Damage',
+      healAmount: 1,
+    });
+    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`preservation_protocol_play_${game.gameId}_${opts.msgId}`).setLabel('Play Preservation Protocol').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`preservation_protocol_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await thread.send({
+      content: ownerId
+        ? `<@${ownerId}> 🛡️ **Preservation Protocol** — **4-LOM** is about to be defeated. Play to recover 1 Damage instead? (Loses **Programming Override** and **Shared Intuition** for the rest of the game.)`
+        : `🛡️ **Preservation Protocol** — **4-LOM** is about to be defeated. Play?`,
       components: [row],
       allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
     }).catch(() => {});

@@ -3332,6 +3332,13 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const { completeDeferredDefeat: completeFinalStand } = await import('../handlers/final-stand.js');
     await completeFinalStand(game, deps);
   }
+  // Dying Lunge deferred-defeat resume (alexanbv 2026-05-10): same shape
+  // as Parting Shot — the dying figure performs the free attack, then
+  // is defeated. completeDyingLungeDefeat reads pendingDyingLunge.
+  if (game.pendingDyingLunge?.active && game.pendingDyingLunge.figureKey === combat.attackerFigureKey) {
+    const { completeDyingLungeDefeat } = await import('../handlers/before-defeated-ccs.js');
+    await completeDyingLungeDefeat(game, deps);
+  }
   // Chain-attack queues: defender chain attacks (Return Fire, etc.)
   // resolve FIRST, then attacker chain attacks (Tonfa / Barrage / Flurry /
   // Fell Swoop), per user 2026-05-09: "the defense side return fire

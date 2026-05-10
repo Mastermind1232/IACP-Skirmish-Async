@@ -160,25 +160,16 @@ describe('B-FS-AUDIT: BEFORE_DEFEATED registry covers all "damage equal to healt
     }
   });
 
-  it('B-FS-AUDIT-003: NOT-YET-WIRED reminder for Dying Lunge / Miracle Worker / Preservation Protocol', async () => {
-    // These three CCs ALSO have "damage equal to its Health, before
-    // defeated" timing per cc-effects.json but currently rely on
-    // duringActivation cc-timing gating — they only fire if their
-    // controller is the active player. They should migrate to
-    // BEFORE_DEFEATED hooks like Final Stand for full pipeline parity.
-    // This test surfaces the gap; remove the assert.fail when migration
-    // ships.
-    const { readFile } = await import('node:fs/promises');
-    const cc = JSON.parse(await readFile(
-      new URL('../../../data/cc-effects.json', import.meta.url),
-      'utf8',
-    ));
-    for (const card of ['Dying Lunge', 'Miracle Worker', 'Preservation Protocol']) {
-      const entry = cc.cards?.[card];
-      assert.ok(entry, `${card} missing from cc-effects.json`);
+  it('B-FS-AUDIT-003: Dying Lunge, Miracle Worker, Preservation Protocol all wired as BEFORE_DEFEATED hooks', async () => {
+    const { BEFORE_DEFEATED_HOOKS } = await import('../../../src/game/damage-pipeline.js');
+    await import('../../../src/game/damage-pipeline-hooks.js');
+    const ids = new Set(BEFORE_DEFEATED_HOOKS.map(h => h.id));
+    for (const expected of [
+      'dying_lunge',          // any-figure deferred-defeat (CC twin of Parting Shot)
+      'miracle_worker',       // MHD-19 prevents-defeat — heals 3
+      'preservation_protocol', // 4-LOM prevents-defeat — heals 1, loses abilities
+    ]) {
+      assert.ok(ids.has(expected), `expected hook '${expected}' in BEFORE_DEFEATED_HOOKS`);
     }
-    // Document the gap as TODO-tagged context, not an automatic fail —
-    // the migration is sequenced after Final Stand.
-    assert.ok(true, 'AUDIT NOTE: Dying Lunge / Miracle Worker / Preservation Protocol still on duringActivation timing — migrate to BEFORE_DEFEATED hooks in follow-up');
   });
 });

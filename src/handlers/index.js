@@ -166,6 +166,11 @@ import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
 import { handleFireFinalStand, handleSkipFinalStand } from './final-stand.js';
+import {
+  handleFireDyingLunge, handleSkipDyingLunge,
+  handlePlayMiracleWorker, handleSkipMiracleWorker,
+  handlePlayPreservationProtocol, handleSkipPreservationProtocol,
+} from './before-defeated-ccs.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
@@ -586,6 +591,12 @@ register('parting_shot_fire_', handleFirePartingShot, 'interrupts');
 register('parting_shot_skip_', handleSkipPartingShot, 'interrupts');
 register('final_stand_play_', handleFireFinalStand, 'interrupts');
 register('final_stand_skip_', handleSkipFinalStand, 'interrupts');
+register('dying_lunge_play_', handleFireDyingLunge, 'interrupts');
+register('dying_lunge_skip_', handleSkipDyingLunge, 'interrupts');
+register('miracle_worker_play_', handlePlayMiracleWorker, 'interrupts');
+register('miracle_worker_skip_', handleSkipMiracleWorker, 'interrupts');
+register('preservation_protocol_play_', handlePlayPreservationProtocol, 'interrupts');
+register('preservation_protocol_skip_', handleSkipPreservationProtocol, 'interrupts');
 
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
