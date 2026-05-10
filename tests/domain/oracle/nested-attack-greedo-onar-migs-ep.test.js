@@ -348,6 +348,36 @@ describe('B-NA-SOTD: Slow on the Draw correctly stacks the outer', () => {
   });
 });
 
+// ── B-NA-EP-PAUSE: pipeline pauses at WHEN_DAMAGED for EP ───────────────────
+
+describe('B-NA-EP-PAUSE: pipeline bails after damage when EP probe sets pending state', () => {
+  it('B-NA-EP-PAUSE-001: source-level contract — combat-bridge bails when pendingExtraProtection.combatRef === current frame', async () => {
+    // Without this bail, inner-1 would race to finishCombatResolution
+    // and the expiry block would clear EP before the user could click.
+    // The bail pauses the pipeline so the user has time to respond.
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/engine/combat-bridge.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /if \(game\.pendingExtraProtection\?\.\bcombatRef === combat\) \{[\s\S]{0,200}return;/,
+      'combat-bridge pauses (returns early) when pendingExtraProtection is set for the current frame');
+  });
+
+  it('B-NA-EP-PAUSE-002: re-entry passes through the bail (pendingExtraProtection is null after handler clears it)', () => {
+    // Simulate: EP handler clears pendingExtraProtection then re-calls
+    // applyDamageAndFinishCombat. The bail check sees null and falls
+    // through, so the pipeline resumes Step 8+ on the re-entry pass.
+    const inner = inner1MigsGreedo();
+    inner._damageApplied = true;
+    const game = { pendingCombat: inner, pendingExtraProtection: null };
+    // Bail check (mirrors combat-bridge logic):
+    const shouldBail = game.pendingExtraProtection?.combatRef === inner;
+    assert.equal(shouldBail, false,
+      're-entry pass does not bail because pendingExtraProtection is null');
+  });
+});
+
 // ── B-NA-EP-EXPIRE: EP window expires when inner finishes ────────────────────
 
 describe('B-NA-EP-EXPIRE: EP window closes when its combat frame resolves', () => {

@@ -772,6 +772,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (_mdResult.preventDefeat) {
         combat._defeatSuppressed = true;
       }
+      // Pause-on-WHEN_DAMAGED-interrupt (alexanbv 2026-05-09): Extra
+      // Protection's WHEN_DAMAGED probe sets pendingExtraProtection +
+      // posts the Play/Skip button. Without this bail, the pipeline
+      // would continue past damage and reach finishCombatResolution
+      // before the user has any chance to click — the EP window would
+      // expire mid-pipeline. Bail here so the pipeline pauses; the
+      // EP handler's applyDamageAndFinishCombat re-entry resumes
+      // execution from this point on the next pass (combat._damageApplied
+      // skips the damage step, pendingExtraProtection is null after
+      // handler clears it, so the bail no-ops on re-entry).
+      if (game.pendingExtraProtection?.combatRef === combat) {
+        if (typeof saveGames === 'function') saveGames(game.gameId);
+        return;
+      }
     }
     // Combat-pipeline rebuild (slice 6.4): capture the defender's pre-condition
     // state BEFORE the Step 8 condition application block. Parting Shot is a
