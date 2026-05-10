@@ -46,7 +46,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingMpBonus',
   'freeAttackBonusPending',
   'freeAttackDifferentTargets',
-  'heroicUsedThisActivation',
+  // heroicUsedThisActivation moved to ACTIVATION_FIGKEY_FLAGS
+  // 2026-05-09 (per-figure scope per IACP rule clarification).
   'boRifleStaffUsedThisActivation',
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',
@@ -126,6 +127,10 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'overdriveUsedThisActivation',
   'massiveMovementLocked',
   'figureWallRunActive',
+  // Migrated 2026-05-09 from ACTIVATION_MSGID_FLAGS to per-figureKey
+  // per IACP rule clarification: "once per activation" applies to
+  // each figure's activation in a multifigure group, not the group.
+  'heroicUsedThisActivation',
 ];
 
 /**
@@ -315,7 +320,8 @@ const ROUND_OBJECT_FLAGS = [
   'roundAttackRerollDice',
   'freeAttackBonusPending',
   'freeAttackDifferentTargets',
-  'heroicUsedThisActivation',
+  // heroicUsedThisActivation moved to ACTIVATION_FIGKEY_FLAGS
+  // 2026-05-09 (per-figure scope per IACP rule clarification).
   'boRifleStaffUsedThisActivation',
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',

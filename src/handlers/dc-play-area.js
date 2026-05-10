@@ -1354,7 +1354,7 @@ async function buildAndSendAttackTargets(
 /**
  * Heroic Attack (Jedi Luke) — sibling Primary/blue Attack button that costs
  * no action and is gated once-per-activation. Pre-sets:
- *   - game.heroicUsedThisActivation[msgId] = true (used flag — disables the
+ *   - game.heroicUsedThisActivation[figureKey] = true (used flag — disables the
  *     button on subsequent renders)
  *   - game.freeAttackBonusPending[msgId] = true (zero-action cost on the
  *     follow-up Attack consumption)
@@ -1389,15 +1389,20 @@ export async function handleDcHeroicAttack(interaction, ctx) {
     await interaction.followUp({ content: 'This figure does not have Heroic.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Once-per-activation gate.
-  if (game.heroicUsedThisActivation?.[msgId]) {
+  // Once-per-activation gate. Per IACP rule clarification 2026-05-09:
+  // "once per activation" applies to each FIGURE'S activation in a
+  // multifigure group, not the group as a whole. Key by figureKey.
+  const _heroicDgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const _heroicDgIdx = _heroicDgMatch ? _heroicDgMatch[1] : '1';
+  const _heroicFigureKey = `${meta.dcName}-${_heroicDgIdx}-${figureIndexStr}`;
+  if (game.heroicUsedThisActivation?.[_heroicFigureKey]) {
     await interaction.followUp({ content: '**Heroic** has already been used this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
 
   // Mark used + grant the zero-action follow-up Attack.
   game.heroicUsedThisActivation = game.heroicUsedThisActivation || {};
-  game.heroicUsedThisActivation[msgId] = true;
+  game.heroicUsedThisActivation[_heroicFigureKey] = true;
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   game.freeAttackBonusPending[msgId] = true;
 
