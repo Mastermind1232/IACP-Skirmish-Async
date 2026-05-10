@@ -26,10 +26,31 @@
  * auto-prompt itself is correct.
  */
 import { clearPendingDefeatCcPrompt } from '../game/interrupts.js';
-import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList } from '../game/player-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
+
+/**
+ * Find the first friendly DC msgId for a player that has at least one
+ * figure on the board. Used as the default target for out-of-activation
+ * Debts Repaid / Retaliation plays. Not a picker — picker UX is a
+ * follow-up; this unblocks the canonical "fires regardless of whose
+ * activation" trigger so the card actually resolves.
+ */
+function _firstFriendlyDcMsgId(game, playerNum) {
+  const dcMsgIds = getDcMessageIds(game, playerNum) || [];
+  const dcList = getDcList(game, playerNum) || [];
+  const figs = game.figurePositions?.[playerNum] || {};
+  for (let i = 0; i < dcMsgIds.length; i++) {
+    const dc = dcList[i];
+    if (!dc || dc.defeated) continue;
+    const dcName = (typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc) || '';
+    const hasFigure = Object.keys(figs).some(fk => fk.startsWith(dcName + '-'));
+    if (hasFigure) return dcMsgIds[i];
+  }
+  return null;
+}
 
 export async function handleSkipDefeatCcPrompt(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
@@ -90,10 +111,22 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   clearPendingDefeatCcPrompt(game);
 
   if (typeof resolveAbility === 'function') {
+    // Out-of-activation auto-targeting: per alexanbv 2026-05-10, Debts
+    // Repaid and Retaliation must work regardless of whose activation
+    // is in progress. When the controller isn't currently activating,
+    // their canonical resolvers (Focus + readyActiveDc, etc.) need an
+    // explicit target msgId. Pass the first friendly DC's msgId as the
+    // default target; the resolver honors context.msgId override (see
+    // abilities.js Focus resolver). Picker UX is a follow-up.
+    let _targetMsgId = null;
+    if (cardName === 'Debts Repaid' || cardName === 'Retaliation') {
+      _targetMsgId = _firstFriendlyDcMsgId(game, playerPN);
+    }
     const result = resolveAbility(cardName, {
       game,
       playerNum: playerPN,
       cardName,
+      msgId: _targetMsgId ?? undefined,
       dcMessageMeta,
       dcHealthState,
       dcExhaustedState,

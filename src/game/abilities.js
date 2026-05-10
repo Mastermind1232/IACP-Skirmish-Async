@@ -4873,13 +4873,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `Spent ${entry.mpCost} MP and became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }
 
-  // ccEffect: Focus / Meditation — apply Focus to activating figures; requires active activation
+  // ccEffect: Focus / Meditation — apply Focus to activating figures.
+  // Per alexanbv 2026-05-10: when called with an explicit context.msgId
+  // (e.g. from the defeat-CC auto-prompt for Debts Repaid / Retaliation),
+  // target THAT DC instead of falling back to findActiveActivationMsgId.
+  // This unblocks out-of-activation plays like Debts Repaid (CC fires on
+  // friendly defeat regardless of whose activation is in progress).
   // Optional: readyActiveDc: true → also unexhaust/ready the active DC embed (e.g. Debts Repaid)
   // Excluded: conditionalFocusIfDamagedGte entries (e.g. Furious Charge) — handled in their own block below
   if ((abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) && !entry.conditionalFocusIfDamagedGte) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
