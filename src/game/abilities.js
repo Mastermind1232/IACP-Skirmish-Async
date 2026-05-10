@@ -1870,37 +1870,73 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // Overclock (Elite Ugnaught): Junk Droid companion may interrupt to perform a move or attack
+  // Overclock (Elite Ugnaught): Junk Droid companion may interrupt to
+  // perform a move OR attack. Per alexanbv 2026-05-10: use the same
+  // Executive Order pattern — player picks one action, JD gets a granted
+  // move or attack button (not both). Card text is "move or attack",
+  // singular. Previous implementation auto-granted both.
   if (entry.type === 'dcSpecial' && entry.overclockCompanionInterrupt) {
-    const { game, msgId, playerNum } = context;
-    if (game && msgId) {
-      // Find the Junk Droid companion DC msgId for this player
-      const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
-      const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      let junkDroidMsgId = null;
-      if (companionMsgIds) {
-        for (let i = 0; i < companionMsgIds.length; i++) {
-          if (companionMsgIds[i]) {
-            const parentMeta = context.dcMessageMeta?.get?.(dcMsgIds?.[i]);
-            if (parentMeta?.dcName?.includes('Ugnaught')) {
-              junkDroidMsgId = companionMsgIds[i];
-              break;
-            }
-          }
+    const { game, msgId, playerNum, choiceIndex } = context;
+    if (!game || !msgId || !playerNum) return { applied: false, manualMessage: '**Overclock** — resolve manually.' };
+
+    // Locate the Junk Droid's companion msgId on this Ugnaught's host slot.
+    const companionMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    const dcMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    let junkDroidMsgId = null;
+    if (companionMsgIds && dcMsgIds) {
+      for (let i = 0; i < companionMsgIds.length; i++) {
+        if (!companionMsgIds[i]) continue;
+        const parentMeta = context.dcMessageMeta?.get?.(dcMsgIds?.[i]);
+        if (parentMeta?.dcName?.includes('Ugnaught')) {
+          junkDroidMsgId = companionMsgIds[i];
+          break;
         }
       }
-      if (junkDroidMsgId) {
-        // Grant Junk Droid companion 4 MP (its Speed) and a free attack
-        game.movementBank = game.movementBank || {};
-        game.movementBank[junkDroidMsgId] = { remaining: 4, total: 4 };
-        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        const _ocFk = figureKeyForActivation(game, junkDroidMsgId);
-        if (_ocFk) game.freeAttackBonusPending[_ocFk] = { from: 'Overclock' };
-      }
     }
+    if (!junkDroidMsgId) {
+      return { applied: true, logMessage: '**Overclock** — no Junk Droid companion in play, no effect.' };
+    }
+    const junkDroidFk = figureKeyForActivation(game, junkDroidMsgId);
+    if (!junkDroidFk || !game.figurePositions?.[playerNum]?.[junkDroidFk]) {
+      return { applied: true, logMessage: '**Overclock** — Junk Droid not deployed, no effect.' };
+    }
+
+    // Phase 1: action chosen → grant the appropriate button to JD.
+    if (choiceIndex != null) {
+      if (choiceIndex === 0) {
+        // Move — grant JD a free move (Speed spaces) via grantedMoveXButton.
+        const jdSpeed = getStatsForDc('Junk Droid')?.speed ?? 4;
+        return {
+          applied: true,
+          logMessage: `**Overclock** — **Junk Droid** interrupts to **move** (up to ${jdSpeed} MP).`,
+          grantedMoveXButton: {
+            granteeMsgId: junkDroidMsgId,
+            granteeFigureKey: junkDroidFk,
+            granteeName: 'Junk Droid',
+            sourceLabel: 'Overclock',
+            spaces: jdSpeed,
+            playerNum,
+          },
+        };
+      }
+      // Attack
+      return {
+        applied: true,
+        logMessage: '**Overclock** — **Junk Droid** interrupts to declare a **free attack**.',
+        grantedAttackButton: {
+          granteeMsgId: junkDroidMsgId,
+          granteeFigureKey: junkDroidFk,
+          granteeName: 'Junk Droid',
+          sourceLabel: 'Overclock',
+        },
+      };
+    }
+
+    // Phase 0: post action picker.
     return {
-      applied: true,
-      logMessage: '**Overclock** — Your **Junk Droid** companion may interrupt to perform a **move** (4 MP granted) or **attack** (free attack granted). Use the Junk Droid\'s Move/Attack buttons.',
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: ['Move (Junk Droid)', 'Attack (Junk Droid)'],
     };
   }
 
@@ -1910,47 +1946,121 @@ export function resolveAbility(abilityId, context) {
   // placing the new one. The new JD enters READY (un-exhausted), which
   // is what enables an effective second JD activation when paired with
   // Scrap Battalion's auto-ready at start of each Ugnaught activation.
+  //
+  // Per alexanbv 2026-05-10: this should be a full space-picker flow.
+  // Phase 0: enumerate adjacent spaces, return requiresSpaceChoice.
+  // Phase 1 (chosenSpace set): remove old JD, place new JD, allocate
+  // fresh companion banks mid-game so the new JD can activate at end
+  // of Ugnaught.
   if (entry.type === 'dcSpecial' && entry.spotWeldCompanionPlace) {
-    const { game, msgId, playerNum } = context;
-    if (game && msgId) {
-      game.spotWeldPending = game.spotWeldPending || {};
-      game.spotWeldPending[msgId] = true;
-      // Find the Junk Droid DC slot for this player. If a JD figure is
-      // already deployed, remove it from figurePositions so the new
-      // placement starts fresh. The JD's dcExhaustedState should be
-      // flipped to false (READY) at deployment time — handled by the
-      // companion-deploy path in post-deploy.js when the player places
-      // the new JD via its deploy button.
-      const _swDcList = (playerNum === 1 ? game.p1DcList : game.p2DcList) || [];
-      const _swDcMsgIds = (playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
-      let _swJdMsgId = null;
-      for (let _swI = 0; _swI < _swDcList.length; _swI++) {
-        if ((_swDcList[_swI]?.dcName || _swDcList[_swI]) === 'Junk Droid') {
-          _swJdMsgId = _swDcMsgIds[_swI];
-          break;
-        }
-      }
-      if (_swJdMsgId) {
-        // Remove any existing Junk Droid figure positions so the new
-        // placement starts clean. The deploy/place path will set the
-        // new position.
-        const _swPoses = game.figurePositions?.[playerNum] || {};
-        for (const fk of Object.keys(_swPoses)) {
-          if (fk.startsWith('Junk Droid-')) {
-            delete _swPoses[fk];
-          }
-        }
-        // Mark JD as ready so it can activate this round.
-        game._spotWeldReadyJd = game._spotWeldReadyJd || [];
-        if (!game._spotWeldReadyJd.includes(_swJdMsgId)) {
-          game._spotWeldReadyJd.push(_swJdMsgId);
-        }
+    const { game, msgId, playerNum, meta, chosenSpace } = context;
+    if (!game || !msgId || !playerNum) return { applied: false, manualMessage: '**Spot Weld** — resolve manually.' };
+
+    // Locate Ugnaught's position.
+    const _swDcList = (playerNum === 1 ? game.p1DcList : game.p2DcList) || [];
+    const _swDcMsgIds = (playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
+    const _swCompMsgIds = (playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds) || [];
+    const _swHostIdx = _swDcMsgIds.indexOf(msgId);
+    let _swJdMsgId = null;
+    for (let _swI = 0; _swI < _swDcList.length; _swI++) {
+      if ((_swDcList[_swI]?.dcName || _swDcList[_swI]) === 'Junk Droid') {
+        _swJdMsgId = _swDcMsgIds[_swI];
+        break;
       }
     }
+    if (!_swJdMsgId) {
+      _swJdMsgId = _swCompMsgIds[_swHostIdx] || null;
+    }
+
+    const _swUgnaughtName = meta?.dcName;
+    const _swUgnaughtDisp = meta?.displayName || _swUgnaughtName;
+    const _swDg = (_swUgnaughtDisp || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _swFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _swUgnaughtFk = `${_swUgnaughtName}-${_swDg}-${_swFigIdx}`;
+    const _swUgnaughtPos = game.figurePositions?.[playerNum]?.[_swUgnaughtFk];
+
+    if (!_swUgnaughtPos) {
+      return { applied: false, manualMessage: '**Spot Weld** — Ugnaught not on the board; resolve manually.' };
+    }
+
+    // Phase 1: space chosen → place new JD.
+    if (chosenSpace) {
+      // Remove existing JD figures from positions (and clear stale banks).
+      const _swPoses = game.figurePositions?.[playerNum] || {};
+      for (const fk of Object.keys(_swPoses)) {
+        if (fk.startsWith('Junk Droid-')) delete _swPoses[fk];
+      }
+      if (_swJdMsgId) {
+        if (game.dcActionsData?.[_swJdMsgId]) delete game.dcActionsData[_swJdMsgId];
+        if (game.movementBank?.[_swJdMsgId]) delete game.movementBank[_swJdMsgId];
+      }
+      // Place new JD at chosen space.
+      const _swNewFk = 'Junk Droid-0-0';
+      if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+      game.figurePositions[playerNum][_swNewFk] = String(chosenSpace).toLowerCase();
+      game.companionHostMap = game.companionHostMap || {};
+      game.companionHostMap[_swNewFk] = { hostFigureKey: _swUgnaughtFk, playerNum };
+      // Mark JD as ready so it can activate this round.
+      if (_swJdMsgId) {
+        game._spotWeldReadyJd = game._spotWeldReadyJd || [];
+        if (!game._spotWeldReadyJd.includes(_swJdMsgId)) game._spotWeldReadyJd.push(_swJdMsgId);
+        // Allocate fresh companion banks for the new JD so it can
+        // activate at end of Ugnaught (inline — resolveAbility is sync).
+        const _threadId = game.dcActionsData?.[msgId]?.threadId || null;
+        game.dcActionsData = game.dcActionsData || {};
+        game.dcActionsData[_swJdMsgId] = {
+          remaining: 2,
+          total: 2,
+          perFigureRemaining: { 0: 2 },
+          figureLocked: {},
+          figureSoaFired: {},
+          figureEoaFired: {},
+          messageId: null,
+          threadId: _threadId,
+          specialsUsed: [],
+          isCompanion: true,
+          hostMsgId: msgId,
+        };
+        game.movementBank = game.movementBank || {};
+        game.movementBank[_swJdMsgId] = {
+          total: 0,
+          remaining: 0,
+          threadId: _threadId,
+          messageId: null,
+          displayName: 'Junk Droid',
+        };
+        game.activationStartPositions = game.activationStartPositions || {};
+        game.activationStartPositions[_swNewFk] = String(chosenSpace).toLowerCase();
+      }
+      return {
+        applied: true,
+        logMessage: `**Spot Weld** — old Junk Droid removed; new **Junk Droid** placed at **${String(chosenSpace).toUpperCase()}** (READY for second activation at end of Ugnaught's turn).`,
+        refreshBoard: true,
+        refreshDcEmbed: true,
+      };
+    }
+
+    // Phase 0: enumerate adjacent unoccupied spaces, return space picker.
+    const _swMapId = game.selectedMap?.id;
+    const _swMs = _swMapId ? getMapData(_swMapId) : null;
+    if (!_swMs) return { applied: false, manualMessage: '**Spot Weld** — no map data; resolve manually.' };
+    const _swAdj = (_swMs.adjacency?.[String(_swUgnaughtPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+    // Filter to unoccupied (no figure positioned there).
+    const _swOccupied = new Set();
+    for (const pn of [1, 2]) {
+      for (const pos of Object.values(game.figurePositions?.[pn] || {})) {
+        if (pos) _swOccupied.add(String(pos).toLowerCase());
+      }
+    }
+    const _swValid = _swAdj.filter((sp) => !_swOccupied.has(sp));
+    if (_swValid.length === 0) {
+      return { applied: false, manualMessage: '**Spot Weld** — no unoccupied adjacent spaces. Resolve manually.' };
+    }
     return {
-      applied: true,
-      logMessage: '**Spot Weld** — Place your **Junk Droid** companion in a space adjacent to this figure. (If a JD was already on the board, it has been removed; the new placement enters READY for this round.)',
-      refreshBoard: true,
+      applied: false,
+      requiresSpaceChoice: true,
+      validSpaces: _swValid,
+      spaceChoiceLabel: '**Spot Weld** — Choose an adjacent space to place the new **Junk Droid** (enters READY):',
     };
   }
 
