@@ -623,6 +623,7 @@ const ROUND_NULL_FLAGS = [
   'pendingSurgeOverflow',
   'pendingInterrogate',
   'pendingMastery',
+  'pendingMilitaryEfficiency',
   'pendingMissionSorReveal',
   'pendingSuppressiveFireMp',
   // Combat pipeline pendings — safety net (deleted on happy path, but no fallback if handler throws)

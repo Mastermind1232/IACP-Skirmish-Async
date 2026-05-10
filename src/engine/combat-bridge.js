@@ -53,7 +53,7 @@ import {
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -2577,24 +2577,35 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
       return true;
     }
   }
-  // Military Efficiency (Leia Organa): shuffle 1 CC from discard back into deck
+  // Military Efficiency (Leia Organa): player picks 1 CC from discard to shuffle back into deck
   if (combat.surgeMilitaryEfficiency && combat.attackerPlayerNum) {
     const mePlayerNum = combat.attackerPlayerNum;
     const meDiscardKey = ccDiscardKey(mePlayerNum);
-    const meDeckKey = ccDeckKey(mePlayerNum);
     const meDiscard = game[meDiscardKey] || [];
     if (meDiscard.length === 0) {
       await thread.send(`**Military Efficiency** — No cards in discard pile to return.`).catch(discordCatch);
     } else {
-      // Shuffle the most-recently-discarded card back into the deck
-      const meCard = meDiscard[meDiscard.length - 1];
-      game[meDiscardKey] = meDiscard.slice(0, -1);
-      const meDeck = [...(game[meDeckKey] || [])];
-      const meInsertIdx = Math.floor(Math.random() * (meDeck.length + 1));
-      meDeck.splice(meInsertIdx, 0, meCard);
-      game[meDeckKey] = meDeck;
-      await thread.send(`**Military Efficiency** — **${meCard}** shuffled from discard back into your Command deck.`).catch(discordCatch);
-      await logGameAction(game, client, `**Military Efficiency** — **${meCard}** shuffled back into P${mePlayerNum}'s Command deck.`, { phase: 'ROUND', icon: 'card' });
+      setPendingMilitaryEfficiency(game, {
+        gameId: game.gameId,
+        attackerPlayerNum: mePlayerNum,
+        discardKey: meDiscardKey,
+        eligible: [...meDiscard],
+        resultText,
+        combat,
+        initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
+        defenderPlayerNum,
+      });
+      const meOwnerId = getPlayerId(game, mePlayerNum);
+      const meBtns = meDiscard.slice(0, 4).map((cardName, i) =>
+        new ButtonBuilder().setCustomId(`me_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
+      );
+      meBtns.push(new ButtonBuilder().setCustomId(`me_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+      await thread.send(sanitizeMentions({
+        content: `<@${meOwnerId}> **Military Efficiency** — Choose a Command card from your discard pile to shuffle back into your deck:`,
+        allowedMentions: { users: [meOwnerId] },
+        components: [new ActionRowBuilder().addComponents(meBtns)],
+      })).catch(discordCatch);
+      return true;
     }
   }
   return false;

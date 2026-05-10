@@ -9,11 +9,11 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { getMapData, getCcEffect } from '../data-loader.js';
-import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { ccHandKey, ccDiscardKey, ccDeckKey } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
-import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa, clearPendingMastery, clearPendingInterrogate } from '../game/interrupts.js';
+import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa, clearPendingMastery, clearPendingMilitaryEfficiency, clearPendingInterrogate } from '../game/interrupts.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 
@@ -236,6 +236,57 @@ export async function handleMasteryPick(interaction, ctx) {
   }
   await finishCombatResolution(mastGame, mastCombat, mastRT, new Set(mastEmbed), client);
   saveGames(game.gameId);
+  return;
+}
+
+/**
+ * me_pick_ / me_skip_ — Military Efficiency (Leia Organa)
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution
+ */
+export async function handleMilitaryEfficiencyPick(interaction, ctx) {
+  const { getGame, client, saveGames, checkPostCombatSurges, finishCombatResolution } = ctx;
+  const isMeSkip = interaction.customId.startsWith('me_skip_');
+  const meGameId = isMeSkip ? parseCustomId(interaction.customId, 'me_skip_') : interaction.customId.match(/^me_pick_([^_]+)_\d+$/)?.[1];
+  if (!meGameId) { await interaction.followUp({ content: 'Invalid Military Efficiency interaction.', ephemeral: true }).catch(discordCatch); return; }
+  const meGame = await requireGame(interaction, getGame, meGameId, { silent: true });
+  if (!meGame) return;
+  if (!meGame.pendingMilitaryEfficiency) { await interaction.followUp({ content: 'No pending Military Efficiency choice.', ephemeral: true }).catch(discordCatch); return; }
+  const { attackerPlayerNum: meAPN, discardKey: meDK, eligible: meEl, resultText: meRT, combat: meCombat, initialEmbedRefreshMsgIds: meEmbed, defenderPlayerNum: meDPN } = meGame.pendingMilitaryEfficiency;
+  const meOwnerId = meAPN === 1 ? meGame.player1Id : meGame.player2Id;
+  if (interaction.user.id !== meOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Military Efficiency.', ephemeral: true }).catch(discordCatch); return; }
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  clearPendingMilitaryEfficiency(meGame);
+  if (!isMeSkip) {
+    if (meGame.restInPeaceActive) {
+      const meThread = await fetchCombatThread(client, meCombat.combatThreadId);
+      if (meThread) await meThread.send('**Military Efficiency** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
+    } else {
+      const meCardIdx = parseInt(splitCustomId(interaction.customId, 'me_pick_')[1], 10);
+      const meCard = meEl[meCardIdx];
+      if (meCard) {
+        const meDiscard = meGame[meDK] || [];
+        const meIdx = meDiscard.indexOf(meCard);
+        if (meIdx >= 0) meDiscard.splice(meIdx, 1);
+        meGame[meDK] = meDiscard;
+        const meDeckK = ccDeckKey(meAPN);
+        const meDeck = [...(meGame[meDeckK] || [])];
+        const meInsertIdx = Math.floor(Math.random() * (meDeck.length + 1));
+        meDeck.splice(meInsertIdx, 0, meCard);
+        meGame[meDeckK] = meDeck;
+        const meThread = await fetchCombatThread(client, meCombat.combatThreadId);
+        if (meThread) await meThread.send(`**Military Efficiency** — **${meCard}** shuffled from discard back into your Command deck.`).catch(discordCatch);
+      }
+    }
+  }
+  const meCThread = await fetchCombatThread(client, meCombat.combatThreadId);
+  if (meCThread) {
+    const triggered = await checkPostCombatSurges(meGame, meCombat, meRT, new Set(meEmbed), meCThread, meOwnerId, meDPN);
+    if (triggered) { saveGames(meGame.gameId); return; }
+  }
+  await finishCombatResolution(meGame, meCombat, meRT, new Set(meEmbed), client);
+  saveGames(meGame.gameId);
   return;
 }
 

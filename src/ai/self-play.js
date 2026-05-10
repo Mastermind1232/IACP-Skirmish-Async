@@ -159,6 +159,7 @@ function determineActingPlayer(game) {
   if (game.pendingDeflect) return game.pendingDeflect.defenderPlayerNum || game.pendingDeflect.attackerPlayerNum || 'both';
   if (game.pendingReaction) return game.pendingReaction.defenderPlayerNum || 'both';
   if (game.pendingMastery) return game.pendingMastery.attackerPlayerNum || 'both';
+  if (game.pendingMilitaryEfficiency) return game.pendingMilitaryEfficiency.attackerPlayerNum || 'both';
   if (game.pendingInterrogate) return game.pendingInterrogate.attackerPlayerNum || 'both';
   if (game.pendingFigurehead) return game.pendingFigurehead.defenderPlayerNum || 'both';
   if (game.pendingCleave) return game.pendingCleave.attackerPlayerNum || 'both';
@@ -226,7 +227,7 @@ const PENDING_KEYS = [
   // Post-combat abilities (set during finishCombatResolution after pendingCombat is deleted)
   'pendingBoltslinger', 'pendingIndiscriminateFire', 'pendingHeavyFire',
   'pendingHavocShot', 'pendingWantonDestruction', 'pendingDeflect',
-  'pendingReaction', 'pendingMastery', 'pendingInterrogate',
+  'pendingReaction', 'pendingMastery', 'pendingMilitaryEfficiency', 'pendingInterrogate',
   // Pre-resolution combat abilities (set while pendingCombat still exists)
   'pendingFigurehead', 'pendingCleave', 'pendingFightingKnife',
   'pendingConcussiveBolt', 'pendingAssassinsBlade', 'pendingExtraProtection',

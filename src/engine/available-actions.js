@@ -418,6 +418,18 @@ function getRoundActiveActions(game, playerNum, deps) {
     }
     return [];
   }
+  if (game.pendingMilitaryEfficiency) {
+    const me = game.pendingMilitaryEfficiency;
+    if (playerNum === me.attackerPlayerNum) {
+      const acts = (me.eligible || []).map((card, i) => ({
+        type: 'me_pick', customId: `me_pick_${gameId}_${i}`,
+        description: `Military Efficiency: shuffle ${card} back into deck`,
+      }));
+      acts.push({ type: 'me_skip', customId: `me_skip_${gameId}`, description: 'Skip Military Efficiency' });
+      return acts;
+    }
+    return [];
+  }
   if (game.pendingInterrogate) {
     const it = game.pendingInterrogate;
     if (playerNum === it.attackerPlayerNum) {

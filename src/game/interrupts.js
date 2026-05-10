@@ -126,6 +126,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   STILL_FASTER:          'still-faster',
   SELF_DESTRUCT:         'self-destruct',
   MASTERY:               'mastery',
+  MILITARY_EFFICIENCY:   'military-efficiency',
   INTERROGATE:           'interrogate',
   HUNTER_PROTOCOL:       'hunter-protocol',
   EXECUTOR_INTERRUPT:    'executor-interrupt',
@@ -545,6 +546,9 @@ export function clearPendingSelfDestruct(game) { _clearDual(game, 'pendingSelfDe
 
 export function setPendingMastery(game, payload) { _setDual(game, 'pendingMastery', INTERRUPT_TYPES.MASTERY, payload); }
 export function clearPendingMastery(game) { _clearDual(game, 'pendingMastery', INTERRUPT_TYPES.MASTERY); }
+
+export function setPendingMilitaryEfficiency(game, payload) { _setDual(game, 'pendingMilitaryEfficiency', INTERRUPT_TYPES.MILITARY_EFFICIENCY, payload); }
+export function clearPendingMilitaryEfficiency(game) { _clearDual(game, 'pendingMilitaryEfficiency', INTERRUPT_TYPES.MILITARY_EFFICIENCY); }
 
 export function setPendingInterrogate(game, payload) { _setDual(game, 'pendingInterrogate', INTERRUPT_TYPES.INTERROGATE, payload); }
 export function clearPendingInterrogate(game) { _clearDual(game, 'pendingInterrogate', INTERRUPT_TYPES.INTERROGATE); }
