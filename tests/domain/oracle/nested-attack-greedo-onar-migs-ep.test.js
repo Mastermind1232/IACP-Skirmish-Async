@@ -327,6 +327,83 @@ describe('B-NA-SOTD: Slow on the Draw correctly stacks the outer', () => {
     resolvePendingCombat(game);
     assert.equal(game.pendingCombat, outer, 'outer restored on explicit pop');
   });
+
+  it('B-NA-SOTD-003: handleSlowOnTheDraw uses pushNestedCombat (architectural fix)', async () => {
+    // Source-level contract: SoTD migrated from slowOnTheDrawInterrupt
+    // side-channel to canonical combat-stack push/pop. Verify the import
+    // and that no Resume button is posted.
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/handlers/combat-reactions.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /import \{ resolvePendingCombat, pushNestedCombat \} from/,
+      'pushNestedCombat imported');
+    assert.match(src, /pushNestedCombat\(game\)/,
+      'SoTD-yes calls pushNestedCombat instead of legacy side-channel');
+    assert.doesNotMatch(src, /game\.slowOnTheDrawInterrupt = \{/,
+      'no longer creates the slowOnTheDrawInterrupt side-channel object');
+    assert.doesNotMatch(src, /slow_on_draw_resume_\$\{gameId\}/,
+      'no longer posts Resume button — outer auto-resumes via popNestedCombat');
+  });
+});
+
+// ── B-NA-EP-EXPIRE: EP window expires when inner finishes ────────────────────
+
+describe('B-NA-EP-EXPIRE: EP window closes when its combat frame resolves', () => {
+  it('B-NA-EP-EXPIRE-001: source-level contract — finishCombatResolution clears pendingExtraProtection if combatRef === current frame', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/engine/combat-bridge.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /game\.pendingExtraProtection\?\.\bcombatRef === combat/,
+      'combat-bridge expires pendingExtraProtection when its combatRef matches the current frame');
+  });
+
+  it('B-NA-EP-EXPIRE-002: simulated — pendingExtraProtection is cleared when its combatRef finishes', () => {
+    // Simulate: inner-1 in flight, pendingExtraProtection.combatRef = inner-1.
+    // When inner-1 reaches finishCombatResolution, the expiry block clears
+    // the pending state before resolvePendingCombat pops the outer.
+    const outer = outerGreedoMigs();
+    const inner = inner1MigsGreedo();
+    const game = { pendingCombat: outer };
+    pushNestedCombat(game);
+    game.pendingCombat = inner;
+    game.pendingExtraProtection = {
+      targetFigKey: GREEDO_FK, damage: 3, playerNum: 1,
+      onarFigKey: ONAR_FK, defenderPlayerNum: 1, attackerPlayerNum: 2,
+      combatRef: inner,
+    };
+    // Simulate the expiry check that lives in finishCombatResolution
+    if (game.pendingExtraProtection?.combatRef === game.pendingCombat) {
+      delete game.pendingExtraProtection;
+    }
+    resolvePendingCombat(game);
+    assert.equal(game.pendingExtraProtection, undefined,
+      'EP window expired before outer resumed');
+    assert.equal(game.pendingCombat, outer,
+      'outer restored cleanly');
+  });
+
+  it('B-NA-EP-EXPIRE-003: EP from an earlier combat (different combatRef) is NOT expired by an unrelated combat finishing', () => {
+    // Defensive: only the EP attached to the resolving combat frame is
+    // expired. An EP from a different combat (shouldn't normally exist
+    // simultaneously, but the guard must be precise) survives.
+    const inner = inner1MigsGreedo();
+    const otherCombat = { _frameLabel: 'unrelated' };
+    const game = { pendingCombat: inner };
+    game.pendingExtraProtection = {
+      targetFigKey: GREEDO_FK, damage: 3, playerNum: 1,
+      onarFigKey: ONAR_FK, defenderPlayerNum: 1, attackerPlayerNum: 2,
+      combatRef: otherCombat,
+    };
+    if (game.pendingExtraProtection?.combatRef === game.pendingCombat) {
+      delete game.pendingExtraProtection;
+    }
+    assert.notEqual(game.pendingExtraProtection, undefined,
+      'unrelated EP not expired by mismatched-combat finish');
+  });
 });
 
 // ── B-NA-RF: Return Fire ────────────────────────────────────────────────────

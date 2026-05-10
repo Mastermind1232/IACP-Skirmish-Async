@@ -1,5 +1,5 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
-import { resolvePendingCombat } from '../game/combat-stack.js';
+import { resolvePendingCombat, pushNestedCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -444,28 +444,18 @@ export async function handleSlowOnTheDraw(interaction, ctx) {
   await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
 
   if (isYes) {
-    // Queue a free attack for the defender targeting Greedo
-    // Store the current combat state so it can resume after the free attack
-    game.slowOnTheDrawInterrupt = {
-      suspendedCombat: game.pendingCombat,
-      attackerFigureKey: sotd.attackerFigureKey,
-      attackerPlayerNum: sotd.attackerPlayerNum,
-      defenderPlayerNum: defPN,
-    };
-    // Clear pendingCombat so the defender can start a new attack
-    resolvePendingCombat(game);
+    // Architectural fix (alexanbv 2026-05-09): use the canonical
+    // combat-stack push/pop instead of a SoTD-specific side channel.
+    // pushNestedCombat saves the outer (Greedo→Migs) onto game.combatStack
+    // and clears game.pendingCombat. The defender then declares the
+    // interrupt attack via the standard Attack action — combat.js attack-
+    // declare sees pendingCombat=null and runs as a fresh frame; when
+    // inner-1 finishes, finishCombatResolution → resolvePendingCombat
+    // pops the outer back automatically. No Resume button needed.
+    pushNestedCombat(game);
 
     const defOwnerId = getPlayerId(game, defPN);
-    if (thread) await thread.send(sanitizeMentions({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. After the interrupt attack resolves, click **Resume Original Attack** below to continue.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
-
-    // Post a resume button in the thread for after the interrupt attack
-    const resumeRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`slow_on_draw_resume_${gameId}`)
-        .setLabel('Resume Original Attack')
-        .setStyle(ButtonStyle.Success),
-    );
-    if (thread) await thread.send({ content: 'When the interrupt attack is complete (or if you choose not to attack), click below to resume Greedo\'s attack.', components: [resumeRow] }).catch(discordCatch);
+    if (thread) await thread.send(sanitizeMentions({ content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Use your DC's Attack action. Greedo's original attack will resume automatically once the interrupt attack resolves.`, allowedMentions: { users: [defOwnerId] } })).catch(discordCatch);
 
     if (logGameAction) await logGameAction(game, client, `**Slow on the Draw** — Defender interrupts to attack Greedo first.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   } else {

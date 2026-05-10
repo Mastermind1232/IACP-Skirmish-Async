@@ -49,6 +49,7 @@ const EMIT_ALLOWLIST = new Set([
   'default_deck_',          // game-tools.js:470 handleDefaultDeck — never wired to UI
   'extra_armor_cancel_',    // round.js:1733 — comment says "kept for backwards compat but no longer used in the new UI"
   'botmenu_recover_',       // recover.js:26 handleBotmenuRecover — superseded by resync_
+  'slow_on_draw_resume_',   // alexanbv 2026-05-09 architectural fix: SoTD migrated to combatStack push/pop, no Resume button posted; handler kept for legacy state recovery only
 ]);
 
 function getRegistrations() {

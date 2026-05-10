@@ -1110,7 +1110,7 @@ describe('B-CR-HP: Hunter Protocol surge re-trigger', () => {
 // ── B-CR-SOTD: Slow on the Draw combat suspension ──────────────────────────
 
 describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
-  it('B-CR-SOTD-001: yes suspends pendingCombat and stores interrupt state', async () => {
+  it('B-CR-SOTD-001: yes pushes pendingCombat onto combatStack (architectural fix 2026-05-09)', async () => {
     const combat = makeCombat();
     const game = {
       gameId: 'g1',
@@ -1127,11 +1127,14 @@ describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
     const { ctx } = buildCtx(game);
     await handleSlowOnTheDraw(mockInteraction('slow_on_draw_yes_g1', 'player2'), ctx);
 
-    assert.strictEqual(game.pendingCombat, null, 'pendingCombat cleared for interrupt');
-    assert.ok(game.slowOnTheDrawInterrupt, 'interrupt state stored');
-    assert.strictEqual(game.slowOnTheDrawInterrupt.suspendedCombat, combat,
-      'original combat stored by reference');
-    assert.strictEqual(game.slowOnTheDrawInterrupt.attackerFigureKey, 'Greedo-1-0');
+    // SoTD now uses canonical combatStack push (pushNestedCombat) instead
+    // of the legacy slowOnTheDrawInterrupt.suspendedCombat side-channel.
+    assert.strictEqual(game.pendingCombat, undefined, 'pendingCombat cleared by pushNestedCombat');
+    assert.ok(Array.isArray(game.combatStack) && game.combatStack.length === 1,
+      'outer combat pushed onto combatStack');
+    assert.strictEqual(game.combatStack[0], combat, 'outer is on top of stack by identity');
+    assert.strictEqual(game.slowOnTheDrawInterrupt, undefined,
+      'no legacy side-channel field set');
     assert.ok(game.pendingSlowOnTheDraw == null, 'pendingSlowOnTheDraw cleared');
   });
 
@@ -1180,13 +1183,15 @@ describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
     assert.strictEqual(game.slowOnTheDrawInterrupt, null, 'interrupt state cleared');
   });
 
-  it('B-CR-SOTD-004: suspended combat preserves dice state through interrupt cycle', async () => {
-    // Full cycle: suspend → (interrupt happens) → resume → original dice intact
+  it('B-CR-SOTD-004: combatStack push/pop preserves dice state through full nested-attack cycle', async () => {
+    // Architectural fix 2026-05-09: outer survives a push onto combatStack,
+    // inner-1 declares + finishes, popNestedCombat restores outer with its
+    // dice state byte-for-byte intact (object identity preserved).
     const combat = makeCombat();
     const origAtk = JSON.parse(JSON.stringify(combat.attackDiceResults));
     const origDef = JSON.parse(JSON.stringify(combat.defenseDiceResults));
 
-    // Step 1: Suspend
+    // Step 1: Push outer via SoTD
     const game = {
       gameId: 'g1',
       player1Id: 'player1',
@@ -1201,16 +1206,20 @@ describe('B-CR-SOTD: Slow on the Draw combat suspend/restore', () => {
     };
     const { ctx: ctx1 } = buildCtx(game);
     await handleSlowOnTheDraw(mockInteraction('slow_on_draw_yes_g1', 'player2'), ctx1);
-    assert.strictEqual(game.pendingCombat, null);
+    assert.strictEqual(game.pendingCombat, undefined, 'outer pushed off');
+    assert.strictEqual(game.combatStack.length, 1, 'outer on stack');
 
-    // Step 2: Resume
-    const { ctx: ctx2 } = buildCtx(game);
-    await handleSlowOnTheDrawResume(mockInteraction('slow_on_draw_resume_g1', 'player1'), ctx2);
+    // Step 2: Inner-1 (defender's interrupt attack) runs and finishes,
+    // simulated by popping the stack — that's what resolvePendingCombat
+    // does at the end of finishCombatResolution.
+    const { popNestedCombat } = await import('../../../src/game/combat-stack.js');
+    popNestedCombat(game);
 
+    assert.strictEqual(game.pendingCombat, combat, 'outer restored by identity');
     assert.deepStrictEqual(game.pendingCombat.attackDiceResults, origAtk,
-      'attack dice survived suspend/resume cycle');
+      'attack dice survived stack cycle');
     assert.deepStrictEqual(game.pendingCombat.defenseDiceResults, origDef,
-      'defense dice survived suspend/resume cycle');
+      'defense dice survived stack cycle');
     assert.deepStrictEqual(game.pendingCombat.attackRoll, { acc: 3, dmg: 6, surge: 2 },
       'attack totals intact');
   });

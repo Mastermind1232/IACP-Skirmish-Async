@@ -3102,6 +3102,20 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
+  // Extra Protection window expiry (alexanbv 2026-05-09): EP is a
+  // "when damaged" interrupt — once this combat (the inner where the
+  // damage event fired) finishes resolving, the window has passed.
+  // If the player didn't click Play/Skip in time, expire the prompt
+  // so it doesn't get applied against a stale frame after the outer
+  // resumes. Match by combatRef identity captured at probe time.
+  if (game.pendingExtraProtection?.combatRef === combat) {
+    delete game.pendingExtraProtection;
+    if (thread) {
+      try {
+        await thread.send('**Extra Protection** — Window expired (combat resolved without response).').catch(discordCatch);
+      } catch {}
+    }
+  }
   resolvePendingCombat(game);
   clearPendingCleave(game);
   if (combat.rollMessageId) {
