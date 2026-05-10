@@ -1979,11 +1979,19 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**${entry.label || 'Override Attack'}** — Free${typeNote} attack: ${diceDesc}${pierceNote}${accNote}. Resolve manually (no active activation).` };
     }
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    // Saber Orbit: up to N free melee attacks with override dice
+    // Saber Orbit: up to N free melee attacks with override dice.
+    // Per IACP rule 2026-05-09: per-FIGURE chain, key by figureKey
+    // (not msgId) so a multifigure group's other figures aren't
+    // affected by Saber Orbit started by another figure.
     if (entry.saberOrbitChain > 1) {
       game.freeAttackBonusPending[msgId] = entry.saberOrbitChain;
+      const _soMeta = context.meta || (dcMessageMeta?.get?.(msgId));
+      const _soDgMatch = (_soMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _soDgIdx = _soDgMatch ? _soDgMatch[1] : '1';
+      const _soSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _soFigureKey = `${_soMeta?.dcName || 'unknown'}-${_soDgIdx}-${_soSelFig}`;
       game.saberOrbitAttacksRemaining = game.saberOrbitAttacksRemaining || {};
-      game.saberOrbitAttacksRemaining[msgId] = entry.saberOrbitChain;
+      game.saberOrbitAttacksRemaining[_soFigureKey] = entry.saberOrbitChain;
     } else {
       game.freeAttackBonusPending[msgId] = true;
     }

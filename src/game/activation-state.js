@@ -82,12 +82,11 @@ const ACTIVATION_MSGID_FLAGS = [
   'fireMissionActive',
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
-  'saberOrbitAttacksRemaining',
+  // saberOrbitAttacksRemaining + unstableDevicesUsedThisActivation
+  // moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope).
   'pendingOverwatchPlacement',
   'activationKills',
   'activationDamagedFigures',
-  // unstableDevicesUsedThisActivation moved to ACTIVATION_FIGKEY_FLAGS
-  // 2026-05-09 (per-figure scope per IACP rule clarification).
   'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
@@ -133,6 +132,7 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'heroicUsedThisActivation',
   'boRifleStaffUsedThisActivation',
   'unstableDevicesUsedThisActivation',
+  'saberOrbitAttacksRemaining',
 ];
 
 /**

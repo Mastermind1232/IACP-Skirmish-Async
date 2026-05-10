@@ -3185,16 +3185,18 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
   // Saber Orbit (Second Sister): re-apply override dice for remaining chained attacks
-  if (game.saberOrbitAttacksRemaining?.[combat.attackerMsgId] > 0) {
-    game.saberOrbitAttacksRemaining[combat.attackerMsgId] -= 1;
-    const soRemaining = game.saberOrbitAttacksRemaining[combat.attackerMsgId];
+  // Per IACP rule 2026-05-09: keyed per-figureKey so each figure in a
+  // multifigure group has its own Saber Orbit budget.
+  if (game.saberOrbitAttacksRemaining?.[combat.attackerFigureKey] > 0) {
+    game.saberOrbitAttacksRemaining[combat.attackerFigureKey] -= 1;
+    const soRemaining = game.saberOrbitAttacksRemaining[combat.attackerFigureKey];
     if (soRemaining > 0) {
       // Re-set the override dice for the next Saber Orbit attack
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['red'], type: 'melee', pierce: 0, bonusAccuracy: 0 };
       await thread.send(`**Saber Orbit** — ${soRemaining} attack${soRemaining !== 1 ? 's' : ''} remaining (1 red die, Melee). Use the Attack button.`).catch(discordCatch);
     } else {
-      delete game.saberOrbitAttacksRemaining[combat.attackerMsgId];
+      delete game.saberOrbitAttacksRemaining[combat.attackerFigureKey];
       await thread.send('**Saber Orbit** — All attacks resolved.').catch(discordCatch);
     }
   }

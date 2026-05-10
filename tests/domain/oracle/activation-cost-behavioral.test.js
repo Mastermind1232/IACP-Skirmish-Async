@@ -580,7 +580,9 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
       nextAttackBonusSurgeAbilities: { 1: [{ surge: 1 }] },
       nextAttackBonusPierce: { 1: 1 },
       pendingOverrideAttackDice: { '3001': { dice: ['red'] } },
-      saberOrbitAttacksRemaining: { '3001': 2 },
+      // saberOrbitAttacksRemaining migrated to figureKey-keyed
+      // 2026-05-09 (per-figure scope per IACP rule clarification).
+      saberOrbitAttacksRemaining: { 'Rebel Trooper-1-0': 2 },
       pendingMissileSalvo: { '3001': { diceAvailable: ['blue'] } },
     });
     const { ctx, calls, exhaustedState } = buildUnactivateCtx(game);
@@ -600,7 +602,7 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
     assert.strictEqual(game.nextAttackBonusSurgeAbilities?.[1], undefined, 'nextAttackBonusSurgeAbilities cleaned');
     assert.strictEqual(game.nextAttackBonusPierce?.[1], undefined, 'nextAttackBonusPierce cleaned');
     assert.strictEqual(game.pendingOverrideAttackDice?.['3001'], undefined, 'pendingOverrideAttackDice cleaned');
-    assert.strictEqual(game.saberOrbitAttacksRemaining?.['3001'], undefined, 'saberOrbitAttacksRemaining cleaned');
+    assert.strictEqual(game.saberOrbitAttacksRemaining?.['Rebel Trooper-1-0'], undefined, 'saberOrbitAttacksRemaining cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.pendingMissileSalvo?.['3001'], undefined, 'pendingMissileSalvo cleaned');
     // saveGames called
     assert.ok(calls.saveGames.length > 0, 'saveGames called');

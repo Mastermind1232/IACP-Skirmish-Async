@@ -322,7 +322,9 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
   if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
-  if (game.saberOrbitAttacksRemaining?.[msgId]) delete game.saberOrbitAttacksRemaining[msgId];
+  // saberOrbitAttacksRemaining is figureKey-keyed (2026-05-09) and
+  // cleared by ACTIVATION_FIGKEY_FLAGS in cleanupActivation; no manual
+  // msgId sweep here.
   if (game.pendingMissileSalvo?.[msgId]) delete game.pendingMissileSalvo[msgId];
   if (game.pendingEe3Carbine?.[msgId]) delete game.pendingEe3Carbine[msgId];
   // Wave 4: Stun is NOT auto-cleared at end of activation.
