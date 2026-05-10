@@ -1478,7 +1478,17 @@ export async function handleDcFigPick(interaction, ctx) {
   const _ad = game.dcActionsData[msgId];
   // Refuse picking a locked figure
   if (_ad.figureLocked?.[figIdx]) return;
+  // Refuse picking when an activation lock is held by a DIFFERENT msgId
+  // (the paired host/companion is still mid-activation).
+  if (game.activationLockKey && !game.activationLockKey.startsWith(`${msgId}_f`)) {
+    await interaction.followUp({ content: 'The paired figure must finish its activation first.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   _ad.selectedFigure = figIdx;
+  // Picker is BINDING (alexanbv 2026-05-10): acquire the unified
+  // activation lock on this exact figure so other figures' rows + the
+  // paired companion/host are gated until this figure ends.
+  game.activationLockKey = `${msgId}_f${figIdx}`;
   // Per-figure separate activation (alexanbv 2026-05-09: multifigure groups
   // behave the same as host+companion; nothing carries between figures).
   // Reset shared action bank, MP bank, specials-used, and every msgId-

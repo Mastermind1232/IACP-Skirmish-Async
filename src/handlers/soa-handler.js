@@ -857,12 +857,28 @@ export async function handleSoaFire(interaction, ctx) {
   // separate item (audit (c) follow-up).
   } else if (desc.subPromptKey === 'companion_order') {
     game.companionActivatedBefore = game.companionActivatedBefore || {};
+    // Picker is BINDING (alexanbv 2026-05-10): immediately acquire the
+    // unified activation lock on the chosen side's first figure so the
+    // OTHER side's buttons are disabled from the moment of the pick.
+    // Lock auto-releases when the chosen side's bank drains or its End
+    // Activation fires.
+    const _hostMsgId = desc.sourceMsgId;
+    const _companionMsgId = (() => {
+      try {
+        const hostIds = game.p1DcMessageIds?.includes(_hostMsgId) ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const compIds = game.p1DcMessageIds?.includes(_hostMsgId) ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+        const idx = hostIds?.indexOf(_hostMsgId);
+        return idx >= 0 ? (compIds?.[idx] || null) : null;
+      } catch { return null; }
+    })();
     if (choiceKey === 'first') {
-      game.companionActivatedBefore[desc.sourceMsgId] = 'before';
+      game.companionActivatedBefore[_hostMsgId] = 'before';
+      if (_companionMsgId) game.activationLockKey = `${_companionMsgId}_f0`;
       await interaction.message.edit({ content: `\u{1F43E} **Companion order** — **${desc.extras?.companionName}** activates FIRST. Complete its full activation before ${desc.extras?.dcName}.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F43E} **Companion order** — ${desc.extras?.companionName} first.`, { phase: 'ROUND', icon: 'card' });
     } else if (choiceKey === 'second') {
-      game.companionActivatedBefore[desc.sourceMsgId] = 'after';
+      game.companionActivatedBefore[_hostMsgId] = 'after';
+      game.activationLockKey = `${_hostMsgId}_f0`;
       await interaction.message.edit({ content: `\u{1F43E} **Companion order** — **${desc.extras?.dcName}** activates first; **${desc.extras?.companionName}** activates after.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F43E} **Companion order** — ${desc.extras?.dcName} first, ${desc.extras?.companionName} after.`, { phase: 'ROUND', icon: 'card' });
     } else {
