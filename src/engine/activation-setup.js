@@ -333,6 +333,44 @@ export async function finalizeActivation({
   const actionsMsg = await withDiscordRetry(() => thread.send(actionsPayload));
   game.dcActionsData[msgId].messageId = actionsMsg.id;
 
+  // B13.5. Companion action-counter message in the host's thread (slice 2)
+  // Posts a parallel actions-counter + buttons message for the companion
+  // so the player can see and click the companion's own action bank. The
+  // companion's DC embed in the play area also auto-refreshes its buttons
+  // via getDcPlayAreaComponents which reads dcActionsData[companionMsgId].
+  {
+    const _b13_5_compMsgIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    const _b13_5_hostMsgIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const _b13_5_hostIdx = (_b13_5_hostMsgIds || []).indexOf(msgId);
+    const _b13_5_companionMsgId = _b13_5_hostIdx >= 0 ? _b13_5_compMsgIds?.[_b13_5_hostIdx] : null;
+    if (_b13_5_companionMsgId && game.dcActionsData[_b13_5_companionMsgId]) {
+      const _compData = game.dcActionsData[_b13_5_companionMsgId];
+      const _compName = _compData.isCompanion ? game.movementBank?.[_b13_5_companionMsgId]?.displayName || dcName : dcName;
+      const _compMsg = await withDiscordRetry(() => thread.send(sanitizeMentions({
+        content: `🐾 **${_compName}** (companion) — ${getActionsCounterContent(_compData.total, _compData.remaining)}`,
+        components: getDcActionButtons(_b13_5_companionMsgId, _compName, _compName, _compData, game),
+        allowedMentions: { users: [] },
+      })));
+      _compData.messageId = _compMsg.id;
+      // Refresh companion's play-area DC embed so its CC-special / DC-special
+      // buttons light up (getDcPlayAreaComponents reads dcActionsData).
+      try {
+        const playAreaId = playerNum === 1 ? game.p1PlayAreaId : game.p2PlayAreaId;
+        if (playAreaId) {
+          const _playArea = await fetchGameChannel(client, playAreaId);
+          const _embedMsg = await _playArea.messages.fetch(_b13_5_companionMsgId).catch(() => null);
+          if (_embedMsg) {
+            await withDiscordRetry(() => _embedMsg.edit({
+              components: getDcPlayAreaComponents(_b13_5_companionMsgId, false, game, _compName),
+            }));
+          }
+        }
+      } catch (err) {
+        console.error('[activation-setup] companion embed refresh failed:', err?.message ?? err);
+      }
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // [C] INTERRUPT-TIMING EFFECTS — other figures reacting to activation
   // ═══════════════════════════════════════════════════════════════════════════
