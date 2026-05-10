@@ -213,56 +213,58 @@ describe('B-NA-EP: EP handler must reference inner-1 frame, not whatever is on t
       'EP payload attacker = inner-1 attacker (Migs, P2)');
   });
 
-  it('B-NA-EP-002: KNOWN-RISK — EP click handler reads game.pendingCombat at click time, which may be outer if inner-1 already popped', () => {
-    // This test documents the architectural concern. If inner-1's
-    // damage pipeline runs to completion BEFORE the user clicks the EP
-    // button, inner-1 is popped and game.pendingCombat is the outer.
-    // handleExtraProtection then captures _epCombat = outer, and
-    // applyDamageAndFinishCombat(outer, ...) would re-finish the OUTER
-    // not inner-1 — wrong semantics.
-    const game = {
-      pendingCombat: outerGreedoMigs(),
-    };
-    pushNestedCombat(game);
-    game.pendingCombat = inner1MigsGreedo();
-    // EP fires during inner-1 (set pending payload).
-    game.pendingExtraProtection = {
-      targetFigKey: GREEDO_FK, damage: 3, playerNum: 1,
-      onarFigKey: ONAR_FK, defenderPlayerNum: 1, attackerPlayerNum: 2,
-    };
-    // Inner-1 resolves WITHOUT waiting for EP click (current pipeline
-    // behavior — WHEN_DAMAGED apply doesn't pause).
-    resolvePendingCombat(game);
-    // pendingCombat is now the OUTER (Greedo→Migs)
-    assert.equal(game.pendingCombat._frameLabel, 'outer-greedo→migs',
-      'after inner-1 resolves without waiting, outer is on top');
-    // If EP handler captures _epCombat = game.pendingCombat NOW, it'd be outer
-    const _epCombatAtClickTime = game.pendingCombat;
-    assert.equal(_epCombatAtClickTime.attackerFigureKey, GREEDO_FK,
-      'KNOWN RISK: handler would re-finish OUTER combat, not inner-1');
+  it('B-NA-EP-002: damage-pipeline-hooks.js EP probe captures opts.combat as combatRef on the payload', async () => {
+    // Fix shipped: `setPendingExtraProtection` now records
+    // `combatRef: opts.combat` so the handler can read the inner-1
+    // combat object directly instead of depending on
+    // `game.pendingCombat` at click time. Verify by inspecting the
+    // damage-pipeline-hooks source for the contract.
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/game/damage-pipeline-hooks.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /combatRef: opts\.combat/,
+      'EP probe must capture opts.combat into combatRef on the pending payload');
   });
 
-  it('B-NA-EP-003: PROPOSED CONTRACT — EP payload should snapshot the combat object reference at probe time', () => {
-    // Suggested fix: pendingExtraProtection.combatRef = the inner-1
-    // combat object captured at probe time. Handler uses combatRef
-    // instead of game.pendingCombat at click time.
+  it('B-NA-EP-003: handleExtraProtection prefers pending.combatRef over game.pendingCombat', async () => {
+    // Click-time handler in src/handlers/interrupts.js must read the
+    // combat object from the payload's combatRef snapshot, falling
+    // back to game.pendingCombat only if the snapshot is missing
+    // (defensive — pre-fix payloads).
+    const { readFile } = await import('node:fs/promises');
+    const src = await readFile(
+      new URL('../../../src/handlers/interrupts.js', import.meta.url),
+      'utf8',
+    );
+    assert.match(src, /_epPending\.combatRef\s*\|\|\s*_epGame\.pendingCombat/,
+      'handler must read combatRef first, with pendingCombat as defensive fallback');
+  });
+
+  it('B-NA-EP-003b: combatRef survives inner-1 pop so handler reaches the right frame', () => {
     const inner = inner1MigsGreedo();
     const game = { pendingCombat: outerGreedoMigs() };
     pushNestedCombat(game);
     game.pendingCombat = inner;
-    // Probe captures the combat reference
+    // Probe captures the combat reference (mirrors damage-pipeline-hooks.js)
     game.pendingExtraProtection = {
       targetFigKey: GREEDO_FK, damage: 3, playerNum: 1,
       onarFigKey: ONAR_FK, defenderPlayerNum: 1, attackerPlayerNum: 2,
-      combatRef: inner, // <-- the contract this test asserts
+      combatRef: inner,
     };
-    // Inner-1 finishes in current code, popping back to outer
+    // Inner-1 resolves before user clicks the EP button
     resolvePendingCombat(game);
-    // Even though pendingCombat is now outer, the EP handler should
-    // restore from combatRef. Verify the reference still points to inner.
+    // pendingCombat is now the outer; combatRef still points to inner-1
+    assert.equal(game.pendingCombat._frameLabel, 'outer-greedo→migs');
     assert.equal(game.pendingExtraProtection.combatRef._frameLabel,
       'inner1-migs→greedo (Slow on the Draw)',
-      'combatRef still references inner-1 after pop');
+      'combatRef survives inner-1 pop and still points at inner-1');
+    // Handler simulation: read combatRef → frame-correct
+    const _epCombat = game.pendingExtraProtection.combatRef
+      || game.pendingCombat;
+    assert.equal(_epCombat.attackerFigureKey, MIGS_FK,
+      'handler resumes against inner-1 (Migs is attacker), not outer');
   });
 
   it('B-NA-EP-004: extraProtectionTriggeredThisCombat must scope to ONE combat frame, not to the activation', () => {

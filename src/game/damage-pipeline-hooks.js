@@ -182,6 +182,12 @@ WHEN_DAMAGED_HOOKS.push({
       defenderPlayerNum: defPN,
       attackerPlayerNum: opts.attackerPlayerNum,
       ownerId: opts.combat ? game[`player${opts.combat.attackerPlayerNum}Id`] : null,
+      // Frame-correctness fix (alexanbv 2026-05-09, B-NA-EP-002 / -003):
+      // capture the combat object reference at probe time so the click
+      // handler doesn't depend on `game.pendingCombat` at click time —
+      // which may have popped to an outer frame (Slow on the Draw,
+      // Parting Shot) by the time the user clicks.
+      combatRef: opts.combat || null,
     });
     const ownerId = game[`player${defPN}Id`];
     const damagedLabel = opts.combat?.target?.label || dcNameFromFigureKey(opts.figureKey);

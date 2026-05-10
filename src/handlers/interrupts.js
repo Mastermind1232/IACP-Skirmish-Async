@@ -1373,7 +1373,12 @@ export async function handleExtraProtection(interaction, ctx) {
   const _epPending = _epGame.pendingExtraProtection;
   if (!await requirePlayer(interaction, _epGame, interaction.user.id, _epPending.playerNum, canActAsPlayer, 'Only the defending player may respond.')) return;
   delete _epGame.pendingExtraProtection;
-  const _epCombat = _epGame.pendingCombat;
+  // Frame-correctness fix (alexanbv 2026-05-09, B-NA-EP-002): use the
+  // combat object captured at probe time, not `game.pendingCombat` at
+  // click time. By the time the user clicks, the inner combat where EP
+  // fired may have already popped (Slow on the Draw outer underneath),
+  // and reading pendingCombat would re-finish the wrong frame.
+  const _epCombat = _epPending.combatRef || _epGame.pendingCombat;
 
   if (isPlay) {
     // Remove Extra Protection from hand, add to discard
