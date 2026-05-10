@@ -4311,7 +4311,8 @@
       "surgeAbilities": [
         "damage 2",
         "accuracy 3",
-        "recover 2"
+        "recover 2",
+        "military_efficiency"
       ],
       "attachment": false,
       "elite": true,

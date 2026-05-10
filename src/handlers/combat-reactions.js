@@ -783,6 +783,21 @@ export async function handleIllicitArms(interaction, ctx) {
     if (thread) await thread.send(`**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for **+1 Hit**.`).catch(discordCatch);
     if (logGameAction) await logGameAction(game, client, `**Illicit Arms** (${ia.bibDcName}) — Discarded **${discarded}** for +1 Hit.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
+    // De Wanna Wanga passive: when discarded from hand, may shuffle
+    // back into the deck instead of staying in discard. Per user
+    // 2026-05-09: hand-discard reshuffle isn't Bib-specific but
+    // should be wired to work with his ability — call the existing
+    // helper here so Illicit Arms triggers it.
+    try {
+      const { checkHandDiscardPassiveReshuffle } = await import('../game/cc-passive-redraw.js');
+      const _dwwResult = checkHandDiscardPassiveReshuffle(game, ia.playerNum, discarded);
+      if (_dwwResult?.reshuffled && logGameAction) {
+        await logGameAction(game, client, `**De Wanna Wanga** (passive) — Shuffled back into command deck instead of staying in discard.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+      }
+    } catch (err) {
+      console.error('[Illicit Arms] De Wanna Wanga reshuffle check failed:', err?.message ?? err);
+    }
+
     clearPendingIllicitArms(game);
     saveGames(game.gameId);
     return;
