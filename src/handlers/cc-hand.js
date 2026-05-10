@@ -1316,10 +1316,22 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
     await interaction.followUp({ content: 'No pending play to resolve.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const { playerNum, card, messageId } = game.pendingIllegalCcPlay;
+  const { playerNum, card, messageId, excavationPlay } = game.pendingIllegalCcPlay;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the player who played the card can choose.')) return;
-  await resolveCcPlay(game, playerNum, card, ctx);
   clearPendingIllegalCcPlay(game);
+  if (excavationPlay) {
+    const tgt = game.aphraExcavationTarget;
+    if (tgt && !tgt.used && tgt.cardName === card) {
+      await _commitExcavationPlay(game, ctx, interaction, {
+        gameId, card, playerNum, sourcePN: tgt.sourcePN,
+        sourceDiscardKey: ccDiscardKey(tgt.sourcePN),
+      });
+    } else {
+      await interaction.followUp({ content: 'Excavation marker no longer valid.', ephemeral: true }).catch(discordCatch);
+    }
+  } else {
+    await resolveCcPlay(game, playerNum, card, ctx);
+  }
   if (messageId && interaction.channel?.id) {
     try {
       const msg = await interaction.channel.messages.fetch(messageId);
@@ -1544,16 +1556,18 @@ export async function handleCelebrationPlay(interaction, ctx) {
 }
 
 /**
- * Aphra Excavation play — when Aphra's player clicks "Play [card] (Excavation)"
- * on her hand channel. The card is in the source player's discard pile per
- * `game.aphraExcavationTarget`; this handler splices it, resolves the
- * ability, and routes the card to the game box (per card text "return it
- * to the game box"). Card never enters any hand.
+ * Aphra Excavation play — Aphra's player clicks "Play [card] (Excavation)"
+ * on her hand channel. The card lives in the source player's discard pile
+ * per `game.aphraExcavationTarget`; this handler validates legality, runs
+ * the same interceptor windows hand-played cards see (Signal Jammer,
+ * Negation, Comm Disruption, illegal-play prompt), then splices the card
+ * out of source discard, pushes it to the game box, and resolves the
+ * ability via the shared resolveAbility / applyAbilityResult path.
  *
  * customId: excavation_play_${gameId}
  */
 export async function handleExcavationPlay(interaction, ctx) {
-  const { getGame, getCcEffect, isCcPlayableNow, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, client, saveGames } = ctx;
+  const { getGame, isCcPlayableNow, isCcPlayLegalByRestriction, getIllegalCcPlayButtons, client, saveGames } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const gameId = parseCustomId(interaction.customId, 'excavation_play_');
   const game = await requireGame(interaction, getGame, gameId);
@@ -1566,36 +1580,126 @@ export async function handleExcavationPlay(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, tgt.excavatorPN, canActAsPlayer, "Only Aphra's player may play this card.")) return;
   const sourceDiscardKey = ccDiscardKey(tgt.sourcePN);
   const sourceDiscard = game[sourceDiscardKey] || [];
-  const idx = sourceDiscard.indexOf(tgt.cardName);
-  if (idx < 0) {
+  if (!sourceDiscard.includes(tgt.cardName)) {
     await interaction.followUp({ content: `**${tgt.cardName}** is no longer in P${tgt.sourcePN}'s discard pile (redrawn out). Excavation cannot resolve.`, ephemeral: true }).catch(discordCatch);
     await interaction.message.edit({ content: `⛏️ **Excavation** — **${tgt.cardName}** was redrawn out of discard before play. Marker lost.`, components: [] }).catch(discordCatch);
     return;
   }
-  if (isCcPlayableNow && !isCcPlayableNow(game, tgt.excavatorPN, tgt.cardName)) {
-    await interaction.followUp({ content: `**${tgt.cardName}** can't be played right now (timing mismatch).`, ephemeral: true }).catch(discordCatch);
+  const card = tgt.cardName;
+  const playerNum = tgt.excavatorPN;
+  // Pre-commit legality. Wrong-timing → error + bail (player can retry
+  // later in the round). Restriction violation → "Ignore and play / Unplay"
+  // prompt with excavationPlay flag so handleIllegalCcIgnore routes back
+  // through the excavation commit path.
+  if (isCcPlayableNow && !isCcPlayableNow(game, playerNum, card)) {
+    await interaction.followUp({ content: `**${card}** can't be played right now (wrong timing).`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (isCcPlayLegalByRestriction) {
+    const restriction = isCcPlayLegalByRestriction(game, playerNum, card);
+    if (!restriction.legal) {
+      setPendingIllegalCcPlay(game, { playerNum, card, reason: restriction.reason, excavationPlay: true });
+      const handId = getHandChannelId(game, playerNum);
+      const handChannel = handId ? await fetchGameChannel(client, handId) : null;
+      if (handChannel && getIllegalCcPlayButtons) {
+        const msg = await withDiscordRetry(() => handChannel.send({
+          content: `⚠️ The bot thinks playing **${card}** via **Excavation** is illegal: ${restriction.reason}\n\nChoose **Ignore and play** to play it anyway, or **Unplay card** to cancel (the marker stays — try again).`,
+          components: [getIllegalCcPlayButtons(gameId)],
+        })).catch(() => null);
+        if (msg) game.pendingIllegalCcPlay.messageId = msg.id;
+      }
+      saveGames(game.gameId);
+      return;
+    }
+  }
+  await _commitExcavationPlay(game, ctx, interaction, { gameId, card, playerNum, sourcePN: tgt.sourcePN, sourceDiscardKey });
+}
+
+/**
+ * Commit phase: actually splices from source discard → game box, marks
+ * `aphraExcavationTarget.used`, then runs the same interceptor sequence
+ * a hand-played CC sees (Signal Jammer, Negation for cost 0, Comm
+ * Disruption for cost > 0). Called from handleExcavationPlay (legal path)
+ * and handleIllegalCcIgnore (when pendingIllegalCcPlay.excavationPlay).
+ */
+async function _commitExcavationPlay(game, ctx, interaction, params) {
+  const { getCcEffect, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, getNegationResponseButtons, client, saveGames } = ctx;
+  const { gameId, card, playerNum, sourcePN, sourceDiscardKey } = params;
+  // Re-validate card still in source discard (state may have shifted
+  // between prompt and click — Mastery, redraws, etc).
+  const sourceDiscard = game[sourceDiscardKey] || [];
+  const idx = sourceDiscard.indexOf(card);
+  if (idx < 0) {
+    if (interaction.message?.editable) {
+      await interaction.message.edit({ content: `⛏️ **Excavation** — **${card}** was redrawn out of discard before commit. Lost.`, components: [] }).catch(discordCatch);
+    }
     return;
   }
   // Splice from source discard, push to game box, mark used.
   sourceDiscard.splice(idx, 1);
   game[sourceDiscardKey] = sourceDiscard;
   game.gameBox = game.gameBox || [];
-  game.gameBox.push(tgt.cardName);
-  tgt.used = true;
-  const card = tgt.cardName;
-  const sourcePN = tgt.sourcePN;
-  const playerNum = tgt.excavatorPN;
-  const effectData = getCcEffect ? getCcEffect(card) : null;
-  const abilityId = effectData?.abilityId ?? card;
-  await interaction.message.edit({
-    content: `⛏️ **Excavation** — **${card}** played from P${sourcePN}'s discard pile, returned to game box.`,
-    components: [],
-  }).catch(discordCatch);
+  game.gameBox.push(card);
+  if (game.aphraExcavationTarget) game.aphraExcavationTarget.used = true;
+  const tgt = game.aphraExcavationTarget;
+  // Edit the original "Play X (Excavation)" prompt button (separate from
+  // any "ignore-and-play" message the user may have just clicked).
+  try {
+    const playMsgId = tgt?.playButtonMessageId;
+    const playChId = tgt?.playButtonChannelId;
+    if (playMsgId && playChId && playMsgId !== interaction.message?.id) {
+      const ch = await fetchGameChannel(client, playChId);
+      const msg = ch ? await ch.messages.fetch(playMsgId).catch(() => null) : null;
+      if (msg) await msg.edit({ content: `⛏️ **Excavation** — **${card}** played from P${sourcePN}'s discard, returned to game box.`, components: [] }).catch(discordCatch);
+    } else if (interaction.message?.editable) {
+      await interaction.message.edit({ content: `⛏️ **Excavation** — **${card}** played from P${sourcePN}'s discard, returned to game box.`, components: [] }).catch(discordCatch);
+    }
+  } catch {}
   await logGameAction(game, client, `<@${interaction.user.id}> played **${card}** via ⛏️ **Excavation** (from P${sourcePN}'s discard → game box).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (updateDiscardPileMessage) {
     await updateDiscardPileMessage(game, sourcePN, client).catch(discordCatch);
   }
+  const effectData = getCcEffect ? getCcEffect(card) : null;
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  const abilityId = effectData?.abilityId ?? card;
+  // Signal Jammer intercept (mirrors handleCcConfirmPlay). Per CRR the
+  // jammed card and Signal Jammer both go to discard; for excavation the
+  // played card is already in game box per Aphra's "return to game box"
+  // rule, so only Signal Jammer routes to its owner's discard here.
+  if (game.signalJammerActive && card !== 'Signal Jammer') {
+    const jammerOwnerNum = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    const jammerDiscardKey = ccDiscardKey(jammerOwnerNum);
+    game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
+    await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — Signal Jammer discarded; **${card}** still routes to game box per Excavation.`, { phase: 'ACTION', icon: 'card' });
+    saveGames(game.gameId);
+    return;
+  }
+  // Cost 0: open the Negation window before resolving. handleNegationPlay
+  // (cancels) marks the card via markTopCcCanceled — the played card stays
+  // wherever it currently is (game box for excavation), per CRR. Comm
+  // Disruption can also fire on cost-0 plays.
+  if (cost === 0 && getNegationResponseButtons) {
+    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: getHandChannelId(game, playerNum) });
+    const oppNum = opponentPlayerNum(playerNum);
+    const oppHandId = getHandChannelId(game, oppNum);
+    const oppHandChannel = oppHandId ? await fetchGameChannel(client, oppHandId) : null;
+    if (oppHandChannel) {
+      const oppId = getPlayerId(game, oppNum);
+      await oppHandChannel.send(sanitizeMentions({
+        content: `Your opponent played **${card}** via **Excavation** (cost 0). You may play **Negation** to cancel it.`,
+        components: [getNegationResponseButtons(gameId)],
+        allowedMentions: { users: [oppId] },
+      })).catch(discordCatch);
+    }
+    await logGameAction(game, client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
+    await promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames);
+    saveGames(game.gameId);
+    return;
+  }
+  // Cost > 0: resolveAbility immediately, then prompt Comm Disruption.
   if (resolveAbility) {
+    const _ccPreSnap = game.pendingCombat ? JSON.parse(JSON.stringify(game.pendingCombat)) : null;
     const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.combat || game.pendingCombat });
     const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
     if (!aarResult.handled && result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
@@ -1642,6 +1746,7 @@ export async function handleExcavationPlay(interaction, ctx) {
         }
       }
     }
+    await promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames, _ccPreSnap);
   }
   saveGames(game.gameId);
 }
