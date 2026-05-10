@@ -1578,6 +1578,12 @@ export async function handleExcavationPlay(interaction, ctx) {
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, tgt.excavatorPN, canActAsPlayer, "Only Aphra's player may play this card.")) return;
+  // Rest in Peace blocks all retrievals from discard piles for the round —
+  // that includes Aphra playing her excavated card from discard.
+  if (game.restInPeaceActive) {
+    await interaction.followUp({ content: '**Excavation** — blocked by **Rest in Peace** (cannot play from discard piles this round).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   const sourceDiscardKey = ccDiscardKey(tgt.sourcePN);
   const sourceDiscard = game[sourceDiscardKey] || [];
   if (!sourceDiscard.includes(tgt.cardName)) {

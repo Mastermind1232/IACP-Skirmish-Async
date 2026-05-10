@@ -85,6 +85,8 @@ export function moveDiscardToHand(game, playerNum, cardName) {
  */
 export function checkSurgePassiveRedraws(game, attackerPlayerNum, attackerDcName) {
   const redrawn = [];
+  // Rest in Peace blocks all retrievals from discard piles for the round.
+  if (game.restInPeaceActive) return { redrawn };
   const dKey = ccDiscardKey(attackerPlayerNum);
   const discard = game[dKey] || [];
   if (discard.length === 0) return { redrawn };
@@ -118,6 +120,10 @@ export function checkSurgePassiveRedraws(game, attackerPlayerNum, attackerDcName
  */
 export function checkDeckDiscardPassiveRedraws(game, playerNum, discardedCardName) {
   const redrawn = [];
+  // Rest in Peace blocks retrieval from discard. Built on Hope's redraw
+  // routes through discard ("when this card is discarded from your Command
+  // deck, re-draw it") so it counts as a discard retrieval.
+  if (game.restInPeaceActive) return { redrawn };
   // The card was just discarded from deck to... where? It needs to go to discard first,
   // then the passive triggers and moves it to hand.
   // Actually, the card text says "when this card is discarded from your Command deck, re-draw it."
@@ -145,6 +151,7 @@ export function checkDeckDiscardPassiveRedraws(game, playerNum, discardedCardNam
  */
 export function checkFriendlyDefeatedPassiveRedraws(game, defeatedFigureOwnerPlayerNum, defeatedDcName) {
   const redrawn = [];
+  if (game.restInPeaceActive) return { redrawn };
   const dKey = ccDiscardKey(defeatedFigureOwnerPlayerNum);
   const discard = game[dKey] || [];
   if (discard.length === 0) return { redrawn };
@@ -178,6 +185,7 @@ export function checkFriendlyDefeatedPassiveRedraws(game, defeatedFigureOwnerPla
  */
 export function checkStartOfRoundPassiveRedraws(game, playerNum) {
   const redrawn = [];
+  if (game.restInPeaceActive) return { redrawn };
   const dKey = ccDiscardKey(playerNum);
   const discard = game[dKey] || [];
   if (discard.length === 0) return { redrawn };
@@ -216,6 +224,7 @@ export function checkStartOfRoundPassiveRedraws(game, playerNum) {
  */
 export function checkCapitalizePassiveRedraw(game, hostileFigureKey, hostileFigureOwnerPN) {
   const out = { redrawn: [], beneficiaryPN: null };
+  if (game.restInPeaceActive) return out;
   // Capitalize's owner = the OPPOSITE of the figure's controller.
   const ownerPN = hostileFigureOwnerPN === 1 ? 2 : 1;
   const dKey = ccDiscardKey(ownerPN);
@@ -249,6 +258,10 @@ export const HAND_DISCARD_RESHUFFLE_CARDS = new Set([
  */
 export function checkHandDiscardPassiveReshuffle(game, playerNum, cardName) {
   if (!HAND_DISCARD_RESHUFFLE_CARDS.has(cardName)) return { reshuffled: false };
+  // Rest in Peace blocks retrieval from discard. De Wanna Wanga's reshuffle
+  // moves the card from discard pile back into the deck — that's a
+  // retrieval, so RIP suppresses it for the round.
+  if (game.restInPeaceActive) return { reshuffled: false };
 
   // Once per round check
   game.deWannaWangaUsedThisRound = game.deWannaWangaUsedThisRound || {};
