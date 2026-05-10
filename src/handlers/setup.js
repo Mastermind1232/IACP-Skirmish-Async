@@ -1918,9 +1918,15 @@ export async function handleDeploymentDone(interaction, ctx) {
     const initiativeHandId = game.initiativePlayerId === game.player1Id ? game.p1HandId : game.p2HandId;
     try {
       const handChannel = await fetchGameChannel(client, initiativeHandId);
-      const toDelete = [...(game.initiativeDeployMessageIds || []), ...(game.initiativeDeployedConfirmIds || [])];
-      for (const msgId of toDelete) {
-        try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+      // Per user 2026-05-09: preserve setup-phase records — edit
+      // prior deployment prompts to remove buttons instead of
+      // deleting them.
+      const toEdit = [...(game.initiativeDeployMessageIds || []), ...(game.initiativeDeployedConfirmIds || [])];
+      for (const msgId of toEdit) {
+        try {
+          const _hMsg = await handChannel.messages.fetch(msgId).catch(() => null);
+          if (_hMsg) await _hMsg.edit({ components: [] }).catch(() => {});
+        } catch {}
       }
       game.initiativeDeployMessageIds = [];
       game.initiativeDeployedConfirmIds = [];
@@ -2000,9 +2006,13 @@ export async function handleDeploymentDone(interaction, ctx) {
   const nonInitiativeHandId = game.initiativePlayerId === game.player1Id ? game.p2HandId : game.p1HandId;
   try {
     const handChannel = await fetchGameChannel(client, nonInitiativeHandId);
-    const toDelete = [...(game.nonInitiativeDeployMessageIds || []), ...(game.nonInitiativeDeployedConfirmIds || [])];
-    for (const msgId of toDelete) {
-      try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+    // Per user 2026-05-09: preserve setup-phase records.
+    const toEdit = [...(game.nonInitiativeDeployMessageIds || []), ...(game.nonInitiativeDeployedConfirmIds || [])];
+    for (const msgId of toEdit) {
+      try {
+        const _hMsg = await handChannel.messages.fetch(msgId).catch(() => null);
+        if (_hMsg) await _hMsg.edit({ components: [] }).catch(() => {});
+      } catch {}
     }
     game.nonInitiativeDeployMessageIds = [];
     game.nonInitiativeDeployedConfirmIds = [];
@@ -2112,10 +2122,15 @@ export async function handleAutoDeploy(interaction, ctx) {
   const handId = getHandChannelId(game, playerNum);
   try {
     const handChannel = await fetchGameChannel(client, handId);
-    // Delete old deploy messages
-    const toDelete = game[idsKey] || [];
-    for (const msgId of toDelete) {
-      try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+    // Per user 2026-05-09: preserve hand-channel records — edit
+    // prior deploy messages to remove buttons (preserves text) and
+    // re-post a fresh deploy-buttons message after.
+    const toEdit = game[idsKey] || [];
+    for (const msgId of toEdit) {
+      try {
+        const _hMsg = await handChannel.messages.fetch(msgId).catch(() => null);
+        if (_hMsg) await _hMsg.edit({ components: [] }).catch(() => {});
+      } catch {}
     }
     game[idsKey] = [];
     // Re-post deploy buttons with updated positions

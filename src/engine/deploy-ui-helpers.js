@@ -40,9 +40,15 @@ export async function updateDeployPromptMessages(game, playerNum, client, deps) 
   const squad = deps.getSquad(game, playerNum);
   const dcList = squad?.dcList || [];
   try {
+    // Per user 2026-05-09: do NOT delete hand-channel records.
+    // Edit prior deployment-prompt messages to remove their buttons
+    // (preserves message text as a clear deployment-phase record).
     const handChannel = await fetchGameChannel(client, handId);
     for (const msgId of msgIds) {
-      try { await (await handChannel.messages.fetch(msgId)).delete(); } catch {}
+      try {
+        const _hMsg = await handChannel.messages.fetch(msgId).catch(() => null);
+        if (_hMsg) await _hMsg.edit({ components: [] }).catch(() => {});
+      } catch {}
     }
     game[idsKey] = [];
     const { deployRows, doneRow } = getDeployButtonRows(game.gameId, playerNum, dcList, zone, game.figurePositions, game, deps);

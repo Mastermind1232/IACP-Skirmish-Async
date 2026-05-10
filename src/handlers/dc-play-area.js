@@ -343,18 +343,14 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.pendingEe3Carbine?.[msgId]) delete game.pendingEe3Carbine[msgId];
   // Wave 4: Stun is NOT auto-cleared at end of activation.
   // Stunned figures must spend 1 action (dc_remove_stun_) to discard Stun (rules: STUNNED L2759-2762).
+  // Per user 2026-05-09: preserve game-log records — do NOT delete
+  // the DC activation log message at activation end. Just clear the
+  // tracker so a future activation can re-post a new log entry.
   if (game.dcActivationLogMessageIds?.[msgId]) {
-    try {
-      const logCh = await fetchGameChannel(client, game.generalId);
-      if (logCh) {
-        const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-        await logMsg.delete().catch(discordCatch);
-      }
-    } catch {}
     delete game.dcActivationLogMessageIds[msgId];
   }
   // Clean all activation-scoped flags (scalars, msgId-keyed, figKey-keyed, playerNum-keyed).
-  // The manual deletes above handle Discord-specific cleanup (thread, log message);
+  // The manual deletes above handle Discord-specific cleanup (thread);
   // cleanupActivation handles the full game-state safety net.
   {
     const getDcEffects = ctx.getDcEffects;
@@ -628,14 +624,9 @@ export async function handleDcToggle(interaction, ctx) {
     }
     if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
     if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
+    // Per user 2026-05-09: preserve game-log records on un-activate
+    // (no delete; just drop the tracker reference).
     if (game.dcActivationLogMessageIds?.[msgId]) {
-      try {
-        const logCh = await fetchGameChannel(client, game.generalId);
-        if (logCh) {
-          const logMsg = await logCh.messages.fetch(game.dcActivationLogMessageIds[msgId]);
-          await logMsg.delete().catch(discordCatch);
-        }
-      } catch {}
       delete game.dcActivationLogMessageIds[msgId];
     }
   }

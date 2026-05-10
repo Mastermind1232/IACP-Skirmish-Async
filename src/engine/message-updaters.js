@@ -364,11 +364,14 @@ export async function repostRoundActivationMessage(game, gameId, client, deps) {
   const ch = await fetchGameChannel(client, game.generalId).catch(() => null);
   if (!ch) return;
 
-  // Best-effort delete of the existing activation message.
+  // Per user 2026-05-09: do NOT delete log-channel records. Edit
+  // the prior activation message to remove its buttons (preserves
+  // the text/embed as a clear round-by-round record) instead of
+  // deleting it.
   if (game.roundActivationMessageId) {
     try {
       const oldMsg = await ch.messages.fetch(game.roundActivationMessageId).catch(() => null);
-      if (oldMsg) await oldMsg.delete().catch(() => {});
+      if (oldMsg) await oldMsg.edit({ components: [] }).catch(() => {});
     } catch {}
   }
 
