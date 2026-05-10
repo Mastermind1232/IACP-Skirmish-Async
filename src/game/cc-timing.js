@@ -6,6 +6,7 @@ import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
+import { getUniqueFigureCcEntry } from './unique-figure-ccs.js';
 import { isNamedCcAlreadyPlayed } from './named-cc-tracker.js';
 
 /**
@@ -538,11 +539,44 @@ export function hasDarksaberImperial(game, playerNum, dcName) {
   return false;
 }
 
+/**
+ * True if this DC is Mara Jade AND Fast Learner is unused AND the CC is
+ * a unique-figure CC whose named figure is in the army. Mirrors the in-
+ * hand FL bypass in isCcPlayLegalByRestriction so Mara can play unique-
+ * figure special-action / 2-action / EoA CCs from her DC menu (e.g.
+ * Static Pulse when Iden is defeated).
+ */
+function _maraFastLearnerSpecialBypass(ccName, dcName, game) {
+  if (!game || !dcName) return false;
+  const dcEffects = getDcEffects() || {};
+  const sIds = dcEffects[dcName]?.specialAbilityIds
+    || dcEffects[dcName?.replace(/\s*\[.*\]\s*$/, '')]?.specialAbilityIds
+    || [];
+  if (!sIds.includes(ADAPTIVE_SKILLS_ABILITY_ID)) return false;
+  if (game.roundFigureAbilityUsed?.[`${dcName}_fast_learner`]) return false;
+  const entry = getUniqueFigureCcEntry(ccName);
+  if (!entry || entry.excludeFromFastLearner) return false;
+  const figureNames = (entry.figures || (entry.figure ? [entry.figure] : [])).map((s) => String(s).toLowerCase());
+  if (figureNames.length === 0) return false;
+  for (const pn of [1, 2]) {
+    const dcList = getDcList(game, pn) || [];
+    for (const dc of dcList) {
+      const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      const dnBase = String(dn || '').replace(/\s*\[.*\]\s*$/, '').toLowerCase();
+      if (figureNames.some((n) => dnBase.includes(n) || n.includes(dnBase))) return true;
+    }
+  }
+  return false;
+}
+
 /** True if this DC can legally play this CC (for Special Action timing). */
 export function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null, game = null) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
-  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game);
+  if (ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game)) return true;
+  // Mara Fast Learner bypass: surface unique-figure special-action CCs on
+  // Mara's DC menu when FL is unused and the named figure is in army.
+  return _maraFastLearnerSpecialBypass(ccName, dcName, game);
 }
 
 /** CC names in hand that are Special Action and legally playable by this DC. */
@@ -557,7 +591,8 @@ export function getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName)
 export function isCcDoubleActionPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null, game = null) {
   const effect = getCcEffect(ccName);
   if (!effect || (effect.timing || '').toLowerCase() !== 'doubleactionspecial') return false;
-  return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game);
+  if (ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game)) return true;
+  return _maraFastLearnerSpecialBypass(ccName, dcName, game);
 }
 
 /** CC names in hand that are Double Action Special and legally playable by this DC. */
@@ -576,7 +611,8 @@ export function getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displ
   return hand.filter((ccName) => {
     const effect = getCcEffect(ccName);
     if (!effect || (effect.timing || '').toLowerCase() !== 'endofactivation') return false;
-    return ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber, extraKw, game);
+    if (ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, darksaber, extraKw, game)) return true;
+    return _maraFastLearnerSpecialBypass(ccName, dcName, game);
   });
 }
 

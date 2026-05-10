@@ -8487,7 +8487,80 @@ export function resolveAbility(abilityId, context) {
       const mapId = game.selectedMap?.id;
       const dioCandidates = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => fk.startsWith('Dio-'));
       if (dioCandidates.length === 0) {
-        return { applied: true, logMessage: '**Static Pulse** — Dio is not in play. Deploy Dio to your space then apply the effect manually.' };
+        // Branch B (alexanbv 2026-05-10): "If Dio is not in play, put Dio
+        // into play in your space instead." Deploy Dio at the playing
+        // figure's space (Iden's, or Mara's via FL bypass). Allocate
+        // companion banks immediately so Dio can act this activation.
+        // The Strain/Weaken effect does NOT fire in this branch ("instead").
+        const playingMsgId = context.msgId;
+        const playingMeta = playingMsgId ? dcMessageMeta.get(playingMsgId) : null;
+        const playingDcName = playingMeta?.dcName;
+        const playingDisplay = playingMeta?.displayName || playingDcName;
+        // Find playing figure's position via figureKey prefix.
+        let playingPos = null;
+        if (playingDcName && playingMeta) {
+          const _pdgIdx = (playingDisplay || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          const _pPrefix = `${playingDcName}-${_pdgIdx}-`;
+          for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+            if (fk.startsWith(_pPrefix)) { playingPos = pos; break; }
+          }
+        }
+        if (!playingPos) {
+          return { applied: true, logMessage: '**Static Pulse** — Dio is not in play, but no valid space to deploy Dio (playing figure not on board). Resolve manually.' };
+        }
+        // Look up Dio's host slot (Iden Versio) to find Dio's msgId.
+        const _hostIds = playerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        const _compIds = playerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+        const _dcList = playerNum === 1 ? game.p1DcList : game.p2DcList;
+        let _hostIdx = -1;
+        for (let _i = 0; _i < (_dcList || []).length; _i++) {
+          const _dn = typeof _dcList[_i] === 'object' ? (_dcList[_i].dcName || _dcList[_i].displayName) : _dcList[_i];
+          if (_dn === 'Iden Versio') { _hostIdx = _i; break; }
+        }
+        const _dioMsgId = _hostIdx >= 0 ? (_compIds?.[_hostIdx] || null) : null;
+        // Deploy Dio at playing figure's position.
+        const _dioFigureKey = 'Dio-0-0';
+        if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+        game.figurePositions[playerNum][_dioFigureKey] = playingPos;
+        game.companionHostMap = game.companionHostMap || {};
+        if (_hostIdx >= 0 && _hostIds?.[_hostIdx]) {
+          game.companionHostMap[_dioFigureKey] = { hostFigureKey: `Iden Versio-1-0`, playerNum };
+        }
+        // Allocate Dio's banks mid-game so he can act this activation.
+        // Inlined (no async dynamic import inside sync resolveAbility) —
+        // mirrors allocateCompanionBanksMidGame in activation-setup.js.
+        if (_dioMsgId && !game.dcActionsData?.[_dioMsgId]) {
+          const _threadId = game.dcActionsData?.[playingMsgId]?.threadId || null;
+          game.dcActionsData = game.dcActionsData || {};
+          game.dcActionsData[_dioMsgId] = {
+            remaining: 2,
+            total: 2,
+            perFigureRemaining: { 0: 2 },
+            figureLocked: {},
+            figureSoaFired: {},
+            figureEoaFired: {},
+            messageId: null,
+            threadId: _threadId,
+            specialsUsed: [],
+            isCompanion: true,
+            hostMsgId: _hostIds?.[_hostIdx] || null,
+          };
+          game.movementBank = game.movementBank || {};
+          game.movementBank[_dioMsgId] = {
+            total: 0,
+            remaining: 0,
+            threadId: _threadId,
+            messageId: null,
+            displayName: 'Dio',
+          };
+          game.activationStartPositions = game.activationStartPositions || {};
+          game.activationStartPositions[_dioFigureKey] = playingPos;
+        }
+        return {
+          applied: true,
+          logMessage: `**Static Pulse** — Dio was not in play; deployed at **${String(playingPos).toUpperCase()}** (${playingDisplay || 'playing figure'}'s space). Strain/Weaken effect does not fire (Branch B "instead").`,
+          refreshDcEmbed: true,
+        };
       }
       const dioFk = dioCandidates[0];
       const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
