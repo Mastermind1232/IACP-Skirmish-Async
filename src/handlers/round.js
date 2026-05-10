@@ -1141,8 +1141,13 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
-        // Programming Override (4-LOM): choose a TRAIT at start of round
-        if (sIds.includes('programming_override_4lom')) {
+        // Programming Override (4-LOM): choose a TRAIT at start of round.
+        // Suppressed if Preservation Protocol was played on this 4-LOM —
+        // PP rule says "Until the end of the game, you lose Programming
+        // Override and Shared Intuition" (alexanbv 2026-05-10).
+        const _4lomFk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith('4-LOM-'));
+        const _ppSuppressed = !!(game.preservationProtocolUsed?.[playerNum]?.[_4lomFk]);
+        if (sIds.includes('programming_override_4lom') && !_ppSuppressed) {
           game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
           const ownerId = getPlayerId(game, playerNum);
           const traits = ['TROOPER', 'SPY', 'HUNTER', 'SMUGGLER', 'FORCE USER', 'BRAWLER', 'CREATURE', 'LEADER', 'GUARDIAN', 'WOOKIEE', 'VEHICLE'];

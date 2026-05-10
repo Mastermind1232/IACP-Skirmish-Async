@@ -2293,8 +2293,13 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Shared Intuition (Tress Hacnua): +1 Hit while attacking if another friendly HUNTER within 3 has LOS to target
-  if (hasSharedIntuitionAbility(atkSpecialIds) && hasLineOfSight && mapSpaces && targetCoord) {
+  // Shared Intuition (Tress Hacnua, 4-LOM): +1 Hit while attacking if
+  // another friendly HUNTER within 3 has LOS to target.
+  // Per alexanbv 2026-05-10: if this 4-LOM has had Preservation Protocol
+  // played, Shared Intuition is suppressed for the rest of the game.
+  // Tress Hacnua is unaffected (different figureKey, no PP flag for her).
+  const _siPpSuppressed = !!(game.preservationProtocolUsed?.[attackerPlayerNum]?.[attackerFigureKey]);
+  if (hasSharedIntuitionAbility(atkSpecialIds) && !_siPpSuppressed && hasLineOfSight && mapSpaces && targetCoord) {
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (attackerPos) {
       const friendlyPoses = game.figurePositions?.[attackerPlayerNum] || {};

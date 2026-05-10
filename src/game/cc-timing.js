@@ -640,11 +640,26 @@ export function getPlayableReactionCardsForTiming(game, playerNum, timingTrigger
   return results;
 }
 
-/** Get extra keywords from Programming Override for a DC (4-LOM). */
+/** Get extra keywords from Programming Override for a DC (4-LOM).
+ *
+ * Per alexanbv 2026-05-10: 4-LOM's Preservation Protocol CC, when
+ * played, suppresses Programming Override for the rest of the game.
+ * If `game.preservationProtocolUsed[playerNum][figKey]` is set for
+ * any 4-LOM figure on this player's side, the trait grant is
+ * suppressed.
+ */
 function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
   const trait = game?.roundProgrammingOverrideTrait?.[playerNum];
   if (!trait) return null;
   const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
   if (dcBase !== '4-LOM') return null;
+  // PP suppression: any 4-LOM figure on this player's side that's had
+  // Preservation Protocol played loses Programming Override.
+  const ppMap = game?.preservationProtocolUsed?.[playerNum];
+  if (ppMap) {
+    for (const fk of Object.keys(ppMap)) {
+      if (fk.startsWith('4-LOM-') && ppMap[fk]) return null;
+    }
+  }
   return [trait];
 }

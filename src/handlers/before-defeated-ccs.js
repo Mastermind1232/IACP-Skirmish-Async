@@ -307,6 +307,11 @@ export async function handlePlayPreservationProtocol(interaction, ctx) {
   game.preservationProtocolUsed = game.preservationProtocolUsed || {};
   game.preservationProtocolUsed[ownerPN] = game.preservationProtocolUsed[ownerPN] || {};
   game.preservationProtocolUsed[ownerPN][pending.figureKey] = true;
+  // Programming Override is lost too — clear any active trait grant for
+  // this player's 4-LOM. (The flag is stored at game.roundProgrammingOverrideTrait[playerNum].)
+  if (game.roundProgrammingOverrideTrait?.[ownerPN] != null) {
+    game.roundProgrammingOverrideTrait[ownerPN] = null;
+  }
 
   clearPendingPreservationProtocol(game);
   await _completeDeferredDefeat(game, ctx, {
