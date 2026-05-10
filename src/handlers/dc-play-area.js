@@ -1596,6 +1596,10 @@ export async function handleDcEndFigure(interaction, ctx) {
   actionsData.figureLocked = actionsData.figureLocked || {};
   actionsData.figureLocked[figIdx] = true;
   actionsData.selectedFigure = null;
+  // Unified activation lock release: forfeiting this figure releases the
+  // lock so the next figure pick (or paired companion) can acquire on
+  // its first action.
+  if (game.activationLockKey === `${msgId}_f${figIdx}`) delete game.activationLockKey;
   // Per destruct 2026-05-07: each figure has individual EoA. Fire EoA
   // for the just-locked figure scoped to that figureIndex (single-
   // figure groups continue to fire group-wide EoA via

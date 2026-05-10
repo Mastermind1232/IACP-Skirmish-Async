@@ -195,10 +195,15 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
  */
 const ACTIVATION_SCALAR_FLAGS = [
   'commsJammerActivePlayerNum',
-  // alexanbv 2026-05-10: companion + host activation lock. Set when either
-  // side consumes its first action; cleared at activation end. Enforces
-  // "complete one before the other" / "no two figures activate at once".
-  'activationLockMsgId',
+  // alexanbv 2026-05-10: unified activation lock keyed by
+  // `${msgId}_f${figureIndex}`. Acquired when ANY action is consumed,
+  // identifying the exact figure currently activating. Blocks:
+  //   - other figures in the same group (different figureIndex)
+  //   - companion or other groups (different msgId)
+  // Cleared on activation end (via ACTIVATION_SCALAR_FLAGS wipe) and on
+  // intra-group figure switch (handleDcFigurePick releases stale lock
+  // after the previous figure locked itself via perFigureRemaining→0).
+  'activationLockKey',
   // partingShotTriggered is technically msgId-keyed (game.partingShotTriggered[msgId] = true)
   // but is INTENTIONALLY registered here, NOT in ACTIVATION_MSGID_FLAGS. The desired
   // semantic at activation end is "wipe everyone's parting-shot tracking" so the
@@ -313,18 +318,18 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
  */
 export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null, msgId = null) {
   if (!actionsData || cost <= 0) return;
-  // Activation lock (alexanbv 2026-05-10): once one side of a paired
-  // host+companion activation consumes its first action, lock to that
-  // msgId. The paired side's buttons stay disabled until the locked
-  // side ends activation. "Every activation is sequenced — NO TWO
-  // FIGURES ACTIVATE AT THE SAME TIME." Lock is keyed on the
-  // dcActionsData entry so it scales to any paired flow, not just
-  // host+companion.
-  if (game && msgId && actionsData.isCompanion !== undefined) {
-    if (!game.activationLockMsgId) game.activationLockMsgId = msgId;
-  } else if (game && msgId) {
-    // host side — also acquire the lock if not already set
-    if (!game.activationLockMsgId) game.activationLockMsgId = msgId;
+  // Unified activation lock (alexanbv 2026-05-10): the lock identifies
+  // the exact figure currently activating as `${msgId}_f${figureIndex}`,
+  // enforcing "complete one before another" at BOTH scopes:
+  //   - intra-group: figure 1 of group A vs figure 2 of group A
+  //   - cross-msgId: group A vs companion vs other groups
+  // Acquired only when unset (preserves the locked figure across its
+  // remaining actions). Cleared on activation end (cleanupActivation
+  // wipes via ACTIVATION_SCALAR_FLAGS) and on intra-group figure switch
+  // (handleDcFigurePick releases when previous figure is figureLocked).
+  if (game && msgId && !game.activationLockKey) {
+    const figIdx = actionsData.selectedFigure ?? 0;
+    game.activationLockKey = `${msgId}_f${figIdx}`;
   }
   actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - cost);
   const figIdx = actionsData.selectedFigure ?? 0;
@@ -341,6 +346,12 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null
       // render. Locked figures are filtered out of the dropdown
       // automatically (components.js).
       actionsData.selectedFigure = null;
+      // Unified activation lock release (alexanbv 2026-05-10): when the
+      // locked figure finishes, release the lock so the next figure
+      // pick OR the paired companion can acquire on its first action.
+      if (game && msgId && game.activationLockKey === `${msgId}_f${figIdx}`) {
+        delete game.activationLockKey;
+      }
     }
   }
 }

@@ -898,11 +898,13 @@ export function getAttachmentSpecials(attachments, game, msgId) {
  */
 export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
   const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [], getPlayableCcDoubleActionsForDc = () => [] } = helpers;
-  // Activation lock (alexanbv 2026-05-10): when host+companion paired
-  // activation is in progress and one side has consumed its first
-  // action, the OTHER side's buttons disable until the locked side
-  // ends. Enforces "no two figures activate at the same time."
-  const _activationLocked = !!(game?.activationLockMsgId && game.activationLockMsgId !== msgId);
+  // Unified activation lock (alexanbv 2026-05-10): lock key is
+  // `${msgId}_f${figureIndex}` identifying the exact activating figure.
+  // Buttons for any other (msgId, figureIndex) combination are disabled
+  // until the locked figure ends. Computed at render time using the
+  // figure that this row pertains to (selectedFigure for the action
+  // row; figure-pick rows separately gate their pick buttons).
+  const _lockKey = game?.activationLockKey || null;
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   let specials = stats.specials || [];
@@ -986,6 +988,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // gates are computed separately (noMove/noAttack below).
   // Phase 2 (destruct 2026-05-07): also gate when the current figure has
   // used all its per-figure actions (must switch via dropdown).
+  // Compose this row's lock key from msgId + selectedFigure. Row is
+  // blocked when a lock exists that doesn't match this exact figure.
+  const _thisRowFigIdx = selectedFigure ?? 0;
+  const _thisRowKey = `${msgId}_f${_thisRowFigIdx}`;
+  const _activationLocked = !!(_lockKey && _lockKey !== _thisRowKey);
+
   const noAct = noActions || _curFigOutOfActions || _activationLocked;
   const noAttack = noActions || isStunned || _curFigOutOfActions || _activationLocked;
 
