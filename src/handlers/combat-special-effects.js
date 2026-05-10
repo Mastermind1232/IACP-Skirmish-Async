@@ -5,7 +5,7 @@
  */
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { splitCustomId } from '../discord/custom-id.js';
-import { reduceHp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, applyCondition } from '../game/index.js';
+import { reduceHp, opponentPlayerNum, parseFigureKey, dcNameFromFigureKey, applyCondition, figureKeyForActivation } from '../game/index.js';
 import { getPlayAreaId, getPlayerId, getDcList, getDcMessageIds, ccDeckKey, ccHandKey, ccDiscardKey, pushFigure } from '../game/player-helpers.js';
 import { getDcKeywords } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
@@ -743,7 +743,8 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
   game.pendingOverrideAttackDice[msgId] = { dice: [color], type: 'ranged', bonusAccuracy: 3 };
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[msgId] = true;
+  const _msFk = figureKeyForActivation(game, msgId);
+  if (_msFk) game.freeAttackBonusPending[_msFk] = true;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
   const salvoThread = await fetchCombatThread(client, threadId);

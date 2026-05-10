@@ -79,7 +79,8 @@ describe('PROBE-ATK-029-A: Pounce bypass is single-use — post-Pounce gate re-b
 describe('PROBE-ATK-029-B: Brutality / freeAttackBonusPending is single-use', () => {
   it('freeAttackBonusPending=true → attack offered (bypass active)', () => {
     const { game, deps, dc } = buildMidActivation('Bossk', 'Greedo');
-    game.freeAttackBonusPending = { [dc.msgId]: true };
+    // figureKey-keyed per IACP rule 2026-05-09
+    game.freeAttackBonusPending = { [dc.figKey]: true };
     const actions = getAvailableActions(game, 1, deps);
     const attacks = actions.filter((a) => a.type === 'attack_target');
     assert.ok(attacks.length > 0,

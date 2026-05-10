@@ -505,7 +505,8 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
       `M22: 0-damage hit means Migs HP unchanged. Got: ${initialHp} → ${finalHp}`);
 
     // Witness 2: Return Fire triggered — freeAttackBonusPending set
-    assert.strictEqual(game.freeAttackBonusPending?.[migsMsgId], true,
+    // (figureKey-keyed per IACP rule 2026-05-09)
+    assert.strictEqual(game.freeAttackBonusPending?.[migsFigKey], true,
       'M22: Migs Return Fire must set freeAttackBonusPending despite 0 damage');
 
     // Witness 3: forcedAttackTarget points to the attacker
@@ -543,10 +544,12 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
       distanceToTarget: 1,
     });
 
+    const hanFigKey = combat.target.figureKey;
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
     // Han's Return Fire requires 0 damage — positive damage blocks it
-    assert.notStrictEqual(game.freeAttackBonusPending?.[hanMsgId], true,
+    // (figureKey-keyed per IACP rule 2026-05-09)
+    assert.notStrictEqual(game.freeAttackBonusPending?.[hanFigKey], true,
       'Control: Han Return Fire is gated on 0 damage — positive damage must block it');
   });
 });

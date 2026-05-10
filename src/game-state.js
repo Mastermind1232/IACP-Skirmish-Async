@@ -381,6 +381,15 @@ class DerivedDcMessageMeta {
 /** Derived view: { gameId, playerNum, dcName, displayName } per msgId */
 const dcMessageMeta = new DerivedDcMessageMeta(games);
 
+// Register the derived view with activation-state so figureKeyForActivation
+// can resolve dcName/displayName from msgId without a circular static import
+// (game-state → event-store → reducer → activation-reducer → activation-state).
+// Use a synchronous side-channel via globalThis so tests don't have to wait
+// for any Promise resolution. activation-state's helper reads the registered
+// map on first call.
+import { _registerDcMessageMeta } from './game/activation-state.js';
+_registerDcMessageMeta(dcMessageMeta);
+
 /**
  * Map-shaped derived view of DC exhausted state.
  * .get(msgId) computes:

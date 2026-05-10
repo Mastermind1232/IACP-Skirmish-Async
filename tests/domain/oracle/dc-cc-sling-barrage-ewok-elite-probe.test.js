@@ -24,6 +24,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getAbilityLibrary, getDcEffects } from '../../../src/data-loader.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
@@ -45,11 +46,16 @@ describe('DC-CC: Ewok Warrior (Elite) — Sling Barrage wiring', () => {
   });
 
   it('resolveAbility sets pendingSlingBarrage + free ranged attack for the msgId', () => {
+    // Register a stub dcMessageMeta so figureKeyForActivation can resolve
+    // msgId M1 → "Ewok Warrior (Elite)-1-0" (per IACP rule 2026-05-09:
+    // freeAttackBonusPending is figureKey-keyed, not msgId-keyed).
+    const stubMeta = new Map([['M1', { dcName: 'Ewok Warrior (Elite)', displayName: 'Ewok Warrior (Elite) [DG 1]', playerNum: 1 }]]);
+    _registerDcMessageMeta(stubMeta);
     const game = {};
     const result = resolveAbility('sling_barrage_ewok_elite', { game, msgId: 'M1' });
     assert.equal(result.applied, true);
     assert.equal(game.pendingSlingBarrage?.M1, true);
-    assert.equal(game.freeAttackBonusPending?.M1?.from, 'Sling Barrage');
+    assert.equal(game.freeAttackBonusPending?.['Ewok Warrior (Elite)-1-0']?.from, 'Sling Barrage');
     assert.equal(game.pendingOverrideAttackDice?.M1?.type, 'ranged');
     assert.ok(/Sling Barrage/.test(result.logMessage));
   });

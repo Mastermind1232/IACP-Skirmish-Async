@@ -468,9 +468,11 @@ describe('PROBE-LOADOUT-07: flurry_of_blows — free melee override queued on hi
     assert.strictEqual(override.bonusHits, 1,
       `Flurry override must specify bonusHits=1. Got: ${override.bonusHits}`);
     // Flurry also grants the free-attack window bonus so the attack does not
-    // consume an action.
-    assert.ok(game.freeAttackBonusPending?.[attackerMsgId],
-      `flurry_of_blows must set freeAttackBonusPending[${attackerMsgId}] so the follow-up attack is free.`);
+    // consume an action. Per IACP rule 2026-05-09, freeAttackBonusPending is
+    // keyed by attackerFigureKey (per-figure scope, not per-group).
+    const _attFk = combat.attackerFigureKey;
+    assert.ok(game.freeAttackBonusPending?.[_attFk],
+      `flurry_of_blows must set freeAttackBonusPending[${_attFk}] so the follow-up attack is free.`);
     // Once-per-activation lock.
     assert.ok(game.roundFigureAbilityUsed?.[`flurryOfBlows_${attackerMsgId}`],
       `flurry_of_blows must mark roundFigureAbilityUsed[flurryOfBlows_${attackerMsgId}] = true to block repeats.`);

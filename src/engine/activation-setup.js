@@ -20,7 +20,7 @@ import { awrRange, enumerateAwrTargets } from '../game/awr-helpers.js';
 import { detectDroidKitTrigger } from '../game/droid-kit-helpers.js';
 import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
 import { getFootprintCells } from '../game/coords.js';
-import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp } from '../game/index.js';
+import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, grantMovementBank, figureChoiceLabels, isCompanionHostDefeated, reduceHp, figureKeyForActivation } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
@@ -807,7 +807,8 @@ export async function finalizeActivation({
       game.movementBank = game.movementBank || {};
       game.movementBank[_sbJunkDroidMsgId] = { remaining: 4, total: 4, threadId: thread.id, messageId: null, displayName: 'Junk Droid' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[_sbJunkDroidMsgId] = { from: 'Scrap Battalion' };
+      const _sbJdFk = figureKeyForActivation(game, _sbJunkDroidMsgId);
+      if (_sbJdFk) game.freeAttackBonusPending[_sbJdFk] = { from: 'Scrap Battalion' };
     }
     await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group**.${_sbJunkDroidMsgId ? ' **4 MP** and **1 free attack** granted — use its Move/Attack buttons.' : ' Move and attack with it during this activation.'}\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
@@ -1026,7 +1027,8 @@ export async function finalizeActivation({
     if (_natKws.includes('FORCE USER')) {
       const _natData = game.nextActivationFreeAttack[playerNum];
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
+      const _natFk = figureKeyForActivation(game, msgId);
+      if (_natFk) game.freeAttackBonusPending[_natFk] = true;
       if (_natData?.dice) {
         game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
         game.pendingOverrideAttackDice[msgId] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };

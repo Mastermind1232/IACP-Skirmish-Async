@@ -639,6 +639,7 @@ async function fireTonfaStrike(thread, game, combat, effect, ctx) {
   _stageChainAttack(combat, {
     source: 'Tonfa Strike',
     msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     message: '**Tonfa Strike** — You may perform an additional attack (use Attack button).',
@@ -661,6 +662,7 @@ async function fireBarrage(thread, game, combat, effect, ctx) {
   _stageChainAttack(combat, {
     source: 'Barrage',
     msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     barrageTargetSpace: targetPos || null,
@@ -682,6 +684,7 @@ async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
   _stageChainAttack(combat, {
     source: 'Flurry of Blows',
     msgId: combat.attackerMsgId,
+    figureKey: combat.attackerFigureKey,
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     pendingOverrideAttackDice: { dice: ['green'], type: 'melee', bonusHits: 1 },
@@ -1470,6 +1473,7 @@ async function fireReturnFire(thread, game, combat, effect, ctx) {
   combat._pendingDefenderChainAttacks.push({
     source: label,
     msgId: defMsgId,
+    figureKey: fk,
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     forcedTargetMsgId: combat.attackerMsgId,

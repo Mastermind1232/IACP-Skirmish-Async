@@ -10,7 +10,7 @@ import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingI
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
-import { cleanupActivation, isActivationActionInProgress } from '../game/activation-state.js';
+import { cleanupActivation, isActivationActionInProgress, figureKeyForActivation } from '../game/activation-state.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels, isConditionImmune, HARMFUL_CONDITIONS } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getValidPushDestinations } from '../game/movement.js';
@@ -2355,7 +2355,7 @@ export async function handleHairTriggerUse(interaction, ctx) {
   game.roundFigureAbilityUsed[htKey] = true;
   // Grant free attack
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[htMsgId] = true;
+  game.freeAttackBonusPending[figureKey] = true;
   const htDcName = dcNameFromFigureKey(figureKey);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await interaction.followUp({
@@ -2564,7 +2564,8 @@ export async function handleItWillBeAlrightAction(interaction, ctx) {
   } else {
     // Grant free attack
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[cassianMsgId] = true;
+    const _iwbaFk = figureKeyForActivation(game, cassianMsgId);
+    if (_iwbaFk) game.freeAttackBonusPending[_iwbaFk] = true;
     await interaction.message.edit({
       content: `**It Will Be Alright** — **${cassianDisplay}** may perform a free attack. Use the **Attack** button.`,
       components: [],

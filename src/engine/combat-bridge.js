@@ -1659,14 +1659,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (false && game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[combat.attackerMsgId] = true;
+    game.freeAttackBonusPending[combat.attackerFigureKey] = true;
     await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
   }
   // Barrage inline disabled 2026-05-09 → fireBarrage.
   if (false && game.barrageSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
     delete game.barrageSecondAttack[combat.attackerMsgId];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[combat.attackerMsgId] = true;
+    game.freeAttackBonusPending[combat.attackerFigureKey] = true;
     // Store first target's position so second attack target must be within 3 spaces
     const _barrageTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
     if (_barrageTargetPos) {
@@ -1744,7 +1744,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
         game.roundFigureAbilityUsed[_fobKey] = true;
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[combat.attackerMsgId] = true;
+        game.freeAttackBonusPending[combat.attackerFigureKey] = true;
         game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
         game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['green'], type: 'melee', bonusHits: 1 };
         await thread.send('**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.');
@@ -3006,7 +3006,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
           if (_rfDefMsgId) {
             game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-            game.freeAttackBonusPending[_rfDefMsgId] = true;
+            game.freeAttackBonusPending[_rfDefFk] = true;
             game.forcedAttackTarget = game.forcedAttackTarget || {};
             game.forcedAttackTarget[_rfDefMsgId] = combat.attackerFigureKey;
             const _rfOwnerId = getPlayerId(game, _rfDefPN);
@@ -3040,7 +3040,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         game.roundFigureAbilityUsed[_dwpKey] = true;
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[combat.attackerMsgId] = true;
+        game.freeAttackBonusPending[combat.attackerFigureKey] = true;
         await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Use the **Attack** button.`).catch(discordCatch);
         await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** earns a free Ranged attack.`, { phase: 'ROUND', icon: 'attack' });
       }
@@ -3124,7 +3124,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   if (game.darksaberSecondAttack?.[combat.attackerMsgId]) {
     delete game.darksaberSecondAttack[combat.attackerMsgId];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Darksaber Strike' };
+    game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Darksaber Strike' };
     // Clear the override so the second attack uses normal dice
     if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
@@ -3138,7 +3138,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.forcedAttackTarget = game.forcedAttackTarget || {};
       game.forcedAttackTarget[combat.attackerMsgId] = combat.defenderFigureKey;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Focus Fire' };
+      game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Focus Fire' };
       await thread.send(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Use the Attack button.`).catch(discordCatch);
     } else {
       delete game.focusFireActive[combat.attackerFigureKey];
@@ -3157,7 +3157,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1 };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Multi-Fire' };
+      game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Multi-Fire' };
       await thread.send(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (\u22121 Hit). Use the Attack button.`).catch(discordCatch);
     } else {
       delete game.multiFireActive[combat.attackerFigureKey];
@@ -3176,7 +3176,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Overheated' };
+      game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Overheated' };
       await thread.send(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Use the Attack button.`).catch(discordCatch);
     } else {
       delete game.overheatedActive[combat.attackerFigureKey];
@@ -3300,7 +3300,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     if (!_entry?.msgId) continue;
     if (_entry.flagKey === 'freeAttackBonusPending') {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[_entry.msgId] = _entry.flagValue ?? true;
+      // Per IACP rule 2026-05-09: freeAttackBonusPending is per-figureKey.
+      // after-attack-fire entries set msgId for routing context, but the
+      // free-attack flag must be keyed by the figure that gets the attack
+      // — the original attacker's figureKey for chain-attack queues, the
+      // defender's figureKey for Return Fire / defender chain queues.
+      const _fabFkForEntry = _entry.figureKey
+        || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_fabFkForEntry) game.freeAttackBonusPending[_fabFkForEntry] = _entry.flagValue ?? true;
     } else if (_entry.flagKey === 'fellSwoopFreeAttack') {
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
       game.fellSwoopFreeAttack[_entry.msgId] = _entry.flagValue ?? true;

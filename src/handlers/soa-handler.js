@@ -950,7 +950,7 @@ export async function handleSoaFire(interaction, ctx) {
       game.jynHairTriggerUsed = game.jynHairTriggerUsed || {};
       game.jynHairTriggerUsed[jynMsgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[jynMsgId] = true;
+      if (jynFk) game.freeAttackBonusPending[jynFk] = true;
       game.forcedAttackTarget = game.forcedAttackTarget || {};
       game.forcedAttackTarget[jynMsgId] = targetFk;
       const _jynFkMatch = String(jynFk || '').match(/-(\d+)-(\d+)$/);

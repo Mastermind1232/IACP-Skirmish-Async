@@ -65,8 +65,8 @@ describe('PROBE-FA-001: freeAttackBonusPending bypasses already-attacked gate', 
   it('001a: flag set → attack_target offered despite already attacked', () => {
     const { game, deps, dc } = buildAttackScenario('Bossk', 'Greedo');
 
-    // Set the free-attack flag
-    game.freeAttackBonusPending = { [dc.msgId]: true };
+    // Set the free-attack flag (figureKey-keyed per IACP rule 2026-05-09)
+    game.freeAttackBonusPending = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const attacks = actions.filter(a => a.type === 'attack_target');

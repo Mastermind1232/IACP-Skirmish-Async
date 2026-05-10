@@ -238,8 +238,8 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     // MP granted
     assert.ok(game.movementBank?.dc3, 'movement bank created for RGC');
     assert.strictEqual(game.movementBank.dc3.remaining, 2, '2 MP granted');
-    // Free attack granted
-    assert.strictEqual(game.freeAttackBonusPending?.dc3, true, 'free attack pending');
+    // Free attack granted (figureKey-keyed per IACP rule 2026-05-09)
+    assert.strictEqual(game.freeAttackBonusPending?.['Royal Guard Champion-1-0'], true, 'free attack pending');
     // 2026-05-09 migration: Executor moved BEFORE_DEFEATED → WHEN_DEFEATED.
     // The friendly's defeat is finalized by processFigureDefeat BEFORE
     // RGC's button click (in the pipeline's WHEN_DEFEATED + CC-play
@@ -451,7 +451,7 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     // the mock map has no real cells; the migration's correctness is
     // already covered by Move-X picker tests.
     assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X never banks');
-    assert.strictEqual(game.freeAttackBonusPending?.dc4, true, 'free attack pending for Onar');
+    assert.strictEqual(game.freeAttackBonusPending?.['Onar Koma-1-0'], true, 'free attack pending for Onar');
     // Re-entry called
     assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
     assert.strictEqual(calls.applyDamageAndFinishCombat[0].params.damage, 3, 'original damage passed');

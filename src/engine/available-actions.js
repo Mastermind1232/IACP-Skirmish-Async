@@ -758,7 +758,7 @@ function getActivationActions(game, playerNum, deps) {
       const alreadyAttacked = !!game.attackPerformedThisActivation?.[msgId];
       let attackBlocked = false;
       if (alreadyAttacked) {
-        const hasFreeAttack = game.freeAttackBonusPending?.[msgId] != null
+        const hasFreeAttack = game.freeAttackBonusPending?.[figureKey] != null
           || game.pounceAttackPending?.[msgId] != null
           || game.fellSwoopFreeAttack?.[msgId]
           || game.pummelTwoAttacksThisActivation?.[msgId];

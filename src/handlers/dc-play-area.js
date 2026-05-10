@@ -35,7 +35,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
-import { cleanupActivation, consumeActionForCurrentFigure } from '../game/activation-state.js';
+import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
@@ -1358,7 +1358,7 @@ async function buildAndSendAttackTargets(
  * no action and is gated once-per-activation. Pre-sets:
  *   - game.heroicUsedThisActivation[figureKey] = true (used flag — disables the
  *     button on subsequent renders)
- *   - game.freeAttackBonusPending[msgId] = true (zero-action cost on the
+ *   - game.freeAttackBonusPending[figureKey] = true (zero-action cost on the
  *     follow-up Attack consumption)
  * then rewrites the customId to the standard `dc_attack_…` form and
  * re-dispatches into handleDcAction. The follow-up flow then runs identically
@@ -1406,7 +1406,7 @@ export async function handleDcHeroicAttack(interaction, ctx) {
   game.heroicUsedThisActivation = game.heroicUsedThisActivation || {};
   game.heroicUsedThisActivation[_heroicFigureKey] = true;
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[msgId] = true;
+  game.freeAttackBonusPending[_heroicFigureKey] = true;
 
   // Rewrite customId and forward to the standard Attack handler. Discord.js
   // ButtonInteraction has a writable customId via configurable property; if
@@ -1588,7 +1588,7 @@ export async function handleDcEndFigure(interaction, ctx) {
  *
  * Sets:
  *   - game.boRifleStaffUsedThisActivation[figureKey] = true (gate)
- *   - game.freeAttackBonusPending[msgId] = true (zero-action follow-up)
+ *   - game.freeAttackBonusPending[figureKey] = true (zero-action follow-up)
  *   - game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red','red'], pierce: 0, bonusAccuracy: 0 }
  * Then rewrites customId to dc_attack_ and forwards to handleDcAction.
  */
@@ -1627,7 +1627,7 @@ export async function handleDcBoRifleAttack(interaction, ctx) {
   game.boRifleStaffUsedThisActivation = game.boRifleStaffUsedThisActivation || {};
   game.boRifleStaffUsedThisActivation[_brFigureKey] = true;
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[msgId] = true;
+  game.freeAttackBonusPending[_brFigureKey] = true;
   game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
   game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red', 'red'], pierce: 0, bonusAccuracy: 0 };
   const _newId = `dc_attack_${msgId}_f${figureIndexStr}`;
@@ -2064,7 +2064,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Assault rule: non-Assault DCs can only perform 1 attack per activation (free attacks exempt)
     if (game.attackPerformedThisActivation?.[msgId]) {
       const isFreeAttack = hasFellSwoopFreeAttack || hasPummelFreeAttack ||
-        game.freeAttackBonusPending?.[msgId] != null || game.pounceAttackPending?.[msgId] != null;
+        game.freeAttackBonusPending?.[figureKey] != null || game.pounceAttackPending?.[msgId] != null;
       // Imperial Retrofitting: multi-attack bypass
       const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[msgId];
       if (!isFreeAttack && !hasIRMultiAttack) {
@@ -2267,18 +2267,23 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
 
   if (actionsData) {
+    // Compute attacker figureKey (the figure currently performing the action).
+    // Per IACP rule 2026-05-09: freeAttackBonusPending is figureKey-keyed so
+    // each figure in a multifigure group has its own pending free-attack flag.
+    const _ahDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const _ahFigureKey = `${meta.dcName}-${_ahDgIndex}-${figureIndex}`;
     // Free pounce attack: Pounce special grants one free attack (already paid as special action)
     const isPounceAttack = action === 'Attack' && game.pounceAttackPending?.[msgId] != null;
     // Free heroic attack: Heroic ability grants one free attack (action restored via freeAction flag on the special)
-    const isHeroicAttack = action === 'Attack' && game.freeAttackBonusPending?.[msgId] != null;
+    const isHeroicAttack = action === 'Attack' && game.freeAttackBonusPending?.[_ahFigureKey] != null;
     if (isPounceAttack) {
       delete game.pounceAttackPending[msgId];
     } else if (isHeroicAttack) {
-      const _fabCount = game.freeAttackBonusPending[msgId];
+      const _fabCount = game.freeAttackBonusPending[_ahFigureKey];
       if (typeof _fabCount === 'number' && _fabCount > 1) {
-        game.freeAttackBonusPending[msgId] = _fabCount - 1;
+        game.freeAttackBonusPending[_ahFigureKey] = _fabCount - 1;
       } else {
-        delete game.freeAttackBonusPending[msgId];
+        delete game.freeAttackBonusPending[_ahFigureKey];
         // Brutality / Sarlacc Sweep: clear different-target tracker once the
         // last free attack is consumed.
         if (game.freeAttackDifferentTargets?.[msgId]) delete game.freeAttackDifferentTargets[msgId];
@@ -2385,7 +2390,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // to 1 space (CRR MOVE-017 picker after the attack resolves).
     if (_suHandler === 'VF: Attack+Move') {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: "Vader's Finest" };
+      const _vfFk = figureKeyForActivation(game, msgId, figureIndex);
+      if (_vfFk) game.freeAttackBonusPending[_vfFk] = { from: "Vader's Finest" };
       game.vadersFinestPostAttackMove = game.vadersFinestPostAttackMove || {};
       game.vadersFinestPostAttackMove[msgId] = true;
       await thread.send(`**Vader's Finest** — Your next attack is free. After attack resolves, you may move up to **1 space** (Move-X picker).`).catch(discordCatch);
@@ -2452,7 +2458,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.autofireActive = game.autofireActive || {};
       game.autofireActive[msgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Autofire' };
+      const _afFk = figureKeyForActivation(game, msgId, figureIndex);
+      if (_afFk) game.freeAttackBonusPending[_afFk] = { from: 'Autofire' };
       await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(discordCatch);
       saveGames(game.gameId);
       return;
@@ -2463,7 +2470,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.fireMissionActive = game.fireMissionActive || {};
       game.fireMissionActive[msgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Fire Mission' };
+      const _fmFk2 = figureKeyForActivation(game, msgId, figureIndex);
+      if (_fmFk2) game.freeAttackBonusPending[_fmFk2] = { from: 'Fire Mission' };
       await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(discordCatch);
       saveGames(game.gameId);
       return;
@@ -2474,7 +2482,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { dice: ['red'], type: 'melee', darksaberBlastToCleave: true };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Darksaber Strike' };
+      const _dsFk = figureKeyForActivation(game, msgId, figureIndex);
+      if (_dsFk) game.freeAttackBonusPending[_dsFk] = { from: 'Darksaber Strike' };
       // Grant a second free attack after this one (the "then may perform an attack")
       game.darksaberSecondAttack = game.darksaberSecondAttack || {};
       game.darksaberSecondAttack[msgId] = true;
@@ -2491,7 +2500,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await thread.send(`**Orbital Bombardment** — Placed **${roundNum} Bombardment token${roundNum > 1 ? 's' : ''}** (total: **${game.orbitalBombardmentTokens[msgId]}**). You may also perform an attack (use Attack button).`).catch(discordCatch);
       // The card says "Then, you may perform an attack" — grant free attack
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Orbital Bombardment' };
+      const _obFk = figureKeyForActivation(game, msgId, figureIndex);
+      if (_obFk) game.freeAttackBonusPending[_obFk] = { from: 'Orbital Bombardment' };
       await logGameAction(game, client, `**Orbital Bombardment** — **${displayName}** placed ${roundNum} Bombardment tokens (total: ${game.orbitalBombardmentTokens[msgId]}).`, { phase: 'ROUND', icon: 'card' });
       saveGames(game.gameId);
       return;
@@ -3923,7 +3933,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
     // Not SMALL or push-immune: grant free attack targeting this
     // figure, no push.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
     game.forcedAttackTarget = game.forcedAttackTarget || {};
     game.forcedAttackTarget[msgId] = targetFk;
     const reason = !isSmall ? 'not SMALL' : 'push-immune';
@@ -3950,7 +3960,7 @@ export async function handleShoulderRushFig(interaction, ctx) {
   if (validSpaces.length === 0) {
     // No room to push — grant free attack without push
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
     game.forcedAttackTarget = game.forcedAttackTarget || {};
     game.forcedAttackTarget[msgId] = targetFk;
     const logMsg = `**Shoulder Rush** — **${targetName}** is SMALL but no room to push. Attack that figure (free action).`;
@@ -4014,7 +4024,7 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   }
   // Grant free attack targeting the pushed figure
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[msgId] = true;
+  if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
   game.forcedAttackTarget = game.forcedAttackTarget || {};
   game.forcedAttackTarget[msgId] = targetFk;
   const logMsg = `**Shoulder Rush** — Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}. Entered vacated space. Attack that figure (free action).`;

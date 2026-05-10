@@ -3,6 +3,19 @@
  * Single authoritative lists of per-activation and round-scoped flags.
  */
 
+// dcMessageMeta is set lazily by game-state.js after its module init
+// completes. Cannot static-import here because game-state.js sits at the
+// top of the dependency graph (game-state → domain/event-store →
+// domain/reducer → activation-reducer → activation-state).
+//
+// game-state.js calls _registerDcMessageMeta(dcMessageMeta) on init.
+// All handler/ability call sites that fire after game-state.js is loaded
+// (i.e. once Discord is up) see the registered Map.
+let _dcMessageMeta = null;
+export function _registerDcMessageMeta(map) {
+  _dcMessageMeta = map;
+}
+
 /**
  * Per-activation flags keyed by msgId.
  * Deleted from game[key] at end of activation.
@@ -44,7 +57,10 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingCombatResupply',
   'pendingPostAttackConditions',
   'pendingMpBonus',
-  'freeAttackBonusPending',
+  // freeAttackBonusPending moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09
+  // (per IACP rule clarification: "free attack bonus" is per-figure, not
+  // per-multifigure-group; figureKey-keyed so figure 1's pending free
+  // attack is not consumed by figure 0's attack).
   'freeAttackDifferentTargets',
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
@@ -130,6 +146,11 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'multiFireBlockedTarget',
   'overheatedActive',
   'attackTypeOverride',
+  // Migrated 2026-05-09 from ACTIVATION_MSGID_FLAGS to per-figureKey
+  // per IACP rule clarification: each figure in a multifigure group has
+  // its own complete activation; a figure's pending free attack must not
+  // be consumed by another figure in the group.
+  'freeAttackBonusPending',
 ];
 
 /**
@@ -165,6 +186,35 @@ const ACTIVATION_SCALAR_FLAGS = [
   'pendingWookSlamPush',
   'pendingSurgeOverflow',
 ];
+
+/**
+ * Compute the canonical figureKey for the figure currently activating
+ * under the given msgId. Used by ability/handler SET sites that have
+ * only msgId in scope and need to key per-figure flags
+ * (e.g. freeAttackBonusPending) without recomputing dgIndex inline.
+ *
+ * Resolution order:
+ *   1. dcActionsData[msgId].selectedFigure (the active figure)
+ *   2. fallback: figureIndex 0 (single-figure DCs / pre-activation arms)
+ *
+ * dcName + dgIndex come from dcMessageMeta. Synchronous lookup.
+ *
+ * @param {object} game
+ * @param {string} msgId
+ * @param {number} [overrideFigureIndex] — optional explicit figure index
+ *   (use when caller knows the targeted figure, e.g. Officer Order grantee)
+ * @returns {string|null} figureKey or null if meta missing
+ */
+export function figureKeyForActivation(game, msgId, overrideFigureIndex) {
+  if (!msgId) return null;
+  const meta = _dcMessageMeta?.get(msgId);
+  if (!meta?.dcName) return null;
+  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const figureIndex = overrideFigureIndex != null
+    ? overrideFigureIndex
+    : (game?.dcActionsData?.[msgId]?.selectedFigure ?? 0);
+  return `${meta.dcName}-${dgIndex}-${figureIndex}`;
+}
 
 /**
  * Clean per-activation state when a DC ends its activation.

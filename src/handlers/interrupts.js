@@ -969,7 +969,7 @@ export async function handleDrivenByHatred(interaction, ctx) {
   } else {
     // dbh_attack_: stamp picker + freeAttackPrompt + −1 die penalty.
     _dbhGame.freeAttackBonusPending = _dbhGame.freeAttackBonusPending || {};
-    _dbhGame.freeAttackBonusPending[_dbhMsgId] = true;
+    if (_dbhFigKey) _dbhGame.freeAttackBonusPending[_dbhFigKey] = true;
     _dbhGame.attackDicePenaltyForMsgId = _dbhGame.attackDicePenaltyForMsgId || {};
     _dbhGame.attackDicePenaltyForMsgId[_dbhMsgId] = 1;
     _dbhGame.attackDicePenaltyLabel = 'Driven by Hatred';
@@ -1046,7 +1046,7 @@ export async function handleFindsmanMeditation(interaction, ctx) {
   }
   // action === 'attack'
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[zuckussMsgId] = { from: 'Findsman Meditation' };
+  if (zuckussFk) game.freeAttackBonusPending[zuckussFk] = { from: 'Findsman Meditation' };
   await interaction.message.edit({ content: '**Findsman Meditation** — **Zuckuss** performs an attack. Use the Attack button.', components: [] }).catch(discordCatch);
   await logGameAction?.(game, client, '**Findsman Meditation** — Zuckuss performs an interrupt attack.', { phase: 'ROUND', icon: 'card' });
   saveGames(game.gameId);
@@ -1273,7 +1273,7 @@ export async function handleExecutor(interaction, ctx) {
 
     // Grant free attack (next attack costs no action)
     _exGame.freeAttackBonusPending = _exGame.freeAttackBonusPending || {};
-    _exGame.freeAttackBonusPending[_exPending.rgcMsgId] = true;
+    if (_exPending.rgcFigKey) _exGame.freeAttackBonusPending[_exPending.rgcFigKey] = true;
 
     await logGameAction(_exGame, client, `**Executor** — **${_exPending.rgcDcName}** gains 2 MP and a free attack (friendly **${_exPending.defeatedLabel}** defeated). Use Move/Attack buttons on the DC.`, { phase: 'ROUND', icon: 'card' });
   } else {
@@ -1322,8 +1322,6 @@ export async function handleExtraProtection(interaction, ctx) {
     // Card text: "move up to 2 spaces and perform an attack." That's
     // a Move-X effect — pendingMoveX with bypassCosts: true, no
     // bank, freeAttackPrompt continuation for the attack.
-    _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
-    _epGame.freeAttackBonusPending[_epPending.onarMsgId] = true;
 
     // Resolve Onar's figure key from dcMessageMeta for the picker.
     let _epOnarFigureKey = null;
@@ -1334,6 +1332,8 @@ export async function handleExtraProtection(interaction, ctx) {
         .filter(k => k.startsWith((_epMeta.dcName || '') + '-'));
       _epOnarFigureKey = _epFigKeys[0] || null;
     }
+    _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
+    if (_epOnarFigureKey) _epGame.freeAttackBonusPending[_epOnarFigureKey] = true;
 
     if (!_epOnarFigureKey) {
       // No figure resolved — Extra Protection cannot fire. Card stays

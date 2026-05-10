@@ -39,6 +39,7 @@ import assert from 'node:assert/strict';
 import { handleDcAction } from '../../../src/handlers/dc-play-area.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { getMapData } from '../../../src/data-loader.js';
+import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -100,6 +101,9 @@ function buildAttachmentCtx(game, opts = {}) {
   const calls = { saveGames: [], logGameAction: [], updateDcActionsMessage: [] };
   const dcMessageMeta = new Map();
   dcMessageMeta.set(meta._msgId || MSG_ID, meta);
+  // Register with activation-state so figureKeyForActivation can resolve
+  // msgId → figureKey for figureKey-keyed flag writes (post 2026-05-09 migration).
+  _registerDcMessageMeta(dcMessageMeta);
 
   return {
     ctx: {
@@ -267,7 +271,8 @@ describe('B-DCATT-003: Autofire — legal activation', () => {
 
     assert.strictEqual(game.autofireActive?.[MSG_ID], true,
       'autofireActive flag set');
-    assert.ok(game.freeAttackBonusPending?.[MSG_ID],
+    // figureKey-keyed per IACP rule 2026-05-09
+    assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'],
       'freeAttackBonusPending set');
   });
 
@@ -308,8 +313,8 @@ describe('B-DCATT-004: Darksaber Strike — multi-pending setup', () => {
     assert.strictEqual(override.type, 'melee', 'override type = melee');
     assert.strictEqual(override.darksaberBlastToCleave, true);
 
-    // freeAttackBonusPending
-    assert.ok(game.freeAttackBonusPending?.[MSG_ID],
+    // freeAttackBonusPending — figureKey-keyed per IACP rule 2026-05-09
+    assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'],
       'freeAttackBonusPending set');
 
     // darksaberSecondAttack
@@ -347,7 +352,8 @@ describe('B-DCATT-005: Fire Mission — double-action cost', () => {
     await handleDcAction(interaction, ctx, 'dc_special_');
 
     assert.strictEqual(game.fireMissionActive?.[MSG_ID], true, 'fireMissionActive set');
-    assert.ok(game.freeAttackBonusPending?.[MSG_ID], 'freeAttackBonusPending set');
+    // figureKey-keyed per IACP rule 2026-05-09
+    assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'], 'freeAttackBonusPending set');
   });
 
   it('005b: cost=2 deducts both actions (remaining 2→0)', async () => {

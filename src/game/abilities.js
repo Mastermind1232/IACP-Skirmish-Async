@@ -5,6 +5,7 @@
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapData, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
+import { figureKeyForActivation } from './activation-state.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
@@ -352,7 +353,8 @@ export function resolveAbility(abilityId, context) {
       // Post-push free attack (Mandalorian Whip): grant free attack targeting the pushed figure
       if (entry.postPushFreeAttack) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[msgId] = true;
+        const _mwFk = figureKeyForActivation(game, msgId);
+        if (_mwFk) game.freeAttackBonusPending[_mwFk] = true;
         game.forcedAttackTarget = game.forcedAttackTarget || {};
         game.forcedAttackTarget[msgId] = targetFigureKey;
       }
@@ -1213,7 +1215,7 @@ export function resolveAbility(abilityId, context) {
         // free attacks consistently with Emperor / Battlefield
         // Leadership / Order Hit etc.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[chosenMsgId] = { from: 'Firing Squad' };
+        game.freeAttackBonusPending[targetFigureKey] = { from: 'Firing Squad' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Check if this is the second pick or if we should offer another
@@ -1369,7 +1371,7 @@ export function resolveAbility(abilityId, context) {
         // Per destruct 2026-05-08: also tag through universal free-attack
         // pipeline (consistent accounting with Emperor / Order Hit / etc).
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[chosenMsgId] = { from: 'Coordinated Raid' };
+        game.freeAttackBonusPending[targetFigureKey] = { from: 'Coordinated Raid' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1410,7 +1412,7 @@ export function resolveAbility(abilityId, context) {
         // Per destruct 2026-05-08: also tag through universal free-attack
         // pipeline (consistent accounting with Emperor / Order Hit / etc).
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[chosenMsgId] = { from: 'Coordinated Raid' };
+        game.freeAttackBonusPending[targetFigureKey] = { from: 'Coordinated Raid' };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
@@ -1426,7 +1428,7 @@ export function resolveAbility(abilityId, context) {
       setPendingCoordinatedRaid(game, { forMsgId: msgId, chosenFigureKey: onlyFk, triggeredByMsgId: msgId });
       // Universal free-attack pipeline tag.
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Coordinated Raid' };
+      game.freeAttackBonusPending[onlyFk] = { from: 'Coordinated Raid' };
       const chosenName = dcNameFromFigureKey(onlyFk);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
     }
@@ -1659,7 +1661,8 @@ export function resolveAbility(abilityId, context) {
     }
     // Grant free Ranged attack using own attack pool
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    const _cuFk = figureKeyForActivation(game, msgId);
+    if (_cuFk) game.freeAttackBonusPending[_cuFk] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
     return { applied: true, logMessage: `**Continually Unexpected** — K-2S0 has ${hitCount} Damage + ${surgeCount} Surge Tokens. Your next attack costs no action and is **Ranged** (uses your normal dice pool). *(Token requirement met — no tokens consumed.)*` };
@@ -1725,7 +1728,7 @@ export function resolveAbility(abilityId, context) {
         const tgtMsgId = findMsgIdForFigureKey(game, playerNum, targetFigureKey, dcMessageMeta);
         if (tgtMsgId) {
           game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-          game.freeAttackBonusPending[tgtMsgId] = true;
+          game.freeAttackBonusPending[targetFigureKey] = true;
           if (entry.grantMpToTarget > 0) {
             addMovementPoints(game, tgtMsgId, entry.grantMpToTarget);
           }
@@ -1799,7 +1802,8 @@ export function resolveAbility(abilityId, context) {
     const { game, msgId } = context;
     if (game && msgId) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Sling Barrage' };
+      const _sbFk = figureKeyForActivation(game, msgId);
+      if (_sbFk) game.freeAttackBonusPending[_sbFk] = { from: 'Sling Barrage' };
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
       game.pendingSlingBarrage = game.pendingSlingBarrage || {};
@@ -1825,7 +1829,7 @@ export function resolveAbility(abilityId, context) {
       const _ffFigureKey = `${meta?.dcName || 'unknown'}-${_ffDgIdx}-${_ffSelFig}`;
       // Grant a free attack for the second shot; after first attack resolves, grant another
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Focus Fire' };
+      game.freeAttackBonusPending[_ffFigureKey] = { from: 'Focus Fire' };
       // Track that Focus Fire is active — second attack must target the same figure
       game.focusFireActive = game.focusFireActive || {};
       game.focusFireActive[_ffFigureKey] = { attacksRemaining: 2 };
@@ -1846,7 +1850,7 @@ export function resolveAbility(abilityId, context) {
       const _mfFigureKey = `${meta?.dcName || 'unknown'}-${_mfDgIdx}-${_mfSelFig}`;
       // Grant a free attack for the second shot
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Multi-Fire' };
+      game.freeAttackBonusPending[_mfFigureKey] = { from: 'Multi-Fire' };
       // Apply -1 Hit to all attacks during Multi-Fire
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { bonusHits: -1 };
@@ -1884,7 +1888,8 @@ export function resolveAbility(abilityId, context) {
         game.movementBank = game.movementBank || {};
         game.movementBank[junkDroidMsgId] = { remaining: 4, total: 4 };
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[junkDroidMsgId] = { from: 'Overclock' };
+        const _ocFk = figureKeyForActivation(game, junkDroidMsgId);
+        if (_ocFk) game.freeAttackBonusPending[_ocFk] = { from: 'Overclock' };
       }
     }
     return {
@@ -1996,16 +2001,17 @@ export function resolveAbility(abilityId, context) {
     // (not msgId) so a multifigure group's other figures aren't
     // affected by Saber Orbit started by another figure.
     if (entry.saberOrbitChain > 1) {
-      game.freeAttackBonusPending[msgId] = entry.saberOrbitChain;
       const _soMeta = context.meta || (dcMessageMeta?.get?.(msgId));
       const _soDgMatch = (_soMeta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
       const _soDgIdx = _soDgMatch ? _soDgMatch[1] : '1';
       const _soSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _soFigureKey = `${_soMeta?.dcName || 'unknown'}-${_soDgIdx}-${_soSelFig}`;
+      game.freeAttackBonusPending[_soFigureKey] = entry.saberOrbitChain;
       game.saberOrbitAttacksRemaining = game.saberOrbitAttacksRemaining || {};
       game.saberOrbitAttacksRemaining[_soFigureKey] = entry.saberOrbitChain;
     } else {
-      game.freeAttackBonusPending[msgId] = true;
+      const _odFk = figureKeyForActivation(game, msgId);
+      if (_odFk) game.freeAttackBonusPending[_odFk] = true;
     }
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = {
@@ -2096,7 +2102,8 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     // freeAttackBonusCount > 1 (e.g. Sarlacc Sweep: 2 free attacks): store count, each attack decrements by 1
-    game.freeAttackBonusPending[msgId] = entry.freeAttackBonusCount ?? true;
+    const _fabFk = figureKeyForActivation(game, msgId);
+    if (_fabFk) game.freeAttackBonusPending[_fabFk] = entry.freeAttackBonusCount ?? true;
     // Brutality / Sarlacc Sweep / Multi-Fire: each attack must target a different figure.
     // Initialize an empty target-tracker; handlers/combat.js handleAttackTarget pushes
     // each chosen figureKey and refuses duplicates while this entry is set.
@@ -2275,7 +2282,8 @@ export function resolveAbility(abilityId, context) {
     // Charge (and similar): also grant a free attack after the move
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
+      const _chFk = figureKeyForActivation(game, msgId);
+      if (_chFk) game.freeAttackBonusPending[_chFk] = true;
     }
     // Wall Run: tag the activating figure so movement.js waives difficult-
     // terrain MP cost in cells edge/corner-adjacent to a wall. Cleared at
@@ -3050,7 +3058,7 @@ export function resolveAbility(abilityId, context) {
     // freeAttackBonusPending in combat.js to mark the attack as free.
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
+      if (_figureKey) game.freeAttackBonusPending[_figureKey] = true;
     }
     // mobileMovement (Lift Off): grant Mobile movement for these MP
     if (entry.mobileMovement) {
@@ -8177,7 +8185,8 @@ export function resolveAbility(abilityId, context) {
     game.pendingOverrideAttackDice[msgId] = { ...entry.attackOverrideOpts };
     if (entry.freeAttackBonus) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
+      const _aoFk = figureKeyForActivation(game, msgId);
+      if (_aoFk) game.freeAttackBonusPending[_aoFk] = true;
     }
     const rangeNote = entry.attackOverrideOpts.minRange ? ` Target must be **${entry.attackOverrideOpts.minRange}+** spaces away.` : '';
     const dieNote = entry.attackOverrideOpts.removeDieColor ? ` Remove 1 **${entry.attackOverrideOpts.removeDieColor}** die from your attack pool.` : '';
@@ -8537,7 +8546,7 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `**Jundland Terror** — could not locate **${targetName}**'s play area; resolve manually.` };
       }
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[targetMsgId] = true;
+      game.freeAttackBonusPending[chosenFigureKey] = true;
       // Out-of-activation 2-MP grant on a non-activating friendly →
       // setupPendingMoveX, bypassCosts: false. Free attack stays
       // banked for the figure's next activation interrupt.
@@ -8785,7 +8794,7 @@ export function resolveAbility(abilityId, context) {
         findMsgIdForFigureKey(game, opponentPlayerNum(playerNum), chosenFigureKey, dcMessageMeta);
       if (!creatureMsgId) return { applied: false, manualMessage: 'Resolve manually: could not locate creature figure.' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[creatureMsgId] = true;
+      game.freeAttackBonusPending[chosenFigureKey] = true;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       return { applied: true, logMessage: `**Ferocity** — **${dcName}** may perform 1 free attack (use their Attack button).` };
     }
@@ -8810,7 +8819,7 @@ export function resolveAbility(abilityId, context) {
       const mid = findMsgIdForFigureKey(game, 1, creatureKeys[0], dcMessageMeta) || findMsgIdForFigureKey(game, 2, creatureKeys[0], dcMessageMeta);
       if (mid) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[mid] = true;
+        game.freeAttackBonusPending[creatureKeys[0]] = true;
         return { applied: true, logMessage: `**Ferocity** — **${dcNameFromFigureKey(creatureKeys[0])}** may perform 1 free attack (use their Attack button).` };
       }
     }
@@ -8831,7 +8840,7 @@ export function resolveAbility(abilityId, context) {
     const j4xMsgId = findMsgIdForFigureKey(game, playerNum, j4xFk, dcMessageMeta);
     if (j4xMsgId) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[j4xMsgId] = true;
+      game.freeAttackBonusPending[j4xFk] = true;
     }
     return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is now **Focused**. J4X-7 may perform 1 free attack (use J4X-7\'s Attack button).' };
   }
@@ -8945,7 +8954,8 @@ export function resolveAbility(abilityId, context) {
     // Grant (diceCount - 1) more free attacks
     if (diceCount > 1) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = diceCount - 1;
+      const _fsFk = figureKeyForActivation(game, msgId);
+      if (_fsFk) game.freeAttackBonusPending[_fsFk] = diceCount - 1;
     }
     return { applied: true, logMessage: `**Feral Swipes** — **${dcName}** performs ${diceCount} Melee attack${diceCount !== 1 ? 's' : ''} (1 red die each). First attack override set. Each remaining free attack: use 1 red die.` };
   }
@@ -8981,7 +8991,7 @@ export function resolveAbility(abilityId, context) {
     for (const fk of targets.slice(0, 3)) {
       const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
       if (figMsgId) {
-        game.freeAttackBonusPending[figMsgId] = true;
+        game.freeAttackBonusPending[fk] = true;
         if (blastBonus > 0) {
           game.optimalBombardmentBlastBonus = game.optimalBombardmentBlastBonus || {};
           game.optimalBombardmentBlastBonus[figMsgId] = blastBonus;
@@ -9033,7 +9043,7 @@ export function resolveAbility(abilityId, context) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = { from: 'Overheated' };
+      game.freeAttackBonusPending[selfFk] = { from: 'Overheated' };
       return {
         applied: true,
         logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Ranged attacks queued at −1 Hit each. Attack type becomes Melee after both resolve.`,
@@ -9132,7 +9142,8 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey && chosenSpace) {
       const { prevPos: _fmPrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
+      const _fmFk = figureKeyForActivation(game, msgId);
+      if (_fmFk) game.freeAttackBonusPending[_fmFk] = true;
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
@@ -9154,7 +9165,7 @@ export function resolveAbility(abilityId, context) {
       if (!activatorPos || !mapId) {
         // Fallback: grant free attack without push
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[msgId] = true;
+        if (activatorFk) game.freeAttackBonusPending[activatorFk] = true;
         const nm = dcNameFromFigureKey(chosenFigureKey);
         return { applied: true, logMessage: `**Face Me!** — Move **${nm}** adjacent manually. Then use Melee Attack button for 1 free attack.` };
       }
@@ -9165,7 +9176,7 @@ export function resolveAbility(abilityId, context) {
       const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s) || s === targetCurrentPos);
       if (!validSpaces.length) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[msgId] = true;
+        if (activatorFk) game.freeAttackBonusPending[activatorFk] = true;
         const nm = dcNameFromFigureKey(chosenFigureKey);
         return { applied: true, logMessage: `**Face Me!** — No free adjacent space for push; move **${nm}** adjacent manually. Use Melee Attack button for 1 free attack.` };
       }
@@ -9587,7 +9598,7 @@ export function resolveAbility(abilityId, context) {
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
       addMovementPoints(game, figMsgId, figSpeed);
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[figMsgId] = true;
+      game.freeAttackBonusPending[chosenFigureKey] = true;
       return { applied: true, logMessage: `**Call the Vanguard** — **${dcName}** gains ${figSpeed} MP + 1 free attack (interrupt). Use their Move and Attack buttons.` };
     }
     // Phase 1: find TROOPER figures with cost 4+ (any range, any player's table)
@@ -9816,8 +9827,9 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey) {
       const friendlyMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[msgId] = true;
-      if (friendlyMsgId) game.freeAttackBonusPending[friendlyMsgId] = true;
+      const _caFk = figureKeyForActivation(game, msgId);
+      if (_caFk) game.freeAttackBonusPending[_caFk] = true;
+      if (friendlyMsgId) game.freeAttackBonusPending[chosenFigureKey] = true;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure. LOS: figures don't block for these attacks.` };
     }
@@ -10254,7 +10266,8 @@ export function resolveAbility(abilityId, context) {
         // this attack removes 1 die from the attacker's pool — set the
         // one-shot per-msgId penalty so handleCombatReady consumes it.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[msgId] = true;
+        const _losFk = figureKeyForActivation(game, msgId);
+        if (_losFk) game.freeAttackBonusPending[_losFk] = true;
         game.attackDicePenaltyForMsgId = game.attackDicePenaltyForMsgId || {};
         game.attackDicePenaltyForMsgId[msgId] = 1;
         game.attackDicePenaltyLabel = 'Lord of the Sith';
@@ -10387,7 +10400,8 @@ export function resolveAbility(abilityId, context) {
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    const _pbkFk = figureKeyForActivation(game, msgId);
+    if (_pbkFk) game.freeAttackBonusPending[_pbkFk] = true;
     game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
     game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 2;
     const meta = dcMessageMeta.get(msgId);
@@ -10403,7 +10417,8 @@ export function resolveAbility(abilityId, context) {
     const meta = dcMessageMeta.get(msgId);
     // Grant free attack with Pierce 2
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    const _ocwFk = figureKeyForActivation(game, msgId);
+    if (_ocwFk) game.freeAttackBonusPending[_ocwFk] = true;
     game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
     game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), pierce: (game.pendingOverrideAttackDice[msgId]?.pierce || 0) + 2 };
     // Apply Weaken to activating figure (respects immunity)
@@ -10432,7 +10447,8 @@ export function resolveAbility(abilityId, context) {
     const meta = dcMessageMeta.get(msgId);
     // Grant free attack
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    const _pbFk = figureKeyForActivation(game, msgId);
+    if (_pbFk) game.freeAttackBonusPending[_pbFk] = true;
     // Mark as used this move (cleared when a new Move action starts — G36)
     game.partingShotTriggered[msgId] = true;
     // Apply Stun to activating figure (respects immunity)
@@ -10473,7 +10489,8 @@ export function resolveAbility(abilityId, context) {
           const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
           if (kws.includes('MOBILE')) {
             game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-            game.freeAttackBonusPending[mid] = { from: 'Choose a Side (Flamethrower)' };
+            const _csFk = figureKeyForActivation(game, mid);
+            if (_csFk) game.freeAttackBonusPending[_csFk] = { from: 'Choose a Side (Flamethrower)' };
             grantedNames.push(dcN);
           }
         }
@@ -10490,7 +10507,8 @@ export function resolveAbility(abilityId, context) {
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[msgId] = true;
+    const _reFk = figureKeyForActivation(game, msgId);
+    if (_reFk) game.freeAttackBonusPending[_reFk] = true;
     game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
     game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 1;
     // Flag: swap to defender's surge abilities when attack resolves

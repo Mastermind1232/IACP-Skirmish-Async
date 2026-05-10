@@ -91,7 +91,7 @@ export {
   countSpaces,
 } from './spatial.js';
 
-export { cleanupActivation, cleanupRoundStart } from './activation-state.js';
+export { cleanupActivation, cleanupRoundStart, figureKeyForActivation } from './activation-state.js';
 
 export { reduceHp, healHp, healHpDistributed } from './damage-helpers.js';
 
