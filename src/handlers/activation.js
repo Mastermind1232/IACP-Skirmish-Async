@@ -4,7 +4,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
-import { finalizeActivation, getCompanionForDc, formatCompanionStats } from '../engine/activation-setup.js';
+import { finalizeActivation, getCompanionForDc, formatCompanionStats, getPairedActiveMsgId, getCompanionMsgIdForHost } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
 import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
@@ -749,6 +749,15 @@ export async function handleDcEndActivation(interaction, ctx) {
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[msgId] = true;
 
+  // Slice 3 (alexanbv 2026-05-10): host and companion end activation
+  // INDEPENDENTLY. If the paired side still has an active dcActionsData
+  // entry, this is a partial end — clean up only the clicked msgId's
+  // per-figure state and DC card; skip thread archive, turn switch,
+  // companion manual-log, Clan of Two teleport, and post-activation
+  // hooks. Those fire when the OTHER side ends (and the paired check
+  // returns null because this side is already cleared).
+  const _slice3PairedActive = getPairedActiveMsgId(game, msgId);
+
   // Companion-first gate clearance (destruct 2026-05-07 (c)): if the
   // ending DC is itself a companion that was chosen to go BEFORE its
   // host, flip the host's companionActivatedBefore flag from 'before'
@@ -766,9 +775,10 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
 
-  // Clean up activation state
+  // Clean up activation state. Skip thread archive when the paired side
+  // (companion or host) is still active — the thread is shared.
   const actionsData = game.dcActionsData?.[msgId];
-  if (actionsData?.threadId) {
+  if (actionsData?.threadId && !_slice3PairedActive) {
     try {
       const thread = await fetchGameChannel(client, actionsData.threadId);
       await thread.setArchived(true);
@@ -853,12 +863,26 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Update DC card (stays exhausted)
   await updateDcCardMessage(client, game, msgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Activation:' });
 
+  // Slice 3 partial end: paired side still active. Skip turn switch and
+  // all post-activation hooks (Clan of Two teleport, End Turn prompt,
+  // manual companion log, On a Diplomatic, Field Tactics, Lie in Ambush,
+  // repost). They fire when the SECOND side ends and the paired check
+  // returns null.
+  if (_slice3PairedActive) {
+    saveGames(game.gameId);
+    return;
+  }
+
   // --- Companion activation at end of activation ---
   // If companion was marked 'pending-after' or was never addressed (player ignored buttons), activate now
   {
     const _compAttachments = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _compInfo = getCompanionForDc(meta.dcName, _compAttachments);
-    if (_compInfo && !_compInfo.isCoActivation) {
+    // Skip the manual companion-log path when the companion has its own
+    // wired bank (slice 1+2). That path was the legacy "play it manually"
+    // hint; with the wired bank the companion activates via its own UI.
+    const _compMsgId = getCompanionMsgIdForHost(game, msgId);
+    if (_compInfo && !_compInfo.isCoActivation && !_compMsgId) {
       const _compState = game.companionActivatedBefore?.[msgId];
       if (_compState === 'pending-after' || !_compState) {
         const _compSummary = formatCompanionStats(_compInfo.companionName, _compInfo.companionStats);

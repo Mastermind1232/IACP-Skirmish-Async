@@ -77,6 +77,52 @@ export function getCompanionForDc(dcName, attachments) {
   return null;
 }
 
+/**
+ * Resolve the companion msgId associated with a host msgId, or null.
+ * Reads p{n}DcCompanionMessageIds at the host's index.
+ */
+export function getCompanionMsgIdForHost(game, hostMsgId) {
+  for (const pn of [1, 2]) {
+    const hostIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const compIds = pn === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    if (!hostIds || !compIds) continue;
+    const idx = hostIds.indexOf(hostMsgId);
+    if (idx >= 0) return compIds[idx] || null;
+  }
+  return null;
+}
+
+/**
+ * Resolve the host msgId for a companion msgId, or null. Inverse of
+ * getCompanionMsgIdForHost.
+ */
+export function getHostMsgIdForCompanion(game, companionMsgId) {
+  for (const pn of [1, 2]) {
+    const compIds = pn === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    const hostIds = pn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    if (!compIds || !hostIds) continue;
+    const idx = compIds.indexOf(companionMsgId);
+    if (idx >= 0) return hostIds[idx] || null;
+  }
+  return null;
+}
+
+/**
+ * Given a msgId currently activating, return the PAIRED msgId (the host
+ * if msgId is a companion, the companion if msgId is a host) when both
+ * sides are allocated this activation, otherwise null. Used by the
+ * End-Activation handler to gate thread archive + turn switch on BOTH
+ * sides finishing — per alexanbv 2026-05-10, host and companion end
+ * independently and the turn doesn't change until both are done.
+ */
+export function getPairedActiveMsgId(game, msgId) {
+  const companionMsgId = getCompanionMsgIdForHost(game, msgId);
+  if (companionMsgId && game.dcActionsData?.[companionMsgId]) return companionMsgId;
+  const hostMsgId = getHostMsgIdForCompanion(game, msgId);
+  if (hostMsgId && game.dcActionsData?.[hostMsgId]) return hostMsgId;
+  return null;
+}
+
 /** Build a summary string for a companion's stats. */
 export function formatCompanionStats(name, stats) {
   const parts = [`**${name}**`];
