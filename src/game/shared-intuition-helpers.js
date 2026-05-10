@@ -1,5 +1,7 @@
 /**
- * Pure helpers for Tress Hacnua's **Shared Intuition**.
+ * Pure helpers for **Shared Intuition** — carried by 4-LOM only per
+ * dc-effects.json (alexanbv correction 2026-05-10; the original file
+ * comment misattributed it to Tress Hacnua).
  *
  * Card text: "While attacking, if another friendly HUNTER is
  *  within 3 spaces of you and has LOS to the target, apply +1 Hit
