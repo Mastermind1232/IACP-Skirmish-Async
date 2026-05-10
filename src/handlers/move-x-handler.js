@@ -1060,6 +1060,18 @@ async function _runMassiveDisplacement(game, ctx, pending) {
   const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcName) || '1x1';
   const footprintSet = new Set(getNormalizedFootprint(pos, size));
   const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
+  if (dispPending) {
+    // Per CRR (2026-05-09 user clarification): once a MASSIVE figure
+    // displaces another figure, it may no longer move during the
+    // current phase (SoR / EoR / activation). Set a per-figureKey
+    // flag that movement validators check; flag is cleared on phase
+    // boundaries (cleanupActivation, round transitions).
+    game.massivePushedThisPhase = game.massivePushedThisPhase || {};
+    game.massivePushedThisPhase[pending.figureKey] = true;
+    await logGameAction?.(game, client,
+      `🦿 **MASSIVE displaced** — **${pending.dcName || dcName}** pushed ${dispPending.totalDisplaced} figure(s); cannot move again this phase.`,
+      { phase: 'ROUND', icon: 'move' });
+  }
   if (!dispPending) {
     // Diagnostic: log that the MASSIVE displacement check ran but
     // found no overlaps. Helps debug bug reports like "AT-DP moved
