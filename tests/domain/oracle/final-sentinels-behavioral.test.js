@@ -237,25 +237,25 @@ describe('B-SENT-003: Bossk + Hardy EoR interaction', () => {
 // ── B-SENT-004: Cross-player activation flag isolation ─────────────────────
 
 describe('B-SENT-004: Cross-player activation flag isolation', () => {
-  it('004a: P1 activation cleanup does not erase P2 playerNum-scoped flags', () => {
+  it('004a: P1 activation cleanup does not erase P2 figure-scoped flags', () => {
     const game = makeGame();
-    // Both players have playerNum-scoped bonuses (unusual but possible via CCs)
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
     game.nextAttacksBonusHits = {
-      1: [{ source: 'cc_a', hits: 1 }],
-      2: [{ source: 'cc_b', hits: 2 }],
+      'Trooper-1-0': [{ source: 'cc_a', hits: 1 }],
+      'IG-88-2-0': [{ source: 'cc_b', hits: 2 }],
     };
-    game.nextAttackBonusPierce = { 1: 3, 2: 1 };
+    game.nextAttackBonusPierce = { 'Trooper-1-0': 3, 'IG-88-2-0': 1 };
 
     // P1's activation ends
     cleanupActivation(game, 'msg_p1', 1, ['Trooper-1-0']);
 
-    // P1's playerNum-scoped flags cleaned
-    assert.strictEqual(game.nextAttacksBonusHits?.[1], undefined, 'P1 bonus hits cleaned');
-    assert.strictEqual(game.nextAttackBonusPierce?.[1], undefined, 'P1 bonus pierce cleaned');
-    // P2's playerNum-scoped flags preserved
-    assert.deepStrictEqual(game.nextAttacksBonusHits?.[2], [{ source: 'cc_b', hits: 2 }],
+    // P1's figure-scoped flags cleaned
+    assert.strictEqual(game.nextAttacksBonusHits?.['Trooper-1-0'], undefined, 'P1 bonus hits cleaned');
+    assert.strictEqual(game.nextAttackBonusPierce?.['Trooper-1-0'], undefined, 'P1 bonus pierce cleaned');
+    // P2's figure-scoped flags preserved
+    assert.deepStrictEqual(game.nextAttacksBonusHits?.['IG-88-2-0'], [{ source: 'cc_b', hits: 2 }],
       'P2 bonus hits preserved');
-    assert.strictEqual(game.nextAttackBonusPierce?.[2], 1, 'P2 bonus pierce preserved');
+    assert.strictEqual(game.nextAttackBonusPierce?.['IG-88-2-0'], 1, 'P2 bonus pierce preserved');
   });
 
   it('004b: sequential P1 → P2 activations — no cross-contamination', () => {
@@ -264,7 +264,8 @@ describe('B-SENT-004: Cross-player activation flag isolation', () => {
     // P1 activates
     game.figureMoved = { 'Trooper-1-0': true };
     game.dcActionsData = { msg_p1: { remaining: 0, total: 2 } };
-    game.nextAttacksBonusHits = { 1: [{ source: 'test' }] };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    game.nextAttacksBonusHits = { 'Trooper-1-0': [{ source: 'test' }] };
     game.commsJammerActivePlayerNum = 1;
 
     cleanupActivation(game, 'msg_p1', 1, ['Trooper-1-0']);
@@ -275,12 +276,12 @@ describe('B-SENT-004: Cross-player activation flag isolation', () => {
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData['msg_p2'] = { remaining: 1, total: 2 };
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-    game.nextAttacksBonusHits[2] = [{ source: 'p2_cc' }];
+    game.nextAttacksBonusHits['IG-88-2-0'] = [{ source: 'p2_cc' }];
 
     // P1 state must not be present during P2's activation
     assert.strictEqual(game.figureMoved['Trooper-1-0'], undefined, 'P1 figureMoved gone');
     assert.strictEqual(game.dcActionsData['msg_p1'], undefined, 'P1 dcActionsData gone');
-    assert.strictEqual(game.nextAttacksBonusHits[1], undefined, 'P1 bonus gone');
+    assert.strictEqual(game.nextAttacksBonusHits['Trooper-1-0'], undefined, 'P1 bonus gone');
     assert.strictEqual(game.commsJammerActivePlayerNum, undefined, 'P1 scalar gone');
 
     // P2 state is live
@@ -293,6 +294,6 @@ describe('B-SENT-004: Cross-player activation flag isolation', () => {
     // Everything clean
     assert.strictEqual(game.figureMoved?.['IG-88-2-0'], undefined, 'P2 figureMoved cleaned');
     assert.strictEqual(game.dcActionsData?.['msg_p2'], undefined, 'P2 dcActionsData cleaned');
-    assert.strictEqual(game.nextAttacksBonusHits?.[2], undefined, 'P2 bonus cleaned');
+    assert.strictEqual(game.nextAttacksBonusHits?.['IG-88-2-0'], undefined, 'P2 bonus cleaned');
   });
 });

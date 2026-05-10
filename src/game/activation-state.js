@@ -74,7 +74,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // Chaotic / Corrupting / Balancing Force shared per-player picker
   // state — cleared at round boundary in case picker is abandoned.
   'pendingForceCardPick',
-  'nextAttackReach',
+  // nextAttackReach moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-
+  // figure scope per IACP multifigure-independent-activation rule).
   'selfDestructProtocolTriggered',
   'falseOrdersUpgrade',
   'setTrapSpace',
@@ -151,13 +152,12 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // its own complete activation; a figure's pending free attack must not
   // be consumed by another figure in the group.
   'freeAttackBonusPending',
-];
-
-/**
- * Per-activation flags keyed by playerNum.
- * Deleted for the activating player at end of activation.
- */
-const ACTIVATION_PLAYERNUM_FLAGS = [
+  // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
+  // per IACP rule clarification 2026-05-09: figures in the same multifigure
+  // group have completely independent activations — nothing carries over.
+  // These "next attack" bonuses arm during a single figure's activation and
+  // must not bleed into a sibling figure's attack within the same group.
+  'nextAttackReach',
   'nextAttacksBonusHits',
   'nextAttacksBonusConditions',
   'nextAttackBonusSurgeAbilities',
@@ -165,6 +165,18 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
   'nextAttackBonusAccuracy',
   'vetInstinctsActiveThisActivation',
 ];
+
+/**
+ * Per-activation flags keyed by playerNum.
+ * Deleted for the activating player at end of activation.
+ *
+ * Empty 2026-05-09 — last surviving entries (next-attack bonuses + Vet
+ * Instincts) migrated to ACTIVATION_FIGKEY_FLAGS for the multifigure-
+ * independent-activation rule. Kept as an explicit empty list so the
+ * cleanup loop in cleanupActivation stays inert without code changes
+ * if a future flag reintroduces the playerNum-keyed shape.
+ */
+const ACTIVATION_PLAYERNUM_FLAGS = [];
 
 /**
  * Per-activation scalar flags (deleted outright).

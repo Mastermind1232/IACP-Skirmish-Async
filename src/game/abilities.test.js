@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
+import { _registerDcMessageMeta } from './activation-state.js';
 
 test('getAbility returns library entry for known surge id', () => {
   const entry = getAbility('damage 1');
@@ -737,35 +738,48 @@ test('resolveAbility Size Advantage sets nextAttacksBonusHits and nextAttacksBon
   const msgId = 'msg-sa';
   const game = {
     gameId: 'g-sa',
-    dcActionsData: { [msgId]: {} },
+    p1ActivatedDcIndices: [],
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
     nextAttacksBonusHits: {},
     nextAttacksBonusConditions: {},
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-sa', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
   const result = resolveAbility('Size Advantage', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 1, bonus: 2 });
-  assert.deepStrictEqual(game.nextAttacksBonusConditions[1], { count: 1, conditions: ['Weaken'] });
+  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+  assert.deepStrictEqual(game.nextAttacksBonusHits['Nexu-1-0'], { count: 1, bonus: 2 });
+  assert.deepStrictEqual(game.nextAttacksBonusConditions['Nexu-1-0'], { count: 1, conditions: ['Weaken'] });
 });
 
 test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
   const msgId = 'msg-mfp';
   const game = {
     gameId: 'g11',
-    dcActionsData: { [msgId]: {} },
+    p2ActivatedDcIndices: [],
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
     nextAttacksBonusHits: {},
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g11', playerNum: 2, dcName: 'Heavy Troopers', displayName: 'Heavy [Group 1]' }]]);
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g11', playerNum: 2, dcName: 'Heavy Troopers', displayName: 'Heavy Troopers [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
   const result = resolveAbility('Maximum Firepower', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.nextAttacksBonusHits[2], { count: 1, bonus: 4 });
+  assert.deepStrictEqual(game.nextAttacksBonusHits['Heavy Troopers-1-0'], { count: 1, bonus: 4 });
 });
 
 test('resolveAbility Cruel Strike sets nextAttackBonusSurgeAbilities', () => {
-  const game = { gameId: 'g-cs', nextAttackBonusSurgeAbilities: {} };
-  const result = resolveAbility('Cruel Strike', { game, playerNum: 1 });
+  const msgId = 'msg-cs';
+  const game = {
+    gameId: 'g-cs',
+    p1ActivatedDcIndices: [],
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    nextAttackBonusSurgeAbilities: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-cs', playerNum: 1, dcName: 'Trandoshan Hunter', displayName: 'Trandoshan Hunter [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Cruel Strike', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.nextAttackBonusSurgeAbilities[1], ['pierce 1, weaken']);
+  assert.deepStrictEqual(game.nextAttackBonusSurgeAbilities['Trandoshan Hunter-1-0'], ['pierce 1, weaken']);
   assert.ok(result.logMessage?.toLowerCase().includes('pierce') && result.logMessage?.toLowerCase().includes('weaken'));
 });
 
@@ -1194,11 +1208,13 @@ test('resolveAbility Disable with chosenOption adds to disabledFigures', () => {
 
 test('resolveAbility Beatdown sets nextAttacksBonusHits for 2 attacks +1 Hit', () => {
   const msgId = 'msg-bd';
-  const game = { gameId: 'g-bd', dcActionsData: { [msgId]: {} } };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee [Group 1]' }]]);
+  const game = { gameId: 'g-bd', p1ActivatedDcIndices: [], dcActionsData: { [msgId]: { selectedFigure: 0 } } };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bd', playerNum: 1, dcName: 'Wookiee Warrior', displayName: 'Wookiee Warrior [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
   const result = resolveAbility('Beatdown', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.nextAttacksBonusHits[1], { count: 2, bonus: 1 });
+  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+  assert.deepStrictEqual(game.nextAttacksBonusHits['Wookiee Warrior-1-0'], { count: 2, bonus: 1 });
   assert.ok(result.logMessage?.includes('2') && result.logMessage?.includes('+1 Hit'));
 });
 

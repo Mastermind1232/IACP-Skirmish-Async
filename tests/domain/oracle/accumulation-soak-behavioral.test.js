@@ -177,8 +177,8 @@ describe('B-SOAK-002: Activation-scoped flags across two activations', () => {
     // Set per-figKey flags
     game.figureMoved = { [fkA]: true };
     game.tripodAttacked = { [fkA]: true };
-    // Set per-playerNum flags
-    game.nextAttacksBonusHits = { 1: [{ source: 'test', hits: 1 }] };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    game.nextAttacksBonusHits = { [fkA]: [{ source: 'test', hits: 1 }] };
     // Set scalar flag
     game.commsJammerActivePlayerNum = 2;
 
@@ -190,8 +190,8 @@ describe('B-SOAK-002: Activation-scoped flags across two activations', () => {
     // per-figKey cleaned
     assert.strictEqual(game.figureMoved?.[fkA], undefined, 'figureMoved[A] cleaned');
     assert.strictEqual(game.tripodAttacked?.[fkA], undefined, 'tripodAttacked[A] cleaned');
-    // per-playerNum cleaned for player 1
-    assert.strictEqual(game.nextAttacksBonusHits?.[1], undefined, 'nextAttacksBonusHits[1] cleaned');
+    // per-figureKey cleaned (migrated 2026-05-09 from playerNum)
+    assert.strictEqual(game.nextAttacksBonusHits?.[fkA], undefined, 'nextAttacksBonusHits[fkA] cleaned');
     // scalar cleaned
     assert.strictEqual(game.commsJammerActivePlayerNum, undefined, 'scalar flag deleted');
   });
@@ -207,7 +207,8 @@ describe('B-SOAK-002: Activation-scoped flags across two activations', () => {
     game.figureMoved = { [fkA]: true };
     game.tripodAttacked = { [fkA]: true };
     game.dcActionsData = { [msgIdA]: { remaining: 0, total: 2 } };
-    game.nextAttacksBonusHits = { 1: [{ source: 'test' }] };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    game.nextAttacksBonusHits = { [fkA]: [{ source: 'test' }] };
     game.commsJammerActivePlayerNum = 2;
 
     // End A's activation
@@ -222,7 +223,7 @@ describe('B-SOAK-002: Activation-scoped flags across two activations', () => {
     // Figure A's data must not be present
     assert.strictEqual(game.figureMoved[fkA], undefined, 'A\'s figureMoved not visible during B');
     assert.strictEqual(game.dcActionsData[msgIdA], undefined, 'A\'s dcActionsData not visible during B');
-    assert.strictEqual(game.nextAttacksBonusHits?.[1], undefined, 'A\'s playerNum bonus not visible during B');
+    assert.strictEqual(game.nextAttacksBonusHits?.[fkA], undefined, 'A\'s figureKey bonus not visible during B');
     assert.strictEqual(game.commsJammerActivePlayerNum, undefined, 'A\'s scalar not visible during B');
 
     // B's own flags are live
@@ -539,7 +540,8 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     game.figureMoved = { [fkA]: true };
     game.tripodAttacked = { [fkA]: true };
     game.dcActionsData = { [msgA]: { remaining: 0, total: 2 } };
-    game.nextAttacksBonusHits = { 1: [{ source: 'cc', hits: 1 }] };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    game.nextAttacksBonusHits = { [fkA]: [{ source: 'cc', hits: 1 }] };
 
     cleanupActivation(game, msgA, 1, [fkA]);
 
@@ -548,7 +550,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     assert.strictEqual(game.figureMoved?.[fkA], undefined, 'A figureMoved gone');
     assert.strictEqual(game.tripodAttacked?.[fkA], undefined, 'A tripodAttacked gone');
     assert.strictEqual(game.dcActionsData?.[msgA], undefined, 'A dcActionsData gone');
-    assert.strictEqual(game.nextAttacksBonusHits?.[1], undefined, 'A playerNum bonus gone');
+    assert.strictEqual(game.nextAttacksBonusHits?.[fkA], undefined, 'A figure bonus gone');
 
     // Set B's flags
     game.figureMoved = game.figureMoved || {};
@@ -620,7 +622,8 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     // Set activation flags
     game.figureMoved = { [fkA]: true };
     game.dcActionsData = { [msgA]: { remaining: 0, total: 2 } };
-    game.nextAttacksBonusHits = { 1: [{ source: 'son_of_skywalker', hits: 2 }] };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    game.nextAttacksBonusHits = { [fkA]: [{ source: 'son_of_skywalker', hits: 2 }] };
     game.commsJammerActivePlayerNum = 2;
     // Set round flags
     addRoundDefenseAccuracyPenalty(game, 2, -2);

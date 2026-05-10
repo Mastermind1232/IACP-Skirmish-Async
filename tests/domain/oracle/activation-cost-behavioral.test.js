@@ -575,10 +575,13 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
       p1ActivationsTotal: 1,
       dcFinishedPinged: { '3001': true },
       pendingEndTurn: { '3001': { playerNum: 1 } },
-      nextAttacksBonusHits: { 1: 2 },
-      nextAttacksBonusConditions: { 1: ['Stun'] },
-      nextAttackBonusSurgeAbilities: { 1: [{ surge: 1 }] },
-      nextAttackBonusPierce: { 1: 1 },
+      // Position required so handleDcUnactivate's per-figureKey sweep finds the figure.
+      figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' }, 2: {} },
+      // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+      nextAttacksBonusHits: { 'Rebel Trooper-1-0': 2 },
+      nextAttacksBonusConditions: { 'Rebel Trooper-1-0': ['Stun'] },
+      nextAttackBonusSurgeAbilities: { 'Rebel Trooper-1-0': [{ surge: 1 }] },
+      nextAttackBonusPierce: { 'Rebel Trooper-1-0': 1 },
       pendingOverrideAttackDice: { '3001': { dice: ['red'] } },
       // saberOrbitAttacksRemaining migrated to figureKey-keyed
       // 2026-05-09 (per-figure scope per IACP rule clarification).
@@ -597,10 +600,10 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
     assert.ok(!game.p1ActivatedDcIndices.includes(0), 'removed from activatedDcIndices');
     assert.strictEqual(game.dcFinishedPinged?.['3001'], undefined, 'dcFinishedPinged cleaned');
     assert.strictEqual(game.pendingEndTurn?.['3001'], undefined, 'pendingEndTurn cleaned');
-    assert.strictEqual(game.nextAttacksBonusHits?.[1], undefined, 'nextAttacksBonusHits cleaned');
-    assert.strictEqual(game.nextAttacksBonusConditions?.[1], undefined, 'nextAttacksBonusConditions cleaned');
-    assert.strictEqual(game.nextAttackBonusSurgeAbilities?.[1], undefined, 'nextAttackBonusSurgeAbilities cleaned');
-    assert.strictEqual(game.nextAttackBonusPierce?.[1], undefined, 'nextAttackBonusPierce cleaned');
+    assert.strictEqual(game.nextAttacksBonusHits?.['Rebel Trooper-1-0'], undefined, 'nextAttacksBonusHits cleaned (figureKey-keyed 2026-05-09)');
+    assert.strictEqual(game.nextAttacksBonusConditions?.['Rebel Trooper-1-0'], undefined, 'nextAttacksBonusConditions cleaned (figureKey-keyed 2026-05-09)');
+    assert.strictEqual(game.nextAttackBonusSurgeAbilities?.['Rebel Trooper-1-0'], undefined, 'nextAttackBonusSurgeAbilities cleaned (figureKey-keyed 2026-05-09)');
+    assert.strictEqual(game.nextAttackBonusPierce?.['Rebel Trooper-1-0'], undefined, 'nextAttackBonusPierce cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.pendingOverrideAttackDice?.['3001'], undefined, 'pendingOverrideAttackDice cleaned');
     assert.strictEqual(game.saberOrbitAttacksRemaining?.['Rebel Trooper-1-0'], undefined, 'saberOrbitAttacksRemaining cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.pendingMissileSalvo?.['3001'], undefined, 'pendingMissileSalvo cleaned');

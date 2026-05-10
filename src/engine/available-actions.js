@@ -2170,7 +2170,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     const _hasReach =
       _reachKws.includes('REACH') ||
       _reachPassives.includes('REACH') ||
-      !!game.nextAttackReach?.[playerNum] ||
+      !!game.nextAttackReach?.[figureKey] ||
       _hasFury ||
       _loadoutReach;
     if (_hasReach && maxRange < 2) maxRange = 2;

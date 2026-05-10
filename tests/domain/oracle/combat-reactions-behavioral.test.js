@@ -1662,12 +1662,15 @@ describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
     combat.pcPendingAtkRerolls = 1;
     combat.pcPendingDefRerolls = 1;
     combat.vetInstinctsAttackApplied = true; // attack phase done
+    // Per-figure 2026-05-09: VI keyed by defender figureKey, not playerNum.
+    combat.target = { figureKey: 'Stormtrooper-1-0' };
     // Defense NOT yet applied — _resumeRerollFlow should detect this
     const game = {
       gameId: 'g1',
       player1Id: 'player1',
       player2Id: 'player2',
-      vetInstinctsActiveThisActivation: { 2: true }, // keyed by defender playerNum
+      // Per-figure 2026-05-09 (multifigure-independent-activation rule). Keyed by defender figureKey.
+      vetInstinctsActiveThisActivation: { 'Stormtrooper-1-0': true },
       pendingCombat: combat,
     };
     const { ctx, thread } = buildCtx(game);
@@ -1695,11 +1698,13 @@ describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
     combat.pcPendingAtkRerolls = 1;
     combat.pcPendingDefRerolls = 0;
     combat.vetInstinctsAttackApplied = true;
+    // Per-figure 2026-05-09: VI keyed by defender figureKey, not playerNum.
+    combat.target = { figureKey: 'Stormtrooper-1-0' };
     const game = {
       gameId: 'g1',
       player1Id: 'player1',
       player2Id: 'player2',
-      vetInstinctsActiveThisActivation: { 2: true },
+      vetInstinctsActiveThisActivation: { 'Stormtrooper-1-0': true },
       pendingCombat: combat,
     };
 

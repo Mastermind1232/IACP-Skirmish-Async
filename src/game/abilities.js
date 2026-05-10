@@ -275,16 +275,22 @@ export function resolveAbility(abilityId, context) {
       }
       parts.push('Became **Focused**');
     }
-    // Grant bonus cleave for next attack via surge
+    // Grant bonus cleave for next attack via surge (per-figure 2026-05-09)
     if (typeof chosen.nextAttackCleave === 'number' && chosen.nextAttackCleave > 0 && game && playerNum) {
-      game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
-      const existing = game.nextAttackBonusSurgeAbilities[playerNum] || [];
-      game.nextAttackBonusSurgeAbilities[playerNum] = [...existing, `cleave ${chosen.nextAttackCleave}`];
+      const _dbfFk = figureKeyForActivation(game, msgId);
+      if (_dbfFk) {
+        game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
+        const existing = game.nextAttackBonusSurgeAbilities[_dbfFk] || [];
+        game.nextAttackBonusSurgeAbilities[_dbfFk] = [...existing, `cleave ${chosen.nextAttackCleave}`];
+      }
     }
-    // Grant Reach for next attack (melee range extended to 2)
+    // Grant Reach for next attack (melee range extended to 2) — per-figure 2026-05-09
     if (chosen.nextAttackReach && game && playerNum) {
-      game.nextAttackReach = game.nextAttackReach || {};
-      game.nextAttackReach[playerNum] = true;
+      const _dbfFk = figureKeyForActivation(game, msgId);
+      if (_dbfFk) {
+        game.nextAttackReach = game.nextAttackReach || {};
+        game.nextAttackReach[_dbfFk] = true;
+      }
     }
     if (chosen.nextAttackReach || chosen.nextAttackCleave) parts.push(`Next attack gains **${chosen.nextAttackReach ? 'Reach + ' : ''}Cleave ${chosen.nextAttackCleave || 0}** (attack targets up to 2 spaces away if Reach)`);
     return { applied: true, logMessage: `**${entry.label}**: ${parts.join(' and ')}.`, refreshDcEmbed: !!chosen.applyFocusToSelf };
@@ -1169,9 +1175,9 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingBombardmentSorin(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
-        // Grant Blast 1 + Accuracy 1 bonus for the next attack
+        // Grant Blast 1 + Accuracy 1 bonus for the next attack (per-figure 2026-05-09)
         game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-        game.nextAttacksBonusHits[playerNum] = { count: 1, bonus: 0, blast: 1, accuracy: 1 };
+        game.nextAttacksBonusHits[targetFigureKey] = { count: 1, bonus: 0, blast: 1, accuracy: 1 };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Bombardment** — **${chosenName}** may interrupt to perform a free attack with **+1 Accuracy** and **Blast 1** (no action cost). Use their **Attack** button.` };
@@ -2166,10 +2172,10 @@ export function resolveAbility(abilityId, context) {
       game.postActivationConditions = game.postActivationConditions || {};
       game.postActivationConditions[msgId] = entry.postActivationConditions;
     }
-    // nextAttackBonusAccuracy (Charged Shot): grant bonus accuracy on next attack
-    if (typeof entry.nextAttackBonusAccuracy === 'number' && entry.nextAttackBonusAccuracy > 0) {
+    // nextAttackBonusAccuracy (Charged Shot): grant bonus accuracy on next attack (per-figure 2026-05-09)
+    if (typeof entry.nextAttackBonusAccuracy === 'number' && entry.nextAttackBonusAccuracy > 0 && _fabFk) {
       game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
-      game.nextAttackBonusAccuracy[playerNum] = (game.nextAttackBonusAccuracy[playerNum] || 0) + entry.nextAttackBonusAccuracy;
+      game.nextAttackBonusAccuracy[_fabFk] = (game.nextAttackBonusAccuracy[_fabFk] || 0) + entry.nextAttackBonusAccuracy;
     }
     // mpBonus alongside freeAttackBonus (Face to Face, Final Stand,
     // Dying Lunge, Lord of the Sith: move + free attack). Cards
@@ -3096,8 +3102,11 @@ export function resolveAbility(abilityId, context) {
       _pmxMsgId = msgId;
     }
     const nb = entry.nextAttacksBonusHits;
-    game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-    game.nextAttacksBonusHits[meta.playerNum] = { count: nb.count, bonus: nb.bonus };
+    if (_othFigureKey) {
+      // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+      game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+      game.nextAttacksBonusHits[_othFigureKey] = { count: nb.count, bonus: nb.bonus };
+    }
     const logMsg = entry.logMessage || `**${entry.label || 'On the Hunt'}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Hit.`;
     return { applied: true, logMessage: logMsg, pendingMoveXMsgId: _pmxMsgId };
   }
@@ -4399,9 +4408,11 @@ export function resolveAbility(abilityId, context) {
     game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
     const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
     // Veteran Instincts: set activation-long flag so attacker/defender may add +1 Hit/Surge or Block/Evade
-    if (entry.vetInstinctsActiveThisActivation) {
+    // Per-figure 2026-05-09: keyed by the figure that received the Veteran Instincts power-token grant
+    // (the figure carrying the buff), so it does not bleed to other figures in a multifigure group.
+    if (entry.vetInstinctsActiveThisActivation && fk) {
       game.vetInstinctsActiveThisActivation = game.vetInstinctsActiveThisActivation || {};
-      game.vetInstinctsActiveThisActivation[playerNum] = true;
+      game.vetInstinctsActiveThisActivation[fk] = true;
     }
     return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
@@ -5509,8 +5520,12 @@ export function resolveAbility(abilityId, context) {
       pnum = meta?.playerNum;
     }
     if (!pnum) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    // Per-figure 2026-05-09: arm on the activating figure so multifigure-group siblings don't share the buff.
+    const _csMsgId = dcMessageMeta ? findActiveActivationMsgId(game, pnum, dcMessageMeta) : null;
+    const _csFk = _csMsgId ? figureKeyForActivation(game, _csMsgId) : null;
+    if (!_csFk) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
-    game.nextAttackBonusSurgeAbilities[pnum] = entry.nextAttackBonusSurgeAbilities;
+    game.nextAttackBonusSurgeAbilities[_csFk] = entry.nextAttackBonusSurgeAbilities;
     const labels = entry.nextAttackBonusSurgeAbilities.join(', ');
     return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.` };
   }
@@ -5620,8 +5635,11 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    const _ewFk = figureKeyForActivation(game, msgId);
+    if (!_ewFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.nextAttackBonusPierce = game.nextAttackBonusPierce || {};
-    game.nextAttackBonusPierce[playerNum] = entry.nextAttackBonusPierce;
+    game.nextAttackBonusPierce[_ewFk] = entry.nextAttackBonusPierce;
     return {
       applied: true,
       logMessage: `Your next attack gains +${entry.nextAttackBonusPierce} Pierce.`,
@@ -5635,12 +5653,15 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    const _bdFk = figureKeyForActivation(game, msgId);
+    if (!_bdFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-    game.nextAttacksBonusHits[playerNum] = { count: nb.count, bonus: nb.bonus };
+    game.nextAttacksBonusHits[_bdFk] = { count: nb.count, bonus: nb.bonus };
     const nbc = entry.nextAttacksBonusConditions;
     if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
       game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
-      game.nextAttacksBonusConditions[playerNum] = { count: nbc.count, conditions: nbc.conditions };
+      game.nextAttacksBonusConditions[_bdFk] = { count: nbc.count, conditions: nbc.conditions };
     }
     const condPart = (nbc?.conditions?.length) ? ` and ${nbc.conditions.join(', ')}` : '';
     return {
@@ -10595,10 +10616,15 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: ballisticsMatrixEffect (Ballistics Matrix) — next attack ignores figure LOS blocking
   if (entry.type === 'ccEffect' && entry.ballisticsMatrixEffect) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Bug fix 2026-05-09: was keying by playerNum, but the consumption sites
+    // (combat.js + available-actions.js + dc-play-area.js) read by msgId to
+    // match Marksman's keying. Align both arming paths on msgId.
+    const _bmMsgId = dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
+    if (!_bmMsgId) return { applied: false, manualMessage: entry.label || 'Resolve manually: no activation in progress.' };
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
-    game.nextAttackIgnoreFigureLOS[playerNum] = true;
+    game.nextAttackIgnoreFigureLOS[_bmMsgId] = true;
     return { applied: true, logMessage: `**Ballistics Matrix** — For your next attack, intervening figures do **not** block line of sight. Declare your attack normally.` };
   }
 

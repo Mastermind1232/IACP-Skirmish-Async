@@ -555,8 +555,10 @@ export async function handlePowerConverter(interaction, ctx) {
     const atkRem = combat.pcPendingAtkRerolls || 0;
     const defRem = combat.pcPendingDefRerolls || 0;
     const defPN = opponentPlayerNum(atkPN);
-    // Check Veteran Instincts defense (may have been pending when PC interrupted)
-    if (game.vetInstinctsActiveThisActivation?.[defPN] && !combat.vetInstinctsDefenseApplied && thread) {
+    // Check Veteran Instincts defense (may have been pending when PC interrupted).
+    // Per-figure 2026-05-09: VI is keyed by the defender figureKey (multifigure-
+    // independent-activation rule).
+    if (game.vetInstinctsActiveThisActivation?.[combat.target?.figureKey] && !combat.vetInstinctsDefenseApplied && thread) {
       combat.viPendingAtkRerolls = atkRem;
       combat.viPendingDefRerolls = defRem;
       const _viRow = new ActionRowBuilder().addComponents(

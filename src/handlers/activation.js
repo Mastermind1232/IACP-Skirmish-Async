@@ -582,10 +582,24 @@ export async function handleEndTurn(interaction, ctx) {
       console.error('Failed to archive DC activation thread:', err);
     }
     if (game.dcActionsData?.[dcMsgId]) delete game.dcActionsData[dcMsgId];
-    if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
-    if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
-    if (game.nextAttackBonusSurgeAbilities?.[meta.playerNum]) delete game.nextAttackBonusSurgeAbilities[meta.playerNum];
-    if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
+    // next-attack bonuses: per-figure 2026-05-09 (multifigure-independent-
+    // activation rule). cleanupActivation (called downstream) clears these
+    // via ACTIVATION_FIGKEY_FLAGS, but this thread-archive path runs before
+    // cleanupActivation, so sweep figureKeys for the DG here too.
+    {
+      const _etDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+      const _etPrefix = `${meta.dcName}-${_etDgIdx}-`;
+      const _etFkSweep = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+        .filter((k) => k.startsWith(_etPrefix));
+      for (const _efk of _etFkSweep) {
+        if (game.nextAttacksBonusHits?.[_efk]) delete game.nextAttacksBonusHits[_efk];
+        if (game.nextAttacksBonusConditions?.[_efk]) delete game.nextAttacksBonusConditions[_efk];
+        if (game.nextAttackBonusSurgeAbilities?.[_efk]) delete game.nextAttackBonusSurgeAbilities[_efk];
+        if (game.nextAttackBonusPierce?.[_efk]) delete game.nextAttackBonusPierce[_efk];
+        if (game.nextAttackBonusAccuracy?.[_efk]) delete game.nextAttackBonusAccuracy[_efk];
+        if (game.nextAttackReach?.[_efk]) delete game.nextAttackReach[_efk];
+      }
+    }
     if (game.movementBank?.[dcMsgId]) delete game.movementBank[dcMsgId];
   }
   await updateDcCardMessage(client, game, dcMsgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Turn:' });

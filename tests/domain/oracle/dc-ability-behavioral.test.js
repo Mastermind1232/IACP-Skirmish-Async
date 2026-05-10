@@ -20,7 +20,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyStartOfActivationEffects } from '../../../src/engine/activation-effects.js';
-import { cleanupActivation } from '../../../src/game/activation-state.js';
+import { cleanupActivation, _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { handleDcAction } from '../../../src/handlers/dc-play-area.js';
 import { enumerateActivatorSoaDescriptors } from '../../../src/game/soa-orchestrator.js';
@@ -265,8 +265,13 @@ describe('B-DC-004: resolveAbility — Dual-Bladed Fury', () => {
   function buildDualBladedContext({ choiceIndex } = {}) {
     const game = makeGame({
       figurePositions: { 1: { 'Seventh Sister-1-0': 'b3' }, 2: {} },
+      dcActionsData: { msg_7sis: { selectedFigure: 0 } },
     });
-    const meta = { dcName: 'Seventh Sister', displayName: 'Seventh Sister [DG 1]' };
+    const meta = { gameId: 'test1', playerNum: 1, dcName: 'Seventh Sister', displayName: 'Seventh Sister [DG 1]' };
+    // Register meta so figureKeyForActivation can resolve msgId → figureKey
+    // for the figureKey-keyed nextAttackReach + nextAttackBonusSurgeAbilities
+    // writes (post 2026-05-09 multifigure-independent-activation migration).
+    _registerDcMessageMeta(new Map([['msg_7sis', meta]]));
     return {
       game,
       context: { game, playerNum: 1, meta, msgId: 'msg_7sis', choiceIndex },
@@ -287,9 +292,11 @@ describe('B-DC-004: resolveAbility — Dual-Bladed Fury', () => {
     const { context, game } = buildDualBladedContext({ choiceIndex: 0 });
     const result = resolveAbility('dual_bladed_fury', context);
     assert.equal(result.applied, true);
-    assert.ok(game.nextAttackReach?.[1] === true, 'nextAttackReach should be set for player 1');
-    assert.ok(Array.isArray(game.nextAttackBonusSurgeAbilities?.[1]));
-    assert.ok(game.nextAttackBonusSurgeAbilities[1].some(s => s.includes('cleave')));
+    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+    assert.ok(game.nextAttackReach?.['Seventh Sister-1-0'] === true,
+      'nextAttackReach should be set for the activating figure');
+    assert.ok(Array.isArray(game.nextAttackBonusSurgeAbilities?.['Seventh Sister-1-0']));
+    assert.ok(game.nextAttackBonusSurgeAbilities['Seventh Sister-1-0'].some(s => s.includes('cleave')));
   });
 
   it('Choice 1 (Focus): applies Focus condition to figure', () => {

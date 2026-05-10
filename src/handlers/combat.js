@@ -1336,8 +1336,9 @@ export async function handleAttackTarget(interaction, ctx) {
     if (game.arcingShotActive?.[msgId]) delete game.arcingShotActive[msgId];
     if (game.arcingShotActiveScalar) delete game.arcingShotActiveScalar;
   }
-  // Ballistics Matrix: clear per-attack flag after this attack proceeds
-  if (game.nextAttackIgnoreFigureLOS?.[attackerPlayerNum]) delete game.nextAttackIgnoreFigureLOS[attackerPlayerNum];
+  // Ballistics Matrix / Marksman: clear per-attack flag after this attack proceeds.
+  // Both paths arm by msgId 2026-05-09 (Ballistics Matrix bug fix aligned with Marksman).
+  if (game.nextAttackIgnoreFigureLOS?.[msgId]) delete game.nextAttackIgnoreFigureLOS[msgId];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -1516,12 +1517,13 @@ export async function handleAttackTarget(interaction, ctx) {
     _flyByFired = true;
   }
   // Utinni! (roundUtinniJawaBuffs): Jawa Scavenger gets +1 Accuracy and a VP-earning surge ability
+  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
   if (game.roundUtinniJawaBuffs && meta.dcName?.toLowerCase().includes('jawa scavenger')) {
     game.nextAttackBonusAccuracy = game.nextAttackBonusAccuracy || {};
-    game.nextAttackBonusAccuracy[attackerPlayerNum] = (game.nextAttackBonusAccuracy[attackerPlayerNum] || 0) + 1;
+    game.nextAttackBonusAccuracy[attackerFigureKey] = (game.nextAttackBonusAccuracy[attackerFigureKey] || 0) + 1;
     game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
-    game.nextAttackBonusSurgeAbilities[attackerPlayerNum] = game.nextAttackBonusSurgeAbilities[attackerPlayerNum] || [];
-    game.nextAttackBonusSurgeAbilities[attackerPlayerNum].push('utinni_vp_1');
+    game.nextAttackBonusSurgeAbilities[attackerFigureKey] = game.nextAttackBonusSurgeAbilities[attackerFigureKey] || [];
+    game.nextAttackBonusSurgeAbilities[attackerFigureKey].push('utinni_vp_1');
   }
   // Merciless (HK Assassin Droid Elite): if defender has harmful conditions, 1 Damage
   if ((_atkEff?.passives || []).includes('Merciless')) {
@@ -1576,9 +1578,11 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (${_fullOfRageDmg} damage suffered, +1 green die).`).catch(discordCatch);
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
-  const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum] || [];
-  const nextPierce = (game.nextAttackBonusPierce?.[attackerPlayerNum] || 0) + (overrideDice?.pierce || 0);
-  const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerPlayerNum] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
+  // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
+  // (multifigure-independent-activation rule).
+  const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerFigureKey] || [];
+  const nextPierce = (game.nextAttackBonusPierce?.[attackerFigureKey] || 0) + (overrideDice?.pierce || 0);
+  const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerFigureKey] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
   const isRanged = attackInfo.type === 'range';
   const distanceToTarget = target.dist ?? 1;
   // Slice 7.2 (destruct 2026-05-05, nested attack frames): if there's an
@@ -2920,10 +2924,11 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerPlayerNum];
-  if (nextPierce) delete game.nextAttackBonusPierce?.[attackerPlayerNum];
-  if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerPlayerNum];
-  if (game.nextAttackReach?.[attackerPlayerNum]) delete game.nextAttackReach[attackerPlayerNum];
+  // Per-figure 2026-05-09: clear next-attack bonuses keyed by attackerFigureKey.
+  if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerFigureKey];
+  if (nextPierce) delete game.nextAttackBonusPierce?.[attackerFigureKey];
+  if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerFigureKey];
+  if (game.nextAttackReach?.[attackerFigureKey]) delete game.nextAttackReach[attackerFigureKey];
   delete game.lastAttackTargetSpacesForRubble;
   delete game.lastAttackAttackerPlayerNum;
 
@@ -3245,7 +3250,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const _otlReachPassives = (_otlAtkEff.passives || []).map(p => String(p).toUpperCase());
         const _otlHasReach = _otlReachKws.includes('REACH')
           || _otlReachPassives.includes('REACH')
-          || !!game.nextAttackReach?.[attackerPlayerNum];
+          || !!game.nextAttackReach?.[combat.attackerFigureKey];
         const _otlMaxRange = _otlHasReach ? 2 : 1;
         const _otlInRange = _isWithinSpaces(
           _otlMapSpaces,
@@ -3768,8 +3773,9 @@ export async function handleCombatRoll(interaction, ctx) {
         return;
       }
     }
-    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window
-    if (game.vetInstinctsActiveThisActivation?.[defenderPlayerNum] && !combat.vetInstinctsDefenseApplied) {
+    // Veteran Instincts: defender may add +1 Block or +1 Evade before the reroll window.
+    // Per-figure 2026-05-09: keyed by the defender's figureKey.
+    if (game.vetInstinctsActiveThisActivation?.[combat.target?.figureKey] && !combat.vetInstinctsDefenseApplied) {
       combat.viPendingAtkRerolls = atkRerolls;
       combat.viPendingDefRerolls = defRerolls;
       const _viRow = new ActionRowBuilder().addComponents(
@@ -5478,7 +5484,9 @@ export async function sendModsYn(thread, game, combat, role) {
   // remaining checks / final mods_yn YES/NO can fire next. Guards prevent
   // re-prompting once each ability has been applied/skipped.
   if (isAtk) {
-    if (game.vetInstinctsActiveThisActivation?.[playerNum] && !combat.vetInstinctsAttackApplied) {
+    // Per-figure 2026-05-09: VI keyed by the figure that received the buff.
+    const _viFk = isAtk ? combat.attackerFigureKey : combat.target?.figureKey;
+    if (game.vetInstinctsActiveThisActivation?.[_viFk] && !combat.vetInstinctsAttackApplied) {
       const _viRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_hit`).setLabel('+1 Damage').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`vet_instincts_pick_${gameId}_surge`).setLabel('+1 Surge').setStyle(ButtonStyle.Primary),

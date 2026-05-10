@@ -314,10 +314,24 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
   if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-  if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
-  if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
-  if (game.nextAttackBonusSurgeAbilities?.[meta.playerNum]) delete game.nextAttackBonusSurgeAbilities[meta.playerNum];
-  if (game.nextAttackBonusPierce?.[meta.playerNum]) delete game.nextAttackBonusPierce[meta.playerNum];
+  // next-attack bonuses + Vet Instincts: per-figure 2026-05-09 (multifigure-
+  // independent-activation rule). Sweep all figureKeys for this DG so an
+  // un-activate clears every figure's pending buff cleanly.
+  {
+    const _uaDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+    const _uaPrefix = `${meta.dcName}-${_uaDgIdx}-`;
+    const _uaFkSweep = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+      .filter((k) => k.startsWith(_uaPrefix));
+    for (const _ufk of _uaFkSweep) {
+      if (game.nextAttacksBonusHits?.[_ufk]) delete game.nextAttacksBonusHits[_ufk];
+      if (game.nextAttacksBonusConditions?.[_ufk]) delete game.nextAttacksBonusConditions[_ufk];
+      if (game.nextAttackBonusSurgeAbilities?.[_ufk]) delete game.nextAttackBonusSurgeAbilities[_ufk];
+      if (game.nextAttackBonusPierce?.[_ufk]) delete game.nextAttackBonusPierce[_ufk];
+      if (game.nextAttackBonusAccuracy?.[_ufk]) delete game.nextAttackBonusAccuracy[_ufk];
+      if (game.nextAttackReach?.[_ufk]) delete game.nextAttackReach[_ufk];
+      if (game.vetInstinctsActiveThisActivation?.[_ufk]) delete game.vetInstinctsActiveThisActivation[_ufk];
+    }
+  }
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
@@ -595,9 +609,23 @@ export async function handleDcToggle(interaction, ctx) {
     }
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
-    if (game.nextAttacksBonusHits?.[meta.playerNum]) delete game.nextAttacksBonusHits[meta.playerNum];
-    if (game.nextAttacksBonusConditions?.[meta.playerNum]) delete game.nextAttacksBonusConditions[meta.playerNum];
-    if (game.nextAttackBonusSurgeAbilities?.[meta.playerNum]) delete game.nextAttackBonusSurgeAbilities[meta.playerNum];
+    // next-attack bonuses + Vet Instincts: per-figure 2026-05-09 (multifigure-
+    // independent-activation rule). Sweep all figureKeys for this DG.
+    {
+      const _toDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+      const _toPrefix = `${meta.dcName}-${_toDgIdx}-`;
+      const _toFkSweep = Object.keys(game.figurePositions?.[meta.playerNum] || {})
+        .filter((k) => k.startsWith(_toPrefix));
+      for (const _tfk of _toFkSweep) {
+        if (game.nextAttacksBonusHits?.[_tfk]) delete game.nextAttacksBonusHits[_tfk];
+        if (game.nextAttacksBonusConditions?.[_tfk]) delete game.nextAttacksBonusConditions[_tfk];
+        if (game.nextAttackBonusSurgeAbilities?.[_tfk]) delete game.nextAttackBonusSurgeAbilities[_tfk];
+        if (game.nextAttackBonusPierce?.[_tfk]) delete game.nextAttackBonusPierce[_tfk];
+        if (game.nextAttackBonusAccuracy?.[_tfk]) delete game.nextAttackBonusAccuracy[_tfk];
+        if (game.nextAttackReach?.[_tfk]) delete game.nextAttackReach[_tfk];
+        if (game.vetInstinctsActiveThisActivation?.[_tfk]) delete game.vetInstinctsActiveThisActivation[_tfk];
+      }
+    }
     if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
     if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
     if (game.dcActivationLogMessageIds?.[msgId]) {
@@ -2091,9 +2119,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
     const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-    // Reach from DC passives, keywords, CC-granted, loadout card (Electrostaff), or Fury of Kashyyyk (WOOKIEE)
+    // Reach from DC passives, keywords, CC-granted (per-figure 2026-05-09), loadout card (Electrostaff), or Fury of Kashyyyk (WOOKIEE)
     const _loadoutCard = getLoadoutCards()[getConfig(game, figureKey)?.loadout];
-    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[playerNum] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, playerNum, attackerKws);
+    const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[figureKey] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, playerNum, attackerKws);
     const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
     const ms = getMapData(game.selectedMap?.id);
     if (!ms) {
@@ -2658,7 +2686,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const [_wpMinRange, _wpMaxRange] = defaultAttackRange(_wpAttackInfo);
       const _wpAtkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
       const _wpAtkKws = (_wpAtkEff?.keywords || []).map((k) => String(k).toUpperCase());
-      const _wpHasReach = _wpAtkKws.includes('REACH') || (_wpAtkEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_wpPlayerNum];
+      const _wpHasReach = _wpAtkKws.includes('REACH') || (_wpAtkEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_wpFk];
       const _wpEffMax = _wpHasReach && _wpMaxRange < 2 ? 2 : _wpMaxRange;
       const _wpMs = getMapData(game.selectedMap?.id);
       if (!_wpMs) {
@@ -3303,7 +3331,9 @@ export async function handleArsenalPick(interaction, ctx) {
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
+  const _attDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _attFigKey = `${meta.dcName}-${_attDgIdx}-${figureIndex}`;
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_attFigKey] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapData(game.selectedMap?.id);
   if (!ms) {
@@ -3312,8 +3342,8 @@ export async function handleArsenalPick(interaction, ctx) {
   }
   const playerNum = meta.playerNum;
   const enemyPlayerNum = opponentPlayerNum(playerNum);
-  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const dgIndex = _attDgIdx;
+  const figureKey = _attFigKey;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
     await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
@@ -3367,7 +3397,9 @@ export async function handleEe3DiePick(interaction, ctx) {
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
-  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _hasFuryReach(game, meta.playerNum, attackerKws);
+  const _ee3DgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _ee3FigKey = `${meta.dcName}-${_ee3DgIdx}-${figureIndex}`;
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_ee3FigKey] || _hasFuryReach(game, meta.playerNum, attackerKws);
   const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
   const ms = getMapData(game.selectedMap?.id);
   if (!ms) {
@@ -3376,8 +3408,8 @@ export async function handleEe3DiePick(interaction, ctx) {
   }
   const playerNum = meta.playerNum;
   const enemyPlayerNum = opponentPlayerNum(playerNum);
-  const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const dgIndex = _ee3DgIdx;
+  const figureKey = _ee3FigKey;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
     await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
@@ -3426,8 +3458,9 @@ export async function handleBoRiflePick(interaction, ctx) {
   const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const _loadoutCard = getLoadoutCards()[getConfig(game, `${meta.dcName}-${dgIndex}-${figureIndex}`)?.loadout];
-  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[meta.playerNum] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, meta.playerNum, attackerKws);
+  const _brFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
+  const _loadoutCard = getLoadoutCards()[getConfig(game, _brFigKey)?.loadout];
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_brFigKey] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, meta.playerNum, attackerKws);
   // If Bo-Rifle mode, override range to melee
   const brOverride = game.pendingOverrideAttackDice?.[msgId];
   const effectiveMinRange = brOverride?.type === 'melee' ? 1 : minRange;

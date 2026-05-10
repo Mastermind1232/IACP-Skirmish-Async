@@ -219,19 +219,21 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   if (combat.currentStep === 'zillo-window') combat.currentStep = 'step6';
 
   // Beatdown / nextAttacksBonusHits: consume one charge and add bonus to this attack
-  const pending = game.nextAttacksBonusHits?.[combat.attackerPlayerNum];
+  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+  const _nabhKey = combat.attackerFigureKey;
+  const pending = game.nextAttacksBonusHits?.[_nabhKey];
   if (pending && pending.count > 0 && pending.bonus > 0) {
     combat.bonusHits = (combat.bonusHits || 0) + pending.bonus;
     pending.count -= 1;
-    if (pending.count <= 0) delete game.nextAttacksBonusHits[combat.attackerPlayerNum];
+    if (pending.count <= 0) delete game.nextAttacksBonusHits[_nabhKey];
   }
   // Size Advantage / nextAttacksBonusConditions: consume and add conditions to defender
-  const condPending = game.nextAttacksBonusConditions?.[combat.attackerPlayerNum];
+  const condPending = game.nextAttacksBonusConditions?.[_nabhKey];
   if (condPending && condPending.count > 0 && condPending.conditions?.length) {
     combat.bonusConditions = combat.bonusConditions || [];
     combat.bonusConditions.push(...condPending.conditions);
     condPending.count -= 1;
-    if (condPending.count <= 0) delete game.nextAttacksBonusConditions[combat.attackerPlayerNum];
+    if (condPending.count <= 0) delete game.nextAttacksBonusConditions[_nabhKey];
   }
   const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
   // Snapshot target position before damage resolution can remove it (used by Heavy Fire, etc.)
@@ -450,7 +452,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     _attackerHasReach =
       _atkKws.includes('REACH') ||
       _atkPassives.includes('REACH') ||
-      !!game.nextAttackReach?.[combat.attackerPlayerNum] ||
+      !!game.nextAttackReach?.[combat.attackerFigureKey] ||
       _loadoutHasReach ||
       _furyKashyyykReach;
   }

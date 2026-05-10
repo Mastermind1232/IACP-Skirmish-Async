@@ -87,10 +87,11 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
   const _loadoutName = game.figureConfig?.[attackerFigureKey]?.loadout;
   const _loadoutReach = _loadoutName
     && getLoadoutCards()?.[_loadoutName]?.passive === 'Reach';
+  // Per-figure 2026-05-09 (multifigure-independent-activation rule).
   const hasReach =
     kws.includes('REACH') ||
     passives.includes('REACH') ||
-    !!game.nextAttackReach?.[playerNum] ||
+    !!game.nextAttackReach?.[attackerFigureKey] ||
     _furyReach ||
     _loadoutReach;
   const effMax = hasReach && maxRange < 2 ? 2 : maxRange;

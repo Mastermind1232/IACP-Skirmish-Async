@@ -363,8 +363,8 @@ export const PARITY_SCENARIOS = [
       };
       const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Kanan Jarrus');
       enableAttackFor(game, attackerMsgId);
-      // Grant Reach for next attack via flag
-      game.nextAttackReach = { 1: attackerMsgId };
+      // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+      game.nextAttackReach = { 'Kanan Jarrus-1-0': true };
       return {
         ...built,
         attacker: { playerNum: 1, figureKey: 'Kanan Jarrus-1-0', msgId: attackerMsgId, figureIndex: 0 },
@@ -372,7 +372,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Engine now reads game.nextAttackReach[playerNum] and extends melee maxRange to 2 when set (fixed 2026-04-16; available-actions.js:2149-2170). Both sides agree. Fury of Kashyyyk and Electrostaff loadout-card Reach also closed 2026-04-17 (scenarios 12/13).',
+    reason: 'Engine reads game.nextAttackReach[figureKey] (per-figure as of 2026-05-09 multifigure-independent-activation migration; was [playerNum] from 2026-04-16) and extends melee maxRange to 2 when set; available-actions.js:2149-2170. Both sides agree. Fury of Kashyyyk and Electrostaff loadout-card Reach also closed 2026-04-17 (scenarios 12/13).',
   },
 
   // 5. Priority Target — handler ignores figure-blocking LOS via abilityText
