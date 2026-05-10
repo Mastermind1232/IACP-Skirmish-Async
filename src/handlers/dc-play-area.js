@@ -1479,13 +1479,38 @@ export async function handleDcFigPick(interaction, ctx) {
   // Refuse picking a locked figure
   if (_ad.figureLocked?.[figIdx]) return;
   _ad.selectedFigure = figIdx;
-  // Per-figure separate activation: reset shared action bank + MP bank.
-  // perFigureRemaining tracks each figure's individual 2-action budget;
-  // align the shared `remaining` to the new figure's budget so action
-  // gating reflects the picked figure, not the group total.
+  // Per-figure separate activation (alexanbv 2026-05-09: multifigure groups
+  // behave the same as host+companion; nothing carries between figures).
+  // Reset shared action bank, MP bank, specials-used, and every msgId-
+  // keyed per-activation flag so the new figure starts with a clean slate.
   const _newRem = _ad.perFigureRemaining?.[figIdx] ?? 2;
   _ad.remaining = _newRem;
+  _ad.specialsUsed = [];
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+  // Wipe msgId-keyed per-activation flags for this msgId so they don't
+  // leak from figure A's activation into figure B's. Excludes group-level
+  // state (perFigureRemaining, figureLocked, figureSoaFired/figureEoaFired,
+  // companionActivatedBefore, dcActivationLogMessageIds) and pending
+  // interrupt-state buckets which span figures by design.
+  const _PER_FIGURE_RESET_MSGID_FLAGS = [
+    'overrunThisActivation', 'overrunDamagedThisMove',
+    'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
+    'closeQuartersActive', 'mobileMovementActive',
+    'autofireActive', 'fireMissionActive', 'autofireChainTargetSpace',
+    'activationKills', 'activationDamagedFigures',
+    'activationExtraActionThenStun', 'beastTamerInteractOverride',
+    'imperialRetrofittingMultiAttack', 'arcingShotActive',
+    'wookieeAvengerSlamUsed', 'specialActionUsedThisActivation',
+    'activationDoubleSpecialAction', 'falseOrdersAttackTargets',
+    'paybackBonusSurge', 'falseOrdersUpgrade', 'setTrapSpace',
+    'reverseEngineerActive', 'deviceRerollGranted',
+    'selfDestructProtocolTriggered',
+  ];
+  for (const _f of _PER_FIGURE_RESET_MSGID_FLAGS) {
+    if (game[_f] && Object.prototype.hasOwnProperty.call(game[_f], msgId)) {
+      delete game[_f][msgId];
+    }
+  }
   // Per destruct 2026-05-07: each figure has individual SoA. Fire
   // figure-scoped start-of-activation effects once per figure.
   _ad.figureSoaFired = _ad.figureSoaFired || {};
