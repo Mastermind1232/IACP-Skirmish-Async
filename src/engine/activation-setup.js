@@ -123,6 +123,68 @@ export function getPairedActiveMsgId(game, msgId) {
   return null;
 }
 
+/**
+ * Mid-game companion bank allocation (slice 4). Allocates dcActionsData
+ * + movementBank entries for a companion msgId WITH a full action bank
+ * and 0 MP bank (per alexanbv 2026-05-10: "When deployed, all banks
+ * refresh. Movement bank is 0 until companion performs move or gains
+ * mp from some other effect.")
+ *
+ * Used by mid-game deploy paths (Static Pulse Branch B, post-deploy
+ * companion_deploy, Ugnaught-style mid-game ready). No-op if the
+ * companion's msgId is unknown or banks already exist.
+ *
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} companionMsgId
+ * @param {string} companionName
+ * @param {object} opts
+ * @param {number} opts.actionsPerActivation - usually DC_ACTIONS_PER_ACTIVATION (2)
+ * @param {string} [opts.threadId] - host's activation thread id, if known
+ */
+export function allocateCompanionBanksMidGame(game, playerNum, companionMsgId, companionName, opts = {}) {
+  if (!companionMsgId || !companionName) return;
+  if (game.dcActionsData?.[companionMsgId]) return; // already allocated
+  const actionsPerActivation = opts.actionsPerActivation ?? 2;
+  game.dcActionsData = game.dcActionsData || {};
+  game.dcActionsData[companionMsgId] = {
+    remaining: actionsPerActivation,
+    total: actionsPerActivation,
+    perFigureRemaining: { 0: actionsPerActivation },
+    figureLocked: {},
+    figureSoaFired: {},
+    figureEoaFired: {},
+    messageId: null,
+    threadId: opts.threadId || null,
+    specialsUsed: [],
+    isCompanion: true,
+    hostMsgId: opts.hostMsgId || null,
+  };
+  game.movementBank = game.movementBank || {};
+  game.movementBank[companionMsgId] = {
+    total: 0,
+    remaining: 0,
+    threadId: opts.threadId || null,
+    messageId: null,
+    displayName: companionName,
+  };
+  game.activationStartPositions = game.activationStartPositions || {};
+  const prefix = `${companionName}-`;
+  for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+    if (fk.startsWith(prefix)) game.activationStartPositions[fk] = pos;
+  }
+}
+
+/**
+ * Clear companion banks (mid-game removal / defeat / retrieval).
+ * Mirror inverse of allocateCompanionBanksMidGame.
+ */
+export function clearCompanionBanks(game, companionMsgId) {
+  if (!companionMsgId) return;
+  if (game.dcActionsData?.[companionMsgId]) delete game.dcActionsData[companionMsgId];
+  if (game.movementBank?.[companionMsgId]) delete game.movementBank[companionMsgId];
+}
+
 /** Build a summary string for a companion's stats. */
 export function formatCompanionStats(name, stats) {
   const parts = [`**${name}**`];

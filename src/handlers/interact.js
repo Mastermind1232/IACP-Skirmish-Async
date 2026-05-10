@@ -194,6 +194,26 @@ export async function handleInteractChoice(interaction, ctx) {
           }
         }
       }
+      // Slice 4: Child being retrieved = removed from play. Clear its
+      // companion banks so a future re-deploy (Static Pulse-style) starts
+      // fresh, and the stale msgId doesn't keep an actions counter alive.
+      try {
+        const { getCompanionMsgIdForHost, clearCompanionBanks } = await import('../engine/activation-setup.js');
+        const _childHostIds = childOwnerPN === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+        for (const _hostMsgId of (_childHostIds || [])) {
+          const _compMsgId = getCompanionMsgIdForHost(game, _hostMsgId);
+          if (!_compMsgId) continue;
+          const _hostDc = (childOwnerPN === 1 ? game.p1DcList : game.p2DcList)?.[(_childHostIds || []).indexOf(_hostMsgId)];
+          if (_hostDc && (typeof _hostDc === 'object' ? _hostDc.dcName : _hostDc)) {
+            // Match by attachment "Clan of Two" or built-in companion = The Child
+            const _atts = childOwnerPN === 1 ? (game.p1DcAttachments?.[_hostMsgId] || []) : (game.p2DcAttachments?.[_hostMsgId] || []);
+            const _isChildHost = _atts.some((a) => /clan of two/i.test(a));
+            if (_isChildHost) clearCompanionBanks(game, _compMsgId);
+          }
+        }
+      } catch (err) {
+        console.error('[interact] retrieve-child companion-bank cleanup failed:', err?.message ?? err);
+      }
       game.childIncapacitated = false;
       const { awardObjectiveVp } = await import('../game/index.js');
       awardObjectiveVp(game, playerNum, 1);

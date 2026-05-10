@@ -168,6 +168,28 @@ export async function processFigureDefeat(game, opts, deps) {
     await decrementActivationIfGroupDefeated(game, defeatedPlayerNum, dcIdx, client);
   }
 
+  // 4b. Slice 4: defeated companion — clear its banks. Companion figures
+  // are always 1-figure DCs, so one defeat = group defeat = bank cleanup.
+  // Look up companion msgId by walking p{n}DcCompanionMessageIds against
+  // the host whose companion is this figure's DC.
+  try {
+    const compIds = defeatedPlayerNum === 1 ? game.p1DcCompanionMessageIds : game.p2DcCompanionMessageIds;
+    const hostIds = defeatedPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
+    if (Array.isArray(compIds) && Array.isArray(hostIds)) {
+      for (let _i = 0; _i < compIds.length; _i++) {
+        const _compMsgId = compIds[_i];
+        if (!_compMsgId) continue;
+        const _meta = dcMessageMeta?.get(_compMsgId);
+        if (_meta?.dcName !== dcName) continue;
+        // companion's banks live keyed by its own msgId; clear them.
+        if (game.dcActionsData?.[_compMsgId]) delete game.dcActionsData[_compMsgId];
+        if (game.movementBank?.[_compMsgId]) delete game.movementBank[_compMsgId];
+      }
+    }
+  } catch (err) {
+    console.error('[defeat-handler] companion-bank cleanup failed:', err?.message ?? err);
+  }
+
   // 5. Clear CC attachments
   if (msgId && dcIdx >= 0 && ccAttachmentsKey && updateAttachmentMessageForDc) {
     const key = ccAttachmentsKey(defeatedPlayerNum);
