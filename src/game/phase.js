@@ -108,5 +108,13 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
     if (opts.strict || globalStrictMode) throw new Error(msg);
     console.warn(`[Phase] ${msg}`);
   }
+  // Clear MASSIVE pushed-this-phase flag on phase transition. Per CRR
+  // (2026-05-09): once a MASSIVE figure pushes a figure, it may no
+  // longer move during the current phase (SoR / EoR / activation).
+  // Each new round-phase starts the flag fresh so the figure can move
+  // again in the next phase.
+  if (from !== roundPhase && game.massivePushedThisPhase) {
+    delete game.massivePushedThisPhase;
+  }
   game.roundPhase = roundPhase;
 }

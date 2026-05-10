@@ -199,6 +199,18 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
   if (game.namedCcsPlayedPerTiming?.activation) {
     delete game.namedCcsPlayedPerTiming.activation;
   }
+  // Clear MASSIVE pushed-this-phase flag for the activating figure(s)
+  // (per CRR 2026-05-09): the rule scopes "current phase" to the
+  // activating figure's activation cycle, so once that activation
+  // ends, the figure may move freely again next phase.
+  if (game.massivePushedThisPhase) {
+    for (const fk of figureKeys) {
+      delete game.massivePushedThisPhase[fk];
+    }
+    if (Object.keys(game.massivePushedThisPhase).length === 0) {
+      delete game.massivePushedThisPhase;
+    }
+  }
 }
 
 /**

@@ -87,6 +87,17 @@ export function stampPendingMoveX(game, opts) {
  * @param {string} [opts.threadId] - combat thread id, if posting there
  */
 export async function setupPendingMoveX(game, ctx, opts) {
+  // MASSIVE pushed-this-phase gate (CRR 2026-05-09): if the figure
+  // already pushed during the current phase, refuse the move grant.
+  // Flag clears at phase boundaries (cleanupActivation +
+  // setRoundPhase).
+  if (opts?.figureKey && game.massivePushedThisPhase?.[opts.figureKey]) {
+    const dcName = dcNameFromFigureKey(opts.figureKey);
+    await ctx.logGameAction?.(game, ctx.client,
+      `🦿 **MASSIVE blocked** — **${dcName}** already pushed a figure this phase; cannot move again until next phase.`,
+      { phase: 'ROUND', icon: 'move' });
+    return;
+  }
   if (!stampPendingMoveX(game, opts)) return;
   await postMoveXPicker(game, ctx, opts.msgId);
   ctx.saveGames?.(game.gameId);
