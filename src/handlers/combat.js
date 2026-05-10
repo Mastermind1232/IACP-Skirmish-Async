@@ -219,7 +219,7 @@ import {
   opponentPlayerNum, getInitiativePlayerNum,
   removeFigurePosition, getHandChannelId,
 } from '../game/player-helpers.js';
-import { checkSurgePassiveRedraws, checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
+import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -1647,6 +1647,23 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_aimFired) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
     game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+  }
+  // CC Passive Redraw (per CRR card text 2026-05-09): K&D / Targeting
+  // Network grant the relevant figure (FORCE USER / DROID) a NEW
+  // surge ability "Re-draw this card" while the card is in discard.
+  // Player chooses whether to spend a surge on it among their other
+  // surge options (instead of auto-firing on any surge spend).
+  {
+    const _redrawDiscardKey = ccDiscardKey(attackerPlayerNum);
+    const _redrawDiscard = game[_redrawDiscardKey] || [];
+    const _redrawAtkEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const _redrawAtkKws = (_redrawAtkEff?.keywords || []).map(k => String(k).toUpperCase());
+    if (_redrawDiscard.includes('Knowledge and Defense') && _redrawAtkKws.includes('FORCE USER')) {
+      game.pendingCombat.bonusSurgeAbilities.push('kd_redraw');
+    }
+    if (_redrawDiscard.includes('Targeting Network') && _redrawAtkKws.includes('DROID')) {
+      game.pendingCombat.bonusSurgeAbilities.push('tn_redraw');
+    }
   }
   // Imperial Loadout (Purge Trooper Elite): inject loadout surge abilities + store post-attack hook
   const _loadoutChoice = getConfig(game, attackerFigureKey)?.loadout;
@@ -6555,6 +6572,19 @@ export async function handleCombatSurge(interaction, ctx) {
         // Cost is deducted by the general decrement below (line with `combat.surgeRemaining -= cost`)
         await thread.send('**Autofire** — Chain attack queued! After this attack resolves, perform another attack targeting within 3 of the target space.').catch(discordCatch);
       }
+      // K&D / Targeting Network re-draw (per CRR 2026-05-09): spend a
+      // surge to move the named CC from discard back to hand.
+      if (key === 'kd_redraw' || key === 'tn_redraw') {
+        const _redrawCard = key === 'kd_redraw' ? 'Knowledge and Defense' : 'Targeting Network';
+        const { moveDiscardToHand: _moveD2H } = await import('../game/cc-passive-redraw.js');
+        const _moved = _moveD2H(game, attackerPlayerNum, _redrawCard);
+        if (_moved) {
+          await thread.send(`**Surge: Re-draw** — **${_redrawCard}** moved from discard pile to hand.`).catch(discordCatch);
+          if (ctx.logGameAction && ctx.client) await ctx.logGameAction(game, ctx.client, `**Surge: Re-draw** — **${_redrawCard}** re-drawn from discard (surge spent by **${combat.attackerDcName}**).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+          if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
+          if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
+        }
+      }
       // Utinni! (Jawa Scavenger): spending this surge earns 1 VP
       if (key === 'utinni_vp_1') {
         awardObjectiveVp(game, attackerPlayerNum, 1);
@@ -6653,22 +6683,11 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgeSpentCount[idx] = (combat.surgeSpentCount[idx] || 0) + 1;
       const label = getSurgeLabel(key);
       await thread.send(`**Surge spent (${cost}):** ${label}`).catch(discordCatch);
-      // CC Passive Redraw: surge-triggered (Knowledge and Defense, Targeting Network)
-      {
-        const _prResult = checkSurgePassiveRedraws(game, attackerPlayerNum, combat.attackerDcName);
-        for (const _prCard of _prResult.redrawn) {
-          await thread.send(`**Passive Redraw** — **${_prCard}** re-drawn from discard pile (surge spent by ${combat.attackerDcName}).`).catch(discordCatch);
-          if (ctx.logGameAction && ctx.client) {
-            await ctx.logGameAction(game, ctx.client, `**Passive Redraw** — **${_prCard}** re-drawn from discard (surge spent by **${combat.attackerDcName}**).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-          }
-          if (ctx.updateHandVisualMessage) {
-            await ctx.updateHandVisualMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
-          }
-          if (ctx.updateDiscardPileMessage) {
-            await ctx.updateDiscardPileMessage(game, attackerPlayerNum, ctx.client || interaction.client).catch(discordCatch);
-          }
-        }
-      }
+      // K&D / Targeting Network passive redraw is now a SURGE OPTION
+      // (key === 'kd_redraw' / 'tn_redraw'), handled above. The legacy
+      // auto-fire-after-any-surge-spend behavior (checkSurgePassiveRedraws)
+      // was incorrect per CRR (the cards grant a NEW surge ability, not
+      // a free trigger). Removed 2026-05-09.
       // Hunter Protocol: offer to trigger the same surge ability once more
       if (game.surgeDoublingActive?.[attackerPlayerNum] && key && !combat.surgeDoubledAbility && !key.startsWith('double:') && key !== 'utinni_vp_1') {
         if ((combat.surgeRemaining || 0) >= cost) {

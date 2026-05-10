@@ -149,6 +149,8 @@ export const SURGE_LABELS = {
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Damage, Hide',
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
   'utinni_vp_1': 'Utinni! (+1 VP)',
+  'kd_redraw': 'Re-draw Knowledge and Defense (from discard)',
+  'tn_redraw': 'Re-draw Targeting Network (from discard)',
   'autofire_chain': 'Chain Attack (within 3)',
   'military_efficiency': 'Military Efficiency',
   'deadly': 'Deadly (-1 Dodge)',
