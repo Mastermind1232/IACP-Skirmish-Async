@@ -556,48 +556,19 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
     return;
   }
 
-  // Per destruct 2026-05-08: post-deploy moves use the same
-  // pendingOrderedMove pipeline as Officer Order / Tactical Maneuver
-  // — eliminates the brittle moveInProgress lifecycle that was
-  // causing "Move session expired" on AT-DP / MASSIVE figures.
-  const reachableSpaces = [...cache.cells.keys()];
-  const { setPendingOrderedMove } = await import('../game/interrupts.js');
-  setPendingOrderedMove(game, {
-    figureKey,
-    targetMsgId: msgId,
-    playerNum,
-    mp,
-    label: active.abilityLabel || 'Post-Deploy Move',
-    postDeployReturn: true,
+  // Migrated 2026-05-09: pendingOrderedMove → pendingMoveX. Post-deploy
+  // moves now use the move-x picker (step-by-step, Stop button,
+  // MASSIVE displacement at end via _finishPicker → _runMassiveDisplacement).
+  // afterAction: 'postDeployAdvance' fires _advanceAfterFigure once the
+  // picker drains, advancing the post-deploy queue.
+  const { setupPendingMoveXSequence } = await import('./move-x-handler.js');
+  await setupPendingMoveXSequence(game, { client, logGameAction, saveGames }, {
+    figures: [{ msgId, figureKey, playerNum, spaces: mp, dcName }],
+    source: active.abilityLabel || 'Post-Deploy Move',
+    threadId: null,
+    bypassCosts: false,
+    afterAction: { type: 'postDeployAdvance' },
   });
-  const _pdGenCh = await fetchGameChannel(client, game.generalId);
-  if (!_pdGenCh) {
-    await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
-    return;
-  }
-  const contextKey = `${gameId}_${msgId}`;
-  game.pendingSpacePick = game.pendingSpacePick || {};
-  game.pendingSpacePick[contextKey] = {
-    validSpaces: reachableSpaces,
-    cellPrefix: `order_move_space_${gameId}_${msgId}_`,
-    mapSpaces: boardState.mapSpaces || {},
-    headerText: `**${active.abilityLabel || 'Post-Deploy Move'}** — Choose a space for **${dcName}** (up to ${mp} MP)`,
-  };
-  const { buildRowPickerButtons: _bRPB } = await import('../discord/components.js');
-  const { rows: _pdRows } = _bRPB(reachableSpaces, `space_row_${contextKey}_`);
-  // Add a Skip button so the player can deploy the figure but skip the
-  // optional post-deploy move (matches legacy UX before unification).
-  const _pdSkipKey = `${msgId}_${(figureKey.match(/-(\d+)-(\d+)$/) || [,'0','0'])[2]}`;
-  const _pdSkipBtn = new ButtonBuilder()
-    .setCustomId(`pd_move_skip_${gameId}_${playerNum}_${_pdSkipKey}`)
-    .setLabel('Skip Movement')
-    .setStyle(ButtonStyle.Secondary);
-  const _pdSkipRow = new ActionRowBuilder().addComponents(_pdSkipBtn);
-  await _pdGenCh.send({
-    content: `🚶 **${active.abilityLabel || 'Post-Deploy Move'}** — <@${ownerId}>, **${dcName}** may move up to **${mp}** spaces. Pick a row:`,
-    components: [..._pdRows.slice(0, 4), _pdSkipRow],
-    allowedMentions: { users: [ownerId] },
-  }).catch(() => null);
   if (saveGames) saveGames(game.gameId);
 }
 

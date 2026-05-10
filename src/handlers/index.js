@@ -19,7 +19,7 @@ import {
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
+  handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
   handleSetYourSightsPick,
@@ -93,7 +93,6 @@ import {
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
   handleOrderMove,
-  handleOrderMoveSpacePick,
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,
@@ -244,7 +243,6 @@ register('pd_security_pick_', handleSecurityDetailPick, 'postDeploy');
 register('pd_strike_adj_', handleStrikeTeamAdjPick, 'postDeploy');
 register('pd_strike_token_done_', handleStrikeTeamTokenDone, 'postDeploy');
 register('pd_strike_token_', handleStrikeTeamTokenPick, 'postDeploy');
-register('pd_move_skip_', handlePostDeployMoveSkip, 'postDeploy');
 register('pd_move_stay_', handlePostDeployMoveStay, 'postDeploy');
 register('pd_sl_pick_', handleSmoothLandingPick, 'postDeploy');
 register('pd_walker_move_', handleWalkerMove, 'postDeploy');
@@ -310,7 +308,6 @@ register('lasat_die_', handleLasatDiePick, 'combat');
 register('lasat_face_', handleLasatFacePick, 'combat');
 register('false_orders_action_', handleFalseOrdersAction, 'dcPlayArea');
 register('false_orders_space_', handleFalseOrdersMovePick, 'dcPlayArea');
-register('order_move_space_', handleOrderMoveSpacePick, 'dcPlayArea');
 register('order_move_', handleOrderMove, 'dcPlayArea');
 register('false_orders_atk_', handleFalseOrdersAtkPick, 'combat');
 register('zillo_discard_skip_', handleZilloDiscard, 'combat');
@@ -712,7 +709,7 @@ export {
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
   handlePostDeployPick, handleSecurityDetailPick, handleStrikeTeamAdjPick,
   handleStrikeTeamTokenPick, handleStrikeTeamTokenDone,
-  handlePostDeployMoveSkip, handlePostDeployMoveStay, handleSmoothLandingPick,
+  handlePostDeployMoveStay, handleSmoothLandingPick,
   handleWalkerMove, handleWalkerSkip,
   handleArmsDistFigPick, handleArmsDistTokenPick,
   handleSetYourSightsPick,
@@ -784,7 +781,6 @@ export {
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
   handleOrderMove,
-  handleOrderMoveSpacePick,
   handleRushPushFig,
   handleRushPushSpace,
   handleRushPushSkip,

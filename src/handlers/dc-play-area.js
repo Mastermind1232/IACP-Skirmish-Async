@@ -3050,6 +3050,9 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   }
 
   // Order / Tactical Maneuver: present "Move (Figure)" button for the ordered figure
+  // Migrated 2026-05-09: pendingOrderedMove → pendingMoveX. The
+  // intermediate "Move/Skip" prompt is preserved for UX; clicking
+  // Move triggers setupPendingMoveX (move-x picker with Stop button).
   if (resolveResult.applied && resolveResult.orderMovePrompt) {
     const omp = resolveResult.orderMovePrompt;
     setPendingOrderedMove(game, {
@@ -3690,11 +3693,7 @@ export async function handleOrderMove(interaction, ctx) {
   const m = interaction.customId.match(/^order_move_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, officerMsgId] = m;
-  const {
-    getGame, replyIfGameEnded, getDcStats,
-    getBoardStateForMovement, getMovementProfile, computeMovementCache,
-    getMapAttachmentForSpaces, saveGames, client, FIGURE_LETTERS,
-  } = ctx;
+  const { getGame, replyIfGameEnded, saveGames, client, logGameAction } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -3705,7 +3704,7 @@ export async function handleOrderMove(interaction, ctx) {
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the ordering player may choose.')) return;
 
-  const { figureKey, mp, label } = pending;
+  const { figureKey, targetMsgId, mp, label } = pending;
   const pos = game.figurePositions?.[pending.playerNum]?.[figureKey];
   if (!pos) {
     const dcName = dcNameFromFigureKey(figureKey);
@@ -3715,48 +3714,32 @@ export async function handleOrderMove(interaction, ctx) {
     return;
   }
 
+  // Migrated 2026-05-09: pendingOrderedMove → pendingMoveX. Hand off
+  // to the move-x picker (step-by-step, Stop button, MASSIVE
+  // displacement at end via _finishPicker → _runMassiveDisplacement).
   const dcName = dcNameFromFigureKey(figureKey);
-  const boardState = getBoardStateForMovement(game, figureKey);
-  if (!boardState) {
-    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const profile = getMovementProfile(dcName, figureKey, game);
-  const cache = computeMovementCache(pos, mp, boardState, profile);
-  const reachableSpaces = [...cache.cells.keys()];
-  if (reachableSpaces.length === 0) {
-    await interaction.followUp({ content: `**${dcName}** cannot move (no valid spaces within ${mp} MP).`, ephemeral: false }).catch(discordCatch);
-    clearPendingOrderedMove(game);
-    saveGames(game.gameId);
-    return;
-  }
-
-  const contextKey = `${gameId}_${officerMsgId}`;
-  const headerText = `**${label}** — Choose a space for **${dcName}** to move to`;
-  game.pendingSpacePick = game.pendingSpacePick || {};
-  game.pendingSpacePick[contextKey] = {
-    validSpaces: reachableSpaces,
-    cellPrefix: `order_move_space_${gameId}_${officerMsgId}_`,
-    mapSpaces: boardState.mapSpaces || {},
-    headerText,
-  };
-  const { rows } = buildRowPickerButtons(reachableSpaces, `space_row_${contextKey}_`);
-  const mapAttachment = getMapAttachmentForSpaces ? await getMapAttachmentForSpaces(game, reachableSpaces) : null;
-  const payload = {
-    content: `${headerText}:\nChoose a row:`,
-    components: rows.slice(0, 5),
-    ephemeral: false,
-  };
-  if (mapAttachment) payload.files = [mapAttachment];
-  await interaction.followUp(payload).catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  clearPendingOrderedMove(game);
+  const { setupPendingMoveX } = await import('./move-x-handler.js');
+  await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+    msgId: targetMsgId || officerMsgId,
+    figureKey,
+    playerNum: pending.playerNum,
+    spaces: mp,
+    source: label || 'Order',
+    threadId: null,
+    bypassCosts: false,
+    dcName,
+  });
   saveGames(game.gameId);
 }
 
-/**
- * Handle order_move_space_ button: complete the ordered figure move when a space is chosen.
- * customId: order_move_space_{gameId}_{officerMsgId}_{space}
- */
-export async function handleOrderMoveSpacePick(interaction, ctx) {
+// REMOVED 2026-05-09: handleOrderMoveSpacePick — pendingOrderedMove
+// migrated to pendingMoveX. handleOrderMove now hands off directly
+// to setupPendingMoveX (move-x picker step-by-step + Stop button).
+// Old handler body retained below as `_legacyHandleOrderMoveSpacePick_unused`
+// for git-blame visibility but never invoked.
+async function _legacyHandleOrderMoveSpacePick_unused(interaction, ctx) {
   const m = interaction.customId.match(/^order_move_space_([^_]+)_([^_]+)_(.+)$/);
   if (!m) return;
   const [, gameId, officerMsgId, space] = m;
