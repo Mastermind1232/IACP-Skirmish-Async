@@ -985,16 +985,16 @@ export async function finalizeActivation({
     }
   }
 
-  // D34. Scrap Battalion (Ugnaught): Junk Droid co-activates
+  // D34. Scrap Battalion (Ugnaught): Junk Droid auto-readies + activates
+  // as part of the group. Per alexanbv 2026-05-10: there is no "co-
+  // activate" — every activation is sequenced and the player must pick
+  // companion order (Before / After) via the SOA orchestrator's
+  // companion_order picker. The pre-set that suppressed the picker has
+  // been removed; the picker fires naturally when companionActivatedBefore
+  // is absent.
   if (_abilityIds.includes('scrap_battalion_ugnaught_elite') || _abilityIds.includes('scrap_battalion_ugnaught_reg')) {
     const isElite = _abilityIds.includes('scrap_battalion_ugnaught_elite');
-    game.companionActivatedBefore = game.companionActivatedBefore || {};
-    game.companionActivatedBefore[msgId] = 'co-activate';
-    // Per alexanbv 2026-05-09: Junk Droid no longer gets pre-granted MP /
-    // free attack at start of co-activation. It activates with its own
-    // standard 2 actions (allocated when activation-setup runs for its
-    // own msgId) — no free stuff up front.
-    await thread.send({ content: `🤖 **Scrap Battalion — Junk Droid Co-Activates**\nThe Junk Droid readies and activates **as part of this group** (its own 2 actions, no pre-granted MP or free attack).\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
+    await thread.send({ content: `🤖 **Scrap Battalion** — **Junk Droid** readies and activates as part of this group. Pick the activation order below.\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
 
   // D35. Skirmish Upgrade attachment activation effects

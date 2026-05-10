@@ -423,7 +423,7 @@ export async function handleDcRemoveStun(interaction, ctx) {
 
   // Remove Stun and spend 1 action
   filterCondition(game, figureKey, 'Stun');
-  consumeActionForCurrentFigure(actionsData, 1);
+  consumeActionForCurrentFigure(actionsData, 1, game, msgId);
 
   const displayName = meta.displayName || meta.dcName;
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Stunned**.`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -489,7 +489,7 @@ export async function handleDcRemoveBleed(interaction, ctx) {
   }
 
   filterCondition(game, figureKey, 'Bleed');
-  consumeActionForCurrentFigure(actionsData, 1);
+  consumeActionForCurrentFigure(actionsData, 1, game, msgId);
 
   const displayName = meta.displayName || meta.dcName;
   await logGameAction(game, client, `⚡ **${displayName}** spent 1 action to remove **Bleeding**.`, { phase: 'ACTIVATION', icon: 'condition' });
@@ -2363,7 +2363,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
-      consumeActionForCurrentFigure(actionsData, actionCost);
+      consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
       await updateDcActionsMessage(game, msgId, client);
     }
   }
@@ -3126,7 +3126,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     // Deduct action
     const actionsData = game.dcActionsData?.[msgId];
     if (actionsData) {
-      consumeActionForCurrentFigure(actionsData, 1);
+      consumeActionForCurrentFigure(actionsData, 1, game, msgId);
       await updateDcActionsMessage(game, msgId, client);
     }
     if (logGameAction) await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
@@ -3147,7 +3147,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   // Deduct action (was refunded when showing choice buttons)
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
-    consumeActionForCurrentFigure(actionsData, 1);
+    consumeActionForCurrentFigure(actionsData, 1, game, msgId);
     await updateDcActionsMessage(game, msgId, client);
   }
   if (resolveResult.freeAction && actionsData) {

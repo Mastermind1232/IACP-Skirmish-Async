@@ -59,7 +59,7 @@ describe('PROBE-PD-ACT-004: special action icon cost semantics (1♦ vs 2♦)', 
     // group-wide remaining decrement now also tracks per-figure budgets via
     // consumeActionForCurrentFigure. Pin the helper call shape.
     assert.match(DCPA_SRC,
-      /const actionCost = buttonKey === 'dc_special_' \? _effectiveActionCost : 1;\s*\n\s*consumeActionForCurrentFigure\(actionsData, actionCost\);/,
+      /const actionCost = buttonKey === 'dc_special_' \? _effectiveActionCost : 1;\s*\n\s*consumeActionForCurrentFigure\(actionsData, actionCost, game, msgId\);/,
       'deduction must subtract the declared cost in one step via consumeActionForCurrentFigure — CRR-ACT-004');
   });
 

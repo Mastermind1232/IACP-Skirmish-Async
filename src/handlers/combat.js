@@ -1371,7 +1371,7 @@ export async function handleAttackTarget(interaction, ctx) {
     } else if (isFieldTacticsFreeAttack) {
       clearPendingFieldTactics(game);
     } else {
-      consumeActionForCurrentFigure(actionsData, 1);
+      consumeActionForCurrentFigure(actionsData, 1, game, msgId);
       await updateDcActionsMessage(game, msgId, interaction.client);
     }
   }

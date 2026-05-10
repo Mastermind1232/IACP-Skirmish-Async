@@ -898,6 +898,11 @@ export function getAttachmentSpecials(attachments, game, msgId) {
  */
 export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRemaining = 2, game = null, helpers = {}) {
   const { getDcStats = () => ({}), getPlayerNumForMsgId = () => 1, getPlayableCcSpecialsForDc = () => [], getPlayableCcEndOfActivationForDc = () => [], getPlayableCcDoubleActionsForDc = () => [] } = helpers;
+  // Activation lock (alexanbv 2026-05-10): when host+companion paired
+  // activation is in progress and one side has consumed its first
+  // action, the OTHER side's buttons disable until the locked side
+  // ends. Enforces "no two figures activate at the same time."
+  const _activationLocked = !!(game?.activationLockMsgId && game.activationLockMsgId !== msgId);
   const stats = getDcStats(dcName);
   const figures = stats.figures ?? 1;
   let specials = stats.specials || [];
@@ -981,13 +986,13 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // gates are computed separately (noMove/noAttack below).
   // Phase 2 (destruct 2026-05-07): also gate when the current figure has
   // used all its per-figure actions (must switch via dropdown).
-  const noAct = noActions || _curFigOutOfActions;
-  const noAttack = noActions || isStunned || _curFigOutOfActions;
+  const noAct = noActions || _curFigOutOfActions || _activationLocked;
+  const noAttack = noActions || isStunned || _curFigOutOfActions || _activationLocked;
 
   // To the Limit (C75): extra action cannot be a Move
   const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
-  // Move blocked by Stun + To-the-Limit + no-actions.
-  const noMove = noActions || isStunned || toTheLimitActive || _curFigOutOfActions;
+  // Move blocked by Stun + To-the-Limit + no-actions + activation lock.
+  const noMove = noActions || isStunned || toTheLimitActive || _curFigOutOfActions || _activationLocked;
 
   // Non-Combatant: DCs with no attack dice cannot attack
   const hasAttack = (stats.attack?.dice?.length ?? 0) > 0;

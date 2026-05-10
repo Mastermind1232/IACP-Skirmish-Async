@@ -195,6 +195,10 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
  */
 const ACTIVATION_SCALAR_FLAGS = [
   'commsJammerActivePlayerNum',
+  // alexanbv 2026-05-10: companion + host activation lock. Set when either
+  // side consumes its first action; cleared at activation end. Enforces
+  // "complete one before the other" / "no two figures activate at once".
+  'activationLockMsgId',
   // partingShotTriggered is technically msgId-keyed (game.partingShotTriggered[msgId] = true)
   // but is INTENTIONALLY registered here, NOT in ACTIVATION_MSGID_FLAGS. The desired
   // semantic at activation end is "wipe everyone's parting-shot tracking" so the
@@ -307,8 +311,21 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
  * @param {number} cost          - 1 for normal action, 2 for Double Action
  * @returns {void}
  */
-export function consumeActionForCurrentFigure(actionsData, cost = 1) {
+export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null, msgId = null) {
   if (!actionsData || cost <= 0) return;
+  // Activation lock (alexanbv 2026-05-10): once one side of a paired
+  // host+companion activation consumes its first action, lock to that
+  // msgId. The paired side's buttons stay disabled until the locked
+  // side ends activation. "Every activation is sequenced — NO TWO
+  // FIGURES ACTIVATE AT THE SAME TIME." Lock is keyed on the
+  // dcActionsData entry so it scales to any paired flow, not just
+  // host+companion.
+  if (game && msgId && actionsData.isCompanion !== undefined) {
+    if (!game.activationLockMsgId) game.activationLockMsgId = msgId;
+  } else if (game && msgId) {
+    // host side — also acquire the lock if not already set
+    if (!game.activationLockMsgId) game.activationLockMsgId = msgId;
+  }
   actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - cost);
   const figIdx = actionsData.selectedFigure ?? 0;
   if (actionsData.perFigureRemaining) {
