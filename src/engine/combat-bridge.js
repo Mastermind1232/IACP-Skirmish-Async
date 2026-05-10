@@ -3167,8 +3167,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // Overheated (Paz Vizsla): -1 Hit re-stamped for 2nd attack; attack
   // type flips to Melee after BOTH attacks complete (per CRR last-thing
   // ordering). Ranged for both attacks; swap is the closing step.
-  if (game.overheatedActive?.[combat.attackerMsgId]) {
-    const oh = game.overheatedActive[combat.attackerMsgId];
+  // Per IACP rule 2026-05-09: keyed per-figureKey so each figure in a
+  // multifigure group has its own Overheated chain.
+  if (game.overheatedActive?.[combat.attackerFigureKey]) {
+    const oh = game.overheatedActive[combat.attackerFigureKey];
     oh.attacksRemaining -= 1;
     if (oh.attacksRemaining > 0) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
@@ -3177,11 +3179,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.freeAttackBonusPending[combat.attackerMsgId] = { from: 'Overheated' };
       await thread.send(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Use the Attack button.`).catch(discordCatch);
     } else {
-      delete game.overheatedActive[combat.attackerMsgId];
+      delete game.overheatedActive[combat.attackerFigureKey];
       // Last thing: attack type becomes Melee for the rest of the round.
       game.attackTypeOverride = game.attackTypeOverride || {};
-      game.attackTypeOverride[combat.attackerMsgId] = 'melee';
-      await thread.send(`**Overheated** — Both attacks resolved. Attack type is now **Melee** for the rest of the round.`).catch(discordCatch);
+      game.attackTypeOverride[combat.attackerFigureKey] = 'melee';
+      await thread.send(`**Overheated** — Both attacks resolved. Attack type is now **Melee** for the rest of the activation.`).catch(discordCatch);
     }
   }
   // Saber Orbit (Second Sister): re-apply override dice for remaining chained attacks

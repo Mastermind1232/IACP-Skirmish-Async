@@ -50,15 +50,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',
-  // Overheated (Paz Vizsla): per-msgId attack-type override that
-  // persists across attacks. Set after Overheated's 2 ranged attacks
-  // resolve so the figure's attack type becomes Melee for the rest
-  // of the round. Cleared on round boundary.
-  'attackTypeOverride',
-  // Overheated active state — tracks attacksRemaining so the
-  // post-attack hook in combat-bridge knows when to flip
-  // attackTypeOverride to 'melee'.
-  'overheatedActive',
+  // attackTypeOverride + overheatedActive moved to
+  // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
   // Static Pulse per-target chained choice state — cleared at round
   // boundary in case a player abandons the picker mid-flight.
   'pendingStaticPulse',
@@ -135,6 +128,8 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'focusFireActive',
   'multiFireActive',
   'multiFireBlockedTarget',
+  'overheatedActive',
+  'attackTypeOverride',
 ];
 
 /**
@@ -328,15 +323,8 @@ const ROUND_OBJECT_FLAGS = [
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   'pendingOverrideAttackDice',
   'pendingSlingBarrage',
-  // Overheated (Paz Vizsla): per-msgId attack-type override that
-  // persists across attacks. Set after Overheated's 2 ranged attacks
-  // resolve so the figure's attack type becomes Melee for the rest
-  // of the round. Cleared on round boundary.
-  'attackTypeOverride',
-  // Overheated active state — tracks attacksRemaining so the
-  // post-attack hook in combat-bridge knows when to flip
-  // attackTypeOverride to 'melee'.
-  'overheatedActive',
+  // attackTypeOverride + overheatedActive moved to
+  // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
   // Static Pulse per-target chained choice state — cleared at round
   // boundary in case a player abandons the picker mid-flight.
   'pendingStaticPulse',

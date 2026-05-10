@@ -9015,8 +9015,9 @@ export function resolveAbility(abilityId, context) {
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const selfFk = `${meta.dcName}-${dgIndex}-${figIdx}`;
 
+    // Per IACP rule 2026-05-09: Overheated is per-FIGURE state.
     // Determine current attack type — only Ranged gates the 2-attack chain.
-    const currentOverride = game.attackTypeOverride?.[msgId];
+    const currentOverride = game.attackTypeOverride?.[selfFk];
     const dcStats = getStatsForDc(meta.dcName);
     const baseAttackType = (dcStats?.attack?.type || '').toLowerCase();
     const effectiveAttackType = currentOverride || baseAttackType;
@@ -9026,9 +9027,9 @@ export function resolveAbility(abilityId, context) {
       // First of 2 attacks: -1 Hit, no attack-type swap yet (stays Ranged).
       // Track attacksRemaining so combat-bridge's post-attack hook can:
       //   (a) re-stamp -1 Hit + grant the 2nd free attack
-      //   (b) on attacksRemaining=0, flip attackTypeOverride[msgId] = 'melee'
+      //   (b) on attacksRemaining=0, flip attackTypeOverride[figureKey] = 'melee'
       game.overheatedActive = game.overheatedActive || {};
-      game.overheatedActive[msgId] = { attacksRemaining: 2 };
+      game.overheatedActive[selfFk] = { attacksRemaining: 2 };
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};

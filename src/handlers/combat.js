@@ -1378,11 +1378,12 @@ export async function handleAttackTarget(interaction, ctx) {
   const attackerStats = getDcStats(meta.dcName);
   let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
 
-  // attackTypeOverride (Overheated → 'melee'): persistent per-msgId
-  // attack-type swap that survives across attacks until round cleanup.
-  // Applied BEFORE pendingOverrideAttackDice so a per-attack override
-  // can still further modify if needed.
-  const _attackTypeOverride = game.attackTypeOverride?.[msgId];
+  // attackTypeOverride (Overheated → 'melee'): per-FIGURE attack-type
+  // swap that survives across attacks until activation cleanup. Per
+  // IACP rule 2026-05-09 keyed by the attacker's figureKey so each
+  // figure in a multifigure group has its own override.
+  const _atkFkForOverride = `${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1}-${figureIndex}`;
+  const _attackTypeOverride = game.attackTypeOverride?.[_atkFkForOverride];
   if (_attackTypeOverride === 'melee') {
     attackInfo = { ...attackInfo, range: [1, 1], attackType: 'Melee' };
   } else if (_attackTypeOverride === 'ranged') {
