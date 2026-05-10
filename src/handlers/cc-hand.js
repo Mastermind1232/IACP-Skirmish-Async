@@ -1812,8 +1812,12 @@ export async function handleCcShuffleDraw(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
-    const { sendPhaseGateMessages } = ctx;
-    await sendPhaseGateMessages(game, 'cc_drawn', ctx);
+    // Per user 2026-05-09: removed the cc_drawn ready check —
+    // proceed directly to round 1 SoR. The SoR ability check is
+    // still posted by runStartOfRoundContinuation inside
+    // advanceFromCcDraw.
+    const { advanceFromCcDraw } = await import('./phase-gate.js');
+    await advanceFromCcDraw(game, ctx);
   }
   saveGames(game.gameId);
 }
@@ -1887,8 +1891,9 @@ export async function handleIKnowEverythingKeep(interaction, ctx) {
   await updateHandVisualMessage(game, playerNum, client);
   if (game.player1CcDrawn && game.player2CcDrawn) {
     await updatePlayAreaDcButtons(game, client);
-    const { sendPhaseGateMessages } = ctx;
-    await sendPhaseGateMessages(game, 'cc_drawn', ctx);
+    // Per user 2026-05-09: removed the cc_drawn ready check.
+    const { advanceFromCcDraw } = await import('./phase-gate.js');
+    await advanceFromCcDraw(game, ctx);
   }
   saveGames(game.gameId);
 }

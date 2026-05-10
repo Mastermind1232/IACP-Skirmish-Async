@@ -706,7 +706,9 @@ async function endBlitzDeployment(game, ctx) {
 
   await logGameAction(game, client, '**Blitz deployment complete.** Both players have finished deploying.', { phase: 'DEPLOYMENT', icon: 'deployed' });
 
-  // Use the standard phase gate to advance from deployment → CC draw
-  await sendPhaseGateMessages(game, 'deploy_done', ctx);
+  // Per user 2026-05-09: removed the deploy_done ready check —
+  // proceed directly to the post-deploy step.
+  const { advanceFromDeployment } = await import('./phase-gate.js');
+  await advanceFromDeployment(game, ctx);
   if (saveGames) saveGames(game.gameId);
 }

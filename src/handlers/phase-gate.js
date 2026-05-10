@@ -296,48 +296,9 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
       break;
     }
 
-    case 'cc_drawn': {
-      setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
-      // Recompute activation counts now that figures are deployed and we're
-      // entering the round. Mirror of the fix in setup-bridge.js#runDraftRandom
-      // — the populatePlayAreas recompute fires before figures are placed,
-      // so the round can otherwise open with 0/0 remaining.
-      recomputeActivationCounts(game, 1);
-      recomputeActivationCounts(game, 2);
-      const { getMissionRules, getMapTokensData, runStartOfRoundRules, runStartOfRoundContinuation } = ctx;
-
-      // Round 1 enters start-of-round here (Round 2+ uses _runInitiativeSwapAndContinue).
-      // Run the same mission SOR gate + shared continuation so every start-of-round
-      // effect (mission rules, CC passives, DC passives, hand refresh, phase gate,
-      // mission-specific prompts) fires identically in both paths.
-      const mapId = game.selectedMap?.id;
-      const variant = game.selectedMission?.variant;
-      const missionRules = getMissionRules?.(mapId, variant) ?? {};
-      if (missionRules?.startOfRound?.randomRevealAndPlaceStrain) {
-        const missionName = game.selectedMission?.name || 'Mission Effect';
-        const generalChannel = await fetchGameChannel(client, game.generalId);
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`sor_mission_reveal_${gameId}`)
-            .setLabel('Reveal Mission Tokens')
-            .setStyle(ButtonStyle.Primary)
-        );
-        await generalChannel.send({
-          content: `⚡ **Round ${game.currentRound || 1} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
-          components: [row],
-        });
-        setPendingMissionSorReveal(game);
-        saveGames(game.gameId);
-        return;
-      }
-      if (runStartOfRoundRules && missionRules?.startOfRound) {
-        await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
-      }
-      if (runStartOfRoundContinuation) {
-        await runStartOfRoundContinuation(game, gameId, null, ctx);
-      }
+    case 'cc_drawn':
+      await advanceFromCcDraw(game, ctx);
       break;
-    }
 
     case 'pre_end_of_round': {
       setRoundPhase(game, ROUND_PHASES.END_OF_ROUND);
@@ -413,13 +374,66 @@ function getIncompleteDeploySelections(game, playerNum) {
   return missing;
 }
 
+// ── advanceFromCcDraw (extracted from cc_drawn dispatch case) ───────────────
+
+/**
+ * Logic to enter Round 1's start-of-round phase after CC draw is
+ * complete. Per user 2026-05-09 the cc_drawn ready check was
+ * removed — we proceed directly here once both players have drawn.
+ * SoR ability check is still posted by runStartOfRoundContinuation
+ * via the post_start_of_round phase gate.
+ */
+export async function advanceFromCcDraw(game, ctx) {
+  const { client, logGameAction, saveGames } = ctx;
+  const gameId = game.gameId;
+  setPhase(game, PHASES.ROUND_ACTIVE, ROUND_PHASES.START_OF_ROUND);
+  // Recompute activation counts now that figures are deployed and we're
+  // entering the round. Mirror of the fix in setup-bridge.js#runDraftRandom
+  // — the populatePlayAreas recompute fires before figures are placed,
+  // so the round can otherwise open with 0/0 remaining.
+  recomputeActivationCounts(game, 1);
+  recomputeActivationCounts(game, 2);
+  const { getMissionRules, getMapTokensData, runStartOfRoundRules, runStartOfRoundContinuation } = ctx;
+
+  // Round 1 enters start-of-round here (Round 2+ uses _runInitiativeSwapAndContinue).
+  // Run the same mission SOR gate + shared continuation so every start-of-round
+  // effect (mission rules, CC passives, DC passives, hand refresh, phase gate,
+  // mission-specific prompts) fires identically in both paths.
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  const missionRules = getMissionRules?.(mapId, variant) ?? {};
+  if (missionRules?.startOfRound?.randomRevealAndPlaceStrain) {
+    const missionName = game.selectedMission?.name || 'Mission Effect';
+    const generalChannel = await fetchGameChannel(client, game.generalId);
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`sor_mission_reveal_${gameId}`)
+        .setLabel('Reveal Mission Tokens')
+        .setStyle(ButtonStyle.Primary)
+    );
+    await generalChannel.send({
+      content: `⚡ **Round ${game.currentRound || 1} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
+      components: [row],
+    });
+    setPendingMissionSorReveal(game);
+    saveGames?.(game.gameId);
+    return;
+  }
+  if (runStartOfRoundRules && missionRules?.startOfRound) {
+    await runStartOfRoundRules(game, mapId, variant, missionRules.startOfRound, { logGameAction, client, getMapTokensData });
+  }
+  if (runStartOfRoundContinuation) {
+    await runStartOfRoundContinuation(game, gameId, null, ctx);
+  }
+}
+
 // ── advanceFromDeployment (extracted from setup.js) ─────────────────────────
 
 /**
  * Logic after both players have deployed: proceed to CC draw.
  * Attachments are already placed before deployment, so no attachment check needed.
  */
-async function advanceFromDeployment(game, ctx) {
+export async function advanceFromDeployment(game, ctx) {
   const {
     client, logGameAction, saveGames,
     getInitiativePlayerZoneLabel, clearPreGameSetup,

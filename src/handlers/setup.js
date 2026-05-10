@@ -2021,9 +2021,13 @@ export async function handleDeploymentDone(interaction, ctx) {
     console.error('Failed to update non-initiative deploy message:', err);
   }
 
-  // Phase gate: both players deployed — wait for both to confirm before advancing
-  const { sendPhaseGateMessages } = ctx;
-  await sendPhaseGateMessages(game, 'deploy_done', ctx);
+  // Per user 2026-05-09: removed the deploy_done ready check (both
+  // players have already clicked "Deployment Completed", which IS
+  // the ready signal). Proceed directly to the post-deploy step
+  // (debts repaid, moff gideon, scavenged walker, smooth landing,
+  // etc.) which is run inside advanceFromDeployment.
+  const { advanceFromDeployment } = await import('./phase-gate.js');
+  await advanceFromDeployment(game, ctx);
   saveGames(game.gameId);
 }
 

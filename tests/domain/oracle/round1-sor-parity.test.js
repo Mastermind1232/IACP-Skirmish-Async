@@ -38,23 +38,24 @@ describe('Round 1 SOR parity (shared-helper unification)', () => {
       'runStartOfRoundContinuation must be exported so phase-gate + setup-bridge can reuse it');
   });
 
-  it('R1SOR-002: phase-gate.js cc_drawn case invokes runStartOfRoundRules', () => {
+  it('R1SOR-002: advanceFromCcDraw invokes runStartOfRoundRules', () => {
+    // Per user 2026-05-09: cc_drawn ready check removed; round 1 SOR
+    // body extracted into advanceFromCcDraw() and called directly when
+    // both players finish drawing. Same body, different entry point.
     const src = readSrc('src/handlers/phase-gate.js');
-    const ccDrawnIdx = src.indexOf("case 'cc_drawn':");
-    assert.ok(ccDrawnIdx > 0, 'cc_drawn case must exist in phase-gate dispatch');
-    const nextCaseIdx = src.indexOf('case ', ccDrawnIdx + 20);
-    const block = src.slice(ccDrawnIdx, nextCaseIdx > 0 ? nextCaseIdx : src.length);
+    const fnIdx = src.indexOf('export async function advanceFromCcDraw');
+    assert.ok(fnIdx > 0, 'advanceFromCcDraw must exist in phase-gate.js');
+    const block = src.slice(fnIdx);
     assert.match(block, /runStartOfRoundRules\s*\(/,
-      'cc_drawn must call runStartOfRoundRules to fire mission SOR rules on round 1');
+      'advanceFromCcDraw must call runStartOfRoundRules to fire mission SOR rules on round 1');
   });
 
-  it('R1SOR-003: phase-gate.js cc_drawn case invokes runStartOfRoundContinuation', () => {
+  it('R1SOR-003: advanceFromCcDraw invokes runStartOfRoundContinuation', () => {
     const src = readSrc('src/handlers/phase-gate.js');
-    const ccDrawnIdx = src.indexOf("case 'cc_drawn':");
-    const nextCaseIdx = src.indexOf('case ', ccDrawnIdx + 20);
-    const block = src.slice(ccDrawnIdx, nextCaseIdx > 0 ? nextCaseIdx : src.length);
+    const fnIdx = src.indexOf('export async function advanceFromCcDraw');
+    const block = src.slice(fnIdx);
     assert.match(block, /runStartOfRoundContinuation\s*\(/,
-      'cc_drawn must call runStartOfRoundContinuation (CC passives, DC SOR, phase gate, mission prompts)');
+      'advanceFromCcDraw must call runStartOfRoundContinuation (CC passives, DC SOR, phase gate, mission prompts)');
   });
 
   it('R1SOR-004: setup-bridge.js runDraftRandom invokes runStartOfRoundRules', () => {
