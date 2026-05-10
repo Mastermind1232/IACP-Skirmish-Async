@@ -132,6 +132,7 @@ import {
   handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
+  handleExcavationPlay,
   handleCommDisruptionPlay,
   handleCommDisruptionSkip,
 } from './cc-hand.js';
@@ -444,6 +445,7 @@ register('negation_play_', handleNegationPlay, 'ccHand');
 register('negation_let_resolve_', handleNegationLetResolve, 'ccHand');
 register('celebration_play_', handleCelebrationPlay, 'ccHand');
 register('celebration_pass_', handleCelebrationPass, 'ccHand');
+register('excavation_play_', handleExcavationPlay, 'ccHand');
 register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
 register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
 
@@ -818,6 +820,7 @@ export {
   handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
+  handleExcavationPlay,
   handleCcSpacePick,
 } from './cc-hand.js';
 export {

@@ -1543,6 +1543,109 @@ export async function handleCelebrationPlay(interaction, ctx) {
   saveGames(game.gameId);
 }
 
+/**
+ * Aphra Excavation play — when Aphra's player clicks "Play [card] (Excavation)"
+ * on her hand channel. The card is in the source player's discard pile per
+ * `game.aphraExcavationTarget`; this handler splices it, resolves the
+ * ability, and routes the card to the game box (per card text "return it
+ * to the game box"). Card never enters any hand.
+ *
+ * customId: excavation_play_${gameId}
+ */
+export async function handleExcavationPlay(interaction, ctx) {
+  const { getGame, getCcEffect, isCcPlayableNow, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, client, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const gameId = parseCustomId(interaction.customId, 'excavation_play_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const tgt = game.aphraExcavationTarget;
+  if (!tgt || tgt.used) {
+    await interaction.followUp({ content: 'No active Excavation card to play.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, tgt.excavatorPN, canActAsPlayer, "Only Aphra's player may play this card.")) return;
+  const sourceDiscardKey = ccDiscardKey(tgt.sourcePN);
+  const sourceDiscard = game[sourceDiscardKey] || [];
+  const idx = sourceDiscard.indexOf(tgt.cardName);
+  if (idx < 0) {
+    await interaction.followUp({ content: `**${tgt.cardName}** is no longer in P${tgt.sourcePN}'s discard pile (redrawn out). Excavation cannot resolve.`, ephemeral: true }).catch(discordCatch);
+    await interaction.message.edit({ content: `⛏️ **Excavation** — **${tgt.cardName}** was redrawn out of discard before play. Marker lost.`, components: [] }).catch(discordCatch);
+    return;
+  }
+  if (isCcPlayableNow && !isCcPlayableNow(game, tgt.excavatorPN, tgt.cardName)) {
+    await interaction.followUp({ content: `**${tgt.cardName}** can't be played right now (timing mismatch).`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Splice from source discard, push to game box, mark used.
+  sourceDiscard.splice(idx, 1);
+  game[sourceDiscardKey] = sourceDiscard;
+  game.gameBox = game.gameBox || [];
+  game.gameBox.push(tgt.cardName);
+  tgt.used = true;
+  const card = tgt.cardName;
+  const sourcePN = tgt.sourcePN;
+  const playerNum = tgt.excavatorPN;
+  const effectData = getCcEffect ? getCcEffect(card) : null;
+  const abilityId = effectData?.abilityId ?? card;
+  await interaction.message.edit({
+    content: `⛏️ **Excavation** — **${card}** played from P${sourcePN}'s discard pile, returned to game box.`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client, `<@${interaction.user.id}> played **${card}** via ⛏️ **Excavation** (from P${sourcePN}'s discard → game box).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  if (updateDiscardPileMessage) {
+    await updateDiscardPileMessage(game, sourcePN, client).catch(discordCatch);
+  }
+  if (resolveAbility) {
+    const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.combat || game.pendingCombat });
+    const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
+    if (!aarResult.handled && result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
+      const _clickerPN = result.choiceForControllerPlayerNum ?? playerNum;
+      const _isOpponentChoice = _clickerPN !== playerNum;
+      setPendingCcChoice(game, {
+        abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card,
+        ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
+        ...(_isOpponentChoice ? { clickerPlayerNum: _clickerPN } : {}),
+      });
+      const btns = result.choiceOptions.map((opt) => {
+        const label = String(opt).slice(0, 80);
+        return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
+      });
+      const rows = chunkButtonsToRows(btns);
+      const promptHandId = getHandChannelId(game, _clickerPN);
+      const promptCh = promptHandId ? await fetchGameChannel(client, promptHandId) : null;
+      const header = _isOpponentChoice
+        ? `**${card}** — your figure was targeted; choose one:`
+        : `**Choose one** (for **${card}**):`;
+      if (promptCh) await promptCh.send({ content: header, components: rows }).catch(discordCatch);
+    }
+    if (!aarResult.handled && result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
+      if (getBoardStateForMovement && getMapAttachmentForSpaces) {
+        setPendingCcSpaceChoice(game, { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null });
+        const handChannelId = getHandChannelId(game, playerNum);
+        const handCh = handChannelId ? await fetchGameChannel(client, handChannelId) : null;
+        if (handCh) {
+          const boardState = getBoardStateForMovement(game, null);
+          const ccMapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
+          const ccHeader = `**Pick a space** (for **${card}**)`;
+          game.pendingSpacePick = game.pendingSpacePick || {};
+          game.pendingSpacePick[gameId] = {
+            validSpaces: result.validSpaces,
+            cellPrefix: `cc_space_${gameId}_`,
+            mapSpaces: ccMapSpaces,
+            headerText: ccHeader,
+          };
+          const { rows: rowBtns } = buildRowPickerButtons(result.validSpaces, `space_row_${gameId}_`);
+          const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
+          const payload = { content: `${ccHeader}:\nChoose a row:`, components: rowBtns.slice(0, 5) };
+          if (mapAttachment) payload.files = [mapAttachment];
+          await handCh.send(payload).catch(discordCatch);
+        }
+      }
+    }
+  }
+  saveGames(game.gameId);
+}
+
 /** @param {import('discord.js').ButtonInteraction} interaction — "Pass" on Celebration. */
 export async function handleCelebrationPass(interaction, ctx) {
   const { getGame, logGameAction, client, saveGames } = ctx;

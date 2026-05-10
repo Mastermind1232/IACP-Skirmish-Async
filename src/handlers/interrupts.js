@@ -939,8 +939,40 @@ export async function handleExcavationPick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   await logGameAction(game, client, `⛏️ **Excavation** — <@${interaction.user.id}> marked **${choice.name}** (in ${sourceLabel} discard) for play this round.`, { phase: 'ROUND', icon: 'round' });
+  // Post the play button in Aphra's hand channel so the player can trigger
+  // the actual play from discard at the right timing during the round.
+  await _postAphraExcavationPlayButton(game, client).catch(discordCatch);
   await resolveStartOfRoundEffect(game, ctx);
   saveGames(game.gameId); return;
+}
+
+/**
+ * Post the "Play [card] (Excavation)" button to Aphra's hand channel after
+ * a SoR pick. Stores the message id on the marker so it can be edited when
+ * the card is played, redrawn out, or the round ends.
+ */
+async function _postAphraExcavationPlayButton(game, client) {
+  const tgt = game.aphraExcavationTarget;
+  if (!tgt || tgt.used) return;
+  const handChannelId = getHandChannelId(game, tgt.excavatorPN);
+  if (!handChannelId) return;
+  const handChannel = await fetchGameChannel(client, handChannelId);
+  if (!handChannel) return;
+  const sourceLabel = tgt.sourcePN === tgt.excavatorPN ? 'your discard' : `P${tgt.sourcePN}'s discard`;
+  const ownerId = getPlayerId(game, tgt.excavatorPN);
+  const btn = new ButtonBuilder()
+    .setCustomId(`excavation_play_${game.gameId}`)
+    .setLabel(`Play ${tgt.cardName.slice(0, 60)} (Excavation)`)
+    .setStyle(ButtonStyle.Primary);
+  const msg = await handChannel.send({
+    content: `<@${ownerId}> ⛏️ **Excavation** — **${tgt.cardName}** is marked in ${sourceLabel}. Press to play it; the card returns to the game box afterward. Marker clears at end of round if unused.`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btn)],
+  }).catch(() => null);
+  if (msg) {
+    tgt.playButtonChannelId = handChannel.id;
+    tgt.playButtonMessageId = msg.id;
+  }
 }
 
 // ── 14. Driven by Hatred (Darth Vader EOR) ──────────────────────────────────
