@@ -118,7 +118,15 @@ async function _finishPicker(game, ctx, msgId) {
   // the MASSIVE keyword and its final footprint overlaps any other
   // figure, route those overlapping figures through the existing
   // pendingMassivePush flow.
-  if (_isMovingFigureMassive(game, pending.figureKey)) {
+  const _isMassive = _isMovingFigureMassive(game, pending.figureKey);
+  // Diagnostic: log _finishPicker entry + isMassive verdict so future
+  // bug reports can tell whether the check even ran. Per user 2026-05-09:
+  // AT-DP moved 3 spaces but no displacement; need to confirm whether
+  // _isMovingFigureMassive returns true for the AT-DP figureKey.
+  await ctx.logGameAction?.(game, ctx.client,
+    `🦿 **_finishPicker** — figureKey=${pending.figureKey}, dcName=${pending.dcName || dcNameFromFigureKey(pending.figureKey)}, isMassive=${_isMassive}`,
+    { phase: 'ROUND', icon: 'move' });
+  if (_isMassive) {
     await _runMassiveDisplacement(game, ctx, pending);
   }
   // Multi-figure MP-gain orchestration: if a sequence is active and
