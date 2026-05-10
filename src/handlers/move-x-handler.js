@@ -1528,18 +1528,6 @@ export async function handleMoveXStep(interaction, ctx) {
     `🦿 **${pending.source}** — **${pending.dcName}** moves to **${match.topLeft.toUpperCase()}**${costNote} (${pending.remaining} left).`,
     { phase: 'ROUND', icon: 'attack' });
 
-  // Per-step MASSIVE displacement: if the moving figure has the
-  // MASSIVE keyword and the new footprint overlaps any other figure
-  // (friendly or hostile), displace each overlapping figure now —
-  // before the next step prompt or _finishPicker. Per user 2026-05-09:
-  // the AT-DP wasn't pushing 3 figures it crossed during a 3-space
-  // step-by-step move because displacement only ran at end of move.
-  // All allegiances are displaced (collectOverlappingFigures pulls
-  // from figurePositions[1] + figurePositions[2]).
-  if (_isMovingFigureMassive(game, pending.figureKey)) {
-    await _runMassiveDisplacement(game, ctx, pending);
-  }
-
   // On a Mission per-step hook: if the activator's new footprint
   // contains a SMALL figure, suspend the picker and post a 1-space
   // push prompt. The valid push destinations come from the same
