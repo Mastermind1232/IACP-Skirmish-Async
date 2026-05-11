@@ -311,7 +311,7 @@ register('pre_reroll_', handlePreReroll, 'combat');
 register('combat_passive_', handleCombatPassive, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('od_dieswap_', handleOnDeclareDieSwap, 'combat');
-register('cq_def_pick_', handleCqDefPick, 'combat');
+register('def_remove_pick_', handleCqDefPick, 'combat');
 register('mtl_face_', handleMtlFacePick, 'combat');
 register('bl_friendly_', handleBlFriendlyPick, 'combat');
 register('unhinged_director_', handleUnhingedDirectorChoice, 'combat');

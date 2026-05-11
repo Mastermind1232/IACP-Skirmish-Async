@@ -1427,38 +1427,8 @@ export async function handleAttackTarget(interaction, ctx) {
             if (cqAttack.attackType?.toLowerCase() === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
             else if (cqAttack.attackType?.toLowerCase() === 'ranged') attackInfo = { ...attackInfo, range: [1, 99] };
             game._closeQuartersBonusAcc = 1;
-            game._closeQuartersRemoveDefDie = true;
-            await withDiscordRetry(() => thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die.`));
-            // Verena picks which defense die to remove (per alexanbv 2026-05-11).
-            // Build the target's defense pool composition (same logic as
-            // handleCombatRoll defense branch) and post a picker if >1 die.
-            const _cqTargetDcName = dcNameFromFigureKey(target.figureKey);
-            const _cqTargetStats = getDcStats(_cqTargetDcName);
-            const _cqBaseDef = _cqTargetStats?.defense || 'white';
-            const _cqBaseDice = Array.isArray(_cqBaseDef) ? _cqBaseDef : [_cqBaseDef];
-            if (_cqBaseDice.length > 1) {
-              const _cqOwnerId = getPlayerId(game, meta.playerNum);
-              const _cqRow = new ActionRowBuilder().addComponents(
-                ..._cqBaseDice.map((color, idx) =>
-                  new ButtonBuilder()
-                    .setCustomId(`cq_def_pick_${game.gameId}_${idx}`)
-                    .setLabel(`Remove ${color} die #${idx + 1}`)
-                    .setStyle(ButtonStyle.Danger),
-                ),
-              );
-              game.pendingCqDefPick = {
-                gameId: game.gameId,
-                attackerPlayerNum: meta.playerNum,
-                attackerMsgId: msgId,
-                combatThreadId: thread.id,
-                pool: _cqBaseDice,
-              };
-              await thread.send(sanitizeMentions({
-                content: `<@${_cqOwnerId}> **Close Quarters** — Pick which defense die to remove from **${_cqTargetDcName}**'s pool [${_cqBaseDice.join(', ')}]:`,
-                allowedMentions: { users: [_cqOwnerId] },
-                components: [_cqRow],
-              })).catch(discordCatch);
-            }
+            game.pendingCombat.defensePoolRemoveMax = (game.pendingCombat.defensePoolRemoveMax || 0) + 1;
+            await withDiscordRetry(() => thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die (picker will fire at defense roll).`));
           }
         }
       }
@@ -1634,7 +1604,10 @@ export async function handleAttackTarget(interaction, ctx) {
     },
     bonusBlock: npcDefenseBonus || undefined, // Krykna: 2 fixed blocks
     blockSurgeAbilities: game._pendingBlockSurgeAbilities || false, // Tusken Cycler
-    defensePoolRemoveMax: game._closeQuartersRemoveDefDie ? 1 : 0, // Close Quarters: remove 1 defense die
+    // defensePoolRemoveMax now incremented directly when CQ / Element of
+    // Surprise / Wild Fire apply (alexanbv 2026-05-11). Generic picker
+    // at defense-roll time consumes _defPickRemoveIdxList.
+    defensePoolRemoveMax: 0,
     attackInfo,
     isRanged,
     distanceToTarget,
@@ -1727,7 +1700,6 @@ export async function handleAttackTarget(interaction, ctx) {
   // Clean up temp flags after transferring to combat object
   if (game._pendingBlockSurgeAbilities) delete game._pendingBlockSurgeAbilities;
   if (game._closeQuartersBonusAcc) delete game._closeQuartersBonusAcc;
-  if (game._closeQuartersRemoveDefDie) delete game._closeQuartersRemoveDefDie;
   // Apply printed passive stat bonuses from attacker only (NPC has no passives)
   // Merge form passives (e.g. "+2 Accuracy") and form combat passives (e.g. "Professional") with DC passives
   const attackerPassives = [...(getDcStats(meta.dcName).passives || [])];
@@ -3242,20 +3214,27 @@ export async function handleCombatRoll(interaction, ctx) {
     const pool = [...baseDice, ...bonusDice];
     if (combat.autofireAttack) pool.push('white');
     if (combat.barrageAttack) pool.push('white');
-    // Close Quarters (Verena): if multi-die defense + Verena hasn't picked
-    // yet, refuse to roll.
-    if (game._closeQuartersRemoveDefDie && baseDice.length > 1 && game.pendingCqDefPick && combat._cqRemoveDefDieIdx == null) {
-      await interaction.followUp({ content: '⏳ Close Quarters: waiting for Verena to pick which defense die to remove.', ephemeral: true }).catch(discordCatch);
+    // Generalized defender-die pick (alexanbv 2026-05-11): when any
+    // attacker effect removes a defense die AND the target has >1 base
+    // die, the attacker picks which to remove. Covers Verena Close
+    // Quarters, Element of Surprise, Wild Fire, etc. Picker fires the
+    // first time Roll is clicked; subsequent clicks proceed once
+    // _defPickRemoveIdxList is populated.
+    const _defRemoveMaxRaw = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, baseDice.length > 1 ? baseDice.length : 0);
+    if (_defPicksNeeded > 0 && !Array.isArray(combat._defPickRemoveIdxList)) {
+      await _postDefenseDieRemovePicker(thread, game, combat, baseDice, _defPicksNeeded);
+      await interaction.followUp({ content: `⏳ Pick ${_defPicksNeeded} defense die${_defPicksNeeded > 1 ? 's' : ''} to remove from the defense pool — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
+      saveGames(game.gameId);
       return;
     }
-    const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const removeMax = _defRemoveMaxRaw;
     const removeCount = Math.min(removeMax, pool.length);
     let diceToRoll;
-    if (combat._cqRemoveDefDieIdx != null && baseDice.length > 1) {
-      // Verena's pick — drop that specific base die, then keep bonus dice.
-      const _cqIdx = combat._cqRemoveDefDieIdx;
+    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && baseDice.length > 1) {
+      const _drop = new Set(combat._defPickRemoveIdxList);
       diceToRoll = [
-        ...baseDice.filter((_, i) => i !== _cqIdx),
+        ...baseDice.filter((_, i) => !_drop.has(i)),
         ...pool.slice(baseDice.length),
       ];
     } else {
@@ -3426,19 +3405,22 @@ export async function handleCombatRoll(interaction, ctx) {
       pool.push('white');
       await thread.send('**Barrage** — Defender adds 1 white die to defense pool (second attack).').catch(discordCatch);
     }
-    // Close Quarters (Verena): waiting on Verena's defense-die pick when
-    // target has multi-die defense.
-    if (game._closeQuartersRemoveDefDie && baseDice.length > 1 && game.pendingCqDefPick && combat._cqRemoveDefDieIdx == null) {
-      await interaction.followUp({ content: '⏳ Close Quarters: waiting for Verena to pick which defense die to remove.', ephemeral: true }).catch(discordCatch);
+    // Generalized defender-die pick (alexanbv 2026-05-11).
+    const _defRemoveMaxRaw = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, baseDice.length > 1 ? baseDice.length : 0);
+    if (_defPicksNeeded > 0 && !Array.isArray(combat._defPickRemoveIdxList)) {
+      await _postDefenseDieRemovePicker(thread, game, combat, baseDice, _defPicksNeeded);
+      await interaction.followUp({ content: `⏳ Pick ${_defPicksNeeded} defense die${_defPicksNeeded > 1 ? 's' : ''} to remove from the defense pool — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
+      saveGames(game.gameId);
       return;
     }
-    const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
+    const removeMax = _defRemoveMaxRaw;
     const removeCount = Math.min(removeMax, pool.length);
     let diceToRoll;
-    if (combat._cqRemoveDefDieIdx != null && baseDice.length > 1) {
-      const _cqIdx = combat._cqRemoveDefDieIdx;
+    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && baseDice.length > 1) {
+      const _drop = new Set(combat._defPickRemoveIdxList);
       diceToRoll = [
-        ...baseDice.filter((_, i) => i !== _cqIdx),
+        ...baseDice.filter((_, i) => !_drop.has(i)),
         ...pool.slice(baseDice.length),
       ];
     } else {
@@ -8231,13 +8213,39 @@ export async function handleBlFriendlyPick(interaction, ctx) {
  *   e = ee3_carbine (2 MP cost)
  */
 /**
- * cq_def_pick_{gameId}_{idx}: Verena picks which defense die to remove
- * from a multi-die defender's pool (Close Quarters). Sets
- * combat._cqRemoveDefDieIdx; the next defense roll consults this index.
+ * Generic defender-die-removal picker (alexanbv 2026-05-11). Fires at
+ * the defense roll when any attacker effect (Verena CQ, Element of
+ * Surprise, Wild Fire, etc.) targets a multi-die defender. Builds one
+ * button per base die + sends a ping to the attacker.
+ */
+async function _postDefenseDieRemovePicker(thread, game, combat, baseDice, picksNeeded) {
+  const attackerPN = combat.attackerPlayerNum;
+  const ownerId = getPlayerId(game, attackerPN);
+  const buttons = baseDice.map((color, idx) =>
+    new ButtonBuilder()
+      .setCustomId(`def_remove_pick_${game.gameId}_${idx}`)
+      .setLabel(`Remove ${color} die #${idx + 1}`)
+      .setStyle(ButtonStyle.Danger),
+  );
+  combat._defPickRemovePool = baseDice;
+  combat._defPickRemoveTargetCount = picksNeeded;
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> — Pick **${picksNeeded}** defense die${picksNeeded > 1 ? 's' : ''} to remove from defender's pool [${baseDice.join(', ')}]:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(buttons)],
+  })).catch(discordCatch);
+}
+
+/**
+ * def_remove_pick_{gameId}_{idx}: attacker picks a defense die to remove.
+ * Multi-pick supported (e.g. Wild Fire removes 2). Picks accumulate in
+ * combat._defPickRemoveIdxList; once length === target, the next
+ * defense Roll click proceeds. Backward-compat alias for the legacy
+ * cq_def_pick_ prefix routes here too.
  */
 export async function handleCqDefPick(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const m = interaction.customId.match(/^cq_def_pick_([^_]+)_(\d+)$/);
+  const m = interaction.customId.match(/^(?:def_remove_pick|cq_def_pick)_([^_]+)_(\d+)$/);
   if (!m) return;
   const [, gameId, idxStr] = m;
   const idx = parseInt(idxStr, 10);
@@ -8249,23 +8257,29 @@ export async function handleCqDefPick(interaction, ctx) {
     await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (!game.pendingCqDefPick) {
-    await interaction.followUp({ content: 'No Close Quarters pick pending.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const cqPN = game.pendingCqDefPick.attackerPlayerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, cqPN, canActAsPlayer, 'Only Verena\'s owner may pick.')) return;
+  const attackerPN = combat.attackerPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPN, canActAsPlayer, 'Only the attacker may pick.')) return;
   await interaction.deferUpdate().catch(discordCatch);
-  const pool = game.pendingCqDefPick.pool || [];
+  const pool = combat._defPickRemovePool || [];
+  const target = combat._defPickRemoveTargetCount || 1;
+  combat._defPickRemoveIdxList = combat._defPickRemoveIdxList || [];
   if (idx < 0 || idx >= pool.length) {
     await interaction.followUp({ content: 'Invalid die index.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  combat._cqRemoveDefDieIdx = idx;
+  if (combat._defPickRemoveIdxList.includes(idx)) {
+    await interaction.followUp({ content: 'That die is already picked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  combat._defPickRemoveIdxList.push(idx);
   const chosenColor = pool[idx];
-  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
-  await interaction.message.channel.send(`**Close Quarters** — Verena removed defender's **${chosenColor}** die (#${idx + 1}) from the defense pool.`).catch(discordCatch);
-  delete game.pendingCqDefPick;
+  if (combat._defPickRemoveIdxList.length >= target) {
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    const picks = combat._defPickRemoveIdxList.map((i) => `${pool[i]} #${i + 1}`).join(', ');
+    await interaction.message.channel.send(`✅ Removing **${picks}** from defender's pool.`).catch(discordCatch);
+  } else {
+    await interaction.message.channel.send(`Picked **${chosenColor}** #${idx + 1}. Pick ${target - combat._defPickRemoveIdxList.length} more.`).catch(discordCatch);
+  }
   if (saveGames) saveGames(game.gameId);
 }
 
