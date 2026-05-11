@@ -3099,6 +3099,64 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
   }
+  // Battlefield Leadership (Leia Organa): card text "Perform an attack,
+  // then choose another friendly figure within 3 spaces. That figure
+  // may interrupt to move up to 1 space and then perform an attack
+  // with the same target." Per alexanbv 2026-05-10: Leia's attack
+  // must fire FIRST, then the friendly picker auto-fires with the
+  // same target captured. Triggers ONCE per Leia activation (gated by
+  // _blFiredThisActivation flag on her msgId).
+  {
+    const _blGetDcEffFn = typeof getDcEffects === 'function' ? getDcEffects : null;
+    const _blGetDcEff = _blGetDcEffFn ? _blGetDcEffFn() : {};
+    const _blAtkDcName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _blAtkEff = _blGetDcEff[_blAtkDcName] || _blGetDcEff[(_blAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const _blHasAbility = (_blAtkEff?.specialAbilityIds || []).includes('battlefield_leadership');
+    const _blMsgId = combat.attackerMsgId;
+    const _blAlreadyFired = _blMsgId ? !!(game._blFiredThisActivation?.[_blMsgId]) : true;
+    if (_blHasAbility && !_blAlreadyFired && combat.defenderFigureKey) {
+      game._blFiredThisActivation = game._blFiredThisActivation || {};
+      game._blFiredThisActivation[_blMsgId] = true;
+      const _blPlayerNum = combat.attackerPlayerNum;
+      const _blLeiaPos = game.figurePositions?.[_blPlayerNum]?.[combat.attackerFigureKey];
+      const _blEligible = [];
+      if (_blLeiaPos) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[_blPlayerNum] || {})) {
+          if (!pos || fk === combat.attackerFigureKey) continue;
+          if (countGameSpaces(game, _blLeiaPos, pos) > 3) continue;
+          _blEligible.push(fk);
+        }
+      }
+      if (_blEligible.length > 0) {
+        game.pendingBattlefieldLeadership = {
+          leiaMsgId: _blMsgId,
+          leiaFigureKey: combat.attackerFigureKey,
+          capturedTargetFigureKey: combat.defenderFigureKey,
+          eligibleFigureKeys: _blEligible,
+          playerNum: _blPlayerNum,
+        };
+        const _blOwnerId = game[`player${_blPlayerNum}Id`];
+        const _blBtns = _blEligible.slice(0, 4).map((fk) =>
+          new ButtonBuilder()
+            .setCustomId(`bl_friendly_${game.gameId}_${fk}`)
+            .setLabel(`${dcNameFromFigureKey(fk)}`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary)
+        );
+        _blBtns.push(
+          new ButtonBuilder()
+            .setCustomId(`bl_friendly_${game.gameId}_skip`)
+            .setLabel('Skip Battlefield Leadership')
+            .setStyle(ButtonStyle.Secondary)
+        );
+        await thread.send({
+          content: `<@${_blOwnerId}> **Battlefield Leadership** — Choose a friendly figure within 3 of Leia. They may move up to 1 space (terrain ignored) and perform a free attack against the same target (**${dcNameFromFigureKey(combat.defenderFigureKey)}**).`,
+          components: [new ActionRowBuilder().addComponents(_blBtns)],
+          allowedMentions: { users: [_blOwnerId] },
+        }).catch(discordCatch);
+      }
+    }
+  }
+
   // Focus Fire: after first attack, enforce same target for second attack
   if (game.focusFireActive?.[combat.attackerFigureKey]) {
     const ff = game.focusFireActive[combat.attackerFigureKey];

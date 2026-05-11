@@ -784,66 +784,20 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
   }
 
-  // battlefield_leadership (Leia Organa): pick a friendly figure within 3 spaces;
-  // that figure may move up to 1 space (MOVE-X pipeline) then performs a free
-  // attack. Per alexanbv 2026-05-10: the 1-space pre-attack move MUST flow
-  // through pendingMoveX so the chosen friendly's move can use the canonical
-  // Move-X picker (terrain costs, movement bank, displacement). The free
-  // attack fires via the freeAttackPrompt continuation when MOVE-X drains.
+  // battlefield_leadership (Leia Organa): per alexanbv 2026-05-10 BL is
+  // wholly driven by an auto-trigger in combat-bridge.js post-resolve.
+  // Card text "Special Action (Battlefield Leadership): Perform an attack,
+  // then choose another friendly..." → Leia just attacks normally; after
+  // her attack resolves, the post-resolve hook captures the target and
+  // posts the friendly picker (bl_friendly_<gameId>_<fk>). The friendly's
+  // 1-space move goes through pendingMoveX (bypassCosts) and the free
+  // attack is forced to the captured target via game.forcedAttackTarget.
+  // The legacy dcSpecial click-to-pick path is retired — clicking the
+  // button now just informs the player to attack first.
   if (abilityId === 'battlefield_leadership') {
-    const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Battlefield Leadership** manually.' };
-    // Phase 2: figure chosen — set up pendingMoveX (range 1) + free-attack continuation
-    if (choiceIndex != null && targetFigureKey) {
-      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
-      if (chosenMsgId) {
-        setPendingBattlefieldLeadership(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
-        game.pendingMoveX = game.pendingMoveX || {};
-        game.pendingMoveX[chosenMsgId] = {
-          remaining: 1,
-          source: 'Battlefield Leadership',
-          playerNum,
-          figureKey: targetFigureKey,
-          dcName: dcNameFromFigureKey(targetFigureKey),
-          threadId: null,
-          msgId: chosenMsgId,
-          bypassCosts: true,
-          nextAction: {
-            type: 'freeAttackPrompt',
-            payload: {
-              msgId: chosenMsgId,
-              playerNum,
-              figureKey: targetFigureKey,
-              sourceLabel: 'Battlefield Leadership',
-            },
-          },
-        };
-      }
-      const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return {
-        applied: true,
-        pendingMoveXMsgId: chosenMsgId,
-        activeMsgId: chosenMsgId,
-        logMessage: `**Battlefield Leadership** — **${chosenName}** may move up to **1 space** then perform a free attack (no action cost).`,
-      };
-    }
-    // Phase 1: enumerate friendly figures within 3 spaces (not Leia herself)
-    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
-    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
-    if (!activatingPos) return { applied: false, manualMessage: '**Battlefield Leadership** — Leia has no position on the board. Resolve manually.' };
-    const validTargets = [];
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 3) continue;
-      validTargets.push(fk);
-    }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Battlefield Leadership** — No other friendly figures within 3 spaces.' };
     return {
-      applied: false,
-      requiresChoice: true,
-      choiceOptions: figureChoiceLabels(validTargets),
-      targetFigureKeys: validTargets,
+      applied: true,
+      logMessage: '**Battlefield Leadership** — perform an attack with Leia. After her attack resolves, you will be prompted to pick a friendly figure within 3 spaces to make a free attack against the same target.',
     };
   }
 

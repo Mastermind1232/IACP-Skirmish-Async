@@ -7863,6 +7863,99 @@ async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
 }
 
 /**
+ * Handle bl_friendly_ button: player picked the friendly figure to
+ * make Battlefield Leadership's free attack (or skipped).
+ *
+ * customId: bl_friendly_{gameId}_{friendlyFigureKey|skip}
+ *
+ * On pick: sets up pendingMoveX (range 1, bypassCosts=true) for the
+ * chosen friendly + freeAttackPrompt continuation; populates
+ * game.forcedAttackTarget[friendlyMsgId] with Leia's captured target
+ * so the chosen friendly's free attack is forced to the same target;
+ * marks pendingBattlefieldLeadership so the attack is treated as free.
+ */
+export async function handleBlFriendlyPick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, findDcMessageIdForFigure, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^bl_friendly_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, pickRaw] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const pendingBL = game.pendingBattlefieldLeadership;
+  if (!pendingBL) {
+    await interaction.followUp({ content: 'No pending Battlefield Leadership.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Authority: Leia's player only.
+  const ownerPN = pendingBL.playerNum;
+  const ownerId = game[`player${ownerPN}Id`];
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: `Only Player ${ownerPN} (Leia's controller) may decide.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  if (pickRaw === 'skip') {
+    delete game.pendingBattlefieldLeadership;
+    await interaction.message.channel.send('**Battlefield Leadership** — Skipped.').catch(discordCatch);
+    if (saveGames) saveGames(game.gameId);
+    return;
+  }
+  const friendlyFigureKey = pickRaw;
+  if (!pendingBL.eligibleFigureKeys.includes(friendlyFigureKey)) {
+    await interaction.followUp({ content: 'That figure is not eligible.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const friendlyMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, ownerPN, friendlyFigureKey) : null;
+  if (!friendlyMsgId) {
+    await interaction.followUp({ content: `Could not locate the DC message for ${friendlyFigureKey}.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const capturedTarget = pendingBL.capturedTargetFigureKey;
+  // Mark the friendly's upcoming attack as a BL free attack (so combat
+  // treats it as no-action-cost) via the canonical interrupt module.
+  const { setPendingBattlefieldLeadership: _setBL } = await import('../game/interrupts.js');
+  _setBL(game, {
+    forMsgId: friendlyMsgId,
+    chosenFigureKey: friendlyFigureKey,
+    triggeredByMsgId: pendingBL.leiaMsgId,
+  });
+  // Force the friendly's attack to target the figure Leia just attacked.
+  game.forcedAttackTarget = game.forcedAttackTarget || {};
+  game.forcedAttackTarget[friendlyMsgId] = capturedTarget;
+  // Set up the 1-space MOVE-X with bypassCosts + free-attack prompt.
+  game.pendingMoveX = game.pendingMoveX || {};
+  game.pendingMoveX[friendlyMsgId] = {
+    remaining: 1,
+    source: 'Battlefield Leadership',
+    playerNum: ownerPN,
+    figureKey: friendlyFigureKey,
+    dcName: dcNameFromFigureKey(friendlyFigureKey),
+    threadId: null,
+    msgId: friendlyMsgId,
+    bypassCosts: true,
+    nextAction: {
+      type: 'freeAttackPrompt',
+      payload: {
+        msgId: friendlyMsgId,
+        playerNum: ownerPN,
+        figureKey: friendlyFigureKey,
+        sourceLabel: 'Battlefield Leadership',
+      },
+    },
+  };
+  delete game.pendingBattlefieldLeadership;
+  await logGameAction?.(game, client,
+    `**Battlefield Leadership** — **${dcNameFromFigureKey(friendlyFigureKey)}** may move up to 1 space (terrain ignored), then perform a free attack against **${dcNameFromFigureKey(capturedTarget)}**.`,
+    { phase: 'ROUND', icon: 'attack' });
+  // Post the Move-X picker to kick off the move + free-attack chain.
+  const { postMoveXPicker } = await import('./move-x-handler.js');
+  await postMoveXPicker(game, ctx, friendlyMsgId).catch((err) => console.error('BL move-X picker failed:', err));
+  if (saveGames) saveGames(game.gameId);
+}
+
+/**
  * Handle on-declare die-swap button: Vanguard (AT-RT) or EE-3 Carbine
  * (Boba Fett). Fires inside the attacker's on-declare window in step
  * 1/2 of the attack sequence, alongside on-declare CCs/tokens.
