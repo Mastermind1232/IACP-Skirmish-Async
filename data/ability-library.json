@@ -5082,15 +5082,16 @@
     "tonfa_strike": {
       "type": "dcSpecial",
       "label": "Tonfa Strike",
-      "description": "Move up to 2 spaces, then perform a Melee attack using 1 red + 1 green die. After, you may perform an additional attack.",
+      "description": "Move up to 2 spaces, then perform a Melee attack using 1 red + 1 green die. After, you may perform an additional attack. Total 1 action.",
       "freeMoveBonus": 2,
       "freeAttackBonus": true,
+      "freeAttackBonusCount": 2,
       "overrideAttackDice": [
         "red",
         "green"
       ],
       "overrideAttackType": "melee",
-      "logMessage": "**Tonfa Strike** — Gained 2 free MP. Your next attack is free and uses [Red, Green] dice (Melee). After it resolves, a second free attack is automatically granted.",
+      "logMessage": "**Tonfa Strike** — Gained 2 free MP. First attack uses [Red, Green] dice (Melee); after it resolves, a second free attack is automatically granted (regular dice pool). Total 1 action.",
       "wiredStatus": "wired"
     },
     "Tools for the Job": {
