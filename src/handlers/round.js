@@ -1016,16 +1016,13 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   // Devaron Garrison B: terminal→door selection + crate push prompts.
   // Driven by rules.openDoorPerTerminal flag (CRR mission card data).
   if (hasMissionFlag(mapId, variant, 'openDoorPerTerminal')) {
-    if (!game.cratePositions) {
+    if (!game.objectHealth?.['crate-' + (game.selectedMap?.crateOrigInitDone || '__sentinel__')] && !game._devaronCratesInited) {
+      // Slice 5 (alexanbv 2026-05-10): unified state only. Legacy
+      // cratePositions removed — push-mechanic, attack-targeting,
+      // damage, and splashOnDefeat all flow through
+      // game.objectHealth / game.objectPositions / game.objectMeta.
       const dMap = getMapTokensData()['devaron-garrison'];
       const allCrates = Object.values(dMap?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
-      game.cratePositions = {};
-      for (const c of allCrates) game.cratePositions[c] = c;
-      // Slice 3 (alexanbv 2026-05-10): also populate the unified
-      // object-damage pipeline state. cratePositions stays for the
-      // push-mechanic (current vs orig coord tracking) but health,
-      // splash-on-defeat, attack-targeting, and Blast all flow
-      // through objectHealth/objectMeta from here.
       game.objectHealth = game.objectHealth || {};
       game.objectPositions = game.objectPositions || {};
       game.objectMeta = game.objectMeta || {};
@@ -1044,6 +1041,7 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
           moves: true,
         };
       }
+      game._devaronCratesInited = true;
     }
     const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
     const p2T = countTerminalsControlledByPlayer(game, 2, mapId);

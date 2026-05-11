@@ -166,25 +166,10 @@ async function fireBlast(thread, game, combat, effect, ctx) {
   } catch (err) {
     console.error('[fireBlast] object-damage iteration failed:', err?.message ?? err);
   }
-  // Legacy crate splash removed in Slice 3 (alexanbv 2026-05-10). The
-  // unified object-damage pipeline above (getDamageableObjectsWithinN +
-  // applyDamageToObject) handles Blast → crate damage and crate
-  // explosion via splashOnDefeat. game.cratePositions is now used only
-  // for the push-mechanic; objectHealth owns crate HP.
-  //
-  // Also drop legacy cratePositions entry when a crate is destroyed —
-  // the new pipeline removes objectPositions[id] on defeat, but the
-  // legacy cratePositions[origCoord] used by push handlers needs to
-  // mirror that removal. Walk the post-pipeline state and prune any
-  // cratePositions entries whose corresponding objectId no longer
-  // exists in objectPositions.
-  if (game.cratePositions && game.objectPositions) {
-    for (const origCoord of Object.keys(game.cratePositions)) {
-      if (!game.objectPositions[`crate-${origCoord}`]) {
-        delete game.cratePositions[origCoord];
-      }
-    }
-  }
+  // Legacy crate splash removed Slice 3; legacy cratePositions removed
+  // Slice 5 (alexanbv 2026-05-10). Crates flow 100% through the unified
+  // object-damage pipeline. applyDamageToObject deletes
+  // objectPositions[id] on defeat — no manual sync needed.
 }
 
 /**

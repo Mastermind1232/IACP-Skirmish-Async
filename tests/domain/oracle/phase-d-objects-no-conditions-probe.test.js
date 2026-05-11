@@ -48,9 +48,12 @@ describe('PROBE-PD-CND-009: objects cannot gain conditions (keyed-by-figureKey i
   });
 
   it('009c: game-state CLEARABLE list separates object token fields from figureConditions', () => {
+    // Slice 5 (alexanbv 2026-05-10): cratePositions removed in favor of
+    // unified objectPositions/objectHealth/objectMeta. The structural
+    // separation between figure-conditions and object-state still holds.
     const src = readFileSync(join(ROOT, 'src/game-state.js'), 'utf8');
-    assert.ok(src.includes('cratePositions'),
-      'cratePositions must be a distinct object-position map — CRR-CND-009');
+    assert.ok(src.includes('objectPositions'),
+      'objectPositions must be a distinct object-position map — CRR-CND-009');
     assert.ok(src.includes('figureConditions'),
       'figureConditions must be a distinct figure-keyed map — CRR-CND-009');
   });

@@ -177,12 +177,11 @@ function ensureGameShape(game) {
     // Post-combat / end-of-round containers
     'postActivationConditions', 'endOfRoundSelfDamage',
     // Map tokens (keyed by coord or id)
-    // Legacy crate-HP field removed Slice 3 (alexanbv 2026-05-10) —
-    // crate HP now lives in game.objectHealth via the unified
-    // object-damage pipeline. cratePositions retained for the
-    // push-mechanic (current vs orig coord); objectPositions mirrors
-    // but is owned by the pipeline.
-    'cratePositions', 'crateTokens', 'deviceTokens',
+    // Legacy crate-HP + crate-positions fields removed Slice 3+5
+    // (alexanbv 2026-05-10) — crates flow entirely through the
+    // unified object-damage pipeline (objectHealth/objectPositions/
+    // objectMeta).
+    'crateTokens', 'deviceTokens',
     'objectHealth', 'objectPositions', 'objectMeta',
     'ancillaryTokens', 'orbitalBombardmentTokens',
     // Misc keyed containers

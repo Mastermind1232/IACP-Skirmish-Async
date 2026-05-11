@@ -270,7 +270,7 @@ export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
   for (const pn of [1, 2]) {
     const pid = deps.getPlayerId(game, pn);
     const controlled = allOrigCoords.filter((origCoord) => {
-      const cur = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+      const cur = String(game.objectPositions?.[`crate-${origCoord}`] || origCoord).toLowerCase();
       return deps.getSpaceController(game, 'devaron-garrison', cur) === pn;
     });
     if (controlled.length === 0) continue;
@@ -279,7 +279,7 @@ export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
       const chunk = controlled.slice(i, i + 5);
       rows.push(new ActionRowBuilder().addComponents(
         chunk.map((origCoord) => {
-          const cur = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+          const cur = String(game.objectPositions?.[`crate-${origCoord}`] || origCoord).toLowerCase();
           return new ButtonBuilder()
             .setCustomId(`devaron_crate_push_${gameId}_${origCoord}`)
             .setLabel(`Push crate @ ${cur.toUpperCase()}`)

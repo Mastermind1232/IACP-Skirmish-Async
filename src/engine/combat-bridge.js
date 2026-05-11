@@ -617,12 +617,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState
   if (combat.target?.isNpc) {
-    // Crate target (Devaron B) — Slice 3: routes through unified
-    // object-damage pipeline. applyDamageToObject handles HP decrement,
-    // splashOnDefeat (2 dmg within 1), and the figure-damage adapter
-    // so when-damaged / before-defeated / when-defeated hooks fire on
-    // splash-killed figures. cratePositions still tracks current vs
-    // orig coord for the push-mechanic; objectHealth owns HP.
+    // Crate target (Devaron B) — Slices 3+5 (alexanbv 2026-05-10):
+    // routes entirely through the unified object-damage pipeline.
+    // applyDamageToObject handles HP decrement, splashOnDefeat (2 dmg
+    // within 1), and the figure-damage adapter so when-damaged /
+    // before-defeated / when-defeated hooks fire on splash-killed
+    // figures. objectPositions owns crate location; objectHealth owns
+    // HP. Legacy cratePositions has been removed.
     if (combat.target.npcType === 'crate') {
       const origCoord = combat.target.crateOrigCoord;
       const objectId = `crate-${origCoord}`;
@@ -639,10 +640,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const res = await applyDamageToObject(game, _crateCtx, {
           objectId, amount: damage, attackerPlayerNum, source: 'Attack',
         });
-        const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toUpperCase();
+        const curCoord = String(game.objectPositions?.[objectId] || origCoord).toUpperCase();
         if (res.defeated) {
           resultText += ` **Crate @ ${curCoord} destroyed! Figures within 1 suffered 2 Damage.**`;
-          if (game.cratePositions) delete game.cratePositions[origCoord];
+          // applyDamageToObject already deleted objectPositions[objectId] on defeat.
           await checkWinConditions(game, client);
         } else {
           const newHp = res.newHp ?? 0;
@@ -652,7 +653,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Wave 3: Blast from crate-target attack — apply to adjacent figures/objects
       const _crateBlastAmt = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
       if (_crateBlastAmt > 0 && hit && damage > 0 && game.selectedMap?.id) {
-        const _crateBlastCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+        const _crateBlastCoord = String(game.objectPositions?.[objectId] || origCoord).toLowerCase();
         const _crateBlastAdj = getFiguresAdjacentToCoord(game, _crateBlastCoord, game.selectedMap.id, null);
         for (const { figureKey: _cbFk, playerNum: _cbPn } of _crateBlastAdj) {
           const _cbMsgId = findDcMessageIdForFigure(game.gameId, _cbPn, _cbFk);

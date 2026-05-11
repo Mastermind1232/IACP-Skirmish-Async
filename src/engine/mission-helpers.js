@@ -20,7 +20,11 @@ export function getCrateDeploymentVpBonus(game, deps) {
   if (game.selectedMap?.id !== 'devaron-garrison' || game.selectedMission?.variant !== 'b') return { p1: 0, p2: 0 };
   const mapData = deps.getMapTokensData()['devaron-garrison'];
   const allCrateCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean);
-  const cratePositions = allCrateCoords.map((c) => deps.normalizeCoord(game.cratePositions?.[deps.normalizeCoord(c)] || c));
+  // Slice 5: read crate positions from unified objectPositions state.
+  const cratePositions = allCrateCoords.map((c) => {
+    const orig = deps.normalizeCoord(c);
+    return deps.normalizeCoord(game.objectPositions?.[`crate-${orig}`] || orig);
+  });
   const initPlayerNum = deps.getInitiativePlayerNum(game);
   const zones = deps.getDeploymentZones()['devaron-garrison'] || {};
   const { p1Zone, p2Zone } = deps.getPlayerDeploymentZones(game, initPlayerNum);

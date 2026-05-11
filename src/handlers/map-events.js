@@ -66,7 +66,7 @@ export async function handleDevaronCratePush(interaction, ctx) {
     const origCoord = rest.substring(lastUnderscore + 1);
     const game = await requireGame(interaction, getGame, gameId);
     if (!game) return;
-    const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toLowerCase();
+    const curCoord = String(game.objectPositions?.[`crate-${origCoord}`] || origCoord).toLowerCase();
     const controller = getSpaceController(game, 'devaron-garrison', curCoord);
     if (!controller) { await interaction.followUp({ content: 'No one controls this crate currently.', ephemeral: true }).catch(discordCatch); return; }
     if (!await requirePlayer(interaction, game, interaction.user.id, controller, canActAsPlayer, 'Only the controlling player can push this crate.')) return;
