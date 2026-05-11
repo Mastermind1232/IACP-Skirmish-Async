@@ -30,6 +30,7 @@ const DATA = JSON.parse(readFileSync(resolve(ROOT, 'data/mission-cards.json'), '
 // reference somewhere in this corpus.
 const DISPATCH_CORPUS = [
   'src/game/mission-rules.js',
+  'src/game/mission-eor-effects-wiring.js',
   'src/handlers/combat.js',
   'src/handlers/round.js',
   'src/handlers/dc-play-area.js',

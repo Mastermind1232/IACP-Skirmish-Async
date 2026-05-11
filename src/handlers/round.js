@@ -879,22 +879,8 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
 
   // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
 
-  // Fluctuation swap gate (Lothal Wastes B — driven by rules.fluctuationSwapGate flag)
-  if (hasMissionFlag(mapId, variant, 'fluctuationSwapGate')) {
-    const _fInitNum = getInitiativePlayerNum(game);
-    const _fOtherNum = opponentPlayerNum(_fInitNum);
-    game.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
-    game.fluctuationSwappedThisRound = [];
-    game.pendingFluctuationSwapFirst = null;
-    game._pendingStatusPhaseLog = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
-    const _fGenCh = await fetchGameChannel(client, game.generalId);
-    if (postFluctuationSwapButtons) {
-      await postFluctuationSwapButtons(game, _fGenCh, gameId, _fInitNum);
-    }
-    if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-    saveGames(game.gameId);
-    return;
-  }
+  // Fluctuation swap gate moved to mission EoR phase (registered in
+  // src/game/mission-eor-effects-wiring.js) — runs BEFORE DC EoR per CRR.
 
   await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx,
     { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
@@ -933,25 +919,21 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
 
-  // Mission SOR: if randomRevealAndPlaceStrain, prompt players before auto-reveal
-  if (missionRules?.startOfRound?.randomRevealAndPlaceStrain) {
-    const missionName = game.selectedMission?.name || 'Mission Effect';
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`sor_mission_reveal_${gameId}`)
-        .setLabel('Reveal Mission Tokens')
-        .setStyle(ButtonStyle.Primary)
-    );
-    await generalChannel.send({
-      content: `⚡ **Round ${game.currentRound} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
-      components: [row],
-    });
-    setPendingMissionSorReveal(game);
-    if (interaction?.message) {
-      await interaction.message.edit({ components: [] }).catch(discordCatch);
+  // Mission SOR async effects: dispatch via the mission-eor-effects
+  // registry (which now handles both EoR and SOR). Halts early on any
+  // pending picker; drain handlers resume via runRemainingMissionSorEffects
+  // + then _continueAfterMissionSor.
+  {
+    const { runMissionSorEffects } = await import('../game/mission-eor-effects.js');
+    await import('../game/mission-eor-effects-wiring.js'); // side-effect: registers handlers
+    const sorRes = missionRules?.startOfRound
+      ? await runMissionSorEffects(game, missionRules.startOfRound, ctx, { gameId, interaction })
+      : { pending: false };
+    if (sorRes.pending) {
+      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
     }
-    saveGames(game.gameId);
-    return;
   }
 
   if (runStartOfRoundRules && missionRules?.startOfRound) {
@@ -1038,52 +1020,10 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   if (Array.isArray(game.pendingPrototypeMoveQueue) && game.pendingPrototypeMoveQueue.length > 0 && ctx.postPrototypeMovePrompt) {
     await ctx.postPrototypeMovePrompt(game, generalChannel, gameId);
   }
-  // Devaron Garrison B: terminal→door selection + crate push prompts.
-  // Driven by rules.openDoorPerTerminal flag (CRR mission card data).
-  if (hasMissionFlag(mapId, variant, 'openDoorPerTerminal')) {
-    if (!game.objectHealth?.['crate-' + (game.selectedMap?.crateOrigInitDone || '__sentinel__')] && !game._devaronCratesInited) {
-      // Slice 5 (alexanbv 2026-05-10): unified state only. Legacy
-      // cratePositions removed — push-mechanic, attack-targeting,
-      // damage, and splashOnDefeat all flow through
-      // game.objectHealth / game.objectPositions / game.objectMeta.
-      const dMap = getMapTokensData()['devaron-garrison'];
-      const allCrates = Object.values(dMap?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
-      game.objectHealth = game.objectHealth || {};
-      game.objectPositions = game.objectPositions || {};
-      game.objectMeta = game.objectMeta || {};
-      for (const c of allCrates) {
-        const id = `crate-${c}`;
-        if (game.objectHealth[id]) continue;
-        game.objectHealth[id] = [5, 5];
-        game.objectPositions[id] = c;
-        game.objectMeta[id] = {
-          name: `Crate @ ${c.toUpperCase()}`,
-          targetable: true,
-          defenseBlock: 1,
-          defenseEvade: 0,
-          splashOnDefeat: { amount: 2, radius: 1, target: 'all' },
-          vpOnDefeat: null,
-          moves: true,
-        };
-      }
-      game._devaronCratesInited = true;
-    }
-    const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
-    const p2T = countTerminalsControlledByPlayer(game, 2, mapId);
-    if ((p1T > 0 || p2T > 0) && postDevaronDoorButtons) {
-      game.pendingDoorSelections = [];
-      if (p1T > 0) game.pendingDoorSelections.push({ playerNum: 1, doorsRemaining: p1T });
-      if (p2T > 0) game.pendingDoorSelections.push({ playerNum: 2, doorsRemaining: p2T });
-      const dDoors = getMapTokensData()['devaron-garrison']?.doors || [];
-      await postDevaronDoorButtons(game, dDoors, generalChannel, gameId);
-    }
-    if (postDevaronCratePushPrompts) {
-      await postDevaronCratePushPrompts(game, generalChannel, gameId);
-    }
-  }
-
-  // Krykna push moved to mission EoR phase in handleEndEndOfRound
-  // (runs BEFORE player DC EoR per CRR + alexanbv 2026-05-10).
+  // Devaron Garrison B (openDoorPerTerminal), Krykna push, and
+  // fluctuation swap moved to mission EoR phase in handleEndEndOfRound
+  // via the mission-eor-effects registry (runs BEFORE player DC EoR
+  // per CRR + alexanbv 2026-05-10). See src/game/mission-eor-effects-wiring.js.
 
   if (interaction?.message) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -1092,16 +1032,25 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
 }
 
 /**
- * Resume status phase flow after fluctuation swap phase completes.
- * Called from map-events.js handleFluctuationSwap/handleFluctuationSkip when queue is empty.
+ * Resume after fluctuation swap drains. Fluctuation swap is a mission
+ * EoR effect (registered in src/game/mission-eor-effects-wiring.js) —
+ * runs BEFORE DC EoR per CRR. Drain handler resumes via
+ * runRemainingMissionEorEffects (any subsequent pending mission EoR
+ * effects) followed by _runDcEorAndContinue (DC EoR + tail).
  */
 export async function continueAfterFluctuationSwap(game, gameId, interaction, ctx) {
-  const logVars = game._pendingStatusPhaseLog || {};
+  const logVars = game._fluctuationResumeLogVars || game._pendingStatusPhaseLog || {};
+  delete game._fluctuationResumeLogVars;
   delete game._pendingStatusPhaseLog;
   delete game.pendingFluctuationSwapQueue;
   delete game.pendingFluctuationSwapFirst;
-  // fluctuationSwappedThisRound is cleared at next round start in cleanupRoundStart — leave it for now
-  await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, logVars);
+  const { runRemainingMissionEorEffects } = await import('../game/mission-eor-effects.js');
+  const res = await runRemainingMissionEorEffects(game, ctx);
+  if (res.pending) {
+    if (ctx.saveGames) ctx.saveGames(game.gameId);
+    return;
+  }
+  await _runDcEorAndContinue(game, gameId, interaction, ctx, logVars);
 }
 
 /**

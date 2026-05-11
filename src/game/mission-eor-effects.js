@@ -31,6 +31,7 @@
  */
 
 const _registry = new Map();
+const _sorRegistry = new Map();
 
 /**
  * Register an async effect handler under a rule flag name.
@@ -141,6 +142,91 @@ function _orderedFlags(rulesEndOfRound) {
   }
   for (const f of presentFlags) {
     if (!seen.has(f) && _registry.has(f)) out.push(f);
+  }
+  return out;
+}
+
+// ── Start-of-round (SOR) registry ─────────────────────────────────────────────
+//
+// Mission SOR effects fire BEFORE either player's DC SOR (CRR ordering).
+// API mirrors the EoR registry but reads from rules.startOfRound and
+// stores resume state under _pendingMissionSorEffects / _pendingMissionSorLogVars.
+//
+// A registered SOR handler may be async and may return { pending: true }
+// to halt round-start until a player resolves an interactive prompt
+// (e.g. Chopper Base Atollon B "Powered Perimeter" random token reveal).
+// Its drain handler resumes via runRemainingMissionSorEffects.
+
+const SOR_EFFECT_ORDER = [
+  'randomRevealAndPlaceStrain', // Chopper Base Atollon B Powered Perimeter
+];
+
+export function registerMissionSorEffect(flagName, handler) {
+  if (typeof flagName !== 'string' || typeof handler !== 'function') return;
+  _sorRegistry.set(flagName, handler);
+}
+
+export function getMissionSorEffect(flagName) {
+  return _sorRegistry.get(flagName) || null;
+}
+
+export async function runMissionSorEffects(game, missionStartOfRoundRules, ctx, opts) {
+  if (!missionStartOfRoundRules || typeof missionStartOfRoundRules !== 'object') {
+    return { pending: false };
+  }
+  const flagsToRun = _orderedSorFlags(missionStartOfRoundRules);
+  for (let i = 0; i < flagsToRun.length; i++) {
+    const flag = flagsToRun[i];
+    const handler = _sorRegistry.get(flag);
+    if (!handler) continue;
+    const res = await handler(game, ctx, opts);
+    if (res?.pending) {
+      game._pendingMissionSorEffects = flagsToRun.slice(i + 1);
+      game._pendingMissionSorLogVars = opts?.logVars || null;
+      return { pending: true };
+    }
+  }
+  return { pending: false };
+}
+
+export async function runRemainingMissionSorEffects(game, ctx) {
+  const remaining = game._pendingMissionSorEffects || [];
+  if (remaining.length === 0) {
+    delete game._pendingMissionSorEffects;
+    return { pending: false };
+  }
+  for (let i = 0; i < remaining.length; i++) {
+    const flag = remaining[i];
+    const handler = _sorRegistry.get(flag);
+    if (!handler) continue;
+    const res = await handler(game, ctx, { logVars: game._pendingMissionSorLogVars });
+    if (res?.pending) {
+      game._pendingMissionSorEffects = remaining.slice(i + 1);
+      return { pending: true };
+    }
+  }
+  delete game._pendingMissionSorEffects;
+  return { pending: false };
+}
+
+export function getMissionSorLogVars(game, { clear = false } = {}) {
+  const v = game._pendingMissionSorLogVars || null;
+  if (clear) delete game._pendingMissionSorLogVars;
+  return v;
+}
+
+function _orderedSorFlags(rulesStartOfRound) {
+  const presentFlags = Object.keys(rulesStartOfRound).filter((k) => rulesStartOfRound[k] !== undefined && rulesStartOfRound[k] !== false);
+  const seen = new Set();
+  const out = [];
+  for (const f of SOR_EFFECT_ORDER) {
+    if (presentFlags.includes(f) && _sorRegistry.has(f)) {
+      out.push(f);
+      seen.add(f);
+    }
+  }
+  for (const f of presentFlags) {
+    if (!seen.has(f) && _sorRegistry.has(f)) out.push(f);
   }
   return out;
 }

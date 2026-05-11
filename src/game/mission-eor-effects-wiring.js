@@ -1,18 +1,91 @@
 /**
- * Mission EoR effects registration (alexanbv 2026-05-10).
+ * Mission phase-effects registration (alexanbv 2026-05-10).
  *
- * Each mission rule flag inside `rules.endOfRound` that needs an async
- * player-picker handler is registered here. Module side-effects run on
- * first import, so importing this file once at bot startup populates
- * the registry.
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * ⚠️ WHERE TO ADD NEW MISSION RULES — READ THIS FIRST
+ * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ *
+ * Mission rules come in 5 flavours. Pick the right home for yours:
+ *
+ *   (A) SYNCHRONOUS mission EoR effect (mutate state / log / score VP —
+ *       NO player picker).
+ *       → data/mission-cards.json under
+ *         `<mapId>.<a|b>.rules.endOfRound.<yourFlag>`
+ *       → Add an `if (rules.yourFlag) { ... }` branch to
+ *         `runEndOfRoundRules` in src/game/mission-rules.js.
+ *       → Runs FIRST inside the EoR phase, before any async EoR
+ *         effects + before either player's DC EoR.
+ *       → Examples: vpForControllingNamedArea, vpPerLaunchPanelControlled,
+ *         setTemporaryVpBuffForControllingCell, damageAdjacentToNpc.
+ *
+ *   (B) ASYNC mission EoR effect (posts a player picker; halts round-end).
+ *       → data/mission-cards.json under
+ *         `<mapId>.<a|b>.rules.endOfRound.<yourFlag>`
+ *       → Register a handler in THIS FILE via registerMissionEorEffect.
+ *         Returns `{ pending: false }` if no work, `{ pending: true }`
+ *         after posting the picker.
+ *       → Add the flag to EFFECT_ORDER in mission-eor-effects.js for
+ *         deterministic ordering vs other async EoR effects.
+ *       → Drain handler (button/modal that finishes the picker) must
+ *         call BOTH:
+ *           runRemainingMissionEorEffects(game, ctx)  // next async effect
+ *           _runDcEorAndContinue(game, gameId, null, ctx, logVars)  // DC EoR + tail
+ *         Use getMissionEorLogVars(game, { clear: true }) to retrieve
+ *         captured logVars.
+ *       → Examples: npcThugs, npcKryknaActivation, openDoorPerTerminal,
+ *         fluctuationSwapGate.
+ *
+ *   (C) SYNCHRONOUS mission SOR effect (mutate state, log, place tokens —
+ *       NO player picker).
+ *       → data/mission-cards.json under
+ *         `<mapId>.<a|b>.rules.startOfRound.<yourFlag>`
+ *       → Add an `if (rules.yourFlag) { ... }` branch to
+ *         `runStartOfRoundRules` in src/game/mission-rules.js.
+ *       → Runs FIRST inside the SOR phase, before either player's DC SOR.
+ *       → Examples: setTokenCountFromInitiativeHand.
+ *
+ *   (D) ASYNC mission SOR effect (posts a player picker; halts round-start).
+ *       → data/mission-cards.json under
+ *         `<mapId>.<a|b>.rules.startOfRound.<yourFlag>`
+ *       → Register in THIS FILE via registerMissionSorEffect.
+ *         Same `{ pending: bool }` contract as EoR effects.
+ *       → Add flag to SOR_EFFECT_ORDER in mission-eor-effects.js.
+ *       → Drain handler resumes via runRemainingMissionSorEffects + then
+ *         continues the SOR chain (e.g. _continueAfterMissionSor).
+ *       → Examples: randomRevealAndPlaceStrain.
+ *
+ *   (E) PERSISTENT mission rules (apply at deploy time or as ongoing
+ *       constraints — move-cost, control rules, attack legality, etc.):
+ *       → data/mission-cards.json under
+ *         `<mapId>.<a|b>.rules.persistent.<yourFlag>` (or `immediate`).
+ *       → Consumed by call sites that probe hasMissionFlag at the
+ *         appropriate moment. No central dispatch.
+ *
+ * COMMON FLAG NAMES IN USE:
+ *   EoR (B): npcThugs, npcKryknaActivation, openDoorPerTerminal,
+ *            fluctuationSwapGate
+ *   EoR (A): vpForControllingNamedArea, vpPerContrabandInDeploymentZone,
+ *            vpPerLaunchPanelControlled, damageAdjacentToNpc,
+ *            setTemporaryVpBuffForControllingCell
+ *   SOR (D): randomRevealAndPlaceStrain
+ *   SOR (C): setTokenCountFromInitiativeHand
+ *   Persistent: pushControlledCratesUpTo, defenseModifierByZone, ...
+ *
+ * Side-effects: importing this file once at bot startup registers every
+ * handler below. Round handler imports it lazily via
+ * `await import('../game/mission-eor-effects-wiring.js')` at the
+ * dispatch sites; the import is cached so registration runs once.
  */
-import { registerMissionEorEffect } from './mission-eor-effects.js';
+import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+import { registerMissionEorEffect, registerMissionSorEffect } from './mission-eor-effects.js';
+import { setPendingMissionSorReveal } from './interrupts.js';
 import { hasMissionFlag, getMapTokensData } from '../data-loader.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { getInitiativePlayerNum, opponentPlayerNum } from './player-helpers.js';
 import { initThugMovementQueue } from './thug-movement.js';
 import { postThugPickerPrompt } from '../handlers/thug-movement.js';
 import { postKryknaPushButtons } from '../engine/misc-helpers.js';
+import { countTerminalsControlledByPlayer } from './board-helpers.js';
 
 /**
  * Corellian Underground A: thug end-of-round push picker.
@@ -87,5 +160,126 @@ registerMissionEorEffect('npcKryknaActivation', async (game, ctx, opts) => {
 
   const channel = await fetchGameChannel(ctx.client, game.generalId);
   if (channel) await postKryknaPushButtons(game, channel, game.gameId);
+  return { pending: true };
+});
+
+/**
+ * Devaron Garrison B: terminal → door selection + crate push prompts.
+ * Each controlled terminal grants a door selection; player picks which
+ * door to open (or move) and which crate(s) to push.
+ */
+registerMissionEorEffect('openDoorPerTerminal', async (game, ctx, opts) => {
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  if (!hasMissionFlag(mapId, variant, 'openDoorPerTerminal')) return { pending: false };
+  const { postDevaronDoorButtons, postDevaronCratePushPrompts } = ctx;
+  if (!postDevaronDoorButtons && !postDevaronCratePushPrompts) return { pending: false };
+
+  // Lazy-init the crate objects in the unified objectHealth pipeline.
+  if (!game._devaronCratesInited) {
+    const dMap = getMapTokensData()['devaron-garrison'];
+    const allCrates = Object.values(dMap?.missionB?.positions || {}).flat()
+      .filter(Boolean).map((c) => String(c).toLowerCase());
+    game.objectHealth = game.objectHealth || {};
+    game.objectPositions = game.objectPositions || {};
+    game.objectMeta = game.objectMeta || {};
+    for (const c of allCrates) {
+      const id = `crate-${c}`;
+      if (game.objectHealth[id]) continue;
+      game.objectHealth[id] = [5, 5];
+      game.objectPositions[id] = c;
+      game.objectMeta[id] = {
+        name: `Crate @ ${c.toUpperCase()}`,
+        targetable: true,
+        defenseBlock: 1,
+        defenseEvade: 0,
+        splashOnDefeat: { amount: 2, radius: 1, target: 'all' },
+        vpOnDefeat: null,
+        moves: true,
+      };
+    }
+    game._devaronCratesInited = true;
+  }
+
+  const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
+  const p2T = countTerminalsControlledByPlayer(game, 2, mapId);
+  let posted = false;
+  if ((p1T > 0 || p2T > 0) && postDevaronDoorButtons) {
+    game.pendingDoorSelections = [];
+    if (p1T > 0) game.pendingDoorSelections.push({ playerNum: 1, doorsRemaining: p1T });
+    if (p2T > 0) game.pendingDoorSelections.push({ playerNum: 2, doorsRemaining: p2T });
+    game._devaronResumeLogVars = opts?.logVars || null;
+    const dDoors = getMapTokensData()['devaron-garrison']?.doors || [];
+    const channel = await fetchGameChannel(ctx.client, game.generalId);
+    if (channel) await postDevaronDoorButtons(game, dDoors, channel, game.gameId);
+    posted = true;
+  }
+  if (postDevaronCratePushPrompts) {
+    const channel = await fetchGameChannel(ctx.client, game.generalId);
+    if (channel) await postDevaronCratePushPrompts(game, channel, game.gameId);
+  }
+  return { pending: posted };
+});
+
+/**
+ * Lothal Wastes B: fluctuation swap gate. Initiative player swaps first,
+ * then non-init player. Each may swap one pair of fluctuation tokens.
+ */
+registerMissionEorEffect('fluctuationSwapGate', async (game, ctx, opts) => {
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  if (!hasMissionFlag(mapId, variant, 'fluctuationSwapGate')) return { pending: false };
+  const { postFluctuationSwapButtons } = ctx;
+  if (!postFluctuationSwapButtons) return { pending: false };
+
+  const initNum = getInitiativePlayerNum(game);
+  const otherNum = opponentPlayerNum(initNum);
+  game.pendingFluctuationSwapQueue = [initNum, otherNum];
+  game.fluctuationSwappedThisRound = [];
+  game.pendingFluctuationSwapFirst = null;
+  game._fluctuationResumeLogVars = opts?.logVars || null;
+
+  const channel = await fetchGameChannel(ctx.client, game.generalId);
+  if (channel) await postFluctuationSwapButtons(game, channel, game.gameId, initNum);
+  return { pending: true };
+});
+
+// ── Mission START-of-round async effects ──────────────────────────────────────
+//
+// Same architecture as EoR: posted before either player's DC SOR.
+// Use registerMissionSorEffect / runMissionSorEffects.
+
+/**
+ * Chopper Base Atollon B (Powered Perimeter): each player randomly reveals
+ * 1 face-down mission token; strain tokens are placed on signal markers
+ * matching the revealed colors. Implemented as a single "Reveal" button
+ * either player can press; the click handler (handleSorMissionReveal in
+ * round.js) advances the SOR chain.
+ */
+registerMissionSorEffect('randomRevealAndPlaceStrain', async (game, ctx, opts) => {
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
+  if (!mapId || !variant) return { pending: false };
+  // Belt-and-suspenders flag check against the canonical mission-cards data.
+  const rules = ctx.getMissionRules?.(mapId, variant)?.startOfRound || {};
+  if (!rules.randomRevealAndPlaceStrain) return { pending: false };
+
+  const gameId = game.gameId;
+  const missionName = game.selectedMission?.name || 'Mission Effect';
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`sor_mission_reveal_${gameId}`)
+      .setLabel('Reveal Mission Tokens')
+      .setStyle(ButtonStyle.Primary)
+  );
+  const channel = await fetchGameChannel(ctx.client, game.generalId);
+  if (channel) {
+    await channel.send({
+      content: `⚡ **Round ${game.currentRound} — ${missionName}** — Each player randomly reveals 1 set-aside mission token. Either player: press to reveal.`,
+      components: [row],
+    }).catch(() => {});
+  }
+  setPendingMissionSorReveal(game);
+  game._sorMissionRevealResumeLogVars = opts?.logVars || null;
   return { pending: true };
 });
