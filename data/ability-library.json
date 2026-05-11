@@ -3188,6 +3188,7 @@
       "rollOneDie": "red",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
+      "rollOneDieSpaceRequiresHostileOccupant": true,
       "freeMoveBonus": 2,
       "includeSelf": true
     },

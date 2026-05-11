@@ -1221,11 +1221,32 @@ async function _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, ne
     }
   }
   const reachable = getReachableSpaces(figurePos, next.range, ms, [...occupied]);
-  const validSet = new Set([String(figurePos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
+  let validSet = new Set([String(figurePos).toLowerCase(), ...reachable.map(s => String(s).toLowerCase())]);
+  // Mortar Launcher (and any future spaceWithin ability with
+  // requireHostileOccupant): the target space must contain a hostile
+  // figure (opp regular OR hostileToAll NPC). Per alexanbv 2026-05-10.
+  if (next.requireHostileOccupant) {
+    const oppPN = pending.playerNum === 1 ? 2 : 1;
+    const hostileCoords = new Set();
+    for (const [, c] of Object.entries(game.figurePositions?.[oppPN] || {})) {
+      if (c) hostileCoords.add(String(c).toLowerCase());
+    }
+    for (const arrName of ['npcThugs', 'npcKrykna']) {
+      const arr = game[arrName];
+      if (!Array.isArray(arr)) continue;
+      for (const npc of arr) {
+        if (!npc || npc.defeated || !npc.coord) continue;
+        const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+        if (h === 'neutral') continue;
+        hostileCoords.add(String(npc.coord).toLowerCase());
+      }
+    }
+    validSet = new Set([...validSet].filter((c) => hostileCoords.has(c)));
+  }
   const validSpaces = [...validSet];
   if (validSpaces.length === 0) {
     await logGameAction?.(game, client,
-      `**${next.label}** — No valid target spaces from current position; effect skipped.`,
+      `**${next.label}** — ${next.requireHostileOccupant ? 'No hostile figure in range; effect skipped.' : 'No valid target spaces from current position; effect skipped.'}`,
       { phase: 'ROUND', icon: 'attack' });
     return;
   }

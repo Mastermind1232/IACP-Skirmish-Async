@@ -2938,6 +2938,28 @@ export function resolveAbility(abilityId, context) {
               }
             }
           }
+          // Neutral NPCs (Thugs / Krykna) on or adjacent to the targeted
+          // space also suffer damage per alexanbv 2026-05-10 — Mortar
+          // Launcher / spaceWithin AOE "affects NPCs but not objects".
+          for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+            const arr = game[arrName];
+            if (!Array.isArray(arr)) continue;
+            for (let i = 0; i < arr.length; i++) {
+              const npc = arr[i];
+              if (!npc || npc.defeated || !npc.coord) continue;
+              if (!affectedSpaces.has(String(npc.coord).toLowerCase())) continue;
+              const npcRes = applyDamageToNpcSync(game, {
+                npcType,
+                npcIndex: i,
+                amount: hits,
+                attackerPlayerNum: _selfAttackerPN ?? null,
+              });
+              if (npcRes.applied) {
+                affected.push(`${npcRes.label} -${hits}HP (→${npcRes.newHp})`);
+                if (npcRes.defeated) _hadDefeats = true;
+              }
+            }
+          }
           resultParts.push(affected.length ? affected.join(', ') : 'no figures in blast area');
         }
         return {
@@ -2961,9 +2983,31 @@ export function resolveAbility(abilityId, context) {
       const occ = boardState.occupiedSet;
       const occArr = occ instanceof Set ? [...occ] : (occ || []);
       const reachable = getReachableSpaces(activatingPos, range, boardState.mapSpaces, occArr);
-      const validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+      let validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+      // Mortar Launcher: target space must contain a hostile figure
+      // (regular opponent OR hostileToAll NPC). Per alexanbv 2026-05-10:
+      // "Mortar must also choose a space that is occupied by a hostile
+      // figure (more restrictive than just within X spaces)."
+      if (entry.rollOneDieSpaceRequiresHostileOccupant) {
+        const oppPN = opponentPlayerNum(playerNum);
+        const hostileCoords = new Set();
+        for (const [, c] of Object.entries(game.figurePositions?.[oppPN] || {})) {
+          if (c) hostileCoords.add(String(c).toLowerCase());
+        }
+        for (const arrName of ['npcThugs', 'npcKrykna']) {
+          const arr = game[arrName];
+          if (!Array.isArray(arr)) continue;
+          for (const npc of arr) {
+            if (!npc || npc.defeated || !npc.coord) continue;
+            const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+            if (h === 'neutral') continue;
+            hostileCoords.add(String(npc.coord).toLowerCase());
+          }
+        }
+        validSet = new Set([...validSet].filter((c) => hostileCoords.has(c)));
+      }
       const validSpaces = [...validSet];
-      if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
+      if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no valid target spaces${entry.rollOneDieSpaceRequiresHostileOccupant ? ' — no hostile figure in range' : ''}).` };
       // freeMoveBonus + rollOneDie (Mortar Launcher): the figure must
       // first complete the Move-X budget, THEN pick a target space
       // for the dice roll. Strict sequencing — the target-space
@@ -2994,7 +3038,8 @@ export function resolveAbility(abilityId, context) {
               abilityId,
               specialIdx: context.specialIdx ?? null,
               figureIndex: _rdSelectedIdx,
-              spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}:`,
+              requireHostileOccupant: !!entry.rollOneDieSpaceRequiresHostileOccupant,
+              spaceChoiceLabel: `**${entry.label}** — Choose a target space within ${range}${entry.rollOneDieSpaceRequiresHostileOccupant ? ' containing a hostile figure' : ''}:`,
             },
           };
           return {

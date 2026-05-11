@@ -1012,7 +1012,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
