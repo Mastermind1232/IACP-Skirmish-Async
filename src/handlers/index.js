@@ -26,6 +26,7 @@ import {
   handleCompanionDeployPick,
 } from './post-deploy.js';
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
+import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush } from './move-x-handler.js';
 import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleDbhPickDie } from './combat.js';
 import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
@@ -270,6 +271,8 @@ register('move_adjust_mp_', handleMoveAdjustMp, 'moveAdjust');
 register('move_pick_', handleMovePick, 'movePick');
 register('massive_push_space_', handleMassivePushSpace, 'movePick');
 register('massive_push_figure_', handleMassivePushFigure, 'movePick');
+register('thug_pick_', handleThugPick, 'thugMove');
+register('thug_dest_', handleThugDest, 'thugMove');
 register('mvint_play_', handleMoveInterruptPlay, 'movePick');
 register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
 register('ow_interrupt_use_', handleOverwatchInterruptUse, 'movePick');

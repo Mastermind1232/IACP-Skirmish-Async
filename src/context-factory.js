@@ -105,6 +105,12 @@ const CONTEXT_GROUPS = {
     'applyDamageAndFinishCombat',
   ],
 
+  thugMove: [
+    'getGame', 'saveGames', 'client', 'logGameAction',
+    'applyNpcDamageToFigure', 'dcHealthState', 'dcMessageMeta',
+    'checkWinConditions',
+  ],
+
   combat: COMBAT_DEPS,
 
   combatReactions: [
