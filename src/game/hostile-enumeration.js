@@ -1,11 +1,15 @@
 /**
  * Hostile-figure enumeration (alexanbv 2026-05-10).
  *
- * Returns every figure that is hostile to a given player, INCLUDING
- * mission-rule-declared neutral figures (Thugs, Krykna, future) that
- * are tagged hostileToAll. Replaces ad-hoc `Object.entries(game.figurePositions[oppPN])`
- * iteration in ability/AoE hot paths, so neutral figures correctly fall
- * under "abilities that target hostile figures" per card text.
+ * NPC hostility taxonomy (per alexanbv 2026-05-10):
+ *   'hostile'           — Thugs. Full hostile: ability target + MP cost + blocks control.
+ *   'treatedAsHostile'  — Krykna. Ability/attack target only; no MP cost, no control block.
+ *   'neutral'           — future. No hostile treatment in any layer.
+ *
+ * Returns every figure that is hostile (or treated as hostile) to a given player,
+ * INCLUDING mission-rule-declared NPCs (Thugs, Krykna). Replaces ad-hoc
+ * `Object.entries(game.figurePositions[oppPN])` iteration in ability/AoE hot paths,
+ * so NPCs correctly fall under "abilities that target hostile figures" per card text.
  *
  * Each yielded entry has the shape:
  *   {
@@ -37,14 +41,15 @@ export function enumerateHostileFigures(game, forPlayerNum) {
       controllerPlayerNum: oppPN,
     });
   }
-  // Neutral figures tagged hostileToAll
+  // NPCs (Thugs hostility='hostile', Krykna hostility='treatedAsHostile')
   for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
     const arr = game[arrName];
     if (!Array.isArray(arr)) continue;
     for (let i = 0; i < arr.length; i++) {
       const npc = arr[i];
       if (!npc || npc.defeated) continue;
-      if (!npc.hostileToAll) continue;
+      const hostility = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+      if (hostility === 'neutral') continue;
       out.push({
         figureKey: `npc_${npcType}_${i}`,
         coord: String(npc.coord).toLowerCase(),
@@ -56,6 +61,24 @@ export function enumerateHostileFigures(game, forPlayerNum) {
     }
   }
   return out;
+}
+
+/** Returns the NPC's hostility class ('hostile' | 'treatedAsHostile' | 'neutral'). */
+export function npcHostility(npc) {
+  if (!npc) return 'neutral';
+  if (npc.hostility) return npc.hostility;
+  // Legacy compat: hostileToAll=true → 'hostile'; absent or false → 'neutral'.
+  return npc.hostileToAll ? 'hostile' : 'neutral';
+}
+
+/** True if the NPC's space costs +1 MP to move through (Thug-style hostility). */
+export function npcCostsMpToMoveThrough(npc) {
+  return npcHostility(npc) === 'hostile';
+}
+
+/** True if the NPC blocks objective/terminal control when adjacent (Thug-style). */
+export function npcBlocksControl(npc) {
+  return npcHostility(npc) === 'hostile';
 }
 
 /**
@@ -198,23 +221,22 @@ export function parseNpcFigureKey(figureKey) {
 }
 
 /**
- * Classify an adjacency-helper entry as hostile to the given player.
- * Hostile = opponent's regular figure OR neutral NPC tagged hostileToAll.
+ * Classify an adjacency-helper entry as hostile (or treated-as-hostile) for
+ * ability-targeting purposes.
+ *   - Opponent's regular figure → hostile
+ *   - NPC with hostility 'hostile' or 'treatedAsHostile' → counts as hostile target
+ *   - NPC with hostility 'neutral' → not a valid hostile target
  *
- * Use at hostile-target callsites so e.g. Force Choke / Trample / Demolish
- * pickers correctly include Thugs/Krykna when card text reads "hostile figure"
- * per CRR neutral-figure rules.
+ * Use at hostile-target callsites so Force Choke / Trample / Demolish / etc.
+ * include Thugs (hostile) AND Krykna (treated-as-hostile) when card text reads
+ * "hostile figure" per CRR neutral-figure rules.
  */
 export function isEntryHostileTo(game, entry, playerNum) {
   if (!entry) return false;
   if (entry.isNpc) {
-    if (entry.npcType === 'thug') {
-      return !!game?.npcThugs?.[entry.npcIndex]?.hostileToAll;
-    }
-    if (entry.npcType === 'krykna') {
-      return !!game?.npcKrykna?.[entry.npcIndex]?.hostileToAll;
-    }
-    return false;
+    const arr = entry.npcType === 'thug' ? game?.npcThugs : entry.npcType === 'krykna' ? game?.npcKrykna : null;
+    const h = npcHostility(arr?.[entry.npcIndex]);
+    return h === 'hostile' || h === 'treatedAsHostile';
   }
   return entry.playerNum != null && entry.playerNum !== playerNum;
 }

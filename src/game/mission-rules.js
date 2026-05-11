@@ -698,9 +698,10 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
     const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
     if (positions.length === 0) return { logs: [], damageEvents: [] };
     // alexanbv 2026-05-10: Krykna card text "can be targeted by attacks
-    // and abilities that can target hostile figures" → hostileToAll: true.
-    // The enumerateHostileFigures helper consults this flag.
-    game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false, hostileToAll: true }));
+    // and abilities that can target hostile figures" → hostility:
+    // 'treatedAsHostile' (ability/attack target only; no MP cost, no
+    // control block, unlike fully-hostile Thugs).
+    game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false, hostility: 'treatedAsHostile' }));
   }
 
   const activeKrykna = game.npcKrykna.filter((k) => !k.defeated);
@@ -789,8 +790,9 @@ export function runNpcThugActivation(game, mapId, ctx = {}) {
     const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
     if (positions.length === 0) return { logs: [], damageEvents: [] };
     // alexanbv 2026-05-10: Thugs "hostile to all figures except other
-    // thugs" → hostileToAll: true (consumed by enumerateHostileFigures).
-    game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false, hostileToAll: true }));
+    // thugs" → hostility: 'hostile' (full hostile: ability target + MP
+    // cost + blocks control, distinct from 'treatedAsHostile' Krykna).
+    game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
   }
 
   const activeThugs = game.npcThugs.filter((t) => !t.defeated);

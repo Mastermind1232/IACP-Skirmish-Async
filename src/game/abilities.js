@@ -7373,13 +7373,16 @@ export function resolveAbility(abilityId, context) {
         }
         hostileSet.add(fk);
       }
-      // Neutral NPCs (hostileToAll) within range — per alexanbv 2026-05-10.
+      // NPCs (hostility 'hostile' or 'treatedAsHostile') within range —
+      // per alexanbv 2026-05-10. 'neutral' NPCs are skipped.
       for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
         const arr = game[arrName];
         if (!Array.isArray(arr)) continue;
         for (let i = 0; i < arr.length; i++) {
           const npc = arr[i];
-          if (!npc || npc.defeated || !npc.hostileToAll || !npc.coord) continue;
+          if (!npc || npc.defeated || !npc.coord) continue;
+          const hostility = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+          if (hostility === 'neutral') continue;
           if (activatorPos && countGameSpaces(game, activatorPos, npc.coord) > cahRange) continue;
           if (cahLos && losCheck && activatorPos && mapSpacesForLos) {
             if (!losCheck(game, activatorPos, npc.coord, mapSpacesForLos, gfs)) continue;
