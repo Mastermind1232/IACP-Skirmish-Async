@@ -37,6 +37,47 @@ import { getConfig } from './figure-config.js';
 const _CAMO_RECIPROCAL_IDS = new Set(['camouflage_mak', 'camouflage_scout_trooper']);
 
 /**
+ * Fingerprint of every game-state input that affects LoS resolution.
+ * Used by the post-declare probe in handleCombatRoll: if this fingerprint
+ * is unchanged between declare time and the moment dice would roll, the
+ * picker's LoS verdict still holds — there is no reason to re-validate
+ * (and re-validation has produced false-positive aborts when the
+ * replicated logic drifts from the picker).
+ *
+ * Inputs covered:
+ *   - figurePositions[1] and figurePositions[2]
+ *   - figureOrientations (multi-cell rotations)
+ *   - npcThugs / npcKrykna positions (defeated flag included)
+ *   - openedDoors
+ *   - ancillaryTokens (energy shield, smoke)
+ *   - game.figureForms (Clawdite Scout/Tough form changes)
+ */
+export function losStateFingerprint(game) {
+  if (!game) return '';
+  const parts = [];
+  for (const pn of [1, 2]) {
+    const poses = game.figurePositions?.[pn] || {};
+    const keys = Object.keys(poses).sort();
+    for (const k of keys) parts.push(`p${pn}:${k}@${poses[k] || 'gone'}`);
+  }
+  const orients = game.figureOrientations || {};
+  for (const k of Object.keys(orients).sort()) parts.push(`o:${k}=${orients[k]}`);
+  for (const arrName of ['npcThugs', 'npcKrykna']) {
+    const arr = game[arrName] || [];
+    for (const npc of arr) parts.push(`${arrName}:${npc?.id || '?'}@${npc?.defeated ? 'D' : (npc?.coord || 'gone')}`);
+  }
+  const doors = (game.openedDoors || []).slice().sort();
+  parts.push(`doors:${doors.join('|')}`);
+  const shields = (game.ancillaryTokens?.energyShield || []).slice().sort();
+  parts.push(`shields:${shields.join('|')}`);
+  const smoke = (game.ancillaryTokens?.smoke || []).slice().sort();
+  parts.push(`smoke:${smoke.join('|')}`);
+  const forms = game.figureForms || {};
+  for (const k of Object.keys(forms).sort()) parts.push(`form:${k}=${forms[k]}`);
+  return parts.join(';');
+}
+
+/**
  * Build the effective mapSpaces for LOS calculations: merge closed doors,
  * energy shields, smoke tokens, broken-wall edges. Shared by the picker
  * (buildAndSendAttackTargets) and the post-declare probe in handleCombatRoll.
