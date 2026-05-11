@@ -2365,19 +2365,23 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Disposable** — −1 Evade applied to defender\'s defense results.');
   }
 
-  // Front Line (Echo Base Trooper): within 3 spaces, replace 1 blue die
-  // with red AND apply +2 Accuracy. Per destruct 2026-05-08 the accuracy
-  // boost is part of Front Line (fires when target is within 3),
-  // not a flat innate passive — moved out of the passives list.
+  // Front Line (Echo Base Trooper): within 3 spaces, +2 Accuracy ALWAYS,
+  // blue→red swap is OPTIONAL (per alexanbv 2026-05-11). +2 Accuracy
+  // applied here; swap is offered via the on-declare die-swap window
+  // (combat._frontLineSwapDecided flag, populated by od_dieswap_f_*).
   if (hasFrontLineAbility(atkSpecialIds) && frontLineInRange(distanceToTarget)) {
-    const swap = applyFrontLineDieSwap(game.pendingCombat.attackInfo.dice || []);
-    let _flMsg = `**Front Line** — Target within ${distanceToTarget} spaces: +2 Accuracy applied.`;
     game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
-    if (swap.applied) {
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: swap.dice };
-      _flMsg = `**Front Line** — 1 blue die replaced with red + +2 Accuracy (target within ${distanceToTarget} spaces).`;
+    if (game.pendingCombat._frontLineSwap) {
+      const swap = applyFrontLineDieSwap(game.pendingCombat.attackInfo.dice || []);
+      if (swap.applied) {
+        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: swap.dice };
+        await thread.send(`**Front Line** — 1 blue die replaced with red + +2 Accuracy (target within ${distanceToTarget} spaces).`);
+      } else {
+        await thread.send(`**Front Line** — +2 Accuracy applied (no blue die to swap; target within ${distanceToTarget} spaces).`);
+      }
+    } else {
+      await thread.send(`**Front Line** — Target within ${distanceToTarget} spaces: +2 Accuracy applied. (Blue→Red swap skipped.)`);
     }
-    await thread.send(_flMsg);
   }
 
   // Cortosis Weave (Echo Base Trooper Elite): reduce Pierce by 2
@@ -6301,6 +6305,29 @@ async function _postOnDeclareDieSwapPrompts(thread, game, combat, ctx) {
     }).catch(discordCatch);
   }
 
+  // Front Line (Echo Base Trooper Elite): per alexanbv 2026-05-11 — the
+  // blue→red swap is optional. +2 Accuracy fires unconditionally
+  // (handled in handleAttackTarget). This prompt only governs the swap.
+  if (atkSIds.includes('front_line') && !combat._frontLineSwapDecided && (combat.distanceAtDeclare ?? combat.target?.dist ?? 99) <= 3) {
+    const hasBlue = (combat.attackInfo?.dice || []).includes('blue');
+    if (hasBlue) {
+      const _flBtns = [
+        new ButtonBuilder()
+          .setCustomId(`od_dieswap_f_swap_${gameId}`)
+          .setLabel('Front Line: Swap Blue → Red')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`od_dieswap_f_skip_${gameId}`)
+          .setLabel('Skip Front Line swap')
+          .setStyle(ButtonStyle.Secondary),
+      ];
+      await thread.send({
+        content: `**Front Line** — Target within 3 spaces. May swap 1 blue die for 1 red die (optional):`,
+        components: chunkButtonsToRows(_flBtns).slice(0, 5),
+      }).catch(discordCatch);
+    }
+  }
+
   // EE-3 Carbine (Boba Fett): costs 2 MP. Only offer if bank >= 2.
   if (atkSIds.includes('ee3_carbine') && !combat._ee3OnDeclareDecided) {
     const mp = game.movementBank?.[atkMsgId]?.remaining ?? 0;
@@ -8021,7 +8048,9 @@ export async function handleBlFriendlyPick(interaction, ctx) {
  */
 export async function handleOnDeclareDieSwap(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames, client } = ctx;
-  const m = interaction.customId.match(/^od_dieswap_([ve])_([^_]+)_(.+)$/);
+  // Front Line variant (kind='f'): choice is 'swap' or 'skip' (no color
+  // since Front Line is always blue→red).
+  const m = interaction.customId.match(/^od_dieswap_([vef])_([^_]+)_(.+)$/);
   if (!m) return;
   const [, kind, choice, gameId] = m;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
@@ -8040,9 +8069,29 @@ export async function handleOnDeclareDieSwap(interaction, ctx) {
     return;
   }
   await interaction.deferUpdate().catch(discordCatch);
-  const decidedFlag = kind === 'v' ? '_vanguardOnDeclareDecided' : '_ee3OnDeclareDecided';
+  const decidedFlag = kind === 'v' ? '_vanguardOnDeclareDecided'
+    : kind === 'e' ? '_ee3OnDeclareDecided'
+    : '_frontLineSwapDecided';
   if (combat[decidedFlag]) {
     await interaction.followUp({ content: 'Already decided for this attack.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Front Line variant: 'swap' or 'skip'.
+  if (kind === 'f') {
+    if (choice === 'skip') {
+      combat[decidedFlag] = true;
+      try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+      await interaction.message.channel.send('**Front Line** — Swap skipped (+2 Accuracy still applies).').catch(discordCatch);
+      if (saveGames) saveGames(game.gameId);
+      return;
+    }
+    // 'swap': set flag — actual swap happens in handleAttackTarget's
+    // modifier block (consults combat._frontLineSwap).
+    combat._frontLineSwap = true;
+    combat[decidedFlag] = true;
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    await interaction.message.channel.send('**Front Line** — Blue → Red swap will apply.').catch(discordCatch);
+    if (saveGames) saveGames(game.gameId);
     return;
   }
   // For EE-3 (kind='e'): re-check 2 MP available, deduct on apply.
