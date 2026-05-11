@@ -515,6 +515,8 @@
       ],
       "overrideAttackType": "melee",
       "freeAttackBonus": true,
+      "differentTargetsRequired": true,
+      "seedDifferentTargetFromLastAttack": true,
       "logMessage": "**Brutal Cleave** — Suffer 1 Strain to unlock a free melee attack with [red, yellow] against a *different* target.",
       "wiredStatus": "wired"
     },
@@ -3521,7 +3523,8 @@
       "wiredStatus": "wired",
       "rollOneDie": "green",
       "rollOneDieTarget": "spaceWithin",
-      "rollOneDieRange": 3
+      "rollOneDieRange": 3,
+      "affectsObjects": true
     },
     "parting_shot_greedo": {
       "type": "dcSpecial",

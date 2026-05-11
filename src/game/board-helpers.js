@@ -431,10 +431,15 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
   return options;
 }
 
-/** Alter Mind: returns { 1: Set<coord>, 2: Set<coord> } of cells that don't count for control. */
+/** Alter Mind: returns { 1: Set<coord>, 2: Set<coord>, npc: Set<coord> } of cells
+ *  that don't count for control. Npc set covers hostile NPCs (Thugs) within
+ *  3 of Obi-Wan — per alexanbv 2026-05-11 Alter Mind prevents Thug control.
+ *  NPC cost is 0 (≤9), so they qualify. */
 function _getAlterMindExcludedCells(game) {
   const excluded = {};
   const allEff = getDcEffects();
+  const _npcExcluded = new Set();
+  let _anyObiWan = false;
   for (const pn of [1, 2]) {
     const oppPn = 3 - pn;
     // Check if opponent has Alter Mind active
@@ -443,6 +448,7 @@ function _getAlterMindExcludedCells(game) {
       const dcName = dcNameFromFigureKey(fk);
       const eff = allEff[dcName];
       if (!(eff?.specialAbilityIds || []).includes('alter_mind_obiwan')) continue;
+      _anyObiWan = true;
       // This player's figures with cost ≤9 within 3 spaces of Obi-Wan don't count for control
       if (!excluded[pn]) excluded[pn] = new Set();
       for (const [tFk, tPos] of Object.entries(game.figurePositions?.[pn] || {})) {
@@ -454,8 +460,21 @@ function _getAlterMindExcludedCells(game) {
         const size = getEffectiveFigureSize(game, tFk, tDcName);
         for (const c of getFootprintCells(tPos, size)) excluded[pn].add(normalizeCoord(c));
       }
+      // NPC sweep — Thugs/Krykna within 3 of Obi-Wan (cost 0, hostile to
+      // both players). Adds to the npc-excluded set used by
+      // _npcBlocksControlIn.
+      for (const arrName of ['npcThugs', 'npcKrykna']) {
+        const arr = game?.[arrName];
+        if (!Array.isArray(arr)) continue;
+        for (const npc of arr) {
+          if (!npc || npc.defeated || !npc.coord) continue;
+          if (countGameSpaces(game, pos, npc.coord) > 3) continue;
+          _npcExcluded.add(normalizeCoord(npc.coord));
+        }
+      }
     }
   }
+  if (_anyObiWan && _npcExcluded.size > 0) excluded.npc = _npcExcluded;
   return excluded;
 }
 
@@ -506,14 +525,15 @@ export function getSpaceController(game, mapId, coord) {
   const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
   // NPC with hostility='hostile' (Thug) in the controlSet blocks control
   // for both players — per alexanbv 2026-05-10. 'treatedAsHostile' (Krykna)
-  // and 'neutral' NPCs do NOT block control.
-  if (_npcBlocksControlIn(game, controlSet)) return null;
+  // and 'neutral' NPCs do NOT block control. Alter Mind (alexanbv 2026-05-11)
+  // removes Thugs within 3 of Obi-Wan from the block list.
+  if (_npcBlocksControlIn(game, controlSet, alterMindExcluded.npc)) return null;
   if (p1Has && !p2Has) return 1;
   if (p2Has && !p1Has) return 2;
   return null;
 }
 
-function _npcBlocksControlIn(game, controlSet) {
+function _npcBlocksControlIn(game, controlSet, alterMindExcludedNpcCells) {
   for (const arrName of ['npcThugs', 'npcKrykna']) {
     const arr = game?.[arrName];
     if (!Array.isArray(arr)) continue;
@@ -521,7 +541,9 @@ function _npcBlocksControlIn(game, controlSet) {
       if (!npc || npc.defeated || !npc.coord) continue;
       const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
       if (h !== 'hostile') continue;
-      if (controlSet.has(normalizeCoord(npc.coord))) return true;
+      const _npcCoordNorm = normalizeCoord(npc.coord);
+      if (alterMindExcludedNpcCells?.has(_npcCoordNorm)) continue;
+      if (controlSet.has(_npcCoordNorm)) return true;
     }
   }
   return false;

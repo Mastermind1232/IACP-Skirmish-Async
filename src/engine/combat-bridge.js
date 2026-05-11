@@ -3072,6 +3072,13 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       } catch {}
     }
   }
+  // Capture the most-recently-attacked target by attacker msgId so
+  // post-attack abilities (Brutal Cleave, etc.) can enforce "different
+  // figure" rules. Cleared at end-of-activation.
+  if (combat.attackerMsgId && combat.target?.figureKey) {
+    game.lastAttackTargetByMsgId = game.lastAttackTargetByMsgId || {};
+    game.lastAttackTargetByMsgId[combat.attackerMsgId] = combat.target.figureKey;
+  }
   resolvePendingCombat(game);
   clearPendingCleave(game);
   if (combat.rollMessageId) {

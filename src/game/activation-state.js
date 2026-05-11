@@ -408,6 +408,10 @@ export function isActivationActionInProgress(game, msgId) {
  * Object flags are reset to {}; null flags to null; array flags to [].
  */
 const ROUND_OBJECT_FLAGS = [
+  // Most-recent attack target per attacker msgId. Used by post-attack
+  // free-attack abilities (Brutal Cleave) to enforce "different figure"
+  // rules. Round-scoped (resets to {} at round start).
+  'lastAttackTargetByMsgId',
   'aphraExcavationOptions',
   // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
   // start; status-phase context = once per round-scoped status phase.

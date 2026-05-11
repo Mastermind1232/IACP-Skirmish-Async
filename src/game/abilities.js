@@ -2354,6 +2354,13 @@ export function resolveAbility(abilityId, context) {
     if (entry.differentTargetsRequired) {
       game.freeAttackDifferentTargets = game.freeAttackDifferentTargets || {};
       game.freeAttackDifferentTargets[msgId] = [];
+      // Post-attack triggers like Brutal Cleave fire AFTER an attack
+      // resolved — seed the tracker with the most-recent target so the
+      // free attack must pick a different figure (per alexanbv 2026-05-11).
+      if (entry.seedDifferentTargetFromLastAttack) {
+        const _lastTgt = game.lastAttackTargetByMsgId?.[msgId];
+        if (_lastTgt) game.freeAttackDifferentTargets[msgId].push(_lastTgt);
+      }
     }
     // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed
     if (entry.label === 'Stay Down') {
@@ -3095,6 +3102,30 @@ export function resolveAbility(abilityId, context) {
               if (npcRes.applied) {
                 affected.push(`${npcRes.label} -${hits}HP (→${npcRes.newHp})`);
                 if (npcRes.defeated) _hadDefeats = true;
+              }
+            }
+          }
+          // Objects (alexanbv 2026-05-11): Parting Gift card text says
+          // "each other figure AND OBJECT on or adjacent". Iterate
+          // game.objectPositions when entry.affectsObjects is set.
+          // Inline sync damage application (no async splash here —
+          // splashOnDefeat fires via the full pipeline post-resolution
+          // if needed).
+          if (entry.affectsObjects && game.objectPositions && game.objectHealth) {
+            for (const [objId, objCoord] of Object.entries(game.objectPositions)) {
+              if (!objCoord || !affectedSpaces.has(String(objCoord).toLowerCase())) continue;
+              const _objHp = game.objectHealth[objId];
+              if (!Array.isArray(_objHp)) continue;
+              const [cur, max] = _objHp;
+              if ((cur ?? 0) <= 0) continue;
+              const _objPrev = cur;
+              const _objNew = Math.max(0, cur - hits);
+              game.objectHealth[objId] = [_objNew, max];
+              const _objName = game.objectMeta?.[objId]?.name || objId;
+              affected.push(`${_objName} -${hits}HP (${_objPrev}→${_objNew})`);
+              if (_objNew === 0) {
+                _hadDefeats = true;
+                if (game.objectPositions) delete game.objectPositions[objId];
               }
             }
           }
