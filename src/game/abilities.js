@@ -499,6 +499,73 @@ export function resolveAbility(abilityId, context) {
     const friendlyPositions = _thfAllowFriendly ? (game.figurePositions?.[playerNum] || {}) : {};
     // Second call: apply effect to the chosen figure
     if (choiceIndex != null && targetFigureKey) {
+      // NPC primary target (Force Lightning hits Thugs/Krykna). Route
+      // damage through applyDamageToNpcSync; condition via figureConditions;
+      // strain queued via pendingStrain (auto-converts to damage in
+      // applyStrain for NPCs).
+      const _isNpcTarget = typeof targetFigureKey === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFigureKey);
+      if (_isNpcTarget) {
+        const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/);
+        const npcType = p[1];
+        const npcIndex = parseInt(p[2], 10);
+        const npcLabel = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${npcIndex + 1}`;
+        const npcParts = [];
+        let _npcDefeated = false;
+        if (damage > 0) {
+          const npcRes = applyDamageToNpcSync(game, { npcType, npcIndex, amount: damage, attackerPlayerNum: playerNum });
+          if (npcRes.applied) {
+            npcParts.push(`${damage} Damage (HP: ${npcRes.prevHp} → ${npcRes.newHp})`);
+            if (npcRes.defeated) _npcDefeated = true;
+          }
+        }
+        const _npcPendingStrain = strain > 0 ? [{ figureKey: targetFigureKey, controllerPlayerNum: null, amount: strain, source: entry.label || 'Force ability' }] : [];
+        if (strain > 0) npcParts.push(`+ ${strain} Strain`);
+        if (condToApply && applyCondition(game, targetFigureKey, condToApply)) {
+          npcParts.push(`became **${condToApply}**`);
+        }
+        // Splash damage to adjacent figures + NPCs (already routes via
+        // getFiguresAdjacentToTarget which I extended in Slice 2 to
+        // include NPCs).
+        const _npcSplashParts = [];
+        if ((splashDamage > 0 || splashConditions.length > 0) && game.selectedMap?.id) {
+          const adjacent = getFiguresAdjacentToTarget(game, targetFigureKey, game.selectedMap.id);
+          for (const adjEntry of adjacent) {
+            const { figureKey: adjFk, isNpc: adjIsNpc } = adjEntry;
+            const adjName = adjIsNpc ? entryDisplayLabel(adjEntry) : dcNameFromFigureKey(adjFk);
+            if (adjIsNpc) {
+              if (splashDamage > 0) {
+                const npcRes = applyDamageToNpcSync(game, { npcType: adjEntry.npcType, npcIndex: adjEntry.npcIndex, amount: splashDamage, attackerPlayerNum: playerNum });
+                if (npcRes.applied) _npcSplashParts.push(`**${adjName}** ${splashDamage} Damage (${npcRes.prevHp}→${npcRes.newHp})`);
+              }
+              if (splashConditions.length > 0) {
+                for (const c of splashConditions) applyCondition(game, adjFk, c);
+              }
+              continue;
+            }
+            const adjMsgId = findMsgIdForFigureKey(game, adjEntry.playerNum, adjFk, dcMessageMeta);
+            if (splashDamage > 0 && dcHealthState && adjMsgId) {
+              const adjFkMatch = adjFk.match(/-(\d+)-(\d+)$/);
+              const adjFigIdx = adjFkMatch ? parseInt(adjFkMatch[2], 10) : 0;
+              const adjRes = applyDamageWithDefeatCheck(dcHealthState, game, adjMsgId, adjFigIdx, splashDamage, adjEntry.playerNum, {
+                sourceLabel: `${entry.label || 'Force ability'} (splash)`, attackerPlayerNum: playerNum,
+              });
+              if (adjRes.maxHp > 0) _npcSplashParts.push(`**${adjName}** ${splashDamage} Damage (${adjRes.prevHp}→${adjRes.newHp})`);
+            }
+            if (splashConditions.length > 0) {
+              for (const c of splashConditions) applyCondition(game, adjFk, c);
+            }
+          }
+        }
+        const splashLog = _npcSplashParts.length > 0 ? `\nSplash — ${_npcSplashParts.join('; ')}` : '';
+        return {
+          applied: true,
+          freeAction: !!entry.freeAction,
+          logMessage: `**${entry.label}** — **${npcLabel}** ${npcParts.join(', ') || 'targeted'}.${splashLog}`,
+          refreshDcEmbed: true,
+          refreshBoard: _npcDefeated,
+          ...(_npcPendingStrain.length ? { pendingStrain: _npcPendingStrain } : {}),
+        };
+      }
       // Resolve target's owner (friendly or enemy) for HP application
       const _thfTargetOwner = enemyPositions[targetFigureKey] ? enemyPlayerNum : (friendlyPositions[targetFigureKey] ? playerNum : enemyPlayerNum);
       const targetMsgId = findMsgIdForFigureKey(game, _thfTargetOwner, targetFigureKey, dcMessageMeta);
@@ -646,14 +713,26 @@ export function resolveAbility(abilityId, context) {
     }
     const validTargets = [];
     // Build candidate pool: enemies always; friendlies too when allowFriendly
-    // is set (Force Lightning per destruct 2026-05-07).
+    // is set (Force Lightning per destruct 2026-05-07). Per alexanbv
+    // 2026-05-10: NPCs (Thugs/Krykna with hostility != 'neutral') are
+    // valid targets too — Force Lightning can hit them with the 3-damage
+    // primary effect (splash already includes them via getFiguresAdjacentToTarget).
     const _thfCandidates = [...Object.entries(enemyPositions)];
     if (_thfAllowFriendly) {
-      // Per destruct 2026-05-07: "force lightning hits self if adjacent" — primary
-      // includes the activating figure too (range/LOS still apply; self trivially
-      // satisfies both).
       for (const [fk, coord] of Object.entries(friendlyPositions)) {
         _thfCandidates.push([fk, coord]);
+      }
+    }
+    // NPC targets (hostile or treated-as-hostile)
+    for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+      const arr = game[arrName];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const npc = arr[i];
+        if (!npc || npc.defeated || !npc.coord) continue;
+        const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+        if (h === 'neutral') continue;
+        _thfCandidates.push([`npc_${npcType}_${i}`, npc.coord]);
       }
     }
     for (const [fk, coord] of _thfCandidates) {
@@ -809,20 +888,31 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // emperor_interrupt (Emperor Palpatine): choose a friendly figure within 4 spaces; it gets a free attack
+  // emperor_interrupt (Emperor Palpatine): choose a friendly figure within
+  // 4 spaces; it interrupts to perform a free attack. Per alexanbv
+  // 2026-05-10: Emperor does NOT cost an action (it's an interrupt-grant
+  // per card text "Once during your activation, you may..."). Card text
+  // also says "once during your activation" — gated via
+  // game.emperorInterruptUsedThisActivation[msgId].
   if (abilityId === 'emperor_interrupt') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Emperor** manually.' };
+    // Once-per-activation gate
+    if (game.emperorInterruptUsedThisActivation?.[msgId] && choiceIndex == null) {
+      return { applied: false, manualMessage: '**Emperor** — Already used this activation.' };
+    }
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingEmperorInterrupt(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
+      // Mark used so the next click in the same activation is rejected.
+      game.emperorInterruptUsedThisActivation = game.emperorInterruptUsedThisActivation || {};
+      game.emperorInterruptUsedThisActivation[msgId] = true;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      // destruct 2026-05-07: granted attack fires IMMEDIATELY in source's
-      // activation thread; click spawns a new combat thread for the grantee.
       return {
         applied: true,
+        freeAction: true, // No action cost — it's an interrupt-grant.
         logMessage: `**Emperor** — **${chosenName}** may interrupt to perform a free attack (no action cost).`,
         grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Emperor' } : null,
       };
@@ -964,23 +1054,18 @@ export function resolveAbility(abilityId, context) {
       }
       return temptResult;
     }
-    // Enumerate all figures (friendly + hostile) within 4 spaces, INCLUDING
-    // Palpatine himself. Per destruct 2026-05-07: "Any figure does not mean
-    // any other than self." Tempt's wording is "a figure of your choice" —
-    // that includes the activating figure.
-    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
-    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
-    if (!activatingPos) return { applied: false, manualMessage: '**Tempt** — No position on the board. Resolve manually.' };
+    // Enumerate ALL figures on the board (friendly + hostile) with NO
+    // range restriction. Per alexanbv 2026-05-10: "Tempt has no range
+    // restriction." Per destruct 2026-05-07: "Any figure does not mean
+    // any other than self." — includes the activating figure too.
     const validTargets = [];
     for (const pn of [playerNum, enemyNum]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!pos) continue;
-        if (countGameSpaces(game, activatingPos, pos) > 4) continue;
         validTargets.push(fk);
       }
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tempt** — No figures within 4 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tempt** — No figures on the board.' };
     return {
       applied: false,
       requiresChoice: true,
