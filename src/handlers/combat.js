@@ -274,11 +274,12 @@ export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
 // (e.g. "I'd only Zillo if you Bib").
 
 const COMBAT_GATE_LABELS = {
-  // Combat just declared: window for on-declare effects (CCs, DC abilities
-  // like Cara Dune's Shock and Awe, etc.). Both players play anything
-  // on-declare from their hand, then click Ready to advance to power
-  // tokens. Self-play auto-advances.
-  on_declare:             '⚔️ **Combat declared** — play any on-declare CCs / abilities / tokens, then click Ready. Next: power tokens.',
+  // Combat just declared: combined on-declare window per player — CCs,
+  // DC abilities (Cara Dune's Shock and Awe, etc.), AND power tokens
+  // all spent/played in one window per destruct 2026-05-08. Both
+  // players click Ready when done; dice auto-roll. Self-play auto-
+  // advances.
+  on_declare:             '⚔️ **Combat declared** — play any on-declare CCs / abilities / power tokens (combined window), then click Ready. Next: roll.',
   post_roll:              '🎲 **Dice rolled** (CRR step 2). Next: rerolls (step 3).',
   post_attacker_reroll:   '🔄 **Attacker rerolls done**. Next: defender rerolls (if any).',
   // Step 4 of an attack per CRR: Apply Modifiers. This is when CCs that
@@ -1554,7 +1555,7 @@ export async function handleAttackTarget(interaction, ctx) {
     autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
   });
   const preCombatMsg = await withDiscordRetry(() => thread.send({
-    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened.** Power tokens prompt next; the **Roll Combat Dice** button appears once both players have spent or skipped.`,
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened.** Each side: on-declare CCs / abilities / power tokens (combined window), then click Ready. Dice auto-roll once both sides are ready.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
@@ -8535,7 +8536,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     autoArchiveDuration: ThreadAutoArchiveDuration?.OneWeek ?? 10080,
   });
   const preCombatMsg = await thread.send({
-    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened (False Orders).** Power tokens prompt next; the **Roll Combat Dice** button appears once both players have spent or skipped.`,
+    content: `<@${game.player1Id}> <@${game.player2Id}> — **Combat opened (False Orders).** Each side: on-declare CCs / abilities / power tokens (combined window), then click Ready. Dice auto-roll once both sides are ready.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
   const isRanged = attackInfo.type === 'range';
