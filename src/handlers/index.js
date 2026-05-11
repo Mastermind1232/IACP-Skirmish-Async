@@ -163,7 +163,7 @@ import {
 import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
+import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll, handleLastStandPick, handleErgPick } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
@@ -526,6 +526,8 @@ register('hunter_protocol_trigger_', handleHunterProtocol, 'combatReactions');
 register('hunter_protocol_skip_', handleHunterProtocol, 'combatReactions');
 register('strike_me_down_yes_', handleStrikeMeDown, 'combatReactions');
 register('strike_me_down_no_', handleStrikeMeDown, 'combatReactions');
+register('last_stand_pick_', handleLastStandPick, 'combatReactions');
+register('erg_pick_', handleErgPick, 'combatReactions');
 register('slow_on_draw_yes_', handleSlowOnTheDraw, 'combatReactions');
 register('slow_on_draw_no_', handleSlowOnTheDraw, 'combatReactions');
 register('slow_on_draw_resume_', handleSlowOnTheDrawResume, 'combatReactions');

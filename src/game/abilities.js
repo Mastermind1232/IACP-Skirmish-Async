@@ -5395,40 +5395,13 @@ export function resolveAbility(abilityId, context) {
     const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
     const pNum = playerNum || meta.playerNum;
     const harmfulConditions = ['Stun', 'Bleed', 'Weaken'];
-    // Helper: per alexanbv 2026-05-11, AI default = DISCARD over RECOVER.
-    // Prefer discarding a harmful condition; fall back to recover if no
-    // harmful conditions present.
-    // TODO(alexanbv 2026-05-11): replace this with a per-figure player
-    // prompt (each affected TROOPER's owner picks Recover or Discard).
-    // For now the AI-preferred path runs deterministically.
-    const applyRecoveryOrDiscard = (figKey, figMsgId, figIdx) => {
-      const dcName = dcNameFromFigureKey(figKey);
-      const conds = game.figureConditions?.[figKey] || [];
-      // Disarm permanent Weakened: skip locked Weaken when choosing which condition to discard
-      const harmful = conds.filter(c => harmfulConditions.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[figKey]));
-      if (harmful.length > 0) {
-        const removed = harmful[0];
-        filterCondition(game, figKey, removed);
-        return `**${dcName}** discarded **${removed}**`;
-      }
-      const hs = dcHealthState.get(figMsgId) || [];
-      const hpEntry = hs[figIdx];
-      if (hpEntry) {
-        const [cur, max] = hpEntry;
-        if (cur < max) {
-          hs[figIdx] = [Math.min(max, cur + 1), max];
-          dcHealthState.set(figMsgId, hs);
-          syncHealthStateToList(game, pNum, figMsgId, hs);
-          return `**${dcName}** recovered 1 HP`;
-        }
-      }
-      return null;
-    };
-    const results = [];
-    // Self
-    const selfResult = applyRecoveryOrDiscard(activatingFigureKey, msgId, selectedFig);
-    if (selfResult) results.push(selfResult);
-    // Adjacent friendly TROOPERs
+    // Per alexanbv 2026-05-11: each affected TROOPER prompts independently
+    // for Recover vs Discard. Figures with only ONE viable option (no
+    // harmful conditions = recover only; full HP = discard only) auto-
+    // apply. Figures with BOTH options get a player prompt; AI default
+    // = discard-over-recover.
+    // ── Build affected-figure list ──
+    const affectedFigs = [{ figureKey: activatingFigureKey, msgId, figIdx: selectedFig, controllerPlayerNum: pNum }];
     if (mapId) {
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
       for (const { figureKey: fk, playerNum: pn } of adjacentAll) {
@@ -5442,16 +5415,57 @@ export function resolveAbility(abilityId, context) {
         if (!tMsgId) continue;
         const fkMatch = fk.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const r = applyRecoveryOrDiscard(fk, tMsgId, figIdx);
-        if (r) results.push(r);
+        affectedFigs.push({ figureKey: fk, msgId: tMsgId, figIdx, controllerPlayerNum: pn });
       }
     }
+    // ── Apply auto-cases; queue prompts for both-options cases ──
+    const _autoResults = [];
+    const _pendingChoices = [];
+    for (const f of affectedFigs) {
+      const conds = game.figureConditions?.[f.figureKey] || [];
+      const harmful = conds.filter(c => harmfulConditions.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[f.figureKey]));
+      const hs = dcHealthState.get(f.msgId) || [];
+      const hpEntry = hs[f.figIdx];
+      const damaged = hpEntry ? hpEntry[0] < hpEntry[1] : false;
+      const _dcN = dcNameFromFigureKey(f.figureKey);
+      if (harmful.length > 0 && damaged) {
+        // Both options viable — player prompt.
+        _pendingChoices.push({ ...f, dcName: _dcN, harmful });
+      } else if (harmful.length > 0) {
+        // Only discard.
+        filterCondition(game, f.figureKey, harmful[0]);
+        _autoResults.push(`**${_dcN}** discarded **${harmful[0]}** (no damage to recover)`);
+      } else if (damaged) {
+        // Only recover.
+        const [cur, max] = hpEntry;
+        hs[f.figIdx] = [Math.min(max, cur + 1), max];
+        dcHealthState.set(f.msgId, hs);
+        syncHealthStateToList(game, pNum, f.msgId, hs);
+        _autoResults.push(`**${_dcN}** recovered 1 HP (no harmful conditions)`);
+      }
+      // No options → skipped silently.
+    }
+    if (_pendingChoices.length > 0) {
+      game.pendingErgChoices = {
+        gameId: game.gameId,
+        controllerPlayerNum: pNum,
+        sourceLabel: entry.label || 'Environmental Recovery Gear',
+        figures: _pendingChoices,
+      };
+    }
+    const _prefix = `**${entry.label}** — `;
+    const _autoPart = _autoResults.length ? _autoResults.join('; ') + '.' : '';
+    const _promptPart = _pendingChoices.length
+      ? ` Choices pending for: ${_pendingChoices.map(c => `**${c.dcName}**`).join(', ')}.`
+      : '';
+    const _allEmpty = _autoResults.length === 0 && _pendingChoices.length === 0;
     return {
       applied: true,
-      logMessage: results.length > 0
-        ? `**${entry.label}** — ${results.join('; ')}.`
-        : `**${entry.label}** — No figures needed healing or condition removal.`,
+      logMessage: _allEmpty
+        ? `${_prefix}No figures needed healing or condition removal.`
+        : `${_prefix}${_autoPart}${_promptPart}`,
       refreshDcEmbed: true,
+      ergPostChoicesPrompt: _pendingChoices.length > 0,
     };
   }
 

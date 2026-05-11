@@ -3164,6 +3164,40 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (resolveResult.pendingMoveXMsgId) {
     await postMoveXPicker(game, { client, logGameAction, saveGames }, resolveResult.pendingMoveXMsgId);
   }
+  // ERG per-figure choices prompt (alexanbv 2026-05-11). Each affected
+  // TROOPER with BOTH options viable gets a Recover/Discard pair.
+  if (resolveResult.ergPostChoicesPrompt && game.pendingErgChoices?.figures?.length) {
+    try {
+      const _ergPending = game.pendingErgChoices;
+      const _ergOwnerId = game[`player${_ergPending.controllerPlayerNum}Id`];
+      const _ergButtons = [];
+      for (const f of _ergPending.figures) {
+        _ergButtons.push(new ButtonBuilder()
+          .setCustomId(`erg_pick_${game.gameId}_${f.figureKey}_recover`)
+          .setLabel(`${f.dcName}: Recover 1`)
+          .setStyle(ButtonStyle.Success));
+        _ergButtons.push(new ButtonBuilder()
+          .setCustomId(`erg_pick_${game.gameId}_${f.figureKey}_discard`)
+          .setLabel(`${f.dcName}: Discard ${f.harmful[0]}`)
+          .setStyle(ButtonStyle.Primary));
+      }
+      _ergButtons.push(new ButtonBuilder()
+        .setCustomId(`erg_pick_${game.gameId}_skip_all`)
+        .setLabel('Skip remaining')
+        .setStyle(ButtonStyle.Secondary));
+      const _ergRows = [];
+      for (let i = 0; i < _ergButtons.length; i += 5) {
+        _ergRows.push(new ActionRowBuilder().addComponents(_ergButtons.slice(i, i + 5)));
+      }
+      await interaction.followUp({
+        content: `🧰 <@${_ergOwnerId}> **${_ergPending.sourceLabel}** — Pick per figure (each TROOPER may Recover 1 OR Discard their harmful condition):`,
+        components: _ergRows.slice(0, 5),
+        allowedMentions: { users: _ergOwnerId ? [_ergOwnerId] : [] },
+      }).catch(discordCatch);
+    } catch (err) {
+      console.error('ERG choices prompt failed:', err?.message ?? err);
+    }
+  }
   // Post-action Bleed strain (DC Special resolves): centralized via
   // triggerBleedAfterAction.
   if (buttonKey === 'dc_special_') {

@@ -699,6 +699,8 @@ const ROUND_NULL_FLAGS = [
   'pendingRogueOneTokenPick',
   'pendingZilloDiscard',
   'pendingStrikeMeDown',
+  'pendingLastStand',
+  'pendingErgChoices',
   'pendingSlowOnTheDraw',
   'pendingForceExhaustion',
   'slowOnTheDrawInterrupt',

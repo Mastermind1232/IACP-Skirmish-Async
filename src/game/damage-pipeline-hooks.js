@@ -1016,14 +1016,13 @@ WHEN_DEFEATED_HOOKS.push({
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'last_stand',
-  sync: true,
   probe: (game, opts) => {
     if (!opts.figureKey) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const eff = getDcEffects()?.[dcName];
     return (eff?.passives || []).includes('Last Stand');
   },
-  apply: (game, opts, ctx) => {
+  apply: async (game, opts, ctx) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const dgMatch = (opts.figureKey || '').match(/-(\d+)-\d+$/);
@@ -1032,16 +1031,62 @@ WHEN_DEFEATED_HOOKS.push({
     const alive = Object.keys(game.figurePositions?.[opts.controllerPlayerNum] || {})
       .filter(k => k.startsWith(prefix) && k !== opts.figureKey);
     if (alive.length === 0) return;
-    const target = alive[0];
-    if (applyCondition(game, target, 'Focus')) {
-      const targetName = dcNameFromFigureKey(target);
-      if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
-        ctx.logGameAction(
-          game,
-          ctx.client,
-          `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
-          { phase: 'ROUND', icon: 'card' },
-        ).catch(() => {});
+    // Auto-pick when only one candidate (no choice to make).
+    if (alive.length === 1) {
+      const target = alive[0];
+      if (applyCondition(game, target, 'Focus')) {
+        const targetName = dcNameFromFigureKey(target);
+        if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+          await ctx.logGameAction(
+            game,
+            ctx.client,
+            `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
+            { phase: 'ROUND', icon: 'card' },
+          ).catch(() => {});
+        }
+      }
+      return;
+    }
+    // Multiple candidates: post a player picker. Per alexanbv 2026-05-11
+    // "fix last stand to prompt which groupmate to focus."
+    game.pendingLastStand = {
+      gameId: game.gameId,
+      controllerPlayerNum: opts.controllerPlayerNum,
+      eligibleFigureKeys: alive,
+      defeatedFigureKey: opts.figureKey,
+      defeatedDcName: dcName,
+    };
+    if (typeof ctx?.client !== 'undefined' && typeof ctx?.logGameAction === 'function') {
+      try {
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = await import('discord.js');
+        const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+        const btns = alive.slice(0, 4).map((fk) =>
+          new ButtonBuilder()
+            .setCustomId(`last_stand_pick_${game.gameId}_${fk}`)
+            .setLabel(dcNameFromFigureKey(fk).slice(0, 80))
+            .setStyle(ButtonStyle.Primary),
+        );
+        btns.push(new ButtonBuilder().setCustomId(`last_stand_pick_${game.gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+        const row = new ActionRowBuilder().addComponents(btns);
+        // Post to general channel — defeat-handler doesn't have a thread context.
+        const channelId = game.generalId;
+        const channel = channelId ? await ctx.client.channels.fetch(channelId).catch(() => null) : null;
+        if (channel) {
+          await channel.send({
+            content: `⚡ **Last Stand** — <@${ownerId}> Pick another figure in **${dcName}**'s group to become Focused:`,
+            allowedMentions: { users: ownerId ? [ownerId] : [] },
+            components: [row],
+          }).catch(() => {});
+        }
+      } catch (err) {
+        // Picker post failed — fall back to auto-pick first.
+        const target = alive[0];
+        if (applyCondition(game, target, 'Focus')) {
+          await ctx.logGameAction?.(game, ctx.client,
+            `⚡ **Last Stand** — picker failed; auto-Focused **${dcNameFromFigureKey(target)}**.`,
+            { phase: 'ROUND', icon: 'card' }).catch(() => {});
+        }
+        delete game.pendingLastStand;
       }
     }
   },

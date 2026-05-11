@@ -939,3 +939,111 @@ export async function handleDoubtReroll(interaction, ctx) {
   }
   saveGames(game.gameId);
 }
+
+/**
+ * Handle last_stand_pick_{gameId}_{figureKey|skip}: Stormtrooper Elite
+ * defeat → owner picks another group-mate to Focus. Per alexanbv 2026-05-11.
+ */
+export async function handleLastStandPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;
+  const m = interaction.customId.match(/^last_stand_pick_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, gameId, pickRaw] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingLastStand;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending Last Stand.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.controllerPlayerNum, canActAsPlayer, 'Only the owner of the defeated figure may pick.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  if (pickRaw === 'skip') {
+    await interaction.message.channel.send('⚡ **Last Stand** — Skipped.').catch(discordCatch);
+  } else {
+    if (!pending.eligibleFigureKeys.includes(pickRaw)) {
+      await interaction.followUp({ content: 'That figure is not eligible.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    if (applyCondition(game, pickRaw, 'Focus')) {
+      const targetName = dcNameFromFigureKey(pickRaw);
+      await interaction.message.channel.send(`⚡ **Last Stand** — **${targetName}** becomes **Focused**.`).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client,
+        `⚡ **Last Stand** — **${targetName}** becomes **Focused** (another figure in the group was defeated).`,
+        { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+  }
+  delete game.pendingLastStand;
+  if (saveGames) saveGames(game.gameId);
+}
+
+/**
+ * Handle erg_pick_{gameId}_{figureKey|skip_all}_{recover|discard}:
+ * Snowtrooper Environmental Recovery Gear per-figure picker
+ * (alexanbv 2026-05-11). Each click resolves one figure; when the
+ * pending list empties, the prompt closes.
+ */
+export async function handleErgPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, logGameAction, client, dcHealthState } = ctx;
+  // skip_all variant has no trailing choice
+  const mSkip = interaction.customId.match(/^erg_pick_([^_]+)_skip_all$/);
+  const mPick = !mSkip ? interaction.customId.match(/^erg_pick_([^_]+)_(.+)_(recover|discard)$/) : null;
+  if (!mSkip && !mPick) return;
+  const gameId = (mSkip || mPick)[1];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingErgChoices;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending ERG choices.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.controllerPlayerNum, canActAsPlayer, 'Only the activator may pick.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  if (mSkip) {
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    await interaction.message.channel.send(`🧰 **${pending.sourceLabel}** — Remaining choices skipped.`).catch(discordCatch);
+    delete game.pendingErgChoices;
+    if (saveGames) saveGames(game.gameId);
+    return;
+  }
+  const [, , figureKey, choice] = mPick;
+  const figIdx = pending.figures.findIndex(f => f.figureKey === figureKey);
+  if (figIdx < 0) {
+    await interaction.followUp({ content: 'That figure is no longer eligible.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const f = pending.figures[figIdx];
+  let resultText = '';
+  if (choice === 'discard') {
+    const cond = f.harmful?.[0];
+    if (cond) {
+      const { filterCondition } = await import('../game/conditions.js');
+      filterCondition(game, f.figureKey, cond);
+      resultText = `**${f.dcName}** discarded **${cond}**`;
+    }
+  } else if (choice === 'recover') {
+    const hs = dcHealthState?.get?.(f.msgId) || [];
+    const hpEntry = hs[f.figIdx];
+    if (hpEntry) {
+      const [cur, max] = hpEntry;
+      if (cur < max) {
+        hs[f.figIdx] = [Math.min(max, cur + 1), max];
+        dcHealthState.set(f.msgId, hs);
+        const { syncHealthStateToList } = await import('../game/health-state.js');
+        syncHealthStateToList(game, f.controllerPlayerNum, f.msgId, hs);
+        resultText = `**${f.dcName}** recovered 1 HP`;
+      }
+    }
+  }
+  pending.figures.splice(figIdx, 1);
+  if (resultText) {
+    await interaction.message.channel.send(`🧰 **${pending.sourceLabel}** — ${resultText}.`).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, `🧰 **${pending.sourceLabel}** — ${resultText}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  }
+  if (pending.figures.length === 0) {
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    delete game.pendingErgChoices;
+  }
+  if (saveGames) saveGames(game.gameId);
+}
