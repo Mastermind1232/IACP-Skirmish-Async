@@ -724,6 +724,56 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
   const sourceLabel = payload.sourceLabel || pending.source || 'Free Attack';
   const granteeName = pending.dcName || dcNameFromFigureKey(granteeFigureKey);
   if (!granteeMsgId || !granteeFigureKey) return;
+  const ownerId = getPlayerId(game, pending.playerNum);
+
+  // If a forcedAttackTarget is set for this grantee (e.g. Battlefield
+  // Leadership: friendly must attack Leia's target), verify the grantee
+  // has Line of Sight to the forced target from its CURRENT post-move
+  // position. Per alexanbv 2026-05-10: BL friendly "may move 1 and not
+  // gain los, in which case it does not attack." If no LoS, do not
+  // post the attack button; clean up forced-target + BL pending state
+  // and log the outcome.
+  const forcedTargetFk = game.forcedAttackTarget?.[granteeMsgId];
+  if (forcedTargetFk) {
+    try {
+      const { hasLineOfSightByCoord } = await import('../game/spatial.js').catch(() => ({}));
+      const { getMapData, getFigureSize } = await import('../data-loader.js').catch(() => ({}));
+      const mapId = game.selectedMap?.id;
+      const ms = mapId && typeof getMapData === 'function' ? getMapData(mapId) : null;
+      const granteePos = game.figurePositions?.[pending.playerNum]?.[granteeFigureKey];
+      // Forced target may be on either player; check both.
+      const targetPos = game.figurePositions?.[1]?.[forcedTargetFk] || game.figurePositions?.[2]?.[forcedTargetFk] || null;
+      if (typeof hasLineOfSightByCoord === 'function' && ms && granteePos && targetPos) {
+        const hasLos = hasLineOfSightByCoord(game, granteePos, targetPos, ms, getFigureSize);
+        if (!hasLos) {
+          // No LoS: free attack skipped. Clean up state.
+          delete game.forcedAttackTarget[granteeMsgId];
+          if (game.pendingBattlefieldLeadership) {
+            try {
+              const { clearPendingBattlefieldLeadership } = await import('../game/interrupts.js');
+              clearPendingBattlefieldLeadership(game);
+            } catch {}
+          }
+          if (game.freeAttackBonusPending?.[granteeFigureKey]) {
+            delete game.freeAttackBonusPending[granteeFigureKey];
+          }
+          const noLosMsg = `⚔️ **${sourceLabel}** — **${granteeName}** does not have line of sight to **${dcNameFromFigureKey(forcedTargetFk)}** after moving. Free attack is skipped.`;
+          if (pending.threadId) {
+            const thread = await fetchCombatThread(client, pending.threadId);
+            if (thread) {
+              await thread.send({ content: noLosMsg }).catch(discordCatch);
+              return;
+            }
+          }
+          await logGameAction?.(game, client, noLosMsg, { phase: 'ROUND', icon: 'attack' });
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Free-attack LoS check failed:', err?.message ?? err);
+    }
+  }
+
   const _gabFkMatch = String(granteeFigureKey).match(/-(\d+)-(\d+)$/);
   const _gabFigIdx = _gabFkMatch ? _gabFkMatch[2] : '0';
   const btn = new ButtonBuilder()
@@ -731,7 +781,6 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
     .setLabel(`Declare Attack (${granteeName})`)
     .setStyle(ButtonStyle.Danger);
   const row = new ActionRowBuilder().addComponents(btn);
-  const ownerId = getPlayerId(game, pending.playerNum);
   const content = `<@${ownerId}> ⚔\u{FE0F} **${sourceLabel}** — click below to declare the free attack with **${granteeName}**.`;
   if (pending.threadId) {
     const thread = await fetchCombatThread(client, pending.threadId);
