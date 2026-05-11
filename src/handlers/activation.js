@@ -749,6 +749,46 @@ export async function handleDcEndActivation(interaction, ctx) {
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[msgId] = true;
 
+  // EoA orchestrator (alexanbv 2026-05-11): enumerate player-triggered
+  // end-of-activation abilities. The chooser posts as a non-blocking
+  // message — the player can resolve them before clicking End Turn.
+  // Currently wired descriptors: Jyn Erso "Trust Goes Both Ways" (EoA
+  // branch). More descriptors added per audit pass.
+  try {
+    const { enumerateActivatorEoaDescriptors, startEoaResolution, describeChooserPrompt } = await import('../game/eoa-orchestrator.js');
+    const _eoaDescs = enumerateActivatorEoaDescriptors(game, {
+      dcName: meta.dcName,
+      playerNum: meta.playerNum,
+      msgId,
+    });
+    if (_eoaDescs.length > 0) {
+      const _eoaInit = game.initiativePlayerNum ?? meta.playerNum;
+      const _eoaStarted = startEoaResolution(game, _eoaDescs, _eoaInit, {
+        activatorPlayerNum: meta.playerNum,
+        activatorMsgId: msgId,
+      });
+      if (_eoaStarted) {
+        const _eoaPrompt = describeChooserPrompt(game.pendingEoaResolution, game.gameId);
+        if (_eoaPrompt) {
+          const { ButtonBuilder: _EoaBB, ButtonStyle: _EoaBS, ActionRowBuilder: _EoaAR } = await import('discord.js');
+          const _eoaButtons = _eoaPrompt.choices.map((c) =>
+            new _EoaBB().setCustomId(c.customId).setLabel(c.label).setStyle(c.descId === '__skip_all__' ? _EoaBS.Secondary : _EoaBS.Primary),
+          );
+          const _eoaRow = new _EoaAR().addComponents(_eoaButtons);
+          const _eoaChannel = await fetchGameChannel(client, game.generalId).catch(() => null);
+          if (_eoaChannel) {
+            await _eoaChannel.send({
+              content: `\u{1F3C1} **End-of-Activation** — Player ${_eoaPrompt.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
+              components: [_eoaRow],
+            }).catch(discordCatch);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('EoA orchestrator failed:', err?.message ?? err);
+  }
+
   // Slice 3 (alexanbv 2026-05-10): host and companion end activation
   // INDEPENDENTLY. If the paired side still has an active dcActionsData
   // entry, this is a partial end — clean up only the clicked msgId's

@@ -1429,6 +1429,36 @@ export async function handleAttackTarget(interaction, ctx) {
             game._closeQuartersBonusAcc = 1;
             game._closeQuartersRemoveDefDie = true;
             await withDiscordRetry(() => thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die.`));
+            // Verena picks which defense die to remove (per alexanbv 2026-05-11).
+            // Build the target's defense pool composition (same logic as
+            // handleCombatRoll defense branch) and post a picker if >1 die.
+            const _cqTargetDcName = dcNameFromFigureKey(target.figureKey);
+            const _cqTargetStats = getDcStats(_cqTargetDcName);
+            const _cqBaseDef = _cqTargetStats?.defense || 'white';
+            const _cqBaseDice = Array.isArray(_cqBaseDef) ? _cqBaseDef : [_cqBaseDef];
+            if (_cqBaseDice.length > 1) {
+              const _cqOwnerId = getPlayerId(game, meta.playerNum);
+              const _cqRow = new ActionRowBuilder().addComponents(
+                ..._cqBaseDice.map((color, idx) =>
+                  new ButtonBuilder()
+                    .setCustomId(`cq_def_pick_${game.gameId}_${idx}`)
+                    .setLabel(`Remove ${color} die #${idx + 1}`)
+                    .setStyle(ButtonStyle.Danger),
+                ),
+              );
+              game.pendingCqDefPick = {
+                gameId: game.gameId,
+                attackerPlayerNum: meta.playerNum,
+                attackerMsgId: msgId,
+                combatThreadId: thread.id,
+                pool: _cqBaseDice,
+              };
+              await thread.send(sanitizeMentions({
+                content: `<@${_cqOwnerId}> **Close Quarters** — Pick which defense die to remove from **${_cqTargetDcName}**'s pool [${_cqBaseDice.join(', ')}]:`,
+                allowedMentions: { users: [_cqOwnerId] },
+                components: [_cqRow],
+              })).catch(discordCatch);
+            }
           }
         }
       }
@@ -2425,22 +2455,46 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send(`**Elite Sniper** — +2 attack rerolls (target ${distanceToTarget} spaces away).`);
   }
 
-  // Much to Learn (Ezra Bridger): +1 reroll if friendly unique within 3 spaces
+  // Much to Learn (Ezra Bridger): per alexanbv 2026-05-11 — surface as a
+  // controlled-reroll bucket entry. If a friendly FORCE USER unique is
+  // within 3, mode='turn' (die-face picker, no restriction). Else if
+  // any friendly unique within 3, mode='reroll' (standard reroll).
+  // The button appears in Ezra's attacker reroll bucket; click → sub-
+  // picker shows attack dice (reroll mode rolls them; turn mode posts
+  // a face picker).
   if (hasMuchToLearnAbility(atkSpecialIds) && _csRawMs) {
     const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (atkPos) {
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
+      let _mtlMode = null;
+      let _mtlSourceName = null;
+      // Prefer FORCE USER (turn mode is strictly better); fall back to non-FU unique.
       for (const [fk, pos] of Object.entries(friendlyPos)) {
         if (fk === attackerFigureKey) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!isUniqueFriendly(fkEff)) continue;
         if (!muchToLearnInRange(countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges))) continue;
-        const r = applyMuchToLearnReroll(game.pendingCombat);
-        game.pendingCombat.rerollOneAttackDie = r.rerollOneAttackDie;
-        const note = isForceUserFriendly(fkEff) ? ' (FORCE USER nearby — may turn die to any side instead)' : '';
-        await thread.send(`**Much to Learn** — ${fkDcName} is within 3 spaces, +1 attack reroll${note}.`);
-        break;
+        if (isForceUserFriendly(fkEff)) {
+          _mtlMode = 'turn';
+          _mtlSourceName = fkDcName;
+          break;
+        }
+        if (!_mtlMode) {
+          _mtlMode = 'reroll';
+          _mtlSourceName = fkDcName;
+        }
+      }
+      if (_mtlMode) {
+        game.pendingCombat.forcedRerollQueue = game.pendingCombat.forcedRerollQueue || [];
+        game.pendingCombat.forcedRerollQueue.push({
+          controlPlayer: attackerPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: _mtlMode === 'turn' ? 'Much to Learn (turn)' : 'Much to Learn (reroll)',
+          mtlMode: _mtlMode,
+        });
+        await thread.send(`**Much to Learn** — ${_mtlSourceName} within 3 spaces; ${_mtlMode === 'turn' ? 'may turn 1 attack die to any side' : 'may reroll 1 attack die'} (appears in attacker reroll bucket).`);
       }
     }
   }
@@ -3188,9 +3242,25 @@ export async function handleCombatRoll(interaction, ctx) {
     const pool = [...baseDice, ...bonusDice];
     if (combat.autofireAttack) pool.push('white');
     if (combat.barrageAttack) pool.push('white');
+    // Close Quarters (Verena): if multi-die defense + Verena hasn't picked
+    // yet, refuse to roll.
+    if (game._closeQuartersRemoveDefDie && baseDice.length > 1 && game.pendingCqDefPick && combat._cqRemoveDefDieIdx == null) {
+      await interaction.followUp({ content: '⏳ Close Quarters: waiting for Verena to pick which defense die to remove.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
-    const diceToRoll = pool.slice(0, pool.length - removeCount);
+    let diceToRoll;
+    if (combat._cqRemoveDefDieIdx != null && baseDice.length > 1) {
+      // Verena's pick — drop that specific base die, then keep bonus dice.
+      const _cqIdx = combat._cqRemoveDefDieIdx;
+      diceToRoll = [
+        ...baseDice.filter((_, i) => i !== _cqIdx),
+        ...pool.slice(baseDice.length),
+      ];
+    } else {
+      diceToRoll = pool.slice(0, pool.length - removeCount);
+    }
     const defDiceResults = [];
     let block = 0, evade = 0, dodge = 0;
     for (const color of diceToRoll) {
@@ -3356,9 +3426,24 @@ export async function handleCombatRoll(interaction, ctx) {
       pool.push('white');
       await thread.send('**Barrage** — Defender adds 1 white die to defense pool (second attack).').catch(discordCatch);
     }
+    // Close Quarters (Verena): waiting on Verena's defense-die pick when
+    // target has multi-die defense.
+    if (game._closeQuartersRemoveDefDie && baseDice.length > 1 && game.pendingCqDefPick && combat._cqRemoveDefDieIdx == null) {
+      await interaction.followUp({ content: '⏳ Close Quarters: waiting for Verena to pick which defense die to remove.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
     const removeMax = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
     const removeCount = Math.min(removeMax, pool.length);
-    const diceToRoll = pool.slice(0, pool.length - removeCount);
+    let diceToRoll;
+    if (combat._cqRemoveDefDieIdx != null && baseDice.length > 1) {
+      const _cqIdx = combat._cqRemoveDefDieIdx;
+      diceToRoll = [
+        ...baseDice.filter((_, i) => i !== _cqIdx),
+        ...pool.slice(baseDice.length),
+      ];
+    } else {
+      diceToRoll = pool.slice(0, pool.length - removeCount);
+    }
     const defDiceResults = [];
     let block = 0, evade = 0, dodge = 0;
     for (const color of diceToRoll) {
@@ -4351,6 +4436,18 @@ export async function handleCombatReroll(interaction, ctx) {
       const dice = combat.attackDiceResults || [];
       const _spAtkRr = combat.attackerRerolledIndices || [];
       if (idx >= 0 && idx < dice.length && !_spAtkRr.includes(idx)) {
+        // Much to Learn (turn mode): no reroll — open a face picker so
+        // the attacker chooses the new die face (no restriction on
+        // which face) per alexanbv 2026-05-11.
+        if (_spEntry.mtlMode === 'turn') {
+          combat.mtlTurnPhase = true;
+          combat.mtlTurnQueueIdx = _spIdx;
+          combat.mtlTurnDieIdx = idx;
+          combat.controlledRerollActiveIdx = null;
+          await sendMtlFacePicker(thread, gameId, combat, idx, ctx);
+          saveGames(game.gameId);
+          return;
+        }
         const oldDie = dice[idx];
         const newDie = rollSingleAttackDie(oldDie.color);
         dice[idx] = newDie;
@@ -7945,6 +8042,93 @@ async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
 }
 
 /**
+ * Send a face picker for Much to Learn (turn mode): no restriction on
+ * which face to turn to (per alexanbv 2026-05-11 — strictly stronger
+ * than Lasat's "1 attack icon only" restriction).
+ */
+async function sendMtlFacePicker(thread, gameId, combat, dieIdx, ctx) {
+  const getDiceData = ctx.getDiceData;
+  if (!getDiceData) {
+    await thread.send('**Much to Learn** — Dice data unavailable; ability skipped.');
+    return;
+  }
+  const die = combat.attackDiceResults[dieIdx];
+  const faces = getDiceData().attack?.[die.color] || [];
+  if (faces.length === 0) {
+    await thread.send('**Much to Learn** — No faces for this die color; ability skipped.');
+    return;
+  }
+  const buttons = faces.map((f, i) =>
+    new ButtonBuilder()
+      .setCustomId(`mtl_face_${gameId}_${dieIdx}_${i}`)
+      .setLabel(`${f.acc || 0}a/${f.dmg || 0}d/${f.surge || 0}s`)
+      .setStyle(ButtonStyle.Primary)
+  );
+  const rows = buildActionRows(buttons.slice(0, 25));
+  await thread.send({ content: `**Much to Learn (turn)** — Turn die ${dieIdx + 1} (${die.color || '?'}) to:`, components: rows });
+}
+
+/**
+ * mtl_face_{gameId}_{dieIdx}_{faceIdx} click: apply the chosen face to
+ * the attack die. Consume the Much to Learn queue entry, drop it, and
+ * re-render the attacker reroll bucket.
+ */
+export async function handleMtlFacePick(interaction, ctx) {
+  const m = interaction.customId.match(/^mtl_face_([^_]+)_(\d+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, dieIdxStr, faceIdxStr] = m;
+  const dieIdx = parseInt(dieIdxStr, 10);
+  const faceIdx = parseInt(faceIdxStr, 10);
+  const { getGame, replyIfGameEnded, saveGames, getDiceData, recalcAttackTotals } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.mtlTurnPhase) {
+    await interaction.followUp({ content: 'No Much to Learn turn pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttacker, canActAsPlayer, 'Only the attacker may choose.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  const dice = combat.attackDiceResults || [];
+  const die = dice[dieIdx];
+  if (!die) {
+    await interaction.followUp({ content: 'That die no longer exists.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const faces = getDiceData?.()?.attack?.[die.color] || [];
+  const newFace = faces[faceIdx];
+  if (!newFace) {
+    await interaction.followUp({ content: 'That face is invalid.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const oldDieDesc = `${die.acc || 0}a/${die.dmg || 0}d/${die.surge || 0}s`;
+  dice[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
+  const totals = recalcAttackTotals(dice);
+  combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
+  combat.attackDiceResults = dice;
+  // Mark this die as touched (G12 — prevents future rerolls).
+  combat.attackerRerolledIndices = combat.attackerRerolledIndices || [];
+  if (!combat.attackerRerolledIndices.includes(dieIdx)) combat.attackerRerolledIndices.push(dieIdx);
+  // Drop the Much to Learn queue entry now that turn resolved.
+  const entry = combat.forcedRerollQueue?.[combat.mtlTurnQueueIdx];
+  if (entry) {
+    combat.forcedRerollQueue.splice(combat.mtlTurnQueueIdx, 1);
+  }
+  combat.mtlTurnPhase = false;
+  combat.mtlTurnQueueIdx = null;
+  combat.mtlTurnDieIdx = null;
+  if (thread) {
+    await thread.send(`**Much to Learn (turn)** — ATK ${die.color} #${dieIdx + 1}: ${oldDieDesc} → **${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`).catch(discordCatch);
+    await sendRerollUI(thread, game, combat, combat.rerollPhase || 'attacker');
+  }
+  if (saveGames) saveGames(game.gameId);
+}
+
+/**
  * Handle bl_friendly_ button: player picked the friendly figure to
  * make Battlefield Leadership's free attack (or skipped).
  *
@@ -8046,6 +8230,45 @@ export async function handleBlFriendlyPick(interaction, ctx) {
  *   v = vanguard (no MP cost; target must be within 3)
  *   e = ee3_carbine (2 MP cost)
  */
+/**
+ * cq_def_pick_{gameId}_{idx}: Verena picks which defense die to remove
+ * from a multi-die defender's pool (Close Quarters). Sets
+ * combat._cqRemoveDefDieIdx; the next defense roll consults this index.
+ */
+export async function handleCqDefPick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const m = interaction.customId.match(/^cq_def_pick_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const idx = parseInt(idxStr, 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!game.pendingCqDefPick) {
+    await interaction.followUp({ content: 'No Close Quarters pick pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const cqPN = game.pendingCqDefPick.attackerPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, cqPN, canActAsPlayer, 'Only Verena\'s owner may pick.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  const pool = game.pendingCqDefPick.pool || [];
+  if (idx < 0 || idx >= pool.length) {
+    await interaction.followUp({ content: 'Invalid die index.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  combat._cqRemoveDefDieIdx = idx;
+  const chosenColor = pool[idx];
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  await interaction.message.channel.send(`**Close Quarters** — Verena removed defender's **${chosenColor}** die (#${idx + 1}) from the defense pool.`).catch(discordCatch);
+  delete game.pendingCqDefPick;
+  if (saveGames) saveGames(game.gameId);
+}
+
 export async function handleOnDeclareDieSwap(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames, client } = ctx;
   // Front Line variant (kind='f'): choice is 'swap' or 'skip' (no color

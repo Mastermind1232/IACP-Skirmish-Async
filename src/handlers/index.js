@@ -28,7 +28,7 @@ import {
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush } from './move-x-handler.js';
-import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick } from './combat.js';
+import { handleAttackTarget, handleCombatReady, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFigureheadDecision, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMtlFacePick } from './combat.js';
 import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -108,6 +108,7 @@ import {
   handleBombDropSpacePick,
 } from './dc-play-area.js';
 import { handleSoaPick, handleSoaFire, handleSoaSkipAll } from './soa-handler.js';
+import { handleEoaPick, handleEoaFire, handleEoaSkipAll } from './eoa-handler.js';
 import {
   handleSquadModal,
   handleDeployModal,
@@ -310,6 +311,8 @@ register('pre_reroll_', handlePreReroll, 'combat');
 register('combat_passive_', handleCombatPassive, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('od_dieswap_', handleOnDeclareDieSwap, 'combat');
+register('cq_def_pick_', handleCqDefPick, 'combat');
+register('mtl_face_', handleMtlFacePick, 'combat');
 register('bl_friendly_', handleBlFriendlyPick, 'combat');
 register('unhinged_director_', handleUnhingedDirectorChoice, 'combat');
 // Unhinged Director Strain absorb handler RETIRED 2026-05-09 — the
@@ -432,6 +435,9 @@ register('granted_move_', handleGrantedMove, 'dcPlayArea');
 register('soa_pick_', handleSoaPick, 'dcPlayArea');
 register('soa_fire_', handleSoaFire, 'dcPlayArea');
 register('soa_skip_all_', handleSoaSkipAll, 'dcPlayArea');
+register('eoa_pick_', handleEoaPick, 'dcPlayArea');
+register('eoa_fire_', handleEoaFire, 'dcPlayArea');
+register('eoa_skip_all_', handleEoaSkipAll, 'dcPlayArea');
 register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dcPlayArea');
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'), 'dcPlayArea');
 register('dc_ability_choice_', handleDcAbilityChoice, 'dcPlayArea');
