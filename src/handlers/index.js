@@ -91,6 +91,7 @@ import {
   handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,
+  handleVanguardDiePick,
   handleBoRiflePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,
@@ -433,6 +434,7 @@ register('dc_interact_', (i, ctx) => handleDcAction(i, ctx, 'dc_interact_'), 'dc
 register('dc_special_', (i, ctx) => handleDcAction(i, ctx, 'dc_special_'), 'dcPlayArea');
 register('dc_ability_choice_', handleDcAbilityChoice, 'dcPlayArea');
 register('ee3_pick_die_', handleEe3DiePick, 'dcPlayArea');
+register('vanguard_pick_', handleVanguardDiePick, 'dcPlayArea');
 register('bo_rifle_pick_', handleBoRiflePick, 'dcPlayArea');
 
 // --- Generic Space Picker (2-step row→cell) ---
@@ -815,6 +817,7 @@ export {
   handleDcAbilityChoice,
   handleArsenalPick,
   handleEe3DiePick,
+  handleVanguardDiePick,
   handleBoRiflePick,
   handleFalseOrdersAction,
   handleFalseOrdersMovePick,

@@ -540,6 +540,7 @@ const ROUND_OBJECT_FLAGS = [
   // ROUND_OBJECT_FLAGS resets to {} which matches the defensive
   // `game.X = game.X || {}` guard pattern at all call sites.
   'pendingEe3Carbine',
+  'pendingVanguardSwap',
   // pendingVoracious removed 2026-05-07 — Voracious migrated to SoA
   // orchestrator (slice 6); replaced by game.voraciousUsed.
   'massiveMovementLocked',

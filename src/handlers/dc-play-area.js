@@ -12,6 +12,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -2346,6 +2347,65 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     }
+    // Vanguard (AT-RT): may replace one attack die with red when attacking
+    // a figure within 3 spaces. Per alexanbv 2026-05-10: same timing as
+    // Boba Fett's EE-3 Carbine. Differs in that there is no MP cost.
+    // Player picks which die to swap (or skip).
+    const hasVanguard = atkSpecialIds.includes('vanguard');
+    if (hasVanguard && game.pendingVanguardSwap?.[msgId] === 'decided') {
+      delete game.pendingVanguardSwap[msgId];
+    }
+    if (hasVanguard && !game.pendingVanguardSwap?.[msgId] && !game.pendingOverrideAttackDice?.[msgId]) {
+      // Only offer if at least one valid hostile is within 3 of the
+      // attacker (regular opp figure OR hostility != 'neutral' NPC).
+      const _vgOppPN = opponentPlayerNum(playerNum);
+      const _vgAttackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+      let _vgAnyHostileInRange = false;
+      if (_vgAttackerPos) {
+        for (const [, c] of Object.entries(game.figurePositions?.[_vgOppPN] || {})) {
+          if (c && countGameSpaces(game, _vgAttackerPos, c) <= 3) { _vgAnyHostileInRange = true; break; }
+        }
+        if (!_vgAnyHostileInRange) {
+          for (const arrName of ['npcThugs', 'npcKrykna']) {
+            const arr = game[arrName];
+            if (!Array.isArray(arr)) continue;
+            for (const npc of arr) {
+              if (!npc || npc.defeated || !npc.coord) continue;
+              const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+              if (h === 'neutral') continue;
+              if (countGameSpaces(game, _vgAttackerPos, npc.coord) <= 3) { _vgAnyHostileInRange = true; break; }
+            }
+            if (_vgAnyHostileInRange) break;
+          }
+        }
+      }
+      if (_vgAnyHostileInRange) {
+        const _vgBaseDice = stats.attack?.dice || ['red'];
+        const _vgNonRedDice = [...new Set(_vgBaseDice.filter((d) => d !== 'red'))];
+        if (_vgNonRedDice.length > 0) {
+          const _vgBtns = _vgNonRedDice.map((color) =>
+            new ButtonBuilder()
+              .setCustomId(`vanguard_pick_${color}_${game.gameId}_${msgId}_${figureIndex}`)
+              .setLabel(`${color.charAt(0).toUpperCase() + color.slice(1)} → Red`)
+              .setStyle(ButtonStyle.Success)
+          );
+          _vgBtns.push(
+            new ButtonBuilder()
+              .setCustomId(`vanguard_pick_skip_${game.gameId}_${msgId}_${figureIndex}`)
+              .setLabel('Skip Vanguard')
+              .setStyle(ButtonStyle.Secondary)
+          );
+          game.pendingVanguardSwap = game.pendingVanguardSwap || {};
+          game.pendingVanguardSwap[msgId] = { gameId: game.gameId, playerNum, figureIndex, msgId };
+          await interaction.followUp({
+            content: `**Vanguard** — Replace one attack die with Red (target must be within 3 spaces):`,
+            components: [new ActionRowBuilder().addComponents(_vgBtns)],
+          }).catch(discordCatch);
+          saveGames(game.gameId);
+          return;
+        }
+      }
+    }
     // Bo-Rifle (Agent Kallus): before declaring attack, may switch to melee (replace blue→red)
     if (atkSpecialIds.includes('bo_rifle_kallus') && !game.pendingOverrideAttackDice?.[msgId]) {
       const baseDice = stats.attack?.dice || [];
@@ -3551,6 +3611,75 @@ export async function handleEe3DiePick(interaction, ctx) {
   const enemyPlayerNum = opponentPlayerNum(playerNum);
   const dgIndex = _ee3DgIdx;
   const figureKey = _ee3FigKey;
+  const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!attackerPos) {
+    await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  await buildAndSendAttackTargets(interaction, ctx, game, meta, msgId, figureKey, figureIndex, {
+    dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats,
+    excludeFigureKeys: game.pendingMissileSalvo?.[msgId]?.targetsFired,
+  });
+}
+
+/**
+ * Handle vanguard_pick_ button: player chose which die color to swap to red
+ * (or skipped). Mirrors handleEe3DiePick — same pattern, no MP cost.
+ * customId: vanguard_pick_{color|skip}_{gameId}_{msgId}_{figureIndex}
+ */
+export async function handleVanguardDiePick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, getMapData, saveGames } = ctx;
+  const withoutPrefix = parseCustomId(interaction.customId, 'vanguard_pick_');
+  const parts = withoutPrefix.split('_');
+  const color = parts[0]; // 'blue' / 'green' / 'yellow' / 'skip'
+  const gameId = parts[1];
+  const figureIndex = parseInt(parts[parts.length - 1], 10);
+  const msgId = parts.slice(2, -1).join('_');
+
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) return;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+
+  game.pendingVanguardSwap = game.pendingVanguardSwap || {};
+
+  if (color !== 'skip') {
+    const stats = getDcStats(meta.dcName);
+    const baseDice = [...(stats.attack?.dice || ['red'])];
+    const idx = baseDice.indexOf(color);
+    if (idx !== -1) baseDice[idx] = 'red';
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[msgId] = { dice: baseDice };
+    // Tag so the post-target check can revert if target ends up >3 spaces.
+    game.pendingVanguardSwap[msgId] = 'swapped';
+    await interaction.message.edit({ content: `**Vanguard** — ${color[0].toUpperCase() + color.slice(1)} → Red.`, components: [] }).catch(discordCatch);
+  } else {
+    game.pendingVanguardSwap[msgId] = 'decided';
+    await interaction.message.edit({ content: '**Vanguard** — Skipped.', components: [] }).catch(discordCatch);
+  }
+  saveGames(game.gameId);
+
+  // Proceed to attack target selection (same pattern as EE-3).
+  const stats = getDcStats(meta.dcName);
+  const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
+  const [minRange, maxRange] = defaultAttackRange(attackInfo);
+  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
+  const _vgDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _vgFigKey = `${meta.dcName}-${_vgDgIdx}-${figureIndex}`;
+  const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_vgFigKey] || _hasFuryReach(game, meta.playerNum, attackerKws);
+  const effectiveMaxRange = hasReach && maxRange < 2 ? 2 : maxRange;
+  const ms = getMapData(game.selectedMap?.id);
+  if (!ms) {
+    await interaction.followUp({ content: 'Map spaces not found.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const playerNum = meta.playerNum;
+  const enemyPlayerNum = opponentPlayerNum(playerNum);
+  const dgIndex = _vgDgIdx;
+  const figureKey = _vgFigKey;
   const attackerPos = game.figurePositions?.[playerNum]?.[figureKey];
   if (!attackerPos) {
     await interaction.followUp({ content: 'Figure has no position yet.', ephemeral: true }).catch(discordCatch);

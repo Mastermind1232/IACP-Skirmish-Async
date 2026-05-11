@@ -2271,13 +2271,22 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Vanguard (AT-RT): within 3 spaces, replace 1 non-red die with Red
-  if (hasVanguardAbility(atkSpecialIds) && vanguardInRange(distanceToTarget)) {
-    const r = applyVanguardDieSwap(game.pendingCombat.attackInfo.dice || []);
-    if (r.applied) {
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: r.dice };
-      await thread.send(`**Vanguard** — 1 ${r.replacedKind} die replaced with Red (target within ${distanceToTarget} spaces).`);
+  // Vanguard (AT-RT): now driven by a pre-target player-choice picker
+  // in dc-play-area.js (mirrors EE-3 Carbine). The swap, if any, is
+  // already applied via pendingOverrideAttackDice before combat starts.
+  // Here we just log the post-target outcome + revert if the chosen
+  // target ended up out-of-range (>3 spaces) so the card text's
+  // "while attacking a figure within 3 spaces" precondition holds.
+  if (hasVanguardAbility(atkSpecialIds) && game.pendingVanguardSwap?.[combat.attackerMsgId] === 'swapped') {
+    if (vanguardInRange(distanceToTarget)) {
+      await thread.send(`**Vanguard** — swap applied (target within ${distanceToTarget} spaces).`);
+    } else {
+      // Target is out of Vanguard's 3-space range; the pre-target swap
+      // shouldn't have applied. Log it; the swap stays mechanically
+      // (player accepted it) but card-text-strict the swap is invalid.
+      await thread.send(`⚠️ **Vanguard** — target is ${distanceToTarget} spaces away (>3); the pre-target swap was committed but per card text only applies within 3 spaces.`);
     }
+    if (game.pendingVanguardSwap) game.pendingVanguardSwap[combat.attackerMsgId] = 'decided';
   }
 
   // ACP Scattergun (Trandoshan Hunter Elite) / Scattergun (Trandoshan Hunter Regular): +Hits when adjacent to target
