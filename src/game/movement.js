@@ -720,21 +720,23 @@ function evaluateMovementStep(current, neighbor, board, profile) {
       if (board.movementBlockingSet.has(edgeKey(cell, prevCoord))) return null;
     }
   }
-  const enteringBlockingCells = !profile.ignoreBlocking ? entering.filter((cell) => board.blockingSet.has(cell)) : [];
-  // Mortar Trooper Haul: blocking/impassable become difficult instead of impassable
-  if (enteringBlockingCells.length > 0 && !profile.treatBlockingAsDifficult) return null;
-  // Wall Run (Cal Kestis): waive difficult-terrain MP cost for cells edge or
-  // corner adjacent to a wall. Per destruct 2026-05-07: Wall Run uses 8-direction
-  // wall adjacency. wallAdjacentSet is precomputed in board state from the
-  // map's impassableEdges. The waiver applies only when the figure's profile
-  // has wallRunActive (set by the Wall Run ability handler at activation).
-  const wallRunWaivesDifficult =
+  // Wall Run (Cal Kestis): per card text "ignore terrain in spaces that
+  // share an edge or corner with a wall." Per alexanbv 2026-05-10:
+  // this includes blocking AND impassable AND difficult terrain, not
+  // just difficult. The waiver applies when every cell being entered
+  // is wall-adjacent.
+  const wallRunWaivesTerrain =
     profile.wallRunActive &&
     board.wallAdjacentSet &&
     entering.every((cell) => board.wallAdjacentSet.has(cell));
+  const enteringBlockingCells = (!profile.ignoreBlocking && !wallRunWaivesTerrain)
+    ? entering.filter((cell) => board.blockingSet.has(cell))
+    : [];
+  // Mortar Trooper Haul: blocking/impassable become difficult instead of impassable
+  if (enteringBlockingCells.length > 0 && !profile.treatBlockingAsDifficult) return null;
   const enteringDifficult =
     !profile.ignoreDifficult &&
-    !wallRunWaivesDifficult &&
+    !wallRunWaivesTerrain &&
     (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult') || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0));
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
   const enteringHostile = board.hostileOccupiedSet

@@ -1540,6 +1540,7 @@
         "i_make_the_rules_cad_bane"
       ]
     },
+    "_Cal_Kestis_audit_note": "alexanbv 2026-05-10: Cal Kestis has TWO cleave 2 surge abilities (intentional, matches canonical card). Do not flag as duplicate in future audits — the surge list correctly contains 'cleave 2' twice.",
     "Cal Kestis": {
       "abilityText": "Special Action (Wall Run): Move a number of spaces up to your speed. During this movement, you may ignore terrain in spaces that share an edge or corner with a wall.\n\nForce Slow: At the start of the round, choose a hostile figure within 3 spaces. That figure's group cannot be activated during its owner's next opportunity to resolve an activation.",
       "keywords": [
@@ -6989,7 +6990,10 @@
         "cleave 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "specialAbilityIds": [
+        "fury_wookiee_reg"
+      ]
     },
     "Yoda": {
       "abilityText": "Calming Presence: At the start of a friendly REBEL FORCE USER figure's activation, that figure may remove one HARMFUL condition and suffer 1 Strain. Limit once per round.\n\nWisdom: At the start of your activation, you may draw 1 Command card. If you do, place 1 card from your hand on the bottom of your deck.\n\nSpecial Action (Do or Do Not): Choose another friendly REBEL FORCE USER within 4 spaces. That figure becomes Focused.\n\nForce Deflection: After an attack targeting you or an adjacent friendly REBEL figure resolves, you may have the attacking figure suffer Damage equal to the number of attack dice rolled. Limit once per round.",
