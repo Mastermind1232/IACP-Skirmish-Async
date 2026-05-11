@@ -36,7 +36,7 @@ import {
 } from '../db.js';
 import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
 import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage, renderDcCompanion } from '../engine/renderer.js';
-import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts } from '../game/interrupts.js';
+import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts, getMidActionReason } from '../game/interrupts.js';
 import { recoverPhaseGate } from './recover.js';
 
 const MAX_CHECKPOINTS_PER_USER = 50;
@@ -167,17 +167,15 @@ export function whyMidAction(game) {
   // pending* fields where loss-on-load would silently drop a player's
   // mid-flow decision (different from incidental pending* tracking).
   //
-  // Source of truth (Phase 3 cutover, 2026-05-01): the interrupts stack
-  // holds 74 single-payload prompt types — adding a new one is just a
-  // setPendingX helper call, no changes here required.
-  const blockingFromStack = getBlockingInterrupts(game);
-  if (blockingFromStack.length > 0) {
-    const first = blockingFromStack[0];
-    return INTERRUPT_GATE_MESSAGES[first.type] || `${first.type.replace(/-/g, ' ')} prompt is open`;
-  }
-  // Collection-shaped pending fields that aren't on the stack (queues,
-  // msgId-keyed maps). Each represents a player decision still owed.
-  if (game.pendingDcAbilityChoice && Object.keys(game.pendingDcAbilityChoice).length > 0) return 'a DC ability choice is open';
+  // Source of truth (Phase 3 cutover, 2026-05-01 → completed 2026-05-11):
+  // `getMidActionReason` consolidates BOTH the migrated stack (84
+  // single-payload types) AND the legacy collection-shaped registry
+  // (42 map/array/scalar pending fields) into one call. Adding a new
+  // single-payload prompt is just a setPendingX helper; adding a new
+  // collection-shaped pending field needs only a `LEGACY_COLLECTION_
+  // INTERRUPTS` registry entry in interrupts.js — no edits here.
+  const reason = getMidActionReason(game, INTERRUPT_GATE_MESSAGES);
+  if (reason) return reason;
   // Round-phase transitions involve actual gameplay effects (damage from
   // Bleeding, VP awards, etc.) — not pure plumbing. Block; the user can
   // wait for the next round-activation message before saving.

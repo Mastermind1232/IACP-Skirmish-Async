@@ -236,6 +236,113 @@ export function getBlockingInterrupts(game) {
 }
 
 /**
+ * Registry of legacy collection-shaped pending fields (msgId-keyed maps,
+ * playerNum-keyed maps, arrays, queues) that haven't been migrated to the
+ * stack but still need to register as "blocking" in `whyMidAction` and
+ * any other single-source-of-truth consumer.
+ *
+ * Per project_pending_consolidation_plan.md: these are intentionally NOT
+ * stack-migrated because their shape (multiple concurrent payloads per
+ * key) doesn't fit the LIFO single-payload model. Registering them here
+ * achieves the architectural goal — one place to ask "is the bot
+ * mid-something" — without forcing 42 × ~3-call-site rewrites.
+ *
+ * Shape values:
+ *   - 'map'    : non-empty if Object.keys(value).length > 0
+ *   - 'array'  : non-empty if value.length > 0
+ *   - 'truthy' : non-empty if value is truthy (scalars / objects / null)
+ */
+export const LEGACY_COLLECTION_INTERRUPTS = Object.freeze([
+  // msgId-keyed maps
+  { field: 'pendingBlackMarket',          shape: 'map',    message: 'a Black Market choice is open' },
+  { field: 'pendingBombDrop',             shape: 'map',    message: 'a Bomb Drop space pick is open' },
+  { field: 'pendingBoRifle',              shape: 'map',    message: 'a Bo-Rifle type pick is open' },
+  { field: 'pendingClaimedKryknaQueue',   shape: 'array',  message: 'a Claimed Krykna prompt is open' },
+  { field: 'pendingCombatResupply',       shape: 'map',    message: 'a Combat Resupply pick is open' },
+  { field: 'pendingDcAbilityChoice',      shape: 'map',    message: 'a DC ability choice is open' },
+  { field: 'pendingDeployGarrison',       shape: 'map',    message: 'a Deploy the Garrison space pick is open' },
+  { field: 'pendingDeployOrientation',    shape: 'map',    message: 'a deploy-orientation pick is open' },
+  { field: 'pendingDoorSelections',       shape: 'map',    message: 'a door selection is open' },
+  { field: 'pendingEndTurn',              shape: 'map',    message: 'an end-turn confirmation is open' },
+  { field: 'pendingErgChoices',           shape: 'map',    message: 'an ERG recover/discard pick is open' },
+  { field: 'pendingExecutiveOrderAction', shape: 'map',    message: 'an Executive Order action pick is open' },
+  { field: 'pendingFiringSquad',          shape: 'array',  message: 'a Firing Squad chain attack is open' },
+  { field: 'pendingFluctuationSwapFirst', shape: 'truthy', message: 'a Fluctuation swap is in progress' },
+  { field: 'pendingFluctuationSwapQueue', shape: 'array',  message: 'a Fluctuation swap queue is active' },
+  { field: 'pendingForceCardPick',        shape: 'map',    message: 'a Force card pick is open' },
+  { field: 'pendingHeroicEffortReturn',   shape: 'map',    message: 'a Heroic Effort return choice is open' },
+  { field: 'pendingHuntDissent',          shape: 'map',    message: 'a Hunt Dissent pick is open' },
+  { field: 'pendingKryknaPushQueue',      shape: 'array',  message: 'a Krykna push queue is active' },
+  { field: 'pendingLastStand',            shape: 'map',    message: 'a Last Stand pick is open' },
+  { field: 'pendingMissileSalvo',         shape: 'map',    message: 'a Missile Salvo pick is open' },
+  { field: 'pendingMoveInterrupts',       shape: 'array',  message: 'a movement interrupt is pending' },
+  { field: 'pendingMoveX',                shape: 'map',    message: 'a Move-X picker is open' },
+  { field: 'pendingMoveXSequence',        shape: 'map',    message: 'a Move-X sequence is in progress' },
+  { field: 'pendingMpBonus',              shape: 'map',    message: 'an MP bonus pick is open' },
+  { field: 'pendingMultiTargetRoll',      shape: 'map',    message: 'a multi-target roll is pending' },
+  { field: 'pendingOnAMissionPush',       shape: 'map',    message: 'an On-a-Mission push pick is open' },
+  { field: 'pendingOverrideAttackDice',   shape: 'map',    message: 'an attack-dice override is pending' },
+  { field: 'pendingOverwatchPlacement',   shape: 'map',    message: 'an Overwatch placement is open' },
+  { field: 'pendingPostAttackConditions', shape: 'map',    message: 'a post-attack condition pick is open' },
+  { field: 'pendingPounceSpaceChoice',    shape: 'map',    message: 'a Pounce space pick is open' },
+  { field: 'pendingPowerTokenGrant',      shape: 'map',    message: 'a power-token grant pick is open' },
+  { field: 'pendingSelfDestructMove',     shape: 'map',    message: 'a Self-Destruct move pick is open' },
+  { field: 'pendingSlingBarrage',         shape: 'map',    message: 'a Sling Barrage reroll is open' },
+  { field: 'pendingSoaResolution',        shape: 'map',    message: 'a SoA resolution prompt is open' },
+  { field: 'pendingSorActions',           shape: 'array',  message: 'a start-of-round action queue is active' },
+  { field: 'pendingSpacePick',            shape: 'map',    message: 'a space pick is open' },
+  { field: 'pendingSpreadThePainCondPick',shape: 'map',    message: 'a Spread-the-Pain condition pick is open' },
+  { field: 'pendingStartOfRoundResolve',  shape: 'truthy', message: 'a start-of-round resolution is pending' },
+  { field: 'pendingStaticPulse',          shape: 'map',    message: 'a Static Pulse pick is open' },
+  { field: 'pendingStrainEvent',          shape: 'map',    message: 'a strain event is pending' },
+  { field: 'pendingVanguardSwap',         shape: 'map',    message: 'a Vanguard die swap is open' },
+]);
+
+/** Returns true if a legacy collection-shaped pending field is currently active. */
+function _isCollectionActive(value, shape) {
+  if (value == null) return false;
+  if (shape === 'array')  return Array.isArray(value) && value.length > 0;
+  if (shape === 'map')    return typeof value === 'object' && Object.keys(value).length > 0;
+  if (shape === 'truthy') return !!value;
+  return false;
+}
+
+/**
+ * Enumerate active legacy collection-shaped interrupts as virtual blocking
+ * entries. Each return value has the shape `{ type, message, source: 'legacy' }`
+ * so consumers can treat it like a stack interrupt.
+ */
+export function getActiveLegacyInterrupts(game) {
+  if (!game) return [];
+  const out = [];
+  for (const entry of LEGACY_COLLECTION_INTERRUPTS) {
+    if (_isCollectionActive(game[entry.field], entry.shape)) {
+      out.push({ type: entry.field, message: entry.message, source: 'legacy' });
+    }
+  }
+  return out;
+}
+
+/**
+ * Single-source-of-truth blocking check. Returns the human-readable reason
+ * if anything blocks, or '' if nothing blocks. Combines the migrated stack
+ * AND the legacy collection-shaped registry — `whyMidAction` and any other
+ * consumer can call this directly without enumerating fields themselves.
+ */
+export function getMidActionReason(game, gateMessages = null) {
+  if (!game) return '';
+  const blockingFromStack = getBlockingInterrupts(game);
+  if (blockingFromStack.length > 0) {
+    const first = blockingFromStack[0];
+    if (gateMessages && gateMessages[first.type]) return gateMessages[first.type];
+    return `${first.type.replace(/-/g, ' ')} prompt is open`;
+  }
+  const legacy = getActiveLegacyInterrupts(game);
+  if (legacy.length > 0) return legacy[0].message;
+  return '';
+}
+
+/**
  * Wipe the stack. Called by clearPendingAndPerMsgIdState during checkpoint
  * load — the new lobby starts with no interrupts.
  */
