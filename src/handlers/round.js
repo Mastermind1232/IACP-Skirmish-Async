@@ -832,21 +832,50 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   }
 
   // NPC thug activation (Corellian Underground A — driven by rules.npcThugs flag)
+  // alexanbv 2026-05-10: Player with initiative moves all thugs 1 at a time
+  // via an interactive picker. After all thugs moved, damage applies. The
+  // picker handler in src/handlers/thug-movement.js resumes the round-end
+  // chain via the closure registered as game._resumeAfterThugMovementFn.
   if (runNpcThugActivation && hasMissionFlag(mapId, variant, 'npcThugs')) {
-    const { logs: thugLogs, damageEvents } = runNpcThugActivation(game, mapId, { getMapTokensData, getMapData, getMapRegistry, filterMapSpacesByBounds });
-    for (const line of thugLogs) {
-      await logGameAction(game, client, `🔫 **Thug:** ${line}`, { phase: 'ROUND', icon: 'attack' });
-    }
-    for (const { figureKey, playerNum, damage } of damageEvents) {
-      await applyNpcDamageToFigure(game, playerNum, figureKey, damage, 'Thug', logGameAction, client, dcHealthState, dcMessageMeta);
-    }
-    if (damageEvents.length > 0) {
-      await checkWinConditions(game, client);
-      if (game.ended) {
-        if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-        saveGames(game.gameId);
-        return;
+    // Lazy-init npcThugs if needed (matches runNpcThugActivation behaviour).
+    if (!game.npcThugs) {
+      const missionData = getMapTokensData?.()[mapId]?.missionA;
+      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) {
+        game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
       }
+    }
+    const activeIndexes = (game.npcThugs || []).map((t, i) => (t && !t.defeated ? i : -1)).filter((i) => i >= 0);
+    if (activeIndexes.length > 0) {
+      const { initThugMovementQueue } = await import('../game/thug-movement.js');
+      const { postThugPickerPrompt } = await import('./thug-movement.js');
+      const initPN = getInitiativePlayerNum(game);
+      initThugMovementQueue(game, initPN, mapId);
+      // Register resume closure: runs after picker drain in handleThugDest.
+      // Damage application + win check are handled by the picker handler;
+      // this closure picks up the post-thug round-end continuation.
+      const _resumeVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
+      game._resumeAfterThugMovementFn = async (g, c) => {
+        // Re-import to avoid stale captures across save/load
+        // Fluctuation swap gate (Lothal Wastes B — preserved from inline path).
+        if (hasMissionFlag(g.selectedMap?.id, g.selectedMission?.variant, 'fluctuationSwapGate')) {
+          const _fInitNum = getInitiativePlayerNum(g);
+          const _fOtherNum = opponentPlayerNum(_fInitNum);
+          g.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
+          g.fluctuationSwappedThisRound = [];
+          g.pendingFluctuationSwapFirst = null;
+          g._pendingStatusPhaseLog = _resumeVars;
+          const _fGenCh = await fetchGameChannel(c.client, g.generalId);
+          if (postFluctuationSwapButtons) await postFluctuationSwapButtons(g, _fGenCh, g.gameId, _fInitNum);
+          saveGames(g.gameId);
+          return;
+        }
+        await _runInitiativeSwapAndContinue(g, g.gameId, null, c, _resumeVars);
+      };
+      await postThugPickerPrompt(game, client, interaction?.channel);
+      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
     }
   }
 
