@@ -1021,6 +1021,29 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
       const allCrates = Object.values(dMap?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
       game.cratePositions = {};
       for (const c of allCrates) game.cratePositions[c] = c;
+      // Slice 3 (alexanbv 2026-05-10): also populate the unified
+      // object-damage pipeline state. cratePositions stays for the
+      // push-mechanic (current vs orig coord tracking) but health,
+      // splash-on-defeat, attack-targeting, and Blast all flow
+      // through objectHealth/objectMeta from here.
+      game.objectHealth = game.objectHealth || {};
+      game.objectPositions = game.objectPositions || {};
+      game.objectMeta = game.objectMeta || {};
+      for (const c of allCrates) {
+        const id = `crate-${c}`;
+        if (game.objectHealth[id]) continue;
+        game.objectHealth[id] = [5, 5];
+        game.objectPositions[id] = c;
+        game.objectMeta[id] = {
+          name: `Crate @ ${c.toUpperCase()}`,
+          targetable: true,
+          defenseBlock: 1,
+          defenseEvade: 0,
+          splashOnDefeat: { amount: 2, radius: 1, target: 'all' },
+          vpOnDefeat: null,
+          moves: true,
+        };
+      }
     }
     const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
     const p2T = countTerminalsControlledByPlayer(game, 2, mapId);

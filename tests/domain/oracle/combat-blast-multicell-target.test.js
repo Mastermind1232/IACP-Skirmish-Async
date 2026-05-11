@@ -42,7 +42,11 @@ describe('CRR-COMBAT-BLAST-MULTICELL: full-footprint adjacency for blast / cleav
     // adjacency.
     const callRe = /getFiguresAdjacentToCoord\(game, _targetCoordBeforeDefeat, game\.selectedMap\.id, combat\.target\.figureKey([^)]*)\)/g;
     const calls = [...CB_SRC.matchAll(callRe)];
-    assert.ok(calls.length >= 3, `expected ≥3 blast-adjacency call sites, got ${calls.length}`);
+    // Slice 3 (2026-05-10): the third inline Blast site (Wave-3 dead block)
+    // was removed; modern Blast splash flows through fireBlast (step 8)
+    // + the unified object-damage pipeline. Remaining ≥2 sites are the
+    // npcType==='crate' attack block and the surge-derive logic.
+    assert.ok(calls.length >= 2, `expected ≥2 blast-adjacency call sites, got ${calls.length}`);
     for (const m of calls) {
       const tail = m[1].trim();
       assert.match(tail, /,\s*_targetSizeBeforeDefeat/,

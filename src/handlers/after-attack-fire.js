@@ -166,37 +166,22 @@ async function fireBlast(thread, game, combat, effect, ctx) {
   } catch (err) {
     console.error('[fireBlast] object-damage iteration failed:', err?.message ?? err);
   }
-  // Legacy crate splash (Devaron-B). Slated for removal in Slice 3 once
-  // the crate state migrates to game.objectHealth + game.objectPositions
-  // and runs only through the unified pipeline above.
-  if (game.cratePositions && getMapData) {
-    const rawMs = getMapData(game.selectedMap.id);
-    const adjacency = rawMs?.adjacency || {};
-    const targetNorm = String(combat._blastTargetCoord).toLowerCase();
-    const adjSet = new Set((adjacency[targetNorm] || []).map((c) => String(c).toLowerCase()));
-    adjSet.add(targetNorm);
-    const checkWinConditions = deps?.checkWinConditions || ctx.checkWinConditions;
-    for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-      const crateNorm = String(curCoord).toLowerCase();
-      if (!adjSet.has(crateNorm)) continue;
-      game.crateHealth = game.crateHealth || {};
-      if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
-      game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - amount);
-      if (logGameAction) {
-        await logGameAction(game, client, `\u{1F4A5} **Blast ${amount}** — Crate @ ${String(curCoord).toUpperCase()} suffers ${amount} damage (${game.crateHealth[origCoord]}/5 HP).`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-      }
-      if (game.crateHealth[origCoord] <= 0) {
+  // Legacy crate splash removed in Slice 3 (alexanbv 2026-05-10). The
+  // unified object-damage pipeline above (getDamageableObjectsWithinN +
+  // applyDamageToObject) handles Blast → crate damage and crate
+  // explosion via splashOnDefeat. game.cratePositions is now used only
+  // for the push-mechanic; objectHealth owns crate HP.
+  //
+  // Also drop legacy cratePositions entry when a crate is destroyed —
+  // the new pipeline removes objectPositions[id] on defeat, but the
+  // legacy cratePositions[origCoord] used by push handlers needs to
+  // mirror that removal. Walk the post-pipeline state and prune any
+  // cratePositions entries whose corresponding objectId no longer
+  // exists in objectPositions.
+  if (game.cratePositions && game.objectPositions) {
+    for (const origCoord of Object.keys(game.cratePositions)) {
+      if (!game.objectPositions[`crate-${origCoord}`]) {
         delete game.cratePositions[origCoord];
-        const bcCurLow = String(curCoord).toLowerCase();
-        if (logGameAction) {
-          await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast! All figures on or adjacent suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-        }
-        for (const pn of [1, 2]) {
-          for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, bcCurLow, game.selectedMap?.id)) {
-            await applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion (Blast)', logGameAction, client, dcHealthState, dcMessageMeta);
-          }
-        }
-        if (checkWinConditions) await checkWinConditions(game, client);
       }
     }
   }

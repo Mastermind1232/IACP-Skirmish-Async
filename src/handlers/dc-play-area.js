@@ -1279,7 +1279,7 @@ async function buildAndSendAttackTargets(
   // Crate targets (Devaron Garrison B): cratePositions keyed by orig coord, value = current coord
   if (game.cratePositions && typeof game.cratePositions === 'object') {
     for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-      const hp = typeof game.crateHealth?.[origCoord] === 'number' ? game.crateHealth[origCoord] : 5;
+      const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
       if (hp <= 0) continue;
       const coord = String(curCoord).toLowerCase();
       const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));

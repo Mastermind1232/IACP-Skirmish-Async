@@ -505,9 +505,11 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
     );
   });
 
-  it('010b: Blast hits adjacent crate when targeting figure', async () => {
-    // Attacker at b1, target (figure) at c1, crate at d1 (adjacent to target).
-    // Current code: Blast only iterates figurePositions → crate takes 0 damage.
+  it('010b: Blast hits adjacent crate when targeting figure (via unified object-damage pipeline)', async () => {
+    // Slice 3 (alexanbv 2026-05-10): crate HP now lives in
+    // game.objectHealth[objectId] via the unified pipeline. Blast still
+    // routes through fireBlast (step 8), which iterates damageable
+    // objects within 1 of target and routes through applyDamageToObject.
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Bossk' }])
       .withPlayer2Army([{ dcName: 'Greedo' }])
@@ -520,9 +522,17 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
     const target = getP2DcInfo(game, dcMessageMeta, dcHealthState, 0);
     game.figurePositions[2] = { [target.figKey]: 'c1' };
 
-    // Place crate at d1 (adjacent to target c1)
+    // Register a damageable crate at d1 in the new pipeline state.
     game.cratePositions = { d1: 'd1' };
-    game.crateHealth = { d1: 5 };
+    game.objectHealth = { 'crate-d1': [5, 5] };
+    game.objectPositions = { 'crate-d1': 'd1' };
+    game.objectMeta = {
+      'crate-d1': {
+        name: 'Crate @ D1', targetable: true, defenseBlock: 1, defenseEvade: 0,
+        splashOnDefeat: { amount: 2, radius: 1, target: 'all' },
+        vpOnDefeat: null, moves: true,
+      },
+    };
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 5, dmg: 3, surge: 1 },
@@ -532,11 +542,11 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    // Crate should take 2 Blast damage: 5 - 2 = 3
+    // Crate should take 2 Blast damage: 5 - 2 = 3 (now in objectHealth).
     assert.strictEqual(
-      game.crateHealth.d1,
+      game.objectHealth['crate-d1']?.[0],
       3,
-      `Blast should damage adjacent crate. crateHealth: ${game.crateHealth.d1} (expected 3)`
+      `Blast should damage adjacent crate. objectHealth: ${game.objectHealth['crate-d1']?.[0]} (expected 3)`
     );
   });
 });

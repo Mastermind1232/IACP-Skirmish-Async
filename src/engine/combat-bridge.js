@@ -495,7 +495,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
       atkAdj.add(atkNorm);
       for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
         if (atkAdj.has(String(curCoord).toLowerCase())) {
-          const hp = game.crateHealth?.[origCoord] ?? 5;
+          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
           targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
         }
       }
@@ -515,7 +515,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     if (game.cratePositions) {
       for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
         if (isWithinN(attackerPos, String(curCoord).toLowerCase(), _reachRange, mapId)) {
-          const hp = game.crateHealth?.[origCoord] ?? 5;
+          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
           targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
         }
       }
@@ -534,7 +534,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     if (game.cratePositions) {
       for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
         if (isWithinN(attackerPos, String(curCoord).toLowerCase(), totalAcc, mapId)) {
-          const hp = game.crateHealth?.[origCoord] ?? 5;
+          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
           targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
         }
       }
@@ -597,28 +597,36 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState
   if (combat.target?.isNpc) {
-    // Crate target (Devaron B)
+    // Crate target (Devaron B) — Slice 3: routes through unified
+    // object-damage pipeline. applyDamageToObject handles HP decrement,
+    // splashOnDefeat (2 dmg within 1), and the figure-damage adapter
+    // so when-damaged / before-defeated / when-defeated hooks fire on
+    // splash-killed figures. cratePositions still tracks current vs
+    // orig coord for the push-mechanic; objectHealth owns HP.
     if (combat.target.npcType === 'crate') {
       const origCoord = combat.target.crateOrigCoord;
-      if (origCoord && game.cratePositions?.[origCoord] !== undefined) {
-        game.crateHealth = game.crateHealth || {};
-        if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
-        if (damage > 0 && hit) {
-          game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - damage);
-          const curCoord = String(game.cratePositions[origCoord] || origCoord).toUpperCase();
-          resultText += ` — Crate @ ${curCoord}: ${game.crateHealth[origCoord]}/5 HP remaining.`;
-          if (game.crateHealth[origCoord] <= 0) {
-            resultText += ` **Crate DESTROYED! Adjacent figures suffer 2 Damage.**`;
-            const curCoordLow = String(game.cratePositions[origCoord] || origCoord).toLowerCase();
-            delete game.cratePositions[origCoord];
-            await logGameAction(game, client, `\u{1F4A5} Crate at **${curCoord}** destroyed! All adjacent figures suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' });
-            for (const pn of [1, 2]) {
-              for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, curCoordLow, 'devaron-garrison')) {
-                await _applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion', logGameAction, client, dcHealthState, dcMessageMeta);
-              }
-            }
-            await checkWinConditions(game, client);
-          }
+      const objectId = `crate-${origCoord}`;
+      if (origCoord && damage > 0 && hit) {
+        const { applyDamageToObject, makeFigureDamageAtAdapter } = await import('../game/object-damage-pipeline.js');
+        const { awardObjectiveVp } = await import('../game/vp-helpers.js');
+        const _crateCtx = {
+          logGameAction, client,
+          applyFigureDamageAt: makeFigureDamageAtAdapter(game, {
+            logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread,
+          }),
+          awardObjectiveVp,
+        };
+        const res = await applyDamageToObject(game, _crateCtx, {
+          objectId, amount: damage, attackerPlayerNum, source: 'Attack',
+        });
+        const curCoord = String(game.cratePositions?.[origCoord] || origCoord).toUpperCase();
+        if (res.defeated) {
+          resultText += ` **Crate @ ${curCoord} destroyed! Figures within 1 suffered 2 Damage.**`;
+          if (game.cratePositions) delete game.cratePositions[origCoord];
+          await checkWinConditions(game, client);
+        } else {
+          const newHp = res.newHp ?? 0;
+          resultText += ` — Crate @ ${curCoord}: ${newHp}/5 HP remaining.`;
         }
       }
       // Wave 3: Blast from crate-target attack — apply to adjacent figures/objects
@@ -1426,101 +1434,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     combat._blastTargetSize = _targetSizeBeforeDefeat;
     combat._blastFireproofFriendly = _ftAtkUpgradesBlast.includes('Flame Trooper');
     let effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
-    // Blast splash migrated 2026-05-09 to step-8 fireBlast handler. Legacy
-    // inline block disabled (preserved for blame; removed in a follow-up).
-    if (false && effectiveBlast > 0 && hit && damage > 0 && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-      // Wave 3 + CRR step 8: Use saved target coord+size (target may be defeated/removed by now,
-      // and multi-cell targets need full-footprint adjacency).
-      const adjacent = _targetCoordBeforeDefeat
-        ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
-        : [];
-      for (const { figureKey: blastFigureKey, playerNum: blastPlayerNum } of adjacent) {
-        // Flame Trooper Fireproof: own Blast does not affect friendly figures
-        if (blastPlayerNum === attackerPlayerNum && _ftAtkUpgradesBlast.includes('Flame Trooper')) continue;
-        const blastMsgId = findDcMessageIdForFigure(game.gameId, blastPlayerNum, blastFigureKey);
-        if (!blastMsgId) continue;
-        const { figureIndex: blastFigIndex } = parseFigureKey(blastFigureKey);
-        const { newHp: newBCur, wasDefeated: blastDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-          figureKey: blastFigureKey, msgId: blastMsgId, figIndex: blastFigIndex,
-          amount: effectiveBlast, controllerPlayerNum: blastPlayerNum,
-          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-          source: 'Blast', combat,
-        });
-        const { dcList: blastDcList, idx: blastIdx } = lookupFigureDcIndex(game, blastPlayerNum, blastFigureKey);
-        // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
-        if (effectiveBlast >= 3 && newBCur > 0) {
-          const _fokBlastDcList = getDcList(game, blastPlayerNum) || [];
-          if (_fokBlastDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
-            const _fokBlastName = dcNameFromFigureKey(blastFigureKey);
-            const _fokBlastKws = (getDcKeywords(game)[_fokBlastName] || []).map(k => String(k).toUpperCase());
-            if (_fokBlastKws.includes('WOOKIEE')) {
-              if (_applyCondition(game, blastFigureKey, 'Focus')) {
-                await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokBlastName}** became **Focused** (suffered ${effectiveBlast} Blast Damage).`, { phase: 'ROUND', icon: 'card' });
-              }
-            }
-          }
-        }
-        if (blastDefeated) {
-          const blastLabel = blastDcList[blastIdx]?.displayName || blastFigureKey;
-          const blastDcName = blastDcList[blastIdx]?.dcName;
-          const { vp } = await processFigureDefeat(game, {
-            defeatedPlayerNum: blastPlayerNum,
-            figureKey: blastFigureKey,
-            attackerPlayerNum,
-            attackerFigureKey: combat.attackerFigureKey,
-            msgId: blastMsgId,
-            dcIdx: blastIdx,
-            dcName: blastDcName,
-            displayName: blastLabel,
-            source: 'Blast',
-          }, { ...deps, client });
-          // Achievement: count blast kills for activation streak
-          if (combat.attackerMsgId) {
-            game.activationKills = game.activationKills || {};
-            game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
-            if (isDbConfigured() && achievementsChannelId) {
-              const _akUserId2 = getPlayerId(game, attackerPlayerNum);
-              checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _akUserId2, 'activation_kills', game.activationKills[combat.attackerMsgId])
-                .catch((err) => console.error('[Achievements] blast activation_kills check failed:', err.message));
-            }
-          }
-          // Celebration auto-prompt for Blast defeats — now handled by
-          // WHEN_DEFEATED hook (damage-pipeline-hooks.js).
-        }
-      }
-      // Wave 3: Blast also damages adjacent crates (objects)
-      if (_targetCoordBeforeDefeat && game.cratePositions) {
-        const _blastMapId = game.selectedMap.id;
-        const rawMapSpaces = getMapData(_blastMapId);
-        const adjacency = rawMapSpaces?.adjacency || {};
-        const _blastTargetNorm = String(_targetCoordBeforeDefeat).toLowerCase();
-        const _blastTargetAdj = new Set((adjacency[_blastTargetNorm] || []).map(c => String(c).toLowerCase()));
-        _blastTargetAdj.add(_blastTargetNorm);
-        for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-          const crateNorm = String(curCoord).toLowerCase();
-          if (!_blastTargetAdj.has(crateNorm)) continue;
-          game.crateHealth = game.crateHealth || {};
-          if (typeof game.crateHealth[origCoord] !== 'number') game.crateHealth[origCoord] = 5;
-          game.crateHealth[origCoord] = Math.max(0, game.crateHealth[origCoord] - effectiveBlast);
-          await logGameAction(game, client, `\u{1F4A5} **Blast ${effectiveBlast}** \u2014 Crate @ ${String(curCoord).toUpperCase()} suffers ${effectiveBlast} damage (${game.crateHealth[origCoord]}/5 HP).`, { phase: 'ROUND', icon: 'attack' });
-          if (game.crateHealth[origCoord] <= 0) {
-            delete game.cratePositions[origCoord];
-            // CRR (Devaron Garrison B): "When a crate is destroyed, all
-            // figures and objects on or adjacent to that crate suffer 2
-            // Damage." Direct-attack destruction already applies this;
-            // blast destruction was missing it (paraphrase bug).
-            const _bcCurLow = String(curCoord).toLowerCase();
-            await logGameAction(game, client, `\u{1F4A5} Crate at **${String(curCoord).toUpperCase()}** destroyed by Blast! All figures on or adjacent suffer 2 Damage.`, { phase: 'ROUND', icon: 'attack' });
-            for (const pn of [1, 2]) {
-              for (const figKey of getFiguresOnOrAdjacentToSpace(game, pn, _bcCurLow, game.selectedMap?.id)) {
-                await _applyNpcDamageToFigure(game, pn, figKey, 2, 'Crate explosion (Blast)', logGameAction, client, dcHealthState, dcMessageMeta);
-              }
-            }
-            await checkWinConditions(game, client);
-          }
-        }
-      }
-    }
+    // Blast splash fully migrated to step-8 fireBlast handler (2026-05-09)
+    // and the object-damage pipeline (Slice 2, 2026-05-10). The legacy
+    // inline `if (false &&` block was removed Slice 3 (2026-05-10).
+    void effectiveBlast;
   } else if (hit && damage === 0) {
     await logGameAction(game, client, `<@${ownerId}> attacked **${combat.target.label}** — blocked`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
   } else if (!hit) {

@@ -41,39 +41,31 @@ function* walkFiles(dir) {
   }
 }
 
-describe('PROBE-PD-OBJ-005: object damage in skirmish only flows to crates (the sole attackable object)', () => {
-  it('005a: state — crateHealth is declared in game-state.js as a per-coord HP container', () => {
-    assert.match(GS_SRC, /'cratePositions', 'crateHealth', 'crateTokens', 'deviceTokens'/,
-      'game-state.js must declare crateHealth alongside other object containers — CRR-OBJ-005');
+describe('PROBE-PD-OBJ-005: object damage flows via the unified object-damage pipeline', () => {
+  it('005a: state — objectHealth is declared in game-state.js as the unified per-id HP container', () => {
+    // Slice 3 (alexanbv 2026-05-10): legacy crateHealth removed; HP for
+    // every damageable mission object lives in objectHealth[objectId].
+    assert.match(GS_SRC, /'objectHealth', 'objectPositions', 'objectMeta'/,
+      'game-state.js must declare objectHealth/objectPositions/objectMeta as the unified object-damage state — CRR-OBJ-005');
+    assert.doesNotMatch(GS_SRC, /'crateHealth'/,
+      'legacy crateHealth must NOT remain in game-state.js OBJECT_FLAGS — CRR-OBJ-005');
   });
 
-  it('005b: state — no OTHER object-HP field exists in game-state.js (no doorHealth / tokenHealth / terrainHealth / rubbleHealth)', () => {
-    assert.doesNotMatch(GS_SRC, /doorHealth|tokenHealth|terrainHealth|rubbleHealth|deviceHealth|objectHealth/i,
-      'no non-crate object may have an HP field — CRR-OBJ-005');
+  it('005b: state — no per-class HP fields (doorHealth / tokenHealth / terrainHealth / rubbleHealth) exist; everything routes through objectHealth', () => {
+    assert.doesNotMatch(GS_SRC, /doorHealth|tokenHealth|terrainHealth|rubbleHealth|deviceHealth/i,
+      'no per-class object-HP field may exist; use objectHealth via mission rules.damageableObjects — CRR-OBJ-005');
   });
 
-  it('005c: source — every site that decrements object HP in src/ writes to game.crateHealth[origCoord] (no other HP-bearing object container is mutated)', () => {
-    const crateDmgSites = [];
-    const forbidden = [];
+  it('005c: source — no src/ file uses legacy crateHealth[origCoord] decrement; damage now flows via applyDamageToObject', () => {
+    const legacyDmgSites = [];
     for (const p of walkFiles(resolve(ROOT, 'src'))) {
       const src = readFileSync(p, 'utf8');
       if (/game\.crateHealth\[origCoord\]\s*=\s*Math\.max\(0,\s*game\.crateHealth\[origCoord\]\s*-/.test(src)) {
-        crateDmgSites.push(p.replace(ROOT + '/', ''));
-      }
-      // No other object-HP decrement sites may exist
-      if (/game\.(doorHealth|tokenHealth|terrainHealth|rubbleHealth|deviceHealth|objectHealth)\[[^\]]+\]\s*=\s*Math\.max\(0/.test(src)) {
-        forbidden.push(p.replace(ROOT + '/', ''));
+        legacyDmgSites.push(p.replace(ROOT + '/', ''));
       }
     }
-    // 2026-05-09: Blast splash migrated from combat-bridge inline to
-    // after-attack-fire.js fireBlast (step-8 button-fired). Both sites are
-    // legitimate crate-damage callers under CRR-OBJ-005.
-    assert.deepEqual(
-      crateDmgSites.sort(),
-      ['src/engine/combat-bridge.js', 'src/handlers/after-attack-fire.js'].sort(),
-      'only combat-bridge.js + after-attack-fire.js (fireBlast) may apply damage to objects — CRR-OBJ-005');
-    assert.deepEqual(forbidden, [],
-      'no src file may apply Math.max(0, -) damage decrement to any non-crate object container — CRR-OBJ-005');
+    assert.deepEqual(legacyDmgSites, [],
+      'no src file may use the legacy crateHealth decrement pattern — Slice 3 routes through applyDamageToObject');
   });
 
   it('005d: source — Cleave target-selection adds only crates (isCrate: true) from cratePositions, not doors/tokens/rubble', () => {
