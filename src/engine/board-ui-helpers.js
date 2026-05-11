@@ -26,7 +26,7 @@ export async function postMissionCardAfterMapSelection(game, client, map, deps) 
   const mission = missions[variant];
   const mapName = map.name || map.id;
   const fullName = `${mapName} — ${mission.name}`;
-  game.selectedMission = { variant, name: mission.name, fullName, tokenLabel: mission.tokenLabel || '', interactLabel: mission.interactLabel || '', mechanics: mission.mechanics || {} };
+  game.selectedMission = { variant, name: mission.name, fullName, tokenLabel: mission.tokenLabel || '', interactLabel: mission.interactLabel || '', mechanics: mission.mechanics || {}, rules: mission.rules || {} };
   await postPinnedMissionCardFromGameState(game, client, deps);
 }
 

@@ -827,7 +827,20 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
   } else if (thread) {
     await thread.send('🧨 **Shrapnel Splash** — no figures within 2 of target space.').catch(discordCatch);
   }
-  // Objects (crates, doors) within 2: TODO when object-damage pipeline lands.
+  // Objects within 2 of target space — card text says "each figure AND
+  // object" so mission-declared damageable objects within range take 1
+  // Damage too. Object-damage pipeline (alexanbv 2026-05-10).
+  try {
+    const { getDamageableObjectsWithinN, applyDamageToObject } = await import('../game/object-damage-pipeline.js');
+    const objectIds = getDamageableObjectsWithinN(game, tgtPos, 2);
+    for (const objId of objectIds) {
+      await applyDamageToObject(game, { logGameAction, client }, {
+        objectId: objId, amount: 1, attackerPlayerNum: atkPn, source: 'Shrapnel Splash',
+      });
+    }
+  } catch (err) {
+    console.error('[shrapnel-splash] object-damage iteration failed:', err?.message ?? err);
+  }
 }
 
 /**

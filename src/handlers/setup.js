@@ -488,7 +488,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
       return;
     }
     game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
-    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
+    game.selectedMission = { variant: variant || 'a', name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {}, rules: missionData.rules || {} };
   } else {
     // Random
     const playReadyMaps = getPlayReadyMaps();
@@ -503,7 +503,7 @@ export async function handleMapTypeChoice(interaction, ctx) {
     const variant = variants[Math.floor(Math.random() * variants.length)];
     const missionData = missionCards?.[variant];
     if (missionData) {
-      game.selectedMission = { variant, name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
+      game.selectedMission = { variant, name: missionData.name, fullName: `${map.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {}, rules: missionData.rules || {} };
     }
   }
 
@@ -628,7 +628,7 @@ function applyMissionToGame(game, missionId, getMapRegistry, getMissionCardsData
   const missionData = getMissionCardsData?.()[mapId]?.[v];
   if (!mapDef || !missionData) return false;
   game.selectedMap = { id: mapDef.id, name: mapDef.name, imagePath: mapDef.imagePath };
-  game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {} };
+  game.selectedMission = { variant: v, name: missionData.name, fullName: `${mapDef.name} — ${missionData.name}`, tokenLabel: missionData.tokenLabel || '', interactLabel: missionData.interactLabel || '', mechanics: missionData.mechanics || {}, rules: missionData.rules || {} };
   return true;
 }
 
