@@ -11,7 +11,7 @@ test('getAbility returns library entry for known surge id', () => {
   assert.ok(entry);
   assert.strictEqual(entry.type, 'surge');
   assert.strictEqual(entry.surgeCost, 1);
-  assert.strictEqual(entry.label, '+1 Hit');
+  assert.strictEqual(entry.label, '+1 Damage');
   assert.strictEqual(getAbility('stun').label, 'Stun');
 });
 
@@ -23,7 +23,7 @@ test('F13: getAbility supports surgeCost > 1 (multi-surge)', () => {
   const entry = getAbility('damage 4');
   assert.ok(entry);
   assert.strictEqual(entry.surgeCost, 2);
-  assert.strictEqual(entry.label, '+4 Hits');
+  assert.strictEqual(entry.label, '+4 Damage');
   assert.strictEqual(resolveSurgeAbility('damage 4').damage, 4);
 });
 
@@ -39,7 +39,7 @@ test('resolveSurgeAbility returns same shape as parseSurgeEffect', () => {
 });
 
 test('getSurgeAbilityLabel uses library when present', () => {
-  assert.strictEqual(getSurgeAbilityLabel('damage 1'), '+1 Hit');
+  assert.strictEqual(getSurgeAbilityLabel('damage 1'), '+1 Damage');
   assert.strictEqual(getSurgeAbilityLabel('pierce 2'), 'Pierce 2');
 });
 
@@ -389,7 +389,7 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
   const dcMessageMeta = new Map([['msg-pt', { gameId: 'g-pt', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
   const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.includes('Hit'));
+  assert.ok(result.logMessage?.includes('Damage'));
   assert.strictEqual(combat.bonusHits, 1);
   assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
 });
@@ -1217,7 +1217,7 @@ test('resolveAbility Beatdown sets groupNextAttacksBonusHits for 2 attacks +1 Hi
   // applies to "your group's activation" per CRR. Stored in
   // groupNextAttacksBonusHits[playerNum].
   assert.deepStrictEqual(game.groupNextAttacksBonusHits[1], { count: 2, bonus: 1 });
-  assert.ok(result.logMessage?.includes('2') && result.logMessage?.includes('+1 Hit'));
+  assert.ok(result.logMessage?.includes('2') && result.logMessage?.includes('+1 Damage'));
 });
 
 test('resolveAbility New Orders first call returns choice list of friendly DCs', () => {

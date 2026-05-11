@@ -1002,7 +1002,7 @@ function getCombatActions(game, playerNum, deps) {
         iaActions.push({
           type: 'illicit_arms_pick',
           customId: `illicit_arms_pick_${gameId}_${i}`,
-          description: `Illicit Arms: Discard ${hand[i]} for +1 Hit`,
+          description: `Illicit Arms: Discard ${hand[i]} for +1 Damage`,
           params: { ccIndex: i, ccName: hand[i] },
         });
       }

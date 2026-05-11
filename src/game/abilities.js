@@ -1994,7 +1994,7 @@ export function resolveAbility(abilityId, context) {
     }
     return {
       applied: true,
-      logMessage: '**Multi-Fire** — Perform 2 attacks with **different targets**. **−1 Hit** applied to each attack. Use the **Attack** button for each attack.',
+      logMessage: '**Multi-Fire** — Perform 2 attacks with **different targets**. **−1 Damage** applied to each attack. Use the **Attack** button for each attack.',
     };
   }
 
@@ -3540,7 +3540,7 @@ export function resolveAbility(abilityId, context) {
       game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
       game.nextAttacksBonusHits[_othFigureKey] = { count: nb.count, bonus: nb.bonus };
     }
-    const logMsg = entry.logMessage || `**${entry.label || 'On the Hunt'}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Hit.`;
+    const logMsg = entry.logMessage || `**${entry.label || 'On the Hunt'}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Damage.`;
     return { applied: true, logMessage: logMsg, pendingMoveXMsgId: _pmxMsgId };
   }
 
@@ -5255,7 +5255,7 @@ export function resolveAbility(abilityId, context) {
     }
     cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
     const focusPart = focusApplied ? 'Became Focused. ' : '';
-    return { applied: true, logMessage: `${focusPart}+${entry.attackBonusHits} Hit added to this attack.`, refreshDcEmbed: focusApplied, refreshBoard: focusApplied };
+    return { applied: true, logMessage: `${focusPart}+${entry.attackBonusHits} Damage added to this attack.`, refreshDcEmbed: focusApplied, refreshBoard: focusApplied };
   }
 
   // ccEffect: applyFocus + attackSurgeBonus combo (Master Operative) — both Focus and +1 Surge
@@ -6144,7 +6144,7 @@ export function resolveAbility(abilityId, context) {
     const condPart = (nbc?.conditions?.length) ? ` and ${nbc.conditions.join(', ')}` : '';
     return {
       applied: true,
-      logMessage: `Next ${nb.count} attack(s) by your figures this activation gain +${nb.bonus} Hit to results${condPart}.`,
+      logMessage: `Next ${nb.count} attack(s) by your figures this activation gain +${nb.bonus} Damage to results${condPart}.`,
     };
   }
 
@@ -6161,7 +6161,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: 'No defeated friendly figures; no bonus.' };
     }
     cbt.bonusHits = (cbt.bonusHits || 0) + bonus;
-    return { applied: true, logMessage: `+${bonus} Hit (${defeated} defeated friendly figure${defeated === 1 ? '' : 's'}).` };
+    return { applied: true, logMessage: `+${bonus} Damage (${defeated} defeated friendly figure${defeated === 1 ? '' : 's'}).` };
   }
 
   // ccEffect: attackBonusHits (Positioning Advantage) — +N Hit to this attack; attacker only
@@ -6178,7 +6178,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.mutualExcludeAttackCc) cbt.ccLockedOut = true;
     return {
       applied: true,
-      logMessage: `+${entry.attackBonusHits} Hit added to this attack.${entry.mutualExcludeAttackCc ? ' No other CCs may be played during this attack.' : ''}`,
+      logMessage: `+${entry.attackBonusHits} Damage added to this attack.${entry.mutualExcludeAttackCc ? ' No other CCs may be played during this attack.' : ''}`,
     };
   }
 
@@ -6557,7 +6557,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.trooperRoundAttackHitBonus) {
       game.roundTrooperAttackHitBonus = game.roundTrooperAttackHitBonus || {};
       game.roundTrooperAttackHitBonus[playerNum] = (game.roundTrooperAttackHitBonus[playerNum] || 0) + entry.trooperRoundAttackHitBonus;
-      parts.push(`+${entry.trooperRoundAttackHitBonus} Hit for friendly TROOPERs attacking`);
+      parts.push(`+${entry.trooperRoundAttackHitBonus} Damage for friendly TROOPERs attacking`);
     }
     // Fuel Upgrade: friendly VEHICLEs get +N Speed this round
     if (entry.vehicleSpeedBonusRound) {
@@ -6901,7 +6901,7 @@ export function resolveAbility(abilityId, context) {
       game.bloodFeudTargets = game.bloodFeudTargets || {};
       game.bloodFeudTargets[defMsgId] = playerNum;
     }
-    return { applied: true, logMessage: `**Blood Feud** — +1 Hit this attack. Future attacks on this group also gain +1 Hit.` };
+    return { applied: true, logMessage: `**Blood Feud** — +1 Damage this attack. Future attacks on this group also gain +1 Damage.` };
   }
 
   // ccEffect: Telekinetic Throw — choose hostile within 3 with LOS, roll 2 blue dice, deal Hits as Damage
@@ -7232,7 +7232,7 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       pendingMoveXMsgId: msgId,
       activeMsgId: msgId,
-      logMessage: '**Whistling Birds** — Move up to 2 spaces, then roll 1 red die; up to 3 hostiles within 2 spaces suffer Hits as Damage.',
+      logMessage: '**Whistling Birds** — Move up to 2 spaces, then roll 1 red die; up to 3 hostiles within 2 spaces suffer Damage results.',
     };
   }
 
@@ -10848,7 +10848,7 @@ export function resolveAbility(abilityId, context) {
       actKeys.forEach((fk) => { applyCondition(game, fk, 'Focus'); });
       const ownNew = game[ownVpKey]?.total ?? 0;
       const oppNew = game[oppVpKey]?.total ?? 0;
-      return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Hits to this attack.` : 'No VP paid.'} Hondo becomes Focused.` };
+      return { applied: true, logMessage: `**Let's Make a Deal** — Paid ${X} VP (your total: ${ownNew}, theirs: ${oppNew}). ${X > 0 ? `Applied −${X} Damage to this attack.` : 'No VP paid.'} Hondo becomes Focused.` };
     }
     // Phase 1: show VP options matching incoming hits
     const options = ['Pay 0 VP (just apply Focus)'];

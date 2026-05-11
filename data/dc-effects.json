@@ -2,7 +2,7 @@
   "source": "DC Effect Editor",
   "cards": {
     "74-Z Speeder Bike (Elite)": {
-      "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space occupies the same row as both of your spaces, apply +1 Hit to the attack results.",
+      "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space occupies the same row as both of your spaces, apply +1 Damage to the attack results.",
       "keywords": [
         "TROOPER",
         "VEHICLE"
@@ -137,7 +137,7 @@
       "affiliation": "Any"
     },
     "[Driven by Hatred]": {
-      "abilityText": "DARTH VADER (LORD OF THE SITH) ONLY\n\nPassive bonus: +1 Hit\n\nYou lose \"Brutality.\" While attacking, you may reroll 1 attack die.\n\nAt the end of each round, move up to 2 spaces. Then you may use \"Force Choke\" or perform an attack. When you declare this attack, remove 1 die from your attack pool.",
+      "abilityText": "DARTH VADER (LORD OF THE SITH) ONLY\n\nPassive bonus: +1 Damage\n\nYou lose \"Brutality.\" While attacking, you may reroll 1 attack die.\n\nAt the end of each round, move up to 2 spaces. Then you may use \"Force Choke\" or perform an attack. When you declare this attack, remove 1 die from your attack pool.",
       "keywords": [],
       "cost": -5,
       "attachment": true,
@@ -164,7 +164,7 @@
       "affiliation": "Any"
     },
     "[Feeding Frenzy]": {
-      "abilityText": "CREATURE ONLY\n\nExhaust this card while attacking a figure that has suffered damage to apply +1 Hit to the attack results.\n\nWhile attacking an adjacent figure, you gain: \n- Surge: Recover 2 Damage",
+      "abilityText": "CREATURE ONLY\n\nExhaust this card while attacking a figure that has suffered damage to apply +1 Damage to the attack results.\n\nWhile attacking an adjacent figure, you gain: \n- Surge: Recover 2 Damage",
       "keywords": [
         "CREATURE"
       ],
@@ -251,7 +251,7 @@
       "affiliation": "Any"
     },
     "[Heir to the Jedi]": {
-      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Ranged attack, apply +1 Hit to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
+      "abilityText": "LUKE SKYWALKER ONLY\n\nWhile attacking, you may reroll 1 attack die.\n\nWhen you declare a Ranged attack, apply +1 Damage to the attack results.\n\nBefore you declare an attack using \"Saber Strike\" you become Focused.",
       "keywords": [
         "LUKE SKYWALKER"
       ],
@@ -294,7 +294,7 @@
       "affiliation": "Scum"
     },
     "[Last Resort]": {
-      "abilityText": "Deplete this card when a figure in this group has suffered Damage equal to its Health. Before that figure is defeated, roll 1 red die. Each figure and object on or adjacent to that figure suffers Damage equal to the Hit results.",
+      "abilityText": "Deplete this card when a figure in this group has suffered Damage equal to its Health. Before that figure is defeated, roll 1 red die. Each figure and object on or adjacent to that figure suffers Damage equal to the Damage results.",
       "keywords": [],
       "cost": 1,
       "attachment": true,
@@ -309,7 +309,7 @@
       "affiliation": "Any"
     },
     "[Mortar Trooper]": {
-      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nGuidance Systems: While attacking, you may apply -1 Hit and +2 Accuracy to the attack results. This ability may be used multiple times per attack.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
+      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nGuidance Systems: While attacking, you may apply -1 Damage and +2 Accuracy to the attack results. This ability may be used multiple times per attack.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
       "keywords": [
         "TROOPER",
         "HEAVY WEAPON",
@@ -405,7 +405,7 @@
       "affiliation": "Rebel"
     },
     "[Rogue One]": {
-      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 Power Token of any type from another friendly figure to add +1 Hit to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
+      "abilityText": "Your army must include Baze Malbus, Bodhi Rook, Cassian Andor, Chirrut Imwe, Jyn Erso, and K-2SO, and cannot include other unique figures that cost 3 or less.\n\nWhile a friendly figure listed above is attacking, it may discard 1 Power Token of any type from another friendly figure to add +1 Damage to the attack results.\n\nAt the start of the first game round, draw 3 Command cards, then place 2 Command cards from your hand on top of your deck.",
       "keywords": [],
       "cost": 0,
       "attachment": false,
@@ -429,7 +429,7 @@
       "affiliation": "Imperial"
     },
     "[Scavenged Walker]": {
-      "abilityText": "AT-ST OR AT-DP ONLY\n\nInclude one of the named groups in your army and attach this card to it. Treat this group's affiliation as SCUM\n\nYou lose ASSAULT. After deployment, you may perform a move.\n\nAt the end of the round, you may interrupt to perform an attack. Apply -1 Hit to the attack results.",
+      "abilityText": "AT-ST OR AT-DP ONLY\n\nInclude one of the named groups in your army and attach this card to it. Treat this group's affiliation as SCUM\n\nYou lose ASSAULT. After deployment, you may perform a move.\n\nAt the end of the round, you may interrupt to perform an attack. Apply -1 Damage to the attack results.",
       "keywords": [],
       "cost": -1,
       "attachment": true,
@@ -437,7 +437,7 @@
       "affiliation": "Scum"
     },
     "[Scavenged Weaponry]": {
-      "abilityText": "DROID OR VEHICLE ONLY\n\nExhaust this card when you declare an attack to apply +1 Hit to the attack results.\n\nWhen the last figure in this group is defeated, you may attach this card to a friendly DROID or VEHICLE group. (Your opponent scores VPs for this attachment each time a group it is attached to is defeated.)",
+      "abilityText": "DROID OR VEHICLE ONLY\n\nExhaust this card when you declare an attack to apply +1 Damage to the attack results.\n\nWhen the last figure in this group is defeated, you may attach this card to a friendly DROID or VEHICLE group. (Your opponent scores VPs for this attachment each time a group it is attached to is defeated.)",
       "keywords": [],
       "cost": 1,
       "attachment": true,
@@ -461,7 +461,7 @@
       "affiliation": "Any"
     },
     "[Spectre Cell]": {
-      "abilityText": "Include this card in your army only if each group in your army has \"Spectre\" or \"Chopper\" as part of its sub-name.\n\nFriendly figures gain the following passives: +1 Hit, +1 Block\n\nExhaust this card during a friendly figure's activation to choose another friendly figure. The chosen figure gains 2 movement points and may interrupt to perform an attack.",
+      "abilityText": "Include this card in your army only if each group in your army has \"Spectre\" or \"Chopper\" as part of its sub-name.\n\nFriendly figures gain the following passives: +1 Damage, +1 Block\n\nExhaust this card during a friendly figure's activation to choose another friendly figure. The chosen figure gains 2 movement points and may interrupt to perform an attack.",
       "keywords": [],
       "cost": 2,
       "attachment": false,
@@ -525,7 +525,7 @@
       "affiliation": "Any"
     },
     "[The General's Ranks]": {
-      "abilityText": "NON-UNIQUE ONLY\n\nWhen you perform a move, if it is not your activation, you gain 2 additional movement points. \n\nWhen you perform an attack, if it is not your activation, apply +1 Hit to the attack results.",
+      "abilityText": "NON-UNIQUE ONLY\n\nWhen you perform a move, if it is not your activation, you gain 2 additional movement points. \n\nWhen you perform an attack, if it is not your activation, apply +1 Damage to the attack results.",
       "keywords": [],
       "cost": 1,
       "attachment": true,
@@ -565,7 +565,7 @@
       "affiliation": "Imperial"
     },
     "[Wookiee Avenger]": {
-      "abilityText": "CHEWBACCA (LOYAL WOOKIE) ONLY\n\nPassive Bonus: +1 Hit\n\nYou lose \"Protector\". While defending, convert all Dodge results to Evade results.\n\nDuring setup, search your Command deck for \"Debts Repaid\", reveal it, put it into your hand, and shuffle your deck. Then, draw 1 fewer card into your initial hand. \n\nOnce during your activation, you may use \"Slam\" without spending an action.",
+      "abilityText": "CHEWBACCA (LOYAL WOOKIE) ONLY\n\nPassive Bonus: +1 Damage\n\nYou lose \"Protector\". While defending, convert all Dodge results to Evade results.\n\nDuring setup, search your Command deck for \"Debts Repaid\", reveal it, put it into your hand, and shuffle your deck. Then, draw 1 fewer card into your initial hand. \n\nOnce during your activation, you may use \"Slam\" without spending an action.",
       "keywords": [],
       "cost": -4,
       "attachment": true,
@@ -649,7 +649,7 @@
       "affiliation": "Imperial"
     },
     "4-LOM": {
-      "abilityText": "Programming Override: At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round.\n\nSurge (Concussive Bolt): After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.\n\nShared Intuition: While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
+      "abilityText": "Programming Override: At the start of each round, choose one TRAIT. You gain that TRAIT until the end of the round.\n\nSurge (Concussive Bolt): After this attack resolves, if you are targeting a SMALL figure and it did not miss, you may push that figure 1 space.\n\nShared Intuition: While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Damage to your attack results.",
       "keywords": [
         "DROID"
       ],
@@ -731,7 +731,7 @@
       ]
     },
     "Agent Kallus": {
-      "abilityText": "Hunt Dissent: When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.\n\nFulcrum: At the start of your activation, you may have each player draw 1 Command card.\n\nBo-Rifle: Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
+      "abilityText": "Hunt Dissent: When your opponent plays a Command card, you may distribute 2 Damage Tokens among friendly figures within 1 space. Limit once per round.\n\nFulcrum: At the start of your activation, you may have each player draw 1 Command card.\n\nBo-Rifle: Before you declare an attack, you may treat your attack type as Melee. If you do, replace 1 blue die with 1 red die.",
       "keywords": [
         "SPY",
         "LEADER",
@@ -952,7 +952,7 @@
       ]
     },
     "AT-DP": {
-      "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
+      "abilityText": "Assault: You can perform multiple attacks during your activation. \n\nCharge Generators: While attacking, if you have suffered fewer than 9 Damage, apply +1 Damage to the attack results and you may reroll 1 attack die.",
       "keywords": [
         "MASSIVE",
         "VEHICLE",
@@ -989,7 +989,7 @@
       ]
     },
     "AT-RT": {
-      "abilityText": "Mortar Launcher: At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.\n\nVanguard: While attacking a figure within 3 spaces, you may replace one die in your attack pool with 1 red die.",
+      "abilityText": "Mortar Launcher: At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Damage results.\n\nVanguard: While attacking a figure within 3 spaces, you may replace one die in your attack pool with 1 red die.",
       "keywords": [
         "MASSIVE",
         "TROOPER",
@@ -1065,7 +1065,7 @@
       "affiliation": "Imperial"
     },
     "Bantha Rider": {
-      "abilityText": "Wild Beast: When you would perform an attack, you may perform a Special Action instead.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
+      "abilityText": "Wild Beast: When you would perform an attack, you may perform a Special Action instead.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
       "keywords": [
         "MASSIVE",
         "CREATURE",
@@ -1160,7 +1160,7 @@
       "unique": true
     },
     "Bib Fortuna": {
-      "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chose figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Hit to the attack results. Limit once per attack.",
+      "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chose figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Damage to the attack results. Limit once per attack.",
       "keywords": [
         "LEADER",
         "SMUGGLER"
@@ -1201,7 +1201,7 @@
       ]
     },
     "Biv Bodhrik": {
-      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of targets Block, Evade, and Dodge, results, to a maximum of 2.",
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of targets Block, Evade, and Dodge, results, to a maximum of 2.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -1362,7 +1362,7 @@
       ]
     },
     "Bossk": {
-      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Hit results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
+      "abilityText": "Special Action (Indiscriminate Fire): Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red attack die. Each other figure within 2 spaces of the target space other than the defender suffers Damage equal to the Damage results and Strain equal to the Surge results.\n\nRegenerate: At the end of each round, recover 2 Damage and discard all Harmful conditions.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -1467,7 +1467,7 @@
       ]
     },
     "C1-10P \"Chopper\"": {
-      "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the Hit results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
+      "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the Damage results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
       "keywords": [
         "DROID"
       ],
@@ -1644,7 +1644,7 @@
       "affiliation": "Imperial"
     },
     "Cara Dune": {
-      "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSmash: Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
+      "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSmash: Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
       "keywords": [
         "TROOPER",
         "BRAWLER",
@@ -1685,7 +1685,7 @@
       ]
     },
     "Cassian Andor": {
-      "abilityText": "Strike Team: After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain 1 Hit Token.\n\nIt Will be Alright: Once during your activation, you may choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move or attack without spending an action.",
+      "abilityText": "Strike Team: After deployment, you and an adjacent friendly figure gain 2 movement points. Then, up to 4 friendly figures outside of your deployment zone each gain 1 Damage Token.\n\nIt Will be Alright: Once during your activation, you may choose another friendly figure within 2 spaces that can be defeated. That figure is defeated, then perform a move or attack without spending an action.",
       "keywords": [
         "LEADER",
         "SPY"
@@ -1721,7 +1721,7 @@
       ]
     },
     "Chewbacca": {
-      "abilityText": "Special Action (Slam): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space.\n\nProtector: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Protector\" ability used per attack.",
+      "abilityText": "Special Action (Slam): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space.\n\nProtector: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Protector\" ability used per attack.",
       "keywords": [
         "TECHNICIAN",
         "SMUGGLER",
@@ -1763,7 +1763,7 @@
       ]
     },
     "Chirrut Imwe": {
-      "abilityText": "Devout: You may use Rebel FORCE USER Command cards.\n\nI'm One With the Force: At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.\n\nThe Force is With Me: When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure suffers 1 Damage.",
+      "abilityText": "Devout: You may use Rebel FORCE USER Command cards.\n\nI'm One With the Force: At the start of a hostile figure's activation, you may move up to 2 spaces to a space adjacent to a hostile figure. Limit once per round.\n\nThe Force is With Me: When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Damage to the attack results and the chosen figure suffers 1 Damage.",
       "keywords": [
         "BRAWLER",
         "GUARDIAN"
@@ -1898,7 +1898,7 @@
       "affiliation": "Rebel"
     },
     "Dark Trooper Mk III": {
-      "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Hit symbols than before it was rerolled, apply +1 Hit to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Hit results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nSpecial Action (Lift Off): Move up to 4 spaces. During this movement, you gain Mobile.",
+      "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Damage symbols than before it was rerolled, apply +1 Damage to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nSpecial Action (Lift Off): Move up to 4 spaces. During this movement, you gain Mobile.",
       "keywords": [
         "DROID",
         "TROOPER"
@@ -2083,7 +2083,7 @@
       ]
     },
     "Del Meeko": {
-      "abilityText": "Expertise: After you perform a Special Action, you may perform an additional action. Limit once per activation.\n\nSpecial Action (Gifted Mechanic): Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Damage and gain 1 Hit Token.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or Power Token.",
+      "abilityText": "Expertise: After you perform a Special Action, you may perform an additional action. Limit once per activation.\n\nSpecial Action (Gifted Mechanic): Choose an adjacent friendly DROID or VEHICLE. If you do, you and that figure each recover 1 Damage and gain 1 Damage Token.\n\nOpen-Minded: After this attack resolves, gain 1 movement point or Power Token.",
       "keywords": [
         "TECHNICIAN",
         "TROOPER",
@@ -2156,7 +2156,7 @@
       "affiliation": "Scum"
     },
     "Dewback Rider": {
-      "abilityText": "Special Action (Shock Lance): Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Weakened.\n\nMounted: At the start of your activation, you gain 3 movement points.",
+      "abilityText": "Special Action (Shock Lance): Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Weakened.\n\nMounted: At the start of your activation, you gain 3 movement points.",
       "keywords": [
         "TROOPER",
         "CREATURE"
@@ -2254,7 +2254,7 @@
         "white"
       ],
       "surgeAbilities": [
-        "+1 hit, stun",
+        "damage 1, stun",
         "damage 1, accuracy 2"
       ],
       "attachment": false,
@@ -2266,7 +2266,7 @@
       ]
     },
     "Director Krennic": {
-      "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Hit Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",
+      "abilityText": "Advanced Weapons Research: At the start of your activation, a friendly figure within 2 spaces may gain 1 Damage Token or 1 Surge Token.\n\nUnhinged Director: When a friendly TROOPER or GUARDIAN within 2 spaces spends a Damage Token or Surge Token while declaring an attack, it may suffer 1 Strain to apply +2 of the chosen symbol to the results instead of +1.",
       "keywords": [
         "LEADER"
       ],
@@ -2337,7 +2337,7 @@
       ]
     },
     "Dr. Royce Hemlock": {
-      "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Hit results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled Damage, that figure gains a Block Token. Then, if you rolled a Surge, that figure gains a Surge Token.",
+      "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Damage results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled Damage, that figure gains a Block Token. Then, if you rolled a Surge, that figure gains a Surge Token.",
       "keywords": [
         "LEADER",
         "TECHNICIAN"
@@ -2382,7 +2382,7 @@
       "health": 12,
       "speed": 4,
       "passives": [
-        "+1 Hit, +1 Accuracy, +1 Block"
+        "+1 damage, +1 Accuracy, +1 Block"
       ],
       "figures": 1,
       "attack": {
@@ -2544,7 +2544,7 @@
       "affiliation": "Rebel"
     },
     "Emperor Palpatine": {
-      "abilityText": "Emperor: Once during your activation, you may choose another figure within 4 spaces. That figure interrupts to perform an attack.\n\nTempt: At the start of your activation, a figure of your choice suffers 1 Damage and gains 1 Hit Token.\n\nSpecial Action (Force Lightning): Choose a figure within 4 spaces and line of sight. That figure suffers 3 Damage and becomes Weakened. Each figure adjacent to that figure suffers 1 Damage.",
+      "abilityText": "Emperor: Once during your activation, you may choose another figure within 4 spaces. That figure interrupts to perform an attack.\n\nTempt: At the start of your activation, a figure of your choice suffers 1 Damage and gains 1 Damage Token.\n\nSpecial Action (Force Lightning): Choose a figure within 4 spaces and line of sight. That figure suffers 3 Damage and becomes Weakened. Each figure adjacent to that figure suffers 1 Damage.",
       "keywords": [
         "FORCE USER",
         "LEADER"
@@ -2584,7 +2584,7 @@
       ]
     },
     "Ewok Warrior (Elite)": {
-      "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a Melee attack, apply +1 Hit to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
+      "abilityText": "Ambush: After you are deployed, you become Hidden.\n\nForest Fighters: While performing a Melee attack, apply +1 Damage to the attack results if you are Hidden.\n\nSpecial Action (Sling Barrage): Perform a Ranged attack using your printed attack pool. During this attack, you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender.",
       "keywords": [
         "BRAWLER"
       ],
@@ -2866,7 +2866,7 @@
       "speed": 4,
       "passives": [
         "Mobile",
-        "+1 Hit"
+        "+1 damage"
       ],
       "figures": 1,
       "attack": {
@@ -3027,7 +3027,7 @@
       "health": 7,
       "speed": 5,
       "passives": [
-        "+1 Hit",
+        "+1 damage",
         "+1 Accuracy"
       ],
       "figures": 1,
@@ -3158,7 +3158,7 @@
       "affiliation": "Imperial"
     },
     "Hera Syndulla": {
-      "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Hit, or +1 Surge to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
+      "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Damage, or +1 Surge to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
       "keywords": [
         "LEADER",
         "SMUGGLER"
@@ -3305,7 +3305,7 @@
       ]
     },
     "HK-47": {
-      "abilityText": "Query: When you declare an attack, apply +1 Hit to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Evade to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
+      "abilityText": "Query: When you declare an attack, apply +1 Damage to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Evade to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
       "keywords": [
         "DROID",
         "HUNTER"
@@ -3376,7 +3376,7 @@
       ]
     },
     "Iden Versio": {
-      "abilityText": "Droid Kit: Once during your activation, if a friendly \"Dio\" is in your space, you may gain 1 Power Token.\n\nPulse Cannon: While attacking, if you spent a Power Token during this attack, apply an additional +4 Accuracy and +1 Hit to the attack results.\n\nID10 Seeker Droid: At the start of the game, put the \"Dio\" companion into play in your space. It activates at the start or end of your activation, and is not counted for the purposes of control.",
+      "abilityText": "Droid Kit: Once during your activation, if a friendly \"Dio\" is in your space, you may gain 1 Power Token.\n\nPulse Cannon: While attacking, if you spent a Power Token during this attack, apply an additional +4 Accuracy and +1 Damage to the attack results.\n\nID10 Seeker Droid: At the start of the game, put the \"Dio\" companion into play in your space. It activates at the start or end of your activation, and is not counted for the purposes of control.",
       "keywords": [
         "TROOPER",
         "LEADER",
@@ -3413,7 +3413,7 @@
       ]
     },
     "IG-11": {
-      "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
+      "abilityText": "Special Action (Rapid Fire): Perform 2 attacks.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct Protocol: When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Damage results. Then, you are defeated.",
       "keywords": [
         "DROID",
         "GUARDIAN"
@@ -3706,7 +3706,7 @@
       "health": 7,
       "speed": 5,
       "passives": [
-        "+1 Hit",
+        "+1 damage",
         "+1 Evade"
       ],
       "figures": 1,
@@ -3737,7 +3737,7 @@
       ]
     },
     "Jawa Scavenger (Elite)": {
-      "abilityText": "Surge (Bargain): Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.\n\nScavenged Stock: If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army.",
+      "abilityText": "Surge (Bargain): Spend 1 VP to roll 1 green die. For each Damage result, gain 1 VP.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.\n\nScavenged Stock: If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army.",
       "keywords": [
         "SMUGGLER",
         "LEADER"
@@ -3885,7 +3885,7 @@
       "health": 1,
       "speed": 4,
       "passives": [
-        "+1 Hit"
+        "+1 damage"
       ],
       "attack": {
         "dice": [
@@ -3947,7 +3947,7 @@
       "speed": 5,
       "passives": [
         "+1 Accuracy",
-        "+1 Hit"
+        "+1 damage"
       ],
       "figures": 1,
       "attack": {
@@ -3975,7 +3975,7 @@
       ]
     },
     "K-2S0": {
-      "abilityText": "Vague and Unconvincing: While defending, your player and your opponent cannot spend power tokens or play Command cards.\n\nCassian Said I Had To: Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token.\n\nSpecial Action (Continually Unexpected): If you have any combination of 2 Hit Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
+      "abilityText": "Vague and Unconvincing: While defending, your player and your opponent cannot spend power tokens or play Command cards.\n\nCassian Said I Had To: Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Damage Token.\n\nSpecial Action (Continually Unexpected): If you have any combination of 2 Damage Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
       "keywords": [
         "DROID",
         "BRAWLER",
@@ -4131,7 +4131,7 @@
       ]
     },
     "Krrsantan": {
-      "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
+      "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
       "keywords": [
         "WOOKIEE",
         "BRAWLER",
@@ -4234,7 +4234,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+1 hit",
+        "damage 1",
         "weaken"
       ],
       "attachment": false,
@@ -4246,7 +4246,7 @@
       ]
     },
     "Lando Calrissian": {
-      "abilityText": "Resourceful: While attacking or defending, you may reroll 1 of your attack or defense dice.\n\nGambit: Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.\n\nShrewd Scoundrel: While attacking or defending, before you reroll a die with \"Resourceful\", you may guess aloud a number from 0-2. After rerolls, if the number of Hits or Block symbols on that die matches the number you guessed, double that die's results. Limit once per activation.",
+      "abilityText": "Resourceful: While attacking or defending, you may reroll 1 of your attack or defense dice.\n\nGambit: Before you reroll a die, you may replace it with another die of the same type. After rolling, the new die is considered rerolled.\n\nShrewd Scoundrel: While attacking or defending, before you reroll a die with \"Resourceful\", you may guess aloud a number from 0-2. After rerolls, if the number of Damage or Block symbols on that die matches the number you guessed, double that die's results. Limit once per activation.",
       "keywords": [
         "LEADER",
         "SMUGGLER"
@@ -4485,7 +4485,7 @@
       "health": 16,
       "speed": 4,
       "passives": [
-        "+1 Hit",
+        "+1 damage",
         "+1 Evade"
       ],
       "figures": 1,
@@ -4588,7 +4588,7 @@
       ]
     },
     "Maul": {
-      "abilityText": "Dual-Bladed Fury: Before you declare an attack, choose one:\n- This attack gains Reach and Cleave 2\n- You become Focused.\n\nSurge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Hit Token.\n\nSustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
+      "abilityText": "Dual-Bladed Fury: Before you declare an attack, choose one:\n- This attack gains Reach and Cleave 2\n- You become Focused.\n\nSurge (Stalk Prey): After this attack resolves, you gain 2 movement points and 1 Damage Token.\n\nSustained by Rage: You cannot recover Damage. If you have not resolved an activation this round, you cannot be defeated.",
       "keywords": [
         "FORCE USER",
         "BRAWLER"
@@ -4598,7 +4598,7 @@
       "health": 12,
       "speed": 4,
       "passives": [
-        "+1 Hit"
+        "+1 damage"
       ],
       "figures": 1,
       "attack": {
@@ -4951,7 +4951,7 @@
       "affiliation": "Any"
     },
     "Probe Droid (Elite)": {
-      "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nSelf-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Damage results. Then, you are defeated.",
       "keywords": [
         "DROID",
         "MOBILE"
@@ -4988,7 +4988,7 @@
       ]
     },
     "Probe Droid (Regular)": {
-      "abilityText": "Self-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure and object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "abilityText": "Self-Destruct: At the end of a round, you may roll 1 red die. Each adjacent figure and object suffers Damage equal to the Damage results. Then, you are defeated.",
       "keywords": [
         "DROID",
         "MOBILE"
@@ -5026,7 +5026,7 @@
       ]
     },
     "Purge Commander (Elite)": {
-      "abilityText": "Special Action (Shock Grenade): Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Hit results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly HUNTER in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
+      "abilityText": "Special Action (Shock Grenade): Choose a space within 3 spaces and roll 1 green die. Each other figure on or adjacent to that space suffers Damage equal to the Damage results. If you rolled a Surge, those figures become Weakened.\n\nCoordinated Hunt: While you or a friendly HUNTER in your line of sight is attacking, it may reroll 1 attack die. Limit one \"Coordinated Hunt\" per attack.",
       "keywords": [
         "TROOPER",
         "HUNTER",
@@ -5063,7 +5063,7 @@
       "affiliation": "Imperial"
     },
     "Purge Trooper (Elite)": {
-      "abilityText": "Imperial Loadout: When you are deployed, gain 1 Loadout card from the supply.\n\nSpecial Action (On the Hunt): Move up to 2 spaces, then perform an attack targeting a unique hostile figure. Apply +1 Hit to the attack results.",
+      "abilityText": "Imperial Loadout: When you are deployed, gain 1 Loadout card from the supply.\n\nSpecial Action (On the Hunt): Move up to 2 spaces, then perform an attack targeting a unique hostile figure. Apply +1 Damage to the attack results.",
       "keywords": [
         "BRAWLER",
         "HUNTER",
@@ -5283,7 +5283,7 @@
       "affiliation": "Rebel"
     },
     "Rebel Trooper (Elite)": {
-      "abilityText": "Double Action Special (Get into Position): Move up to 4 spaces and become Focused.\n\nAim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.\n\nGet Ready: At the start of your activation, another figure in your group interrupts to move 1 space.",
+      "abilityText": "Double Action Special (Get into Position): Move up to 4 spaces and become Focused.\n\nAim: If you have not exited your space during this activation, apply +1 Damage and +2 Accuracy to your attack results.\n\nGet Ready: At the start of your activation, another figure in your group interrupts to move 1 space.",
       "keywords": [
         "TROOPER"
       ],
@@ -5316,7 +5316,7 @@
       "affiliation": "Rebel"
     },
     "Rebel Trooper (Regular)": {
-      "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "abilityText": "Aim: If you have not exited your space during this activation, apply +1 Damage and +2 Accuracy to your attack results.",
       "keywords": [
         "TROOPER"
       ],
@@ -5382,7 +5382,7 @@
       "affiliation": "Imperial"
     },
     "Riot Trooper (Regular)": {
-      "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Hit results, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block tokens, gain 1 Block token.",
+      "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Damage results, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block tokens, gain 1 Block token.",
       "keywords": [
         "TROOPER",
         "BRAWLER",
@@ -5531,7 +5531,7 @@
       ]
     },
     "Sabine Wren": {
-      "abilityText": "Special Action (Evasive Maneuver): Move up to 2 spaces, then recover 2 Damage.\n\nParting Gift: Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
+      "abilityText": "Special Action (Evasive Maneuver): Move up to 2 spaces, then recover 2 Damage.\n\nParting Gift: Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Damage results.",
       "keywords": [
         "HUNTER",
         "VEHICLE"
@@ -5704,9 +5704,6 @@
       "specialAbilityIds": [
         "focus_fire_tank",
         "defensible_sc2m"
-      ],
-      "specials": [
-        "Focus Fire"
       ]
     },
     "Scout Trooper (Elite)": {
@@ -5837,7 +5834,7 @@
       ]
     },
     "Sentry Droid (Regular)": {
-      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Hit to each attack's results.\n\nSpecial Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's results.\n\nSpecial Action (Charged Shot): Perform an attack. Apply +2 Accuracy to the attack results.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
       "keywords": [
         "TROOPER",
         "DROID",
@@ -6093,7 +6090,7 @@
       ]
     },
     "Super Commando (Elite)": {
-      "abilityText": "Jetpack Rocket: Once per figure per round, you may spend 2 movement points to choose a hostile figure within 3 spaces and line of sight. Roll 1 blue die. That figure suffers Damage equal to the Hit results.\n\nShield Gauntlets: Once during your activation, you may spend 1 movement point to gain 1 Block token.",
+      "abilityText": "Jetpack Rocket: Once per figure per round, you may spend 2 movement points to choose a hostile figure within 3 spaces and line of sight. Roll 1 blue die. That figure suffers Damage equal to the Damage results.\n\nShield Gauntlets: Once during your activation, you may spend 1 movement point to gain 1 Block token.",
       "keywords": [
         "HUNTER",
         "TROOPER",
@@ -6137,7 +6134,7 @@
       "affiliation": "Scum"
     },
     "Tauntaun Rider": {
-      "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Headbutt): Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Hit results.\n\nUseful Hide: When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures.",
+      "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Headbutt): Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Damage results.\n\nUseful Hide: When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures.",
       "keywords": [
         "TROOPER",
         "CREATURE"
@@ -6383,11 +6380,11 @@
         "black"
       ],
       "surgeAbilities": [
-        "+1 hit, bleed",
+        "damage 1, bleed",
         "pierce 1"
       ],
       "doubleSurgeAbilities": [
-        "+3 hits"
+        "damage 3"
       ],
       "attachment": false,
       "elite": true,
@@ -6399,7 +6396,7 @@
       ]
     },
     "Trandoshan Hunter (Elite)": {
-      "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Strain.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
+      "abilityText": "Relentless: When you declare an attack on a target within 3 spaces, that figure suffers 1 Strain.\n\nACP Scattergun: While attacking, if you are adjacent to the target, apply +2 Damage to the attack results.\n\nHardy: At the end of each round, discard all HARMFUL conditions.",
       "keywords": [
         "BRAWLER",
         "HUNTER"
@@ -6422,7 +6419,7 @@
       "surgeAbilities": [
         "focus",
         "pierce 2",
-        "+1 hit, bleed"
+        "damage 1, bleed"
       ],
       "attachment": false,
       "elite": true,
@@ -6436,7 +6433,7 @@
       ]
     },
     "Trandoshan Hunter (Regular)": {
-      "abilityText": "Relentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.\n\nScattergun: While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",
+      "abilityText": "Relentless: When you declare an attack targeting a figure within 3 spaces, that figure suffers 1 Strain.\n\nScattergun: While attacking, if you are adjacent to the target, apply +1 Damage to the attack results.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -6492,7 +6489,7 @@
         "damage 1, weaken",
         "cleave X",
         "recover X",
-        "+1 hit, stun"
+        "damage 1, stun"
       ],
       "passives": [
         "Leg Hydraulics"
@@ -6534,7 +6531,7 @@
         "accuracy 1"
       ],
       "doubleSurgeAbilities": [
-        "+1 hit"
+        "damage 1"
       ],
       "specialAbilityIds": [
         "tusken_cycler_elite"
@@ -6650,7 +6647,7 @@
       ]
     },
     "Verena Talos": {
-      "abilityText": "Special Action (Close Quarters): Move up to 1 space, then perform an attack using an adjacent hostile figure's attack type and attack pool. Remove 1 die from the target's defense pool and apply +1 Accuracy to the attack results.\n\nSurge (Fighting Knife): After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.\n\nImprovised Cover: While defending, if you are adjacent to an object or non-friendly figure other than the attacker, apply +1 Block to the defense results.",
+      "abilityText": "Special Action (Close Quarters): Move up to 1 space, then perform an attack using an adjacent hostile figure's attack type and attack pool. Remove 1 die from the target's defense pool and apply +1 Accuracy to the attack results.\n\nSurge (Fighting Knife): After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results.\n\nImprovised Cover: While defending, if you are adjacent to an object or non-friendly figure other than the attacker, apply +1 Block to the defense results.",
       "keywords": [
         "BRAWLER",
         "SPY"
@@ -6712,7 +6709,7 @@
         "white"
       ],
       "surgeAbilities": [
-        "+1 hit, weaken",
+        "damage 1, weaken",
         "pierce 2, bleed",
         "accuracy 2, hide"
       ],
@@ -6736,7 +6733,7 @@
       "health": 12,
       "speed": 3,
       "passives": [
-        "+2 Hit",
+        "+2 damage",
         "Reach"
       ],
       "figures": 1,
@@ -6751,7 +6748,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+2 hits",
+        "damage 2",
         "cleave 3",
         "weaken, stun"
       ],
@@ -6769,7 +6766,7 @@
       "health": 9,
       "speed": 3,
       "passives": [
-        "+1 Hit"
+        "+1 damage"
       ],
       "figures": 1,
       "attack": {
@@ -6814,7 +6811,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+2 hits",
+        "damage 2",
         "pierce 1",
         "accuracy 2"
       ],
@@ -6854,7 +6851,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+1 hit",
+        "damage 1",
         "accuracy 1"
       ],
       "attachment": false,
@@ -6890,7 +6887,7 @@
       ],
       "surgeAbilities": [
         "accuracy 3",
-        "+2 hits"
+        "damage 2"
       ],
       "attachment": false,
       "elite": true,
@@ -6921,7 +6918,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+1 hit",
+        "damage 1",
         "recover 1"
       ],
       "attachment": false,
@@ -6949,7 +6946,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+2 hits",
+        "damage 2",
         "bleed",
         "cleave 2"
       ],
@@ -6989,7 +6986,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "+1 hit",
+        "damage 1",
         "bleed",
         "cleave 2"
       ],
@@ -7086,7 +7083,7 @@
       ],
       "surgeAbilities": [
         "accuracy 3",
-        "+2 hits",
+        "damage 2",
         "pierce 2",
         "stun_net"
       ],
@@ -7099,7 +7096,7 @@
       ]
     },
     "Paz Vizsla": {
-      "abilityText": "Heavy Repeater: While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.\n\nSubmit or Fight: When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
+      "abilityText": "Heavy Repeater: While performing a Ranged attack, you may suffer 1 Strain to apply +1 Damage, Blast 2, or +3 Accuracy to the attack results.\n\nSubmit or Fight: When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
       "keywords": [
         "MOBILE",
         "VEHICLE",

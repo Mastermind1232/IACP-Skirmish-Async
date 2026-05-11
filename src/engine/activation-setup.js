@@ -994,7 +994,7 @@ export async function finalizeActivation({
   // is absent.
   if (_abilityIds.includes('scrap_battalion_ugnaught_elite') || _abilityIds.includes('scrap_battalion_ugnaught_reg')) {
     const isElite = _abilityIds.includes('scrap_battalion_ugnaught_elite');
-    await thread.send({ content: `🤖 **Scrap Battalion** — **Junk Droid** readies and activates as part of this group. Pick the activation order below.\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Hit\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
+    await thread.send({ content: `🤖 **Scrap Battalion** — **Junk Droid** readies and activates as part of this group. Pick the activation order below.\n\`\`\`\nJunk Droid: Speed 4 | Health 1 | Melee (1 green) | +1 Damage\nSurge abilities (${dcName}'s): Bleed, Pierce ${isElite ? '2' : '1'}\n\`\`\`${isElite ? '\n⚡ **Overclock** (Special Action): The Junk Droid may **interrupt** to perform a move or attack.' : ''}` }).catch(discordCatch);
   }
 
   // D35. Skirmish Upgrade attachment activation effects

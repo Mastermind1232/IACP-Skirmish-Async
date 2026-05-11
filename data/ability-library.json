@@ -4,22 +4,22 @@
     "+1 hit": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+1 Hit"
+      "label": "+1 Damage"
     },
     "+1 hit, pierce 1": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+1 Hit, Pierce 1"
+      "label": "+1 Damage, Pierce 1"
     },
     "+1 hit, stun": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+1 Hit, Stun"
+      "label": "+1 Damage, Stun"
     },
     "+2 hits": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+2 Hits"
+      "label": "+2 Damage"
     },
     "+3 damage": {
       "type": "surge",
@@ -39,7 +39,7 @@
     "accuracy 2, damage 2": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+2 Accuracy, +2 Hits"
+      "label": "+2 Accuracy, +2 Damage"
     },
     "accuracy 2, pierce 1": {
       "type": "surge",
@@ -61,7 +61,7 @@
       "category": "passive-auto",
       "trigger": "combat-declare",
       "label": "ACP Scattergun",
-      "description": "While attacking, if you are adjacent to the target, apply +2 Hits to the attack results.",
+      "description": "While attacking, if you are adjacent to the target, apply +2 Damage to the attack results.",
       "oncePer": null,
       "wiredStatus": "wired",
       "freeAction": true
@@ -84,7 +84,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Advanced Targeting Computer",
-      "description": "When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Hit results, apply +1 Hit.",
+      "description": "When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Damage results, apply +1 Damage.",
       "wiredStatus": "wired"
     },
     "advanced_firepower_sorin": {
@@ -99,7 +99,7 @@
       "category": "passive-auto",
       "trigger": "activation-start",
       "label": "Advanced Weapons Research",
-      "description": "At the start of your activation, a friendly figure within 2 spaces may gain 1 Hit Token or 1 Surge Token.",
+      "description": "At the start of your activation, a friendly figure within 2 spaces may gain 1 Damage Token or 1 Surge Token.",
       "wiredStatus": "wired"
     },
     "agile_jet_trooper_elite": {
@@ -127,14 +127,14 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Aim",
-      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "description": "If you have not exited a space during this activation, apply +1 Damage and +2 Accuracy to your attack results.",
       "wiredStatus": "wired"
     },
     "aim_rebel_trooper_reg": {
       "type": "dcSpecial",
       "category": "passive",
       "label": "Aim",
-      "description": "If you have not exited a space during this activation, apply +1 Hit and +2 Accuracy to your attack results.",
+      "description": "If you have not exited a space during this activation, apply +1 Damage and +2 Accuracy to your attack results.",
       "wiredStatus": "wired"
     },
     "get_ready_rebel_trooper_elite": {
@@ -244,7 +244,7 @@
     },
     "Assassinate": {
       "type": "ccEffect",
-      "label": "+3 Hits (first CC this attack; no other CCs)",
+      "label": "+3 Damage (first CC this attack; no other CCs)",
       "attackBonusHits": 3,
       "mutualExcludeAttackCc": true,
       "wiredStatus": "wired"
@@ -258,7 +258,7 @@
     },
     "Balancing Force": {
       "type": "ccEffect",
-      "label": "Each player: roll red die, all damaged figures recover Damage = Hits",
+      "label": "Each player: roll red die, all damaged figures recover Damage = Damage",
       "balancingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -272,7 +272,7 @@
       "type": "surge",
       "surgeCost": 1,
       "label": "Bargain",
-      "description": "Spend 1 VP to roll 1 green die. For each Hit result, gain 1 VP.",
+      "description": "Spend 1 VP to roll 1 green die. For each Damage result, gain 1 VP.",
       "wiredStatus": "wired"
     },
     "barrage_ct1701": {
@@ -324,7 +324,7 @@
     },
     "Beatdown": {
       "type": "ccEffect",
-      "label": "+1 Hit to next 2 attacks (group activation scope)",
+      "label": "+1 Damage to next 2 attacks (group activation scope)",
       "nextAttacksBonusHits": {
         "count": 2,
         "bonus": 1
@@ -406,7 +406,7 @@
     },
     "Blood Feud": {
       "type": "ccEffect",
-      "label": "Place on hostile DC; when attacking that group +1 Hit",
+      "label": "Place on hostile DC; when attacking that group +1 Damage",
       "bloodFeudEffect": true,
       "wiredStatus": "wired"
     },
@@ -576,7 +576,7 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "label": "Call the Shots",
-      "description": "While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Hit, or +1 Surge to the attack results. Limit once per round.",
+      "description": "While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Damage, or +1 Surge to the attack results. Limit once per round.",
       "wiredStatus": "wired"
     },
     "calming_presence_yoda": {
@@ -629,7 +629,7 @@
     },
     "Cavalry Charge": {
       "type": "ccEffect",
-      "label": "Until end of round: +1 Block when defending; friendly TROOPERs get +1 Hit when attacking",
+      "label": "Until end of round: +1 Block when defending; friendly TROOPERs get +1 Damage when attacking",
       "roundDefenseBonusBlock": 1,
       "trooperRoundAttackHitBonus": 1,
       "wiredStatus": "wired"
@@ -677,7 +677,7 @@
     },
     "cc:gauntlet_blade": {
       "type": "ccEffect",
-      "label": "Roll 1 green die vs adjacent hostile: Dmg = Hits; if Surge, gain Power Token",
+      "label": "Roll 1 green die vs adjacent hostile: Dmg = Damage; if Surge, gain Power Token",
       "rollOneDie": "green",
       "rollOneDieTarget": "adjacentHostile",
       "rollOneDieSurgeSelfPowerToken": true,
@@ -688,7 +688,7 @@
       "category": "passive",
       "trigger": "movement",
       "label": "Cassian Said I Had To",
-      "description": "Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Hit Token.",
+      "description": "Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Damage Token.",
       "wiredStatus": "wired"
     },
     "Celebration": {
@@ -728,7 +728,7 @@
       "category": "passive-reactive",
       "trigger": "combat-dice",
       "label": "Charge Generators",
-      "description": "While attacking, if you have suffered fewer than 9 Damage, apply +1 Hit to the attack results and you may reroll 1 attack die.",
+      "description": "While attacking, if you have suffered fewer than 9 Damage, apply +1 Damage to the attack results and you may reroll 1 attack die.",
       "oncePer": null,
       "wiredStatus": "wired"
     },
@@ -839,10 +839,10 @@
     },
     "Combat Resupply": {
       "type": "ccEffect",
-      "label": "Distribute Hit Tokens = round number to friendly figures within 3 + gain 1 Power Token",
+      "label": "Distribute Damage Tokens = round number to friendly figures within 3 + gain 1 Power Token",
       "powerTokenGain": 1,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Distribute Hit tokens equal to the current round number among friendly figures within 3 spaces.",
+      "logMessage": "Gained **1 Power Token**. Distribute Damage tokens equal to the current round number among friendly figures within 3 spaces.",
       "distributeHitTokensEqualToRound": true
     },
     "Comm Disruption": {
@@ -894,7 +894,7 @@
     "continually_unexpected": {
       "type": "dcSpecial",
       "label": "Continually Unexpected",
-      "description": "If you have any combination of 2 Hit Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
+      "description": "If you have any combination of 2 Damage Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
       "wiredStatus": "wired"
     },
     "Coordinated Attack": {
@@ -924,7 +924,7 @@
     },
     "Corrupting Force": {
       "type": "ccEffect",
-      "label": "Roll 1 blue die; all figures suffer Damage = Hits",
+      "label": "Roll 1 blue die; all figures suffer Damage = Damage",
       "corruptingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -1063,32 +1063,32 @@
     "damage 1": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+1 Hit"
+      "label": "+1 Damage"
     },
     "damage 1, accuracy 1": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+1 Hit, +1 Accuracy"
+      "label": "+1 Damage, +1 Accuracy"
     },
     "damage 2": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+2 Hits"
+      "label": "+2 Damage"
     },
     "damage 2, hide": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+2 Hits, Hide"
+      "label": "+2 Damage, Hide"
     },
     "damage 3": {
       "type": "surge",
       "surgeCost": 1,
-      "label": "+3 Hits"
+      "label": "+3 Damage"
     },
     "damage 4": {
       "type": "surge",
       "surgeCost": 2,
-      "label": "+4 Hits"
+      "label": "+4 Damage"
     },
     "Dangerous Bargains": {
       "type": "ccEffect",
@@ -1163,7 +1163,7 @@
     },
     "Deathblow": {
       "type": "ccEffect",
-      "label": "+1 Hit (or +2 if defender has Ranged)",
+      "label": "+1 Damage (or +2 if defender has Ranged)",
       "attackBonusHits": 1,
       "wiredStatus": "wired"
     },
@@ -1269,7 +1269,7 @@
     },
     "Deploy the Garrison": {
       "type": "ccEffect",
-      "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Hit Token (your choice)",
+      "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Damage Token (your choice)",
       "deployGarrisonEffect": true,
       "wiredStatus": "wired"
     },
@@ -1478,7 +1478,7 @@
       "category": "passive-reactive",
       "trigger": "once-per-activation",
       "label": "Durasteel Fist",
-      "description": "Once during your activation, choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Hit results. Then, if you rolled a Surge and the target was a SMALL figure, push it up to 1 space.",
+      "description": "Once during your activation, choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, push it up to 1 space.",
       "wiredStatus": "wired"
     },
     "Dying Lunge": {
@@ -1525,7 +1525,7 @@
       "category": "active",
       "trigger": "activation",
       "label": "Electrified Knuckledusters",
-      "description": "Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Hit results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
+      "description": "Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
       "oncePer": "activation",
       "wiredStatus": "wired",
       "rollOneDie": "blue",
@@ -1799,7 +1799,7 @@
     "Field Supply": {
       "type": "ccEffect",
       "fieldSupplyEffect": true,
-      "label": "Up to 2 friendlies within 3 each gain 1 Hit or Surge Token",
+      "label": "Up to 2 friendlies within 3 each gain 1 Damage or Surge Token",
       "wiredStatus": "wired"
     },
     "Field Tactician": {
@@ -1848,7 +1848,7 @@
       "type": "surge",
       "surgeCost": 1,
       "label": "Fighting Knife",
-      "description": "After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results.",
+      "description": "After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results.",
       "wiredStatus": "wired"
     },
     "figurehead": {
@@ -2152,7 +2152,7 @@
       "category": "passive-auto",
       "trigger": "combat-declare",
       "label": "Forest Fighters",
-      "description": "While performing a melee attack while Hidden, apply +1 Hit.",
+      "description": "While performing a melee attack while Hidden, apply +1 Damage.",
       "wiredStatus": "wired"
     },
     "Forward March": {
@@ -2296,7 +2296,7 @@
     "gifted_mechanic": {
       "type": "dcSpecial",
       "label": "Gifted Mechanic",
-      "description": "Choose an adjacent friendly DROID or VEHICLE. You and that figure each recover 1 Damage and gain 1 Hit Token.",
+      "description": "Choose an adjacent friendly DROID or VEHICLE. You and that figure each recover 1 Damage and gain 1 Damage Token.",
       "targetFriendlyFigureAdjacent": {
         "traits": [
           "DROID",
@@ -2317,7 +2317,7 @@
     },
     "Grenadier": {
       "type": "ccEffect",
-      "label": "Choose space within 3, roll 1 red die, each figure on or adjacent suffers Hit results as Damage",
+      "label": "Choose space within 3, roll 1 red die, each figure on or adjacent suffers Damage results as Damage",
       "rollOneDie": "red",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
@@ -2371,7 +2371,7 @@
       "category": "passive",
       "trigger": "combat",
       "label": "Heavy Repeater",
-      "description": "While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.",
+      "description": "While performing a Ranged attack, you may suffer 1 Strain to apply +1 Damage, Blast 2, or +3 Accuracy to the attack results.",
       "wiredStatus": "wired"
     },
     "Hard to Hit": {
@@ -2420,7 +2420,7 @@
     },
     "Heavy Ordnance": {
       "type": "ccEffect",
-      "label": "+1 Hit (or +2 Hit and Pierce 2 vs object)",
+      "label": "+1 Damage (or +2 Damage and Pierce 2 vs object)",
       "attackBonusHits": 1,
       "wiredStatus": "wired"
     },
@@ -2480,7 +2480,7 @@
     },
     "Honoring the Fallen": {
       "type": "ccEffect",
-      "label": "+1 Hit per defeated friendly figure (max 3)",
+      "label": "+1 Damage per defeated friendly figure (max 3)",
       "attackBonusHitsFromDefeatedFriendly": 1,
       "attackBonusHitsFromDefeatedMax": 3,
       "wiredStatus": "wired"
@@ -2528,7 +2528,7 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "label": "Hunt Dissent",
-      "description": "When your opponent plays a Command card, you may distribute 2 Hit Tokens among friendly figures within 1 space. Limit once per round.",
+      "description": "When your opponent plays a Command card, you may distribute 2 Damage Tokens among friendly figures within 1 space. Limit once per round.",
       "wiredStatus": "partial"
     },
     "Hunter Protocol": {
@@ -2597,7 +2597,7 @@
       "category": "passive-reactive",
       "trigger": "attack-declare",
       "label": "Illicit Arms",
-      "description": "While attacking, you may discard a CC to apply +1 Hit.",
+      "description": "While attacking, you may discard a CC to apply +1 Damage.",
       "wiredStatus": "wired"
     },
     "immune_onar": {
@@ -2693,7 +2693,7 @@
       "category": "active",
       "trigger": "activation",
       "label": "Indiscriminate Fire",
-      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die — each other figure within 2 spaces of the target suffers Damage = Hits and Strain = Surges on that die.",
+      "description": "Perform an attack. After this attack resolves, if it did not miss, choose 1 non-red die — each other figure within 2 spaces of the target suffers Damage = Damage and Strain = Surges on that die.",
       "oncePer": null,
       "wiredStatus": "wired",
       "logMessage": "**Indiscriminate Fire** — Click **Attack** to perform your attack. After it resolves (if not a miss), you will be prompted to choose a die for splash damage.",
@@ -2702,7 +2702,7 @@
     "Induce Rage": {
       "type": "ccEffect",
       "induceRageEffect": true,
-      "label": "Up to 2 figures: discard all conditions; gain 1 Hit Token per condition discarded",
+      "label": "Up to 2 figures: discard all conditions; gain 1 Damage Token per condition discarded",
       "wiredStatus": "wired"
     },
     "infiltration_rebel_pathfinder": {
@@ -2923,7 +2923,7 @@
     "Let's Make a Deal": {
       "type": "ccEffect",
       "letsMakeADealEffect": true,
-      "label": "While defending: pay X VP for -X Hits; then become Focused",
+      "label": "While defending: pay X VP for -X Damage; then become Focused",
       "wiredStatus": "wired"
     },
     "lift_off_dark_trooper": {
@@ -3011,7 +3011,7 @@
     },
     "Lure of the Dark Side": {
       "type": "ccEffect",
-      "label": "Lure: Choose hostile in LOS, +2 Hit Tokens, attack with that figure, then 2 Strain",
+      "label": "Lure: Choose hostile in LOS, +2 Damage Tokens, attack with that figure, then 2 Strain",
       "lureOfTheDarkSide": true,
       "wiredStatus": "wired"
     },
@@ -3084,7 +3084,7 @@
     },
     "Maximum Firepower": {
       "type": "ccEffect",
-      "label": "Perform an attack with +4 Hit",
+      "label": "Perform an attack with +4 Damage",
       "nextAttacksBonusHits": {
         "count": 1,
         "bonus": 4
@@ -3191,10 +3191,10 @@
       "category": "passive-reactive",
       "trigger": "end-of-round",
       "label": "Mortar Launcher",
-      "description": "At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
+      "description": "At the end of the round, you may move up to 2 spaces. Then, choose a space within 3 spaces that contains a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Damage results.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Mortar Launcher** — Move up to 2 spaces, then choose a space within 3 containing a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Hit results.",
+      "logMessage": "**Mortar Launcher** — Move up to 2 spaces, then choose a space within 3 containing a hostile figure and roll 1 red die. Each figure on or adjacent to that space suffers Damage equal to the Damage results.",
       "rollOneDie": "red",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
@@ -3229,7 +3229,7 @@
     "headbutt_tauntaun": {
       "type": "dcSpecial",
       "label": "Headbutt",
-      "description": "Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Hit results.",
+      "description": "Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Damage results.",
       "headbuttMove": 2,
       "headbuttDie": "red",
       "wiredStatus": "wired"
@@ -3309,11 +3309,11 @@
     "neurotoxin_hemlock": {
       "type": "dcSpecial",
       "label": "Neurotoxin",
-      "description": "Choose a space within 3 spaces and roll 1 yellow die. Hostile figures on/adjacent become Weakened and suffer Damage equal to Hit results.",
+      "description": "Choose a space within 3 spaces and roll 1 yellow die. Hostile figures on/adjacent become Weakened and suffer Damage equal to Damage results.",
       "rollOneDie": "yellow",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
-      "rollOneDieNote": "All hostile figures on or adjacent to that space become **Weakened** and suffer Hit results as Damage.",
+      "rollOneDieNote": "All hostile figures on or adjacent to that space become **Weakened** and suffer Damage results.",
       "wiredStatus": "wired"
     },
     "New Orders": {
@@ -3383,7 +3383,7 @@
         "bonus": 1
       },
       "label": "On the Hunt",
-      "logMessage": "On the Hunt: Gained 2 free movement points — use the Move button. Your next attack automatically gains +1 Hit (tracked by the bot). Target must be a unique hostile figure.",
+      "logMessage": "On the Hunt: Gained 2 free movement points — use the Move button. Your next attack automatically gains +1 Damage (tracked by the bot). Target must be a unique hostile figure.",
       "wiredStatus": "wired"
     },
     "One in a Million": {
@@ -3460,7 +3460,7 @@
     "Overheated": {
       "type": "ccEffect",
       "overheatedEffect": true,
-      "label": "Strain 4; if Ranged: 2 attacks with -1 Hit; attack type becomes Melee",
+      "label": "Strain 4; if Ranged: 2 attacks with -1 Damage; attack type becomes Melee",
       "wiredStatus": "wired"
     },
     "overload_saboteur": {
@@ -3522,7 +3522,7 @@
       "category": "active",
       "trigger": "activation",
       "label": "Parting Gift",
-      "description": "Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Hit results.",
+      "description": "Once during your activation, you may choose a space within 3 spaces and roll 1 green die. Each other figure and object on or adjacent to that space suffers Damage equal to the Damage results.",
       "oncePer": "activation",
       "wiredStatus": "wired",
       "rollOneDie": "green",
@@ -3619,7 +3619,7 @@
     },
     "Positioning Advantage": {
       "type": "ccEffect",
-      "label": "+1 Hit to attack results",
+      "label": "+1 Damage to attack results",
       "attackBonusHits": 1,
       "wiredStatus": "wired"
     },
@@ -3668,7 +3668,7 @@
     },
     "Primary Target": {
       "type": "ccEffect",
-      "label": "Become Focused + 1 Hit when attacking highest-cost hostile",
+      "label": "Become Focused + 1 Damage when attacking highest-cost hostile",
       "applyFocus": true,
       "attackBonusHits": 1,
       "wiredStatus": "wired",
@@ -3711,7 +3711,7 @@
     "pulse_cannon_iden": {
       "type": "dcPassive",
       "label": "Pulse Cannon (Iden)",
-      "description": "While attacking, if you spent a Power Token during this attack, apply +4 Accuracy and +1 Hit to the attack results.",
+      "description": "While attacking, if you spent a Power Token during this attack, apply +4 Accuracy and +1 Damage to the attack results.",
       "wiredStatus": "wired"
     },
     "Pummel": {
@@ -3725,7 +3725,7 @@
       "category": "passive-auto",
       "trigger": "combat-declare",
       "label": "Query",
-      "description": "When declaring an attack, apply +1 Hit unless the defender becomes Bleeding.",
+      "description": "When declaring an attack, apply +1 Damage unless the defender becomes Bleeding.",
       "wiredStatus": "wired"
     },
     "raider_weequay_elite": {
@@ -3757,7 +3757,7 @@
     "ram_chopper": {
       "type": "dcSpecial",
       "label": "Ram",
-      "description": "Move up to 2 spaces, then choose an adjacent figure. If hostile, roll 1 green die — it suffers Damage equal to Hit results. If SMALL, push it up to 1 space.",
+      "description": "Move up to 2 spaces, then choose an adjacent figure. If hostile, roll 1 green die — it suffers Damage equal to Damage results. If SMALL, push it up to 1 space.",
       "freeMoveBonus": 2,
       "rollOneDie": "green",
       "rollOneDieTarget": "adjacentHostile",
@@ -4082,7 +4082,7 @@
       "category": "passive-auto",
       "trigger": "combat-declare",
       "label": "Scattergun",
-      "description": "While attacking, if you are adjacent to the target, apply +1 Hit to the attack results.",
+      "description": "While attacking, if you are adjacent to the target, apply +1 Damage to the attack results.",
       "oncePer": null,
       "wiredStatus": "wired",
       "freeAction": true
@@ -4152,24 +4152,24 @@
       "category": "passive-reactive",
       "trigger": "end-of-round",
       "label": "Self-Destruct",
-      "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated.",
+      "description": "At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Damage results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct** — At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Hit results. Then, you are defeated. You will be prompted at end of round.",
+      "logMessage": "**Self-Destruct** — At the end of a round, you may roll 1 red die. Each adjacent figure or object suffers Damage equal to the Damage results. Then, you are defeated. You will be prompted at end of round.",
       "rollOneDie": "red",
-      "rollOneDieNote": "Each adjacent figure suffers Hit results as Damage. Then this figure is defeated."
+      "rollOneDieNote": "Each adjacent figure suffers Damage results. Then this figure is defeated."
     },
     "self_destruct_protocol": {
       "type": "dcSpecial",
       "category": "passive-reactive",
       "trigger": "activation",
       "label": "Self-Destruct Protocol",
-      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated.",
+      "description": "When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Damage results. Then, you are defeated.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Self-Destruct Protocol** — When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Hit results. Then, you are defeated. You will be prompted when this triggers.",
+      "logMessage": "**Self-Destruct Protocol** — When you have suffered Damage equal to your Health, before you are defeated, you may move up to 3 spaces and roll 1 red die. Each figure or object adjacent to you suffers Damage equal to the Damage results. Then, you are defeated. You will be prompted when this triggers.",
       "rollOneDie": "red",
-      "rollOneDieNote": "Each figure adjacent to you suffers Hit results as Damage. Then this figure is defeated."
+      "rollOneDieNote": "Each figure adjacent to you suffers Damage results. Then this figure is defeated."
     },
     "self_preservation": {
       "type": "dcSpecial",
@@ -4237,7 +4237,7 @@
     "Set the Charges": {
       "type": "ccEffect",
       "setTheChargesEffect": true,
-      "label": "Roll blue die: open adjacent doors; Hit+Surge Damage to figures on/adjacent to chosen space",
+      "label": "Roll blue die: open adjacent doors; Damage + Surge Damage to figures on/adjacent to chosen space",
       "wiredStatus": "wired"
     },
     "set_your_sights_loku": {
@@ -4293,7 +4293,7 @@
       "category": "passive-auto",
       "trigger": "combat-dice",
       "label": "Shared Intuition",
-      "description": "While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Hit to your attack results.",
+      "description": "While attacking, if another friendly HUNTER within 3 spaces has line of sight to the target space, apply +1 Damage to your attack results.",
       "oncePer": null,
       "wiredStatus": "wired",
       "freeAction": true
@@ -4341,23 +4341,23 @@
     "shock_grenade_purge": {
       "type": "dcSpecial",
       "label": "Shock Grenade",
-      "description": "Choose a space within 3 spaces and roll 1 green die. Each figure on or adjacent suffers Damage equal to Hit results. If Surge, they become Weakened.",
+      "description": "Choose a space within 3 spaces and roll 1 green die. Each figure on or adjacent suffers Damage equal to Damage results. If Surge, they become Weakened.",
       "rollOneDie": "green",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
       "rollOneDieSurgeCondition": "Weaken",
-      "rollOneDieNote": "Deal Hit results as Damage to each figure on or adjacent to that space. If Surge rolled, those figures become **Weakened**.",
+      "rollOneDieNote": "Deal Damage results to each figure on or adjacent to that space. If Surge rolled, those figures become **Weakened**.",
       "wiredStatus": "wired"
     },
     "shock_lance_dewback": {
       "type": "dcSpecial",
       "label": "Shock Lance",
-      "description": "Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Hit results. If you rolled a Surge, it becomes Weakened.",
+      "description": "Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Damage results. If you rolled a Surge, it becomes Weakened.",
       "rollOneDie": "green",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 2,
       "rollOneDieSurgeCondition": "Weaken",
-      "rollOneDieNote": "Deal Hit results as Damage to the chosen figure. If Surge rolled, that figure becomes **Weakened**.",
+      "rollOneDieNote": "Deal Damage results to the chosen figure. If Surge rolled, that figure becomes **Weakened**.",
       "wiredStatus": "wired"
     },
     "shocking_palm": {
@@ -4393,7 +4393,7 @@
       "type": "dcSpecial",
       "category": "passive-reactive",
       "label": "Shrewd Scoundrel",
-      "description": "While attacking or defending, before you reroll a die with Resourceful, you may guess aloud a number from 0-2. After rerolls, if the number of Hit results matches your guess, gain 2 VP.",
+      "description": "While attacking or defending, before you reroll a die with Resourceful, you may guess aloud a number from 0-2. After rerolls, if the number of Damage results matches your guess, gain 2 VP.",
       "wiredStatus": "wired"
     },
     "sidewinder": {
@@ -4439,7 +4439,7 @@
     },
     "Size Advantage": {
       "type": "ccEffect",
-      "label": "Perform attack vs SMALL: +2 Hit, Weaken",
+      "label": "Perform attack vs SMALL: +2 Damage, Weaken",
       "nextAttacksBonusHits": {
         "count": 1,
         "bonus": 2
@@ -4455,12 +4455,12 @@
     "slam": {
       "type": "dcSpecial",
       "label": "Slam",
-      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile — it suffers Hit results as Damage. If SMALL, push 1 space (automated).",
+      "logMessage": "Slam: Roll 1 red die. Choose an adjacent hostile — it suffers Damage results as Damage. If SMALL, push 1 space (automated).",
       "wiredStatus": "wired",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",
       "rollOneDiePushSmall": true,
-      "rollOneDieNote": "Deal Hit results as Damage to 1 adjacent hostile figure. If that figure is SMALL, push it 1 space."
+      "rollOneDieNote": "Deal Damage results to 1 adjacent hostile figure. If that figure is SMALL, push it 1 space."
     },
     "sling_barrage_ewok_elite": {
       "type": "dcSpecial",
@@ -4503,7 +4503,7 @@
       "category": "active",
       "trigger": "activation",
       "label": "Smash",
-      "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Hit results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
+      "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
       "oncePer": "activation",
       "wiredStatus": "wired",
       "rollOneDie": "red",
@@ -4694,7 +4694,7 @@
       "type": "surge",
       "surgeCost": 1,
       "label": "Stalk Prey",
-      "description": "After this attack resolves, you gain 2 movement points and 1 Hit Token.",
+      "description": "After this attack resolves, you gain 2 movement points and 1 Damage Token.",
       "wiredStatus": "wired"
     },
     "Stall for Time": {
@@ -4946,7 +4946,7 @@
     },
     "Take it Down": {
       "type": "ccEffect",
-      "label": "Special: choose adjacent friendly; that figure performs an attack with +2 Hits",
+      "label": "Special: choose adjacent friendly; that figure performs an attack with +2 Damage",
       "nextAttacksBonusHits": {
         "count": 1,
         "bonus": 2
@@ -5034,7 +5034,7 @@
     },
     "Telekinetic Throw": {
       "type": "ccEffect",
-      "label": "Choose hostile within 3 with LOS: roll 2 blue dice, deal Hits as Damage",
+      "label": "Choose hostile within 3 with LOS: roll 2 blue dice, deal Damage results",
       "telekineticThrowEffect": true,
       "wiredStatus": "wired"
     },
@@ -5043,7 +5043,7 @@
       "category": "active",
       "trigger": "activation",
       "label": "Tempt",
-      "description": "Choose any figure within 4 spaces. That figure suffers 1 Damage and gains 1 Hit Token.",
+      "description": "Choose any figure within 4 spaces. That figure suffers 1 Damage and gains 1 Damage Token.",
       "oncePer": null,
       "wiredStatus": "wired"
     },
@@ -5065,7 +5065,7 @@
       "category": "passive-reactive",
       "trigger": "ranged-attack-declared-on-you",
       "label": "The Force is With Me",
-      "description": "When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Hit to the attack results and the chosen figure suffers 1 Damage.",
+      "description": "When a Ranged attack targeting you is declared, choose an adjacent hostile figure. If you do, apply -1 Damage to the attack results and the chosen figure suffers 1 Damage.",
       "wiredStatus": "wired"
     },
     "There is Another": {
@@ -5137,11 +5137,11 @@
     "trample_bantha": {
       "type": "dcSpecial",
       "label": "Trample",
-      "description": "Choose up to 3 adjacent hostile figures and roll 1 red die. Each suffers Damage equal to Hit results.",
+      "description": "Choose up to 3 adjacent hostile figures and roll 1 red die. Each suffers Damage equal to Damage results.",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",
       "rollOneDieMaxTargets": 3,
-      "rollOneDieNote": "Deal Hit results as Damage to up to 3 adjacent hostile figures (automated).",
+      "rollOneDieNote": "Deal Damage results to up to 3 adjacent hostile figures (automated).",
       "wiredStatus": "wired"
     },
     "Trandoshan Terror": {
@@ -5153,7 +5153,7 @@
     },
     "Transmit the Plans": {
       "type": "ccEffect",
-      "label": "Grant 2 Hit Tokens to activating figure; if adjacent terminal, gain 2 VP (use /editvp +2)",
+      "label": "Grant 2 Damage Tokens to activating figure; if adjacent terminal, gain 2 VP (use /editvp +2)",
       "grantHitTokensToActivating": 2,
       "vpNoteIfAdjacentTerminal": 2,
       "wiredStatus": "wired"
@@ -5280,10 +5280,10 @@
     },
     "Veteran Instincts": {
       "type": "ccEffect",
-      "label": "Gain 1 Hit/Surge token + 1 Block/Evade token",
+      "label": "Gain 1 Damage/Surge token + 1 Block/Evade token",
       "powerTokenGain": 2,
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens** (1 Hit/Surge + 1 Block/Evade — choose types)."
+      "logMessage": "Gained **2 Power Tokens** (1 Damage/Surge + 1 Block/Evade — choose types)."
     },
     "voracious_rancor": {
       "type": "dcSpecial",
@@ -5327,7 +5327,7 @@
     },
     "Whistling Birds": {
       "type": "ccEffect",
-      "label": "Gain 2 MP; roll 1 red die, up to 3 hostiles within 2 suffer Hits as Damage",
+      "label": "Gain 2 MP; roll 1 red die, up to 3 hostiles within 2 suffer Damage results",
       "whistlingBirdsEffect": true,
       "wiredStatus": "wired"
     },

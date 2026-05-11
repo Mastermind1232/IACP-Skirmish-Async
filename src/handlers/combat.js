@@ -4146,9 +4146,9 @@ export async function sendRerollUI(thread, game, combat, phase) {
       }
       if (pr.type === 'shrewd_scoundrel') {
         const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_0`).setLabel('Guess 0 Hits').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_1`).setLabel('Guess 1 Hit').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_2`).setLabel('Guess 2 Hits').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_0`).setLabel('Guess 0 Damage').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_1`).setLabel('Guess 1 Damage').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_2`).setLabel('Guess 2 Damage').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip (no guess)').setStyle(ButtonStyle.Secondary),
         );
         await thread.send({ content: `**Shrewd Scoundrel** — <@${playerId}> guess the number of Hit results after rerolls (0-2):`, components: [row] });
@@ -5700,7 +5700,7 @@ export async function sendModsYn(thread, game, combat, role) {
     if (combat.guidanceSystemsAvailable && !combat.guidanceSystemsCompleted) {
       combat.guidanceSystemsPrompted = true;
       const _gsRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use (-1 Damage, +2 Acc)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({
@@ -6007,7 +6007,7 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
         combatThreadId: thread.id,
       });
       const iaRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Hit)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Damage)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
       );
       await thread.send(sanitizeMentions({
@@ -6856,7 +6856,7 @@ export async function handleCombatSurge(interaction, ctx) {
       );
       const rows = chunkButtonsToRows(btns);
       await thread.send({
-        content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Hit**:',
+        content: '**Rogue One** — Choose a power token to discard from a friendly figure for **+1 Damage**:',
         components: rows,
       }).catch(discordCatch);
       saveGames(game.gameId);
@@ -8759,7 +8759,7 @@ export async function handleGuidanceSystems(interaction, ctx) {
     combat.guidanceSystemsCount = (combat.guidanceSystemsCount || 0) + 1;
     const gsCount = combat.guidanceSystemsCount;
     const _gsRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use again (-1 Hit, +2 Acc)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use again (-1 Damage, +2 Acc)').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
     );
     await interaction.message.edit({

@@ -1404,9 +1404,9 @@ describe('Section 7: Edge Cases — form cards, companions, special figures', ()
     assert.ok(eff.passives?.includes('+1 Evade'), `Obi-Wan passives: ${JSON.stringify(eff.passives)}`);
   });
 
-  it('Jarrod Kelvin has +1 Hit and +1 Evade passives', () => {
+  it('Jarrod Kelvin has +1 Damage and +1 Evade passives', () => {
     const eff = dcEffects['Jarrod Kelvin'];
-    assert.ok(eff.passives?.includes('+1 Hit'), 'Missing +1 Hit');
+    assert.ok(eff.passives?.includes('+1 damage'), 'Missing +1 damage');
     assert.ok(eff.passives?.includes('+1 Evade'), 'Missing +1 Evade');
   });
 
@@ -1426,9 +1426,9 @@ describe('Section 7: Edge Cases — form cards, companions, special figures', ()
     assert.ok(eff.passives?.includes('+2 Accuracy'));
   });
 
-  it('Gar Saxon has +1 Hit passive', () => {
+  it('Gar Saxon has +1 Damage passive', () => {
     const eff = dcEffects['Gar Saxon'];
-    assert.ok(eff.passives?.includes('+1 Hit'));
+    assert.ok(eff.passives?.includes('+1 damage'));
   });
 
   it('Salacious B. Crumb has BRAWLER keyword', () => {

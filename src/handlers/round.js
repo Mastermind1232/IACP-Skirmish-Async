@@ -668,10 +668,10 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
       if (!_swDc?.dcName || _swDc.defeated) continue;
       const _swOwnerId = game[`player${pn}Id`];
       const _swRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`scavenged_walker_attack_${gameId}_${_swMid}`).setLabel('Interrupt Attack (-1 Hit)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`scavenged_walker_attack_${gameId}_${_swMid}`).setLabel('Interrupt Attack (-1 Damage)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`scavenged_walker_skip_${gameId}_${_swMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await logGameAction(game, client, `<@${_swOwnerId}> **Scavenged Walker** — **${_swDc.displayName || _swDc.dcName}** may interrupt to perform an attack with -1 Hit at end of round.`, {
+      await logGameAction(game, client, `<@${_swOwnerId}> **Scavenged Walker** — **${_swDc.displayName || _swDc.dcName}** may interrupt to perform an attack with -1 Damage at end of round.`, {
         components: [_swRow],
         allowedMentions: { users: [_swOwnerId] },
       });
