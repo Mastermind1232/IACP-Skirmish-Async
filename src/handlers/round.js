@@ -384,27 +384,14 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       const initPN = getInitiativePlayerNum(game);
       initThugMovementQueue(game, initPN, mapId);
       const _resumeVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
-      // Resume continuation: after the picker drains, run the remainder
-      // of the round-end chain. Currently this jumps to fluctuation gate
-      // / initiative swap, intentionally SKIPPING DC EoR for the picker
-      // path — known limitation tracked as the post-thug DC-EoR follow-up.
-      // The much simpler inline path (no thug picker) preserves CRR order
-      // mission EoR → DC EoR → tail. Extraction of DC EoR + tail into a
-      // re-callable helper is queued separately.
+      // Resume continuation: after the picker drains, run _runDcEorAndContinue
+      // which preserves CRR order — DC EoR (Regenerate / Hardy / WYIM /
+      // Driven by Hatred / Inspiration / ...) → Krykna note → fluctuation
+      // gate → initiative swap. Critical: DC EoR MUST run on rounds where
+      // the thug picker fires (otherwise every Corellian Underground A
+      // round silently skips player EoR effects).
       game._resumeAfterThugMovementFn = async (g, c) => {
-        if (hasMissionFlag(g.selectedMap?.id, g.selectedMission?.variant, 'fluctuationSwapGate')) {
-          const _fInitNum = getInitiativePlayerNum(g);
-          const _fOtherNum = opponentPlayerNum(_fInitNum);
-          g.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
-          g.fluctuationSwappedThisRound = [];
-          g.pendingFluctuationSwapFirst = null;
-          g._pendingStatusPhaseLog = _resumeVars;
-          const _fGenCh = await fetchGameChannel(c.client, g.generalId);
-          if (postFluctuationSwapButtons) await postFluctuationSwapButtons(g, _fGenCh, g.gameId, _fInitNum);
-          saveGames(g.gameId);
-          return;
-        }
-        await _runInitiativeSwapAndContinue(g, g.gameId, null, c, _resumeVars);
+        await _runDcEorAndContinue(g, g.gameId, null, c, _resumeVars);
       };
       await postThugPickerPrompt(game, client, interaction?.channel);
       if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -412,6 +399,28 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       return;
     }
   }
+
+  await _runDcEorAndContinue(game, gameId, interaction, ctx,
+    { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
+}
+
+/**
+ * DC EoR loops + post-DC tail (Krykna push / fluctuation gate / initiative
+ * swap). Called both inline by handleEndEndOfRound (no thug picker) and by
+ * the thug-picker resume continuation after the picker drains — so DC EoR
+ * always runs after mission EoR per CRR, even on rounds where the thug
+ * picker intercepts the inline flow.
+ */
+export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVars) {
+  const {
+    logGameAction, client, saveGames,
+    dcMessageMeta, dcHealthState, isDepletedRemovedFromGame,
+    isFigureInDeploymentZone, checkWinConditions,
+    postFluctuationSwapButtons,
+  } = ctx;
+  const { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines } = logVars;
+  const mapId = game.selectedMap?.id;
+  const variant = game.selectedMission?.variant;
 
   // DC ability EoR effects (run after mission EoR per CRR)
   const dcEffects = getDcEffects();
