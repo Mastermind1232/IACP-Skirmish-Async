@@ -2795,13 +2795,15 @@
     "jetpack_rocket": {
       "type": "dcSpecial",
       "label": "Jetpack Rocket",
-      "description": "Spend 2 movement points. Roll 1 blue die. A hostile figure within 3 spaces and in LOS suffers damage equal to the rolled result.",
+      "description": "Once per figure per round, spend 2 movement points. Roll 1 blue die. A hostile figure within 3 spaces and in LOS suffers damage equal to the rolled result.",
       "rollOneDie": "blue",
       "rollOneDieTarget": "hostileWithinRange",
       "rollOneDieTargetRange": 3,
       "rollOneDieRequiresLos": true,
       "rollOneDieMpCost": 2,
-      "freeAction": true
+      "oncePer": "round",
+      "freeAction": true,
+      "wiredStatus": "wired"
     },
     "jets_jet_trooper": {
       "type": "dcSpecial",
@@ -4307,9 +4309,11 @@
     "shield_gauntlets": {
       "type": "dcSpecial",
       "label": "Shield Gauntlets",
-      "description": "Spend 1 movement point to gain 1 Block power token.",
+      "description": "Once during your activation, spend 1 movement point to gain 1 Block power token.",
       "spendMpForBlockToken": 1,
-      "freeAction": true
+      "oncePer": "activation",
+      "freeAction": true,
+      "wiredStatus": "wired"
     },
     "shift_clawdite_elite": {
       "type": "dcSpecial",

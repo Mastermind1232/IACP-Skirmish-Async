@@ -6099,9 +6099,13 @@
         "TROOPER",
         "VEHICLE"
       ],
+      "specials": [
+        "Jetpack Rocket",
+        "Shield Gauntlets"
+      ],
       "specialAbilityIds": [
-        "shield_gauntlets",
-        "jetpack_rocket"
+        "jetpack_rocket",
+        "shield_gauntlets"
       ],
       "cost": 7,
       "subCost": 4,
@@ -7097,10 +7101,10 @@
     "Paz Vizsla": {
       "abilityText": "Heavy Repeater: While performing a Ranged attack, you may suffer 1 Strain to apply +1 Hit, Blast 2, or +3 Accuracy to the attack results.\n\nSubmit or Fight: When you would suffer Damage from Strain, you may return any number of Command cards from your discard pile to the game box to prevent that much Damage.",
       "keywords": [
-        "Mobile",
-        "Vehicle",
-        "Heavy Weapon",
-        "Brawler"
+        "MOBILE",
+        "VEHICLE",
+        "HEAVY WEAPON",
+        "BRAWLER"
       ],
       "cost": 7,
       "subCost": 0,
@@ -7116,12 +7120,12 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
-        "+1 Block Token",
-        "+1 accuracy",
-        "+1 Block Token"
+        "block token",
+        "accuracy 1",
+        "block token"
       ],
       "specialAbilityIds": [
         "heavy_repeater_paz",

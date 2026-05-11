@@ -5014,6 +5014,10 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
   for (const passive of (attackerPassives || [])) {
     for (const p of parts(passive)) {
       const hit  = p.match(/^\+(\d+)\s+hit(s?)$/);   if (hit)    { combat.bonusHits      = (combat.bonusHits      || 0) + parseInt(hit[1],    10); continue; }
+      // "+N Damage" passive (Tusken Raider Elite, etc.) — IACP treats
+      // this as a static result-side hit bonus. Wired identically to
+      // "+N hit" per alexanbv 2026-05-11 verification.
+      const dmg  = p.match(/^\+(\d+)\s+damage$/);     if (dmg)    { combat.bonusHits      = (combat.bonusHits      || 0) + parseInt(dmg[1],    10); continue; }
       const acc  = p.match(/^\+(\d+)\s+accur/);       if (acc)    { combat.bonusAccuracy  = (combat.bonusAccuracy  || 0) + parseInt(acc[1],    10); continue; }
       const pier = p.match(/^pierce\s+(\d+)$/i);      if (pier)   { combat.bonusPierce    = (combat.bonusPierce    || 0) + parseInt(pier[1],   10); continue; }
       const surg = p.match(/^\+(\d+)\s+surge$/);      if (surg)   { combat.surgeBonus     = (combat.surgeBonus     || 0) + parseInt(surg[1],   10); continue; }
