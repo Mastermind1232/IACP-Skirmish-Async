@@ -84,8 +84,11 @@ describe('hasLosFromFigureToFigure — post-declare LoS probe', () => {
     assert.equal(losAtRoll, true, 'no state change → probe must agree with picker (no abort)');
   });
 
-  it('Scenario 2: Lam moves a figure into the LoS line → LoS becomes false', () => {
-    const map = makeMap();
+  it('Scenario 2: Lam moves the defender out of LoS behind terrain → LoS becomes false', () => {
+    // Map has terrain (a blocking tile) at c4 — an asteroid / crate /
+    // wall-cell that blocks LoS through its space. The cell occupies
+    // col=2, row=3 in (0,0)-indexed grid coords.
+    const map = makeMap(['c4']);
     const game = makeGame(map, {
       1: { 'Attacker DC-1-0': 'a3' },
       2: { 'Target DC-1-0':   'e3' },
@@ -93,20 +96,22 @@ describe('hasLosFromFigureToFigure — post-declare LoS probe', () => {
     const ctx = makeCtx();
     ctx.getMapData = () => map;
 
-    // Declare time: clear horizontal line a3 → e3, no blockers, LoS true.
+    // Declare time: target at e3. Line a3 → e3 is a horizontal sweep at
+    // row 2 (b3, c3, d3, e3) — doesn't pass through the terrain at c4.
+    // LoS exists and the picker offers the target.
     const losAtDeclare = hasLosFromFigureToFigure(game, 'Attacker DC-1-0', 'Target DC-1-0', ctx);
-    assert.equal(losAtDeclare, true, 'clear line a3 → e3 → LoS exists at declare');
+    assert.equal(losAtDeclare, true, 'clear horizontal line a3 → e3 → LoS exists at declare');
 
-    // Lam (Loku Kanoloa) interrupts: moves a hostile figure into the line
-    // of sight. Here we simulate by placing a friendly Wall DC figure at
-    // c3, directly between the attacker and target. (Lam is the canonical
-    // mid-combat-move ability the original probe was designed to catch.)
-    game.figurePositions[1]['Wall DC-1-0'] = 'c3';
+    // Lam (Loku Kanoloa) interrupts mid-combat: the controller of Lam
+    // moves the defender 2 spaces from e3 down to e5. The new line of
+    // sight a3 → e5 cuts diagonally through the c4 terrain tile.
+    game.figurePositions[2]['Target DC-1-0'] = 'e5';
 
-    // Roll time: probe sees the new blocker in the line — LoS is now false.
-    // The probe MUST abort here (and in the live handler that routes to
-    // step 8 so Migs/Han/etc. still resolve).
+    // Roll time: probe re-traces a3 → e5. The diagonal line passes
+    // through c4 (terrain blocker), so LoS is now lost. The probe MUST
+    // abort here — and in the live handler the abort routes through
+    // _forceMissAndStep8 so Migs/Han Return Fire etc. still resolve.
     const losAtRoll = hasLosFromFigureToFigure(game, 'Attacker DC-1-0', 'Target DC-1-0', ctx);
-    assert.equal(losAtRoll, false, 'Lam-moved blocker in line → LoS lost at roll, probe must abort');
+    assert.equal(losAtRoll, false, 'defender Lam-moved behind terrain → LoS lost at roll, probe must abort');
   });
 });
