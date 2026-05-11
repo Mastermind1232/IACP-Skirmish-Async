@@ -292,6 +292,20 @@ export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey, 
       if (cells.some((cell) => adjacentSet.has(cell))) out.push({ figureKey, playerNum: p });
     }
   }
+  // Neutral NPC figures (Thugs, Krykna) — per alexanbv 2026-05-10.
+  for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+    const arr = game[arrName];
+    if (!Array.isArray(arr)) continue;
+    for (let i = 0; i < arr.length; i++) {
+      const npc = arr[i];
+      if (!npc || npc.defeated) continue;
+      const cell = normalizeCoord(npc.coord);
+      if (!adjacentSet.has(cell)) continue;
+      const fk = `npc_${npcType}_${i}`;
+      if (fk === excludeFigureKey) continue;
+      out.push({ figureKey: fk, playerNum: null, isNpc: true, npcType, npcIndex: i });
+    }
+  }
   return out;
 }
 
@@ -337,6 +351,21 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
       const size = game.figureOrientations?.[figureKey] || getFigureSize(dcName);
       const cells = getFootprintCells(coord, size).map((c) => normalizeCoord(c));
       if (cells.some((cell) => adjacentSet.has(cell))) out.push({ figureKey, playerNum: p });
+    }
+  }
+  // Neutral NPC figures (Thugs, Krykna) — per alexanbv 2026-05-10,
+  // neutrals are figures and must be returned by every figure-iteration
+  // helper. Yielded with playerNum=null + isNpc=true so caller branches
+  // route to applyDamageToNpc / figureConditions[npc_thug_N] etc.
+  for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+    const arr = game[arrName];
+    if (!Array.isArray(arr)) continue;
+    for (let i = 0; i < arr.length; i++) {
+      const npc = arr[i];
+      if (!npc || npc.defeated) continue;
+      const cell = normalizeCoord(npc.coord);
+      if (!adjacentSet.has(cell)) continue;
+      out.push({ figureKey: `npc_${npcType}_${i}`, playerNum: null, isNpc: true, npcType, npcIndex: i });
     }
   }
   return out;
