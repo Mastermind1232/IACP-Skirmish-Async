@@ -1446,7 +1446,9 @@
     },
     "droid_kit_iden": {
       "type": "dcPassive",
-      "label": "Droid Kit (Iden)"
+      "label": "Droid Kit (Iden)",
+      "description": "Once during your activation, if a friendly Dio is in your space, you may gain 1 Power Token.",
+      "wiredStatus": "wired"
     },
     "dual_bladed_fury": {
       "type": "dcSpecial",
@@ -3706,7 +3708,9 @@
     },
     "pulse_cannon_iden": {
       "type": "dcPassive",
-      "label": "Pulse Cannon (Iden)"
+      "label": "Pulse Cannon (Iden)",
+      "description": "While attacking, if you spent a Power Token during this attack, apply +4 Accuracy and +1 Hit to the attack results.",
+      "wiredStatus": "wired"
     },
     "Pummel": {
       "type": "ccEffect",

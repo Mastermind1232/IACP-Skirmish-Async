@@ -3485,21 +3485,15 @@ export async function handleCombatRoll(interaction, ctx) {
     // Targeting Computer family (HK Assassin Elite, IG-11, Probe Droid Elite,
     // Sentry Droid Elite/Reg, AT-ST, Dark Trooper Mk III ATC): +1 atk reroll
     if (hasTargetingComputerAbility(atkSIds)) atkSpecialReroll = applyTargetingComputerReroll(atkSpecialReroll);
-    // Overpower (Royal Guard Champion): +1 atk reroll restricted to RED die when
-    // attacking, +1 def reroll restricted to BLACK die when defending. destruct
-    // 2026-05-06: "overpower is restricted to red die when attacking, and black
-    // die when defending." The +1 enters the standard rerolls budget but
-    // handleCombatReroll's voluntary path enforces color via combat.overpower*
-    // flags (one slot of the budget is locked to the matching color).
+    // Overpower (Royal Guard Champion): +1 attack reroll when attacking,
+    // +1 defense reroll when defending. Per alexanbv 2026-05-11: ANY die
+    // (no color restriction). Earlier destruct 2026-05-06 restriction
+    // (red attacking / black defending) superseded by the rules update.
     if (hasOverpowerAbility(atkSIds)) {
       atkSpecialReroll = applyOverpowerAttackerReroll(atkSpecialReroll);
-      combat.overpowerAtkColorLocked = 'red';
-      combat.overpowerAtkLockedAvailable = true;
     }
     if (hasOverpowerAbility(defSIds)) {
       defSpecialReroll = applyOverpowerDefenderReroll(defSpecialReroll);
-      combat.overpowerDefColorLocked = 'black';
-      combat.overpowerDefLockedAvailable = true;
     }
     // Foresight (Darth Vader defending): +1 def reroll
     if (hasForesightAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
@@ -4505,16 +4499,6 @@ export async function handleCombatReroll(interaction, ctx) {
       // at least 1 non-Overpower slot remaining; picking a matching-color die
       // consumes the locked slot first.
       if (idx >= 0 && idx < dice.length && combat.attackerRerollsRemaining > 0 && !_atkAlreadyRerolled.includes(idx)) {
-        const _opLockColor = combat.overpowerAtkColorLocked;
-        const _opLockAvail = !!combat.overpowerAtkLockedAvailable;
-        const _opPickColor = dice[idx]?.color;
-        if (_opLockColor && _opPickColor && _opPickColor !== _opLockColor) {
-          const _opNonLocked = combat.attackerRerollsRemaining - (_opLockAvail ? 1 : 0);
-          if (_opNonLocked <= 0) {
-            await interaction.followUp({ content: `🚫 **Overpower** restricts this reroll to **${_opLockColor}** dice — no other reroll budget available for a ${_opPickColor} die.`, ephemeral: true }).catch(discordCatch);
-            return;
-          }
-        }
         const oldDie = dice[idx];
         const newDie = rollSingleAttackDie(oldDie.color);
         dice[idx] = newDie;
@@ -4522,11 +4506,6 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcAttackTotals(dice);
         combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
         combat.attackerRerollsRemaining -= 1;
-        // Overpower locked-slot bookkeeping: prefer to consume locked slot
-        // when the picked die matches the locked color.
-        if (_opLockColor && _opLockAvail && _opPickColor === _opLockColor) {
-          combat.overpowerAtkLockedAvailable = false;
-        }
         // G12: mark this die index as rerolled
         combat.attackerRerolledIndices = [..._atkAlreadyRerolled, idx];
         await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
@@ -4574,19 +4553,7 @@ export async function handleCombatReroll(interaction, ctx) {
     } else {
       const dice = combat.defenseDiceResults || [];
       const _defAlreadyRerolled = combat.defenderRerolledIndices || [];
-      // Overpower (RGC): one slot of defender reroll budget is locked to
-      // the configured color (black) — same scheme as the attacker side.
       if (idx >= 0 && idx < dice.length && combat.defenderRerollsRemaining > 0 && !_defAlreadyRerolled.includes(idx)) {
-        const _opDefLockColor = combat.overpowerDefColorLocked;
-        const _opDefLockAvail = !!combat.overpowerDefLockedAvailable;
-        const _opDefPickColor = dice[idx]?.color;
-        if (_opDefLockColor && _opDefPickColor && _opDefPickColor !== _opDefLockColor) {
-          const _opDefNonLocked = combat.defenderRerollsRemaining - (_opDefLockAvail ? 1 : 0);
-          if (_opDefNonLocked <= 0) {
-            await interaction.followUp({ content: `🚫 **Overpower** restricts this reroll to **${_opDefLockColor}** dice — no other reroll budget available for a ${_opDefPickColor} die.`, ephemeral: true }).catch(discordCatch);
-            return;
-          }
-        }
         const oldDie = dice[idx];
         const newDie = rollSingleDefenseDie(oldDie.color);
         dice[idx] = newDie;
@@ -4594,9 +4561,6 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcDefenseTotals(dice);
         combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
         combat.defenderRerollsRemaining -= 1;
-        if (_opDefLockColor && _opDefLockAvail && _opDefPickColor === _opDefLockColor) {
-          combat.overpowerDefLockedAvailable = false;
-        }
         // G12: mark this die index as rerolled
         combat.defenderRerolledIndices = [..._defAlreadyRerolled, idx];
         combat.defenderRerolledOrModified = true; // Track for Quick Strike (Electrostaff loadout)
