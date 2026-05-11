@@ -3213,11 +3213,27 @@ export async function handleCombatRoll(interaction, ctx) {
       }
       const _avAtkSize = game.figureOrientations?.[combat.attackerFigureKey] || ctx.getFigureSize(_avAtkDcName);
       const _avTgtSize = game.figureOrientations?.[combat.target.figureKey] || ctx.getFigureSize(dcNameFromFigureKey(combat.target.figureKey));
-      const _avAtkFp = ctx.getFootprintCells(_avAtkPos, _avAtkSize);
-      const _avTgtFp = ctx.getFootprintCells(_avTgtPosNow, _avTgtSize);
-      const _avEffMs = _buildLosEffectiveMs(game, ctx);
+      // IMPORTANT: combat ctx (COMBAT_DEPS in context-factory.js) does NOT
+      // include getFootprintCells / getMapTokensData. Import-bound
+      // getFootprintCells is used directly here; for buildFigureBlockingCoords
+      // and _buildLosEffectiveMs we shim ctx with the needed helpers.
+      // Without this shim, buildFigureBlockingCoords's destructure pulls
+      // undefined for getFootprintCells / getMapData, throws or returns
+      // empty blocking, and LoS resolves wrong — the live source of the
+      // "neither figure moved but LoS failed" reports.
+      const _avLosCtx = {
+        ...ctx,
+        getFootprintCells,
+        getMapData,
+        getMapTokensData,
+        getDcEffects: ctx.getDcEffects || getDcEffectsGlobal,
+        getFigureSize: ctx.getFigureSize || getFigureSize,
+      };
+      const _avAtkFp = getFootprintCells(_avAtkPos, _avAtkSize);
+      const _avTgtFp = getFootprintCells(_avTgtPosNow, _avTgtSize);
+      const _avEffMs = _buildLosEffectiveMs(game, _avLosCtx);
       const _avMarksmanActive = !!combat.attackIgnoredFigureLOS;
-      const _avBlockingCoords = buildFigureBlockingCoords(game, attackerPlayerNum, _avAtkPos, _avAtkSize, ctx, {
+      const _avBlockingCoords = buildFigureBlockingCoords(game, attackerPlayerNum, _avAtkPos, _avAtkSize, _avLosCtx, {
         marksmanActive: _avMarksmanActive,
         ignoreBlocking: _avAtkIgnoreBlocking,
       });
