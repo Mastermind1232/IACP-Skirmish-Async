@@ -1301,57 +1301,10 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       }
     }
   }
-  // Stampede (Bantha Rider): "When you end your movement in spaces that
-  // contain other figures, each hostile figure in your space suffers 1
-  // Damage." (destruct 2026-05-06 audit). Bantha is MASSIVE — its final
-  // position spans multiple cells. Walk every cell of the new footprint
-  // and damage hostiles there. Companions sharing a cell also count as
-  // "other figures" per the same-space adjacency rule.
-  if (meta.dcName === 'Bantha Rider' && newTopLeft) {
-    const _spOppPN = opponentPlayerNum(playerNum);
-    const _spEnemyFigs = game.figurePositions?.[_spOppPN] || {};
-    const _spHs = ctx.dcHealthState;
-    const _spSize = game.figureOrientations?.[figureKey] || getFigureSize(meta.dcName);
-    const _spFootprint = getFootprintCells(newTopLeft, _spSize).map(c => String(c).toLowerCase());
-    const _spFootprintSet = new Set(_spFootprint);
-    for (const [_spEfk, _spEpos] of Object.entries(_spEnemyFigs)) {
-      if (!_spEpos) continue;
-      if (!_spFootprintSet.has(String(_spEpos).toLowerCase())) continue;
-      const _spTgtDcName = dcNameFromFigureKey(_spEfk);
-      const _spMatch = _spEfk.match(/^(.+)-(\d+)-(\d+)$/);
-      if (!_spMatch) continue;
-      const [, , _spDgIdx, _spFigIdxStr] = _spMatch;
-      const _spFigIdx = parseInt(_spFigIdxStr, 10);
-      let _spTgtMsgId = null;
-      for (const [mId, mMeta] of dcMessageMeta) {
-        if (mMeta.gameId !== game.gameId || mMeta.playerNum !== _spOppPN || mMeta.dcName !== _spTgtDcName) continue;
-        const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-        if (String(dgM ? dgM[1] : '1') === String(_spDgIdx)) { _spTgtMsgId = mId; break; }
-      }
-      if (!_spTgtMsgId || !_spHs) continue;
-      const _spEntry = _spHs.get(_spTgtMsgId)?.[_spFigIdx];
-      if (!_spEntry || !Array.isArray(_spEntry)) continue;
-      const [_spCur, _spMax] = _spEntry;
-      if ((_spMax ?? 0) === 0 || ((_spCur ?? _spMax ?? 0) <= 0)) continue;
-      const _spDmgRes = await _applyDamage(game, { dcHealthState: _spHs, logGameAction, client }, {
-        figureKey: _spTgtFk, msgId: _spTgtMsgId, figIndex: _spFigIdx,
-        amount: 1, controllerPlayerNum: _spOppPN,
-        source: 'Stampede',
-      });
-      const _spPrev = _spDmgRes.prevHp;
-      const _spNew = _spDmgRes.newHp;
-      const _spDefeatTag = _spNew <= 0 ? ' **(defeated)**' : '';
-      await logGameAction(game, client, `**Stampede** — **Bantha Rider** ends movement on **${_spTgtDcName}**'s space: 1 Damage${_spDefeatTag} (HP: ${_spPrev}→${_spNew}).`, { phase: 'ROUND', icon: 'attack' });
-      if (_spNew <= 0 && processFigureDefeat) {
-        await processFigureDefeat(game, {
-          defeatedPlayerNum: _spOppPN,
-          figureKey: _spEfk,
-          attackerPlayerNum: playerNum,
-          source: 'Stampede',
-        });
-      }
-    }
-  }
+  // Stampede (Bantha Rider): per alexanbv 2026-05-10, this is now folded
+  // into the MASSIVE push framework — each displaced enemy in Bantha's
+  // final footprint takes 1 Damage BEFORE being pushed. Implementation
+  // moved to `_runMassiveDisplacement` in move-x-handler.js.
   // Attached (Dio): when Iden Versio exits Dio's space during movement, Dio may move up to 1 space
   {
     const _attachedTrigger = detectAttachedTrigger(game, playerNum, meta.dcName, startCoord, newTopLeft, path);

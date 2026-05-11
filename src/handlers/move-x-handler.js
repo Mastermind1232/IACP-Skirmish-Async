@@ -1105,6 +1105,44 @@ async function _runMassiveDisplacement(game, ctx, pending) {
   const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcName) || '1x1';
   const footprintSet = new Set(getNormalizedFootprint(pos, size));
   const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
+  // Stampede (Bantha Rider) per alexanbv 2026-05-10: when Bantha Rider
+  // is the MASSIVE pusher, each enemy figure being displaced (already
+  // in Bantha's final footprint) takes 1 Damage BEFORE the push. Folded
+  // into the MASSIVE framework, replacing the old end-of-movement impl
+  // in handlers/movement.js.
+  if (dispPending && /^Bantha Rider-/.test(pending.figureKey)) {
+    const { applyDamage: _stApplyDamage } = await import('../game/damage-pipeline.js');
+    const { dcMessageMeta } = ctx;
+    const oppPN = pending.playerNum === 1 ? 2 : 1;
+    for (const entry of dispPending.enemyQueue) {
+      if (!entry?.figureKey) continue;
+      const fkMatch = entry.figureKey.match(/-(\d+)-(\d+)$/);
+      if (!fkMatch) continue;
+      const figIdx = parseInt(fkMatch[2], 10);
+      const tDcName = dcNameFromFigureKey(entry.figureKey);
+      let tMsgId = null;
+      for (const [mId, mMeta] of (dcMessageMeta || [])) {
+        if (mMeta.gameId !== game.gameId || mMeta.playerNum !== oppPN || mMeta.dcName !== tDcName) continue;
+        const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+        const dgIdx = dgM ? dgM[1] : '1';
+        if (String(dgIdx) === String(fkMatch[1])) { tMsgId = mId; break; }
+      }
+      if (!tMsgId) continue;
+      try {
+        await _stApplyDamage(game, { dcHealthState: ctx.dcHealthState, logGameAction, client }, {
+          figureKey: entry.figureKey, msgId: tMsgId, figIndex: figIdx,
+          amount: 1, controllerPlayerNum: oppPN,
+          attackerPlayerNum: pending.playerNum,
+          source: 'Stampede',
+        });
+        await logGameAction?.(game, client,
+          `🐃 **Stampede** — **${tDcName}** in **Bantha Rider**'s footprint: 1 Damage before push.`,
+          { phase: 'ROUND', icon: 'attack' });
+      } catch (err) {
+        console.error('[stampede] applyDamage failed:', err?.message ?? err);
+      }
+    }
+  }
   if (dispPending) {
     // Per CRR (2026-05-09 user clarification): once a MASSIVE figure
     // displaces another figure, it may no longer move during the
