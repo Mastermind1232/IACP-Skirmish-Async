@@ -2116,6 +2116,18 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
           actData.remaining = Math.max(0, actData.remaining - 1);
           await updateDcActionsMessage(game, msgId, client);
         }
+        // Per alexanbv 2026-05-10: the Move action is RESOLVED once MP
+        // are added to the bank, before they are spent. The actual
+        // movement happens via the separate Spend MP click. Fire the
+        // Bleed-on-action trigger now (action has resolved) and return
+        // without opening the movement picker.
+        await triggerBleedAfterAction(game, ctx, figureKey, playerNum);
+        await interaction.followUp({
+          content: `🚶 **${figLabel}** — Move action resolved: **${mpRemaining}** MP added to bank. Click **Spend Remaining MP** to move.`,
+          ephemeral: false,
+        }).catch(discordCatch);
+        saveGames(game.gameId);
+        return;
       }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
@@ -2142,10 +2154,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         // they are spent." MP are granted by reaching this code path, so
         // strain fires now (before the first cell pick).
       };
-      // Bleed strain: fire immediately on Move action declaration, before
-      // any MP are spent (slice 9 timing). Routed through the central
-      // triggerBleedAfterAction so all action sites share one code path.
-      await triggerBleedAfterAction(game, ctx, figureKey, playerNum);
+      // Bleed strain fires only on the SpendMp path (the Move-only path
+      // above already triggered it after the action resolved). This path
+      // is reached only when isSpendMp === true — no bleed re-fire here
+      // since Spend MP is not a separate "action" per CRR.
       game.moveGridMessageIds = game.moveGridMessageIds || {};
       const multiTileNote = isMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
       const labelMap = {};

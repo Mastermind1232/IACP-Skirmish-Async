@@ -695,12 +695,16 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   const { figureKey, playerNum, mpRemaining, displayName } = moveState;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
 
-  // Early termination: "done" ends movement immediately (forfeit remaining MP)
+  // Early termination: "done" ends movement immediately. Remaining MP
+  // stays in the bank — the player can click Spend MP later to spend
+  // them. Per alexanbv 2026-05-10: the previous "X MP forfeited"
+  // message was erroneous; MP are not forfeited on End Movement.
   if (space === 'done') {
     await clearMoveGridMessages(game, moveKey, interaction.channel);
     try { await interaction.message.delete(); } catch { /* already gone */ }
     _cleanupMoveState(game, moveKey, msgId);
-    await interaction.followUp({ content: `**${displayName}** ended movement (**${mpRemaining}** MP forfeited).`, ephemeral: false }).catch(discordCatch);
+    const _mpRemainingNote = mpRemaining > 0 ? ` — **${mpRemaining}** MP remain in bank.` : '';
+    await interaction.followUp({ content: `**${displayName}** ended movement${_mpRemainingNote}`, ephemeral: false }).catch(discordCatch);
     // Restore activation buttons (figure selector, Move/Attack/etc.)
     if (ctx.updateDcActionsMessage) {
       await ctx.updateDcActionsMessage(game, msgId, client).catch(() => {});
