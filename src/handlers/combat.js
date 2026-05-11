@@ -6178,6 +6178,13 @@ export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) 
   if (combat.vagueAndUnconvincing) return;
   const figKey = role === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
   if (!figKey) return;
+  // Per alexanbv 2026-05-10: on-declare die-swap abilities (Vanguard,
+  // EE-3 Carbine) fire in step 1/2 of the attack sequence — inside the
+  // attacker's on-declare window, alongside on-declare CCs / tokens.
+  // Post the picker(s) once per attack BEFORE the token window opens.
+  if (role === 'attacker') {
+    await _postOnDeclareDieSwapPrompts(thread, game, combat, ctx);
+  }
   const ownTokens = getEligibleTokens(game, figKey, role);
   const cohesion = (combat.squadCohesionTokens?.[role] || []);
   if (ownTokens.length === 0 && cohesion.length === 0) return;
@@ -6189,6 +6196,78 @@ export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) 
   combat.tokenPhase = role;
   combat.onDeclareTokenContext = true;
   await sendTokenWindow(thread, game.gameId, role, ownTokens, displayName, combat, ownerId);
+}
+
+/**
+ * Post die-swap picker(s) for on-declare DC abilities (Vanguard, EE-3
+ * Carbine). Fires inside the attacker's on-declare window, after target
+ * has been declared so range checks are accurate.
+ *
+ * Per alexanbv 2026-05-10:
+ *  - Vanguard (AT-RT): replace one die with red; target must be within 3.
+ *  - EE-3 Carbine (Boba Fett): replace one die with red; costs 2 MP;
+ *    available only if MP bank >= 2.
+ *
+ * Buttons modify combat.attackInfo.dice in place; player Ready'ing the
+ * gate advances to roll.
+ */
+async function _postOnDeclareDieSwapPrompts(thread, game, combat, ctx) {
+  if (combat._onDeclareDieSwapsPosted) return;
+  combat._onDeclareDieSwapsPosted = true;
+  const atkMsgId = combat.attackerMsgId;
+  if (!atkMsgId) return;
+  const dcEffects = ctx?.getDcEffects?.() || {};
+  const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey);
+  const atkEff = dcEffects[atkDcName] || dcEffects[(atkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const atkSIds = atkEff?.specialAbilityIds || [];
+  const dice = combat.attackInfo?.dice || [];
+  const nonRedDice = [...new Set(dice.filter((d) => d !== 'red'))];
+  if (nonRedDice.length === 0) return;
+  const gameId = game.gameId;
+  const distance = combat.distanceAtDeclare ?? combat.target?.distance ?? null;
+
+  // Vanguard (AT-RT): only if target within 3 spaces.
+  if (atkSIds.includes('vanguard') && !combat._vanguardOnDeclareDecided && (distance == null || distance <= 3)) {
+    const btns = nonRedDice.map((color) =>
+      new ButtonBuilder()
+        .setCustomId(`od_dieswap_v_${color}_${gameId}`)
+        .setLabel(`Vanguard: ${color[0].toUpperCase() + color.slice(1)} → Red`)
+        .setStyle(ButtonStyle.Success)
+    );
+    btns.push(
+      new ButtonBuilder()
+        .setCustomId(`od_dieswap_v_skip_${gameId}`)
+        .setLabel('Skip Vanguard')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await thread.send({
+      content: `**Vanguard** — replace one attack die with Red (target within 3 spaces):`,
+      components: chunkButtonsToRows(btns).slice(0, 5),
+    }).catch(discordCatch);
+  }
+
+  // EE-3 Carbine (Boba Fett): costs 2 MP. Only offer if bank >= 2.
+  if (atkSIds.includes('ee3_carbine') && !combat._ee3OnDeclareDecided) {
+    const mp = game.movementBank?.[atkMsgId]?.remaining ?? 0;
+    if (mp >= 2) {
+      const btns = nonRedDice.map((color) =>
+        new ButtonBuilder()
+          .setCustomId(`od_dieswap_e_${color}_${gameId}`)
+          .setLabel(`EE-3 (2 MP): ${color[0].toUpperCase() + color.slice(1)} → Red`)
+          .setStyle(ButtonStyle.Success)
+      );
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`od_dieswap_e_skip_${gameId}`)
+          .setLabel('Skip EE-3')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      await thread.send({
+        content: `**EE-3 Carbine** — spend 2 MP (${mp} available) to replace one attack die with Red:`,
+        components: chunkButtonsToRows(btns).slice(0, 5),
+      }).catch(discordCatch);
+    }
+  }
 }
 
 // proceedToTokenPhase removed 2026-05-08 per destruct: tokens are now
@@ -7769,6 +7848,89 @@ async function sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx) {
   );
   const rows = buildActionRows(buttons.slice(0, 25));
   await thread.send({ content: `**Lasat Honor Guard** — Turn die ${dieIdx + 1} (${die.color || '?'}) to:`, components: rows });
+}
+
+/**
+ * Handle on-declare die-swap button: Vanguard (AT-RT) or EE-3 Carbine
+ * (Boba Fett). Fires inside the attacker's on-declare window in step
+ * 1/2 of the attack sequence, alongside on-declare CCs/tokens.
+ *
+ * customId: od_dieswap_{v|e}_{color|skip}_{gameId}
+ *   v = vanguard (no MP cost; target must be within 3)
+ *   e = ee3_carbine (2 MP cost)
+ */
+export async function handleOnDeclareDieSwap(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^od_dieswap_([ve])_([^_]+)_(.+)$/);
+  if (!m) return;
+  const [, kind, choice, gameId] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat) {
+    await interaction.followUp({ content: 'No pending attack.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Authority: attacker only.
+  const ownerPN = combat.attackerPlayerNum;
+  const ownerId = game[`player${ownerPN}Id`];
+  if (interaction.user.id !== ownerId) {
+    await interaction.reply({ content: `Only the attacker (Player ${ownerPN}) may decide this.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const decidedFlag = kind === 'v' ? '_vanguardOnDeclareDecided' : '_ee3OnDeclareDecided';
+  if (combat[decidedFlag]) {
+    await interaction.followUp({ content: 'Already decided for this attack.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // For EE-3 (kind='e'): re-check 2 MP available, deduct on apply.
+  if (kind === 'e' && choice !== 'skip') {
+    const mp = game.movementBank?.[combat.attackerMsgId]?.remaining ?? 0;
+    if (mp < 2) {
+      await interaction.followUp({ content: `EE-3 Carbine needs 2 MP (you have ${mp}).`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
+  // For Vanguard (kind='v'): re-check target within 3.
+  if (kind === 'v' && choice !== 'skip') {
+    const distance = combat.distanceAtDeclare ?? combat.target?.distance ?? null;
+    if (distance != null && distance > 3) {
+      await interaction.followUp({ content: `Vanguard target must be within 3 spaces (target is ${distance}).`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
+
+  if (choice === 'skip') {
+    combat[decidedFlag] = true;
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    const label = kind === 'v' ? 'Vanguard' : 'EE-3 Carbine';
+    await interaction.message.channel.send(`**${label}** — Skipped.`).catch(discordCatch);
+    if (saveGames) saveGames(game.gameId);
+    return;
+  }
+
+  // Apply the swap: replace one die of `choice` color with red in
+  // combat.attackInfo.dice. EE-3 also deducts 2 MP.
+  const dice = [...(combat.attackInfo?.dice || [])];
+  const idx = dice.indexOf(choice);
+  if (idx === -1) {
+    await interaction.followUp({ content: `No ${choice} die in the attack pool.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  dice[idx] = 'red';
+  combat.attackInfo = { ...combat.attackInfo, dice };
+  combat[decidedFlag] = true;
+  if (kind === 'e') {
+    const bank = game.movementBank?.[combat.attackerMsgId];
+    if (bank) bank.remaining = Math.max(0, (bank.remaining || 0) - 2);
+  }
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  const label = kind === 'v' ? 'Vanguard' : 'EE-3 Carbine';
+  const costSuffix = kind === 'e' ? ' (-2 MP)' : '';
+  await interaction.message.channel.send(`**${label}** — ${choice[0].toUpperCase() + choice.slice(1)} → Red${costSuffix}.`).catch(discordCatch);
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**

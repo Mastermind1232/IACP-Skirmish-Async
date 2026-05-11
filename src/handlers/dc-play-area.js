@@ -2308,11 +2308,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }).catch(discordCatch);
       return;
     }
-    // EE-3 Carbine (Boba Fett): spend 2 MP to change one attack die to red.
-    // Card text: "Limit once per attack" — must be eligible on EVERY attack
-    // Boba performs in his activation, not just the first one. Clear any
-    // 'decided' sentinel from the previous attack so this attack's prompt
-    // can fire fresh.
+    // EE-3 Carbine (Boba Fett) + Vanguard (AT-RT) die-swap moved to the
+    // on-declare window in combat.js per alexanbv 2026-05-10 — see
+    // _postOnDeclareDieSwapPrompts + handleOnDeclareDieSwap. The legacy
+    // pre-target pickers below are retired (kept as `if (false)` blocks
+    // until reviewed for stale state cleanup).
+    if (false) {
     const hasEe3Carbine = atkSpecialIds.includes('ee3_carbine');
     if (hasEe3Carbine && game.pendingEe3Carbine?.[msgId] === 'decided') {
       delete game.pendingEe3Carbine[msgId];
@@ -2406,6 +2407,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     }
+    } // end legacy pre-target die-swap pickers (retired)
     // Bo-Rifle (Agent Kallus): before declaring attack, may switch to melee (replace blue→red)
     if (atkSpecialIds.includes('bo_rifle_kallus') && !game.pendingOverrideAttackDice?.[msgId]) {
       const baseDice = stats.attack?.dice || [];
