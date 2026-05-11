@@ -226,7 +226,14 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
   // The action cost is decremented at button-press time, so remaining can be 0 before the action
   // actually finishes. Re-firing happens automatically when the resolution path calls
   // updateDcActionsMessage again (after combat resolution / move pick / space pick clear).
-  if (data?.remaining === 0 && meta && !isActivationActionInProgress(game, msgId)) {
+  // suppressFinishedPrompt: per alexanbv 2026-05-10 — dc_special_ click consumes the action
+  // BEFORE resolveAbility decides if a target picker is needed (requiresChoice path refunds
+  // the action). Skipping the "finished" prompt during that window prevents firing before
+  // the ability has actually resolved. The refund path calls updateDcActionsMessage again
+  // without this flag, which re-evaluates with remaining=1 (no spurious fire).
+  if (deps.suppressFinishedPrompt) {
+    // Skip the finished-prompt branch entirely.
+  } else if (data?.remaining === 0 && meta && !isActivationActionInProgress(game, msgId)) {
     game.dcFinishedPinged = game.dcFinishedPinged || {};
     if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn?.[msgId]) {
       const ownerId = deps.getPlayerId(game, meta.playerNum);

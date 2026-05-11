@@ -1660,7 +1660,7 @@ async function repostRoundActivationMessage(game, gameId, client) {
 }
 
 /** Update the DC thread's Actions message with current counter. If all actions exhausted, @ the other player to activate. */
-async function updateDcActionsMessage(game, msgId, client) {
+async function updateDcActionsMessage(game, msgId, client, opts) {
   return _updateDcActionsMessagePure(game, msgId, client, {
     dcMessageMeta, getActionsCounterContent, getDcActionButtons,
     getActivationMinimapAttachment, discordCatch, getPlayAreaId,
@@ -1669,6 +1669,7 @@ async function updateDcActionsMessage(game, msgId, client) {
     getPlayerId, ACTION_ICONS, ActionRowBuilder, ButtonBuilder, ButtonStyle,
     shouldShowEndActivationPhaseButton, EmbedBuilder, GAME_PHASES, PHASE_COLOR,
     getInitiativePlayerNum, getInitiativePlayerZoneLabel, saveGames,
+    suppressFinishedPrompt: !!opts?.suppressFinishedPrompt,
   });
 }
 

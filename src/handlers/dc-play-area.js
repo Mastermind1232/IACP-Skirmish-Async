@@ -2563,7 +2563,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
       consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
-      await updateDcActionsMessage(game, msgId, client);
+      // Per alexanbv 2026-05-10: for dc_special_ button clicks, defer the
+      // "finished all actions" prompt until after resolveAbility settles.
+      // The ability may return requiresChoice (refunds the action), in
+      // which case firing "finished" here would be wrong. The
+      // requiresChoice refund path + the applied-result path both call
+      // updateDcActionsMessage afterward without this suppression.
+      const _suppressFinished = buttonKey === 'dc_special_';
+      await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: _suppressFinished });
     }
   }
   const displayName = meta.displayName || meta.dcName;
@@ -3151,6 +3158,15 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
     await triggerBleedAfterAction(game, ctx, figureKey, meta.playerNum);
+    // Per alexanbv 2026-05-10: the "finished all actions" prompt for
+    // dc_special_ clicks was suppressed at the consume step (because
+    // requiresChoice paths refund the action). Now that the ability
+    // has settled (applied / requiresChoice already handled their own
+    // updates), re-evaluate WITHOUT suppression so the prompt fires
+    // for auto-applied dcSpecials whose action is genuinely consumed.
+    if (resolveResult.applied && !resolveResult.requiresChoice && !resolveResult.requiresSpaceChoice) {
+      await updateDcActionsMessage(game, msgId, client).catch(() => {});
+    }
   }
   saveGames(game.gameId);
 }
