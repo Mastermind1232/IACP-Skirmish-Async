@@ -103,6 +103,38 @@ export function enumerateAllFigures(game) {
 }
 
 /**
+ * Sync core of NPC damage: mutates npc.hp / npc.defeated and awards
+ * VP without doing any Discord I/O. Use from synchronous resolvers
+ * (resolveAbility); for async callers prefer applyDamageToNpc which
+ * also writes a game-log line.
+ *
+ * Returns { applied, prevHp, newHp, defeated, vp, label }.
+ */
+export function applyDamageToNpcSync(game, opts) {
+  const { npcType, npcIndex, amount, attackerPlayerNum } = opts || {};
+  if (!amount || amount <= 0) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  const arrName = npcType === 'thug' ? 'npcThugs' : npcType === 'krykna' ? 'npcKrykna' : null;
+  if (!arrName) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  const arr = game[arrName];
+  if (!Array.isArray(arr) || !arr[npcIndex]) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  const npc = arr[npcIndex];
+  if (npc.defeated) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  const prevHp = npc.hp;
+  npc.hp = Math.max(0, npc.hp - amount);
+  const label = npcType === 'thug' ? `Thug ${npcIndex + 1}` : `Krykna ${npcIndex + 1}`;
+  if (npc.hp > 0) {
+    return { applied: true, prevHp, newHp: npc.hp, defeated: false, vp: 0, label };
+  }
+  npc.defeated = true;
+  let vp = 0;
+  if (npcType === 'krykna' && attackerPlayerNum && opts?.awardObjectiveVp) {
+    vp = 2;
+    opts.awardObjectiveVp(game, attackerPlayerNum, vp);
+  }
+  return { applied: true, prevHp, newHp: 0, defeated: true, vp, label };
+}
+
+/**
  * Apply damage to a neutral NPC figure (Thug / Krykna). Decrements
  * npc.hp, marks defeated on HP=0, awards VP if attackerPlayerNum is
  * set (per card text: "When a player defeats a Krykna, that player
@@ -163,4 +195,36 @@ export function parseNpcFigureKey(figureKey) {
   const m = figureKey.match(/^npc_(thug|krykna)_(\d+)$/);
   if (!m) return null;
   return { npcType: m[1], npcIndex: parseInt(m[2], 10) };
+}
+
+/**
+ * Classify an adjacency-helper entry as hostile to the given player.
+ * Hostile = opponent's regular figure OR neutral NPC tagged hostileToAll.
+ *
+ * Use at hostile-target callsites so e.g. Force Choke / Trample / Demolish
+ * pickers correctly include Thugs/Krykna when card text reads "hostile figure"
+ * per CRR neutral-figure rules.
+ */
+export function isEntryHostileTo(game, entry, playerNum) {
+  if (!entry) return false;
+  if (entry.isNpc) {
+    if (entry.npcType === 'thug') {
+      return !!game?.npcThugs?.[entry.npcIndex]?.hostileToAll;
+    }
+    if (entry.npcType === 'krykna') {
+      return !!game?.npcKrykna?.[entry.npcIndex]?.hostileToAll;
+    }
+    return false;
+  }
+  return entry.playerNum != null && entry.playerNum !== playerNum;
+}
+
+/** Human-readable label for an adjacency entry (NPC or regular figure). */
+export function entryDisplayLabel(entry) {
+  if (!entry) return 'figure';
+  if (entry.isNpc) {
+    const label = entry.npcType === 'thug' ? 'Thug' : 'Krykna';
+    return `${label} ${(entry.npcIndex ?? 0) + 1}`;
+  }
+  return (entry.figureKey || '').replace(/-\d+-\d+$/, '');
 }

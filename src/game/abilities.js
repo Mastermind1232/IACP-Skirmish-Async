@@ -52,6 +52,7 @@ function getStatsForDc(dcName) {
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
+import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
@@ -545,9 +546,31 @@ export function resolveAbility(abilityId, context) {
         const mapId = game.selectedMap?.id;
         if (mapId) {
           const adjacent = getFiguresAdjacentToTarget(game, targetFigureKey, mapId);
-          for (const { figureKey: adjFk, playerNum: adjPnum } of adjacent) {
+          for (const adjEntry of adjacent) {
+            const { figureKey: adjFk, playerNum: adjPnum, isNpc: adjIsNpc } = adjEntry;
+            const adjName = adjIsNpc ? entryDisplayLabel(adjEntry) : dcNameFromFigureKey(adjFk);
+            if (adjIsNpc) {
+              if (splashDamage > 0) {
+                const npcRes = applyDamageToNpcSync(game, {
+                  npcType: adjEntry.npcType,
+                  npcIndex: adjEntry.npcIndex,
+                  amount: splashDamage,
+                  attackerPlayerNum: playerNum,
+                });
+                if (npcRes.applied) {
+                  splashParts.push(`**${adjName}** ${splashDamage} Damage (${npcRes.prevHp}→${npcRes.newHp})`);
+                  if (npcRes.defeated) _hadDefeats = true;
+                }
+              }
+              if (splashConditions.length > 0) {
+                const adjToAdd = splashConditions.filter((c) => applyCondition(game, adjFk, c));
+                if (adjToAdd.length > 0) {
+                  splashParts.push(`**${adjName}** gains ${adjToAdd.join(', ')}`);
+                }
+              }
+              continue;
+            }
             const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
-            const adjName = dcNameFromFigureKey(adjFk);
             if (splashDamage > 0 && dcHealthState && adjMsgId) {
               const adjFkMatch = adjFk.match(/-(\d+)-(\d+)$/);
               const adjFigIdx = adjFkMatch ? parseInt(adjFkMatch[2], 10) : 0;
@@ -7165,9 +7188,25 @@ export function resolveAbility(abilityId, context) {
         if (mapId) {
           const adjacent = getFiguresAdjacentToTarget(game, strainKey, mapId);
           const splashParts = [];
-          for (const { figureKey: adjFk, playerNum: adjPnum } of adjacent) {
+          for (const adjEntry of adjacent) {
+            const { figureKey: adjFk, playerNum: adjPnum, isNpc: adjIsNpc } = adjEntry;
+            const adjName = adjIsNpc ? entryDisplayLabel(adjEntry) : dcNameFromFigureKey(adjFk);
+            if (adjIsNpc) {
+              if (splashDmg > 0) {
+                const npcRes = applyDamageToNpcSync(game, {
+                  npcType: adjEntry.npcType,
+                  npcIndex: adjEntry.npcIndex,
+                  amount: splashDmg,
+                  attackerPlayerNum: playerNum,
+                });
+                if (npcRes.applied) splashParts.push(`**${adjName}** ${splashDmg} Damage (${npcRes.prevHp}→${npcRes.newHp})`);
+              }
+              if (splashConds.length > 0) {
+                for (const c of splashConds) applyCondition(game, adjFk, c);
+              }
+              continue;
+            }
             const adjMsgId = findMsgIdForFigureKey(game, adjPnum, adjFk, dcMessageMeta);
-            const adjName = dcNameFromFigureKey(adjFk);
             if (splashDmg > 0 && dcHealthState && adjMsgId) {
               const adjHs = (dcHealthState.get(adjMsgId) || []).slice();
               const adjMatch = adjFk.match(/-(\d+)-(\d+)$/);
@@ -8674,7 +8713,13 @@ export function resolveAbility(abilityId, context) {
       }
       const dioFk = dioCandidates[0];
       const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
-      const hostiles = adjAll.filter(({ playerNum: p }) => p !== playerNum).map((a) => a.figureKey);
+      // Static Pulse offers a 2-Strain-or-Weaken choice — Strain is a
+      // figure-strain concept that does not apply to NPCs. Skip NPC entries
+      // here; their figure-targeting hostility is otherwise handled by the
+      // shared isEntryHostileTo path.
+      const hostiles = adjAll
+        .filter((e) => !e.isNpc && e.playerNum != null && e.playerNum !== playerNum)
+        .map((a) => a.figureKey);
       if (hostiles.length === 0) {
         return { applied: true, logMessage: '**Static Pulse** — No hostile figures adjacent to Dio.' };
       }
@@ -8754,26 +8799,36 @@ export function resolveAbility(abilityId, context) {
     const seenMsgIds = new Set();
     for (const selfFk of figureKeys) {
       const adjAll = getFiguresAdjacentToTarget(game, selfFk, mapId);
-      for (const { figureKey: fk, playerNum: p } of adjAll) {
-        const dcName = dcNameFromFigureKey(fk);
-        if (dmg > 0) {
-          const figMsgId = findMsgIdForFigureKey(game, p, fk, dcMessageMeta);
-          if (figMsgId) {
-            const hs = dcHealthState.get(figMsgId) || [];
-            const figMatch = fk.match(/-(\d+)-(\d+)$/);
-            const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-            const hp = hs[figIdx];
-            if (hp) {
-              const [cur, max] = hp;
-              const newCur = Math.max(0, (cur ?? max) - dmg);
-              hs[figIdx] = [newCur, max ?? newCur];
-              dcHealthState.set(figMsgId, hs);
-              syncHealthStateToList(game, p, figMsgId, hs);
-              seenMsgIds.add(figMsgId);
-              results.push(`**${dcName}** ${dmg} Dmg (${cur ?? max}→${newCur})`);
-            } else {
-              results.push(`**${dcName}** ${dmg} Dmg (apply manually)`);
-            }
+      for (const adjEntry of adjAll) {
+        const { figureKey: fk, playerNum: p, isNpc } = adjEntry;
+        const dcName = isNpc ? entryDisplayLabel(adjEntry) : dcNameFromFigureKey(fk);
+        if (dmg <= 0) continue;
+        if (isNpc) {
+          const npcRes = applyDamageToNpcSync(game, {
+            npcType: adjEntry.npcType,
+            npcIndex: adjEntry.npcIndex,
+            amount: dmg,
+            attackerPlayerNum: playerNum,
+          });
+          if (npcRes.applied) results.push(`**${dcName}** ${dmg} Dmg (${npcRes.prevHp}→${npcRes.newHp})`);
+          continue;
+        }
+        const figMsgId = findMsgIdForFigureKey(game, p, fk, dcMessageMeta);
+        if (figMsgId) {
+          const hs = dcHealthState.get(figMsgId) || [];
+          const figMatch = fk.match(/-(\d+)-(\d+)$/);
+          const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+          const hp = hs[figIdx];
+          if (hp) {
+            const [cur, max] = hp;
+            const newCur = Math.max(0, (cur ?? max) - dmg);
+            hs[figIdx] = [newCur, max ?? newCur];
+            dcHealthState.set(figMsgId, hs);
+            syncHealthStateToList(game, p, figMsgId, hs);
+            seenMsgIds.add(figMsgId);
+            results.push(`**${dcName}** ${dmg} Dmg (${cur ?? max}→${newCur})`);
+          } else {
+            results.push(`**${dcName}** ${dmg} Dmg (apply manually)`);
           }
         }
       }
