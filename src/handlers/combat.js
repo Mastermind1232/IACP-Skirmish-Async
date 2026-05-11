@@ -281,7 +281,6 @@ const COMBAT_GATE_LABELS = {
   on_declare:             '⚔️ **Combat declared** — play any on-declare CCs / abilities / tokens, then click Ready. Next: power tokens.',
   post_roll:              '🎲 **Dice rolled** (CRR step 2). Next: rerolls (step 3).',
   post_attacker_reroll:   '🔄 **Attacker rerolls done**. Next: defender rerolls (if any).',
-  post_forced_reroll:     '🔄 **Forced rerolls done**. Next: defender rerolls (if any).',
   // Step 4 of an attack per CRR: Apply Modifiers. This is when CCs that
   // modify the attack (Take Cover, Concentrated Fire, etc.) and ability
   // triggers fire. Both players: play any modifier CCs from your hand
@@ -305,7 +304,6 @@ const COMBAT_GATE_LABELS = {
 const AUTO_ADVANCE_SUB_PHASES = new Set([
   'pre_resolve',
   'post_attacker_reroll',
-  'post_forced_reroll',
   'post_defender_reroll',
 ]);
 
@@ -457,8 +455,12 @@ export async function handleCombatGateReady(interaction, ctx) {
  * owns the active controlled-reroll window. Per destruct 2026-05-08.
  */
 async function _enterDefenderRerollPhase(thread, game, combat, ctx, defPN) {
-  const _defCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN);
-  if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrlForced) {
+  // Per alexanbv 2026-05-11: defender bucket = voluntary defender rerolls
+  // + defender-owned controlled abilities (any pool). Cross Training also
+  // lives here. If none → step 4.
+  const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
+  const _defCtAvail = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+  if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrl || _defCtAvail) {
     combat.rerollPhase = 'defender';
     combat.controlledRerollSide = defPN;
     combat.currentStep = 'step3-defender';
@@ -504,16 +506,14 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'post_roll': {
-      // Proceed to reroll phases. Per destruct 2026-05-08: only two
-      // reroll buckets exist — attacker side and defender side. Each
-      // side's bucket is (own rerolls + controlled cross-side rerolls
-      // where the queue entry's controlPlayer === that side's PN). The
-      // legacy "forced" middle phase is gone; controlled entries are
-      // routed inside the side's window.
+      // Per alexanbv 2026-05-11: two reroll buckets — attacker side and
+      // defender side. Each bucket = (own voluntary rerolls + own
+      // controlled cross-side abilities). Owner picks any order in their
+      // bucket. Legacy `forced` middle phase fully retired.
       const atkPN = combat.attackerPlayerNum || 1;
       const defPN = opponentPlayerNum(atkPN);
-      const _atkCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN);
-      if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrlForced) {
+      const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
+      if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrl) {
         combat.rerollPhase = 'attacker';
         combat.controlledRerollSide = atkPN;
         combat.currentStep = 'step3-attacker';
@@ -525,62 +525,22 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'post_attacker_reroll': {
-      // Attacker's own rerolls done. If atk-controlled cross-side
-      // rerolls remain in the queue, fold them into THIS window
-      // (controlled phase, side=attacker). Otherwise hand off to
-      // defender's window.
+      // Attacker's bucket done — defender opens next (or step 4).
+      // Mark the canonical CRR sub-window between buckets so any CC
+      // wired to `step3-rapidrecal` (Rapid Recalibration) sees the
+      // expected currentStep. The window is engine-driven (auto-advance
+      // through the gate); a CC playing at this step would have been
+      // queued in attacker's bucket and resolved before we got here.
       const atkPN = combat.attackerPlayerNum || 1;
       const defPN = opponentPlayerNum(atkPN);
-      const _atkCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN);
-      if (_atkCtrlForced) {
-        combat.rerollPhase = 'forced';
-        combat.controlledRerollSide = atkPN;
-        combat.currentStep = 'step3-rapidrecal';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else {
-        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
-      }
-      break;
-    }
-
-    case 'post_forced_reroll': {
-      // One controlled-cross-side reroll done. Re-check the queue
-      // filtered to the active side. If more remain on this side,
-      // continue. Else, hand off:
-      //   - attacker side → defender's window
-      //   - defender side → step 4
-      const activeSidePN = combat.controlledRerollSide
-        ?? combat.attackerPlayerNum
-        ?? 1;
-      const atkPN = combat.attackerPlayerNum || 1;
-      const defPN = opponentPlayerNum(atkPN);
-      const _stillForActiveSide = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === activeSidePN);
-      if (_stillForActiveSide) {
-        combat.rerollPhase = 'forced';
-        combat.currentStep = 'step3-rapidrecal';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else if (activeSidePN === atkPN) {
-        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
-      } else {
-        await _enterStep4(thread, game, combat, ctx);
-      }
+      combat.currentStep = 'step3-rapidrecal';
+      await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
       break;
     }
 
     case 'post_defender_reroll': {
-      // Defender's own rerolls done. If def-controlled cross-side
-      // rerolls remain, fold them into THIS window. Otherwise step 4.
-      const atkPN = combat.attackerPlayerNum || 1;
-      const defPN = opponentPlayerNum(atkPN);
-      const _defCtrlForced = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN);
-      if (_defCtrlForced) {
-        combat.rerollPhase = 'forced';
-        combat.controlledRerollSide = defPN;
-        combat.currentStep = 'step3-rapidrecal';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else {
-        await _enterStep4(thread, game, combat, ctx);
-      }
+      // Defender's bucket done — step 4.
+      await _enterStep4(thread, game, combat, ctx);
       break;
     }
 
@@ -3971,25 +3931,83 @@ export async function sendRerollUI(thread, game, combat, phase) {
   //   - active side = attacker → defender reroll window opens
   //                                (own + def-controlled cross-side)
   //   - active side = defender → step 4
+  // Advance from an empty bucket (caller already verified nothing left).
+  // Per alexanbv 2026-05-11: attacker bucket → defender bucket → step 4.
+  // The `forced` re-entry is retired; controlled abilities now live in
+  // the side's main bucket.
   const _advanceFromForced = async () => {
     const atkPN = combat.attackerPlayerNum || 1;
     const defPN = opponentPlayerNum(atkPN);
     const activeSidePN = combat.controlledRerollSide ?? atkPN;
-    const _stillForActiveSide = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === activeSidePN);
-    if (_stillForActiveSide) {
-      combat.rerollPhase = 'forced';
-      await sendRerollUI(thread, game, combat, 'forced');
-      return;
-    }
     if (activeSidePN === atkPN) {
-      // Hand off to defender's window
       await _enterDefenderRerollPhase(thread, game, combat, /*ctx*/ undefined, defPN);
       return;
     }
-    // Defender side done — step 4
     combat.rerollPhase = null;
     combat.controlledRerollSide = null;
   };
+  // Per alexanbv 2026-05-11: rerolls are bucketed by which player's
+  // ABILITY triggered them (attacker-owned vs defender-owned), not by
+  // whose dice get rerolled. Within a bucket, the owning player picks
+  // any order (Versatile Weaponry first, then Targeting Computer, etc.)
+  // and every reroll is individually skippable. The legacy `forced`
+  // sub-phase between attacker and defender windows is gone; controlled
+  // cross-side rerolls (e.g. HK forcing a DEF reroll, Tress while
+  // defending forcing an ATK reroll) now live inside the owner's
+  // attacker/defender window as additional buttons.
+  //
+  // Sub-picker mode: when the user clicks a "Use X" button for a
+  // controlled ability, combat.controlledRerollActiveIdx is set to
+  // its forcedRerollQueue index and we re-render here showing only
+  // pool dice for that entry + Cancel. Picking a die resolves it
+  // (drops the entry) and returns to the main bucket UI.
+  if ((phase === 'attacker' || phase === 'defender') && combat.controlledRerollActiveIdx != null) {
+    const _ctrlEntry = (combat.forcedRerollQueue || [])[combat.controlledRerollActiveIdx];
+    if (_ctrlEntry && (_ctrlEntry.remaining ?? 0) > 0) {
+      const _ctrlButtons = [];
+      const _ctrlAtkRr = combat.attackerRerolledIndices || [];
+      const _ctrlDefRr = combat.defenderRerolledIndices || [];
+      if (_ctrlEntry.pool === 'attack' || _ctrlEntry.pool === 'any') {
+        const aDice = combat.attackDiceResults || [];
+        for (let i = 0; i < aDice.length; i++) {
+          if (_ctrlAtkRr.includes(i)) continue;
+          _ctrlButtons.push(
+            new ButtonBuilder()
+              .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
+              .setLabel(`Force ATK ${formatAttackDie(aDice[i], i)}`)
+              .setStyle(ButtonStyle.Danger),
+          );
+        }
+      }
+      if (_ctrlEntry.pool === 'defense' || _ctrlEntry.pool === 'any') {
+        const dDice = combat.defenseDiceResults || [];
+        for (let i = 0; i < dDice.length; i++) {
+          if (_ctrlDefRr.includes(i)) continue;
+          _ctrlButtons.push(
+            new ButtonBuilder()
+              .setCustomId(`combat_reroll_${gameId}_def_${i}`)
+              .setLabel(`Force DEF ${formatDefenseDie(dDice[i], i)}`)
+              .setStyle(ButtonStyle.Danger),
+          );
+        }
+      }
+      const _ctrlTrailing = [
+        new ButtonBuilder()
+          .setCustomId(`combat_reroll_${gameId}_cancelctrl`)
+          .setLabel('Cancel (return to reroll menu)')
+          .setStyle(ButtonStyle.Secondary),
+      ];
+      const _ctrlPoolLabel = _ctrlEntry.pool === 'any' ? '' : `${_ctrlEntry.pool} `;
+      await thread.send({
+        content: `**${_ctrlEntry.source}** — Pick a ${_ctrlPoolLabel}die to reroll (${_ctrlEntry.remaining} remaining), or Cancel to return.`,
+        components: buildRerollRows(_ctrlButtons, _ctrlTrailing),
+      });
+      return;
+    }
+    // Stale flag — drop and fall through to main UI.
+    combat.controlledRerollActiveIdx = null;
+  }
+
   if (phase === 'attacker') {
     // Pre-reroll prompts: show before any reroll dice are offered
     if (!combat.preRerollsProcessed && (combat.pendingPreRerolls || []).length > 0) {
@@ -4037,100 +4055,82 @@ export async function sendRerollUI(thread, game, combat, phase) {
       combat.pendingPreRerolls.shift();
     }
     const remaining = combat.attackerRerollsRemaining || 0;
-    if (remaining <= 0) {
+    const atkPN = combat.attackerPlayerNum || 1;
+    const _atkCtrl = (combat.forcedRerollQueue || [])
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
+    if (remaining <= 0 && _atkCtrl.length === 0) {
       await _advanceFromForced();
       return;
     }
     const dice = combat.attackDiceResults || [];
     const alreadyRerolled = combat.attackerRerolledIndices || [];
     const dieButtons = [];
-    for (let i = 0; i < dice.length; i++) {
-      if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
+    if (remaining > 0) {
+      for (let i = 0; i < dice.length; i++) {
+        if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
+        dieButtons.push(
+          new ButtonBuilder()
+            .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
+            .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+    }
+    // Attacker-owned controlled abilities (Versatile Weaponry, Shared
+    // Calculations, Precision, Fyrnock Style while attacking, Imperial
+    // Raider, etc.) appear as additional buttons. Each is voluntary
+    // and the attacker picks any order; clicking opens the pool die
+    // sub-picker via combat.controlledRerollActiveIdx.
+    for (const { e, i } of _atkCtrl) {
+      const _poolHint = e.pool === 'any' ? '' : ` (${e.pool})`;
       dieButtons.push(
         new ButtonBuilder()
-          .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
-          .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
-          .setStyle(ButtonStyle.Secondary)
+          .setCustomId(`combat_reroll_${gameId}_ctrl_${i}`)
+          .setLabel(`Use ${e.source}${_poolHint}`)
+          .setStyle(ButtonStyle.Primary),
       );
     }
     const trailing = [
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
-        .setLabel('Done (no rerolls)')
+        .setLabel('Done (skip remaining)')
         .setStyle(ButtonStyle.Primary),
     ];
+    const _atkParts = [];
+    if (remaining > 0) _atkParts.push(`${remaining} voluntary reroll${remaining > 1 ? 's' : ''}`);
+    if (_atkCtrl.length > 0) _atkParts.push(`${_atkCtrl.length} ability button${_atkCtrl.length > 1 ? 's' : ''}`);
     await thread.send({
-      content: `**Reroll Window (Attacker)** — ${remaining} reroll${remaining > 1 ? 's' : ''} available. Choose an attack die to reroll, or Done.`,
+      content: `**Reroll Window (Attacker)** — ${_atkParts.join(' + ')}. Pick any in any order, or Done.`,
       components: buildRerollRows(dieButtons, trailing),
     });
   } else if (phase === 'forced') {
-    // Per destruct 2026-05-08: pick the first queued entry owned by the
-    // currently active side (controlledRerollSide). Entries belonging
-    // to the OTHER side stay queued — they fire inside that side's
-    // own reroll window. Drop globally-exhausted entries (remaining
-    // <= 0) eagerly so they don't pile up regardless of which side
-    // they belong to.
+    // Legacy phase shim — kept so in-flight games (mid-combat at deploy
+    // time) finish gracefully. New flow uses attacker/defender buckets
+    // with controlledRerollActiveIdx for the sub-picker. The only
+    // behavior preserved here is "drop globally-exhausted queue entries
+    // and advance" — matches the pre-2026-05-11 expectation.
     combat.forcedRerollQueue = (combat.forcedRerollQueue || [])
       .filter(e => (e.remaining ?? 0) > 0);
-    const _activeSidePN = combat.controlledRerollSide
-      ?? combat.attackerPlayerNum
-      ?? 1;
-    const entry = combat.forcedRerollQueue.find(e => e.controlPlayer === _activeSidePN);
-    if (!entry) {
-      await _advanceFromForced();
-      return;
-    }
-    const dieButtons = [];
-    const atkAlreadyRerolled = combat.attackerRerolledIndices || []; // G12
-    const defAlreadyRerolled = combat.defenderRerolledIndices || []; // G12
-    if (entry.pool === 'attack' || entry.pool === 'any') {
-      const aDice = combat.attackDiceResults || [];
-      for (let i = 0; i < aDice.length; i++) {
-        if (atkAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        dieButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
-            .setLabel(`Force ATK ${formatAttackDie(aDice[i], i)}`)
-            .setStyle(ButtonStyle.Danger)
-        );
-      }
-    }
-    if (entry.pool === 'defense' || entry.pool === 'any') {
-      const dDice = combat.defenseDiceResults || [];
-      for (let i = 0; i < dDice.length; i++) {
-        if (defAlreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        dieButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`combat_reroll_${gameId}_def_${i}`)
-            .setLabel(`Force DEF ${formatDefenseDie(dDice[i], i)}`)
-            .setStyle(ButtonStyle.Danger)
-        );
-      }
-    }
-    const trailing = [
-      new ButtonBuilder()
-        .setCustomId(`combat_reroll_${gameId}_atk_done`)
-        .setLabel('Skip (no forced reroll)')
-        .setStyle(ButtonStyle.Secondary),
-    ];
-    const poolLabel = entry.pool === 'any' ? '' : entry.pool + ' ';
-    await thread.send({
-      content: `**${entry.source}** (Forced Reroll) — Pick a ${poolLabel}die to force reroll (${entry.remaining} remaining), or Skip.`,
-      components: buildRerollRows(dieButtons, trailing),
-    });
+    // Fall through to advance; do not render anything.
+    return;
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
     const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
-    if (remaining <= 0 && !ctAvailable) {
+    const defPN = opponentPlayerNum(combat.attackerPlayerNum || 1);
+    const _defCtrl = (combat.forcedRerollQueue || [])
+      .map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
+    if (remaining <= 0 && !ctAvailable && _defCtrl.length === 0) {
       combat.rerollPhase = null;
       return;
     }
     const dice = combat.defenseDiceResults || [];
     const alreadyRerolled = combat.defenderRerolledIndices || [];
     const dieButtons = [];
-    for (let i = 0; i < dice.length; i++) {
-      if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-      if (remaining > 0) {
+    if (remaining > 0) {
+      for (let i = 0; i < dice.length; i++) {
+        if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
         dieButtons.push(
           new ButtonBuilder()
             .setCustomId(`combat_reroll_${gameId}_def_${i}`)
@@ -4138,6 +4138,17 @@ export async function sendRerollUI(thread, game, combat, phase) {
             .setStyle(ButtonStyle.Secondary)
         );
       }
+    }
+    // Defender-owned controlled abilities (Fyrnock Style while defending,
+    // Precision when defender is GI, Survival is Strength, Doubt, etc.)
+    for (const { e, i } of _defCtrl) {
+      const _poolHint = e.pool === 'any' ? '' : ` (${e.pool})`;
+      dieButtons.push(
+        new ButtonBuilder()
+          .setCustomId(`combat_reroll_${gameId}_ctrl_${i}`)
+          .setLabel(`Use ${e.source}${_poolHint}`)
+          .setStyle(ButtonStyle.Primary),
+      );
     }
     const trailing = [];
     if (ctAvailable) {
@@ -4151,15 +4162,16 @@ export async function sendRerollUI(thread, game, combat, phase) {
     trailing.push(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_def_done`)
-        .setLabel('Done (no rerolls)')
+        .setLabel('Done (skip remaining)')
         .setStyle(ButtonStyle.Primary)
     );
     const actionRows = buildRerollRows(dieButtons, trailing);
     const parts = [];
-    if (remaining > 0) parts.push(`${remaining} reroll${remaining > 1 ? 's' : ''}`);
+    if (remaining > 0) parts.push(`${remaining} voluntary reroll${remaining > 1 ? 's' : ''}`);
     if (ctAvailable) parts.push('Cross Training');
+    if (_defCtrl.length > 0) parts.push(`${_defCtrl.length} ability button${_defCtrl.length > 1 ? 's' : ''}`);
     await thread.send({
-      content: `**Reroll Window (Defender)** — ${parts.join(' + ')} available. Choose a defense die to reroll, or Done.`,
+      content: `**Reroll Window (Defender)** — ${parts.join(' + ')}. Pick any in any order, or Done.`,
       components: actionRows,
     });
   }
@@ -4222,9 +4234,15 @@ export async function handleCombatRerollYn(interaction, ctx) {
  */
 export async function handleCombatReroll(interaction, ctx) {
   const { getGame, replyIfGameEnded, rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals, recalcDefenseTotals, saveGames } = ctx;
-  const match = interaction.customId.match(/^combat_reroll_([^_]+)_(atk|def)_(done|\d+)$/);
+  // Match the standard "pick a die / done" pattern. New variants
+  // (`ctrl_${idx}` to fire a controlled ability, `cancelctrl` to exit the
+  // sub-picker) get their own match branches below.
+  const _ctrlMatch = interaction.customId.match(/^combat_reroll_([^_]+)_(ctrl_\d+|cancelctrl)$/);
+  const match = _ctrlMatch || interaction.customId.match(/^combat_reroll_([^_]+)_(atk|def)_(done|\d+)$/);
   if (!match) return;
-  const [, gameId, side, choice] = match;
+  const gameId = match[1];
+  const side = _ctrlMatch ? null : match[2];
+  const choice = _ctrlMatch ? null : match[3];
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
@@ -4233,12 +4251,48 @@ export async function handleCombatReroll(interaction, ctx) {
     await interaction.followUp({ content: 'No reroll phase active.', ephemeral: true }).catch(discordCatch);
     return;
   }
+
+  // Branch A: "Use {ability}" button — set the sub-picker flag and
+  // re-render the side bucket. Permission gate: only the owner of the
+  // current bucket can pick.
+  if (_ctrlMatch) {
+    const _ctrlGameId = match[1];
+    const _ctrlOp = match[2];
+    const _ctrlAtkPN = combat.attackerPlayerNum || 1;
+    const _ctrlDefPN = opponentPlayerNum(_ctrlAtkPN);
+    const _ctrlExpectedPN = combat.rerollPhase === 'attacker' ? _ctrlAtkPN : _ctrlDefPN;
+    if (!await requirePlayer(interaction, game, interaction.user.id, _ctrlExpectedPN, canActAsPlayer, `Only **${getPlayerDisplayName(game, _ctrlExpectedPN, interaction.client)}** can use abilities in this reroll window.`)) return;
+    const _ctrlThread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+    if (!_ctrlThread) throw new Error(`handleCombatReroll: thread missing (threadId=${combat.combatThreadId})`);
+    if (_ctrlOp === 'cancelctrl') {
+      combat.controlledRerollActiveIdx = null;
+      await sendRerollUI(_ctrlThread, game, combat, combat.rerollPhase);
+      saveGames(game.gameId);
+      return;
+    }
+    // _ctrlOp like "ctrl_3"
+    const _ctrlIdx = parseInt(_ctrlOp.slice(5), 10);
+    const _ctrlEntry = (combat.forcedRerollQueue || [])[_ctrlIdx];
+    if (!_ctrlEntry || (_ctrlEntry.remaining ?? 0) <= 0 || _ctrlEntry.controlPlayer !== _ctrlExpectedPN) {
+      await interaction.followUp({ content: 'That ability is no longer available.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    combat.controlledRerollActiveIdx = _ctrlIdx;
+    await sendRerollUI(_ctrlThread, game, combat, combat.rerollPhase);
+    saveGames(game.gameId);
+    return;
+  }
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const effectiveAtk = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
   // Phase validation: accept 'forced' for both atk and def sides
+  // (legacy — only fires for stale flows; new flow uses attacker/defender
+  // with combat.controlledRerollActiveIdx for sub-picker).
   if (combat.rerollPhase === 'forced') {
     // Forced phase accepts both atk and def die picks
+  } else if (combat.controlledRerollActiveIdx != null) {
+    // Sub-picker mode: side comes from the entry's pool restriction, not
+    // the bucket. Both atk and def die clicks are valid here.
   } else {
     const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
     if (combat.rerollPhase !== expectedPhase) {
@@ -4246,20 +4300,20 @@ export async function handleCombatReroll(interaction, ctx) {
       return;
     }
   }
-  // Permission: for forced phase, find first entry matching the active
-  // side (controlledRerollSide) — that's the entry being displayed.
-  // Per destruct 2026-05-08, controlled cross-side entries belong to
-  // the side whose controlPlayer matches.
+  // Permission: for forced phase / sub-picker, the bucket owner is the
+  // active reroll-phase side. For voluntary, attacker = atk, defender = def.
   let expectedPlayer;
   if (combat.rerollPhase === 'forced') {
     const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
     expectedPlayer = (combat.forcedRerollQueue || [])
       .find(e => e.controlPlayer === _frActiveSidePN)?.controlPlayer
       ?? _frActiveSidePN;
+  } else if (combat.controlledRerollActiveIdx != null) {
+    expectedPlayer = combat.rerollPhase === 'attacker' ? effectiveAtk : defenderPlayerNum;
   } else {
     expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
   }
-  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only **${getPlayerDisplayName(game, expectedPlayer, interaction.client)}** can reroll ${combat.rerollPhase === 'forced' ? 'forced' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
+  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only **${getPlayerDisplayName(game, expectedPlayer, interaction.client)}** can reroll ${(combat.rerollPhase === 'forced' || combat.controlledRerollActiveIdx != null) ? 'these' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatReroll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
 
@@ -4273,7 +4327,96 @@ export async function handleCombatReroll(interaction, ctx) {
     return 'acc';
   };
 
-  // --- Forced reroll phase handling ---
+  // --- Sub-picker for an attacker/defender bucket controlled ability ---
+  // (Modern path: user clicked "Use {ability}", now picking a pool die.)
+  if (combat.controlledRerollActiveIdx != null && combat.rerollPhase !== 'forced') {
+    const _spIdx = combat.controlledRerollActiveIdx;
+    const _spEntry = (combat.forcedRerollQueue || [])[_spIdx];
+    if (!_spEntry || (_spEntry.remaining ?? 0) <= 0) {
+      combat.controlledRerollActiveIdx = null;
+      await sendRerollUI(thread, game, combat, combat.rerollPhase);
+      saveGames(game.gameId);
+      return;
+    }
+    if (choice === 'done') {
+      // Done in sub-picker is a no-op (user should use Cancel). Re-render.
+      await sendRerollUI(thread, game, combat, combat.rerollPhase);
+      saveGames(game.gameId);
+      return;
+    }
+    const idx = parseInt(choice, 10);
+    if (side === 'atk' && (_spEntry.pool === 'attack' || _spEntry.pool === 'any')) {
+      const dice = combat.attackDiceResults || [];
+      const _spAtkRr = combat.attackerRerolledIndices || [];
+      if (idx >= 0 && idx < dice.length && !_spAtkRr.includes(idx)) {
+        const oldDie = dice[idx];
+        const newDie = rollSingleAttackDie(oldDie.color);
+        dice[idx] = newDie;
+        combat.attackDiceResults = dice;
+        const totals = recalcAttackTotals(dice);
+        combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
+        _spEntry.remaining -= 1;
+        if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
+        if (!combat.attackerRerolledIndices.includes(idx)) combat.attackerRerolledIndices.push(idx);
+        if (_spEntry.source === 'Survival is Strength' && _spEntry.armorerFigKey) {
+          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+          game.roundFigureAbilityUsed[`${_spEntry.armorerFigKey}_survival_is_strength`] = true;
+        }
+        await thread.send(`**${_spEntry.source}** reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+      }
+    } else if (side === 'def' && (_spEntry.pool === 'defense' || _spEntry.pool === 'any')) {
+      const dice = combat.defenseDiceResults || [];
+      const _spDefRr = combat.defenderRerolledIndices || [];
+      if (idx >= 0 && idx < dice.length && !_spDefRr.includes(idx)) {
+        const oldDie = dice[idx];
+        const newDie = rollSingleDefenseDie(oldDie.color);
+        dice[idx] = newDie;
+        combat.defenseDiceResults = dice;
+        const totals = recalcDefenseTotals(dice);
+        combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
+        _spEntry.remaining -= 1;
+        if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
+        if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
+        const dodgeTag = newDie.dodge ? '/DODGE' : '';
+        await thread.send(`**${_spEntry.source}** reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
+        // Demoralizing Monologue post-reroll reveal prompt (preserved).
+        if (_spEntry.demoralizingMonologue) {
+          const _dmCasterPN = _spEntry.casterPlayerNum || combat.attackerPlayerNum;
+          const _dmCasterId = getPlayerId(game, _dmCasterPN);
+          combat.demoralizingMonologuePending = {
+            rerolledDieIdx: idx,
+            rerolledDieBlock: newDie.block || 0,
+            rerolledDieEvade: newDie.evade || 0,
+            rerolledDieDodge: !!newDie.dodge,
+            casterPlayerNum: _dmCasterPN,
+          };
+          const _dmRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`demoralizing_reveal_use_${gameId}`).setLabel('Reveal Hand (need ≥2 cards)').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`demoralizing_reveal_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send(sanitizeMentions({
+            content: `<@${_dmCasterId}> **Demoralizing Monologue** — Reveal your hand publicly? If you have 2+ cards, the rerolled die's results are removed from defense.`,
+            allowedMentions: { users: [_dmCasterId] },
+            components: [_dmRow],
+          })).catch(discordCatch);
+          saveGames(game.gameId);
+          return;
+        }
+      }
+    }
+    // Entry exhausted → drop from queue; clear sub-picker; re-render main.
+    if ((_spEntry.remaining ?? 0) <= 0) {
+      const _spRemoveAt = combat.forcedRerollQueue.indexOf(_spEntry);
+      if (_spRemoveAt >= 0) combat.forcedRerollQueue.splice(_spRemoveAt, 1);
+    }
+    combat.controlledRerollActiveIdx = null;
+    await sendRerollUI(thread, game, combat, combat.rerollPhase);
+    saveGames(game.gameId);
+    return;
+  }
+
+  // --- Forced reroll phase handling --- (legacy, only fires if old
+  // flow's `forced` phase is still in use somewhere)
   if (combat.rerollPhase === 'forced') {
     // Match the active side's first entry (destruct 2026-05-08).
     const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
