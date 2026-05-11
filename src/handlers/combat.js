@@ -1349,8 +1349,36 @@ export async function handleAttackTarget(interaction, ctx) {
     } else if (isBombardmentFreeAttack) {
       clearPendingBombardmentSorin(game);
     } else if (isFiringSquadFreeAttack) {
+      // Firing Squad same-target lock (alexanbv 2026-05-11): the first
+      // chosen Trooper's target locks the target for any remaining
+      // Troopers in the same Firing Squad invocation. Captured on the
+      // entry's `triggeredByMsgId` (Kayn's msgId) — populated on first
+      // attack, read on subsequent attacks via forcedAttackTarget.
+      const _fsEntry = (game.pendingFiringSquad || []).find(p => p.forMsgId === msgId);
+      if (_fsEntry && target?.figureKey) {
+        game.firingSquadLockedTarget = game.firingSquadLockedTarget || {};
+        const _fsLock = game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId];
+        if (!_fsLock) {
+          // First Trooper to attack — record the target and apply forced
+          // target to every OTHER pending entry for this invocation.
+          game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId] = target.figureKey;
+          game.forcedAttackTarget = game.forcedAttackTarget || {};
+          for (const _fsOther of (game.pendingFiringSquad || [])) {
+            if (_fsOther.triggeredByMsgId !== _fsEntry.triggeredByMsgId) continue;
+            if (_fsOther.forMsgId === msgId) continue;
+            game.forcedAttackTarget[_fsOther.forMsgId] = target.figureKey;
+          }
+        }
+      }
       game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
-      if (game.pendingFiringSquad.length === 0) delete game.pendingFiringSquad;
+      if (game.pendingFiringSquad.length === 0) {
+        delete game.pendingFiringSquad;
+        // Clean up the per-invocation lock when the queue empties.
+        if (_fsEntry && game.firingSquadLockedTarget) {
+          delete game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId];
+          if (Object.keys(game.firingSquadLockedTarget).length === 0) delete game.firingSquadLockedTarget;
+        }
+      }
     } else if (isCoordinatedRaidFreeAttack) {
       clearPendingCoordinatedRaid(game);
     } else if (isFieldTacticsFreeAttack) {
@@ -5428,6 +5456,26 @@ export async function handleCombatPassive(interaction, ctx) {
     combat.callTheShotsResolved = true;
     delete combat.pendingCombatPassive;
     delete combat.callTheShotsFigKey;
+  } else if (abilityKey === 'agile') {
+    // Agile passive — defender click handler (apply/skip block→evade).
+    if (choice === 'apply') {
+      const conv = applyAgileConversion({
+        block: combat.defenseRoll?.block,
+        bonusBlock: combat.bonusBlock,
+        bonusEvade: combat.bonusEvade,
+      });
+      if (conv.applied) {
+        combat.bonusBlock = conv.bonusBlock;
+        combat.bonusEvade = conv.bonusEvade;
+        await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
+      } else {
+        await thread.send('**Agile** — No Block available to convert.');
+      }
+    } else {
+      await thread.send('**Agile** — Skipped.');
+    }
+    combat.agileJetTrooperApplied = true;
+    delete combat.pendingCombatPassive;
   } else if (abilityKey === 'sf') {
     // Spray Fire (Heavy Stormtrooper Elite) — player chose apply or skip.
     if (choice === 'apply') {
@@ -5976,23 +6024,30 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
   // ── CRR step 4: DEFENDER modifiers (after attacker modifiers per CRR p.10
   //    + Destruct: "modifiers stage. Attacker modifiers first, then defender.") ──
 
-  // Agile (Jet Trooper E/R): while defending, convert 1 Block to 1 Evade
+  // Agile (Jet Trooper E/R): "you may convert 1 Block to 1 Evade" while
+  // defending. Per alexanbv 2026-05-11: player-opt-in prompt during the
+  // defender modifier window (step-4 defender).
   if (combat.target?.figureKey && !combat.agileJetTrooperApplied) {
     const _agDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
     const _agDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _agDefEff = _agDcEff[_agDefDcName] || _agDcEff[(_agDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     if (hasAgileAbility(_agDefEff?.specialAbilityIds)) {
-      const conv = applyAgileConversion({
-        block: combat.defenseRoll?.block,
-        bonusBlock: combat.bonusBlock,
-        bonusEvade: combat.bonusEvade,
-      });
-      if (conv.applied) {
-        combat.bonusBlock = conv.bonusBlock;
-        combat.bonusEvade = conv.bonusEvade;
-        combat.agileJetTrooperApplied = true;
-        await thread.send('**Agile** — Converted 1 Block to 1 Evade.');
+      // Only offer if there's a Block to convert (own roll or bonusBlock).
+      const _agBlock = (combat.defenseRoll?.block || 0) + (combat.bonusBlock || 0);
+      if (_agBlock > 0) {
+        combat.pendingCombatPassive = 'agile';
+        const _agRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_agile_apply`).setLabel('Apply (Block → Evade)').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_agile_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send({
+          content: `**Agile** — **${_agDefDcName}** may convert 1 Block to 1 Evade:`,
+          components: [_agRow],
+        });
+        saveGames?.(game.gameId);
+        return;
       }
+      combat.agileJetTrooperApplied = true;
     }
   }
 

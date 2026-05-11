@@ -5395,9 +5395,22 @@ export function resolveAbility(abilityId, context) {
     const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
     const pNum = playerNum || meta.playerNum;
     const harmfulConditions = ['Stun', 'Bleed', 'Weaken'];
-    // Helper: recover 1 HP if damaged, else discard 1 harmful condition if at full HP
+    // Helper: per alexanbv 2026-05-11, AI default = DISCARD over RECOVER.
+    // Prefer discarding a harmful condition; fall back to recover if no
+    // harmful conditions present.
+    // TODO(alexanbv 2026-05-11): replace this with a per-figure player
+    // prompt (each affected TROOPER's owner picks Recover or Discard).
+    // For now the AI-preferred path runs deterministically.
     const applyRecoveryOrDiscard = (figKey, figMsgId, figIdx) => {
       const dcName = dcNameFromFigureKey(figKey);
+      const conds = game.figureConditions?.[figKey] || [];
+      // Disarm permanent Weakened: skip locked Weaken when choosing which condition to discard
+      const harmful = conds.filter(c => harmfulConditions.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[figKey]));
+      if (harmful.length > 0) {
+        const removed = harmful[0];
+        filterCondition(game, figKey, removed);
+        return `**${dcName}** discarded **${removed}**`;
+      }
       const hs = dcHealthState.get(figMsgId) || [];
       const hpEntry = hs[figIdx];
       if (hpEntry) {
@@ -5408,15 +5421,6 @@ export function resolveAbility(abilityId, context) {
           syncHealthStateToList(game, pNum, figMsgId, hs);
           return `**${dcName}** recovered 1 HP`;
         }
-      }
-      // At full HP — try discarding 1 harmful condition
-      const conds = game.figureConditions?.[figKey] || [];
-      // Disarm permanent Weakened: skip locked Weaken when choosing which condition to discard
-      const harmful = conds.filter(c => harmfulConditions.includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[figKey]));
-      if (harmful.length > 0) {
-        const removed = harmful[0];
-        filterCondition(game, figKey, removed);
-        return `**${dcName}** discarded **${removed}**`;
       }
       return null;
     };

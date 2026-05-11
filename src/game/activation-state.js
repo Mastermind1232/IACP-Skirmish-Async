@@ -412,6 +412,11 @@ const ROUND_OBJECT_FLAGS = [
   // free-attack abilities (Brutal Cleave) to enforce "different figure"
   // rules. Round-scoped (resets to {} at round start).
   'lastAttackTargetByMsgId',
+  // Firing Squad same-target lock per Kayn msgId. Captured on the
+  // first chosen Trooper's attack; forces subsequent Troopers in the
+  // same invocation to target the same figure. Cleared when the
+  // pending queue empties.
+  'firingSquadLockedTarget',
   'aphraExcavationOptions',
   // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
   // start; status-phase context = once per round-scoped status phase.
