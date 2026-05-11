@@ -3204,6 +3204,15 @@ export function resolveAbility(abilityId, context) {
       const adj = entry.fixedAreaTargetOnly ? [] : (boardState?.mapSpaces?.adjacency?.[spaceNorm] || []);
       const affectedSpaces = new Set([spaceNorm, ...adj.map((s) => String(s).toLowerCase())]);
       const results = [];
+      // Per alexanbv 2026-05-11 (Mando bug): "each other figure" excludes
+      // the SOURCE figure unless entry.includeSelf is explicitly set
+      // (e.g. Mortar Launcher — "each figure" without "other"). Compute
+      // the source figureKey up-front so the loop can skip it.
+      const _faeActD = game.dcActionsData?.[msgId];
+      const _faeSelF = _faeActD?.selectedFigure ?? 0;
+      const _faeDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _faeDgI = _faeDgM ? _faeDgM[1] : '1';
+      const _faeSelfFigureKey = meta?.dcName ? `${meta.dcName}-${_faeDgI}-${_faeSelF}` : null;
       // Damage applies synchronously through applyDamageWithDefeatCheck;
       // Strain is queued via pendingStrain[] so apply-ability-result.js
       // routes it through the canonical applyStrain pipeline (Fireproof /
@@ -3213,6 +3222,7 @@ export function resolveAbility(abilityId, context) {
       for (const pn of [1, 2]) {
         for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
           if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
+          if (!entry.includeSelf && _faeSelfFigureKey && fk === _faeSelfFigureKey) continue;
           const dcName = dcNameFromFigureKey(fk);
           const parts = [];
           if (dmgAmt > 0) {

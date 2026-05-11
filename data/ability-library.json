@@ -470,6 +470,7 @@
       "fixedAreaStrain": 0,
       "placesRubble": true,
       "fixedAreaTargetOnly": true,
+      "includeSelf": true,
       "logMessage": "**Boulder Barrage** — Choose a space in LOS. The figure on it suffers 2 Damage, then place a Rubble token.",
       "wiredStatus": "wired"
     },
@@ -1251,7 +1252,8 @@
       "fixedAreaRange": 3,
       "fixedAreaDamage": 1,
       "fixedSelfStrain": 1,
-      "placesRubble": true
+      "placesRubble": true,
+      "includeSelf": true
     },
     "Demoralizing Monologue": {
       "type": "ccEffect",
