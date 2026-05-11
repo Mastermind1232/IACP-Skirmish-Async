@@ -4857,6 +4857,22 @@
       "description": "When another friendly figure resolves an attack, if the defender was defeated, that figure gains 1 Block Token.",
       "wiredStatus": "wired"
     },
+    "vengeance_royal_guard": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-defeated",
+      "label": "Vengeance",
+      "description": "When an adjacent, friendly, non-GUARDIAN figure is defeated, you become Focused.",
+      "wiredStatus": "wired"
+    },
+    "forward_vengeance_royal_guard_elite": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "when-defeated",
+      "label": "Forward Vengeance",
+      "description": "When an adjacent, friendly, non-GUARDIAN, non-companion figure is defeated, you become Focused and may move 1 space.",
+      "wiredStatus": "wired"
+    },
     "sustained_by_rage": {
       "type": "dcSpecial",
       "category": "passive-auto",

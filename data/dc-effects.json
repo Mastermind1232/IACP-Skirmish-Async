@@ -5423,7 +5423,8 @@
         "BRAWLER"
       ],
       "specialAbilityIds": [
-        "sentinel"
+        "sentinel",
+        "forward_vengeance_royal_guard_elite"
       ],
       "cost": 9,
       "subCost": 5,
@@ -5460,7 +5461,8 @@
         "BRAWLER"
       ],
       "specialAbilityIds": [
-        "sentinel"
+        "sentinel",
+        "vengeance_royal_guard"
       ],
       "cost": 8,
       "subCost": 4,

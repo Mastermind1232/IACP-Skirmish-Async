@@ -1502,3 +1502,107 @@ WHEN_DEFEATED_HOOKS.push(_makeDefeatCcHook({
   scope: 'friendly',
   label: 'Choose one: Focused / 2 Power Tokens / Move up to 2',
 }));
+
+/**
+ * Vengeance (Royal Guard Regular): when an adjacent, friendly,
+ * non-GUARDIAN figure is defeated, each adjacent Royal Guard (Regular)
+ * becomes Focused. Per alexanbv 2026-05-10.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'vengeance_royal_guard',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    const defeatedDc = dcNameFromFigureKey(opts.figureKey);
+    const defeatedEff = getDcEffects()?.[defeatedDc] || getDcEffects()?.[(defeatedDc || '').replace(/\s*\[.*\]\s*$/, '')];
+    const defeatedKws = (defeatedEff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (defeatedKws.includes('GUARDIAN')) return false;
+    const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return false;
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('vengeance_royal_guard')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) === 1) return true;
+    }
+    return false;
+  },
+  apply: (game, opts, ctx) => {
+    const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return;
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    const focused = [];
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('vengeance_royal_guard')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) !== 1) continue;
+      if (isConditionImmune(game, fk)) continue;
+      if (applyCondition(game, fk, 'Focus')) focused.push(dcN);
+    }
+    if (focused.length > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `🛡️ **Vengeance** — adjacent **${focused.join(', ')}** became Focused (friendly non-GUARDIAN defeated).`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});
+
+/**
+ * Forward Vengeance (Royal Guard Elite): when an adjacent, friendly,
+ * non-GUARDIAN, non-companion figure is defeated, each adjacent Royal
+ * Guard (Elite) becomes Focused AND may move 1 space. Per alexanbv
+ * 2026-05-10.
+ */
+WHEN_DEFEATED_HOOKS.push({
+  id: 'forward_vengeance_royal_guard_elite',
+  sync: true,
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    const defeatedDc = dcNameFromFigureKey(opts.figureKey);
+    const defeatedEff = getDcEffects()?.[defeatedDc] || getDcEffects()?.[(defeatedDc || '').replace(/\s*\[.*\]\s*$/, '')];
+    const defeatedKws = (defeatedEff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (defeatedKws.includes('GUARDIAN')) return false;
+    if (defeatedEff?.companion) return false;
+    const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return false;
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('forward_vengeance_royal_guard_elite')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) === 1) return true;
+    }
+    return false;
+  },
+  apply: (game, opts, ctx) => {
+    const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return;
+    const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    const triggered = [];
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!pos || fk === opts.figureKey) continue;
+      const dcN = dcNameFromFigureKey(fk);
+      const eff = getDcEffects()?.[dcN];
+      if (!(eff?.specialAbilityIds || []).includes('forward_vengeance_royal_guard_elite')) continue;
+      if (countGameSpaces(game, defeatedPos, pos) !== 1) continue;
+      if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Focus');
+      triggered.push({ fk, dcName: dcN });
+    }
+    if (triggered.length > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      ctx.logGameAction(
+        game,
+        ctx.client,
+        `🛡️ **Forward Vengeance** — adjacent **${triggered.map((t) => t.dcName).join(', ')}** became Focused and may move 1 space (friendly non-GUARDIAN non-companion defeated). 1-space move must be resolved via Spend MP from bank if MP granted; otherwise resolve manually.`,
+        { phase: 'ROUND', icon: 'card' },
+      ).catch(() => {});
+    }
+  },
+});

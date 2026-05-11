@@ -1018,6 +1018,30 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Tempt** manually.' };
     const enemyNum = opponentPlayerNum(playerNum);
     if (choiceIndex != null && targetFigureKey) {
+      // NPC target: route damage via applyDamageToNpcSync; Damage Token
+      // grant via grantPowerTokens still keys on figureKey (works for
+      // 'npc_thug_N' / 'npc_krykna_N').
+      if (typeof targetFigureKey === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFigureKey)) {
+        const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/);
+        const npcType = p[1];
+        const npcIndex = parseInt(p[2], 10);
+        const npcLabel = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${npcIndex + 1}`;
+        let _npcHpNote = '';
+        let _npcDefeated = false;
+        const npcRes = applyDamageToNpcSync(game, { npcType, npcIndex, amount: 1, attackerPlayerNum: playerNum });
+        if (npcRes.applied) {
+          _npcHpNote = ` (HP: ${npcRes.prevHp} → ${npcRes.newHp})`;
+          if (npcRes.defeated) _npcDefeated = true;
+        }
+        if (!_npcDefeated) grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+        const _npcTokenNote = _npcDefeated ? '' : ' and gains 1 Damage Token';
+        return {
+          applied: true,
+          logMessage: `**Tempt** — **${npcLabel}** suffers 1 Damage${_npcHpNote}${_npcTokenNote}.`,
+          refreshDcEmbed: true,
+          refreshBoard: _npcDefeated,
+        };
+      }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       // Determine which player owns the target figure (Tempt can target friendly or hostile)
       const targetOwnerNum = game.figurePositions?.[playerNum]?.[targetFigureKey] ? playerNum : enemyNum;
@@ -1054,15 +1078,23 @@ export function resolveAbility(abilityId, context) {
       }
       return temptResult;
     }
-    // Enumerate ALL figures on the board (friendly + hostile) with NO
-    // range restriction. Per alexanbv 2026-05-10: "Tempt has no range
-    // restriction." Per destruct 2026-05-07: "Any figure does not mean
-    // any other than self." — includes the activating figure too.
+    // Enumerate ALL figures on the board (friendly + hostile + NPCs)
+    // with NO range restriction. Per alexanbv 2026-05-10: "Tempt has no
+    // range restriction" and "Tempt can target NPCs."
     const validTargets = [];
     for (const pn of [playerNum, enemyNum]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!pos) continue;
         validTargets.push(fk);
+      }
+    }
+    for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+      const arr = game[arrName];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const npc = arr[i];
+        if (!npc || npc.defeated || !npc.coord) continue;
+        validTargets.push(`npc_${npcType}_${i}`);
       }
     }
     if (validTargets.length === 0) return { applied: false, manualMessage: '**Tempt** — No figures on the board.' };
