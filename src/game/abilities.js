@@ -2508,17 +2508,30 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && typeof entry.spendMpForBlockToken === 'number') {
     const { game, msgId, meta, playerNum } = context;
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const bank = game.movementBank?.[msgId];
-    const remaining = bank?.remaining ?? 0;
-    const mpCost = entry.spendMpForBlockToken;
-    if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
-    bank.remaining -= mpCost;
-    // Grant 1 Block token
     const actionsData = game.dcActionsData?.[msgId];
     const selectedFig = actionsData?.selectedFigure ?? 0;
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    // oncePer enforcement per alexanbv 2026-05-11 — Shield Gauntlets is
+    // "once during your activation" PER FIGURE. Track on actionsData
+    // (per-figure-per-activation), which resets next time this figure
+    // activates.
+    if (entry.oncePer === 'activation') {
+      actionsData.shieldGauntletsUsed = actionsData.shieldGauntletsUsed || {};
+      if (actionsData.shieldGauntletsUsed[selectedFig]) {
+        return { applied: false, manualMessage: `**${entry.label}** — already used this activation by figure #${selectedFig + 1}.` };
+      }
+    }
+    const bank = game.movementBank?.[msgId];
+    const remaining = bank?.remaining ?? 0;
+    const mpCost = entry.spendMpForBlockToken;
+    if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
+    bank.remaining -= mpCost;
+    if (entry.oncePer === 'activation') {
+      actionsData.shieldGauntletsUsed = actionsData.shieldGauntletsUsed || {};
+      actionsData.shieldGauntletsUsed[selectedFig] = true;
+    }
     grantPowerTokens(game, figureKey, 'Block', 1);
     return { applied: true, freeAction: !!entry.freeAction, refreshMovementBank: true, activeMsgId: msgId, refreshDcEmbed: true, logMessage: `**${entry.label}** — Spent ${mpCost} MP → gained 1 **Block Token** (${remaining - mpCost} MP remaining).` };
   }
@@ -2919,6 +2932,23 @@ export function resolveAbility(abilityId, context) {
       const maxRange = entry.rollOneDieTargetRange || 3;
       const requiresLos = entry.rollOneDieRequiresLos !== false;
       const mpCost = entry.rollOneDieMpCost || 0;
+      // Compute the activating figure key for per-figure once-per-X gating.
+      const _hwrActD = game?.dcActionsData?.[msgId];
+      const _hwrSelF = _hwrActD?.selectedFigure ?? 0;
+      const _hwrDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _hwrDgI = _hwrDgM ? _hwrDgM[1] : '1';
+      const _hwrSelfFk = meta?.dcName ? `${meta.dcName}-${_hwrDgI}-${_hwrSelF}` : null;
+      // oncePer: 'round' (per alexanbv 2026-05-11 — "once per FIGURE per
+      // round" for Super Commando Jetpack Rocket; the slug stored under
+      // roundFigureAbilityUsed is figureKey-scoped, so the cap is
+      // automatically per-figure within the round).
+      if (entry.oncePer === 'round' && _hwrSelfFk) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        const _hwrUsedKey = `${_hwrSelfFk}_${abilityId}`;
+        if (game.roundFigureAbilityUsed[_hwrUsedKey]) {
+          return { applied: false, manualMessage: `**${entry.label}** — already used this round by **${dcNameFromFigureKey(_hwrSelfFk)}**.` };
+        }
+      }
       // Phase 2: target chosen → check MP cost, roll die, apply damage
       if (targetFigureKey) {
         // Check MP cost
@@ -2927,6 +2957,11 @@ export function resolveAbility(abilityId, context) {
           const remaining = bank?.remaining ?? 0;
           if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
           bank.remaining -= mpCost;
+        }
+        // Mark used after MP successfully spent.
+        if (entry.oncePer === 'round' && _hwrSelfFk) {
+          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+          game.roundFigureAbilityUsed[`${_hwrSelfFk}_${abilityId}`] = true;
         }
         const color = entry.rollOneDie;
         const faces = getDiceData().attack?.[color.toLowerCase()];
