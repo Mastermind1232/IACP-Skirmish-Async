@@ -233,6 +233,20 @@ export function getOccupiedSpacesForMovement(game, excludeFigureKey = null) {
       occupied.push(...getFootprintCells(coord, size));
     }
   }
+  // NPC figures (Thugs/Krykna) block end-of-movement for non-MASSIVE
+  // figures per alexanbv 2026-05-10: "Figures except massive figures
+  // cannot end in the same space as neutral figure." MASSIVE-mover
+  // exemption is applied at end-of-move checks downstream (the moving
+  // figure's size determines whether it can end here). All live NPCs
+  // — regardless of hostility class — occupy a space.
+  for (const [arrName] of [['npcThugs'], ['npcKrykna']]) {
+    const arr = game[arrName];
+    if (!Array.isArray(arr)) continue;
+    for (const npc of arr) {
+      if (!npc || npc.defeated || !npc.coord) continue;
+      occupied.push(normalizeCoord(npc.coord));
+    }
+  }
   return occupied;
 }
 
@@ -248,6 +262,18 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
     const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     hostile.push(...getFootprintCells(coord, size));
+  }
+  // NPCs with hostility='hostile' (Thugs) cost +1 MP to move through, per
+  // alexanbv 2026-05-10. 'treatedAsHostile' (Krykna) do NOT add the cost.
+  for (const [arrName] of [['npcThugs'], ['npcKrykna']]) {
+    const arr = game[arrName];
+    if (!Array.isArray(arr)) continue;
+    for (const npc of arr) {
+      if (!npc || npc.defeated || !npc.coord) continue;
+      const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+      if (h !== 'hostile') continue;
+      hostile.push(normalizeCoord(npc.coord));
+    }
   }
   return hostile;
 }

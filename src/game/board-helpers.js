@@ -504,9 +504,27 @@ export function getSpaceController(game, mapId, coord) {
   const p2Cells = getPlayerOccupiedCellsForControl(game, 2);
   const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c) && !apiExcluded[1]?.has(c));
   const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
+  // NPC with hostility='hostile' (Thug) in the controlSet blocks control
+  // for both players — per alexanbv 2026-05-10. 'treatedAsHostile' (Krykna)
+  // and 'neutral' NPCs do NOT block control.
+  if (_npcBlocksControlIn(game, controlSet)) return null;
   if (p1Has && !p2Has) return 1;
   if (p2Has && !p1Has) return 2;
   return null;
+}
+
+function _npcBlocksControlIn(game, controlSet) {
+  for (const arrName of ['npcThugs', 'npcKrykna']) {
+    const arr = game?.[arrName];
+    if (!Array.isArray(arr)) continue;
+    for (const npc of arr) {
+      if (!npc || npc.defeated || !npc.coord) continue;
+      const h = npc.hostility || (npc.hostileToAll ? 'hostile' : 'neutral');
+      if (h !== 'hostile') continue;
+      if (controlSet.has(normalizeCoord(npc.coord))) return true;
+    }
+  }
+  return false;
 }
 
 /** Returns array of figure keys for playerNum whose positions are on or adjacent to coord.
@@ -557,6 +575,7 @@ export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   for (const term of mapData.terminals) {
     const t = normalizeCoord(term);
     const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
+    if (_npcBlocksControlIn(game, controlSet)) continue; // Thug adjacent → uncontrolled
     const p1Has = [...controlSet].some((c) => p1Cells.has(c) && !alterMindExcluded[1]?.has(c) && !apiExcluded[1]?.has(c));
     const p2Has = [...controlSet].some((c) => p2Cells.has(c) && !alterMindExcluded[2]?.has(c) && !apiExcluded[2]?.has(c));
     if (playerNum === 1 && p1Has && !p2Has) count++;
