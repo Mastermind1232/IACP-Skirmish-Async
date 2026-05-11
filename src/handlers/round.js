@@ -609,10 +609,12 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       });
     }
   }
-  // [Rogue Smuggler] (Han Solo): "Exhaust this card at the end of the
-  // round to interrupt to perform an attack." Per alexanbv 2026-05-10.
-  // Post one prompt per Han Solo with the attachment that is alive AND
-  // not already exhausted this round.
+  // [Rogue Smuggler] (Han Solo) — once-per-round EoR free attack.
+  // Per alexanbv 2026-05-10: the card text uses "Exhaust this card" but
+  // we treat this as a once-per-round ability gated on a round-scoped
+  // flag (`game.roundFigureAbilityUsed[\`${msgId}_rogueSmugglerEor\`]`),
+  // not via the deprecated exhaust mechanic. Round-flag is wiped at
+  // start of the next round by the standard round-reset sweep.
   for (const pn of [1, 2]) {
     const _rsMsgIds = getDcMessageIds(game, pn) || [];
     const _rsDcList = getDcList(game, pn) || [];
@@ -620,20 +622,20 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     for (let i = 0; i < _rsMsgIds.length; i++) {
       const _rsMid = _rsMsgIds[i];
       if (!cardNameIncludes(_rsAtts[_rsMid], 'Rogue Smuggler')) continue;
-      if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_rsMid] || [], 'Rogue Smuggler')) continue;
+      const _rsRoundKey = `${_rsMid}_rogueSmugglerEor`;
+      if (game.roundFigureAbilityUsed?.[_rsRoundKey]) continue;
       const _rsDc = _rsDcList[i];
       if (!_rsDc?.dcName || _rsDc.defeated) continue;
-      // Locate Han's figure on the board (must be alive to attack)
       const _rsDgIdx = (_rsDc.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _rsFk = `${_rsDc.dcName}-${_rsDgIdx}-0`;
       if (!game.figurePositions?.[pn]?.[_rsFk]) continue;
       const _rsOwnerId = game[`player${pn}Id`];
       const _rsRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`rs_attack_${gameId}_${_rsMid}`).setLabel('Free Attack (exhaust [Rogue Smuggler])').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`rs_attack_${gameId}_${_rsMid}`).setLabel('Free Attack ([Rogue Smuggler])').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`rs_skip_${gameId}_${_rsMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
       await logGameAction(game, client,
-        `<@${_rsOwnerId}> **[Rogue Smuggler]** — **${_rsDc.displayName || _rsDc.dcName}** may exhaust to interrupt and perform a free attack at end of round.`,
+        `<@${_rsOwnerId}> **[Rogue Smuggler]** — **${_rsDc.displayName || _rsDc.dcName}** may interrupt to perform a free attack at end of round (once per round).`,
         { components: [_rsRow], allowedMentions: { users: [_rsOwnerId] } });
     }
   }

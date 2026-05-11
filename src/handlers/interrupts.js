@@ -1028,7 +1028,9 @@ export async function handleDrivenByHatred(interaction, ctx) {
   saveGames(_dbhGame.gameId);
 }
 
-// [Rogue Smuggler] EoR exhaust-to-attack — Han Solo only.
+// [Rogue Smuggler] — once-per-round EoR free attack (Han Solo).
+// Gated on a round-scoped flag, not via card exhaust (deprecated per
+// alexanbv 2026-05-10).
 export async function handleRogueSmuggler(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
@@ -1049,9 +1051,11 @@ export async function handleRogueSmuggler(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
-  // Mark [Rogue Smuggler] exhausted this round
-  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-  game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Rogue Smuggler'];
+  // Mark [Rogue Smuggler] as used for the round (round-scoped flag,
+  // wiped at start of next round). Replaces the legacy "exhaust card"
+  // gating.
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[`${msgId}_rogueSmugglerEor`] = true;
   // Set free-attack pending on Han's figureKey so the next Attack click
   // on his DC card consumes the free-attack flag (no action cost).
   const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -1060,7 +1064,7 @@ export async function handleRogueSmuggler(interaction, ctx) {
   game.freeAttackBonusPending[figKey] = true;
   const ownerId = getPlayerId(game, meta.playerNum);
   await logGameAction(game, client,
-    `<@${ownerId}> **[Rogue Smuggler]** — **${displayName}** exhausts to interrupt and perform a free attack. Use the **Attack** button on Han's DC card.`,
+    `<@${ownerId}> **[Rogue Smuggler]** — **${displayName}** interrupts to perform a free attack. Use the **Attack** button on Han's DC card.`,
     { phase: 'ROUND', icon: 'attack', allowedMentions: { users: [ownerId] } });
   saveGames(game.gameId);
 }
