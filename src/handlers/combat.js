@@ -4681,11 +4681,21 @@ export async function handlePreReroll(interaction, ctx) {
     combat.pendingPreRerolls.shift();
     await thread.send(`Pre-reroll choice skipped.`);
   } else if (choice === 'twin_sabers_atk') {
-    // R28/R29: Reroll ALL attack dice simultaneously and mark them as rerolled (cannot be rerolled again)
+    // R28/R29: Reroll ALL attack dice that haven't been rerolled yet.
+    // Per alexanbv 2026-05-10: "a die can only be rerolled once. If an
+    // attack die is rerolled from some other ability that is not twin
+    // sabers, then reroll all OTHER attack dice." All rerolled dice
+    // are then marked simultaneously so subsequent abilities exclude them.
     const atkDice = combat.attackDiceResults || [];
+    const alreadyRerolled = new Set(combat.attackerRerolledIndices || []);
     const rerolledIndices = [];
     const details = [];
+    const skipped = [];
     for (let i = 0; i < atkDice.length; i++) {
+      if (alreadyRerolled.has(i)) {
+        skipped.push(`#${i + 1} (already rerolled)`);
+        continue;
+      }
       const oldDie = atkDice[i];
       const newDie = rollSingleAttackDie(oldDie.color);
       atkDice[i] = newDie;
@@ -4695,16 +4705,23 @@ export async function handlePreReroll(interaction, ctx) {
     combat.attackDiceResults = atkDice;
     const atkTotals = recalcAttackTotals(atkDice);
     combat.attackRoll = { acc: atkTotals.acc, dmg: atkTotals.dmg, surge: atkTotals.surge };
-    // R28: Mark all indices as rerolled so no further rerolls can target them
     combat.attackerRerolledIndices = [...(combat.attackerRerolledIndices || []), ...rerolledIndices];
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Twin Sabers** — Rerolled all ${atkDice.length} attack dice simultaneously:\n${details.join('\n')}\nNew totals: ${atkTotals.acc} acc, ${atkTotals.dmg} dmg, ${atkTotals.surge} surge`);
+    const skipNote = skipped.length > 0 ? `\nSkipped (already rerolled): ${skipped.join(', ')}` : '';
+    await thread.send(`**Twin Sabers** — Rerolled ${rerolledIndices.length} attack die${rerolledIndices.length === 1 ? '' : 's'} simultaneously:\n${details.join('\n') || '(no eligible dice)'}\nNew totals: ${atkTotals.acc} acc, ${atkTotals.dmg} dmg, ${atkTotals.surge} surge${skipNote}`);
   } else if (choice === 'twin_sabers_def') {
-    // R28/R29: Force reroll ALL defense dice simultaneously and mark them as rerolled
+    // R28/R29: Force reroll ALL defense dice that haven't been rerolled yet.
+    // Per alexanbv 2026-05-10: a die can only be rerolled once.
     const defDice = combat.defenseDiceResults || [];
+    const alreadyRerolled = new Set(combat.defenderRerolledIndices || []);
     const rerolledIndices = [];
     const details = [];
+    const skipped = [];
     for (let i = 0; i < defDice.length; i++) {
+      if (alreadyRerolled.has(i)) {
+        skipped.push(`#${i + 1} (already rerolled)`);
+        continue;
+      }
       const oldDie = defDice[i];
       const newDie = rollSingleDefenseDie(oldDie.color);
       defDice[i] = newDie;
@@ -4715,10 +4732,10 @@ export async function handlePreReroll(interaction, ctx) {
     combat.defenseDiceResults = defDice;
     const defTotals = recalcDefenseTotals(defDice);
     combat.defenseRoll = { block: defTotals.block, evade: defTotals.evade, dodge: defTotals.dodge };
-    // R28: Mark all indices as rerolled so no further rerolls can target them
     combat.defenderRerolledIndices = [...(combat.defenderRerolledIndices || []), ...rerolledIndices];
     combat.pendingPreRerolls.shift();
-    await thread.send(`**Twin Sabers** — Force rerolled all ${defDice.length} defense dice simultaneously:\n${details.join('\n')}\nNew totals: ${defTotals.block} block, ${defTotals.evade} evade${defTotals.dodge ? ' DODGE' : ''}`);
+    const skipNote = skipped.length > 0 ? `\nSkipped (already rerolled): ${skipped.join(', ')}` : '';
+    await thread.send(`**Twin Sabers** — Force rerolled ${rerolledIndices.length} defense die${rerolledIndices.length === 1 ? '' : 's'} simultaneously:\n${details.join('\n') || '(no eligible dice)'}\nNew totals: ${defTotals.block} block, ${defTotals.evade} evade${defTotals.dodge ? ' DODGE' : ''}${skipNote}`);
   } else if (choice === 'resourceful_atk') {
     combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
     combat.resourcefulSide = 'atk';
