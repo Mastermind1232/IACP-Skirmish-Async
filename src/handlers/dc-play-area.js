@@ -39,6 +39,7 @@ import { finalizeActivation } from '../engine/activation-setup.js';
 import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
   if (!dcKws?.some(k => k === 'WOOKIEE')) return false;
@@ -1050,7 +1051,7 @@ export function buildFigureBlockingCoords(game, playerNum, attackerPos, attacker
     for (const [fk, pos] of Object.entries(poses)) {
       if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
       const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+      const fkEff = getDcEffect(fkDcName);
       if (fkEff?.companion === true) continue;
       if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
       // Camo reciprocal: skip hostile Camo figures 4+ from attacker.
@@ -1163,7 +1164,7 @@ async function buildAndSendAttackTargets(
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure
     {
       const _insigDcName = dcNameFromFigureKey(k);
-      const _insigEff = getDcEffects()[_insigDcName] || getDcEffects()[_insigDcName.replace(/\s*\[.*\]\s*$/, '')];
+      const _insigEff = getDcEffect(_insigDcName);
       if ((_insigEff?.specialAbilityIds || []).includes('insignificant_dio')) {
         const _insigFriendlyPoses = game.figurePositions?.[enemyPlayerNum] || {};
         const _insigHasFriendly = Object.entries(_insigFriendlyPoses).some(([ffk, fpos]) =>
@@ -1186,7 +1187,7 @@ async function buildAndSendAttackTargets(
     if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
     let losCoords = allFigureBlockingCoords;
     if (allFigureBlockingCoords) {
-      const targetEff = getDcEffects()[dcName] || getDcEffects()[dcName.replace(/\s*\[.*\]\s*$/, '')];
+      const targetEff = getDcEffect(dcName);
       if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
         losCoords = null;
       } else {
@@ -1331,7 +1332,7 @@ async function buildAndSendAttackTargets(
     const ptTargets = targets.filter(t => {
       if (t.isNpc) return false;
       const dcN = dcNameFromFigureKey(t.figureKey);
-      const eff = getDcEffects()[dcN] || getDcEffects()[dcN.replace(/\s*\[.*\]\s*$/, '')];
+      const eff = getDcEffect(dcN);
       return (eff?.passives || []).some(p => String(p).toLowerCase() === 'priority target');
     });
     if (ptTargets.length > 0) targets.splice(0, targets.length, ...ptTargets);
@@ -1442,7 +1443,7 @@ export async function handleDcHeroicAttack(interaction, ctx) {
 
   // Verify Heroic is on this DC (defense in depth — UI shouldn't render the
   // button otherwise, but guard against stale messages or replay).
-  const eff = getDcEffects()[meta.dcName] || getDcEffects()[(meta.dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const eff = getDcEffect(meta.dcName);
   if (!(eff?.specialAbilityIds || []).includes('heroic')) {
     await interaction.followUp({ content: 'This figure does not have Heroic.', ephemeral: true }).catch(discordCatch);
     return;
@@ -1791,7 +1792,7 @@ export async function handleDcBoRifleAttack(interaction, ctx) {
   const game = await requireGame(interaction, getGame, meta.gameId);
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
-  const eff = getDcEffects()[meta.dcName] || getDcEffects()[(meta.dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const eff = getDcEffect(meta.dcName);
   if (!(eff?.specialAbilityIds || []).includes('bo_rifle_staff_strike')) {
     await interaction.followUp({ content: 'This figure does not have Bo-Rifle Staff Strike.', ephemeral: true }).catch(discordCatch);
     return;
@@ -2284,7 +2285,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
     const [minRange, maxRange] = defaultAttackRange(attackInfo);
     // Reach: melee figure can target 1–2 spaces away; no accuracy check (still counts as melee)
-    const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const attackerEffects = getDcEffect(meta.dcName);
     const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
     // Reach from DC passives, keywords, CC-granted (per-figure 2026-05-09), loadout card (Electrostaff), or Fury of Kashyyyk (WOOKIEE)
     const _loadoutCard = getLoadoutCards()[getConfig(game, figureKey)?.loadout];
@@ -2555,7 +2556,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         const _sdDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
         const _sdFigKey = `${meta.dcName}-${_sdDgIdx}-${figureIndex}`;
         // Condition Immunity: skip Stun for immune figures
-        const _sdEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const _sdEff = getDcEffect(meta.dcName);
         const _sdImm = (_sdEff?.specialAbilityIds || []).includes('immune_onar') || (_sdEff?.specialAbilityIds || []).includes('immune_snowtrooper_elite');
         if (!_sdImm) {
           applyCondition(game, _sdFigKey, 'Stun');
@@ -2919,7 +2920,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       const _wpStats = getDcStats(meta.dcName);
       const _wpAttackInfo = _wpStats.attack || { dice: ['red'], type: 'range' };
       const [_wpMinRange, _wpMaxRange] = defaultAttackRange(_wpAttackInfo);
-      const _wpAtkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const _wpAtkEff = getDcEffect(meta.dcName);
       const _wpAtkKws = (_wpAtkEff?.keywords || []).map((k) => String(k).toUpperCase());
       const _wpHasReach = _wpAtkKws.includes('REACH') || (_wpAtkEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_wpFk];
       const _wpEffMax = _wpHasReach && _wpMaxRange < 2 ? 2 : _wpMaxRange;
@@ -3607,7 +3608,7 @@ export async function handleArsenalPick(interaction, ctx) {
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
-  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerEffects = getDcEffect(meta.dcName);
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const _attDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const _attFigKey = `${meta.dcName}-${_attDgIdx}-${figureIndex}`;
@@ -3673,7 +3674,7 @@ export async function handleEe3DiePick(interaction, ctx) {
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
-  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerEffects = getDcEffect(meta.dcName);
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const _ee3DgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const _ee3FigKey = `${meta.dcName}-${_ee3DgIdx}-${figureIndex}`;
@@ -3742,7 +3743,7 @@ export async function handleVanguardDiePick(interaction, ctx) {
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
-  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerEffects = getDcEffect(meta.dcName);
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const _vgDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const _vgFigKey = `${meta.dcName}-${_vgDgIdx}-${figureIndex}`;
@@ -3802,7 +3803,7 @@ export async function handleBoRiflePick(interaction, ctx) {
   const stats = getDcStats(meta.dcName);
   const attackInfo = stats.attack || { dice: ['red'], type: 'range' };
   const [minRange, maxRange] = defaultAttackRange(attackInfo);
-  const attackerEffects = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const attackerEffects = getDcEffect(meta.dcName);
   const attackerKws = (attackerEffects?.keywords || []).map((k) => String(k).toUpperCase());
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const _brFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
@@ -3930,7 +3931,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   }
   const controlledAttackInfo = controlledStats?.attack || { dice: ['red'], type: 'range' };
   const [foMinRange, foMaxRange] = defaultAttackRange(controlledAttackInfo);
-  const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
+  const controlledEff = getDcEffect(controlledName);
   const controlledKws = (controlledEff?.keywords || []).map((k) => String(k).toUpperCase());
   const foHasReach = controlledKws.includes('REACH') || (controlledEff?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || _hasFuryReach(game, controlledPlayerNum, controlledKws);
   let foEffectiveMaxRange = foHasReach && foMaxRange < 2 ? 2 : foMaxRange;
@@ -3986,7 +3987,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     let losBlockingCoords = foBlockingCoords;
     if (foBlockingCoords) {
       const tDcName = dcNameFromFigureKey(figKey);
-      const tEff = getDcEffects()[tDcName] || getDcEffects()[tDcName.replace(/\s*\[.*\]\s*$/, '')];
+      const tEff = getDcEffect(tDcName);
       if ((tEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {
         losBlockingCoords = null;
       } else {

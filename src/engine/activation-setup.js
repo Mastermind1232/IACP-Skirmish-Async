@@ -34,6 +34,7 @@ import { setPendingTokenDistribution, setPendingGeneralsOrders, setPendingConspi
 import { enumerateActivatorSoaDescriptors, startSoaResolution, describeChooserPrompt } from '../game/soa-orchestrator.js';
 import { join } from 'path';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
 
 /**
@@ -355,7 +356,7 @@ export async function finalizeActivation({
   // total budget is 4 actions (2 per figure). Track per-figure remaining
   // counts so each figure must complete its own 2 actions before another
   // figure can act.
-  const _b12Eff = getDcEffects()[dcName] || getDcEffects()[(dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const _b12Eff = getDcEffect(dcName);
   const _b12FigCount = Math.max(1, _b12Eff?.figures ?? 1);
   const _b12Total = _b12FigCount * DC_ACTIONS_PER_ACTIVATION;
   const _b12PerFig = {};

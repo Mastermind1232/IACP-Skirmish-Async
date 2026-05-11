@@ -3,6 +3,7 @@
  * Uses game state to derive play context and cc-effects timing field.
  */
 import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
+import { getDcBaseName } from './dc-helpers.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
@@ -506,8 +507,8 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
 export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false, extraKeywords = null, game = null) {
   if (!playableBy) return false;
   if (playableBy.toLowerCase() === 'any figure') return true;
-  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const displayBase = (displayName || dcBase).replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const dcBase = getDcBaseName(dcName);
+  const displayBase = getDcBaseName(displayName || dcBase);
   const d = dcBase.toLowerCase();
   const disp = displayBase.toLowerCase();
   const kwMap = getDcKeywords(game);
@@ -525,7 +526,7 @@ export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksabe
 
 /** Check if activating DC has The Darksaber and is a FORCE USER → can use IMPERIAL CCs. */
 export function hasDarksaberImperial(game, playerNum, dcName) {
-  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const dcBase = getDcBaseName(dcName);
   const kwMap = getDcKeywords(game);
   const keywords = kwMap[dcName] || kwMap[dcBase];
   if (!keywords?.some((k) => String(k).toUpperCase() === 'FORCE USER')) return false;
@@ -687,7 +688,7 @@ export function getPlayableReactionCardsForTiming(game, playerNum, timingTrigger
 function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
   const trait = game?.roundProgrammingOverrideTrait?.[playerNum];
   if (!trait) return null;
-  const dcBase = (dcName || '').replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const dcBase = getDcBaseName(dcName);
   if (dcBase !== '4-LOM') return null;
   // PP suppression: any 4-LOM figure on this player's side that's had
   // Preservation Protocol played loses Programming Override.

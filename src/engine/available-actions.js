@@ -19,6 +19,7 @@ import { getLegalInteractOptions } from '../game/board-helpers.js';
 import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 /**
  * Get all available actions for a player in the current game state.
  * @param {object} game - The game state
@@ -1328,7 +1329,7 @@ function getCombatActions(game, playerNum, deps) {
       const surgesRemaining = combat.surgeRemaining ?? 0;
       // Overload (Rebel Saboteur): may trigger the same surge ability up to twice per attack
       const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-      const atkEff = getDcEffects()?.[atkDcName] || getDcEffects()?.[(atkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const atkEff = getDcEffect(atkDcName);
       const maxSurgeUses = (atkEff?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
 
       for (let i = 0; i < surgeKeys.length; i++) {
@@ -2158,7 +2159,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   let maxDiceAcc = 0;
   for (const die of attackInfo.dice || []) maxDiceAcc += MAX_ACC_PER_DIE[die] || 0;
   // Check DC surge abilities for accuracy surges (e.g. "accuracy 2")
-  const _aaEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const _aaEff = getDcEffect(meta.dcName);
   let maxSurgeAcc = 0;
   for (const sa of _aaEff?.surgeAbilities || []) {
     const m = sa.match(/^accuracy\s+(\d+)$/i);
@@ -2271,7 +2272,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       for (const [fk, pos] of Object.entries(poses)) {
         if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
         const fkDcName = dcNameFromFigureKey(fk);
-        const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
+        const fkEff = getDcEffect(fkDcName);
         if (fkEff?.companion === true) continue;
         if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
         if (thisPn === enemyPn && (fkEff?.specialAbilityIds || []).some(id => _AA_CAMO_IDS.has(id))) {
@@ -2330,7 +2331,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     // LOS check with figure blocking (parity with dc-play-area.js)
     // Remove target's own footprint from blocking set (target doesn't block LOS to itself)
     let losBlockingCoords = figureBlockingCoords;
-    const targetEff = getDcEffects()?.[targetDcName] || getDcEffects()?.[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
+    const targetEff = getDcEffect(targetDcName);
     if (figureBlockingCoords === null) {
       losBlockingCoords = null; // attacker-side bypass active (Priority Target / MASSIVE / Scout form / Marksman)
     } else if ((targetEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) {

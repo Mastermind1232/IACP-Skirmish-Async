@@ -29,6 +29,7 @@ import { getBrokenWallEdges } from './movement.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { edgeKey } from './coords.js';
 
+import { getDcEffect } from './dc-helpers.js';
 // Camouflage reciprocal: figures with these abilities do not block LOS for
 // hostile figures 4+ spaces away (per card text: "You do not block line of
 // sight for those figures"). Mirror buildFigureBlockingCoords in
@@ -127,7 +128,7 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
       for (const [fk, pos] of Object.entries(poses)) {
         if (!pos || fromFpSet.has(String(pos).toLowerCase())) continue;
         const fkDcName = dcNameFromFigureKey(fk);
-        const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[(fkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+        const fkEff = getDcEffect(fkDcName);
         if (fkEff?.companion === true) continue;
         if ((fkEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE')) continue;
         // Camo reciprocal: only excludes figures on the OPPOSITE team
@@ -143,7 +144,7 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
       }
     }
     // Strip target's full footprint.
-    const toEff = getDcEffects()?.[toDcName] || getDcEffects()?.[(toDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const toEff = getDcEffect(toDcName);
     const toMassive = (toEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE');
     if (toMassive) {
       blocking = null;

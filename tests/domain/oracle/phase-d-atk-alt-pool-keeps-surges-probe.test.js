@@ -33,7 +33,7 @@ const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 describe('PROBE-PD-ATK-004: alternate-pool attacks retain the attacker DC surge abilities by default', () => {
   it('004a: source — getAttackerSurgeAbilities reads surges keyed on attacker DC (not on dice pool)', () => {
     assert.match(G_CB_SRC,
-      /export function getAttackerSurgeAbilities\(combat\) \{[\s\S]*?const surgeDcName = combat\.reverseEngineerActive \? \(combat\.defenderDcName \?\? combat\.attackerDcName\) : combat\.attackerDcName;[\s\S]*?const card = getDcEffects\(\)\[surgeDcName\][\s\S]*?let base = card\?\.surgeAbilities \|\| \[\];/,
+      /export function getAttackerSurgeAbilities\(combat\) \{[\s\S]*?const surgeDcName = combat\.reverseEngineerActive \? \(combat\.defenderDcName \?\? combat\.attackerDcName\) : combat\.attackerDcName;[\s\S]*?const card = getDcEffect\(surgeDcName\);[\s\S]*?let base = card\?\.surgeAbilities \|\| \[\];/,
       'surge ability set must come from the DC card keyed on attacker name — CRR-ATK-004');
   });
 

@@ -1,3 +1,5 @@
+import { getDcBaseName } from './dc-helpers.js';
+
 // ── Opponent helper ─────────────────────────────────────────────────────────
 
 export function opponentPlayerNum(pn) { return pn === 1 ? 2 : 1; }
@@ -171,7 +173,7 @@ export function dcMatchesPlayableBy(dcName, playableBy, getDcEffectsFn, getDcKey
   const lower = playableBy.toLowerCase().trim();
   if (!lower || lower === 'any figure') return true;
 
-  const dcBase = dcName.replace(/\s*\[(?:DG|Group) \d+\]$/i, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const dcBase = getDcBaseName(dcName);
   const allDcEffects = (getDcEffectsFn ? getDcEffectsFn() : null) || {};
   const dcData = allDcEffects[dcName] || allDcEffects[dcBase] || {};
   const kwRaw = getDcKeywordsFn

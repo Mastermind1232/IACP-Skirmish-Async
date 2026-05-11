@@ -38,6 +38,22 @@ export function getDcEffect(dcName) {
 }
 
 /**
+ * Strip deployment-group and Elite/Regular variant suffixes from a DC
+ * name. Used by CC-playable-by matching, hand display, etc.
+ *   "Rebel Trooper [DG 2] (Elite)" → "Rebel Trooper"
+ *   "Luke Skywalker [Group 1]"     → "Luke Skywalker"
+ *   "ISB Agent (Regular)"          → "ISB Agent"
+ * @param {string} dcName
+ * @returns {string}
+ */
+export function getDcBaseName(dcName) {
+  return (dcName || '')
+    .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
+    .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
+    .trim();
+}
+
+/**
  * True if this DC is a "figureless" card (Skirmish Upgrade, attachment, etc.) — no physical figure on the map.
  * @param {string} dcName
  * @returns {boolean}

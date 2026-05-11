@@ -21,6 +21,7 @@ import { requireGame } from '../utils/guards.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 /**
  * Infer the timing category for fast-forward based on the primary CC's ability entry.
  * @param {object|null} entry - Ability library entry for the primary card
@@ -248,7 +249,7 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
   game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
   // Per destruct 2026-05-07: multi-figure groups get figures*2 actions
   // (each figure individually has 2 actions). See activation-setup.js B12.
-  const _ffEff = getDcEffects()[dcName] || getDcEffects()[(dcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  const _ffEff = getDcEffect(dcName);
   const _ffFigCount = Math.max(1, _ffEff?.figures ?? 1);
   const _ffTotal = _ffFigCount * DC_ACTIONS_PER_ACTIVATION;
   const _ffPerFig = {};

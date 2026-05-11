@@ -1458,14 +1458,13 @@ export async function handleExecutor(interaction, ctx) {
     _exGame.roundFigureAbilityUsed = _exGame.roundFigureAbilityUsed || {};
     _exGame.roundFigureAbilityUsed[`${_exPending.rgcFigKey}_executor`] = true;
 
-    // Grant 2 free movement points to RGC
+    // Grant 2 free movement points to RGC. Pre-seed displayName so the
+    // bank message renders correctly even when grantMovementBank inits.
     _exGame.movementBank = _exGame.movementBank || {};
     if (!_exGame.movementBank[_exPending.rgcMsgId]) {
-      _exGame.movementBank[_exPending.rgcMsgId] = { total: 2, remaining: 2, threadId: null, messageId: null, displayName: _exPending.rgcDcName };
-    } else {
-      _exGame.movementBank[_exPending.rgcMsgId].total = (_exGame.movementBank[_exPending.rgcMsgId].total || 0) + 2;
-      _exGame.movementBank[_exPending.rgcMsgId].remaining = (_exGame.movementBank[_exPending.rgcMsgId].remaining || 0) + 2;
+      _exGame.movementBank[_exPending.rgcMsgId] = { total: 0, remaining: 0, threadId: null, messageId: null, displayName: _exPending.rgcDcName };
     }
+    grantMovementBank(_exGame, _exPending.rgcMsgId, 2);
 
     // Grant free attack (next attack costs no action)
     _exGame.freeAttackBonusPending = _exGame.freeAttackBonusPending || {};

@@ -34,6 +34,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId } from '../discord/custom-id.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 const HUNT_DISSENT_TOTAL = 2;
 
 /**
@@ -46,7 +47,7 @@ function _locateKallus(game, kallusPn, dcMessageMeta) {
   for (const [fk, pos] of Object.entries(positions)) {
     if (!pos) continue;
     const dcName = dcNameFromFigureKey(fk);
-    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const eff = getDcEffect(dcName);
     const sIds = eff?.specialAbilityIds || [];
     if (!sIds.includes('hunt_dissent_kallus')) continue;
     let msgId = null;

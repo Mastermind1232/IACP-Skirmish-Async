@@ -6,6 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { checkCapitalizePassiveRedraw } from './cc-passive-redraw.js';
 
+import { getDcEffect } from './dc-helpers.js';
 export const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
 
 /**
@@ -37,7 +38,7 @@ export function filterCondition(game, figureKey, cond) {
  */
 export function isConditionImmune(game, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
-  const dcEff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const dcEff = getDcEffect(dcName);
   const sIds = dcEff?.specialAbilityIds || [];
   if (sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite')) return true;
   return false;

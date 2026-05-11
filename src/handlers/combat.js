@@ -8,6 +8,7 @@ import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-pr
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { consumeActionForCurrentFigure } from '../game/activation-state.js';
+import { getDcEffect } from '../game/dc-helpers.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
@@ -1511,7 +1512,7 @@ export async function handleAttackTarget(interaction, ctx) {
   } else {
     targetDcName = dcNameFromFigureKey(target.figureKey);
     targetStats = getDcStats(targetDcName);
-    targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName.replace(/\s*\[.*\]\s*$/, '')];
+    targetEff = getDcEffect(targetDcName);
   }
   // Reverse Engineer: capture flag before building pendingCombat, then clear it
   const reverseEngineerActive = !!(game.reverseEngineerActive?.[attackerPlayerNum]);
@@ -1699,7 +1700,7 @@ export async function handleAttackTarget(interaction, ctx) {
   {
     const _redrawDiscardKey = ccDiscardKey(attackerPlayerNum);
     const _redrawDiscard = game[_redrawDiscardKey] || [];
-    const _redrawAtkEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const _redrawAtkEff = getDcEffect(meta.dcName);
     const _redrawAtkKws = (_redrawAtkEff?.keywords || []).map(k => String(k).toUpperCase());
     if (_redrawDiscard.includes('Knowledge and Defense') && _redrawAtkKws.includes('FORCE USER')) {
       game.pendingCombat.bonusSurgeAbilities.push('kd_redraw');
@@ -2182,8 +2183,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // --- Passive-auto ability wiring ---
-  const atkEff = getDcEffects()[meta.dcName] || getDcEffects()[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
-  const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const atkEff = getDcEffect(meta.dcName);
+  const defEff = getDcEffect(targetDcName);
   const atkSpecialIds = atkEff?.specialAbilityIds || [];
   const defSpecialIds = defEff?.specialAbilityIds || [];
 
@@ -2233,7 +2234,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const defenderFigPositions = game.figurePositions?.[defenderPlayerNum] || {};
     for (const [fk, pos] of Object.entries(defenderFigPositions)) {
       const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const fkEff = getDcEffect(fkDcName);
       if (!hasDistractingAbility(fkEff?.specialAbilityIds)) continue;
       if (!adjToTarget.has(String(pos).toLowerCase())) continue;
       // Rogue Smuggler: "You lose Distracting" — skip if this figure's DC has the attachment
@@ -2362,7 +2363,7 @@ export async function handleAttackTarget(interaction, ctx) {
       for (const [fk, pos] of Object.entries(friendlyPoses)) {
         if (found || fk === attackerFigureKey) continue;
         const fkDcName = dcNameFromFigureKey(fk);
-        const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const fkEff = getDcEffect(fkDcName);
         if (!isHunterFriendly(fkEff)) continue;
         if (!sharedIntuitionInRange(countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges))) continue;
         if (!hasLineOfSightByCoord(game, pos, targetCoord, mapSpaces, getFigureSize, { blocking: null })) continue;
@@ -8608,7 +8609,7 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const attackInfo = controlledStats?.attack || { dice: ['red'], range: [1, 3] };
   const targetDcName = dcNameFromFigureKey(target.figureKey);
   const targetStats = getDcStats(targetDcName);
-  const targetEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const targetEff = getDcEffect(targetDcName);
   const defenderPlayerNum = opponentPlayerNum(controlledPlayerNum);
   const controllerUserName = getPlayerDisplayName(game, controllerPlayerNum, client);
   const defenderUserName = getPlayerDisplayName(game, defenderPlayerNum, client);
@@ -8678,8 +8679,8 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     // figures as non-friendly when set.
     noFriendliesActive: true,
   };
-  const controlledEff = getDcEffects()[controlledName] || getDcEffects()[controlledName?.replace(/\s*\[.*\]\s*$/, '')];
-  const defEff = getDcEffects()[targetDcName] || getDcEffects()[targetDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const controlledEff = getDcEffect(controlledName);
+  const defEff = getDcEffect(targetDcName);
   applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);

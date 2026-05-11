@@ -9,6 +9,7 @@
  */
 import { getDiceData, getDcEffects } from '../data-loader.js';
 
+import { getDcEffect } from './dc-helpers.js';
 let _diceStream = null;
 let _diceRecorder = null;
 
@@ -121,7 +122,7 @@ export function recalcDefenseTotals(dice) {
  * Parses common patterns: "you may reroll N attack/defense di(c)e"
  */
 export function getInnateRerolls(dcName) {
-  const card = getDcEffects()[dcName] || getDcEffects()[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const card = getDcEffect(dcName);
   const text = (card?.abilityText || '').toLowerCase();
   let attackReroll = 0, defenseReroll = 0;
   // Match unconditional rerolls only — "while defending/attacking" must be
@@ -168,7 +169,7 @@ export function getAttackerSurgeAbilities(combat) {
   if (combat.blockSurgeAbilities) return [];
   // Reverse Engineer: use the defender's DC surge abilities instead of the attacker's
   const surgeDcName = combat.reverseEngineerActive ? (combat.defenderDcName ?? combat.attackerDcName) : combat.attackerDcName;
-  const card = getDcEffects()[surgeDcName] || getDcEffects()[surgeDcName?.replace(/\s*\[.*\]\s*$/, '')];
+  const card = getDcEffect(surgeDcName);
   let base = card?.surgeAbilities || [];
   // Skirmish Upgrade attachments may remove base surge keys (e.g. Focused on the Kill removes "recover 3")
   const removeKeys = combat?.removeSurgeKeys;

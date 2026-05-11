@@ -2,6 +2,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { resolvePendingCombat, pushNestedCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
+import { getDcEffect } from '../game/dc-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -305,7 +306,7 @@ export async function handleHunterProtocol(interaction, ctx) {
     const _hpSurgeAbilities = getAttackerSurgeAbilities(_hpCombat);
     const _hpRemaining = _hpCombat.surgeRemaining || 0;
     // Overload (Rebel Saboteur): allow same surge to be used twice
-    const _hpAtkEff = getDcEffects()?.[_hpCombat.attackerDcName] || getDcEffects()?.[((_hpCombat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, ''))];
+    const _hpAtkEff = getDcEffect(_hpCombat.attackerDcName);
     const _hpOverload = (_hpAtkEff?.specialAbilityIds || []).includes('overload_saboteur');
     const _hpMaxUses = _hpOverload ? 2 : 1;
     const _hpRows = [];

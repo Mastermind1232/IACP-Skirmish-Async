@@ -13,6 +13,7 @@ import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discor
 import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList } from '../game/player-helpers.js';
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 /**
  * Send a "you have N reaction card(s) playable now" notice to the player's
  * private Hand channel. Mirrors src/handlers/combat.js — combat thread is
@@ -951,9 +952,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Jets (Sabine Wren): after attack, if target within 2 spaces, gain 1 MP
       if (combat.attackerDcName === 'Sabine Wren' && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
         const _jetsMsgId = combat.attackerMsgId;
-        if (_jetsMsgId && game.movementBank?.[_jetsMsgId]) {
-          game.movementBank[_jetsMsgId].total = (game.movementBank[_jetsMsgId].total || 0) + 1;
-          game.movementBank[_jetsMsgId].remaining = (game.movementBank[_jetsMsgId].remaining || 0) + 1;
+        if (_jetsMsgId) {
+          grantMovementBank(game, _jetsMsgId, 1);
           await logGameAction(game, client, `\u{1F680} **Jets** — **Sabine Wren** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
         }
       }
@@ -1316,7 +1316,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // figures route through one slug-based check here).
         if (combat.attackerFigureKey) {
           const _gAtkDcName = combat.attackerDcName;
-          const _gAtkEff = getDcEffects()?.[_gAtkDcName] || getDcEffects()?.[_gAtkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+          const _gAtkEff = getDcEffect(_gAtkDcName);
           const _gIds = _gAtkEff?.specialAbilityIds || [];
           if (_gIds.includes('guerrilla_alliance_ranger_elite') || _gIds.includes('guerrilla_alliance_ranger_reg')) {
             if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {

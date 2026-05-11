@@ -50,6 +50,7 @@ import { cardNameIncludes } from './card-names.js';
 import { getCcHand } from './player-helpers.js';
 import { isWithinN } from '../engine/utils.js';
 
+import { getDcEffect } from './dc-helpers.js';
 // Wire dc-effects resolver into damage-pipeline so its
 // isImmuneToDirectDefeat helper can read special-ability ids without
 // taking a static circular import on data-loader.
@@ -100,7 +101,7 @@ WHEN_DAMAGED_HOOKS.push({
     if (!opts.figureKey) return false;
     if ((opts.amount || 0) <= 0) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
-    const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const eff = getDcEffect(dcName);
     return (eff?.specialAbilityIds || []).includes('self_preservation_hired_gun_elite');
   },
   apply: (game, opts, _ctx) => {
@@ -1559,7 +1560,7 @@ WHEN_DEFEATED_HOOKS.push({
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     const defeatedDc = dcNameFromFigureKey(opts.figureKey);
-    const defeatedEff = getDcEffects()?.[defeatedDc] || getDcEffects()?.[(defeatedDc || '').replace(/\s*\[.*\]\s*$/, '')];
+    const defeatedEff = getDcEffect(defeatedDc);
     const defeatedKws = (defeatedEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (defeatedKws.includes('GUARDIAN')) return false;
     const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
@@ -1610,7 +1611,7 @@ WHEN_DEFEATED_HOOKS.push({
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     const defeatedDc = dcNameFromFigureKey(opts.figureKey);
-    const defeatedEff = getDcEffects()?.[defeatedDc] || getDcEffects()?.[(defeatedDc || '').replace(/\s*\[.*\]\s*$/, '')];
+    const defeatedEff = getDcEffect(defeatedDc);
     const defeatedKws = (defeatedEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (defeatedKws.includes('GUARDIAN')) return false;
     if (defeatedEff?.companion) return false;

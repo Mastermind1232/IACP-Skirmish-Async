@@ -49,6 +49,7 @@ import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
+import { getDcEffect } from '../game/dc-helpers.js';
 /**
  * Determine the companion (if any) for a given DC, considering both
  * direct companion fields (e.g. Iden Versio → Dio) and attachment-based
@@ -547,7 +548,7 @@ export async function handleEndTurn(interaction, ctx) {
 
   // Trust Goes Both Ways (Jyn Erso): end-of-activation trigger (limit once per round, shared with start-of-activation)
   {
-    const _tgbwEff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const _tgbwEff = getDcEffect(meta.dcName);
     if ((_tgbwEff?.specialAbilityIds || []).includes('trust_goes_both_ways_jyn')) {
       const _tgbwRoundKey = `trustBothWays_${dcMsgId}`;
       if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {

@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { figureKeyForActivation } from './activation-state.js';
-import { grantPowerTokens } from './game-helpers.js';
+import { grantPowerTokens, consumeMovementPoints } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
@@ -15,6 +15,7 @@ import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 
 
+import { getDcEffect } from './dc-helpers.js';
 /**
  * Decrement a figure's HP in a healthState array.
  * @param {Array} hs - healthState array for the DC (from dcHealthState.get(msgId))
@@ -352,8 +353,8 @@ export function resolveAbility(abilityId, context) {
       const targetOwner = _findOwner(targetFigureKey);
       const { prevPos } = pushFigure(game, targetOwner, targetFigureKey, chosenSpace) || { prevPos: null };
       // Deduct MP cost if applicable
-      if (entry.mpCostToActivate && game.movementBank?.[msgId]) {
-        game.movementBank[msgId].remaining = Math.max(0, game.movementBank[msgId].remaining - entry.mpCostToActivate);
+      if (entry.mpCostToActivate) {
+        consumeMovementPoints(game, msgId, entry.mpCostToActivate);
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = dcNameFromFigureKey(targetFigureKey);
@@ -3392,9 +3393,9 @@ export function resolveAbility(abilityId, context) {
         results.push(`rubble token placed at **${String(chosenSpace).toUpperCase()}**`);
       }
       // Deduct MP cost if specified (e.g. Wrist Flamethrower costs 2 MP)
-      if (entry.mpCost > 0 && game.movementBank?.[msgId]) {
-        game.movementBank[msgId].remaining = Math.max(0, (game.movementBank[msgId].remaining || 0) - entry.mpCost);
-        results.push(`spent ${entry.mpCost} MP`);
+      if (entry.mpCost > 0) {
+        const _spent = consumeMovementPoints(game, msgId, entry.mpCost);
+        if (_spent > 0) results.push(`spent ${_spent} MP`);
       }
       const spaceUpper = String(chosenSpace).toUpperCase();
       return {
@@ -3841,7 +3842,7 @@ export function resolveAbility(abilityId, context) {
       const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
       const meta = msgId ? dcMessageMeta.get(msgId) : null;
       if (meta?.dcName) {
-        const eff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const eff = getDcEffect(meta.dcName);
         const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
         const trait = String(entry.drawIfTrait).toUpperCase();
         if (keywords.includes(trait)) {
@@ -3902,7 +3903,7 @@ export function resolveAbility(abilityId, context) {
       if (meta?.dcName) dcName = meta.dcName;
     }
     const hasTrait = dcName ? (() => {
-      const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const eff = getDcEffect(dcName);
       const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
       return keywords.includes(String(entry.discardIfNotTrait).toUpperCase());
     })() : true;
@@ -3960,7 +3961,7 @@ export function resolveAbility(abilityId, context) {
         if (meta?.dcName) dcName = meta.dcName;
       }
       if (!dcName) return { applied: false, manualMessage: 'Resolve manually: could not determine figure for trait check.' };
-      const eff = getDcEffects()?.[dcName] || getDcEffects()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const eff = getDcEffect(dcName);
       const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
       const trait = String(entry.drawIfTrait).toUpperCase();
       if (!keywords.includes(trait)) return { applied: true };
@@ -4245,7 +4246,7 @@ export function resolveAbility(abilityId, context) {
 
     // Verify keyword: Bodyguard requires GUARDIAN; Get Behind Me requires GUARDIAN or FORCE USER
     const swapperDcName = dcNameFromFigureKey(swapperFk);
-    const swapperEff = getDcEffects()?.[swapperDcName] || getDcEffects()?.[swapperDcName?.replace(/\s*\[.*\]\s*$/, '')];
+    const swapperEff = getDcEffect(swapperDcName);
     const swapperKws = (swapperEff?.keywords || []).map(k => String(k).toUpperCase());
     if (isGetBehindMe) {
       if (!swapperKws.includes('GUARDIAN') && !swapperKws.includes('FORCE USER')) {
@@ -4670,7 +4671,7 @@ export function resolveAbility(abilityId, context) {
         if (dMsgId === msgId) continue;
         const dc = dcList[i];
         if (!dc?.dcName) continue;
-        const eff = getDcEffects()?.[dc.dcName] || getDcEffects()?.[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const eff = getDcEffect(dc.dcName);
         const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!kws.includes('TROOPER')) continue;
         addMovementPoints(game, dMsgId, bonus);
@@ -4833,7 +4834,7 @@ export function resolveAbility(abilityId, context) {
       const _hasLeader = _adjAll.some(({ figureKey: _afk, playerNum: _apn }) => {
         if (_apn !== playerNum) return false;
         const _adcName = dcNameFromFigureKey(_afk);
-        const _aEff = getDcEffects()?.[_adcName] || getDcEffects()?.[_adcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const _aEff = getDcEffect(_adcName);
         return (_aEff?.keywords || []).map(k => String(k).toUpperCase()).includes('LEADER');
       });
       if (_hasLeader) {
@@ -5026,7 +5027,7 @@ export function resolveAbility(abilityId, context) {
     let n = entry.recoverDamageToAdjacent;
     const ifTrait = entry.recoverDamageToAdjacentIfTrait;
     if (ifTrait && meta?.dcName) {
-      const eff = getDcEffects()?.[meta.dcName] || getDcEffects()?.[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+      const eff = getDcEffect(meta.dcName);
       const keywords = ((eff?.keywords || []).map((k) => String(k).toUpperCase())) || [];
       for (const [trait, val] of Object.entries(ifTrait)) {
         if (keywords.includes(String(trait).toUpperCase()) && val > n) n = val;

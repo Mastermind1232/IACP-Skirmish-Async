@@ -20,6 +20,30 @@ export function grantMovementBank(game, msgId, amount) {
 }
 
 /**
+ * Spend MP from a figure's movement bank. Clamps at 0 (can't go
+ * negative). No-op if msgId has no bank entry or amount is 0.
+ *
+ * Use this everywhere instead of inline
+ * `game.movementBank[msgId].remaining -= N` so future bank-related
+ * effects (audit logs, "out of activation" gating, etc.) have a
+ * single chokepoint.
+ *
+ * @param {object} game
+ * @param {string} msgId - DC message ID
+ * @param {number} amount - MP to consume (positive)
+ * @returns {number} - MP actually consumed (clamped at the available remaining)
+ */
+export function consumeMovementPoints(game, msgId, amount) {
+  if (!msgId || !amount || amount <= 0) return 0;
+  const bank = game.movementBank?.[msgId];
+  if (!bank) return 0;
+  const have = bank.remaining || 0;
+  const spent = Math.min(have, amount);
+  bank.remaining = have - spent;
+  return spent;
+}
+
+/**
  * Grant power tokens to a figure. Always adds the tokens, then checks whether
  * the figure exceeds its per-figure maximum (default from getMaxPowerTokens).
  * When overflow occurs, queues a `game.pendingPowerTokenOverflow` entry so the
