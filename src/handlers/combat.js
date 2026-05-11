@@ -3166,7 +3166,23 @@ export async function handleCombatRoll(interaction, ctx) {
       await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — attacker is no longer on the board.');
       return;
     }
-    const _avTgtPosNow = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+    // Target may be on either side: Lure of the Dark Side forces a
+    // friendly figure to attack ANOTHER friendly figure (same team as
+    // attacker). False Orders / regular attacks target the opposing
+    // team. Resolve the target's actual team by lookup rather than
+    // assuming opponent — combat.target.playerNum is sometimes unset.
+    let _avTgtPlayerNum = combat.target.playerNum;
+    let _avTgtPosNow = _avTgtPlayerNum != null
+      ? game.figurePositions?.[_avTgtPlayerNum]?.[combat.target.figureKey]
+      : null;
+    if (!_avTgtPosNow) {
+      // Fallback: search both teams (covers undefined target.playerNum
+      // for both regular attacks and Lure).
+      for (const pn of [1, 2]) {
+        const pos = game.figurePositions?.[pn]?.[combat.target.figureKey];
+        if (pos) { _avTgtPosNow = pos; _avTgtPlayerNum = pn; break; }
+      }
+    }
     if (!_avTgtPosNow) {
       await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — target is no longer on the board.');
       return;
