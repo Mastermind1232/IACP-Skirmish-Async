@@ -2514,20 +2514,37 @@ export function resolveAbility(abilityId, context) {
           // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
           let _trampleHadDefeats = false;
           for (const tFk of targets) {
-            const tName = dcNameFromFigureKey(tFk);
+            const _isNpcTarget = typeof tFk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(tFk);
+            const tName = _isNpcTarget
+              ? (() => { const p = tFk.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+              : dcNameFromFigureKey(tFk);
             const subParts = [];
             if (hits > 0) {
-              const tMsgId = findMsgIdForFigureKey(game, enemyPN, tFk, dcMessageMeta);
-              if (dcHealthState && tMsgId) {
-                const fkM = tFk.match(/-(\d+)-(\d+)$/);
-                const fIdx = fkM ? parseInt(fkM[2], 10) : 0;
-                const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, fIdx, hits, enemyPN, {
-                  sourceLabel: entry.label || 'Trample',
+              if (_isNpcTarget) {
+                const p = tFk.match(/^npc_(thug|krykna)_(\d+)$/);
+                const npcRes = applyDamageToNpcSync(game, {
+                  npcType: p[1],
+                  npcIndex: parseInt(p[2], 10),
+                  amount: hits,
                   attackerPlayerNum: playerNum || 1,
                 });
-                if (dmgRes.maxHp > 0) {
-                  subParts.push(`${hits} Dmg (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
-                  if (dmgRes.wasDefeated) _trampleHadDefeats = true;
+                if (npcRes.applied) {
+                  subParts.push(`${hits} Dmg (HP: ${npcRes.prevHp}→${npcRes.newHp})`);
+                  if (npcRes.defeated) _trampleHadDefeats = true;
+                }
+              } else {
+                const tMsgId = findMsgIdForFigureKey(game, enemyPN, tFk, dcMessageMeta);
+                if (dcHealthState && tMsgId) {
+                  const fkM = tFk.match(/-(\d+)-(\d+)$/);
+                  const fIdx = fkM ? parseInt(fkM[2], 10) : 0;
+                  const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, fIdx, hits, enemyPN, {
+                    sourceLabel: entry.label || 'Trample',
+                    attackerPlayerNum: playerNum || 1,
+                  });
+                  if (dmgRes.maxHp > 0) {
+                    subParts.push(`${hits} Dmg (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
+                    if (dmgRes.wasDefeated) _trampleHadDefeats = true;
+                  }
                 }
               }
             }
@@ -2558,7 +2575,10 @@ export function resolveAbility(abilityId, context) {
             return _rollAndApplyMulti(pendingMT.targets);
           }
           const remaining = pendingMT.allTargets.filter(fk => !pendingMT.targets.includes(fk));
-          const opts = [...remaining.map(fk => dcNameFromFigureKey(fk)), 'Done selecting'];
+          const _labelForRemaining = (fk) => (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk))
+            ? (() => { const p = fk.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+            : dcNameFromFigureKey(fk);
+          const opts = [...remaining.map(_labelForRemaining), 'Done selecting'];
           const fKeys = [...remaining, '__done__'];
           return { applied: false, requiresChoice: true, choiceOptions: opts, targetFigureKeys: fKeys, choicePrompt: `**${entry.label}** — Selected ${pendingMT.targets.length}/${maxTgts}. Choose another or Done:` };
         }
@@ -2572,8 +2592,12 @@ export function resolveAbility(abilityId, context) {
         const dgIndex = dgMatch ? dgMatch[1] : '1';
         const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
         const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
-        const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
-        const validTargetFks = adjacentAll.filter(f => f.playerNum === enemyPlayerNum).map(f => f.figureKey);
+        const validTargetFks = adjacentAll
+          .filter(f => isEntryHostileTo(game, f, playerNum || 1))
+          .map(f => f.figureKey);
+        const _labelFor = (fk) => (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk))
+          ? (() => { const p = fk.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+          : dcNameFromFigureKey(fk);
         if (validTargetFks.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures for **${entry.label}**.` };
         if (validTargetFks.length <= maxTgts) {
           // Auto-target all — no choice needed
@@ -2582,7 +2606,7 @@ export function resolveAbility(abilityId, context) {
         // More than max — sequential picks
         game.pendingMultiTargetRoll = game.pendingMultiTargetRoll || {};
         game.pendingMultiTargetRoll[pendingKey] = { targets: [], allTargets: validTargetFks, max: maxTgts };
-        const choices = [...validTargetFks.map(fk => dcNameFromFigureKey(fk)), 'Done selecting'];
+        const choices = [...validTargetFks.map(_labelFor), 'Done selecting'];
         const fKeysDone = [...validTargetFks, '__done__'];
         return { applied: false, requiresChoice: true, choiceOptions: choices, targetFigureKeys: fKeysDone, choicePrompt: `**${entry.label}** — Choose up to ${maxTgts} adjacent hostile figures:` };
       }
@@ -2602,23 +2626,38 @@ export function resolveAbility(abilityId, context) {
         const resultParts = [];
         // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
         let _adjHadDefeats = false;
+        const _targetIsNpc = typeof targetFigureKey === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFigureKey);
         if (hits > 0) {
-          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
-          if (dcHealthState && targetMsgId) {
-            const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
-            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-            const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, enemyPlayerNum, {
-              sourceLabel: entry.label || 'adjacent-hostile damage',
+          if (_targetIsNpc) {
+            const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/);
+            const npcRes = applyDamageToNpcSync(game, {
+              npcType: p[1],
+              npcIndex: parseInt(p[2], 10),
+              amount: hits,
               attackerPlayerNum: playerNum || 1,
             });
-            if (dmgRes.maxHp > 0) {
-              resultParts.push(`${hits} Damage (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
-              if (dmgRes.wasDefeated) _adjHadDefeats = true;
+            if (npcRes.applied) {
+              resultParts.push(`${hits} Damage (HP: ${npcRes.prevHp} → ${npcRes.newHp})`);
+              if (npcRes.defeated) _adjHadDefeats = true;
+            }
+          } else {
+            const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+            if (dcHealthState && targetMsgId) {
+              const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+              const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+              const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, enemyPlayerNum, {
+                sourceLabel: entry.label || 'adjacent-hostile damage',
+                attackerPlayerNum: playerNum || 1,
+              });
+              if (dmgRes.maxHp > 0) {
+                resultParts.push(`${hits} Damage (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
+                if (dmgRes.wasDefeated) _adjHadDefeats = true;
+              } else {
+                resultParts.push(`apply ${hits} Damage manually`);
+              }
             } else {
               resultParts.push(`apply ${hits} Damage manually`);
             }
-          } else {
-            resultParts.push(`apply ${hits} Damage manually`);
           }
         }
         const surgeCondition = entry.rollOneDieSurgeCondition;
@@ -2635,7 +2674,9 @@ export function resolveAbility(abilityId, context) {
             resultParts.push(`you gain 1 Power Token — choose type`);
           }
         }
-        const targetName = dcNameFromFigureKey(targetFigureKey);
+        const targetName = _targetIsNpc
+          ? (() => { const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+          : dcNameFromFigureKey(targetFigureKey);
         // SMALL push check (Smash, Slam, Ram): after damage, offer space picker for push
         if (entry.rollOneDiePushSmall && hits > 0) {
           const targetStats = getStatsForDc(targetName);
@@ -2718,8 +2759,7 @@ export function resolveAbility(abilityId, context) {
       const mapId = game.selectedMap?.id;
       if (!mapId) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (map not loaded).` };
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
-      const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
-      const validTargets = adjacentAll.filter((f) => f.playerNum === enemyPlayerNum);
+      const validTargets = adjacentAll.filter((f) => isEntryHostileTo(game, f, playerNum || 1));
       if (validTargets.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures. Resolve **${entry.label}** manually.` };
       return {
         applied: false,
@@ -6423,8 +6463,8 @@ export function resolveAbility(abilityId, context) {
     const hostileSet = new Set();
     for (const fk of activatingKeys) {
       const adj = getFiguresAdjacentToTarget(game, fk, mapId);
-      for (const { figureKey, playerNum: p } of adj) {
-        if (p === oppNum) hostileSet.add(figureKey);
+      for (const adjE of adj) {
+        if (isEntryHostileTo(game, adjE, playerNum)) hostileSet.add(adjE.figureKey);
       }
     }
     const hostiles = [...hostileSet];
@@ -6432,6 +6472,10 @@ export function resolveAbility(abilityId, context) {
     // Multiple adjacent hostiles: MP is granted; prompt player to pick damage target
     if (hostiles.length > 1) {
       const labels = hostiles.map((fk) => {
+        if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) {
+          const p = fk.match(/^npc_(thug|krykna)_(\d+)$/);
+          return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`;
+        }
         const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
         const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
         const baseName = tMeta?.displayName || tMeta?.dcName || fk;
@@ -6441,9 +6485,30 @@ export function resolveAbility(abilityId, context) {
       });
       return { applied: false, requiresChoice: true, choiceOptions: labels, choiceValues: hostiles };
     }
-    // Exactly 1 adjacent hostile: auto-apply if dcHealthState available
-    if (!dcHealthState) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. Resolve manually: choose adjacent hostile for ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''}.` };
+    // Exactly 1 adjacent hostile: auto-apply
     const targetFk = hostiles[0];
+    const _targetIsNpc = typeof targetFk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFk);
+    if (_targetIsNpc) {
+      const p = targetFk.match(/^npc_(thug|krykna)_(\d+)$/);
+      if (damage > 0) {
+        applyDamageToNpcSync(game, { npcType: p[1], npcIndex: parseInt(p[2], 10), amount: damage, attackerPlayerNum: playerNum });
+      }
+      const _cahAutoPendingStrainNpc = strain > 0 ? [{
+        figureKey: targetFk,
+        controllerPlayerNum: null,
+        amount: strain,
+        source: entry.label || context.cardName || 'CC ability',
+      }] : [];
+      const npcLabel = `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`;
+      const strainPartNpc = strain > 0 ? ` + ${strain} Strain (queued)` : '';
+      return {
+        applied: true,
+        logMessage: `Gained ${entry.mpBonus} MP. **${npcLabel}** suffered ${damage > 0 ? `${damage} Damage${strainPartNpc}` : `${strain} Strain`}.`,
+        refreshDcEmbed: true,
+        ...(_cahAutoPendingStrainNpc.length ? { pendingStrain: _cahAutoPendingStrainNpc } : {}),
+      };
+    }
+    if (!dcHealthState) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP. Resolve manually: choose adjacent hostile for ${damage > 0 ? `${damage} Damage` : ''}${strain > 0 ? ` ${strain} Strain` : ''}.` };
     const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
     if (!targetMsgId) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
     const targetMeta = dcMessageMeta.get(targetMsgId);
@@ -7047,6 +7112,33 @@ export function resolveAbility(abilityId, context) {
     const oppNum = opponentPlayerNum(playerNum);
     // Shared: apply damage/strain/conditions to target; optionally apply selfStrain to activating figure
     const applyToFigureKey = (targetFk) => {
+      // NPC target (Thug / Krykna): no msgId / health-state pipeline. Damage
+      // routes through applyDamageToNpcSync; conditions via figureConditions;
+      // strain queues normally — applyStrain auto-converts to damage for NPCs.
+      if (isEntryHostileTo && typeof targetFk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFk)) {
+        const parsed = targetFk.match(/^npc_(thug|krykna)_(\d+)$/);
+        const npcType = parsed[1];
+        const npcIndex = parseInt(parsed[2], 10);
+        const npcLabel = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${npcIndex + 1}`;
+        let _dmgMsg = '';
+        if (damage > 0) {
+          const npcRes = applyDamageToNpcSync(game, { npcType, npcIndex, amount: damage, attackerPlayerNum: playerNum });
+          if (npcRes.applied) _dmgMsg = ` ${damage} Damage (${npcRes.prevHp}→${npcRes.newHp})`;
+        }
+        const _cahPendingStrainNpc = (strainBase > 0) ? [{
+          figureKey: targetFk,
+          controllerPlayerNum: null,
+          amount: strainBase,
+          source: entry.label || abilityId || 'CC ability',
+        }] : [];
+        for (const c of baseTargetConditions) applyCondition(game, targetFk, c);
+        return {
+          applied: true,
+          logMessage: `**${npcLabel}** suffered${_dmgMsg || ''}${baseTargetConditions.length ? `; gains ${baseTargetConditions.join(', ')}` : ''}.`,
+          refreshDcEmbed: true,
+          ...(_cahPendingStrainNpc.length ? { pendingStrain: _cahPendingStrainNpc } : {}),
+        };
+      }
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
       const targetMsgId = findMsgIdForFigureKey(game, oppNum, targetFk, dcMessageMeta);
       if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: could not find target deployment.' };
@@ -7261,11 +7353,14 @@ export function resolveAbility(abilityId, context) {
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     const hostileSet = new Set();
     if (cahRange <= 1) {
-      // Original path: adjacent figures via adjacency graph
+      // Original path: adjacent figures via adjacency graph. NPCs tagged
+      // hostileToAll (Thugs/Krykna) are valid hostile targets — per
+      // alexanbv 2026-05-10 neutrals are figures and can be targeted by
+      // any ability that targets hostile figures.
       for (const fk of activatingKeys) {
         const adj = getFiguresAdjacentToTarget(game, fk, mapId);
-        for (const { figureKey, playerNum: p } of adj) {
-          if (p === oppNum) hostileSet.add(figureKey);
+        for (const adjE of adj) {
+          if (isEntryHostileTo(game, adjE, playerNum)) hostileSet.add(adjE.figureKey);
         }
       }
     } else {
@@ -7278,6 +7373,20 @@ export function resolveAbility(abilityId, context) {
         }
         hostileSet.add(fk);
       }
+      // Neutral NPCs (hostileToAll) within range — per alexanbv 2026-05-10.
+      for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+        const arr = game[arrName];
+        if (!Array.isArray(arr)) continue;
+        for (let i = 0; i < arr.length; i++) {
+          const npc = arr[i];
+          if (!npc || npc.defeated || !npc.hostileToAll || !npc.coord) continue;
+          if (activatorPos && countGameSpaces(game, activatorPos, npc.coord) > cahRange) continue;
+          if (cahLos && losCheck && activatorPos && mapSpacesForLos) {
+            if (!losCheck(game, activatorPos, npc.coord, mapSpacesForLos, gfs)) continue;
+          }
+          hostileSet.add(`npc_${npcType}_${i}`);
+        }
+      }
     }
     let hostiles = [...hostileSet];
     // Disorient: filter to hostiles with a beneficial condition (Focus or Hidden)
@@ -7289,8 +7398,12 @@ export function resolveAbility(abilityId, context) {
       });
     }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No valid hostile figure in range.' };
-    // Helper to get a display label for a figure key
+    // Helper to get a display label for a figure key (or NPC slot key).
     const getFigLabel = (fk) => {
+      if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) {
+        const parsed = fk.match(/^npc_(thug|krykna)_(\d+)$/);
+        return `${parsed[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(parsed[2], 10) + 1}`;
+      }
       const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
       const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
       const baseName = tMeta?.displayName || tMeta?.dcName || fk;
@@ -11106,28 +11219,39 @@ export function resolveAbility(abilityId, context) {
       if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
       if (face.surge) dieParts.push(`${face.surge} Surge${face.surge !== 1 ? 's' : ''}`);
       const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
-      const targetName = dcNameFromFigureKey(targetFigureKey);
+      const _tgtIsNpc = typeof targetFigureKey === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFigureKey);
+      const targetName = _tgtIsNpc
+        ? (() => { const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+        : dcNameFromFigureKey(targetFigureKey);
       const resultParts = [];
       if (hits > 0) {
-        const enemyPlayerNum = opponentPlayerNum(playerNum);
-        const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
-        if (dcHealthState && targetMsgId) {
-          const healthState = dcHealthState.get(targetMsgId) || [];
-          const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
-          const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-          const entryHp = healthState[figIdx];
-          if (entryHp) {
-            const [cur, max] = entryHp;
-            const newCur = Math.max(0, (cur ?? max) - hits);
-            healthState[figIdx] = [newCur, max ?? newCur];
-            dcHealthState.set(targetMsgId, healthState);
-            syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-            resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+        if (_tgtIsNpc) {
+          const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/);
+          const npcRes = applyDamageToNpcSync(game, {
+            npcType: p[1], npcIndex: parseInt(p[2], 10), amount: hits, attackerPlayerNum: playerNum,
+          });
+          if (npcRes.applied) resultParts.push(`${hits} Damage (HP: ${npcRes.prevHp} → ${npcRes.newHp})`);
+        } else {
+          const enemyPlayerNum = opponentPlayerNum(playerNum);
+          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, targetFigureKey, dcMessageMeta);
+          if (dcHealthState && targetMsgId) {
+            const healthState = dcHealthState.get(targetMsgId) || [];
+            const fkMatch = targetFigureKey.match(/-(\d+)-(\d+)$/);
+            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+            const entryHp = healthState[figIdx];
+            if (entryHp) {
+              const [cur, max] = entryHp;
+              const newCur = Math.max(0, (cur ?? max) - hits);
+              healthState[figIdx] = [newCur, max ?? newCur];
+              dcHealthState.set(targetMsgId, healthState);
+              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
+              resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+            } else {
+              resultParts.push(`apply ${hits} Damage manually`);
+            }
           } else {
             resultParts.push(`apply ${hits} Damage manually`);
           }
-        } else {
-          resultParts.push(`apply ${hits} Damage manually`);
         }
       }
       return {
@@ -11148,38 +11272,50 @@ export function resolveAbility(abilityId, context) {
       if (!mapId) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. No map data — resolve attack manually.`, refreshBoard: true };
       const adjacentAll = getFiguresAdjacentToTarget(game, activatingFigureKey, mapId);
       const enemyPlayerNum = opponentPlayerNum(playerNum);
-      const validTargets = adjacentAll.filter(f => f.playerNum === enemyPlayerNum);
+      const validTargets = adjacentAll.filter(f => isEntryHostileTo(game, f, playerNum));
       if (validTargets.length === 0) {
         return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. No adjacent hostile figures.`, refreshBoard: true };
       }
       if (validTargets.length === 1) {
         // Auto-target single adjacent hostile: roll immediately
         const singleTarget = validTargets[0].figureKey;
+        const _stIsNpc = typeof singleTarget === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(singleTarget);
+        const _stLabel = _stIsNpc
+          ? (() => { const p = singleTarget.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+          : dcNameFromFigureKey(singleTarget);
         const color = entry.headbuttDie || 'red';
         const faces = getDiceData().attack?.[color.toLowerCase()];
-        if (!faces?.length) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Roll 1 ${color} die against **${dcNameFromFigureKey(singleTarget)}** manually.`, refreshBoard: true };
+        if (!faces?.length) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Roll 1 ${color} die against **${_stLabel}** manually.`, refreshBoard: true };
         const face = faces[Math.floor(Math.random() * faces.length)];
         const hits = face.dmg ?? 0;
         const dieParts = [];
         if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
         if (face.surge) dieParts.push(`${face.surge} Surge${face.surge !== 1 ? 's' : ''}`);
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
-        const tName = dcNameFromFigureKey(singleTarget);
+        const tName = _stLabel;
         const resParts = [];
         if (hits > 0) {
-          const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, singleTarget, dcMessageMeta);
-          if (dcHealthState && targetMsgId) {
-            const healthState = dcHealthState.get(targetMsgId) || [];
-            const fkMatch = singleTarget.match(/-(\d+)-(\d+)$/);
-            const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-            const entryHp = healthState[figIdx];
-            if (entryHp) {
-              const [cur, max] = entryHp;
-              const newCur = Math.max(0, (cur ?? max) - hits);
-              healthState[figIdx] = [newCur, max ?? newCur];
-              dcHealthState.set(targetMsgId, healthState);
-              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-              resParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+          if (_stIsNpc) {
+            const p = singleTarget.match(/^npc_(thug|krykna)_(\d+)$/);
+            const npcRes = applyDamageToNpcSync(game, {
+              npcType: p[1], npcIndex: parseInt(p[2], 10), amount: hits, attackerPlayerNum: playerNum,
+            });
+            if (npcRes.applied) resParts.push(`${hits} Damage (HP: ${npcRes.prevHp} → ${npcRes.newHp})`);
+          } else {
+            const targetMsgId = findMsgIdForFigureKey(game, enemyPlayerNum, singleTarget, dcMessageMeta);
+            if (dcHealthState && targetMsgId) {
+              const healthState = dcHealthState.get(targetMsgId) || [];
+              const fkMatch = singleTarget.match(/-(\d+)-(\d+)$/);
+              const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+              const entryHp = healthState[figIdx];
+              if (entryHp) {
+                const [cur, max] = entryHp;
+                const newCur = Math.max(0, (cur ?? max) - hits);
+                healthState[figIdx] = [newCur, max ?? newCur];
+                dcHealthState.set(targetMsgId, healthState);
+                syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
+                resParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+              }
             }
           }
         }

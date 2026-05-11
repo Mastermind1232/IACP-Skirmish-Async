@@ -145,10 +145,15 @@ const FIGURE_LETTERS = 'abcdefghij';
 export function figureChoiceLabels(figureKeys) {
   const dcCounts = {};
   for (const fk of figureKeys) {
+    if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) continue;
     const dc = dcNameFromFigureKey(fk);
     dcCounts[dc] = (dcCounts[dc] || 0) + 1;
   }
   return figureKeys.map((fk) => {
+    if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) {
+      const p = fk.match(/^npc_(thug|krykna)_(\d+)$/);
+      return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`;
+    }
     const dc = dcNameFromFigureKey(fk);
     const dcEffect = getDcEffect(dc);
     if (dcCounts[dc] > 1 || (dcEffect && dcEffect.figures > 1)) {
