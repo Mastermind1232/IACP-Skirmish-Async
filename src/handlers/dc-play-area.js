@@ -1034,18 +1034,31 @@ export function buildArsenalSelectOptions(diceCount, opts = {}) {
  */
 function buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, opts) {
   if (opts?.marksmanActive || opts?.ignoreBlocking) return null;
-  const { getDcEffects, getFigureSize, getFootprintCells } = ctx;
+  const { getDcEffects, getFigureSize, getFootprintCells, getMapData } = ctx;
   const enemyPlayerNum = playerNum === 1 ? 2 : 1;
   const attackerFpCells = getFootprintCells(attackerPos, attackerSize);
   const attackerFpSet = new Set(attackerFpCells.map(c => String(c).toLowerCase()));
   const blocking = new Set();
-  for (const poses of [game.figurePositions?.[playerNum] || {}, game.figurePositions?.[enemyPlayerNum] || {}]) {
+  // Camo reciprocal (Mak / Scout Trooper Elite): "You do not block line of
+  // sight for [hostile figures 4+ spaces away]." When the attacker is 4+
+  // spaces from a hostile Camo figure, that Camo figure's cells are
+  // excluded from the blocking set.
+  const CAMO_IDS = new Set(['camouflage_mak', 'camouflage_scout_trooper']);
+  const _mapId = game.selectedMap?.id;
+  const _camoMs = (_mapId && typeof getMapData === 'function') ? getMapData(_mapId) : null;
+  for (const [thisPn, poses] of [[playerNum, game.figurePositions?.[playerNum] || {}], [enemyPlayerNum, game.figurePositions?.[enemyPlayerNum] || {}]]) {
     for (const [fk, pos] of Object.entries(poses)) {
       if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffects()[fkDcName] || getDcEffects()[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
       if (fkEff?.companion === true) continue;
       if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+      // Camo reciprocal: skip hostile Camo figures 4+ from attacker.
+      if (thisPn === enemyPlayerNum && _camoMs && (fkEff?.specialAbilityIds || []).some(id => CAMO_IDS.has(id))) {
+        const fkPosLc = String(pos).toLowerCase();
+        const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc)));
+        if (dist >= 4) continue;
+      }
       const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
       for (const cell of getFootprintCells(pos, fkSize)) blocking.add(String(cell).toLowerCase());
     }

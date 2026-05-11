@@ -2727,13 +2727,10 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Spray Fire (Heavy Stormtrooper Elite): -3 Accuracy, +1 Surge (always beneficial at melee range)
-  if (hasSprayFireAbility(atkSpecialIds)) {
-    const bump = applySprayFire(game.pendingCombat);
-    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
-    game.pendingCombat.surgeBonus = bump.surgeBonus;
-    await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.');
-  }
+  // Spray Fire (Heavy Stormtrooper Elite): "you may apply -3 Accuracy
+  // and +1 Surge to the attack results." Player choice — surfaced at
+  // step-4 attacker modifier window (proceedAfterRerolls) via the
+  // combat_passive_ prompt pattern.
 
   // Improvised Cover (Verena Talos): +1 Block if adjacent to object or non-friendly, non-attacker figure
   if (defSpecialIds.includes('improvised_cover_verena') && mapSpaces && targetCoord) {
@@ -5308,6 +5305,18 @@ export async function handleCombatPassive(interaction, ctx) {
     combat.callTheShotsResolved = true;
     delete combat.pendingCombatPassive;
     delete combat.callTheShotsFigKey;
+  } else if (abilityKey === 'sf') {
+    // Spray Fire (Heavy Stormtrooper Elite) — player chose apply or skip.
+    if (choice === 'apply') {
+      const bump = applySprayFire(combat);
+      combat.bonusAccuracy = bump.bonusAccuracy;
+      combat.surgeBonus = bump.surgeBonus;
+      await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.');
+    } else {
+      await thread.send('**Spray Fire** — Skipped.');
+    }
+    combat.sprayFireResolved = true;
+    delete combat.pendingCombatPassive;
   } else if (abilityKey === 'hr') {
     // Heavy Repeater (Paz Vizsla) — three options each cost 1 strain.
     // destruct 2026-05-06: routed through applyStrain so the player gets
@@ -5675,6 +5684,29 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
       await thread.send('**Pulse Cannon** — Iden Versio spent a Power Token: **+4 Accuracy, +1 Hit** applied.');
     }
     combat.pulseCannonResolved = true;
+  }
+
+  // Spray Fire (Heavy Stormtrooper Elite): card text "you may apply -3
+  // Accuracy and +1 Surge to the attack results." Step-4 attacker
+  // modifier; player chooses Apply or Skip.
+  if (!combat.sprayFireResolved && combat.attackerFigureKey) {
+    const _sfDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _sfAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _sfAtkEff = _sfDcEff[_sfAtkDcName] || _sfDcEff[(_sfAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if (hasSprayFireAbility(_sfAtkEff?.specialAbilityIds || [])) {
+      combat.pendingCombatPassive = 'spray_fire';
+      const _sfRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_sf_apply`).setLabel('Apply (-3 Acc, +1 Surge)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${game.gameId}_sf_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({
+        content: `**Spray Fire** — **${_sfAtkDcName}** may apply **-3 Accuracy** and **+1 Surge** to this attack:`,
+        components: [_sfRow],
+      });
+      saveGames?.(game.gameId);
+      return;
+    }
+    combat.sprayFireResolved = true;
   }
 
   // Negotiate (Hondo): +2 Damage unless defender pays 2 VP

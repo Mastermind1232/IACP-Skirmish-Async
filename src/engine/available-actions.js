@@ -2255,14 +2255,27 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     !!game.nextAttackIgnoreFigureLOS?.[msgId];
 
   const figureBlockingCoords = _attackerIgnoresFigureBlocking ? null : new Set();
+  // Attacker footprint cells for multi-cell LOS origin iteration.
+  // Hoisted here so Camo-reciprocal distance computation in the blocking
+  // loop can use it.
+  const _aaAttackerFpCells = [...attackerFpSet];
+  // Camo reciprocal (Mak / Scout Trooper Elite): "You do not block line of
+  // sight for [hostile figures 4+ spaces away]." When attacker is 4+ from
+  // a hostile Camo figure, exclude that Camo figure's cells from blocking.
+  const _AA_CAMO_IDS = new Set(['camouflage_mak', 'camouflage_scout_trooper']);
   if (figureBlockingCoords) {
-    for (const poses of [game.figurePositions?.[playerNum] || {}, enemyPositions]) {
+    for (const [thisPn, poses] of [[playerNum, game.figurePositions?.[playerNum] || {}], [enemyPn, enemyPositions]]) {
       for (const [fk, pos] of Object.entries(poses)) {
         if (!pos || attackerFpSet.has(String(pos).toLowerCase())) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName.replace(/\s*\[.*\]\s*$/, '')];
         if (fkEff?.companion === true) continue;
         if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        if (thisPn === enemyPn && (fkEff?.specialAbilityIds || []).some(id => _AA_CAMO_IDS.has(id))) {
+          const fkPosLc = String(pos).toLowerCase();
+          const dist = Math.min(..._aaAttackerFpCells.map(ac => countSpaces(ms, ac, fkPosLc, _aaClosedDoorEdges)));
+          if (dist >= 4) continue;
+        }
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
         for (const cell of getFootprintCells(pos, fkSize)) figureBlockingCoords.add(String(cell).toLowerCase());
       }
@@ -2270,9 +2283,6 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   }
 
   const targets = [];
-
-  // Attacker footprint cells for multi-cell LOS origin iteration.
-  const _aaAttackerFpCells = [...attackerFpSet];
 
   for (const [fk, coord] of Object.entries(enemyPositions)) {
     if (!coord) continue;

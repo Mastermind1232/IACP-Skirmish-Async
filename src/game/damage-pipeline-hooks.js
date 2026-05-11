@@ -1623,7 +1623,7 @@ WHEN_DEFEATED_HOOKS.push({
           dcName: dcN,
           threadId: null,
           msgId: rgMsgId,
-          bypassCosts: false, // Standard movement — terrain costs apply.
+          bypassCosts: true, // "Move 1 space" → bypassCosts per CRR MOVE-017.
           nextAction: null,
         };
         await postMoveXPicker(game, ctx, rgMsgId).catch((err) =>

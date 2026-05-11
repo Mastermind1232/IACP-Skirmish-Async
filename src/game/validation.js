@@ -2,7 +2,7 @@
  * Game validation (deck legal, etc.). No Discord; uses data-loader for card data.
  */
 import { getDcEffects, getDcKeywords, getCcEffect, getCcEffectsData, getAbilityLibrary } from '../data-loader.js';
-import { modularDiscountDelta } from './modular-hse-helpers.js';
+import { modularDiscountDelta, modularDiscountedAttachments } from './modular-hse-helpers.js';
 import { scavengedStockExcusals, SCAVENGED_STOCK_JAWA_NAME } from './scavenged-stock-helpers.js';
 
 /**
@@ -607,11 +607,17 @@ export function validateArmyAffiliation(squad) {
   }
 
   // ── Heavy Stormtrooper (Elite) — Modular: note attachment discount ──
+  // Per alexanbv 2026-05-10: one discount per HSE group, applied to one
+  // legal-for-HSE attachment each. Must-attach enforcement is player-side.
   if (hasHeavyStormtrooperElite) {
-    const attachments = resolved.filter((d) => d.isAttachment);
-    if (attachments.length) {
+    const discounted = modularDiscountedAttachments(dcList, dcEffects);
+    for (const attName of discounted) {
+      const stripped = String(attName).replace(/^\[|\]$/g, '');
+      const stats = dcEffects[attName] || dcEffects[`[${stripped}]`];
+      const baseCost = stats?.cost ?? '?';
+      const newCost = typeof baseCost === 'number' ? Math.max(0, baseCost - 1) : '?';
       warnings.push(
-        `Heavy Stormtrooper (Elite) — Modular: "${attachments[0].name}" included at -1 cost discount (${attachments[0].cost ?? '?'} → ${(attachments[0].cost ?? 1) - 1} points).`
+        `Heavy Stormtrooper (Elite) — Modular: "${stripped}" included at -1 cost discount (${baseCost} → ${newCost} points).`
       );
     }
   }

@@ -716,6 +716,22 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Tempt (Emperor Palpatine): SoA player-driven trigger. Card text "At
+  // the start of your activation, a figure of your choice suffers 1 Damage
+  // and gains 1 Hit Token." No range restriction (per alexanbv 2026-05-10).
+  // Owner = activating player. Candidate list (any figure on the board +
+  // NPCs) is enumerated at FIRE time so positions are fresh.
+  if (dcName === 'Emperor Palpatine') {
+    descriptors.push({
+      id: `tempt:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Tempt',
+      subPromptKey: 'tempt',
+      extras: { dcName },
+    });
+  }
+
   // Tactical Movement (Fenn Signis): pick a friendly figure within 3 → that
   // figure gains 2 MP. Trigger only enters the bucket when at least one
   // eligible friendly exists.

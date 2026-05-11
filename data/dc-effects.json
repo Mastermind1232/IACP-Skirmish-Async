@@ -2576,13 +2576,11 @@
       "affiliation": "Imperial",
       "specials": [
         "Force Lightning",
-        "Emperor",
-        "Tempt"
+        "Emperor"
       ],
       "specialAbilityIds": [
         "force_lightning",
-        "emperor_interrupt",
-        "tempt"
+        "emperor_interrupt"
       ]
     },
     "Ewok Warrior (Elite)": {

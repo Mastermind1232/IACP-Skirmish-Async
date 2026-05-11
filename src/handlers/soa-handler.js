@@ -593,6 +593,57 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP** (must be used immediately if not Fenn himself):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'tempt') {
+    // Tempt: enumerate ALL figures + NPCs at pick time (positions are
+    // fresh). Store candidates in extras so the fire handler can resolve
+    // by index — figureKey-based choice keys break for NPCs (npc_thug_0)
+    // because the choiceKey parser uses lastIndexOf('_').
+    const ownerPn = bucket.ownerPlayerNum;
+    const enemyNum = opponentPlayerNum(ownerPn);
+    const candidates = [];
+    for (const pn of [ownerPn, enemyNum]) {
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        candidates.push(fk);
+      }
+    }
+    for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+      const arr = game[arrName];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const npc = arr[i];
+        if (!npc || npc.defeated || !npc.coord) continue;
+        candidates.push(`npc_${npcType}_${i}`);
+      }
+    }
+    if (candidates.length === 0) {
+      await interaction.followUp({ content: 'No figures on the board.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    desc.extras = desc.extras || {};
+    desc.extras.candidates = candidates;
+    const labelFor = (fk) => {
+      const m = fk.match(/^npc_(thug|krykna)_(\d+)$/);
+      if (m) return `${m[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(m[2], 10) + 1}`;
+      return dcNameFromFigureKey(fk);
+    };
+    const allButtons = candidates.map((fk, idx) =>
+      new ButtonBuilder()
+        .setCustomId(`soa_fire_${gameId}_${desc.id}_t${idx}`)
+        .setLabel(labelFor(fk).slice(0, 80))
+        .setStyle(ButtonStyle.Danger),
+    );
+    allButtons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    // Discord limit: 5 rows × 5 buttons = 25. Truncate with a warning if more.
+    if (allButtons.length > 25) allButtons.length = 25;
+    const rows = [];
+    for (let i = 0; i < allButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(allButtons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F578}\u{FE0F} **Tempt** — **${displayName}**: choose any figure on the board (no range restriction). That figure suffers **1 Damage** and gains **1 Damage Token**:`,
+      components: rows,
+    }).catch(discordCatch);
   } else {
     await interaction.followUp({ content: `Unknown SoA sub-prompt: ${desc.subPromptKey}`, ephemeral: true }).catch(discordCatch);
   }
@@ -1381,6 +1432,73 @@ export async function handleSoaFire(interaction, ctx) {
         }
       } else {
         await interaction.message.edit({ content: `\u{1F3F0} **Imperial Citadel** — No ${tokenType} tokens remaining.`, components: [] }).catch(discordCatch);
+      }
+    }
+
+  // --- Tempt (Emperor Palpatine) ---
+  } else if (desc.subPromptKey === 'tempt') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F578}\u{FE0F} **Tempt** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const m = /^t(\d+)$/.exec(choiceKey || '');
+      if (!m) {
+        await interaction.followUp({ content: `Malformed Tempt choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const idx = parseInt(m[1], 10);
+      const targetFigureKey = (desc.extras?.candidates || [])[idx];
+      if (!targetFigureKey) {
+        await interaction.followUp({ content: 'That Tempt target is no longer available.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      if (typeof targetFigureKey === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(targetFigureKey)) {
+        const p = targetFigureKey.match(/^npc_(thug|krykna)_(\d+)$/);
+        const npcType = p[1];
+        const npcIndex = parseInt(p[2], 10);
+        const npcLabel = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${npcIndex + 1}`;
+        const { applyDamageToNpcSync } = await import('../game/damage-pipeline.js');
+        const npcRes = applyDamageToNpcSync(game, { npcType, npcIndex, amount: 1, attackerPlayerNum: ownerPlayerNum });
+        let _npcHpNote = '';
+        let _npcDefeated = false;
+        if (npcRes?.applied) {
+          _npcHpNote = ` (HP: ${npcRes.prevHp} → ${npcRes.newHp})`;
+          if (npcRes.defeated) _npcDefeated = true;
+        }
+        if (!_npcDefeated) grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+        const _tokenNote = _npcDefeated ? '' : ' and gained 1 Damage Token';
+        await interaction.message.edit({ content: `\u{1F578}\u{FE0F} **Tempt** — **${npcLabel}** suffered **1 Damage**${_npcHpNote}${_tokenNote}.`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F578}\u{FE0F} **Tempt** — ${npcLabel} -1 HP${_npcHpNote}.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        const enemyNum = opponentPlayerNum(ownerPlayerNum);
+        const targetOwnerNum = game.figurePositions?.[ownerPlayerNum]?.[targetFigureKey] ? ownerPlayerNum : enemyNum;
+        const targetDcName = dcNameFromFigureKey(targetFigureKey);
+        const { figureIndex: figIdx } = parseFigureKey(targetFigureKey);
+        let targetMsgId = null;
+        if (dcMessageMeta) {
+          for (const [mId, mMeta] of dcMessageMeta) {
+            if (mMeta.gameId !== gameId) continue;
+            if (mMeta.dcName === targetDcName && mMeta.playerNum === targetOwnerNum) {
+              targetMsgId = mId;
+              break;
+            }
+          }
+        }
+        let _hpNote = '';
+        let _defeated = false;
+        if (dcHealthState && targetMsgId) {
+          const { applyDamageSync } = await import('../game/damage-pipeline.js');
+          const { prevHp, newHp, wasDefeated } = applyDamageSync(game, { dcHealthState }, {
+            figureKey: targetFigureKey, msgId: targetMsgId, figIndex: figIdx,
+            amount: 1, controllerPlayerNum: targetOwnerNum,
+            source: 'Tempt',
+          });
+          _hpNote = ` (HP: ${prevHp} → ${newHp})`;
+          if (wasDefeated) _defeated = true;
+        }
+        if (!_defeated) grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+        const _tokenNote = _defeated ? '' : ' and gained 1 Damage Token';
+        await interaction.message.edit({ content: `\u{1F578}\u{FE0F} **Tempt** — **${targetDcName}** suffered **1 Damage**${_hpNote}${_tokenNote}.`, components: [] }).catch(discordCatch);
+        if (logGameAction) await logGameAction(game, client, `\u{1F578}\u{FE0F} **Tempt** — ${targetDcName} -1 HP${_hpNote}.`, { phase: 'ROUND', icon: 'card' });
       }
     }
 
