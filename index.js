@@ -4817,6 +4817,46 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferUpdate().catch(discordCatch);
   }
 
+  // ── Pending CC-response global gate ──────────────────────────────────
+  // Per alexanbv 2026-05-11: when an opponent has been prompted with a
+  // Negation or Comm Disruption response, ALL other gameplay buttons
+  // must be locked until they either counter or let the original CC
+  // resolve. Only the 4 response-handler prefixes (and a small set of
+  // always-available admin buttons) are allowed through during the
+  // pause. Putting the gate at dispatch means every handler is
+  // covered automatically — no per-handler guard maintenance.
+  const _CC_RESPONSE_PREFIXES = new Set([
+    'negation_play_',
+    'negation_let_resolve_',
+    'comm_disruption_play_',
+    'comm_disruption_skip_',
+  ]);
+  const _ALWAYS_ALLOWED_PREFIXES = new Set([
+    // Admin / out-of-band actions that must still work even when paused
+    'botmenu_kill_', 'botmenu_kill_yes_', 'botmenu_kill_no_',
+    'botmenu_recover_', 'kill_game_', 'cp_save_', 'cp_load_',
+  ]);
+  if (!_CC_RESPONSE_PREFIXES.has(buttonKey) && !_ALWAYS_ALLOWED_PREFIXES.has(buttonKey)) {
+    try {
+      const _gateGameId = resolveGameIdForLock(interaction);
+      const _gateGame = _gateGameId ? getGame(_gateGameId) : null;
+      if (_gateGame?.pendingNegation) {
+        await interaction.followUp({
+          content: '⏸️ Waiting for opponent to resolve **Negation** response (counter or let resolve). All other actions are paused.',
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+      if (_gateGame?.pendingCommDisruptionPrompt) {
+        await interaction.followUp({
+          content: '⏸️ Waiting for opponent to resolve **Comm Disruption** prompt. All other actions are paused.',
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+    } catch (_e) { /* gate is best-effort — fall through if lookup fails */ }
+  }
+
   const _buttonLockId = resolveGameIdForLock(interaction);
   await withAtomicGameLock(_buttonLockId, atomicOpts, async () => {
 
@@ -4844,7 +4884,7 @@ client.on('interactionCreate', async (interaction) => {
       'move_adjust_mp_',
       // Combat core
       'attack_target_',
-      'combat_ready_',
+      'combat_gate_',
       'combat_roll_',
       'combat_surge_',
       'combat_reroll_',
