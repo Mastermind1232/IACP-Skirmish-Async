@@ -3453,6 +3453,7 @@ export function resolveAbility(abilityId, context) {
         dcName: meta?.dcName || '',
         threadId: null,
         msgId,
+        bypassCosts: !!entry.freeMoveBypassCosts,
         nextAction: _nextAction,
       };
     }
