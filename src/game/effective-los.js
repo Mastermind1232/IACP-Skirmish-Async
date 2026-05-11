@@ -24,11 +24,55 @@
  * `ctx` carries the data-loader / spatial helpers so callers can pass
  * either the handler ctx or a deps bag.
  */
-import { hasLineOfSight } from './spatial.js';
+import { hasLineOfSight, countSpaces } from './spatial.js';
 import { getBrokenWallEdges } from './movement.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { edgeKey } from './coords.js';
 import { getConfig } from './figure-config.js';
+
+// Camouflage reciprocal: figures with these abilities do not block LOS for
+// hostile figures 4+ spaces away (per card text: "You do not block line of
+// sight for those figures"). Mirror buildFigureBlockingCoords in
+// dc-play-area.js so the post-declare probe matches the target picker.
+const _CAMO_RECIPROCAL_IDS = new Set(['camouflage_mak', 'camouflage_scout_trooper']);
+
+/**
+ * Build the effective mapSpaces for LOS calculations: merge closed doors,
+ * energy shields, smoke tokens, broken-wall edges. Shared by the picker
+ * (buildAndSendAttackTargets) and the post-declare probe in handleCombatRoll.
+ *
+ * Exported as `_buildLosEffectiveMs` so the probe in combat.js calls the
+ * exact same shape that the picker computes inline.
+ */
+export function _buildLosEffectiveMs(game, ctx) {
+  const mapId = game?.selectedMap?.id;
+  if (!mapId) return null;
+  const { getMapData, getMapTokensData } = ctx || {};
+  if (!getMapData) return null;
+  const ms = getMapData(mapId);
+  if (!ms) return null;
+  const allDoors = (getMapTokensData ? (getMapTokensData()[mapId]?.doors || []) : []);
+  const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
+  const closedEdges = allDoors.filter((e) => {
+    const a = String(e[0]).toLowerCase(), b = String(e[1]).toLowerCase();
+    return !openedSet.has(`${a}|${b}`) && !openedSet.has(`${b}|${a}`);
+  });
+  const shieldSpaces = (game.ancillaryTokens?.energyShield || []).map((s) => String(s).toLowerCase());
+  const smokeSpaces = (game.ancillaryTokens?.smoke || []).map((s) => String(s).toLowerCase());
+  const extraBlocking = [...shieldSpaces, ...smokeSpaces];
+  const brokenWalls = getBrokenWallEdges ? getBrokenWallEdges(game, ms) : new Set();
+  const baseImpassable = ms?.impassableEdges || [];
+  const filteredImpassable = brokenWalls.size > 0
+    ? baseImpassable.filter((e) => !brokenWalls.has(edgeKey(e[0], e[1])))
+    : baseImpassable;
+  const mergedImpassable = closedEdges.length > 0 ? [...filteredImpassable, ...closedEdges] : filteredImpassable;
+  if (closedEdges.length === 0 && extraBlocking.length === 0 && brokenWalls.size === 0) return ms;
+  return {
+    ...ms,
+    impassableEdges: mergedImpassable,
+    blocking: extraBlocking.length > 0 ? [...(ms?.blocking || []), ...extraBlocking] : ms?.blocking,
+  };
+}
 
 /**
  * @param {object} game
@@ -105,7 +149,11 @@ export function hasEffectiveLineOfSight(game, attackerPlayerNum, attackerFigureK
     const blocking = new Set();
     const attackerFpSet = new Set(attackerFp.map((c) => String(c).toLowerCase()));
     const targetFpSet = new Set(targetFp.map((c) => String(c).toLowerCase()));
-    for (const poses of [game.figurePositions?.[attackerPlayerNum] || {}, game.figurePositions?.[defenderPlayerNum] || {}]) {
+    const playerPoses = [
+      [attackerPlayerNum, game.figurePositions?.[attackerPlayerNum] || {}],
+      [defenderPlayerNum, game.figurePositions?.[defenderPlayerNum] || {}],
+    ];
+    for (const [thisPn, poses] of playerPoses) {
       for (const [fk, pos] of Object.entries(poses)) {
         if (!pos) continue;
         const posLow = String(pos).toLowerCase();
@@ -114,6 +162,17 @@ export function hasEffectiveLineOfSight(game, attackerPlayerNum, attackerFigureK
         const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (fkEff?.companion === true) continue;
         if ((fkEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        // Camouflage reciprocal: hostile Camo figures 4+ from attacker
+        // do not block LOS. Mirrors buildFigureBlockingCoords in
+        // dc-play-area.js — without this, the post-declare LoS probe
+        // diverges from the target picker (the picker allows shots that
+        // the probe then aborts).
+        if (thisPn === defenderPlayerNum
+            && (fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id))) {
+          const fkPosLc = posLow;
+          const dist = Math.min(...attackerFp.map((ac) => countSpaces(effectiveMs, String(ac).toLowerCase(), fkPosLc)));
+          if (dist >= 4) continue;
+        }
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
         for (const cell of getFootprintCells(pos, fkSize)) blocking.add(String(cell).toLowerCase());
       }

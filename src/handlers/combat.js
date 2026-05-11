@@ -1338,9 +1338,16 @@ export async function handleAttackTarget(interaction, ctx) {
     if (game.arcingShotActive?.[msgId]) delete game.arcingShotActive[msgId];
     if (game.arcingShotActiveScalar) delete game.arcingShotActiveScalar;
   }
-  // Ballistics Matrix / Marksman: clear per-attack flag after this attack proceeds.
-  // Both paths arm by msgId 2026-05-09 (Ballistics Matrix bug fix aligned with Marksman).
-  if (game.nextAttackIgnoreFigureLOS?.[msgId]) delete game.nextAttackIgnoreFigureLOS[msgId];
+  // Ballistics Matrix / Marksman: capture the per-attack flag and clear it.
+  // Both paths arm by msgId 2026-05-09 (Ballistics Matrix bug fix aligned
+  // with Marksman). Snapshot the value into a local — pendingCombat is
+  // created downstream (line ~1633) and needs the flag preserved so the
+  // post-declare LoS probe in handleCombatRoll keeps the figures-don't-
+  // block semantic for THIS attack. Without the snapshot, the probe sees
+  // marksmanActive=false and may abort an attack the picker correctly
+  // allowed.
+  const _atkIgnoredFigureLOS = !!game.nextAttackIgnoreFigureLOS?.[msgId];
+  if (_atkIgnoredFigureLOS) delete game.nextAttackIgnoreFigureLOS[msgId];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -1630,6 +1637,9 @@ export async function handleAttackTarget(interaction, ctx) {
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
     defenderDcName: targetDcName,
+    // Snapshot Marksman/Ballistics Matrix "figures don't block" semantic
+    // for this attack — read by handleCombatRoll's post-declare LoS probe.
+    attackIgnoredFigureLOS: _atkIgnoredFigureLOS || undefined,
     reverseEngineerActive: reverseEngineerActive || undefined,
     bonusSurgeAbilities: [...nextSurge],
     bonusPierce: nextPierce,
@@ -3042,6 +3052,47 @@ export async function handleAttackTarget(interaction, ctx) {
 }
 
 /**
+ * Post-declare miss-and-step-8 path. Called when handleCombatRoll's
+ * validity probe aborts the attack (attacker removed, target removed,
+ * or LoS lost). Per CRR: a LoS-loss after declaration still counts as
+ * a missed attack — step 8 abilities (Migs Mayfeld gain-tokens, Han's
+ * Return Fire, etc.) still resolve. We synthesize a miss state on
+ * combat, enqueue step-8 effects for both sides, drain via
+ * postPostResolveWindow, then clean up.
+ */
+async function _forceMissAndStep8(thread, game, combat, ctx, message) {
+  if (thread) await thread.send(message).catch(discordCatch);
+  // Synthesize miss state — step-8 enqueuers read _step7Hit/_step7Damage.
+  combat._step7Hit = false;
+  combat._step7Damage = 0;
+  combat.aborted = true;
+  combat.abortReason = 'los_or_attacker_gone';
+  // Step 8: defender-side enqueuers (Return Fire, Migs auto-tokens, etc.)
+  // The attacker-side enqueuer is hit/damage-gated internally, so it
+  // safely skips Blast / Cleave / damage-conditions on a miss.
+  try {
+    const { enqueueAttackerStep8Effects, enqueueDefenderStep8Effects, postPostResolveWindow } = await import('./after-attack-resolve.js');
+    const _step8Deps = {
+      getDcEffects: ctx.getDcEffects,
+      findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+      dcNameFromFigureKey,
+    };
+    enqueueAttackerStep8Effects(combat);
+    enqueueDefenderStep8Effects(combat, game, _step8Deps);
+    if (thread) {
+      await postPostResolveWindow(thread, game, combat, 'defender', ctx);
+      await postPostResolveWindow(thread, game, combat, 'attacker', ctx);
+    }
+  } catch (err) {
+    console.error('[forceMiss] step8 drain failed:', err?.message ?? err);
+  }
+  resolvePendingCombat(game);
+  if (ctx.saveGames) ctx.saveGames(game.gameId);
+}
+
+
+
+/**
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, rollAttackDice, rollDefenseDice, getAttackerSurgeAbilities, SURGE_LABELS, getSurgeAbilityLabel, resolveCombatAfterRolls, saveGames
  */
@@ -3097,30 +3148,64 @@ export async function handleCombatRoll(interaction, ctx) {
   //     attacker removed)
   //   - Cara Dune CC / Ahsoka CC / Force Push removed the attacker
   //   - LAM repositioned the target out of LOS
-  // Uses the shared hasEffectiveLineOfSight helper so the LOS treatment
-  // matches buildAndSendAttackTargets exactly (closed doors / shields /
-  // smoke / broken walls / Marksman / Priority Target / Massive /
-  // Clawdite Scout / multi-cell footprints).
+  // CRITICAL: this probe MUST match the picker's LoS check exactly —
+  // it calls the same buildFigureBlockingCoords + hasLineOfSight pair
+  // used by buildAndSendAttackTargets so Camo / PT / MASSIVE / Clawdite
+  // Scout / Marksman / multi-cell footprints all resolve identically.
+  // Marksman flag is consumed at declare time (combat.js:1343) so we
+  // read combat.attackIgnoredFigureLOS (snapshot taken at declare).
   if (combat.attackerFigureKey && combat.target?.figureKey) {
     const _avAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
     if (!_avAtkPos) {
-      await thread.send('🚫 **Attack aborted** — attacker is no longer on the board.').catch(discordCatch);
-      resolvePendingCombat(game);
-      saveGames(game.gameId);
+      await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — attacker is no longer on the board.');
       return;
     }
     if (game.selectedMap?.id) {
-      const { hasEffectiveLineOfSight } = await import('../game/effective-los.js');
-      const _avLos = hasEffectiveLineOfSight(
-        game,
-        attackerPlayerNum, combat.attackerFigureKey,
-        defenderPlayerNum, combat.target.figureKey,
-        ctx,
-        { marksmanActive: !!game.nextAttackIgnoreFigureLOS?.[combat.attackerMsgId] },
-      );
+      const _avMod = await import('./dc-play-area.js');
+      const _avLosMod = await import('../game/effective-los.js');
+      const { buildFigureBlockingCoords } = _avMod;
+      const { _buildLosEffectiveMs } = _avLosMod;
+      const _avAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey);
+      const _avAtkEff = ctx.getDcEffects?.()?.[_avAtkDcName] || ctx.getDcEffects?.()?.[(_avAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const _avAtkText = String(_avAtkEff?.abilityText || '').toLowerCase();
+      const _avAtkKws = (_avAtkEff?.keywords || []).map(k => String(k).toUpperCase());
+      let _avAtkIgnoreBlocking = (_avAtkText.includes('priority target') && _avAtkText.includes('line of sight'))
+        || _avAtkKws.includes('MASSIVE');
+      if (!_avAtkIgnoreBlocking) {
+        try {
+          const { getConfig } = await import('../game/figure-config.js');
+          if (getConfig(game, combat.attackerFigureKey)?.form === 'Scout') _avAtkIgnoreBlocking = true;
+        } catch { /* optional */ }
+      }
+      const _avAtkSize = game.figureOrientations?.[combat.attackerFigureKey] || ctx.getFigureSize(_avAtkDcName);
+      const _avTgtSize = game.figureOrientations?.[combat.target.figureKey] || ctx.getFigureSize(dcNameFromFigureKey(combat.target.figureKey));
+      const _avAtkFp = ctx.getFootprintCells(_avAtkPos, _avAtkSize);
+      const _avTgtPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
+      if (!_avTgtPos) {
+        await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — target is no longer on the board.');
+        return;
+      }
+      const _avTgtFp = ctx.getFootprintCells(_avTgtPos, _avTgtSize);
+      const _avEffMs = _buildLosEffectiveMs(game, ctx);
+      const _avMarksmanActive = !!combat.attackIgnoredFigureLOS;
+      const _avBlockingCoords = buildFigureBlockingCoords(game, attackerPlayerNum, _avAtkPos, _avAtkSize, ctx, {
+        marksmanActive: _avMarksmanActive,
+        ignoreBlocking: _avAtkIgnoreBlocking,
+      });
+      // Massive target cannot be hidden behind other figures.
+      const _avTgtDcName = dcNameFromFigureKey(combat.target.figureKey);
+      const _avTgtEff = ctx.getDcEffects?.()?.[_avTgtDcName] || ctx.getDcEffects?.()?.[(_avTgtDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const _avTgtMassive = (_avTgtEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE');
+      const _avLosCoords = _avTgtMassive ? null : _avBlockingCoords;
+      let _avLos = false;
+      for (const ac of _avAtkFp) {
+        for (const tc of _avTgtFp) {
+          if (ctx.hasLineOfSight(ac, tc, _avEffMs, _avLosCoords)) { _avLos = true; break; }
+        }
+        if (_avLos) break;
+      }
       if (!_avLos) {
-        await thread.send('🚫 **Attack aborted** — attacker no longer has line of sight to the target.').catch(discordCatch);
-        resolvePendingCombat(game);
+        await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — attacker no longer has line of sight to the target.');
         saveGames(game.gameId);
         return;
       }

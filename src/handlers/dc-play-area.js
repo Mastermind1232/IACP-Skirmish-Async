@@ -1032,7 +1032,7 @@ export function buildArsenalSelectOptions(diceCount, opts = {}) {
  * @param {boolean} [opts.ignoreBlocking] - if true, return null (attacker ignores blocking)
  * @returns {Set<string>|null}
  */
-function buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, opts) {
+export function buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, opts) {
   if (opts?.marksmanActive || opts?.ignoreBlocking) return null;
   const { getDcEffects, getFigureSize, getFootprintCells, getMapData } = ctx;
   const enemyPlayerNum = playerNum === 1 ? 2 : 1;
