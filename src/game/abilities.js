@@ -784,20 +784,33 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
   }
 
-  // battlefield_leadership (Leia Organa): per alexanbv 2026-05-10 BL is
-  // wholly driven by an auto-trigger in combat-bridge.js post-resolve.
-  // Card text "Special Action (Battlefield Leadership): Perform an attack,
-  // then choose another friendly..." → Leia just attacks normally; after
-  // her attack resolves, the post-resolve hook captures the target and
-  // posts the friendly picker (bl_friendly_<gameId>_<fk>). The friendly's
-  // 1-space move goes through pendingMoveX (bypassCosts) and the free
-  // attack is forced to the captured target via game.forcedAttackTarget.
-  // The legacy dcSpecial click-to-pick path is retired — clicking the
-  // button now just informs the player to attack first.
+  // battlefield_leadership (Leia Organa): per alexanbv 2026-05-10 BL must
+  // remain a Special Action button (distinct from a regular attack, so
+  // abilities that key off "attack as part of a Special Action" can
+  // detect it). Card text "Special Action (Battlefield Leadership):
+  // Perform an attack, then choose another friendly..." → Clicking BL
+  // consumes the Special Action cost, grants a FREE attack to Leia
+  // (next attack tagged as a Special Action), and after that attack
+  // resolves the post-resolve hook in combat-bridge.js posts the
+  // friendly picker with the captured target.
   if (abilityId === 'battlefield_leadership') {
+    const { game, playerNum, meta, msgId } = context;
+    if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Battlefield Leadership** manually.' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    if (!activatingKey) return { applied: false, manualMessage: '**Battlefield Leadership** — Leia not found.' };
+    // Grant a free attack for Leia (no extra action cost — the Special
+    // Action cost is paid by the BL click itself). The attack is tagged
+    // as a Special Action attack via battlefieldLeadershipPendingAttack
+    // so combat.attackAsSpecialAction can be set on attack-declare.
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[activatingKey] = { from: 'Battlefield Leadership' };
+    game.battlefieldLeadershipPendingAttack = game.battlefieldLeadershipPendingAttack || {};
+    game.battlefieldLeadershipPendingAttack[msgId] = true;
     return {
       applied: true,
-      logMessage: '**Battlefield Leadership** — perform an attack with Leia. After her attack resolves, you will be prompted to pick a friendly figure within 3 spaces to make a free attack against the same target.',
+      freeAction: !!entry.freeAction,
+      logMessage: '**Battlefield Leadership** (Special Action) — click **Attack** to make Leia\'s free attack (tagged as Special Action). After it resolves you will be prompted to pick a friendly figure within 3 spaces to make a free attack against the same target.',
     };
   }
 

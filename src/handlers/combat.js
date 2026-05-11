@@ -1638,7 +1638,13 @@ export async function handleAttackTarget(interaction, ctx) {
     // penalties when the figure's condition effects are inert.
     attackerCondEffectsSuppressed: _attackerCondEffectsSuppressed,
     defenderCondEffectsSuppressed: _defenderCondEffectsSuppressed,
+    // Tags whether this attack was performed as part of a Special Action
+    // (e.g. Battlefield Leadership). Other abilities can read this to
+    // detect "attack as part of a Special Action" — per alexanbv 2026-05-10.
+    attackAsSpecialAction: !!(game.battlefieldLeadershipPendingAttack?.[msgId]),
+    attackAsSpecialActionSource: game.battlefieldLeadershipPendingAttack?.[msgId] ? 'Battlefield Leadership' : null,
     attackRoll: null,
+    // (BL pending flag consumed below)
     defenseRoll: null,
     attackTargetMsgId: interaction.message.id,
     darksaberBlastToCleave: overrideDice?.darksaberBlastToCleave || false,
@@ -1647,6 +1653,13 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_aimFired) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
     game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+  }
+  // Consume battlefieldLeadershipPendingAttack so only Leia's BL attack
+  // (this attack) is tagged as a Special Action — the friendly's
+  // follow-up attack via the BL post-resolve hook is a regular free
+  // attack, not a Special Action.
+  if (game.battlefieldLeadershipPendingAttack?.[msgId]) {
+    delete game.battlefieldLeadershipPendingAttack[msgId];
   }
   // CC Passive Redraw (per CRR card text 2026-05-09): K&D / Targeting
   // Network grant the relevant figure (FORCE USER / DROID) a NEW
