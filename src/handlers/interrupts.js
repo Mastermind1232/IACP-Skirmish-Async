@@ -976,14 +976,16 @@ async function _postAphraExcavationPlayButton(game, client) {
 }
 
 // ── 14. Driven by Hatred (Darth Vader EOR) ──────────────────────────────────
+// Per alexanbv 2026-05-10: choice (Force Choke / Attack / Skip) happens
+// AFTER the 2-space move-X picker drains, not before. Top-level button is
+// Move-or-Skip. The post-move picker is fired via the dbhPostMovePick
+// continuation in move-x-handler.js.
 export async function handleDrivenByHatred(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
 
-  // Determine which button was pressed
   let buttonKey;
-  if (interaction.customId.startsWith('dbh_force_choke_')) buttonKey = 'dbh_force_choke_';
-  else if (interaction.customId.startsWith('dbh_attack_')) buttonKey = 'dbh_attack_';
+  if (interaction.customId.startsWith('dbh_move_')) buttonKey = 'dbh_move_';
   else buttonKey = 'dbh_skip_';
 
   const _dbhSuffix = parseCustomId(interaction.customId, buttonKey);
@@ -1002,10 +1004,6 @@ export async function handleDrivenByHatred(interaction, ctx) {
     saveGames(_dbhGame.gameId);
     return;
   }
-  // 2-space Move-X picker per CRR MOVE-017 (no banking, bypassCosts
-  // true). Continuation depends on which option the player chose:
-  //   force_choke → lordOfSithChoice (auto-pre-selects choke branch)
-  //   attack      → freeAttackPrompt + per-msgId -1 die debuff
   const _dbhFigKeys = Object.keys(_dbhGame.figurePositions?.[_dbhMeta.playerNum] || {})
     .filter(k => k.startsWith((_dbhMeta.dcName || '') + '-'));
   const _dbhFigKey = _dbhFigKeys[0] || null;
@@ -1015,45 +1013,68 @@ export async function handleDrivenByHatred(interaction, ctx) {
     return;
   }
   const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
-  if (buttonKey === 'dbh_force_choke_') {
-    stampPendingMoveX(_dbhGame, {
-      msgId: _dbhMsgId,
-      figureKey: _dbhFigKey,
-      playerNum: _dbhMeta.playerNum,
-      spaces: 2,
-      source: 'Driven by Hatred',
-      threadId: null,
-      bypassCosts: true,
-      // dbhForceChoke continuation posts the Force Choke target picker
-      // after the picker drains; same target/damage shape as Lord of
-      // the Sith (2 Damage + 1 Strain, adjacent hostile, post-move
-      // adjacency).
-      nextAction: { type: 'dbhForceChoke', payload: { msgId: _dbhMsgId, playerNum: _dbhMeta.playerNum } },
-    });
-    await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** moves up to 2 spaces, then resolves Force Choke on an adjacent hostile.`, { phase: 'ROUND', icon: 'card' });
-    await postMoveXPicker(_dbhGame, { client, logGameAction, saveGames }, _dbhMsgId);
-  } else {
-    // dbh_attack_: stamp picker + freeAttackPrompt + −1 die penalty.
-    _dbhGame.freeAttackBonusPending = _dbhGame.freeAttackBonusPending || {};
-    if (_dbhFigKey) _dbhGame.freeAttackBonusPending[_dbhFigKey] = true;
-    _dbhGame.attackDicePenaltyForMsgId = _dbhGame.attackDicePenaltyForMsgId || {};
-    _dbhGame.attackDicePenaltyForMsgId[_dbhMsgId] = 1;
-    _dbhGame.attackDicePenaltyLabel = 'Driven by Hatred';
-    stampPendingMoveX(_dbhGame, {
-      msgId: _dbhMsgId,
-      figureKey: _dbhFigKey,
-      playerNum: _dbhMeta.playerNum,
-      spaces: 2,
-      source: 'Driven by Hatred',
-      threadId: null,
-      bypassCosts: true,
-      nextAction: { type: 'freeAttackPrompt', payload: { msgId: _dbhMsgId, label: 'Driven by Hatred' } },
-    });
-    await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** moves up to 2 spaces, then takes a free attack (−1 attack die).`, { phase: 'ROUND', icon: 'card' });
-    await postMoveXPicker(_dbhGame, { client, logGameAction, saveGames }, _dbhMsgId);
-  }
+  stampPendingMoveX(_dbhGame, {
+    msgId: _dbhMsgId,
+    figureKey: _dbhFigKey,
+    playerNum: _dbhMeta.playerNum,
+    spaces: 2,
+    source: 'Driven by Hatred',
+    threadId: null,
+    bypassCosts: true,
+    nextAction: { type: 'dbhPostMovePick', payload: { msgId: _dbhMsgId, playerNum: _dbhMeta.playerNum } },
+  });
+  await logGameAction(_dbhGame, client, `**Driven by Hatred** — **${_dbhDisplayName}** moves up to 2 spaces; choose Force Choke or free attack after move.`, { phase: 'ROUND', icon: 'card' });
+  await postMoveXPicker(_dbhGame, { client, logGameAction, saveGames }, _dbhMsgId);
   saveGames(_dbhGame.gameId);
-  return;
+}
+
+// Post-move pick for Driven by Hatred: fired from the move-x-handler
+// dbhPostMovePick continuation, then routes to dbhForceChoke or sets up
+// a free attack with -1 die penalty.
+export async function handleDbhPostMove(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  let buttonKey;
+  if (interaction.customId.startsWith('dbh_post_choke_')) buttonKey = 'dbh_post_choke_';
+  else if (interaction.customId.startsWith('dbh_post_attack_')) buttonKey = 'dbh_post_attack_';
+  else buttonKey = 'dbh_post_skip_';
+  const suffix = parseCustomId(interaction.customId, buttonKey);
+  const parts = suffix.split('_');
+  const gameId = parts[0]; const msgId = parts[1];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+  const displayName = meta.displayName || meta.dcName;
+  const figKey = Object.keys(game.figurePositions?.[meta.playerNum] || {}).find(k => k.startsWith((meta.dcName || '') + '-')) || null;
+  if (buttonKey === 'dbh_post_skip_') {
+    await logGameAction(game, client, `**Driven by Hatred** — **${displayName}** skipped the post-move action.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(game.gameId);
+    return;
+  }
+  if (buttonKey === 'dbh_post_choke_') {
+    // Reuse the existing dbhForceChoke continuation by faking a drained
+    // pendingMoveX state. Simpler: call _runDbhForceChokeContinuation
+    // directly from move-x-handler.
+    const { _runDbhForceChokeContinuationDirect } = await import('./move-x-handler.js');
+    if (_runDbhForceChokeContinuationDirect) {
+      await _runDbhForceChokeContinuationDirect(game, { client, logGameAction, saveGames }, { msgId, playerNum: meta.playerNum, figureKey: figKey });
+    }
+    saveGames(game.gameId);
+    return;
+  }
+  // dbh_post_attack_: set free-attack pending + -1 die penalty.
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  if (figKey) game.freeAttackBonusPending[figKey] = true;
+  game.attackDicePenaltyForMsgId = game.attackDicePenaltyForMsgId || {};
+  game.attackDicePenaltyForMsgId[msgId] = 1;
+  game.attackDicePenaltyLabel = 'Driven by Hatred';
+  const ownerId = getPlayerId(game, meta.playerNum);
+  await logGameAction(game, client,
+    `<@${ownerId}> **Driven by Hatred** — **${displayName}** takes a free attack (-1 die). Use the **Attack** button on your DC card.`,
+    { phase: 'ROUND', icon: 'attack', allowedMentions: { users: [ownerId] } });
+  saveGames(game.gameId);
 }
 
 // ── Findsman Meditation (Zuckuss) ──────────────────────────────────────────

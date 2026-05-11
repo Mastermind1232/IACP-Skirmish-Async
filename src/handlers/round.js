@@ -620,12 +620,15 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       const _dbhDc = _dbhDcList[i];
       if (!_dbhDc?.dcName || _dbhDc.defeated) continue;
       const _dbhOwnerId = game[`player${pn}Id`];
+      // Per alexanbv 2026-05-10: choice happens AFTER move, not before.
+      // Single Move button stamps pendingMoveX with a dbhPostMovePick
+      // continuation that fires the Force Choke / Attack / Skip picker
+      // once the player has finished moving 0–2 spaces.
       const _dbhRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`dbh_force_choke_${gameId}_${_dbhMid}`).setLabel('Move 2 + Force Choke').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`dbh_attack_${gameId}_${_dbhMid}`).setLabel('Move 2 + Attack (-1 die)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`dbh_move_${gameId}_${_dbhMid}`).setLabel('Move up to 2 (then choose)').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`dbh_skip_${gameId}_${_dbhMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await logGameAction(game, client, `<@${_dbhOwnerId}> **Driven by Hatred** — **${_dbhDc.displayName || _dbhDc.dcName}** may move up to 2 spaces and then use Force Choke or perform an attack (-1 die) at end of round.`, {
+      await logGameAction(game, client, `<@${_dbhOwnerId}> **Driven by Hatred** — **${_dbhDc.displayName || _dbhDc.dcName}** may move up to 2 spaces, then choose Force Choke or a free attack (-1 die).`, {
         components: [_dbhRow],
         allowedMentions: { users: [_dbhOwnerId] },
       });

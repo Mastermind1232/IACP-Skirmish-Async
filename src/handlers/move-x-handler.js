@@ -184,8 +184,42 @@ async function _finishPicker(game, ctx, msgId) {
     await _runHeadbuttRollContinuation(game, ctx, pending, nextAction);
   } else if (nextAction.type === 'dbhForceChoke') {
     await _runDbhForceChokeContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'dbhPostMovePick') {
+    await _runDbhPostMovePickContinuation(game, ctx, pending, nextAction);
   }
   // Future continuation types plug in here.
+}
+
+/**
+ * Post-move picker for [Driven by Hatred]: after the 2-space move-X
+ * drains, post a Force Choke / Attack / Skip choice. Per alexanbv
+ * 2026-05-10: the choice is made AFTER the move so the player can
+ * see post-move adjacency before committing.
+ */
+async function _runDbhPostMovePickContinuation(game, ctx, pending, next) {
+  const { client, logGameAction } = ctx;
+  const msgId = next.payload?.msgId || pending.msgId;
+  const playerNum = next.payload?.playerNum || pending.playerNum;
+  const ownerId = getPlayerId(game, playerNum);
+  const gameId = game.gameId;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`dbh_post_choke_${gameId}_${msgId}`).setLabel('Force Choke (adjacent hostile)').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`dbh_post_attack_${gameId}_${msgId}`).setLabel('Free Attack (-1 die)').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`dbh_post_skip_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  );
+  await logGameAction?.(game, client,
+    `<@${ownerId}> 🩸 **Driven by Hatred** — move complete. Choose: Force Choke an adjacent hostile (2 Dmg + 1 Strain), free Melee Attack (-1 die from pool), or Skip.`,
+    { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+}
+
+/**
+ * Exposed wrapper around _runDbhForceChokeContinuation so the post-move
+ * handler (handleDbhPostMove) can fire the Force Choke target picker
+ * after the player makes the post-move choice. The wrapper accepts a
+ * minimal "pending" shape so it doesn't need an actual pendingMoveX.
+ */
+export async function _runDbhForceChokeContinuationDirect(game, ctx, { msgId, playerNum, figureKey }) {
+  await _runDbhForceChokeContinuation(game, ctx, { msgId, playerNum, figureKey }, { payload: { msgId, playerNum } });
 }
 
 /**
