@@ -10,6 +10,7 @@ import { getDeploymentZones, getMissionFlag } from '../data-loader.js';
 import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
 import { normalizeCoord } from './coords.js';
+import { computeThugCandidates, computeThugDamageEvents } from './thug-movement.js';
 
 /**
  * Canonical accessor for current fluctuation positions.
@@ -774,12 +775,19 @@ export function getValidKryknaPlacementSpaces(game, playerNum, mapId) {
 }
 
 /**
- * Advance all NPC thugs toward the nearest hostile figure, then emit damage events for adjacent hostiles.
- * Returns { logs, damageEvents } — damage is NOT applied here; round.js handles it.
- * Lazily initializes game.npcThugs from map-tokens if not already set.
- * @param {object} game
- * @param {string} mapId
- * @param {object} ctx - { getMapData, getMapRegistry, filterMapSpacesByBounds, getMapTokensData }
+ * Advance all NPC thugs per CRR rule (alexanbv 2026-05-10):
+ *  - Targets = non-thug figures only (other thugs aren't targets).
+ *  - If a thug is already adjacent to ≥1 non-thug, it must END adjacent
+ *    to at least one of those it is CURRENTLY adjacent to.
+ *  - Else it must decrease distance to the closest non-thug as much as
+ *    possible (in ≤2 single-space moves, blocked by other thugs / figures).
+ *  - When candidates tie, this implementation auto-picks the first
+ *    (deterministic). A player-interactive picker is queued as follow-up.
+ *  - After all moves, each non-thug figure adjacent to any thug takes 2
+ *    damage (capped at 2 even if adjacent to multiple thugs).
+ *
+ * Returns { logs, damageEvents } — damage is NOT applied here; round.js
+ * handles damage application + win-condition check.
  */
 export function runNpcThugActivation(game, mapId, ctx = {}) {
   const { getMapData, getMapRegistry, filterMapSpacesByBounds, getMapTokensData } = ctx;
@@ -795,8 +803,10 @@ export function runNpcThugActivation(game, mapId, ctx = {}) {
     game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
   }
 
-  const activeThugs = game.npcThugs.filter((t) => !t.defeated);
-  if (activeThugs.length === 0) return { logs: [], damageEvents: [] };
+  const activeIndexes = game.npcThugs
+    .map((t, i) => (t && !t.defeated ? i : -1))
+    .filter((i) => i >= 0);
+  if (activeIndexes.length === 0) return { logs: [], damageEvents: [] };
 
   const rawMapSpaces = getMapData?.(mapId);
   if (!rawMapSpaces?.adjacency) return { logs: ['No map adjacency — thug movement skipped'], damageEvents: [] };
@@ -804,65 +814,24 @@ export function runNpcThugActivation(game, mapId, ctx = {}) {
   const mapSpaces = filterMapSpacesByBounds?.(rawMapSpaces, mapDef?.gridBounds) || rawMapSpaces;
   const adjacency = mapSpaces.adjacency || {};
 
-  // Map coord → { figureKey, playerNum } for all hostile figures
-  const hostileByCoord = new Map();
-  for (const pn of [1, 2]) {
-    for (const [figKey, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-      hostileByCoord.set(normalizeCoord(coord), { figureKey: figKey, playerNum: pn });
-    }
-  }
-  const allHostileCoords = new Set(hostileByCoord.keys());
-
   const logs = [];
-
-  for (const thug of activeThugs) {
+  for (const thugIdx of activeIndexes) {
+    const thug = game.npcThugs[thugIdx];
     const startCoord = normalizeCoord(thug.coord);
-
-    // BFS from thug to find nearest hostile
-    const visited = new Map([[startCoord, null]]);
-    const queue = [startCoord];
-    let targetCoord = null;
-    outer: while (queue.length > 0) {
-      const curr = queue.shift();
-      for (const neighbor of (adjacency[curr] || [])) {
-        const n = normalizeCoord(neighbor);
-        if (visited.has(n)) continue;
-        visited.set(n, curr);
-        if (allHostileCoords.has(n)) { targetCoord = n; break outer; }
-        queue.push(n);
-      }
+    const candidates = computeThugCandidates(game, mapId, thugIdx, adjacency);
+    if (candidates.length === 0) {
+      logs.push(`Thug ${thugIdx + 1} at **${startCoord}**: no valid destination — stays put.`);
+      continue;
     }
-    if (!targetCoord) { logs.push(`Thug at ${thug.coord}: no hostile found, stays put.`); continue; }
-
-    // Reconstruct path (list of spaces from start to target, not including start)
-    const path = [];
-    let cur = targetCoord;
-    while (cur && cur !== startCoord) {
-      const prev = visited.get(cur);
-      if (prev !== undefined && prev !== null) path.unshift(cur);
-      cur = visited.get(cur);
-    }
-
-    // Move up to 2 steps, stopping 1 space short of the hostile (to be adjacent)
-    const maxSteps = Math.min(2, Math.max(0, path.length - 1));
-    if (maxSteps > 0) {
-      thug.coord = path[maxSteps - 1];
-      logs.push(`Thug moved ${startCoord} → **${thug.coord}** (${maxSteps} step${maxSteps !== 1 ? 's' : ''} toward ${targetCoord}).`);
+    const chosen = candidates[0];
+    if (chosen === startCoord) {
+      logs.push(`Thug ${thugIdx + 1}: already adjacent to a non-thug at **${startCoord}** — stays put.`);
     } else {
-      logs.push(`Thug at **${startCoord}**: already adjacent to hostile at ${targetCoord}.`);
+      thug.coord = chosen;
+      const tieNote = candidates.length > 1 ? ` (auto-picked from ${candidates.length} tied candidates)` : '';
+      logs.push(`Thug ${thugIdx + 1} moved ${startCoord} → **${chosen}**${tieNote}.`);
     }
   }
 
-  // Emit damage events: each hostile adjacent to any active thug takes 2 damage
-  const thugCoords = new Set(game.npcThugs.filter((t) => !t.defeated).map((t) => normalizeCoord(t.coord)));
-  const damageEvents = [];
-  for (const pn of [1, 2]) {
-    for (const [figKey, figCoord] of Object.entries(game.figurePositions?.[pn] || {})) {
-      const fc = normalizeCoord(figCoord);
-      const adjToThug = (adjacency[fc] || []).some((n) => thugCoords.has(normalizeCoord(n)));
-      if (adjToThug) damageEvents.push({ figureKey: figKey, playerNum: pn, damage: 2 });
-    }
-  }
-
-  return { logs, damageEvents };
+  return { logs, damageEvents: computeThugDamageEvents(game, adjacency) };
 }
