@@ -45,6 +45,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // On a Mission per-step push prompt: pauses the picker between steps
   // so the player can push a SMALL figure 1 space (or skip).
   'pendingOnAMissionPush',
+  // Wild Beast (Bantha Rider) — per alexanbv 2026-05-10: when an attack
+  // is granted to Bantha, may perform a Special Action instead. Limit
+  // once per activation. Status-phase context tracked separately via
+  // ROUND_OBJECT_FLAGS.wildBeastUsedThisStatusPhase.
+  'wildBeastUsedThisActivation',
   // Lord of the Sith / [Driven by Hatred]: per-msgId one-shot dice
   // penalty consumed at handleCombatReady.
   'attackDicePenaltyForMsgId',
@@ -404,6 +409,9 @@ export function isActivationActionInProgress(game, msgId) {
  */
 const ROUND_OBJECT_FLAGS = [
   'aphraExcavationOptions',
+  // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
+  // start; status-phase context = once per round-scoped status phase.
+  'wildBeastUsedThisStatusPhase',
   'roundDefenseBonusBlock',
   // Generic named-CC per-timing-instance tracker (destruct 2026-05-07).
   // Reset to {} at round start so SOR/EOR/status buckets clear naturally;

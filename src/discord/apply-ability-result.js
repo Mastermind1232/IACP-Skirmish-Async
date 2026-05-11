@@ -309,7 +309,24 @@ export async function applyAbilityResult(result, opts) {
           .setCustomId(`granted_attack_${game.gameId}_${granteeMsgId}_f${_gabFigIdx}`)
           .setLabel(`Declare Attack (${granteeName || 'grantee'})`)
           .setStyle(ButtonStyle.Primary);
-        const _gabRow = new ActionRowBuilder().addComponents(_gabBtn);
+        const _gabBtns = [_gabBtn];
+        // Wild Beast (Bantha Rider) — alexanbv 2026-05-10: when an attack
+        // is granted to Bantha, may perform a Special Action (Trample)
+        // instead. Limit once per activation AND once per status phase
+        // (two separate counters). Button shown only if neither counter
+        // is set for the grantee msgId.
+        const _wbIsBantha = String(granteeFigureKey).startsWith('Bantha Rider-');
+        const _wbActivationUsed = !!game?.wildBeastUsedThisActivation?.[granteeMsgId];
+        const _wbStatusUsed = !!game?.wildBeastUsedThisStatusPhase?.[granteeMsgId];
+        if (_wbIsBantha && !_wbActivationUsed && !_wbStatusUsed) {
+          _gabBtns.push(
+            new ButtonBuilder()
+              .setCustomId(`wild_beast_trample_${game.gameId}_${granteeMsgId}_f${_gabFigIdx}`)
+              .setLabel('Wild Beast: Trample instead')
+              .setStyle(ButtonStyle.Secondary)
+          );
+        }
+        const _gabRow = new ActionRowBuilder().addComponents(..._gabBtns);
         const data = game.dcActionsData?.[msgId];
         if (data?.threadId) {
           const thread = await fetchGameChannel(client, data.threadId);

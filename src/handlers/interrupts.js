@@ -1028,6 +1028,74 @@ export async function handleDrivenByHatred(interaction, ctx) {
   saveGames(_dbhGame.gameId);
 }
 
+// Wild Beast (Bantha Rider) — per alexanbv 2026-05-10: when an attack is
+// granted to Bantha, may perform Trample (Special Action) instead.
+// Limit once per activation AND once per status phase (separate flags).
+// Fires Trample via the existing trample_bantha resolveAbility entry.
+export async function handleWildBeastTrample(interaction, ctx) {
+  const {
+    getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction,
+    dcHealthState, getDcEffects, getMapData, getFigureSize, findDcMessageIdForFigure,
+    hasLineOfSightByCoord,
+  } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const m = interaction.customId.match(/^wild_beast_trample_(.+)_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid Wild Beast button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, granteeMsgId] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta.get(granteeMsgId);
+  if (!meta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only Bantha\'s owner may respond.')) return;
+  // Re-verify usage gate
+  if (game.wildBeastUsedThisActivation?.[granteeMsgId] || game.wildBeastUsedThisStatusPhase?.[granteeMsgId]) {
+    await interaction.followUp({ content: '**Wild Beast** already used in this window.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Detect activation vs status-phase context: if Bantha has an active
+  // dcActionsData entry, she's mid-activation; otherwise this is an
+  // out-of-activation grant (status phase / EoR).
+  const _isActivationCtx = !!game.dcActionsData?.[granteeMsgId];
+  if (_isActivationCtx) {
+    game.wildBeastUsedThisActivation = game.wildBeastUsedThisActivation || {};
+    game.wildBeastUsedThisActivation[granteeMsgId] = true;
+  } else {
+    game.wildBeastUsedThisStatusPhase = game.wildBeastUsedThisStatusPhase || {};
+    game.wildBeastUsedThisStatusPhase[granteeMsgId] = true;
+  }
+  // Clear any granted-attack pending state targeting Bantha so the
+  // grant doesn't auto-consume on a later Bantha attack. The specific
+  // grantor's pending field (pendingExecutiveOrder, pendingEmperorInterrupt,
+  // etc.) is left to its own cleanup — clearing freeAttackBonusPending is
+  // enough to neutralize the free-attack flag.
+  const dgIdx = (meta.displayName || meta.dcName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const banthaFk = `${meta.dcName}-${dgIdx}-0`;
+  if (game.freeAttackBonusPending?.[banthaFk]) {
+    delete game.freeAttackBonusPending[banthaFk];
+  }
+  // Fire Trample via resolveAbility (existing trample_bantha entry).
+  // Trample is a 3-adjacent-hostile + red die effect.
+  try {
+    const { resolveAbility } = await import('../game/abilities.js');
+    const { applyAbilityResult } = await import('../discord/apply-ability-result.js');
+    const result = resolveAbility('trample_bantha', {
+      game, playerNum: meta.playerNum, meta, msgId: granteeMsgId,
+      dcMessageMeta, dcHealthState, getDcEffects,
+      getMapData, getFigureSize, findDcMessageIdForFigure,
+      hasLineOfSightByCoord,
+    });
+    await logGameAction(game, client, `🐃 **Wild Beast** — **Bantha Rider** performs **Trample** instead of the granted attack.`, { phase: 'ROUND', icon: 'attack' });
+    await applyAbilityResult(result, { game, playerNum: meta.playerNum, msgId: granteeMsgId, client, ctx });
+  } catch (err) {
+    console.error('[wild_beast_trample] resolve failed:', err?.message ?? err);
+    await logGameAction(game, client, `**Wild Beast** — failed to auto-resolve Trample; resolve manually.`, { phase: 'ROUND', icon: 'attack' });
+  }
+  saveGames(game.gameId);
+}
+
 // [Rogue Smuggler] — once-per-round EoR free attack (Han Solo).
 // Gated on a round-scoped flag, not via card exhaust (deprecated per
 // alexanbv 2026-05-10).

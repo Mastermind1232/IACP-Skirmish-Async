@@ -162,7 +162,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
@@ -574,6 +574,7 @@ register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
 register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
 register('rs_attack_', handleRogueSmuggler, 'interrupts');
 register('rs_skip_', handleRogueSmuggler, 'interrupts');
+register('wild_beast_trample_', handleWildBeastTrample, 'interrupts');
 register('dbh_move_', handleDrivenByHatred, 'interrupts');
 register('dbh_skip_', handleDrivenByHatred, 'interrupts');
 register('dbh_post_choke_', handleDbhPostMove, 'interrupts');
