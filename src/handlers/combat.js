@@ -3215,15 +3215,16 @@ export async function handleCombatRoll(interaction, ctx) {
     if (combat.autofireAttack) pool.push('white');
     if (combat.barrageAttack) pool.push('white');
     // Generalized defender-die pick (alexanbv 2026-05-11): when any
-    // attacker effect removes a defense die AND the target has >1 base
-    // die, the attacker picks which to remove. Covers Verena Close
-    // Quarters, Element of Surprise, Wild Fire, etc. Picker fires the
-    // first time Roll is clicked; subsequent clicks proceed once
-    // _defPickRemoveIdxList is populated.
+    // attacker effect removes a defense die AND the FULL pool (base +
+    // bonus) has >1 die, the attacker picks which to remove. Covers
+    // Verena Close Quarters, Element of Surprise, Wild Fire — Wild Fire
+    // matters because Barrage/Autofire add a white bonus die to the
+    // pool (e.g. AT-ST + Barrage = bbw), and the attacker may pick from
+    // ALL of them.
     const _defRemoveMaxRaw = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
-    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, baseDice.length > 1 ? baseDice.length : 0);
+    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, pool.length > 1 ? pool.length : 0);
     if (_defPicksNeeded > 0 && !Array.isArray(combat._defPickRemoveIdxList)) {
-      await _postDefenseDieRemovePicker(thread, game, combat, baseDice, _defPicksNeeded);
+      await _postDefenseDieRemovePicker(thread, game, combat, pool, _defPicksNeeded);
       await interaction.followUp({ content: `⏳ Pick ${_defPicksNeeded} defense die${_defPicksNeeded > 1 ? 's' : ''} to remove from the defense pool — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
       saveGames(game.gameId);
       return;
@@ -3231,12 +3232,9 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeMax = _defRemoveMaxRaw;
     const removeCount = Math.min(removeMax, pool.length);
     let diceToRoll;
-    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && baseDice.length > 1) {
+    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && pool.length > 1) {
       const _drop = new Set(combat._defPickRemoveIdxList);
-      diceToRoll = [
-        ...baseDice.filter((_, i) => !_drop.has(i)),
-        ...pool.slice(baseDice.length),
-      ];
+      diceToRoll = pool.filter((_, i) => !_drop.has(i));
     } else {
       diceToRoll = pool.slice(0, pool.length - removeCount);
     }
@@ -3405,11 +3403,12 @@ export async function handleCombatRoll(interaction, ctx) {
       pool.push('white');
       await thread.send('**Barrage** — Defender adds 1 white die to defense pool (second attack).').catch(discordCatch);
     }
-    // Generalized defender-die pick (alexanbv 2026-05-11).
+    // Generalized defender-die pick (alexanbv 2026-05-11) — uses FULL
+    // pool (base + bonus, e.g. AT-ST + Barrage = bbw).
     const _defRemoveMaxRaw = combat.defensePoolRemoveAll ? pool.length : (combat.defensePoolRemoveMax || 0);
-    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, baseDice.length > 1 ? baseDice.length : 0);
+    const _defPicksNeeded = Math.min(_defRemoveMaxRaw, pool.length > 1 ? pool.length : 0);
     if (_defPicksNeeded > 0 && !Array.isArray(combat._defPickRemoveIdxList)) {
-      await _postDefenseDieRemovePicker(thread, game, combat, baseDice, _defPicksNeeded);
+      await _postDefenseDieRemovePicker(thread, game, combat, pool, _defPicksNeeded);
       await interaction.followUp({ content: `⏳ Pick ${_defPicksNeeded} defense die${_defPicksNeeded > 1 ? 's' : ''} to remove from the defense pool — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
       saveGames(game.gameId);
       return;
@@ -3417,12 +3416,9 @@ export async function handleCombatRoll(interaction, ctx) {
     const removeMax = _defRemoveMaxRaw;
     const removeCount = Math.min(removeMax, pool.length);
     let diceToRoll;
-    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && baseDice.length > 1) {
+    if (Array.isArray(combat._defPickRemoveIdxList) && combat._defPickRemoveIdxList.length > 0 && pool.length > 1) {
       const _drop = new Set(combat._defPickRemoveIdxList);
-      diceToRoll = [
-        ...baseDice.filter((_, i) => !_drop.has(i)),
-        ...pool.slice(baseDice.length),
-      ];
+      diceToRoll = pool.filter((_, i) => !_drop.has(i));
     } else {
       diceToRoll = pool.slice(0, pool.length - removeCount);
     }
