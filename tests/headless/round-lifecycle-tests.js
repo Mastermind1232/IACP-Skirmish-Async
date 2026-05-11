@@ -579,10 +579,10 @@ describe('Combat Lifecycle — False Orders delegation', () => {
 // SUITE 12: Combat Lifecycle — CustomId parsing and handler exports
 // ===================================================================
 describe('Combat Lifecycle — CustomId parsing', () => {
-  it('combat_ready customId format', () => {
+  it('combat_gate customId format', () => {
     const gameId = 'gm-1';
-    const customId = `combat_ready_${gameId}`;
-    assert.ok(customId.startsWith('combat_ready_'));
+    const customId = `combat_gate_${gameId}`;
+    assert.ok(customId.startsWith('combat_gate_'));
     assert.ok(customId.endsWith(gameId));
   });
 
@@ -606,9 +606,9 @@ describe('Combat Lifecycle — CustomId parsing', () => {
 });
 
 describe('Combat Lifecycle — handler exports', () => {
-  it('combat.js exports handleCombatReady', async () => {
+  it('combat.js exports handleCombatGateReady', async () => {
     const mod = await import('../../src/handlers/combat.js');
-    assert.equal(typeof mod.handleCombatReady, 'function');
+    assert.equal(typeof mod.handleCombatGateReady, 'function');
   });
 
   it('combat.js exports handleCombatRoll', async () => {

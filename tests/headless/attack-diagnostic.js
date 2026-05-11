@@ -106,8 +106,8 @@ async function main() {
       const otherActions = allActions.filter(a => a.actingPlayer === otherPlayer);
       let actingPN;
       if (turnActions.length > 0 && otherActions.length > 0) {
-        const tm = turnActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
-        const om = otherActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
+        const tm = turnActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
+        const om = otherActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
         actingPN = (om && !tm) ? otherPlayer : turnPlayer;
       } else {
         actingPN = turnActions.length > 0 ? turnPlayer : otherPlayer;

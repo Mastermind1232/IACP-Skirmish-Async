@@ -163,7 +163,7 @@ async function trace() {
         actions.find(a => a.type === 'end_activation') ||
         actions.find(a => a.type === 'pass_activation_turn') ||
         actions.find(a => a.type === 'end_round_phase') ||
-        actions.find(a => a.type === 'combat_gate' || a.type === 'combat_ready') ||
+        actions.find(a => a.type === 'combat_gate' || a.type === 'combat_gate') ||
         actions.find(a => a.type === 'combat_roll') ||
         actions.find(a => !a.type.startsWith('play_cc') && !a.type.startsWith('move_'));
       if (escape && escape !== chosen) {

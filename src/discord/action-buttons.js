@@ -48,7 +48,7 @@ const TYPE_TO_GROUP = {
 
   // Combat
   [ACTION_TYPES.ATTACK_TARGET]: 'combat',
-  [ACTION_TYPES.COMBAT_READY]: 'combat',
+  [ACTION_TYPES.COMBAT_GATE]: 'combat',
   [ACTION_TYPES.COMBAT_ROLL]: 'combat',
   [ACTION_TYPES.COMBAT_REROLL]: 'combat',
   [ACTION_TYPES.COMBAT_SURGE]: 'combat',

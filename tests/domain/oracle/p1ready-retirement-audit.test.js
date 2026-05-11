@@ -90,11 +90,11 @@ test('session 11: combat init sites use acked + currentStep, not legacy fields',
   );
 });
 
-test('session 11: ready-toggle handler writes to combat.acked, not legacy fields', () => {
+test('session 11: ready-toggle handler writes to gate.acked, not legacy fields', () => {
   const COMBAT_HANDLER = readFileSync(resolve(SRC, 'handlers/combat.js'), 'utf8');
   assert.match(
     COMBAT_HANDLER,
-    /combat\.acked\[playerNum\]\s*=\s*true/,
-    'handleCombatReady must write to combat.acked[playerNum], not legacy p1Ready/p2Ready',
+    /gate\.acked\[effectivePn\]\s*=\s*true/,
+    'handleCombatGateReady must write to gate.acked[effectivePn], not legacy p1Ready/p2Ready',
   );
 });

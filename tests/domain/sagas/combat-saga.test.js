@@ -45,7 +45,7 @@ describe('CombatSaga', () => {
 
   it('getExpectedActions returns correct actions per phase', () => {
     const saga = new CombatSaga('c-1');
-    assert.deepEqual(saga.getExpectedActions(), ['combat_ready']);
+    assert.deepEqual(saga.getExpectedActions(), ['combat_gate']);
 
     saga.state.phase = COMBAT_STATES.ROLLING;
     assert.deepEqual(saga.getExpectedActions(), ['combat_roll']);

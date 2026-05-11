@@ -11,6 +11,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { setActivatedDcIndices, recomputeActivationCounts } from '../game/player-helpers.js';
 import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
+import { sendCombatGate, sendOnDeclareTokenWindow } from '../handlers/combat.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -245,19 +246,16 @@ async function mutateToCombat(game, client, deps, userId) {
     { phase: 'ACTION', icon: 'attack' },
   );
 
-  // Send combat prompt to Game Log
+  // Send combat prompt to Game Log via the canonical on-declare gate
+  // (seeds combat.combatGate state for handleCombatGateReady).
   const generalChannel = await fetchGameChannel(client, game.generalId);
-  const readyRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_ready_${game.gameId}`)
-      .setLabel('Ready to roll combat dice')
-      .setStyle(ButtonStyle.Secondary),
-  );
   await generalChannel.send({
-    content: `**Pre-combat window** — <@${game.player1Id}> (attacker: **${attackerDcName}**) vs <@${game.player2Id}> (defender: **${defenderDcName}**)\nBoth players: resolve any Command Cards, etc. When ready, click **Ready to roll combat dice**.`,
-    components: [readyRow],
+    content: `**Pre-combat window** — <@${game.player1Id}> (attacker: **${attackerDcName}**) vs <@${game.player2Id}> (defender: **${defenderDcName}**)\nResolve any Command Cards / power tokens via the prompts below, then click **Ready**.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
+  const _ctx = { saveGames, client };
+  await sendCombatGate(generalChannel, game, game.pendingCombat, 'on_declare', _ctx);
+  await sendOnDeclareTokenWindow(generalChannel, game, game.pendingCombat, 'attacker', _ctx);
 
   await updatePlayAreaDcButtons(game, client);
   saveGames(game.gameId);

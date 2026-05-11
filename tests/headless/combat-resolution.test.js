@@ -390,10 +390,10 @@ describe('headless combat resolution', () => {
     assert.ok(game.pendingCombat, 'pendingCombat created after attack_target');
 
     // Step 3: Both players ready
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
     assert.ok(readyP1, 'P1 has combat_ready action');
     await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
     assert.ok(readyP2, 'P2 has combat_ready action');
     await fh.act(readyP2.customId, 'player2');
 
@@ -449,9 +449,9 @@ describe('headless combat resolution', () => {
     const attackAction = fh.getActions(1).find(a => a.type === 'attack_target');
     await fh.act(attackAction.customId, 'player1');
 
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
     await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
     await fh.act(readyP2.customId, 'player2');
 
     const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
@@ -830,9 +830,9 @@ describe('headless combat resolution', () => {
     await fh.act(attackAction.customId, 'player1');
 
     // Both players ready
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
     if (readyP1) await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
     if (readyP2) await fh.act(readyP2.customId, 'player2');
 
     // Attack roll
@@ -1218,9 +1218,9 @@ describe('Weakened removal at end of activation', () => {
  */
 async function driveCombatWithSurge(fh, surgeIndex) {
   // Both players ready
-  const readyP1 = fh.getActions(1).find(a => a.type === 'combat_ready');
+  const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
   if (readyP1) await fh.act(readyP1.customId, 'player1');
-  const readyP2 = fh.getActions(2).find(a => a.type === 'combat_ready');
+  const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
   if (readyP2) await fh.act(readyP2.customId, 'player2');
 
   // Attack roll

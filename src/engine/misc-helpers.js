@@ -110,7 +110,7 @@ export function extractGameIdFromInteraction(interaction, deps) {
   const id = interaction.customId || interaction.values?.[0] || '';
   const prefixes = [
     'status_phase_', 'end_end_of_round_', 'end_start_of_round_', 'map_selection_', 'draft_random_',
-    'pass_activation_turn_', 'combat_ready_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_', 'cc_attach_to_',
+    'pass_activation_turn_', 'combat_gate_', 'combat_roll_', 'cc_play_select_', 'cc_discard_select_', 'cc_attach_to_',
     'botmenu_kill_yes_', 'botmenu_kill_no_', 'botmenu_kill_',
     'kill_game_', 'refresh_map_', 'refresh_all_', 'undo_', 'deployment_zone_red_', 'deployment_zone_blue_',
   ];

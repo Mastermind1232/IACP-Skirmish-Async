@@ -64,7 +64,7 @@ describe('AI strategy', () => {
   it('prefers combat_roll over combat_ready', () => {
     const engine = createGameEngine(baseGame);
     const actions = [
-      { type: 'combat_ready', customId: 'cr', description: 'Ready' },
+      { type: 'combat_gate', customId: 'cr', description: 'Ready' },
       { type: 'combat_roll', customId: 'roll', description: 'Roll' },
     ];
     const result = pickBestAction(engine, actions, 1);

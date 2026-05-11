@@ -24,7 +24,7 @@ export const PREFIX_TO_COMMAND = {
   'move_adjust_mp_': COMMAND_TYPES.MoveAdjustMp,
   // Combat
   'attack_target_': COMMAND_TYPES.AttackTarget,
-  'combat_ready_': COMMAND_TYPES.ReadyForCombat,
+  'combat_gate_': COMMAND_TYPES.ReadyForCombat,
   'combat_roll_': COMMAND_TYPES.RollCombatDice,
   'combat_surge_': COMMAND_TYPES.SpendSurge,
   'combat_reroll_': COMMAND_TYPES.PerformReroll,
@@ -130,7 +130,7 @@ export function parsePayloadFromCustomId(customId, prefix) {
     case 'attack_target_':
       return { gameId: parts[0], attackerMsgId: parts[1], defenderMsgId: parts[2] };
 
-    case 'combat_ready_':
+    case 'combat_gate_':
       return { gameId: parts[0], playerNum: parseInt(parts[1], 10) };
 
     case 'combat_roll_':

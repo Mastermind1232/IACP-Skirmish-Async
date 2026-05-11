@@ -42,7 +42,6 @@ export const ACTION_TYPES = {
   CC_DRAW: 'cc_draw',
 
   // Combat
-  COMBAT_READY: 'combat_ready',
   COMBAT_GATE: 'combat_gate',
   COMBAT_ROLL: 'combat_roll',
   COMBAT_REROLL: 'combat_reroll',
@@ -148,8 +147,6 @@ export function buildCustomId(type, params = {}) {
     // Combat — handler expects _f{figureIndex} suffix for attack
     case ACTION_TYPES.ATTACK_TARGET:
       return `dc_attack_${msgId}_f${figureIndex}`;
-    case ACTION_TYPES.COMBAT_READY:
-      return `combat_ready_${gameId}`;
     case ACTION_TYPES.COMBAT_GATE:
       return `combat_gate_${gameId}`;
     case ACTION_TYPES.COMBAT_ROLL:

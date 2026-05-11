@@ -3186,7 +3186,7 @@ export function abstractActionType(action, game) {
   // Mandatory flow actions
   if (t === 'phase_gate_ready' || t === 'end_start_of_round' ||
       t === 'end_end_of_round' || t === 'end_activation_phase') return 'gate';
-  if (t === 'combat_ready' || t === 'combat_roll') return 'combat_flow';
+  if (t === 'combat_gate' || t === 'combat_roll') return 'combat_flow';
   // Strategic combat actions
   if (t === 'combat_resolve' || t === 'combat_skip_surges') return 'skip_surges';
   if (t?.startsWith('combat_reroll')) return 'reroll';

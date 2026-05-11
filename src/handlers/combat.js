@@ -1,5 +1,5 @@
 /**
- * Combat handlers: attack_target_, combat_ready_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
+ * Combat handlers: attack_target_, combat_gate_, combat_roll_, combat_surge_, combat_resolve_ready_ (F10), cleave_target_ (F6)
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
@@ -422,6 +422,13 @@ export async function handleCombatGateReady(interaction, ctx) {
   const bothAcked = gate.acked[atkPn] && gate.acked[defPn];
   if (!bothAcked) {
     gate.activePlayer = effectivePn === atkPn ? defPn : atkPn;
+    // Mirror gate rotation onto combat.currentStep so the canonical CRR
+    // step pointer stays accurate (audited by
+    // currentstep-transition-audit). step1+2-attacker → step1+2-defender
+    // when the attacker just acked during on-declare.
+    if (gate.phase === 'on_declare' && effectivePn === atkPn) {
+      combat.currentStep = 'step1+2-defender';
+    }
     const _nextName = gate.activePlayer === atkPn ? atkName : defName;
     const content = `🔔 ${label}\n${atkLabel} (ATK) ${atkStatus} | ${defLabel} (DEF) ${defStatus}\n**${_nextName}**: click **Ready** to confirm.`;
     await interaction.message.edit({
@@ -530,10 +537,12 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
       // Both players Ready'd after combat declaration. Per destruct
       // 2026-05-08: tokens were merged into each player's on_declare
       // window (sendOnDeclareTokenWindow), so the legacy
-      // proceedToTokenPhase pass is skipped. Clear the merge flag and
-      // post the Roll Combat Dice button (auto-roll runs from there).
+      // proceedToTokenPhase pass is skipped. Clear the merge flag,
+      // transition the canonical CRR step pointer to 'roll', and post
+      // the Roll Combat Dice button (auto-roll runs from there).
       combat.onDeclareTokenContext = false;
       combat.tokenPhase = null;
+      combat.currentStep = 'roll';
       await postRollDiceButton(thread, game, combat, ctx);
       break;
     }
@@ -3029,84 +3038,6 @@ export async function handleAttackTarget(interaction, ctx) {
   // channel as usual; the gate Ready button advances to the next role.
   await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
   await sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx);
-  saveGames(game.gameId);
-}
-
-/**
- * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - getGame, replyIfGameEnded, resolveCombatAfterRolls, saveGames, client
- */
-export async function handleCombatReady(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'combat_ready_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (await replyIfGameEnded(game, interaction)) return;
-  const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId) {
-    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const clickerIsP1 = interaction.user.id === game.player1Id;
-  const clickerIsP2 = interaction.user.id === game.player2Id;
-  if (!clickerIsP1 && !clickerIsP2) {
-    await interaction.followUp({ content: 'Only players in this game can indicate ready.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  // Session 11 retirement: combat.acked replaces legacy p1Ready/p2Ready.
-  // The acked map is per-step — it's reset whenever currentStep advances.
-  // currentStep itself is the authoritative gate; acked tracks who has
-  // confirmed at the current step.
-  combat.acked = combat.acked || {};
-  // In test games, human (P1) can click for both sides; first click = P1, second = P2
-  let playerNum = clickerIsP1 ? 1 : 2;
-  if (game.isTestGame && clickerIsP1) {
-    playerNum = combat.acked[1] ? 2 : 1;
-  }
-  combat.acked[playerNum] = true;
-  // Advance currentStep based on acked state. Attacker ready → defender's
-  // pre-roll window opens; both ready → roll happens. Sub-steps (step3-* /
-  // step4-* / step5 / zillo / step6 / step7 / step8) are advanced in
-  // their respective handlers (audited by currentstep-transition-audit.test.js).
-  const attackerIsReady = Boolean(combat.acked[combat.attackerPlayerNum]);
-  const defenderPn = combat.attackerPlayerNum === 1 ? 2 : 1;
-  const defenderIsReady = Boolean(combat.acked[defenderPn]);
-  if (attackerIsReady && defenderIsReady) {
-    combat.currentStep = 'roll';
-    // Step transition: reset per-step ack map for the next gate.
-    combat.acked = {};
-  } else if (attackerIsReady) {
-    combat.currentStep = 'step1+2-defender';
-  }
-  if (!interaction.message?.channel) throw new Error(`handleCombatReady: interaction.message.channel is null (gameId=${gameId}, generalId=${game.generalId})`);
-  const _readyName = getPlayerDisplayName(game, playerNum, interaction.client);
-  await interaction.message.channel.send(`**${_readyName}** is ready to roll combat.`);
-  if (combat.currentStep === 'step1+2-attacker' || combat.currentStep === 'step1+2-defender') {
-    // Attacker just acked → defender's window is now active. Post the
-    // defender's on-declare token window so cards + tokens land in one
-    // combined window for the defender too (destruct 2026-05-08).
-    if (combat.currentStep === 'step1+2-defender' && !game.selfPlay) {
-      const _ondThread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-      if (_ondThread) {
-        await sendOnDeclareTokenWindow(_ondThread, game, combat, 'defender', ctx);
-      }
-    }
-    saveGames(game.gameId);
-    return;
-  }
-  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  if (!thread) throw new Error(`handleCombatReady: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
-  try {
-    const preMsg = await thread.messages.fetch(combat.combatPreMsgId);
-    await preMsg.edit({ components: [] }).catch(discordCatch);
-  } catch {}
-  // Per destruct 2026-05-08: tokens are spent inside the on_declare
-  // per-player window now (sendOnDeclareTokenWindow), so by the time
-  // both players have ack'd this gate the token phase is already done.
-  // Just post the Roll Combat Dice button — auto-roll runs from there.
-  combat.onDeclareTokenContext = false;
-  combat.tokenPhase = null;
-  await postRollDiceButton(thread, game, combat, ctx);
   saveGames(game.gameId);
 }
 

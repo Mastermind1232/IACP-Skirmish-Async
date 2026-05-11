@@ -21,28 +21,28 @@ describe('combat flow via engine API', () => {
   it('no combat actions when no pending combat', () => {
     const engine = createGameEngine(baseGame);
     const actions = engine.getAvailableActions(1);
-    assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_READY));
+    assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_GATE));
     assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_ROLL));
   });
 
-  it('shows combat ready for unready players', () => {
+  it('shows combat gate ready only for the currently-active player', () => {
     const game = {
       ...baseGame,
       pendingCombat: {
         attackerPlayerNum: 1,
-        p1Ready: true,
-        p2Ready: false,
+        currentStep: 'step1+2-defender',
+        combatGate: { phase: 'on_declare', acked: { 1: true }, activePlayer: 2 },
       },
     };
     const engine = createGameEngine(game);
 
-    // P1 already ready — no actions
+    // P1 already acked — no actions
     const p1 = engine.getAvailableActions(1);
     assert.strictEqual(p1.length, 0);
 
-    // P2 needs to ready
+    // P2 is active — must ready
     const p2 = engine.getAvailableActions(2);
-    assert.ok(p2.some(a => a.type === ACTION_TYPES.COMBAT_READY));
+    assert.ok(p2.some(a => a.type === ACTION_TYPES.COMBAT_GATE));
   });
 
   it('shows roll dice when both ready and no rolls yet', () => {
@@ -116,8 +116,8 @@ describe('combat flow via engine API', () => {
       ...baseGame,
       pendingCombat: {
         attackerPlayerNum: 1,
-        p1Ready: true,
-        p2Ready: false,
+        currentStep: 'step1+2-defender',
+        combatGate: { phase: 'on_declare', acked: { 1: true }, activePlayer: 2 },
       },
     };
     const engine = createGameEngine(game);

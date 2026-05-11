@@ -51,7 +51,7 @@ const ACTIVATION_MSGID_FLAGS = [
   // ROUND_OBJECT_FLAGS.wildBeastUsedThisStatusPhase.
   'wildBeastUsedThisActivation',
   // Lord of the Sith / [Driven by Hatred]: per-msgId one-shot dice
-  // penalty consumed at handleCombatReady.
+  // penalty consumed at handleCombatDeclare.
   'attackDicePenaltyForMsgId',
   'rushPending',
   'shoulderRushPending',
@@ -455,7 +455,7 @@ const ROUND_OBJECT_FLAGS = [
   'fellSwoopFreeAttack',
   // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
   // from this msgId's next attack pool" one-shot debuff. Cleared on
-  // consumption in handleCombatReady (see combat.js attack-pool block).
+  // consumption in handleCombatDeclare (see combat.js attack-pool block).
   'attackDicePenaltyForMsgId',
   // On a Mission per-step push state: msgId-keyed snapshot of the
   // SMALL figure currently being prompted for a 1-space push. Cleared

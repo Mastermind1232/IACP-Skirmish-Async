@@ -159,7 +159,7 @@ function pickOracleAction(allActions, game, actingPN, dcHealthState, dcMessageMe
   if (combat.length > 0) {
     // combat_ready, combat_roll — mandatory flow
     const flow = combat.filter(a =>
-      a.type === 'combat_ready' || a.type === 'combat_roll' ||
+      a.type === 'combat_gate' || a.type === 'combat_roll' ||
       a.type === 'combat_resolve' || a.type === 'combat_reroll_confirm');
     if (flow.length > 0) return pick(flow);
     // Surge spending — prefer damage surges, then any surge, then skip
@@ -494,8 +494,8 @@ async function runOneGame(learnings, gameNum, useOracle) {
     const otherActions = actionsToUse.filter(a => a.actingPlayer === otherPlayer);
     let actingPN;
     if (turnActions.length > 0 && otherActions.length > 0) {
-      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
-      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
+      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
+      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
       actingPN = (otherMandatory && !turnMandatory) ? otherPlayer : turnPlayer;
     } else { actingPN = turnActions.length > 0 ? turnPlayer : otherPlayer; }
 

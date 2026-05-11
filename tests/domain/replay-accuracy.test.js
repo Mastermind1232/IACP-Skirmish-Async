@@ -282,17 +282,19 @@ describe('Replay Accuracy', () => {
       allEvents.push(...events);
     }
 
-    // Both ready (session 11: write to combat.acked map)
+    // Both ready (modern gate: write to combat.combatGate.acked map)
     {
-      const { after, events } = simulateTransition('combat_ready_', actualState, s => {
-        s.pendingCombat.acked = { ...(s.pendingCombat.acked || {}), 1: true };
+      const { after, events } = simulateTransition('combat_gate_', actualState, s => {
+        s.pendingCombat.combatGate = s.pendingCombat.combatGate || { phase: 'on_declare', acked: {}, activePlayer: 1 };
+        s.pendingCombat.combatGate.acked = { ...(s.pendingCombat.combatGate.acked || {}), 1: true };
+        s.pendingCombat.combatGate.activePlayer = 2;
       });
       actualState = after;
       allEvents.push(...events);
     }
     {
-      const { after, events } = simulateTransition('combat_ready_', actualState, s => {
-        s.pendingCombat.acked = { ...(s.pendingCombat.acked || {}), 2: true };
+      const { after, events } = simulateTransition('combat_gate_', actualState, s => {
+        s.pendingCombat.combatGate.acked = { ...(s.pendingCombat.combatGate.acked || {}), 2: true };
       });
       actualState = after;
       allEvents.push(...events);

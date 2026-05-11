@@ -60,7 +60,7 @@ async function driveCombatToCompletion(fh) {
 
     let acted = false;
     for (const [pn, uid] of [[1, P1], [2, P2]]) {
-      for (const type of ['combat_ready', 'combat_roll', 'combat_reroll_done', 'combat_skip_surges', 'combat_resolve']) {
+      for (const type of ['combat_gate', 'combat_roll', 'combat_reroll_done', 'combat_skip_surges', 'combat_resolve']) {
         const action = findAction(fh, pn, type);
         if (action) {
           const r = await fh.act(action.customId, uid);
@@ -480,8 +480,8 @@ describe('Region 2: Wrong Player Routing', () => {
     const game = fh.getGame();
     if (!game.pendingCombat) return;
     // At least one player should have combat_ready
-    const p1Ready = findAction(fh, 1, 'combat_ready');
-    const p2Ready = findAction(fh, 2, 'combat_ready');
+    const p1Ready = findAction(fh, 1, 'combat_gate');
+    const p2Ready = findAction(fh, 2, 'combat_gate');
     assert.ok(p1Ready || p2Ready, 'At least one player has combat_ready');
   });
 
@@ -496,11 +496,11 @@ describe('Region 2: Wrong Player Routing', () => {
 
     // Ready both players
     for (let i = 0; i < 5; i++) {
-      const ready1 = findAction(fh, 1, 'combat_ready');
-      const ready2 = findAction(fh, 2, 'combat_ready');
+      const ready1 = findAction(fh, 1, 'combat_gate');
+      const ready2 = findAction(fh, 2, 'combat_gate');
       if (ready1) await fh.act(ready1.customId, P1);
       if (ready2) await fh.act(ready2.customId, P2);
-      if (!findAction(fh, 1, 'combat_ready') && !findAction(fh, 2, 'combat_ready')) break;
+      if (!findAction(fh, 1, 'combat_gate') && !findAction(fh, 2, 'combat_gate')) break;
     }
 
     // After ready, attacker should have combat_roll. Session 11: currentStep
@@ -1054,9 +1054,9 @@ describe('Region 5: Payload Shape — Activation Payloads', () => {
     const attackAction = findAction(fh, 1, 'attack_target');
     if (!attackAction) return;
     await fh.act(attackAction.customId, P1);
-    const ready = findAction(fh, 1, 'combat_ready') || findAction(fh, 2, 'combat_ready');
+    const ready = findAction(fh, 1, 'combat_gate') || findAction(fh, 2, 'combat_gate');
     if (!ready) return;
-    const uid = findAction(fh, 1, 'combat_ready') ? P1 : P2;
+    const uid = findAction(fh, 1, 'combat_gate') ? P1 : P2;
     const r = await fh.act(ready.customId, uid);
     const errors = validateResultPayloads(r, 'combat-ready');
     assert.deepEqual(errors, [], `No payload violations: ${errors.join(', ')}`);
@@ -1070,11 +1070,11 @@ describe('Region 5: Payload Shape — Activation Payloads', () => {
     await fh.act(attackAction.customId, P1);
     // Ready both
     for (let i = 0; i < 5; i++) {
-      const r1 = findAction(fh, 1, 'combat_ready');
-      const r2 = findAction(fh, 2, 'combat_ready');
+      const r1 = findAction(fh, 1, 'combat_gate');
+      const r2 = findAction(fh, 2, 'combat_gate');
       if (r1) await fh.act(r1.customId, P1);
       if (r2) await fh.act(r2.customId, P2);
-      if (!findAction(fh, 1, 'combat_ready') && !findAction(fh, 2, 'combat_ready')) break;
+      if (!findAction(fh, 1, 'combat_gate') && !findAction(fh, 2, 'combat_gate')) break;
     }
     const roll = findAction(fh, 1, 'combat_roll') || findAction(fh, 2, 'combat_roll');
     if (!roll) return;

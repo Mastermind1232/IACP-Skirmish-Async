@@ -48,7 +48,7 @@ async function driveCombatToCompletion(fh) {
     if (!game.pendingCombat) break;
 
     for (const [pn, uid] of [[1, 'player1'], [2, 'player2']]) {
-      for (const type of ['combat_ready', 'combat_roll', 'combat_skip_surges', 'combat_resolve']) {
+      for (const type of ['combat_gate', 'combat_roll', 'combat_skip_surges', 'combat_resolve']) {
         const action = findAction(fh, pn, type);
         if (action) {
           const r = await fh.act(action.customId, uid);

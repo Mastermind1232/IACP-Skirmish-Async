@@ -25,20 +25,18 @@ const ROOT = resolve(__dirname, '../../..');
 const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
-  it('handleCombatReady advances to postRollDiceButton (tokens already spent in on_declare merge)', () => {
+  it('dispatchCombatGateAdvance routes on_declare to postRollDiceButton (tokens already spent)', () => {
     // Per destruct 2026-05-08: tokens are spent inside the per-player
     // on_declare window (sendOnDeclareTokenWindow), so by the time both
-    // players ack the gate, token phase is done. handleCombatReady's
-    // post-ack path goes straight to postRollDiceButton.
-    const fnMatch = H_CB_SRC.match(/export async function handleCombatReady\(interaction, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'handleCombatReady body must be locatable');
+    // players ack the gate, token phase is done. The on_declare branch
+    // of dispatchCombatGateAdvance goes straight to postRollDiceButton.
+    const fnMatch = H_CB_SRC.match(/async function dispatchCombatGateAdvance\(thread, game, combat, subPhase, ctx\) \{[\s\S]*?^}/m);
+    assert.ok(fnMatch, 'dispatchCombatGateAdvance body must be locatable');
     const body = fnMatch[0];
-    assert.match(body, /await postRollDiceButton\(thread, game, combat, ctx\);/,
-      'handleCombatReady must call postRollDiceButton after both ack — tokens done in declare');
+    assert.match(body, /case 'on_declare':[\s\S]*?await postRollDiceButton\(thread, game, combat, ctx\);/,
+      'dispatchCombatGateAdvance on_declare branch must call postRollDiceButton — tokens done in declare');
     assert.doesNotMatch(body, /await proceedToTokenPhase\b/,
-      'handleCombatReady must not call the deleted proceedToTokenPhase — tokens are merged into on_declare');
-    assert.doesNotMatch(body, /setLabel\('Roll Combat Dice'\)/,
-      'handleCombatReady must not post the roll button itself — postRollDiceButton owns it');
+      'dispatchCombatGateAdvance must not call the deleted proceedToTokenPhase');
   });
 
   it('on_declare gate posts sendOnDeclareTokenWindow inline so cards + tokens land in same player window', () => {

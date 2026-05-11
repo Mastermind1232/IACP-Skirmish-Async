@@ -14,21 +14,21 @@ describe('getAvailableActions — combat flow', () => {
     currentRound: 1,
   };
 
-  it('returns combat ready when pending combat not both ready', () => {
+  it('returns combat gate action for the currently-active gate player only', () => {
     const game = {
       ...baseGame,
       pendingCombat: {
         attackerPlayerNum: 1,
-        p1Ready: true,
-        p2Ready: false,
+        currentStep: 'step1+2-defender',
+        combatGate: { phase: 'on_declare', acked: { 1: true }, activePlayer: 2 },
       },
     };
 
     const p1Actions = getAvailableActions(game, 1);
-    assert.strictEqual(p1Actions.length, 0); // P1 already ready
+    assert.strictEqual(p1Actions.length, 0); // P1 already acked
 
     const p2Actions = getAvailableActions(game, 2);
-    assert.ok(p2Actions.some(a => a.type === ACTION_TYPES.COMBAT_READY));
+    assert.ok(p2Actions.some(a => a.type === ACTION_TYPES.COMBAT_GATE));
   });
 
   it('returns roll dice when both ready but no rolls', () => {
@@ -77,7 +77,7 @@ describe('getAvailableActions — combat flow', () => {
   it('returns no combat actions when no pending combat', () => {
     const actions = getAvailableActions(baseGame, 1);
     // Should get activation actions instead, not combat
-    assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_READY));
+    assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_GATE));
     assert.ok(!actions.some(a => a.type === ACTION_TYPES.COMBAT_ROLL));
   });
 });

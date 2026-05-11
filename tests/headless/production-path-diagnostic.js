@@ -318,19 +318,19 @@ async function runOneGame(gameNum) {
       continue;
     }
 
-    // Combat ready-gate: both players must confirm — submit before action generation
-    // (matches train.js pattern; without this, getAvailableActions may return empty
-    // during combat-ready phase, causing false NO_PROGRESS)
-    if (g.pendingCombat
+    // Combat ready-gate: both players must confirm via the modern
+    // sequential gate (combat_gate_). Submit attacker first, then defender.
+    if (g.pendingCombat?.combatGate
         && (g.pendingCombat.currentStep === 'step1+2-attacker'
             || g.pendingCombat.currentStep === 'step1+2-defender')) {
-      const _acked = g.pendingCombat.acked || {};
-      const combatReadyId = `combat_ready_${g.gameId}`;
-      if (!_acked[1]) {
-        try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
+      const combatGateId = `combat_gate_${g.gameId}`;
+      const atkPN = g.pendingCombat.attackerPlayerNum || 1;
+      const defPN = atkPN === 1 ? 2 : 1;
+      if (!(g.pendingCombat.combatGate.acked || {})[atkPN]) {
+        try { await harness.submitAction(combatGateId, g[`player${atkPN}Id`]); } catch {}
       }
-      if (g.pendingCombat && !(g.pendingCombat.acked || {})[2]) {
-        try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
+      if (g.pendingCombat?.combatGate && !(g.pendingCombat.combatGate.acked || {})[defPN]) {
+        try { await harness.submitAction(combatGateId, g[`player${defPN}Id`]); } catch {}
       }
       continue;
     }
@@ -422,7 +422,7 @@ async function runOneGame(gameNum) {
     // Combat flow and phase gates need both players. Submit one per iteration
     // to maintain proper ordering. Prefer the turn player's mandatory actions.
     const MANDATORY_TYPES = new Set([
-      'phase_gate_ready', 'combat_ready', 'combat_roll', 'combat_gate',
+      'phase_gate_ready', 'combat_gate', 'combat_roll', 'combat_gate',
       'combat_resolve', 'combat_resolve_ready',
     ]);
     const p1Mandatory = p1Actions.filter(a => MANDATORY_TYPES.has(a.type));
@@ -481,7 +481,7 @@ async function runOneGame(gameNum) {
         actions.find(a => a.type === 'end_activation') ||
         actions.find(a => a.type === 'pass_activation_turn') ||
         actions.find(a => a.type === 'end_round_phase') ||
-        actions.find(a => a.type === 'combat_gate' || a.type === 'combat_ready') ||
+        actions.find(a => a.type === 'combat_gate' || a.type === 'combat_gate') ||
         actions.find(a => a.type === 'combat_roll') ||
         actions.find(a => !a.type.startsWith('play_cc') && !a.type.startsWith('move_'));
       if (escape) chosen = escape;

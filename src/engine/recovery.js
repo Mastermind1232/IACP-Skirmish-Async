@@ -18,7 +18,7 @@ const PROMPT_DESCRIPTIONS = {
   [ACTION_TYPES.ATTACK_TARGET]: 'Attack target selection',
   [ACTION_TYPES.END_TURN]: 'End turn button',
   [ACTION_TYPES.END_ACTIVATION_PHASE]: 'End activation phase button',
-  [ACTION_TYPES.COMBAT_READY]: 'Combat ready confirmation',
+  [ACTION_TYPES.COMBAT_GATE]: 'Combat ready confirmation',
   [ACTION_TYPES.COMBAT_ROLL]: 'Roll dice button',
   [ACTION_TYPES.COMBAT_REROLL]: 'Reroll options',
   [ACTION_TYPES.COMBAT_SURGE]: 'Surge assignment',

@@ -239,8 +239,8 @@ async function runOneGame(learnings, gameNum) {
     const otherActions = actionsToUse.filter(a => a.actingPlayer === otherPlayer);
     let actingPN;
     if (turnActions.length > 0 && otherActions.length > 0) {
-      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
-      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
+      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
+      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
       actingPN = (otherMandatory && !turnMandatory) ? otherPlayer : turnPlayer;
     } else { actingPN = turnActions.length > 0 ? turnPlayer : otherPlayer; }
 

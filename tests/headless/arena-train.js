@@ -191,7 +191,7 @@ async function runArenaGame(arenaData, learnings, agent1, agent2) {
 
     let actingPN;
     if (turnActions.length > 0 && otherActions.length > 0) {
-      const MANDATORY = ['phase_gate_ready', 'combat_ready', 'combat_roll',
+      const MANDATORY = ['phase_gate_ready', 'combat_gate', 'combat_roll',
         'dc_ability_choice', 'celebration_play', 'celebration_pass',
         'pounce_space', 'missile_salvo_die', 'missile_salvo_done',
         'power_token_choice', 'cover_fire_block', 'cover_fire_skip',

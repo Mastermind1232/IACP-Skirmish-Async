@@ -56,7 +56,7 @@ const KNOWN_PREFIXES = [
   'dc_activate', 'dc_end_activation', 'dc_move', 'dc_attack', 'dc_special', 'dc_ability_choice',
   'move_mp', 'move_pick', 'move_letter',
   'attack_target',
-  'combat_ready', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_resolve_ready', 'combat_resolve',
+  'combat_gate', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_resolve_ready', 'combat_resolve',
   'negation_let_resolve', 'negation_use',
   'celebration_play', 'celebration_pass',
   'pass_activation_turn', 'end_turn', 'end_end_of_round', 'end_start_of_round', 'status_phase',
@@ -210,7 +210,7 @@ function pickAction(policy, rng, p1Actions, p2Actions, stepNum) {
   switch (policy) {
     case 'aggressive': {
       // Prefer attack/combat actions, then activate, then anything
-      const priority = ['attack_target', 'combat_roll', 'combat_ready', 'combat_skip_surges',
+      const priority = ['attack_target', 'combat_roll', 'combat_gate', 'combat_skip_surges',
         'combat_resolve', 'combat_surge', 'activate_dc', 'celebration_pass',
         'negation_let_resolve', 'dc_end_activation'];
       for (const type of priority) {

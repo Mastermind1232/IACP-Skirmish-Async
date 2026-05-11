@@ -10984,7 +10984,7 @@ export function resolveAbility(abilityId, context) {
         // path). Set the free-attack flag and post the prompt via the
         // freeAttackPrompt-style fallback. Per canonical card text,
         // this attack removes 1 die from the attacker's pool — set the
-        // one-shot per-msgId penalty so handleCombatReady consumes it.
+        // one-shot per-msgId penalty so handleCombatDeclare consumes it.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         const _losFk = figureKeyForActivation(game, msgId);
         if (_losFk) game.freeAttackBonusPending[_losFk] = true;

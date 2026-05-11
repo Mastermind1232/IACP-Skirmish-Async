@@ -59,8 +59,8 @@ export class CombatSaga extends Saga {
 
   getExpectedActions() {
     switch (this.state.phase) {
-      case COMBAT_STATES.DECLARED: return ['combat_ready'];
-      case COMBAT_STATES.READY_CHECK: return ['combat_ready'];
+      case COMBAT_STATES.DECLARED: return ['combat_gate'];
+      case COMBAT_STATES.READY_CHECK: return ['combat_gate'];
       case COMBAT_STATES.ROLLING: return ['combat_roll'];
       case COMBAT_STATES.REROLL_WINDOW: return ['combat_reroll', 'combat_skip_reroll'];
       case COMBAT_STATES.SURGE_SPENDING: return ['combat_surge', 'combat_skip_surges'];

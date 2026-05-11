@@ -18,6 +18,7 @@ import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 import { clearPendingCcConfirmation } from '../game/interrupts.js';
+import { sendCombatGate, sendOnDeclareTokenWindow } from './combat.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -514,23 +515,20 @@ async function recoverPendingCombat(game, gameId, ctx) {
     return null; // thread gone — cannot recover
   }
 
-  // No attack roll yet and modify-yn gate still pending → re-send the
-  // combat_ready_ button. Session 11 migration: read currentStep
-  // (canonical CRR gate) instead of legacy p1Ready/p2Ready.
+  // No attack roll yet and modify-yn gate still pending → re-post the
+  // on-declare gate via the canonical sendCombatGate (seeds
+  // combat.combatGate state so handleCombatGateReady accepts clicks).
+  // Also re-post the active role's on-declare token window so the
+  // player gets the same combined cards+tokens UI they would have had
+  // pre-restart.
   const _stepIsPreRoll = combat.currentStep === 'step1+2-attacker'
     || combat.currentStep === 'step1+2-defender';
   if (!combat.attackRoll && _stepIsPreRoll) {
-    const readyRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`combat_ready_${gameId}`)
-        .setLabel('Ready to roll combat dice')
-        .setStyle(ButtonStyle.Secondary)
-    );
-    await thread.send({
-      content: '**[Recover]** Pre-combat window — click **Ready to roll combat dice** when ready.',
-      components: [readyRow],
-    });
-    return 'Re-sent combat ready button';
+    await thread.send({ content: '**[Recover]** Pre-combat window — re-posting the on-declare gate and token window.' });
+    await sendCombatGate(thread, game, combat, 'on_declare', ctx);
+    const _activeRole = combat.currentStep === 'step1+2-defender' ? 'defender' : 'attacker';
+    await sendOnDeclareTokenWindow(thread, game, combat, _activeRole, ctx);
+    return 'Re-sent on_declare gate + token window';
   }
 
   // Both ready but no roll yet → re-send combat_roll_ button. Session 11

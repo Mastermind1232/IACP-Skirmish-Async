@@ -234,17 +234,18 @@ async function runOneGame(learnings, gameNum) {
       }
       continue;
     }
-    // Auto-resolve combat ready (session 11: read combat.acked instead)
-    if (g.pendingCombat
+    // Auto-resolve combat ready via the modern sequential gate.
+    if (g.pendingCombat?.combatGate
         && (g.pendingCombat.currentStep === 'step1+2-attacker'
             || g.pendingCombat.currentStep === 'step1+2-defender')) {
-      const _acked = g.pendingCombat.acked || {};
-      const combatReadyId = `combat_ready_${g.gameId}`;
-      if (!_acked[1]) {
-        try { await harness.submitAction(combatReadyId, g.player1Id); } catch {}
+      const combatGateId = `combat_gate_${g.gameId}`;
+      const atkPN = g.pendingCombat.attackerPlayerNum || 1;
+      const defPN = atkPN === 1 ? 2 : 1;
+      if (!(g.pendingCombat.combatGate.acked || {})[atkPN]) {
+        try { await harness.submitAction(combatGateId, g[`player${atkPN}Id`]); } catch {}
       }
-      if (g.pendingCombat && !(g.pendingCombat.acked || {})[2]) {
-        try { await harness.submitAction(combatReadyId, g.player2Id); } catch {}
+      if (g.pendingCombat?.combatGate && !(g.pendingCombat.combatGate.acked || {})[defPN]) {
+        try { await harness.submitAction(combatGateId, g[`player${defPN}Id`]); } catch {}
       }
       continue;
     }
@@ -369,8 +370,8 @@ async function runOneGame(learnings, gameNum) {
 
     let actingPN;
     if (turnActions.length > 0 && otherActions.length > 0) {
-      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
-      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_ready','combat_roll'].includes(a.type));
+      const turnMandatory = turnActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
+      const otherMandatory = otherActions.some(a => ['phase_gate_ready','combat_gate','combat_roll'].includes(a.type));
       if (otherMandatory && !turnMandatory) actingPN = otherPlayer;
       else actingPN = turnPlayer;
     } else {

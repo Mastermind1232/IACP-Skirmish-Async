@@ -45,7 +45,7 @@ const PENDING_STATES = [
 // must be available to at least one player.
 const PENDING_TO_ACTION_TYPES = {
   pendingCombat: [
-    'combat_ready', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_reroll_done', 'combat_resolve',
+    'combat_gate', 'combat_roll', 'combat_surge', 'combat_skip_surges', 'combat_reroll', 'combat_reroll_done', 'combat_resolve',
     // Combat reaction types — these are legitimate combat actions for reaction sub-states
     'strike_me_down_yes', 'strike_me_down_no',
     'slow_on_draw_yes', 'slow_on_draw_no',
