@@ -126,111 +126,118 @@ export function enumerateAllFigures(game) {
 }
 
 /**
- * Sync core of NPC damage: mutates npc.hp / npc.defeated and awards
- * VP without doing any Discord I/O. Use from synchronous resolvers
- * (resolveAbility); for async callers prefer applyDamageToNpc which
- * also writes a game-log line.
+ * Apply damage to a neutral NPC figure (Thug / Krykna). Pure, sync
+ * core — mutates `npc.hp` / `npc.defeated`, awards Krykna and
+ * Nefarious-Gains VP, and returns a structured log queue for the
+ * async caller to drain.
  *
- * Returns { applied, prevHp, newHp, defeated, vp, label }.
+ * Distinct from applyDamage (figure pipeline) and applyDamageToObject
+ * (object pipeline) — neutrals are figures but live in their own
+ * state container (`game.npcThugs` / `game.npcKrykna`).
+ *
+ * Pre-2026-05-11 there were two functions doing the same thing
+ * (`applyDamageToNpc` async + `applyDamageToNpcSync` sync). Unified
+ * here. The async wrapper at the bottom of this file owns the
+ * logging side-effect; this core stays pure for callers that need it
+ * inside a synchronous resolver (resolveAbility, SoA orchestrator).
+ *
+ * Inputs:
+ *   game                       — game state
+ *   opts.npcType               — 'thug' | 'krykna'
+ *   opts.npcIndex              — index into the respective array
+ *   opts.amount                — damage to apply
+ *   opts.attackerPlayerNum     — defeater's player num (for VP)
+ *   opts.awardObjectiveVp(g,n,a) — optional VP awarder; if omitted, VP
+ *                                  totals are computed but not banked
+ *
+ * Returns:
+ *   {
+ *     applied,                 — bool: did damage land?
+ *     prevHp,                  — hp before
+ *     newHp,                   — hp after (0 on defeat)
+ *     defeated,                — bool: hp hit 0
+ *     vp,                      — total VP awarded (Krykna 2 + Jabba +1)
+ *     label,                   — "Thug N" / "Krykna N" for logging
+ *     logs,                    — Array<{ kind, msg, opts }> for the
+ *                                async wrapper to drain via logGameAction
+ *   }
  */
 export function applyDamageToNpcSync(game, opts) {
-  const { npcType, npcIndex, amount, attackerPlayerNum } = opts || {};
-  if (!amount || amount <= 0) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  const { npcType, npcIndex, amount, attackerPlayerNum, source } = opts || {};
+  const _none = { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '', logs: [] };
+  if (!amount || amount <= 0) return _none;
   const arrName = npcType === 'thug' ? 'npcThugs' : npcType === 'krykna' ? 'npcKrykna' : null;
-  if (!arrName) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  if (!arrName) return _none;
   const arr = game[arrName];
-  if (!Array.isArray(arr) || !arr[npcIndex]) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  if (!Array.isArray(arr) || !arr[npcIndex]) return _none;
   const npc = arr[npcIndex];
-  if (npc.defeated) return { applied: false, prevHp: 0, newHp: 0, defeated: false, vp: 0, label: '' };
+  if (npc.defeated) return _none;
   const prevHp = npc.hp;
   npc.hp = Math.max(0, npc.hp - amount);
   const label = npcType === 'thug' ? `Thug ${npcIndex + 1}` : `Krykna ${npcIndex + 1}`;
+  const logs = [
+    { kind: 'damage', msg: `🩸 **${label}** suffers ${amount} Damage from **${source || 'attack'}** (HP: ${prevHp} → ${npc.hp}).`,
+      opts: { phase: 'ROUND', icon: 'attack' } },
+  ];
   if (npc.hp > 0) {
-    return { applied: true, prevHp, newHp: npc.hp, defeated: false, vp: 0, label };
+    return { applied: true, prevHp, newHp: npc.hp, defeated: false, vp: 0, label, logs };
   }
   npc.defeated = true;
   let vp = 0;
+  // Krykna defeat awards 2 VP per card text.
   if (npcType === 'krykna' && attackerPlayerNum && opts?.awardObjectiveVp) {
     vp = 2;
     opts.awardObjectiveVp(game, attackerPlayerNum, vp);
+    logs.push({ kind: 'defeat',
+      msg: `🏆 **${label} defeated** — Player ${attackerPlayerNum} gains **${vp} VP** (Krykna kill bonus).`,
+      opts: { phase: 'ROUND', icon: 'vp' } });
+  } else {
+    logs.push({ kind: 'defeat', msg: `💀 **${label}** defeated.`, opts: { phase: 'ROUND', icon: 'attack' } });
   }
-  // Nefarious Gains (Jabba) per alexanbv 2026-05-11: NPC cost = 0,
-  // Jabba on defeater's team grants +1 VP.
+  // Nefarious Gains (Jabba) per alexanbv 2026-05-11: NPC cost = 0, but
+  // Jabba's "+1 VP per hostile defeated" still fires when the defeater's
+  // team has Jabba alive. NPCs are neutral so the standard
+  // checkNefariousGains "opposing-team" logic doesn't apply — emulate
+  // the alive-on-attacker-team check here.
   if (attackerPlayerNum && opts?.awardObjectiveVp) {
     const _jabbaAlive = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
     if (_jabbaAlive) {
       opts.awardObjectiveVp(game, attackerPlayerNum, 1);
       vp += 1;
+      logs.push({ kind: 'nefarious_gains',
+        msg: `🤑 **Nefarious Gains** — Player ${attackerPlayerNum} (Jabba's army) gains **+1 VP** for defeating ${label} (NPC cost 0 + 1).`,
+        opts: { phase: 'ROUND', icon: 'vp' } });
     }
   }
-  return { applied: true, prevHp, newHp: 0, defeated: true, vp, label };
+  return { applied: true, prevHp, newHp: 0, defeated: true, vp, label, logs };
 }
 
 /**
- * Apply damage to a neutral NPC figure (Thug / Krykna). Decrements
- * npc.hp, marks defeated on HP=0, awards VP if attackerPlayerNum is
- * set (per card text: "When a player defeats a Krykna, that player
- * gains 2 VPs"). Distinct from applyDamage (figure pipeline) and
- * applyDamageToObject (object pipeline) — neutrals are figures, not
- * objects, but live in a separate state container.
+ * Async wrapper around `applyDamageToNpcSync` for handler-context
+ * callers that have a Discord client + logGameAction. Drains the
+ * sync core's `logs` queue, then returns the same shape (minus the
+ * `logs` field) for callers that expect the legacy contract.
  *
- * Returns { applied, prevHp, newHp, defeated, vp }.
+ * Pre-unification this was a parallel ~80-line implementation; now
+ * it's a thin adapter that owns only the Discord I/O.
  */
 export async function applyDamageToNpc(game, ctx, opts) {
-  const { npcType, npcIndex, amount, attackerPlayerNum, source } = opts;
-  if (!amount || amount <= 0) return { applied: false, prevHp: 0, newHp: 0, defeated: false };
-  const arrName = npcType === 'thug' ? 'npcThugs' : npcType === 'krykna' ? 'npcKrykna' : null;
-  if (!arrName) return { applied: false, prevHp: 0, newHp: 0, defeated: false };
-  const arr = game[arrName];
-  if (!Array.isArray(arr) || !arr[npcIndex]) return { applied: false, prevHp: 0, newHp: 0, defeated: false };
-  const npc = arr[npcIndex];
-  if (npc.defeated) return { applied: false, prevHp: 0, newHp: 0, defeated: false };
-  const prevHp = npc.hp;
-  npc.hp = Math.max(0, npc.hp - amount);
-  const { logGameAction, client } = ctx || {};
-  const label = npcType === 'thug' ? `Thug ${npcIndex + 1}` : `Krykna ${npcIndex + 1}`;
+  const { logGameAction, client, awardObjectiveVp } = ctx || {};
+  const result = applyDamageToNpcSync(game, { ...opts, awardObjectiveVp });
+  if (!result.applied) return { applied: false, prevHp: 0, newHp: 0, defeated: false };
   if (logGameAction && client) {
-    await logGameAction(game, client,
-      `🩸 **${label}** suffers ${amount} Damage from **${source || 'attack'}** (HP: ${prevHp} → ${npc.hp}).`,
-      { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-  }
-  if (npc.hp > 0) {
-    return { applied: true, prevHp, newHp: npc.hp, defeated: false, vp: 0 };
-  }
-  npc.defeated = true;
-  let vp = 0;
-  // Krykna defeat awards 2 VP per card text.
-  if (npcType === 'krykna' && attackerPlayerNum && ctx?.awardObjectiveVp) {
-    vp = 2;
-    ctx.awardObjectiveVp(game, attackerPlayerNum, vp);
-    if (logGameAction && client) {
-      await logGameAction(game, client,
-        `🏆 **${label} defeated** — Player ${attackerPlayerNum} gains **${vp} VP** (Krykna kill bonus).`,
-        { phase: 'ROUND', icon: 'vp' }).catch(() => {});
-    }
-  } else if (logGameAction && client) {
-    await logGameAction(game, client,
-      `💀 **${label}** defeated.`,
-      { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-  }
-  // Nefarious Gains (Jabba) per alexanbv 2026-05-11: NPC cost = 0, but
-  // Jabba's "+1 VP per hostile defeated" still fires when the defeater's
-  // team has Jabba alive. Check via attacker's own team (NPCs are
-  // neutral so the standard checkNefariousGains' "opposing-team" logic
-  // doesn't apply — emulate the alive-on-attacker-team check here).
-  if (attackerPlayerNum && ctx?.awardObjectiveVp) {
-    const _jabbaAlive = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
-    if (_jabbaAlive) {
-      ctx.awardObjectiveVp(game, attackerPlayerNum, 1);
-      vp += 1;
-      if (logGameAction && client) {
-        await logGameAction(game, client,
-          `🤑 **Nefarious Gains** — Player ${attackerPlayerNum} (Jabba's army) gains **+1 VP** for defeating ${label} (NPC cost 0 + 1).`,
-          { phase: 'ROUND', icon: 'vp' }).catch(() => {});
-      }
+    for (const entry of result.logs) {
+      await logGameAction(game, client, entry.msg, entry.opts).catch(() => {});
     }
   }
-  return { applied: true, prevHp, newHp: 0, defeated: true, vp };
+  // Match legacy return shape (no `logs`, no `label`).
+  return {
+    applied: result.applied,
+    prevHp: result.prevHp,
+    newHp: result.newHp,
+    defeated: result.defeated,
+    vp: result.vp,
+  };
 }
 
 /** True if a figureKey refers to an NPC slot (npc_thug_N / npc_krykna_N). */
