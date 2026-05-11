@@ -339,7 +339,81 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   }
 
   // ══ STEP 3: End of Round Effects (rules: STATUS PHASE IN A SKIRMISH L2718) ══
-  // DC ability EoR effects
+  // Per CRR + alexanbv 2026-05-10: mission EoR rules fire FIRST, before
+  // either player's DC EoR effects. Within DC EoR (further down), the
+  // initiative player resolves their effects before the non-initiative
+  // player.
+  const variant = game.selectedMission?.variant;
+  const missionRules = getMissionRules?.(mapId, variant) ?? {};
+  const endOfRoundRules = missionRules.endOfRound;
+  if (endOfRoundRules && runEndOfRoundRules) {
+    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, countTerminalsControlledByPlayer, client };
+    const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
+    if (gameEnded) {
+      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
+    }
+    if (game.pendingPowerTokenOverflow?.length > 0) {
+      const _ovCh = await fetchGameChannel(client, game.generalId);
+      if (_ovCh) {
+        const _ovEntry = game.pendingPowerTokenOverflow[0];
+        const _ovPn = Object.entries(game.figurePositions || {}).find(([, figs]) => figs?.[_ovEntry.figureKey])?.[0];
+        await sendPowerTokenOverflowUI(game, gameId, _ovCh, _ovPn ? parseInt(_ovPn, 10) : 1, saveGames);
+      }
+    }
+  }
+
+  // NPC thug activation (Corellian Underground A — driven by rules.npcThugs flag)
+  // alexanbv 2026-05-10: Player with initiative moves all thugs 1 at a time
+  // via an interactive picker. After all thugs moved, damage applies. The
+  // picker handler in src/handlers/thug-movement.js resumes the round-end
+  // chain via the closure registered as game._resumeAfterThugMovementFn.
+  if (runNpcThugActivation && hasMissionFlag(mapId, variant, 'npcThugs')) {
+    if (!game.npcThugs) {
+      const missionData = getMapTokensData?.()[mapId]?.missionA;
+      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) {
+        game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
+      }
+    }
+    const activeIndexes = (game.npcThugs || []).map((t, i) => (t && !t.defeated ? i : -1)).filter((i) => i >= 0);
+    if (activeIndexes.length > 0) {
+      const { initThugMovementQueue } = await import('../game/thug-movement.js');
+      const { postThugPickerPrompt } = await import('./thug-movement.js');
+      const initPN = getInitiativePlayerNum(game);
+      initThugMovementQueue(game, initPN, mapId);
+      const _resumeVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
+      // Resume continuation: after the picker drains, run the remainder
+      // of the round-end chain. Currently this jumps to fluctuation gate
+      // / initiative swap, intentionally SKIPPING DC EoR for the picker
+      // path — known limitation tracked as the post-thug DC-EoR follow-up.
+      // The much simpler inline path (no thug picker) preserves CRR order
+      // mission EoR → DC EoR → tail. Extraction of DC EoR + tail into a
+      // re-callable helper is queued separately.
+      game._resumeAfterThugMovementFn = async (g, c) => {
+        if (hasMissionFlag(g.selectedMap?.id, g.selectedMission?.variant, 'fluctuationSwapGate')) {
+          const _fInitNum = getInitiativePlayerNum(g);
+          const _fOtherNum = opponentPlayerNum(_fInitNum);
+          g.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
+          g.fluctuationSwappedThisRound = [];
+          g.pendingFluctuationSwapFirst = null;
+          g._pendingStatusPhaseLog = _resumeVars;
+          const _fGenCh = await fetchGameChannel(c.client, g.generalId);
+          if (postFluctuationSwapButtons) await postFluctuationSwapButtons(g, _fGenCh, g.gameId, _fInitNum);
+          saveGames(g.gameId);
+          return;
+        }
+        await _runInitiativeSwapAndContinue(g, g.gameId, null, c, _resumeVars);
+      };
+      await postThugPickerPrompt(game, client, interaction?.channel);
+      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
+    }
+  }
+
+  // DC ability EoR effects (run after mission EoR per CRR)
   const dcEffects = getDcEffects();
   // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
   for (const [msgId, meta] of dcMessageMeta) {
@@ -807,78 +881,6 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
       });
     }
   }
-  // Mission end-of-round rules (also Step 3 — grouped with DC ability EoR effects)
-  const variant = game.selectedMission?.variant;
-  const missionRules = getMissionRules?.(mapId, variant) ?? {};
-  const endOfRoundRules = missionRules.endOfRound;
-  if (endOfRoundRules && runEndOfRoundRules) {
-    const ruleCtx = { logGameAction, checkWinConditions, getMapTokensData, getSpaceController, isFigureInDeploymentZone, getFiguresOnOrAdjacentToSpace, countTerminalsControlledByPlayer, client };
-    const { gameEnded } = await runEndOfRoundRules(game, mapId, variant, endOfRoundRules, ruleCtx);
-    if (gameEnded) {
-      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
-    // Check for power token overflow from mission rules (fluctuation/crate tokens)
-    if (game.pendingPowerTokenOverflow?.length > 0) {
-      const _ovCh = await fetchGameChannel(client, game.generalId);
-      if (_ovCh) {
-        const _ovEntry = game.pendingPowerTokenOverflow[0];
-        // Determine owning player from figure positions
-        const _ovPn = Object.entries(game.figurePositions || {}).find(([, figs]) => figs?.[_ovEntry.figureKey])?.[0];
-        await sendPowerTokenOverflowUI(game, gameId, _ovCh, _ovPn ? parseInt(_ovPn, 10) : 1, saveGames);
-      }
-    }
-  }
-
-  // NPC thug activation (Corellian Underground A — driven by rules.npcThugs flag)
-  // alexanbv 2026-05-10: Player with initiative moves all thugs 1 at a time
-  // via an interactive picker. After all thugs moved, damage applies. The
-  // picker handler in src/handlers/thug-movement.js resumes the round-end
-  // chain via the closure registered as game._resumeAfterThugMovementFn.
-  if (runNpcThugActivation && hasMissionFlag(mapId, variant, 'npcThugs')) {
-    // Lazy-init npcThugs if needed (matches runNpcThugActivation behaviour).
-    if (!game.npcThugs) {
-      const missionData = getMapTokensData?.()[mapId]?.missionA;
-      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
-      if (positions.length > 0) {
-        game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
-      }
-    }
-    const activeIndexes = (game.npcThugs || []).map((t, i) => (t && !t.defeated ? i : -1)).filter((i) => i >= 0);
-    if (activeIndexes.length > 0) {
-      const { initThugMovementQueue } = await import('../game/thug-movement.js');
-      const { postThugPickerPrompt } = await import('./thug-movement.js');
-      const initPN = getInitiativePlayerNum(game);
-      initThugMovementQueue(game, initPN, mapId);
-      // Register resume closure: runs after picker drain in handleThugDest.
-      // Damage application + win check are handled by the picker handler;
-      // this closure picks up the post-thug round-end continuation.
-      const _resumeVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
-      game._resumeAfterThugMovementFn = async (g, c) => {
-        // Re-import to avoid stale captures across save/load
-        // Fluctuation swap gate (Lothal Wastes B — preserved from inline path).
-        if (hasMissionFlag(g.selectedMap?.id, g.selectedMission?.variant, 'fluctuationSwapGate')) {
-          const _fInitNum = getInitiativePlayerNum(g);
-          const _fOtherNum = opponentPlayerNum(_fInitNum);
-          g.pendingFluctuationSwapQueue = [_fInitNum, _fOtherNum];
-          g.fluctuationSwappedThisRound = [];
-          g.pendingFluctuationSwapFirst = null;
-          g._pendingStatusPhaseLog = _resumeVars;
-          const _fGenCh = await fetchGameChannel(c.client, g.generalId);
-          if (postFluctuationSwapButtons) await postFluctuationSwapButtons(g, _fGenCh, g.gameId, _fInitNum);
-          saveGames(g.gameId);
-          return;
-        }
-        await _runInitiativeSwapAndContinue(g, g.gameId, null, c, _resumeVars);
-      };
-      await postThugPickerPrompt(game, client, interaction?.channel);
-      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
-  }
-
   // NPC Krykna push+damage phase (Chopper Base A): build push queue here; damage runs after all pushes (in modal handler)
 
   // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
