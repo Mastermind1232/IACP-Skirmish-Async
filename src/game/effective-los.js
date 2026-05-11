@@ -78,36 +78,47 @@ export function losStateFingerprint(game) {
 }
 
 /**
- * Team-agnostic LOS check between any two figures on the board.
+ * Directional LOS check: can `fromFigureKey` see `toFigureKey`?
  *
- * Resolves each figure's position and footprint regardless of which
- * team owns it, then computes effective mapSpaces (closed doors,
- * shields, smoke, broken walls) and figure-blocking coords. Uses the
- * picker's canonical blocking rules (Camouflage reciprocal, Massive,
- * companion exemptions).
+ * LOS is directional. `hasLosFromFigureToFigure(game, A, B)` does NOT
+ * imply `hasLosFromFigureToFigure(game, B, A)`. Example: Camouflage
+ * says hostile figures 4+ spaces away cannot draw LoS TO the camo
+ * figure, but the camo figure can still draw LoS to them. So A→B and
+ * B→A can disagree when one side has Camo.
+ *
+ * The function resolves each figure's position by searching both
+ * teams (no "attacker/defender" labels — pure source/destination).
+ * It computes effective mapSpaces (closed doors, shields, smoke,
+ * broken walls) and figure-blocking coords using the picker's
+ * canonical rules:
+ *   - Companion exemption
+ *   - MASSIVE exemption (both as attacker and as target — target's
+ *     side is treated as never hidden behind other figures)
+ *   - Camouflage reciprocal (only excludes blockers on the OPPOSITE
+ *     team from the source — the camo figure isn't a "hostile figure"
+ *     to a same-team source)
+ *   - Multi-cell target footprint stripped from blocking
+ *   - opts.marksmanActive: figures don't block this trace
+ *   - opts.attackerIgnoresFigureBlocking: Priority Target / Scout form
  *
  * Use cases:
  *   - Post-declare combat probe (handleCombatRoll)
- *   - Same-team LoS for friendly-targeted abilities (Gideon Argus,
- *     Force Deflection, Distracting Fire, etc.)
+ *   - Friendly-targeted abilities: Gideon Argus, Force Deflection,
+ *     Distracting Fire, Squad Cohesion, etc.
  *   - Any future surface that needs "can X see Y?"
  *
- * Deliberately does NOT consult combat state — pure geometry +
- * figure-blocking. Caller passes any per-attack overrides via opts.
- *
  * @param {object} game
- * @param {string} fromFigureKey - source figure
- * @param {string} toFigureKey - target figure
- * @param {object} ctx - getDcEffects, getFigureSize, getMapData,
- *   getMapTokensData (or any subset; falls back to module-level
- *   data-loader imports via the caller's bag)
+ * @param {string} fromFigureKey - LoS source (the one drawing the line)
+ * @param {string} toFigureKey - LoS destination
+ * @param {object} ctx - { getDcEffects, getFigureSize, getMapData,
+ *   getMapTokensData, getFootprintCells }
  * @param {object} [opts]
  * @param {boolean} [opts.marksmanActive] - figures don't block this attack
  * @param {boolean} [opts.attackerIgnoresFigureBlocking] - Priority Target
  *   / Massive attacker / Clawdite Scout-form: figures don't block
  * @returns {boolean}
  */
-export function hasLosBetweenFigures(game, fromFigureKey, toFigureKey, ctx, opts = {}) {
+export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, opts = {}) {
   if (!game || !fromFigureKey || !toFigureKey) return false;
   const mapId = game.selectedMap?.id;
   if (!mapId) return false;

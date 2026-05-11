@@ -15,7 +15,6 @@ import { pushNestedCombat, resolvePendingCombat } from '../game/combat-stack.js'
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
-import { losStateFingerprint } from '../game/effective-los.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
@@ -1641,11 +1640,6 @@ export async function handleAttackTarget(interaction, ctx) {
     // Snapshot Marksman/Ballistics Matrix "figures don't block" semantic
     // for this attack — read by handleCombatRoll's post-declare LoS probe.
     attackIgnoredFigureLOS: _atkIgnoredFigureLOS || undefined,
-    // LoS-state fingerprint captured at declare. If unchanged at roll
-    // time, the picker's verdict still holds and the probe skips LoS
-    // re-validation entirely (the probe still checks attacker/target
-    // are on the board — those are absolute, not LoS-derived).
-    declareLosFingerprint: losStateFingerprint(game),
     reverseEngineerActive: reverseEngineerActive || undefined,
     bonusSurgeAbilities: [...nextSurge],
     bonusPierce: nextPierce,
@@ -3155,7 +3149,7 @@ export async function handleCombatRoll(interaction, ctx) {
   //   - Cara Dune CC / Ahsoka CC / Force Push removed the attacker
   //   - LAM repositioned the target out of LOS
   // CRITICAL: this probe MUST match the picker's LoS check exactly —
-  // both go through hasLosBetweenFigures (game/effective-los.js), the
+  // both go through hasLosFromFigureToFigure (game/effective-los.js), the
   // single team-agnostic LoS oracle. Camo / PT / MASSIVE / Clawdite
   // Scout / Marksman / multi-cell footprints all resolve identically.
   // Marksman flag is consumed at declare time (combat.js:1343) so we
@@ -3187,15 +3181,8 @@ export async function handleCombatRoll(interaction, ctx) {
       await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — target is no longer on the board.');
       return;
     }
-    // LoS state-change gate: if every LoS input is identical to the
-    // moment of declare, the picker's verdict still holds — skip the
-    // re-validation entirely. Re-validation only fires when something
-    // moved/closed/spawned that could actually change LoS.
-    const _avFpNow = losStateFingerprint(game);
-    const _avFpDeclare = combat.declareLosFingerprint || '';
-    const _avStateUnchanged = _avFpDeclare && _avFpNow === _avFpDeclare;
-    if (game.selectedMap?.id && !_avStateUnchanged) {
-      // Team-agnostic LoS via the shared hasLosBetweenFigures helper.
+    if (game.selectedMap?.id) {
+      // Team-agnostic LoS via the shared hasLosFromFigureToFigure helper.
       // Same calculator used (or usable by) Gideon Argus / Force
       // Deflection / Distracting Fire / any future same-team LoS check.
       // Shims missing combat-ctx helpers (getFootprintCells,
@@ -3205,7 +3192,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const { getConfig } = await import('../game/figure-config.js');
         _avAtkScoutForm = getConfig(game, combat.attackerFigureKey)?.form === 'Scout';
       } catch { /* optional */ }
-      const { hasLosBetweenFigures } = await import('../game/effective-los.js');
+      const { hasLosFromFigureToFigure } = await import('../game/effective-los.js');
       const _avLosCtx = {
         getDcEffects: ctx.getDcEffects || getDcEffectsGlobal,
         getFigureSize: ctx.getFigureSize || getFigureSize,
@@ -3213,7 +3200,7 @@ export async function handleCombatRoll(interaction, ctx) {
         getMapData,
         getMapTokensData,
       };
-      const _avLos = hasLosBetweenFigures(
+      const _avLos = hasLosFromFigureToFigure(
         game,
         combat.attackerFigureKey,
         combat.target.figureKey,
@@ -8656,7 +8643,6 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
     attackerFigureKey: controlledFigureKey,
     attackerConds: game.figureConditions?.[controlledFigureKey] || [],
     defenderConds: game.figureConditions?.[target.figureKey] || [],
-    declareLosFingerprint: losStateFingerprint(game),
     // Slice 8.4 follow-up: per-side condition-effects-suppression flags
     // (YWNDM-on-Fifth-Brother). Mirrors primary attack init.
     attackerCondEffectsSuppressed: areConditionEffectsSuppressed(game, controlledFigureKey),
