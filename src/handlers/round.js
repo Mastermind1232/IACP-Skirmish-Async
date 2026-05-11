@@ -400,6 +400,38 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
 
+  // Krykna push phase (Chopper Base Atollon A — mission EoR effect).
+  // Per alexanbv 2026-05-10 + CRR: Krykna are pushed BEFORE either
+  // player's DC EoR effects, with players ALTERNATING (init player
+  // first). Posts player picker buttons + early-return; the modal
+  // drain handler (index.js krykna_push_modal_) invokes
+  // _runDcEorAndContinue with the captured logVars when the queue
+  // drains, preserving CRR ordering: mission EoR → DC EoR → tail.
+  if (hasMissionFlag(mapId, variant, 'npcKryknaActivation') && postKryknaPushButtons) {
+    if (!game.npcKrykna) {
+      const missionData = getMapTokensData()['chopper-base-atollon']?.missionA;
+      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
+      if (positions.length > 0) {
+        game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase().trim(), hp: 8, maxHp: 8, defeated: false, hostility: 'treatedAsHostile' }));
+      }
+    }
+    const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
+    if (activeKrykna.length > 0) {
+      const _initNum = getInitiativePlayerNum(game);
+      const _otherNum = opponentPlayerNum(_initNum);
+      const queue = [];
+      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? _initNum : _otherNum);
+      game.pendingKryknaPushQueue = queue;
+      game.kryknaPushedIds = [];
+      game._kryknaResumeLogVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
+      const _kpGenCh = await fetchGameChannel(client, game.generalId);
+      if (_kpGenCh) await postKryknaPushButtons(game, _kpGenCh, gameId);
+      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
+    }
+  }
+
   await _runDcEorAndContinue(game, gameId, interaction, ctx,
     { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
 }
@@ -1097,28 +1129,8 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
 
-  // Krykna push queue + buttons (damage fires after all pushes in modal handler).
-  // Driven by rules.npcKryknaActivation flag.
-  if (hasMissionFlag(mapId, variant, 'npcKryknaActivation') && postKryknaPushButtons) {
-    // Lazy-init npcKrykna from missionA token positions (breaks chicken-and-egg with self-play.js)
-    if (!game.npcKrykna) {
-      const missionData = getMapTokensData()['chopper-base-atollon']?.missionA;
-      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
-      if (positions.length > 0) {
-        game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase().trim(), hp: 8, maxHp: 8, defeated: false }));
-      }
-    }
-    const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
-    if (activeKrykna.length > 0) {
-      const _initNum = getInitiativePlayerNum(game);
-      const _otherNum = opponentPlayerNum(_initNum);
-      const queue = [];
-      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? _initNum : _otherNum);
-      game.pendingKryknaPushQueue = queue;
-      game.kryknaPushedIds = [];
-      await postKryknaPushButtons(game, generalChannel, gameId);
-    }
-  }
+  // Krykna push moved to mission EoR phase in handleEndEndOfRound
+  // (runs BEFORE player DC EoR per CRR + alexanbv 2026-05-10).
 
   if (interaction?.message) {
     await interaction.message.edit({ components: [] }).catch(discordCatch);

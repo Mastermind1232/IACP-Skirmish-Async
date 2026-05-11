@@ -352,6 +352,7 @@ export async function handleKryknaPlaceSkip(interaction, ctx) {
     }
   } else {
     delete game.pendingClaimedKryknaQueue;
+    await _resumeKryknaEor(game, gameId, ctx);
   }
   saveGames(game.gameId);
 }
@@ -411,8 +412,23 @@ export async function handleKryknaPlacePick(interaction, ctx) {
     }
   } else {
     delete game.pendingClaimedKryknaQueue;
+    await _resumeKryknaEor(game, gameId, ctx);
   }
   saveGames(game.gameId);
+}
+
+/**
+ * Resume CRR-correct EoR ordering after the Krykna pick/place queue
+ * drains. Krykna push is a mission EoR effect that runs BEFORE player
+ * DC EoR; here we pick up the DC EoR loops that the round-end handler
+ * skipped when it posted the picker.
+ */
+async function _resumeKryknaEor(game, gameId, ctx) {
+  if (!game._kryknaResumeLogVars) return;
+  const logVars = game._kryknaResumeLogVars;
+  delete game._kryknaResumeLogVars;
+  const { _runDcEorAndContinue } = await import('./round.js');
+  await _runDcEorAndContinue(game, gameId, null, ctx, logVars);
 }
 
 // ── Arms Salvage (Devaron Garrison A) distribute handlers ─────────────────

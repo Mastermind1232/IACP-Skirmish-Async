@@ -4523,6 +4523,7 @@ client.on('interactionCreate', async (interaction) => {
         if (kryknaEvt2.length > 0) await checkWinConditions(game2, client);
 
         // After damage: claimed Krykna placement (initiative order, 1 per player per round)
+        let _kryknaHasClaimedPlacement = false;
         if (claimedPlacementNeeded && generalCh2) {
           const _kpInitNum = getInitiativePlayerNum(game2);
           const _kpOtherNum = opponentPlayerNum(_kpInitNum);
@@ -4532,7 +4533,26 @@ client.on('interactionCreate', async (interaction) => {
           if (queue.length > 0) {
             game2.pendingClaimedKryknaQueue = queue;
             await postKryknaPlaceButtons(game2, generalCh2, gameId2);
+            _kryknaHasClaimedPlacement = true;
           }
+        }
+        // Krykna push queue drained: resume CRR-correct EoR ordering by
+        // running DC EoR + tail. Per alexanbv 2026-05-10: Krykna push is
+        // a mission EoR effect that runs BEFORE player DC EoR; here we
+        // pick up the DC EoR loops that the round-end handler skipped.
+        // Skip if a claimed-placement picker is also pending (its drain
+        // handler will call _runDcEorAndContinue).
+        if (!_kryknaHasClaimedPlacement) {
+          const _kryknaLogVars = game2._kryknaResumeLogVars || {};
+          delete game2._kryknaResumeLogVars;
+          const { _runDcEorAndContinue } = await import('./src/handlers/round.js');
+          const _kryknaCtx = {
+            logGameAction, client, saveGames,
+            dcMessageMeta, dcHealthState, isDepletedRemovedFromGame,
+            isFigureInDeploymentZone, checkWinConditions,
+            postFluctuationSwapButtons,
+          };
+          await _runDcEorAndContinue(game2, gameId2, null, _kryknaCtx, _kryknaLogVars);
         }
       }
       saveGames(game.gameId);
