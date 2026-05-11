@@ -949,14 +949,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // after destruct's audit confirmed Alliance Ranger Regular needed its
       // own slug ('guerrilla_alliance_ranger_reg'); now both Reg and Elite go
       // through the slug-based check.
-      // Jets (Sabine Wren): after attack, if target within 2 spaces, gain 1 MP
-      if (combat.attackerDcName === 'Sabine Wren' && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
-        const _jetsMsgId = combat.attackerMsgId;
-        if (_jetsMsgId) {
-          grantMovementBank(game, _jetsMsgId, 1);
-          await logGameAction(game, client, `\u{1F680} **Jets** — **Sabine Wren** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
-        }
-      }
+      // Sabine-Wren-Jets block REMOVED 2026-05-11 per alexanbv:
+      // Sabine Wren does NOT have the Jets passive (her ability is
+      // Special Action — Evasive Maneuver: move up to 2 spaces +
+      // recover 2). The Jets passive block below already handles every
+      // Jets-having DC data-driven, so this hardcoded duplicate was
+      // both wrong (granted unearned MP to Sabine) and redundant.
+
       // Fly-By (Jet Trooper Elite): after attack, gain 2 MP if target was within 2 spaces
       {
         const _fbAtkEff = getDcEffects()?.[combat.attackerDcName];

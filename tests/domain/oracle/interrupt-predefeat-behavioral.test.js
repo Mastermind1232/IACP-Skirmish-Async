@@ -209,7 +209,7 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
     assert.strictEqual(calls.processFigureDefeat[0].source, 'Last Resort', 'source labeled');
   });
 
-  it('B-I-PREDEFEAT-004: Executor use path grants MP + free attack, marks once-per-round', async () => {
+  it('B-I-PREDEFEAT-004: Executor use path stamps Move-X picker + free attack, marks once-per-round', async () => {
     const combat = makeCombat();
     const game = makeGame({
       pendingCombat: combat,
@@ -235,9 +235,22 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
       game.roundFigureAbilityUsed['Royal Guard Champion-1-0_executor'], true,
       'once-per-round ability marked',
     );
-    // MP granted
-    assert.ok(game.movementBank?.dc3, 'movement bank created for RGC');
-    assert.strictEqual(game.movementBank.dc3.remaining, 2, '2 MP granted');
+    // Per alexanbv 2026-05-11: Executor card text is "move up to 2
+    // spaces and then perform an attack" — Move-X-spaces pipeline
+    // (spend immediately, no bank), NOT a 2-MP bank grant. The picker
+    // is stamped via setupPendingMoveX(spaces=2, bypassCosts=false).
+    // If the test fixture has no map data / valid neighbors, the
+    // picker auto-finishes and clears pendingMoveX immediately —
+    // so accept EITHER (a) the stamp is still present, OR (b) it
+    // was auto-cleared because there are no destinations.
+    const pmx = game.pendingMoveX?.dc3;
+    if (pmx) {
+      assert.strictEqual(pmx.remaining, 2, '2 spaces available');
+      assert.strictEqual(pmx.source, 'Executor', 'source labeled');
+      assert.strictEqual(pmx.bypassCosts, true, 'bypassCosts=true (Move-X spaces — each step 1 budget regardless of terrain)');
+    }
+    // No bank grant either way — Move-X spends immediately.
+    assert.strictEqual(game.movementBank, undefined, 'no bank grant — Move-X spends immediately');
     // Free attack granted (figureKey-keyed per IACP rule 2026-05-09)
     assert.strictEqual(game.freeAttackBonusPending?.['Royal Guard Champion-1-0'], true, 'free attack pending');
     // 2026-05-09 migration: Executor moved BEFORE_DEFEATED → WHEN_DEFEATED.

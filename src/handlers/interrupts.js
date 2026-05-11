@@ -1458,19 +1458,35 @@ export async function handleExecutor(interaction, ctx) {
     _exGame.roundFigureAbilityUsed = _exGame.roundFigureAbilityUsed || {};
     _exGame.roundFigureAbilityUsed[`${_exPending.rgcFigKey}_executor`] = true;
 
-    // Grant 2 free movement points to RGC. Pre-seed displayName so the
-    // bank message renders correctly even when grantMovementBank inits.
-    _exGame.movementBank = _exGame.movementBank || {};
-    if (!_exGame.movementBank[_exPending.rgcMsgId]) {
-      _exGame.movementBank[_exPending.rgcMsgId] = { total: 0, remaining: 0, threadId: null, messageId: null, displayName: _exPending.rgcDcName };
-    }
-    grantMovementBank(_exGame, _exPending.rgcMsgId, 2);
-
-    // Grant free attack (next attack costs no action)
+    // Per alexanbv 2026-05-11: Executor card text is "move up to 2
+    // spaces and then perform an attack" — this is the Move-X-spaces
+    // pipeline (spend immediately, no bank), NOT a 2-MP bank grant.
+    // Grant free attack first (next attack costs no action), then
+    // stamp the pendingMoveX picker so RGC can move up to 2 spaces.
     _exGame.freeAttackBonusPending = _exGame.freeAttackBonusPending || {};
     if (_exPending.rgcFigKey) _exGame.freeAttackBonusPending[_exPending.rgcFigKey] = true;
 
-    await logGameAction(_exGame, client, `**Executor** — **${_exPending.rgcDcName}** gains 2 MP and a free attack (friendly **${_exPending.defeatedLabel}** defeated). Use Move/Attack buttons on the DC.`, { phase: 'ROUND', icon: 'card' });
+    await logGameAction(_exGame, client, `**Executor** — **${_exPending.rgcDcName}** moves up to 2 spaces, then performs a free attack (friendly **${_exPending.defeatedLabel}** defeated).`, { phase: 'ROUND', icon: 'card' });
+    try {
+      const { setupPendingMoveX } = await import('./move-x-handler.js');
+      await setupPendingMoveX(_exGame, { client, logGameAction, saveGames }, {
+        msgId: _exPending.rgcMsgId,
+        figureKey: _exPending.rgcFigKey,
+        playerNum: _exPending.rgcPlayerNum,
+        spaces: 2,
+        source: 'Executor',
+        threadId: null,
+        // Per alexanbv 2026-05-11: "Move X spaces" effects use
+        // bypassCosts=true (each step consumes 1 budget regardless of
+        // terrain). Executor card says "move up to 2 spaces" — that's
+        // canonical Move-X, not an MP-gain. bypassCosts=false would be
+        // for Slippery / Smooth Landing-style MP gains where terrain
+        // cost still applies.
+        bypassCosts: true,
+      });
+    } catch (err) {
+      console.error('[interrupts] Executor Move-X stamp failed:', err?.message ?? err);
+    }
   } else {
     await logGameAction(_exGame, client, `**Executor** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
