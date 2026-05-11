@@ -784,21 +784,47 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
   }
 
-  // battlefield_leadership (Leia Organa): pick a friendly figure within 3 spaces; it gets a free attack
+  // battlefield_leadership (Leia Organa): pick a friendly figure within 3 spaces;
+  // that figure may move up to 1 space (MOVE-X pipeline) then performs a free
+  // attack. Per alexanbv 2026-05-10: the 1-space pre-attack move MUST flow
+  // through pendingMoveX so the chosen friendly's move can use the canonical
+  // Move-X picker (terrain costs, movement bank, displacement). The free
+  // attack fires via the freeAttackPrompt continuation when MOVE-X drains.
   if (abilityId === 'battlefield_leadership') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Battlefield Leadership** manually.' };
-    // Phase 2: figure chosen — set pending flag and return applied
+    // Phase 2: figure chosen — set up pendingMoveX (range 1) + free-attack continuation
     if (choiceIndex != null && targetFigureKey) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingBattlefieldLeadership(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[chosenMsgId] = {
+          remaining: 1,
+          source: 'Battlefield Leadership',
+          playerNum,
+          figureKey: targetFigureKey,
+          dcName: dcNameFromFigureKey(targetFigureKey),
+          threadId: null,
+          msgId: chosenMsgId,
+          bypassCosts: true,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: {
+              msgId: chosenMsgId,
+              playerNum,
+              figureKey: targetFigureKey,
+              sourceLabel: 'Battlefield Leadership',
+            },
+          },
+        };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return {
         applied: true,
-        logMessage: `**Battlefield Leadership** — **${chosenName}** may interrupt to move up to 1 space and perform a free attack (no action cost).`,
-        grantedAttackButton: chosenMsgId ? { granteeMsgId: chosenMsgId, granteeFigureKey: targetFigureKey, granteeName: chosenName, sourceLabel: 'Battlefield Leadership' } : null,
+        pendingMoveXMsgId: chosenMsgId,
+        activeMsgId: chosenMsgId,
+        logMessage: `**Battlefield Leadership** — **${chosenName}** may move up to **1 space** then perform a free attack (no action cost).`,
       };
     }
     // Phase 1: enumerate friendly figures within 3 spaces (not Leia herself)

@@ -7807,10 +7807,9 @@ export async function handleFigureheadDecision(interaction, ctx) {
 
 /** Send die picker for Lasat Honor Guard (multiple eligible dice). */
 async function sendLasatDiePicker(thread, gameId, combat, eligibleIdxs, ctx) {
-  if (eligibleIdxs.length === 1) {
-    await sendLasatFacePicker(thread, gameId, combat, eligibleIdxs[0], ctx);
-    return;
-  }
+  const attackerPN = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  const ownerId = ctx?.getGame ? (() => { const g = ctx.getGame(gameId); return g?.[`player${attackerPN}Id`]; })() : null;
+  const mention = ownerId ? `<@${ownerId}> ` : '';
   const buttons = eligibleIdxs.map((idx) => {
     const die = combat.attackDiceResults[idx];
     const face = `${die.acc || 0}a/${die.dmg || 0}d/${die.surge || 0}s`;
@@ -7819,8 +7818,21 @@ async function sendLasatDiePicker(thread, gameId, combat, eligibleIdxs, ctx) {
       .setLabel(`${(die.color || 'die').charAt(0).toUpperCase() + (die.color || 'die').slice(1)} [${face}]`)
       .setStyle(ButtonStyle.Secondary);
   });
+  // Per card text "you may turn 1 die" — optional. Add a Skip button so
+  // the attacker can decline without forcing a die turn.
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId(`lasat_die_${gameId}_skip`)
+      .setLabel('Skip Lasat Honor Guard')
+      .setStyle(ButtonStyle.Primary)
+  );
   const rows = buildActionRows(buttons);
-  await thread.send({ content: '**Lasat Honor Guard** — Choose which die to turn:', components: rows });
+  const content = `${mention}**Lasat Honor Guard** — Step 3→4 window: you may turn 1 attack die showing only a single Damage or Surge symbol to any other side. Accuracy numbers do not count as symbols.`;
+  await thread.send({
+    content,
+    components: rows,
+    ...(ownerId ? { allowedMentions: { users: [ownerId] } } : {}),
+  });
 }
 
 /** Send face picker for Lasat Honor Guard (player selects new face). */
@@ -7938,10 +7950,11 @@ export async function handleOnDeclareDieSwap(interaction, ctx) {
  * customId: lasat_die_{gameId}_{dieIdx}
  */
 export async function handleLasatDiePick(interaction, ctx) {
-  const m = interaction.customId.match(/^lasat_die_([^_]+)_(\d+)$/);
-  if (!m) return;
-  const [, gameId, idxStr] = m;
-  const dieIdx = parseInt(idxStr, 10);
+  // customId: lasat_die_{gameId}_{dieIdx|skip}
+  const skipMatch = interaction.customId.match(/^lasat_die_([^_]+)_skip$/);
+  const dieMatch = interaction.customId.match(/^lasat_die_([^_]+)_(\d+)$/);
+  if (!skipMatch && !dieMatch) return;
+  const gameId = (skipMatch || dieMatch)[1];
   const { getGame, replyIfGameEnded, saveGames } = ctx;
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
@@ -7953,15 +7966,40 @@ export async function handleLasatDiePick(interaction, ctx) {
   }
   const effectiveAttacker = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttacker, canActAsPlayer, 'Only the attacker may choose.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (skipMatch) {
+    combat.lasatHonorGuardPhase = false;
+    if (thread) await thread.send('**Lasat Honor Guard** — Skipped.').catch(discordCatch);
+    // Resume the modifier step now that Lasat is decided.
+    await _resumeAttackerModifiersAfterLasat(thread, game, combat, ctx);
+    saveGames(game.gameId);
+    return;
+  }
+  const dieIdx = parseInt(dieMatch[2], 10);
   if (!(combat.lasatEligibleDiceIndices || []).includes(dieIdx)) {
     await interaction.followUp({ content: 'That die is not eligible.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  await interaction.deferUpdate().catch(discordCatch);
-  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   combat.lasatChosenDieIndex = dieIdx;
-  await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
+  if (thread) await sendLasatFacePicker(thread, gameId, combat, dieIdx, ctx);
   saveGames(game.gameId);
+}
+
+/**
+ * Resume combat after Lasat Honor Guard is skipped or committed.
+ * Re-enters proceedAfterRerolls — the canonical entry point for the
+ * attacker modifier step, matching the resume path used by
+ * handleLasatFacePick.
+ */
+async function _resumeAttackerModifiersAfterLasat(thread, game, combat, ctx) {
+  combat.lasatHonorGuardPhase = false;
+  combat.lasatEligibleDiceIndices = null;
+  combat.lasatChosenDieIndex = null;
+  if (thread && typeof proceedAfterRerolls === 'function') {
+    await proceedAfterRerolls(thread, game, combat, ctx).catch((err) => console.error('Lasat resume failed:', err));
+  }
 }
 
 /**
