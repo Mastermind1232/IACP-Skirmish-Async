@@ -80,6 +80,7 @@ import {
   handleDcAction,
   handleDcHeroicAttack,
   handleDcBoRifleAttack,
+  handleDcWaSlam,
   handleDcEndFigure,
   handleDcFigPick,
   handleGrantedAttack,
@@ -161,7 +162,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
@@ -417,6 +418,7 @@ register('dc_move_', (i, ctx) => handleDcAction(i, ctx, 'dc_move_'), 'dcPlayArea
 register('dc_attack_', (i, ctx) => handleDcAction(i, ctx, 'dc_attack_'), 'dcPlayArea');
 register('dc_heroic_attack_', handleDcHeroicAttack, 'dcPlayArea');
 register('dc_bo_rifle_attack_', handleDcBoRifleAttack, 'dcPlayArea');
+register('dc_wa_slam_', handleDcWaSlam, 'dcPlayArea');
 register('dc_end_figure_', handleDcEndFigure, 'dcPlayArea');
 register('dc_fig_pick_', handleDcFigPick, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
@@ -570,6 +572,8 @@ register('submit_fight_use_', handleSubmitOrFight, 'interrupts');
 register('submit_fight_skip_', handleSubmitOrFight, 'interrupts');
 register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
 register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
+register('rs_attack_', handleRogueSmuggler, 'interrupts');
+register('rs_skip_', handleRogueSmuggler, 'interrupts');
 register('dbh_move_', handleDrivenByHatred, 'interrupts');
 register('dbh_skip_', handleDrivenByHatred, 'interrupts');
 register('dbh_post_choke_', handleDbhPostMove, 'interrupts');
@@ -797,6 +801,7 @@ export {
   handleDcAction,
   handleDcHeroicAttack,
   handleDcBoRifleAttack,
+  handleDcWaSlam,
   handleDcEndFigure,
   handleDcFigPick,
   handleGrantedAttack,

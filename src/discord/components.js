@@ -1024,6 +1024,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _hasBoRifleStaff = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('bo_rifle_staff_strike');
   const _boRifleUsed = !!game?.boRifleStaffUsedThisActivation?.[_figureKeyForOncePerAct];
   const _showBoRifleStaff = _hasBoRifleStaff && hasAttack && !_boRifleUsed;
+  // [Wookiee Avenger] (Chewbacca): "Once during your activation, you may
+  // use Slam without spending an action." Surfaces as a sibling
+  // free-action button alongside Attack, available ANYTIME during the
+  // activation (alexanbv 2026-05-10). Gated on the existing
+  // wookieeAvengerSlamUsed[msgId] flag.
+  const _hasWaSlam = !!(_suUpgrades.length && cardNameIncludes(_suUpgrades, 'Wookiee Avenger'));
+  const _waSlamUsed = !!game?.wookieeAvengerSlamUsed?.[msgId];
+  const _showWaSlam = _hasWaSlam && !_waSlamUsed;
 
   const rows = [];
 
@@ -1041,6 +1049,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f${selectedFigure}`).setLabel(`Attack${suffix}`).setStyle(ButtonStyle.Danger).setDisabled(noAttack));
       if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
       if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f${selectedFigure}`).setLabel(`Bo-Rifle Strike (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+      if (_showWaSlam) comps.push(new ButtonBuilder().setCustomId(`dc_wa_slam_${msgId}_f${selectedFigure}`).setLabel(`Free Slam (Wookiee Avenger)`).setStyle(ButtonStyle.Primary).setDisabled(_activationLocked));
       comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
       rows.push(new ActionRowBuilder().addComponents(...comps));
       // Condition-discard row: Remove Stun + Remove Bleed (1 action each)
@@ -1108,6 +1117,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     if (hasAttack) comps.push(new ButtonBuilder().setCustomId(`dc_attack_${msgId}_f0`).setLabel('Attack').setStyle(ButtonStyle.Danger).setDisabled(noAttack));
     if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
     if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f0`).setLabel('Bo-Rifle Strike (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
+    if (_showWaSlam) comps.push(new ButtonBuilder().setCustomId(`dc_wa_slam_${msgId}_f0`).setLabel('Free Slam (Wookiee Avenger)').setStyle(ButtonStyle.Primary).setDisabled(_activationLocked));
     comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
     rows.push(new ActionRowBuilder().addComponents(...comps));
     if (isStunned || isBleeding) {

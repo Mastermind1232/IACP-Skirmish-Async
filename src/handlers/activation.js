@@ -1521,16 +1521,22 @@ export async function handleActPassive(interaction, ctx) {
         }
       }
       // Recipient ≠ activator (card explicitly says "another friendly")
-      // → spend immediately, no bank. setupPendingMoveX with bypassCosts:
-      // false so terrain/figure adders apply.
+      // → spend immediately, no bank. Per alexanbv 2026-05-10: the card
+      // says "perform a move" = a full Move action with the figure's
+      // own Speed-MP, not a fixed 2 MP.
+      let _goSpaces = 2;
       if (targetMsgId) {
+        try {
+          const { getEffectiveSpeed } = await import('../game/board-helpers.js');
+          _goSpaces = getEffectiveSpeed(targetDcName, targetFk, game, meta.playerNum) ?? 2;
+        } catch { /* fall back to 2 if speed lookup fails */ }
         try {
           const { setupPendingMoveX } = await import('./move-x-handler.js');
           await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
             msgId: targetMsgId,
             figureKey: targetFk,
             playerNum: meta.playerNum,
-            spaces: 2,
+            spaces: _goSpaces,
             source: "General's Orders",
             threadId: null,
             bypassCosts: false,
@@ -1541,9 +1547,9 @@ export async function handleActPassive(interaction, ctx) {
       }
       pending.chosen.push(targetFk);
       pending.remaining--;
-      await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} gains 2 MP (spend immediately, no bank).`, { phase: 'ACTIVATION', icon: 'activate' });
+      await logGameAction?.(game, client, `**General's Orders** — ${targetDcName} performs a Move (${_goSpaces} MP, spend immediately, no bank).`, { phase: 'ACTIVATION', icon: 'activate' });
       if (pending.remaining <= 0) {
-        await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. All picks used.`, components: [] }).catch(discordCatch);
+        await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** moved (${_goSpaces} MP). All picks used.`, components: [] }).catch(discordCatch);
         clearPendingGeneralsOrders(game);
       } else {
         // Show remaining figure choices (exclude already chosen)

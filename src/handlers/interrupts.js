@@ -1028,6 +1028,43 @@ export async function handleDrivenByHatred(interaction, ctx) {
   saveGames(_dbhGame.gameId);
 }
 
+// [Rogue Smuggler] EoR exhaust-to-attack — Han Solo only.
+export async function handleRogueSmuggler(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  let buttonKey;
+  if (interaction.customId.startsWith('rs_attack_')) buttonKey = 'rs_attack_';
+  else buttonKey = 'rs_skip_';
+  const suffix = parseCustomId(interaction.customId, buttonKey);
+  const parts = suffix.split('_');
+  const gameId = parts[0]; const msgId = parts[1];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+  const displayName = meta.displayName || meta.dcName;
+  if (buttonKey === 'rs_skip_') {
+    await logGameAction(game, client, `**[Rogue Smuggler]** — **${displayName}** skipped the end-of-round attack.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(game.gameId);
+    return;
+  }
+  // Mark [Rogue Smuggler] exhausted this round
+  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+  game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Rogue Smuggler'];
+  // Set free-attack pending on Han's figureKey so the next Attack click
+  // on his DC card consumes the free-attack flag (no action cost).
+  const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const figKey = `${meta.dcName}-${dgIdx}-0`;
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[figKey] = true;
+  const ownerId = getPlayerId(game, meta.playerNum);
+  await logGameAction(game, client,
+    `<@${ownerId}> **[Rogue Smuggler]** — **${displayName}** exhausts to interrupt and perform a free attack. Use the **Attack** button on Han's DC card.`,
+    { phase: 'ROUND', icon: 'attack', allowedMentions: { users: [ownerId] } });
+  saveGames(game.gameId);
+}
+
 // Post-move pick for Driven by Hatred: fired from the move-x-handler
 // dbhPostMovePick continuation, then routes to dbhForceChoke or sets up
 // a free attack with -1 die penalty.

@@ -835,7 +835,7 @@ export async function finalizeActivation({
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(_goLabels[i]).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each gains **2 MP** (pick 1 of 2):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each may **perform a Move** (their own Speed-MP, spend immediately):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
     } else {
       await thread.send({ content: `🎖️ **General's Orders** — No friendly figures available.` }).catch(discordCatch);
     }
@@ -1001,31 +1001,13 @@ export async function finalizeActivation({
   // Focused on the Kill — now handled by applyStartOfActivationEffects()
   const _suActivationUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
   if (_suActivationUpgrades.length) {
-    // Wookiee Avenger (Chewbacca): free Slam
-    if (cardNameIncludes(_suActivationUpgrades, 'Wookiee Avenger') && !game.wookieeAvengerSlamUsed?.[msgId]) {
-      const _waMapId = game.selectedMap?.id;
-      const _waMs = _waMapId ? _getMapData(_waMapId) : null;
-      const _waDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const _waSelfFk = `${dcName}-${_waDgIndex}-0`;
-      const _waSelfPos = game.figurePositions?.[playerNum]?.[_waSelfFk];
-      if (_waSelfPos && _waMs) {
-        const _waAdj = (_waMs.adjacency?.[String(_waSelfPos).toLowerCase()] || []).map(a => String(a).toLowerCase());
-        const _waEnemyNum = opponentPlayerNum(playerNum);
-        const _waHostiles = Object.entries(game.figurePositions?.[_waEnemyNum] || {})
-          .filter(([, fp]) => fp && _waAdj.includes(String(fp).toLowerCase()));
-        if (_waHostiles.length > 0) {
-          const _waSlice = _waHostiles.slice(0, 4);
-          const _waLabels = figureChoiceLabels(_waSlice.map(([fk]) => fk));
-          const btns = _waSlice.map(([fk], i) =>
-            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslam_${fk}`).setLabel(_waLabels[i]).setStyle(ButtonStyle.Primary)
-          );
-          btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslam_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await thread.send({ content: `**Wookiee Avenger** — **${dcName}** may use **Slam** without spending an action. Choose an adjacent hostile figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
-        } else {
-          await thread.send({ content: `**Wookiee Avenger** — No adjacent hostile figures for free Slam.` }).catch(discordCatch);
-        }
-      }
-    }
+    // [Wookiee Avenger] (Chewbacca): per alexanbv 2026-05-10, the free
+    // Slam is "Once during your activation" — i.e. ANYTIME during
+    // activation, not locked to SoA. The SoA picker is removed in favor
+    // of a `Free Slam (Wookiee Avenger)` button rendered on the DC
+    // action row (components.js getDcActionButtons), which fires the
+    // adjacent-hostile picker at click-time using the figure's CURRENT
+    // (post-move) position. Handler: handleWookieeAvengerSlam.
     // Motivation (UNIQUE): exhaust during activation
     if (cardNameIncludes(_suActivationUpgrades, 'Motivation') && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Motivation')) {
       const _motMapSpaces = getMapDataFn(game.selectedMap?.id);

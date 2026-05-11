@@ -65,8 +65,15 @@ export const DD_BASELINE = {
   dcName_equality: 63,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 97,
+  cardNameIncludes: 99,
 };
+// 2026-05-10: cardNameIncludes 97→99. Two new attachment-equality
+// checks: (a) `getDcActionButtons` (components.js) gates the
+// "Free Slam (Wookiee Avenger)" button via cardNameIncludes; (b)
+// `handleDcWaSlam` (dc-play-area.js) re-verifies the attachment is
+// still present at click time before posting the adjacent-hostile
+// picker. (c) round.js EoR loop for [Rogue Smuggler] uses cardNameIncludes
+// on both the attachment list and the exhausted-upgrades list.
 // 2026-05-09: cardNameIncludes 95→96. Return Fire migrated to step-8
 // fireReturnFire (after-attack-fire.js); the Han Solo damage-gate
 // branch checks for the 'Rogue Smuggler' upgrade — same shape as the

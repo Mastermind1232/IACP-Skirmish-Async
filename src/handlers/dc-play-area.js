@@ -20,7 +20,7 @@ import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -1637,6 +1637,94 @@ export async function handleDcEndFigure(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   await updateDcActionsMessage(game, msgId, client);
   if (ctx.saveGames) ctx.saveGames(game.gameId);
+}
+
+/**
+ * [Wookiee Avenger] free Slam — anytime-during-activation button.
+ * Per alexanbv 2026-05-10: card text says "Once during your activation,
+ * you may use Slam without spending an action." The SoA picker was
+ * wrong; this handler fires when the player clicks the action-row
+ * button. Posts the adjacent-hostile picker using the existing
+ * `act_passive_..._wookslam_*` flow, which marks `wookieeAvengerSlamUsed[msgId]`
+ * + Slam specialsUsed + specialActionUsedThisActivation + rolls 1 red die.
+ */
+export async function handleDcWaSlam(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, logGameAction, client, saveGames, getMapData: getMs, getDcEffects } = ctx;
+  const m = interaction.customId.match(/^dc_wa_slam_(.+)_f(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid Wookiee Avenger Slam button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const figIdx = parseInt(figureIndexStr, 10);
+  const playerNum = meta.playerNum;
+  // Verify upgrade still attached + not used this activation
+  const _waUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  if (!cardNameIncludes(_waUpgrades, 'Wookiee Avenger')) {
+    await interaction.followUp({ content: 'Wookiee Avenger is not attached.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (game.wookieeAvengerSlamUsed?.[msgId]) {
+    await interaction.followUp({ content: 'Free Slam was already used this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  // Activation lock: refuse if lock is held by another (figure or msgId).
+  const _waLockKey = `${msgId}_f${figIdx}`;
+  if (game.activationLockKey && game.activationLockKey !== _waLockKey) {
+    await interaction.followUp({ content: 'Another figure is mid-activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _waDgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const _waDgIdx = _waDgMatch ? _waDgMatch[1] : '1';
+  const _waSelfFk = `${meta.dcName}-${_waDgIdx}-${figIdx}`;
+  const _waSelfPos = game.figurePositions?.[playerNum]?.[_waSelfFk];
+  if (!_waSelfPos) {
+    await interaction.followUp({ content: 'Cannot locate Chewbacca on the board.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _waMapId = game.selectedMap?.id;
+  const _waMs = _waMapId ? (typeof getMs === 'function' ? getMs(_waMapId) : null) : null;
+  if (!_waMs) {
+    await interaction.followUp({ content: 'Map data unavailable for Wookiee Avenger Slam.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _waAdj = (_waMs.adjacency?.[String(_waSelfPos).toLowerCase()] || []).map(s => String(s).toLowerCase());
+  const _waEnemyNum = playerNum === 1 ? 2 : 1;
+  const _waHostiles = Object.entries(game.figurePositions?.[_waEnemyNum] || {})
+    .filter(([, fp]) => fp && _waAdj.includes(String(fp).toLowerCase()));
+  if (_waHostiles.length === 0) {
+    await interaction.followUp({ content: '**Wookiee Avenger** — no adjacent hostile to Slam right now.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Post the adjacent-hostile picker. The existing act_passive wookslam
+  // handler does the die roll, damage, push prompt, and marks the
+  // wookieeAvengerSlamUsed[msgId] flag on resolution.
+  const gameId = game.gameId;
+  const _waSlice = _waHostiles.slice(0, 4);
+  const _waLabels = figureChoiceLabels(_waSlice.map(([fk]) => fk));
+  const btns = _waSlice.map(([fk], i) =>
+    new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslam_${fk}`).setLabel(_waLabels[i]).setStyle(ButtonStyle.Primary)
+  );
+  btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslam_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+  const threadId = game.dcActionsData?.[msgId]?.threadId;
+  if (threadId) {
+    const thread = await fetchGameChannel(client, threadId);
+    if (thread) {
+      await withDiscordRetry(() => thread.send({ content: `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without an action. Choose an adjacent hostile figure:`, components: [new ActionRowBuilder().addComponents(btns)] }));
+    }
+  } else if (logGameAction) {
+    await logGameAction(game, client, `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without an action. Choose an adjacent hostile figure:`, { components: [new ActionRowBuilder().addComponents(btns)], phase: 'ACTIVATION', icon: 'attack' });
+  }
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
