@@ -802,10 +802,12 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
   const atkPn = combat.attackerPlayerNum;
   const atkFk = combat.attackerFigureKey;
   const lines = [];
-  // Both players' figures within 2 of target space (excluding the target itself).
+  // Both players' figures within 2 of target space (alexanbv 2026-05-10:
+  // INCLUDING the primary target per card text "each figure and object
+  // within 2 spaces of the target space suffers 1 Damage").
   for (const pn of [1, 2]) {
     for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-      if (!coord || fk === tgtFk) continue;
+      if (!coord) continue;
       if (countGameSpaces(game, tgtPos, coord) > 2) continue;
       const fMsgId = findDcMessageIdForFigure?.(game.gameId, pn, fk);
       if (!fMsgId) continue;
