@@ -1276,16 +1276,39 @@ async function buildAndSendAttackTargets(
       targets.push({ figureKey: `npc_${npcType}_${i}`, coord, label, hasLOS: los, dist, isNpc: true, npcType, npcIndex: i });
     }
   }
-  // Crate targets (Devaron Garrison B): cratePositions keyed by orig coord, value = current coord
-  if (game.cratePositions && typeof game.cratePositions === 'object') {
-    for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-      const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
+  // Damageable-object targets (Slice 4, alexanbv 2026-05-10): iterate
+  // game.objectMeta for entries with targetable:true. Replaces the
+  // legacy cratePositions loop. The npcType='crate'/crateOrigCoord
+  // target shape is retained for resolver back-compat (the resolver
+  // path was migrated in Slice 3 to applyDamageToObject keyed on
+  // `crate-${origCoord}`). Future generic targetable objects can be
+  // added by mission rules without code changes.
+  if (game.objectMeta && typeof game.objectMeta === 'object') {
+    for (const [objId, meta] of Object.entries(game.objectMeta)) {
+      if (!meta?.targetable) continue;
+      const hp = (game.objectHealth?.[objId] || [0])[0] ?? 0;
       if (hp <= 0) continue;
-      const coord = String(curCoord).toLowerCase();
+      const objPos = game.objectPositions?.[objId];
+      if (!objPos) continue;
+      const coord = String(objPos).toLowerCase();
       const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
-      targets.push({ figureKey: `npc_crate_${origCoord}`, coord, label: `Crate @ ${coord.toUpperCase()} (${hp}/5 HP)`, hasLOS: los, dist, isNpc: true, npcType: 'crate', crateOrigCoord: origCoord });
+      const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
+      // Crate id shape: crate-{origCoord}. Other targetable objects can
+      // use a generic id; resolver checks crateOrigCoord truthiness.
+      const crateOrigCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
+      targets.push({
+        figureKey: `npc_crate_${crateOrigCoord || objId}`,
+        coord,
+        label: `${meta.name || objId} (${hp}/${maxHp} HP)`,
+        hasLOS: los,
+        dist,
+        isNpc: true,
+        npcType: 'crate',
+        crateOrigCoord,
+        objectId: objId,
+      });
     }
   }
   // Priority Target intercept: if any enemy figures with "Priority Target" passive are among

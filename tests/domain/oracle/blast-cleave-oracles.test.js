@@ -370,9 +370,8 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
   });
 
   it('009d: Cleave offers eligible crate as target', async () => {
-    // Attacker at b1, target (figure) at c1, crate at a1 (adj to attacker).
-    // Current code: crate never offered (only figures from getFiguresAdjacentToTarget).
-    // Fixed code: crate eligible as Cleave target (adjacent to attacker for melee).
+    // Slice 4 (alexanbv 2026-05-10): Cleave-eligibility enumerates
+    // targetable damageable objects from game.objectMeta.
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Bossk' }])
       .withPlayer2Army([{ dcName: 'Greedo' }])
@@ -385,9 +384,17 @@ describe('ORACLE-HANDLER-009: Cleave Eligibility', () => {
     const target = getP2DcInfo(game, dcMessageMeta, dcHealthState, 0);
     game.figurePositions[2] = { [target.figKey]: 'c1' };
 
-    // Place a crate at a1 (adjacent to attacker b1)
+    // Place a crate at a1 (adjacent to attacker b1) — new unified state.
     game.cratePositions = { a1: 'a1' };
-    game.crateHealth = { a1: 5 };
+    game.objectHealth = { 'crate-a1': [5, 5] };
+    game.objectPositions = { 'crate-a1': 'a1' };
+    game.objectMeta = {
+      'crate-a1': {
+        name: 'Crate @ A1', targetable: true, defenseBlock: 1, defenseEvade: 0,
+        splashOnDefeat: { amount: 2, radius: 1, target: 'all' },
+        vpOnDefeat: null, moves: true,
+      },
+    };
 
     const combat = buildCombat(game, dcMessageMeta, {
       attackRoll: { acc: 5, dmg: 3, surge: 1 },

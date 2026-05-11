@@ -487,17 +487,25 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
       if (c.figureKey === combat.target?.figureKey) continue;
       targets.push(c);
     }
-    if (game.cratePositions) {
+    // Damageable-object cleave/attack targets (Slice 4): iterate
+    // objectMeta for targetable entries. Replaces legacy cratePositions
+    // loop. Adjacency check matches melee range (1 space).
+    if (game.objectMeta) {
       const rawMs = getMapData(mapId);
       const adj = rawMs?.adjacency || {};
       const atkNorm = String(attackerPos).toLowerCase();
       const atkAdj = new Set((adj[atkNorm] || []).map((c) => String(c).toLowerCase()));
       atkAdj.add(atkNorm);
-      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-        if (atkAdj.has(String(curCoord).toLowerCase())) {
-          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
-          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
-        }
+      for (const [objId, meta] of Object.entries(game.objectMeta)) {
+        if (!meta?.targetable) continue;
+        const hp = (game.objectHealth?.[objId] || [0])[0] ?? 0;
+        if (hp <= 0) continue;
+        const objPos = game.objectPositions?.[objId];
+        if (!objPos) continue;
+        if (!atkAdj.has(String(objPos).toLowerCase())) continue;
+        const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
+        const origCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
+        targets.push({ figureKey: `crate_${origCoord || objId}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: objPos, objectId: objId, label: `${meta.name || objId} (${hp}/${maxHp} HP)` });
       }
     }
   } else if (!combat.isRanged && _attackerHasReach) {
@@ -512,12 +520,18 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
       if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
       targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
     }
-    if (game.cratePositions) {
-      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-        if (isWithinN(attackerPos, String(curCoord).toLowerCase(), _reachRange, mapId)) {
-          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
-          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
-        }
+    // Damageable-object targets within reach range (Slice 4).
+    if (game.objectMeta) {
+      for (const [objId, meta] of Object.entries(game.objectMeta)) {
+        if (!meta?.targetable) continue;
+        const hp = (game.objectHealth?.[objId] || [0])[0] ?? 0;
+        if (hp <= 0) continue;
+        const objPos = game.objectPositions?.[objId];
+        if (!objPos) continue;
+        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), _reachRange, mapId)) continue;
+        const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
+        const origCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
+        targets.push({ figureKey: `crate_${origCoord || objId}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: objPos, objectId: objId, label: `${meta.name || objId} (${hp}/${maxHp} HP)` });
       }
     }
   } else {
@@ -531,12 +545,18 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
       if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
       targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
     }
-    if (game.cratePositions) {
-      for (const [origCoord, curCoord] of Object.entries(game.cratePositions)) {
-        if (isWithinN(attackerPos, String(curCoord).toLowerCase(), totalAcc, mapId)) {
-          const hp = (game.objectHealth?.[`crate-${origCoord}`] || [5])[0] ?? 5;
-          targets.push({ figureKey: `crate_${origCoord}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: curCoord, label: `Crate @ ${String(curCoord).toUpperCase()} (${hp}/5 HP)` });
-        }
+    // Damageable-object targets within ranged accuracy (Slice 4).
+    if (game.objectMeta) {
+      for (const [objId, meta] of Object.entries(game.objectMeta)) {
+        if (!meta?.targetable) continue;
+        const hp = (game.objectHealth?.[objId] || [0])[0] ?? 0;
+        if (hp <= 0) continue;
+        const objPos = game.objectPositions?.[objId];
+        if (!objPos) continue;
+        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), totalAcc, mapId)) continue;
+        const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
+        const origCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
+        targets.push({ figureKey: `crate_${origCoord || objId}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: objPos, objectId: objId, label: `${meta.name || objId} (${hp}/${maxHp} HP)` });
       }
     }
   }
