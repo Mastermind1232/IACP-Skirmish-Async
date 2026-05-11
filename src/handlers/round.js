@@ -364,68 +364,21 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
 
-  // NPC thug activation (Corellian Underground A — driven by rules.npcThugs flag)
-  // alexanbv 2026-05-10: Player with initiative moves all thugs 1 at a time
-  // via an interactive picker. After all thugs moved, damage applies. The
-  // picker handler in src/handlers/thug-movement.js resumes the round-end
-  // chain via the closure registered as game._resumeAfterThugMovementFn.
-  if (runNpcThugActivation && hasMissionFlag(mapId, variant, 'npcThugs')) {
-    if (!game.npcThugs) {
-      const missionData = getMapTokensData?.()[mapId]?.missionA;
-      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
-      if (positions.length > 0) {
-        game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: String(coord).toLowerCase(), hp: 4, maxHp: 4, defeated: false, hostility: 'hostile' }));
-      }
-    }
-    const activeIndexes = (game.npcThugs || []).map((t, i) => (t && !t.defeated ? i : -1)).filter((i) => i >= 0);
-    if (activeIndexes.length > 0) {
-      const { initThugMovementQueue } = await import('../game/thug-movement.js');
-      const { postThugPickerPrompt } = await import('./thug-movement.js');
-      const initPN = getInitiativePlayerNum(game);
-      initThugMovementQueue(game, initPN, mapId);
-      const _resumeVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
-      // Resume continuation: after the picker drains, run _runDcEorAndContinue
-      // which preserves CRR order — DC EoR (Regenerate / Hardy / WYIM /
-      // Driven by Hatred / Inspiration / ...) → Krykna note → fluctuation
-      // gate → initiative swap. Critical: DC EoR MUST run on rounds where
-      // the thug picker fires (otherwise every Corellian Underground A
-      // round silently skips player EoR effects).
-      game._resumeAfterThugMovementFn = async (g, c) => {
-        await _runDcEorAndContinue(g, g.gameId, null, c, _resumeVars);
-      };
-      await postThugPickerPrompt(game, client, interaction?.channel);
-      if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
-  }
-
-  // Krykna push phase (Chopper Base Atollon A — mission EoR effect).
-  // Per alexanbv 2026-05-10 + CRR: Krykna are pushed BEFORE either
-  // player's DC EoR effects, with players ALTERNATING (init player
-  // first). Posts player picker buttons + early-return; the modal
-  // drain handler (index.js krykna_push_modal_) invokes
-  // _runDcEorAndContinue with the captured logVars when the queue
-  // drains, preserving CRR ordering: mission EoR → DC EoR → tail.
-  if (hasMissionFlag(mapId, variant, 'npcKryknaActivation') && postKryknaPushButtons) {
-    if (!game.npcKrykna) {
-      const missionData = getMapTokensData()['chopper-base-atollon']?.missionA;
-      const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
-      if (positions.length > 0) {
-        game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: String(coord).toLowerCase().trim(), hp: 8, maxHp: 8, defeated: false, hostility: 'treatedAsHostile' }));
-      }
-    }
-    const activeKrykna = (game.npcKrykna || []).filter((k) => !k.defeated);
-    if (activeKrykna.length > 0) {
-      const _initNum = getInitiativePlayerNum(game);
-      const _otherNum = opponentPlayerNum(_initNum);
-      const queue = [];
-      for (let i = 0; i < activeKrykna.length; i++) queue.push(i % 2 === 0 ? _initNum : _otherNum);
-      game.pendingKryknaPushQueue = queue;
-      game.kryknaPushedIds = [];
-      game._kryknaResumeLogVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
-      const _kpGenCh = await fetchGameChannel(client, game.generalId);
-      if (_kpGenCh) await postKryknaPushButtons(game, _kpGenCh, gameId);
+  // Async mission EoR effects (thug picker, Krykna push, ...) are
+  // declared per-mission in data/mission-cards.json under rules.endOfRound
+  // and dispatched via the mission-eor-effects registry. Each registered
+  // effect can return { pending: true } to halt the round-end chain;
+  // its drain handler resumes via runRemainingMissionEorEffects + then
+  // _runDcEorAndContinue. See src/game/mission-eor-effects-wiring.js for
+  // registered handlers.
+  {
+    const _logVars = { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines };
+    const { runMissionEorEffects } = await import('../game/mission-eor-effects.js');
+    await import('../game/mission-eor-effects-wiring.js'); // side-effect: registers handlers
+    const _missionEorRes = endOfRoundRules
+      ? await runMissionEorEffects(game, endOfRoundRules, ctx, { gameId, interaction, logVars: _logVars })
+      : { pending: false };
+    if (_missionEorRes.pending) {
       if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
       saveGames(game.gameId);
       return;
