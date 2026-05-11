@@ -8713,12 +8713,12 @@ export function resolveAbility(abilityId, context) {
       }
       const dioFk = dioCandidates[0];
       const adjAll = mapId ? getFiguresAdjacentToTarget(game, dioFk, mapId) : [];
-      // Static Pulse offers a 2-Strain-or-Weaken choice — Strain is a
-      // figure-strain concept that does not apply to NPCs. Skip NPC entries
-      // here; their figure-targeting hostility is otherwise handled by the
-      // shared isEntryHostileTo path.
+      // Per alexanbv 2026-05-10, NPCs (Thugs/Krykna tagged hostileToAll)
+      // are valid Static Pulse targets. Strain on an NPC auto-converts to
+      // damage inside applyStrain (NPCs can't discard CCs), and Weaken
+      // applies via figureConditions['npc_<type>_<i>'] like any condition.
       const hostiles = adjAll
-        .filter((e) => !e.isNpc && e.playerNum != null && e.playerNum !== playerNum)
+        .filter((e) => isEntryHostileTo(game, e, playerNum))
         .map((a) => a.figureKey);
       if (hostiles.length === 0) {
         return { applied: true, logMessage: '**Static Pulse** — No hostile figures adjacent to Dio.' };

@@ -113,6 +113,38 @@ export async function applyStrain(game, ctx, opts) {
   }
   const figureKey = opts.figureKey;
   const controllerPN = opts.controllerPlayerNum;
+
+  // Neutral / NPC figures (Thugs, Krykna) cannot discard CCs to prevent
+  // strain — per alexanbv 2026-05-10, strain on an NPC converts 1:1 to
+  // damage. Short-circuit before UD / Headhunter / per-strain prompts.
+  const { isNpcFigureKey, parseNpcFigureKey, applyDamageToNpcSync } =
+    await import('../game/hostile-enumeration.js');
+  if (isNpcFigureKey(figureKey)) {
+    const parsed = parseNpcFigureKey(figureKey);
+    if (parsed) {
+      const npcRes = applyDamageToNpcSync(game, {
+        npcType: parsed.npcType,
+        npcIndex: parsed.npcIndex,
+        amount,
+        attackerPlayerNum: opts.attackerPlayerNum || (controllerPN ? (controllerPN === 1 ? 2 : 1) : null),
+      });
+      if (npcRes.applied) {
+        const src = opts.source || 'Strain';
+        await ctx.logGameAction?.(
+          game, ctx.client,
+          `🩸 **${npcRes.label}** suffers ${amount} Damage from **${src}** (Strain → Damage; NPCs cannot prevent Strain). HP: ${npcRes.prevHp} → ${npcRes.newHp}.`,
+          { phase: 'ROUND', icon: 'attack' }
+        ).catch(() => {});
+        if (npcRes.defeated) {
+          await ctx.logGameAction?.(
+            game, ctx.client, `💀 **${npcRes.label}** defeated.`,
+            { phase: 'ROUND', icon: 'attack' }
+          ).catch(() => {});
+        }
+      }
+    }
+    return _runStrainFollowup(game, ctx, opts.followup || null);
+  }
   const source = opts.source || 'Strain';
 
   // ── Fireproof (Flame Trooper attachment): immune to Strain. Find the
