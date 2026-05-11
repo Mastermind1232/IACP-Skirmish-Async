@@ -1408,6 +1408,9 @@ export async function handleNegationPlay(interaction, ctx) {
       const result = resolveAbility(abilityId, { game, playerNum: counterTargetPlayedBy, cardName: counterTargetCard, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
       await applyAbilityResult(result, { game, playerNum: counterTargetPlayedBy, client, ctx });
     }
+    // Counter-Negation resolved a CC that may have granted VP. Re-check
+    // win conditions (deferred while negation prompt was pending).
+    if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
     saveGames(game.gameId);
     return;
   }
@@ -1540,6 +1543,10 @@ export async function handleNegationLetResolve(interaction, ctx) {
       if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch(discordCatch);
     }
   }
+  // Re-check win conditions: the resolved CC may have granted VP that
+  // would end the game (was deferred while the negation prompt was
+  // pending). Per alexanbv 2026-05-11.
+  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   saveGames(game.gameId);
 }
 

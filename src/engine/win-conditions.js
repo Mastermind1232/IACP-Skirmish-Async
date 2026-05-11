@@ -15,6 +15,13 @@ import { countGameSpaces } from '../game/board-helpers.js';
  * @returns {Promise<{ ended: boolean, winnerId?: string, reason?: string }>}
  */
 export async function checkWinConditions(game, client, deps) {
+  // Per alexanbv 2026-05-11: never end the game while a Negation or
+  // Comm Disruption response is pending. The CC must resolve first;
+  // the win-condition recheck happens again after the response handler
+  // pops the interrupt (via the normal post-CC pipeline).
+  if (game.pendingNegation || game.pendingCommDisruptionPrompt) {
+    return { ended: false, deferred: true, reason: game.pendingNegation ? 'pending_negation' : 'pending_comm_disruption' };
+  }
   const crateBonus = deps.getCrateDeploymentVpBonus(game);
   const patronBonus = deps.getAnchorheadPatronVpBonus(game);
   const sabaccBuff = deps.getSabaccTableBuff ? deps.getSabaccTableBuff(game) : { p1: 0, p2: 0 };

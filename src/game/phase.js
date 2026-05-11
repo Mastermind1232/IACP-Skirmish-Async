@@ -90,8 +90,18 @@ export function setPhase(game, phase, roundPhase = null, opts = {}) {
     if (opts.strict || globalStrictMode) throw new Error(msg);
     console.warn(`[Phase] ${msg}`);
   }
+  // Per alexanbv 2026-05-11: never transition phase (especially to
+  // ENDED) while a Negation or Comm Disruption response is pending.
+  // The CC must resolve first — either countered or let-resolve. Phase
+  // transition is deferred to whoever pops the interrupt off the stack.
+  if (game.pendingNegation || game.pendingCommDisruptionPrompt) {
+    const blocker = game.pendingNegation ? 'Negation' : 'Comm Disruption';
+    console.warn(`[Phase] Refusing setPhase ${from} → ${phase}: pending ${blocker} response must resolve first.`);
+    return false;
+  }
   game.phase = phase;
   game.roundPhase = phase === 'round_active' ? (roundPhase || game.roundPhase) : null;
+  return true;
 }
 
 /**
@@ -108,6 +118,13 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
     if (opts.strict || globalStrictMode) throw new Error(msg);
     console.warn(`[Phase] ${msg}`);
   }
+  // Per alexanbv 2026-05-11: never round-transition while a Negation
+  // or Comm Disruption response is pending. The CC must resolve first.
+  if (from !== roundPhase && (game.pendingNegation || game.pendingCommDisruptionPrompt)) {
+    const blocker = game.pendingNegation ? 'Negation' : 'Comm Disruption';
+    console.warn(`[Phase] Refusing setRoundPhase ${from} → ${roundPhase}: pending ${blocker} response must resolve first.`);
+    return false;
+  }
   // Clear MASSIVE pushed-this-phase flag on phase transition. Per CRR
   // (2026-05-09): once a MASSIVE figure pushes a figure, it may no
   // longer move during the current phase (SoR / EoR / activation).
@@ -117,4 +134,5 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
     delete game.massivePushedThisPhase;
   }
   game.roundPhase = roundPhase;
+  return true;
 }
