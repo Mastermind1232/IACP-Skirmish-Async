@@ -429,6 +429,14 @@ export async function handleCombatGateReady(interaction, ctx) {
       components: interaction.message.components,
       allowedMentions: { users: [gate.activePlayer === 1 ? game.player1Id : game.player2Id].filter(Boolean) },
     }).catch(discordCatch);
+    // On-declare merge (destruct 2026-05-08): after attacker's ack, post
+    // the defender's combined on-declare token window so cards + tokens
+    // land in one window for the defender too. Without this, the defender
+    // sees only the gate Ready button and gets no token-spend UI.
+    if (gate.phase === 'on_declare' && effectivePn === atkPn) {
+      const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+      if (thread) await sendOnDeclareTokenWindow(thread, game, combat, 'defender', ctx);
+    }
     saveGames(game.gameId);
     return;
   }

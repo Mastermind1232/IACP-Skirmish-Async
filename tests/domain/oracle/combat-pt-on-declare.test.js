@@ -50,6 +50,21 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'attack-declare must post on_declare gate AND attacker token window inline — destruct 2026-05-08');
   });
 
+  it('handleCombatGateReady posts defender token window after attacker acks on_declare', () => {
+    // Bug found 2026-05-11: live combat_gate_ flow only posted the
+    // attacker's token window — defender saw the gate Ready button but
+    // never got a token-spend UI. Fix: post sendOnDeclareTokenWindow
+    // for the defender during the attacker→defender rotation, scoped
+    // to the on_declare phase only.
+    const fnMatch = H_CB_SRC.match(/export async function handleCombatGateReady\(interaction, ctx\) \{[\s\S]*?^}/m);
+    assert.ok(fnMatch, 'handleCombatGateReady body must be locatable');
+    const body = fnMatch[0];
+    assert.match(body, /sendOnDeclareTokenWindow\(thread, game, combat, 'defender', ctx\)/,
+      'handleCombatGateReady must post defender on-declare token window after attacker acks');
+    assert.match(body, /gate\.phase === 'on_declare' && effectivePn === atkPn/,
+      'defender token-window post must be guarded by phase=on_declare AND attacker-just-acked');
+  });
+
   it('proceedToTokenPhase has been removed', () => {
     assert.doesNotMatch(H_CB_SRC, /export async function proceedToTokenPhase\(/,
       'proceedToTokenPhase function must be deleted — its callers go through sendOnDeclareTokenWindow + postRollDiceButton now');
