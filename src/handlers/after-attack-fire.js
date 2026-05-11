@@ -140,6 +140,28 @@ async function fireBlast(thread, game, combat, effect, ctx) {
       }
     }
   }
+  // Neutral-NPC splash (alexanbv 2026-05-10): Blast also affects
+  // neutral figures (Thugs, Krykna) within 1 of target space. They're
+  // figures, not objects — receive damage via applyDamageToNpc.
+  try {
+    const { applyDamageToNpc } = await import('../game/hostile-enumeration.js');
+    const { awardObjectiveVp: _vpBlast } = await import('../game/vp-helpers.js');
+    const _blastNormCoord = String(combat._blastTargetCoord).toLowerCase();
+    for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+      const arr = game[arrName];
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) {
+        const npc = arr[i];
+        if (!npc || npc.defeated) continue;
+        if (countGameSpaces(game, _blastNormCoord, String(npc.coord).toLowerCase()) > 1) continue;
+        await applyDamageToNpc(game, { logGameAction, client, awardObjectiveVp: _vpBlast }, {
+          npcType, npcIndex: i, amount, attackerPlayerNum, source: `Blast ${amount}`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[fireBlast] npc damage iteration failed:', err?.message ?? err);
+  }
   // Object splash (alexanbv 2026-05-10): Blast also damages damageable
   // objects on/adjacent to target space. Routes through the unified
   // object-damage pipeline; splashOnDefeat fires through the figure
@@ -800,25 +822,38 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
   const atkPn = combat.attackerPlayerNum;
   const atkFk = combat.attackerFigureKey;
   const lines = [];
-  // Both players' figures within 2 of target space (alexanbv 2026-05-10:
-  // INCLUDING the primary target per card text "each figure and object
-  // within 2 spaces of the target space suffers 1 Damage").
-  for (const pn of [1, 2]) {
-    for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
-      if (!coord) continue;
-      if (countGameSpaces(game, tgtPos, coord) > 2) continue;
-      const fMsgId = findDcMessageIdForFigure?.(game.gameId, pn, fk);
-      if (!fMsgId) continue;
-      const { figureIndex } = parseFigureKey(fk);
-      const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-        figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
-        amount: 1, controllerPlayerNum: pn,
-        attackerPlayerNum: atkPn,
-        attackerFigureKey: atkFk,
-        source: 'Shrapnel Splash', combat,
+  // alexanbv 2026-05-10: card text "each figure and object within 2 of
+  // target space" — every figure (regular + neutral NPCs) is affected,
+  // including the primary target. enumerateAllFigures returns both
+  // populations; routing branches on isNpc.
+  const { enumerateAllFigures, applyDamageToNpc } = await import('../game/hostile-enumeration.js');
+  const { awardObjectiveVp } = await import('../game/vp-helpers.js');
+  for (const entry of enumerateAllFigures(game)) {
+    if (countGameSpaces(game, tgtPos, entry.coord) > 2) continue;
+    if (entry.isNpc) {
+      const r = await applyDamageToNpc(game, { logGameAction, client, awardObjectiveVp }, {
+        npcType: entry.npcType, npcIndex: entry.npcIndex,
+        amount: 1, attackerPlayerNum: atkPn, source: 'Shrapnel Splash',
       });
-      lines.push(`**${dcNameFromFigureKey(fk)}** 1 Dmg (${prevHp}→${newHp})`);
+      if (r.applied) {
+        const label = entry.npcType === 'thug' ? `Thug ${entry.npcIndex + 1}` : `Krykna ${entry.npcIndex + 1}`;
+        lines.push(`**${label}** 1 Dmg (${r.prevHp}→${r.newHp})`);
+      }
+      continue;
     }
+    const pn = entry.controllerPlayerNum;
+    const fk = entry.figureKey;
+    const fMsgId = findDcMessageIdForFigure?.(game.gameId, pn, fk);
+    if (!fMsgId) continue;
+    const { figureIndex } = parseFigureKey(fk);
+    const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+      figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
+      amount: 1, controllerPlayerNum: pn,
+      attackerPlayerNum: atkPn,
+      attackerFigureKey: atkFk,
+      source: 'Shrapnel Splash', combat,
+    });
+    lines.push(`**${dcNameFromFigureKey(fk)}** 1 Dmg (${prevHp}→${newHp})`);
   }
   if (lines.length && thread) {
     await thread.send(`🧨 **Shrapnel Splash** — Figures within 2 of target: ${lines.join(', ')}`).catch(discordCatch);

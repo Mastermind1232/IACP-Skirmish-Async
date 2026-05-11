@@ -697,7 +697,10 @@ export function runNpcKryknaActivation(game, mapId, ctx = {}) {
     const missionData = getMapTokensData?.()[mapId]?.missionA;
     const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
     if (positions.length === 0) return { logs: [], damageEvents: [] };
-    game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false }));
+    // alexanbv 2026-05-10: Krykna card text "can be targeted by attacks
+    // and abilities that can target hostile figures" → hostileToAll: true.
+    // The enumerateHostileFigures helper consults this flag.
+    game.npcKrykna = positions.map((coord, i) => ({ id: `krykna-${i + 1}`, coord: normalizeCoord(coord), hp: 8, maxHp: 8, defeated: false, hostileToAll: true }));
   }
 
   const activeKrykna = game.npcKrykna.filter((k) => !k.defeated);
@@ -785,7 +788,9 @@ export function runNpcThugActivation(game, mapId, ctx = {}) {
     const missionData = getMapTokensData?.()[mapId]?.missionA;
     const positions = Object.values(missionData?.positions || {}).flat().filter(Boolean);
     if (positions.length === 0) return { logs: [], damageEvents: [] };
-    game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false }));
+    // alexanbv 2026-05-10: Thugs "hostile to all figures except other
+    // thugs" → hostileToAll: true (consumed by enumerateHostileFigures).
+    game.npcThugs = positions.map((coord, i) => ({ id: `thug-${i + 1}`, coord: normalizeCoord(coord), hp: 4, maxHp: 4, defeated: false, hostileToAll: true }));
   }
 
   const activeThugs = game.npcThugs.filter((t) => !t.defeated);
