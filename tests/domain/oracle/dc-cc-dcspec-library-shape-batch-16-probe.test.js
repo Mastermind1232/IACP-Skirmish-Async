@@ -52,7 +52,7 @@ const BATCH = [
   ["DC-SPEC-BOMBARDMENT-SORIN", "bombardment_sorin", "Bombardment", "active"],
   ["DC-SPEC-BOULDER-BARRAGE", "boulder_barrage", "Boulder Barrage", null],
   ["DC-SPEC-BOUNTY-FENNEC", "bounty_fennec", "Bounty", "passive-auto"],
-  ["DC-SPEC-BRUSH-EZRA", "brush_ezra", "Brush", "passive-auto"],
+  ["DC-SPEC-BRUSH-EZRA", "brash_ezra", "Brash", "passive-auto"],
   ["DC-SPEC-BRUTAL-CLEAVE", "brutal_cleave", "Brutal Cleave", null],
   ["DC-SPEC-BRUTAL-TACTICS", "brutal_tactics", "Brutal Tactics", "passive-auto"],
   ["DC-SPEC-BRUTALITY", "brutality", "Brutality: Perform 2 attacks. Each attack must have a different target.", null],

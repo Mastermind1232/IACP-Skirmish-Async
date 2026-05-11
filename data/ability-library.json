@@ -142,7 +142,7 @@
       "category": "passive-soa",
       "label": "Get Ready",
       "description": "At the start of your activation, another figure in your group interrupts to move 1 space.",
-      "wiredStatus": "stub"
+      "wiredStatus": "wired"
     },
     "air_support_bodhi": {
       "type": "dcSpecial",
@@ -496,11 +496,11 @@
       "defenseBonusOnlyWhenNotAttackerActivation": true,
       "wiredStatus": "wired"
     },
-    "brush_ezra": {
+    "brash_ezra": {
       "type": "dcSpecial",
       "category": "passive-auto",
       "trigger": "start-of-round",
-      "label": "Brush",
+      "label": "Brash",
       "description": "At the start of each round, gain 4 MP.",
       "wiredStatus": "wired"
     },
@@ -715,8 +715,10 @@
       "description": "Move a number of spaces up to your Speed. Then, you may perform an attack.",
       "oncePer": null,
       "wiredStatus": "wired",
-      "logMessage": "**Charge** — Gained free MP equal to Speed. Your next attack costs no action.",
+      "logMessage": "**Charge** — Move up to your Speed (ignoring terrain costs). Then your next attack costs no action.",
       "freeMoveEqualToSpeed": true,
+      "freeMoveAsMoveX": true,
+      "freeMoveBypassCosts": true,
       "freeAttackBonus": true
     },
     "charge_generators": {

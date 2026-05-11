@@ -593,6 +593,31 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F3AF} **Tactical Movement** — Choose a friendly figure within 3 spaces to gain **2 MP** (must be used immediately if not Fenn himself):`,
       components: rows,
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'get_ready') {
+    // Get Ready (Rebel Trooper Elite): pick another figure in the same
+    // group to interrupt and move 1 space (bypassCosts=true).
+    const candidates = (desc.extras?.candidates || []).filter(
+      (fk) => game.figurePositions?.[bucket.ownerPlayerNum]?.[fk],
+    );
+    if (candidates.length === 0) {
+      await interaction.followUp({ content: 'No other figures in this group are alive.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const allButtons = candidates.map((fk) =>
+      new ButtonBuilder()
+        .setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}`)
+        .setLabel(dcNameFromFigureKey(fk).slice(0, 80))
+        .setStyle(ButtonStyle.Primary),
+    );
+    allButtons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const rows = [];
+    for (let i = 0; i < allButtons.length; i += 5) {
+      rows.push(new ActionRowBuilder().addComponents(allButtons.slice(i, i + 5)));
+    }
+    await interaction.message.channel.send({
+      content: `\u{1F3C3} **Get Ready** — Pick another figure in **${displayName}**'s group to interrupt and move 1 space:`,
+      components: rows,
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'tempt') {
     // Tempt: enumerate ALL figures + NPCs at pick time (positions are
     // fresh). Store candidates in extras so the fire handler can resolve
@@ -1433,6 +1458,55 @@ export async function handleSoaFire(interaction, ctx) {
       } else {
         await interaction.message.edit({ content: `\u{1F3F0} **Imperial Citadel** — No ${tokenType} tokens remaining.`, components: [] }).catch(discordCatch);
       }
+    }
+
+  // --- Get Ready (Rebel Trooper Elite) ---
+  // Pick another figure in the group, set up pendingMoveX for 1 space
+  // (bypassCosts=true), and post the picker.
+  } else if (desc.subPromptKey === 'get_ready') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3C3} **Get Ready** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      const targetFk = choiceKey;
+      if (!game.figurePositions?.[ownerPlayerNum]?.[targetFk]) {
+        await interaction.followUp({ content: 'That figure is no longer on the board.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      const targetDcName = dcNameFromFigureKey(targetFk);
+      let targetMsgId = null;
+      if (dcMessageMeta) {
+        for (const [mId, mMeta] of dcMessageMeta) {
+          if (mMeta.gameId !== gameId) continue;
+          if (mMeta.dcName === targetDcName && mMeta.playerNum === ownerPlayerNum) {
+            targetMsgId = mId;
+            break;
+          }
+        }
+      }
+      if (!targetMsgId) {
+        await interaction.followUp({ content: 'Target message not found; resolve manually.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[targetMsgId] = {
+        remaining: 1,
+        source: 'Get Ready',
+        playerNum: ownerPlayerNum,
+        figureKey: targetFk,
+        dcName: targetDcName,
+        threadId: null,
+        bypassCosts: true,
+        msgId: targetMsgId,
+        nextAction: null,
+      };
+      try {
+        const { postMoveXPicker } = await import('./move-x-handler.js');
+        await postMoveXPicker(game, ctx, targetMsgId).catch((err) => console.error('Get Ready MOVE-X picker failed:', err?.message ?? err));
+      } catch (err) {
+        console.error('Get Ready MOVE-X integration failed:', err?.message ?? err);
+      }
+      await interaction.message.edit({ content: `\u{1F3C3} **Get Ready** — **${targetDcName}** interrupts to move 1 space (bypassing terrain costs).`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F3C3} **Get Ready** — ${targetDcName} interrupts (1 space, bypass terrain).`, { phase: 'ROUND', icon: 'card' });
     }
 
   // --- Tempt (Emperor Palpatine) ---

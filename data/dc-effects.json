@@ -2620,14 +2620,14 @@
       "affiliation": "Rebel"
     },
     "Ezra Bridger": {
-      "abilityText": "Brush: At the start of each round, move up to 4 spaces.\n\nMuch to Learn: While attacking, if there is another friendly unique figure within 3 spaces, you may reroll 1 attack die. If that figure is a FORCE USER, you may turn that attack die to any side instead.",
+      "abilityText": "Brash: At the start of each round, move up to 4 spaces.\n\nMuch to Learn: While attacking, if there is another friendly unique figure within 3 spaces, you may reroll 1 attack die. If that figure is a FORCE USER, you may turn that attack die to any side instead.",
       "keywords": [
         "FORCE USER",
         "SMUGGLER"
       ],
       "specialAbilityIds": [
         "much_to_learn",
-        "brush_ezra"
+        "brash_ezra"
       ],
       "passives": [
         "Block 1"

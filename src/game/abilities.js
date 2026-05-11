@@ -2522,6 +2522,39 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const dcStats = getStatsForDc(meta.dcName);
     const speed = typeof dcStats?.speed === 'number' ? dcStats.speed : 4;
+    // Charge (alexanbv 2026-05-11): route through pendingMoveX picker
+    // (forced move, single window) with bypassCosts=true rather than
+    // banking MP. Wall Run still uses the bank path (no freeMoveAsMoveX).
+    if (entry.freeMoveAsMoveX) {
+      const _chActD = game.dcActionsData?.[msgId];
+      const _chSelF = _chActD?.selectedFigure ?? 0;
+      const _chDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+      const _chDgI = _chDgM ? _chDgM[1] : '1';
+      const _chFkActive = `${meta.dcName}-${_chDgI}-${_chSelF}`;
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: speed,
+        source: entry.label || 'Charge',
+        playerNum,
+        figureKey: _chFkActive,
+        dcName: meta.dcName,
+        threadId: null,
+        bypassCosts: !!entry.freeMoveBypassCosts,
+        msgId,
+        nextAction: null,
+      };
+      if (entry.freeAttackBonus) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        if (_chFkActive) game.freeAttackBonusPending[_chFkActive] = true;
+      }
+      const _chExtraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : '';
+      return {
+        applied: true,
+        logMessage: entry.logMessage || `**${entry.label || 'Charge'}** — Move up to ${speed} spaces${entry.freeMoveBypassCosts ? ' (ignoring terrain costs)' : ''}.${_chExtraMsg}`,
+        pendingMoveXMsgId: msgId,
+        activeMsgId: msgId,
+      };
+    }
     addMovementPoints(game, msgId, speed);
     // Charge (and similar): also grant a free attack after the move
     if (entry.freeAttackBonus) {

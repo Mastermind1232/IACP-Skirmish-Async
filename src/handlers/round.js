@@ -946,7 +946,7 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
  * Shared start-of-round continuation helper. Runs every effect that must fire
  * after mission SOR rules are in place:
  *   - CC passive start-of-round redraws (Rebel Graffiti / Sabine)
- *   - DC start-of-round passives (Brush, Force Slow, Excavation, etc.)
+ *   - DC start-of-round passives (Brash, Force Slow, Excavation, etc.)
  *   - Hand visual refresh + hand-channel message rebuild
  *   - Phase gate → pre_activation (unless a DC SOR effect is pending)
  *   - Mission-specific round-start prompts (Devaron B doors/crates, Chopper A Krykna push)
@@ -1110,11 +1110,11 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
         const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const sIds = eff?.specialAbilityIds || [];
 
-        // Brush (Ezra Bridger): "Move up to 4 spaces" at start of
+        // Brash (Ezra Bridger): "Move up to 4 spaces" at start of
         // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
         // 4-space budget, no banking. Out-of-activation timing per
         // rule 1: spent immediately.
-        if (sIds.includes('brush_ezra')) {
+        if (sIds.includes('brash_ezra')) {
           const mid = msgIds[i];
           if (mid) {
             const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
@@ -1127,11 +1127,11 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
                 figureKey: fk,
                 playerNum,
                 spaces: 4,
-                source: 'Brush',
+                source: 'Brash',
                 threadId: null,
                 bypassCosts: true,
               });
-              await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+              await logGameAction(game, client, `🌿 **Brash** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
             }
           }
         }
@@ -1408,11 +1408,11 @@ export async function handleEndStartOfRound(interaction, ctx) {
         const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
         const sIds = eff?.specialAbilityIds || [];
 
-        // Brush (Ezra Bridger): "Move up to 4 spaces" at start of
+        // Brash (Ezra Bridger): "Move up to 4 spaces" at start of
         // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
         // 4-space budget, no banking. Out-of-activation timing per
         // rule 1: spent immediately.
-        if (sIds.includes('brush_ezra')) {
+        if (sIds.includes('brash_ezra')) {
           const mid = msgIds[i];
           if (mid) {
             const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
@@ -1425,11 +1425,11 @@ export async function handleEndStartOfRound(interaction, ctx) {
                 figureKey: fk,
                 playerNum,
                 spaces: 4,
-                source: 'Brush',
+                source: 'Brash',
                 threadId: null,
                 bypassCosts: true,
               });
-              await logGameAction(game, client, `🌿 **Brush** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+              await logGameAction(game, client, `🌿 **Brash** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
             }
           }
         }

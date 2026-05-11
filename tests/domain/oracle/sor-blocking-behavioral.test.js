@@ -6,7 +6,7 @@
  *
  * Test IDs:
  *   B-SORBLK-001: Programming Override (4-LOM) blocks activation
- *   B-SORBLK-002: Brush (Ezra) auto-grants MP without blocking
+ *   B-SORBLK-002: Brash (Ezra) auto-grants MP without blocking
  *   B-SORBLK-003: resolveStartOfRoundEffect decrements and triggers activation at 0
  *   B-SORBLK-004: resolveStartOfRoundEffect does not trigger activation when counter > 1
  *   B-SORBLK-005: Imperial Citadel blocks activation (regression)
@@ -72,9 +72,9 @@ describe('B-SORBLK-001: Programming Override blocks activation', () => {
   });
 });
 
-// ── B-SORBLK-002: Brush (Ezra) does NOT block ─────────────────────────────
+// ── B-SORBLK-002: Brash (Ezra) does NOT block ─────────────────────────────
 
-describe('B-SORBLK-002: Brush auto-resolves without blocking', () => {
+describe('B-SORBLK-002: Brash auto-resolves without blocking', () => {
   it('does not increment pendingStartOfRoundResolve', async () => {
     const game = makeGame({
       p1DcList: [{ dcName: 'Ezra Bridger', displayName: 'Ezra Bridger' }],
@@ -83,7 +83,7 @@ describe('B-SORBLK-002: Brush auto-resolves without blocking', () => {
     });
     const { ctx } = mockCtx();
     const hasPending = await runStartOfRoundDcEffects(game, 'test1', mockClient(), ctx);
-    assert.equal(hasPending, false, 'should return false — Brush is auto-resolve');
+    assert.equal(hasPending, false, 'should return false — Brash is auto-resolve');
     assert.equal(game.pendingStartOfRoundResolve ?? 0, 0, 'counter should remain 0');
   });
 });

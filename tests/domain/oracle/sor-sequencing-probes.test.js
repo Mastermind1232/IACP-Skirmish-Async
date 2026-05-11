@@ -8,7 +8,7 @@
  * game, and whether the activation-phase gate ever opens:
  *
  *   Block A (DC passive hooks):  initiative-player-first ordering;
- *                                effects = Brush, Force Slow, Excavation,
+ *                                effects = Brash, Force Slow, Excavation,
  *                                Programming Override, Shape/Shift.
  *   Block B (Skirmish Upgrades): fixed [1, 2] player order;
  *                                effects = First Strike, Rule by Fear,
@@ -25,8 +25,8 @@
  *
  * PROBE-SOR-001: return-value semantics (counter 0 → false; > 0 → true)
  * PROBE-SOR-002: First Strike — round-1 guard, once-per-game flag, both players get 4 VP
- * PROBE-SOR-003: Ezra Brush — every-round sync, 4 MP per DC msgId
- * PROBE-SOR-004: Initiative-first ordering in Block A (both players have Brush)
+ * PROBE-SOR-003: Ezra Brash — every-round sync, 4 MP per DC msgId
+ * PROBE-SOR-004: Initiative-first ordering in Block A (both players have Brash)
  * PROBE-SOR-005: resolveStartOfRoundEffect counter + pre_activation gate transition
  * PROBE-SOR-006: Source pin on structural invariants
  *
@@ -167,10 +167,10 @@ describe('PROBE-SOR-002: [First Strike] — round-1 guard + once-per-game flag +
   });
 });
 
-// ── PROBE-SOR-003: Ezra Brush (Block A sync path) ─────────────────────────
+// ── PROBE-SOR-003: Ezra Brash (Block A sync path) ─────────────────────────
 
-describe('PROBE-SOR-003: Ezra Bridger Brush — Move-X picker every round', () => {
-  // Brush migrated from movementBank-grant to a 4-space pendingMoveX
+describe('PROBE-SOR-003: Ezra Bridger Brash — Move-X picker every round', () => {
+  // Brash migrated from movementBank-grant to a 4-space pendingMoveX
   // picker (CRR MOVE-017 — bypassCosts true, no banking). Test fixtures
   // lack real map data so the picker may auto-finish on zero
   // candidates; either pendingMoveX-stamped OR the picker drained is
@@ -188,11 +188,11 @@ describe('PROBE-SOR-003: Ezra Bridger Brush — Move-X picker every round', () =
     if (pmx) {
       assert.equal(pmx.remaining, 4, 'picker.remaining = 4');
       assert.equal(pmx.bypassCosts, true, 'bypassCosts true');
-      assert.equal(pmx.source, 'Brush', 'source set');
+      assert.equal(pmx.source, 'Brash', 'source set');
     }
   });
 
-  it('003b: still fires on round 2+ (no round guard on Brush — every round)', async () => {
+  it('003b: still fires on round 2+ (no round guard on Brash — every round)', async () => {
     const game = buildGame({
       p1Dcs: [{ dcName: 'Ezra Bridger' }],
       p1MsgIds: ['ezra-msg-id'],
@@ -220,7 +220,7 @@ describe('PROBE-SOR-003: Ezra Bridger Brush — Move-X picker every round', () =
 // ── PROBE-SOR-004: Initiative-first ordering in Block A ───────────────────
 
 describe('PROBE-SOR-004: Block A resolves initiative player first (Ezra × 2 probe)', () => {
-  it('004a: P1 has initiative → P1 Brush logs before P2 Brush', async () => {
+  it('004a: P1 has initiative → P1 Brash logs before P2 Brash', async () => {
     const log = [];
     const game = buildGame({
       initPn: 1,
@@ -235,11 +235,11 @@ describe('PROBE-SOR-004: Block A resolves initiative player first (Ezra × 2 pro
     await runStartOfRoundDcEffects(game, 'g1', null, buildCtx(log));
     const p1Idx = log.findIndex(t => t.includes('Ezra P1'));
     const p2Idx = log.findIndex(t => t.includes('Ezra P2'));
-    assert.ok(p1Idx >= 0 && p2Idx >= 0, 'both Brush logs emitted');
+    assert.ok(p1Idx >= 0 && p2Idx >= 0, 'both Brash logs emitted');
     assert.ok(p1Idx < p2Idx, `P1 (idx ${p1Idx}) must resolve before P2 (idx ${p2Idx})`);
   });
 
-  it('004b: P2 has initiative → P2 Brush logs before P1 Brush', async () => {
+  it('004b: P2 has initiative → P2 Brash logs before P1 Brash', async () => {
     const log = [];
     const game = buildGame({
       initPn: 2,

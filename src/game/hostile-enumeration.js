@@ -154,6 +154,15 @@ export function applyDamageToNpcSync(game, opts) {
     vp = 2;
     opts.awardObjectiveVp(game, attackerPlayerNum, vp);
   }
+  // Nefarious Gains (Jabba) per alexanbv 2026-05-11: NPC cost = 0,
+  // Jabba on defeater's team grants +1 VP.
+  if (attackerPlayerNum && opts?.awardObjectiveVp) {
+    const _jabbaAlive = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
+    if (_jabbaAlive) {
+      opts.awardObjectiveVp(game, attackerPlayerNum, 1);
+      vp += 1;
+    }
+  }
   return { applied: true, prevHp, newHp: 0, defeated: true, vp, label };
 }
 
@@ -203,6 +212,23 @@ export async function applyDamageToNpc(game, ctx, opts) {
     await logGameAction(game, client,
       `💀 **${label}** defeated.`,
       { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  }
+  // Nefarious Gains (Jabba) per alexanbv 2026-05-11: NPC cost = 0, but
+  // Jabba's "+1 VP per hostile defeated" still fires when the defeater's
+  // team has Jabba alive. Check via attacker's own team (NPCs are
+  // neutral so the standard checkNefariousGains' "opposing-team" logic
+  // doesn't apply — emulate the alive-on-attacker-team check here).
+  if (attackerPlayerNum && ctx?.awardObjectiveVp) {
+    const _jabbaAlive = Object.keys(game.figurePositions?.[attackerPlayerNum] || {}).some(fk => fk.startsWith('Jabba the Hutt-'));
+    if (_jabbaAlive) {
+      ctx.awardObjectiveVp(game, attackerPlayerNum, 1);
+      vp += 1;
+      if (logGameAction && client) {
+        await logGameAction(game, client,
+          `🤑 **Nefarious Gains** — Player ${attackerPlayerNum} (Jabba's army) gains **+1 VP** for defeating ${label} (NPC cost 0 + 1).`,
+          { phase: 'ROUND', icon: 'vp' }).catch(() => {});
+      }
+    }
   }
   return { applied: true, prevHp, newHp: 0, defeated: true, vp };
 }

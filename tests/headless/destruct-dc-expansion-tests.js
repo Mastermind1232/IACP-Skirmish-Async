@@ -37,7 +37,7 @@ function assertAbilityTextContains(name, text) {
 describe('DC-Rebel: Ezra Bridger', () => {
   it('exists', () => assertExists('Ezra Bridger'));
   it('is FORCE USER', () => assertHasKeyword('Ezra Bridger', 'FORCE USER'));
-  it('has Brush ability (SOR movement)', () => assertAbilityTextContains('Ezra Bridger', 'Brush'));
+  it('has Brash ability (SOR movement)', () => assertAbilityTextContains('Ezra Bridger', 'Brash'));
   it('has Much to Learn (reroll)', () => assertAbilityTextContains('Ezra Bridger', 'Much to Learn'));
   it('Much to Learn references FORCE USER', () => assertAbilityTextContains('Ezra Bridger', 'FORCE USER'));
 });

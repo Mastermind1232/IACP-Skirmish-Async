@@ -716,6 +716,31 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // Get Ready (Rebel Trooper Elite): per alexanbv 2026-05-11 — "At the
+  // start of your activation, another figure in your group interrupts
+  // to move 1 space." Owner = activator. The other figure is picked
+  // from the same group (different figure index), regardless of that
+  // figure's own activation status. Moves 1 space, bypassCosts=true
+  // ("Move 1 space" per CRR MOVE-017).
+  if (_abilityIds.includes('get_ready_rebel_trooper_elite') && game) {
+    const _grDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _grSelfIdx = (game.dcActionsData?.[msgId]?.selectedFigure ?? 0);
+    const _grSelfFk = `${dcName}-${_grDgIdx}-${_grSelfIdx}`;
+    const _grAllFp = game.figurePositions?.[playerNum] || {};
+    const _grGroupKeys = Object.keys(_grAllFp).filter((fk) =>
+      fk.startsWith(`${dcName}-${_grDgIdx}-`) && fk !== _grSelfFk && _grAllFp[fk]);
+    if (_grGroupKeys.length > 0) {
+      descriptors.push({
+        id: `get_ready:${msgId}:f${_grSelfIdx}`,
+        ownerPlayerNum: playerNum,
+        sourceMsgId: msgId,
+        sourceLabel: 'Get Ready',
+        subPromptKey: 'get_ready',
+        extras: { dcName, candidates: _grGroupKeys, selfFigureKey: _grSelfFk },
+      });
+    }
+  }
+
   // Tempt (Emperor Palpatine): SoA player-driven trigger. Card text "At
   // the start of your activation, a figure of your choice suffers 1 Damage
   // and gains 1 Hit Token." No range restriction (per alexanbv 2026-05-10).
