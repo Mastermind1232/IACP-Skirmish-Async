@@ -140,7 +140,35 @@ async function fireBlast(thread, game, combat, effect, ctx) {
       }
     }
   }
-  // Crate splash (CRR step 8 also hits adjacent objects).
+  // Object splash (alexanbv 2026-05-10): Blast also damages damageable
+  // objects on/adjacent to target space. Routes through the unified
+  // object-damage pipeline; splashOnDefeat fires through the figure
+  // damage adapter so crate-explosion mechanics keep working.
+  try {
+    const { getDamageableObjectsWithinN, applyDamageToObject, makeFigureDamageAtAdapter } =
+      await import('../game/object-damage-pipeline.js');
+    const _blastTargetNorm2 = String(combat._blastTargetCoord).toLowerCase();
+    const objectIds = getDamageableObjectsWithinN(game, _blastTargetNorm2, 1);
+    if (objectIds.length > 0) {
+      const _blastObjCtx = {
+        logGameAction, client,
+        applyFigureDamageAt: makeFigureDamageAtAdapter(game, {
+          logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread,
+        }),
+        awardObjectiveVp: (await import('../game/vp-helpers.js')).awardObjectiveVp,
+      };
+      for (const objId of objectIds) {
+        await applyDamageToObject(game, _blastObjCtx, {
+          objectId: objId, amount, attackerPlayerNum, source: `Blast ${amount}`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[fireBlast] object-damage iteration failed:', err?.message ?? err);
+  }
+  // Legacy crate splash (Devaron-B). Slated for removal in Slice 3 once
+  // the crate state migrates to game.objectHealth + game.objectPositions
+  // and runs only through the unified pipeline above.
   if (game.cratePositions && getMapData) {
     const rawMs = getMapData(game.selectedMap.id);
     const adjacency = rawMs?.adjacency || {};
@@ -829,14 +857,26 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
   }
   // Objects within 2 of target space — card text says "each figure AND
   // object" so mission-declared damageable objects within range take 1
-  // Damage too. Object-damage pipeline (alexanbv 2026-05-10).
+  // Damage too. Object-damage pipeline (alexanbv 2026-05-10). The
+  // splash-on-defeat callback routes through canonical applyDamage so
+  // figure-defeat hooks fire.
   try {
-    const { getDamageableObjectsWithinN, applyDamageToObject } = await import('../game/object-damage-pipeline.js');
+    const { getDamageableObjectsWithinN, applyDamageToObject, makeFigureDamageAtAdapter } =
+      await import('../game/object-damage-pipeline.js');
     const objectIds = getDamageableObjectsWithinN(game, tgtPos, 2);
-    for (const objId of objectIds) {
-      await applyDamageToObject(game, { logGameAction, client }, {
-        objectId: objId, amount: 1, attackerPlayerNum: atkPn, source: 'Shrapnel Splash',
-      });
+    if (objectIds.length > 0) {
+      const _splashCtx = {
+        logGameAction, client,
+        applyFigureDamageAt: makeFigureDamageAtAdapter(game, {
+          logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread,
+        }),
+        awardObjectiveVp: (await import('../game/vp-helpers.js')).awardObjectiveVp,
+      };
+      for (const objId of objectIds) {
+        await applyDamageToObject(game, _splashCtx, {
+          objectId: objId, amount: 1, attackerPlayerNum: atkPn, source: 'Shrapnel Splash',
+        });
+      }
     }
   } catch (err) {
     console.error('[shrapnel-splash] object-damage iteration failed:', err?.message ?? err);

@@ -13,6 +13,13 @@
  *     name:         'Supply Crate',    // human-readable
  *     coord:        'i12',             // initial position (lowercase)
  *     health:       5,                 // max HP
+ *     targetable:   true,              // optional, default false; if true,
+ *                                      // can be declared as a primary attack
+ *                                      // target AND a valid cleave target
+ *     defenseBlock: 1,                 // optional, default 0; inherent block
+ *                                      // applied to any attack vs this object
+ *                                      // (no defense die)
+ *     defenseEvade: 0,                 // optional, default 0; inherent evade
  *     splashOnDefeat: {                // optional, fires on HP→0
  *       amount: 2,                     // damage per affected figure
  *       radius: 1,                     // figures within N of object's coord
@@ -59,11 +66,65 @@ export function initDamageableObjectsForMission(game) {
     if (obj.coord) game.objectPositions[obj.id] = String(obj.coord).toLowerCase();
     game.objectMeta[obj.id] = {
       name: obj.name || obj.id,
+      targetable: !!obj.targetable,
+      defenseBlock: Number(obj.defenseBlock) > 0 ? Number(obj.defenseBlock) : 0,
+      defenseEvade: Number(obj.defenseEvade) > 0 ? Number(obj.defenseEvade) : 0,
       splashOnDefeat: obj.splashOnDefeat || null,
       vpOnDefeat: obj.vpOnDefeat || null,
       moves: !!obj.moves,
     };
   }
+}
+
+/**
+ * Adapter that creates a `ctx.applyFigureDamageAt(coord, radius, amount, opts)`
+ * function suitable for passing into applyDamageToObject as the splash
+ * delegate. Iterates figures within `radius` of `coord`, optionally
+ * filtered by `opts.filter` ('all' | 'hostile' | 'friendly' relative to
+ * `opts.attackerPlayerNum`), and routes each through the canonical
+ * applyDamage so figure-defeat hooks fire. Returns the number of figures
+ * actually damaged.
+ *
+ * Wire this into call sites that invoke applyDamageToObject so
+ * splashOnDefeat resolves correctly. Without it, splash is silently
+ * skipped.
+ */
+export function makeFigureDamageAtAdapter(game, ctx) {
+  return async function applyFigureDamageAt(coord, radius, amount, opts) {
+    const { attackerPlayerNum, source, filter = 'all' } = opts || {};
+    if (!coord || amount <= 0) return 0;
+    const c = String(coord).toLowerCase();
+    let count = 0;
+    const { applyDamage } = await import('./damage-pipeline.js');
+    const { logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread } = ctx || {};
+    for (const pn of [1, 2]) {
+      if (filter === 'hostile' && pn === attackerPlayerNum) continue;
+      if (filter === 'friendly' && pn !== attackerPlayerNum) continue;
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+        if (!pos) continue;
+        const dist = countGameSpaces(game, c, String(pos).toLowerCase());
+        if (typeof dist !== 'number' || dist < 0 || dist > radius) continue;
+        const fMsgId = typeof findDcMessageIdForFigure === 'function'
+          ? findDcMessageIdForFigure(game.gameId, pn, fk)
+          : null;
+        if (!fMsgId) continue;
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        try {
+          await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+            figureKey: fk, msgId: fMsgId, figIndex: figIdx,
+            amount, controllerPlayerNum: pn,
+            attackerPlayerNum,
+            source: source || 'Object splash',
+          });
+          count++;
+        } catch (err) {
+          console.error('[applyFigureDamageAt] applyDamage failed:', err?.message ?? err);
+        }
+      }
+    }
+    return count;
+  };
 }
 
 /** True iff the object id is alive (HP > 0). */
