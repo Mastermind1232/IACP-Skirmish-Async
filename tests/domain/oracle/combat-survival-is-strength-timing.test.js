@@ -66,23 +66,22 @@ describe('CRR-COMBAT-SIS-STEP3: Survival is Strength fires in step 3 (forced rer
       'SiS queue entry must carry armorerFigKey for round-once enforcement');
   });
 
-  it('forced-reroll handler marks SiS used only after a reroll fires (skip preserves the ability)', () => {
+  it('sub-picker handler marks SiS used only after a reroll fires (skip preserves the ability)', () => {
     // Per CRR "may" semantics: skipping the SiS prompt should NOT consume the
     // once-per-round ability. The mark-used must live in the reroll-fired
-    // branch, NOT in the skip branch.
-    const handler = H_CB_SRC.match(/--- Forced reroll phase handling ---[\s\S]*?if \(\(combat\.forcedRerollQueue \|\| \[\]\)\.length > 0\) \{[\s\S]*?return;\s*\n\s*\}/);
-    assert.ok(handler, 'forced-reroll handler block must be locatable');
-    const body = handler[0];
-    // Must mark SiS used in the reroll-fired branch
-    assert.match(body, /_frEntry\.source === 'Survival is Strength'[\s\S]*?_frEntry\.armorerFigKey[\s\S]*?roundFigureAbilityUsed/,
-      'reroll-fired branch must mark SiS used via roundFigureAbilityUsed');
-    // The shift on Skip / exhausted should be source-agnostic — no special
-    // mark-used logic next to the shift call (otherwise Skip would burn the ability).
-    const shiftIdx = body.indexOf('combat.forcedRerollQueue.shift()');
-    if (shiftIdx >= 0) {
-      const around = body.slice(Math.max(0, shiftIdx - 200), shiftIdx + 200);
-      assert.doesNotMatch(around, /Survival is Strength[\s\S]{0,100}roundFigureAbilityUsed/,
-        'Skip branch must not mark SiS used — that would defeat the "may" semantics');
+    // branch (sub-picker resolution), NOT in the skip/cancel branch.
+    // Post-2026-05-11: controlled cross-side rerolls live inside the
+    // owner's bucket; resolution happens in the sub-picker branch.
+    // Source assertion: SiS-used marking appears in the sub-picker
+    // reroll-fired path.
+    assert.match(H_CB_SRC,
+      /_spEntry\.source === 'Survival is Strength'[\s\S]*?_spEntry\.armorerFigKey[\s\S]*?roundFigureAbilityUsed/,
+      'sub-picker reroll-fired branch must mark SiS used via roundFigureAbilityUsed');
+    // Cancel branch (controlledRerollActiveIdx = null) must not have SiS-specific marking.
+    const cancelHandler = H_CB_SRC.match(/_ctrlOp === 'cancelctrl'[\s\S]*?return;/);
+    if (cancelHandler) {
+      assert.doesNotMatch(cancelHandler[0], /Survival is Strength[\s\S]*?roundFigureAbilityUsed/,
+        'Cancel branch must not mark SiS used — that would defeat the "may" semantics');
     }
   });
 

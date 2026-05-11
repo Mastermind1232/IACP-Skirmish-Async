@@ -478,6 +478,30 @@ async function _enterStep4(thread, game, combat, ctx) {
   combat.rerollPhase = null;
   combat.controlledRerollSide = null;
   combat.currentStep = 'step4-attacker';
+  // Lasat Honor Guard (Zeb Orrelios): per alexanbv 2026-05-11, fires
+  // STRICTLY between the reroll buckets and step-4 modifiers — not
+  // mid-step-4. Run the picker here; on resume the post-Lasat path
+  // continues into sendModsYn (or directly to proceedAfterRerolls for
+  // self-play). The legacy in-proceedAfterRerolls firing site is gone.
+  if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
+    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
+    const _atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const _atkEff = getDcEff[_atkDcName] || getDcEff[(_atkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((_atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
+      const _eligibleIdxs = combat.attackDiceResults
+        .map((d, i) => ({ d, i }))
+        .filter(({ d }) => ((d.dmg || 0) + (d.surge || 0)) === 1)
+        .map(({ i }) => i);
+      if (_eligibleIdxs.length > 0) {
+        combat.lasatHonorGuardPhase = true;
+        combat.lasatHonorGuardUsed = true;
+        combat.lasatEligibleDiceIndices = _eligibleIdxs;
+        await sendLasatDiePicker(thread, game.gameId, combat, _eligibleIdxs, ctx);
+        ctx.saveGames?.(game.gameId);
+        return;
+      }
+    }
+  }
   if (game.selfPlay) {
     combat.currentStep = 'step5';
     await proceedAfterRerolls(thread, game, combat, ctx);
@@ -4104,16 +4128,6 @@ export async function sendRerollUI(thread, game, combat, phase) {
       content: `**Reroll Window (Attacker)** — ${_atkParts.join(' + ')}. Pick any in any order, or Done.`,
       components: buildRerollRows(dieButtons, trailing),
     });
-  } else if (phase === 'forced') {
-    // Legacy phase shim — kept so in-flight games (mid-combat at deploy
-    // time) finish gracefully. New flow uses attacker/defender buckets
-    // with controlledRerollActiveIdx for the sub-picker. The only
-    // behavior preserved here is "drop globally-exhausted queue entries
-    // and advance" — matches the pre-2026-05-11 expectation.
-    combat.forcedRerollQueue = (combat.forcedRerollQueue || [])
-      .filter(e => (e.remaining ?? 0) > 0);
-    // Fall through to advance; do not render anything.
-    return;
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
     const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
@@ -4285,35 +4299,19 @@ export async function handleCombatReroll(interaction, ctx) {
   const attackerPlayerNum = combat.attackerPlayerNum;
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const effectiveAtk = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
-  // Phase validation: accept 'forced' for both atk and def sides
-  // (legacy — only fires for stale flows; new flow uses attacker/defender
-  // with combat.controlledRerollActiveIdx for sub-picker).
-  if (combat.rerollPhase === 'forced') {
-    // Forced phase accepts both atk and def die picks
-  } else if (combat.controlledRerollActiveIdx != null) {
-    // Sub-picker mode: side comes from the entry's pool restriction, not
-    // the bucket. Both atk and def die clicks are valid here.
-  } else {
+  // Phase validation. In sub-picker mode (controlledRerollActiveIdx set)
+  // both atk and def die clicks are valid — the entry's pool restricts.
+  if (combat.controlledRerollActiveIdx == null) {
     const expectedPhase = side === 'atk' ? 'attacker' : 'defender';
     if (combat.rerollPhase !== expectedPhase) {
       await interaction.followUp({ content: `It's the ${combat.rerollPhase}'s turn to reroll.`, ephemeral: true }).catch(discordCatch);
       return;
     }
   }
-  // Permission: for forced phase / sub-picker, the bucket owner is the
-  // active reroll-phase side. For voluntary, attacker = atk, defender = def.
-  let expectedPlayer;
-  if (combat.rerollPhase === 'forced') {
-    const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
-    expectedPlayer = (combat.forcedRerollQueue || [])
-      .find(e => e.controlPlayer === _frActiveSidePN)?.controlPlayer
-      ?? _frActiveSidePN;
-  } else if (combat.controlledRerollActiveIdx != null) {
-    expectedPlayer = combat.rerollPhase === 'attacker' ? effectiveAtk : defenderPlayerNum;
-  } else {
-    expectedPlayer = side === 'atk' ? effectiveAtk : defenderPlayerNum;
-  }
-  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only **${getPlayerDisplayName(game, expectedPlayer, interaction.client)}** can reroll ${(combat.rerollPhase === 'forced' || combat.controlledRerollActiveIdx != null) ? 'these' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
+  const expectedPlayer = combat.controlledRerollActiveIdx != null
+    ? (combat.rerollPhase === 'attacker' ? effectiveAtk : defenderPlayerNum)
+    : (side === 'atk' ? effectiveAtk : defenderPlayerNum);
+  if (!expectedPlayer || !await requirePlayer(interaction, game, interaction.user.id, expectedPlayer, canActAsPlayer, `Only **${getPlayerDisplayName(game, expectedPlayer, interaction.client)}** can reroll ${combat.controlledRerollActiveIdx != null ? 'these' : (side === 'atk' ? 'attack' : 'defense')} dice.`)) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (!thread) throw new Error(`handleCombatReroll: combat thread is null (threadId=${combat.combatThreadId}, gameId=${gameId})`);
 
@@ -4415,105 +4413,7 @@ export async function handleCombatReroll(interaction, ctx) {
     return;
   }
 
-  // --- Forced reroll phase handling --- (legacy, only fires if old
-  // flow's `forced` phase is still in use somewhere)
-  if (combat.rerollPhase === 'forced') {
-    // Match the active side's first entry (destruct 2026-05-08).
-    const _frActiveSidePN = combat.controlledRerollSide ?? combat.attackerPlayerNum ?? 1;
-    const _frEntry = (combat.forcedRerollQueue || [])
-      .find(e => e.controlPlayer === _frActiveSidePN);
-    if (choice !== 'done' && _frEntry && _frEntry.remaining > 0) {
-      const idx = parseInt(choice, 10);
-      if (side === 'atk') {
-        const dice = combat.attackDiceResults || [];
-        const _frAtkRerolled = combat.attackerRerolledIndices || [];
-        if (idx >= 0 && idx < dice.length && !_frAtkRerolled.includes(idx)) { // G12: reject already-rerolled
-          const oldDie = dice[idx];
-          const newDie = rollSingleAttackDie(oldDie.color);
-          dice[idx] = newDie;
-          combat.attackDiceResults = dice;
-          const totals = recalcAttackTotals(dice);
-          combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
-          _frEntry.remaining -= 1;
-          // G12: mark this die index as rerolled (forced)
-          if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
-          if (!combat.attackerRerolledIndices.includes(idx)) combat.attackerRerolledIndices.push(idx);
-          // Survival is Strength (Armorer): mark used once the reroll actually fires.
-          // Skip-without-reroll preserves the ability (CRR "may" semantics).
-          if (_frEntry.source === 'Survival is Strength' && _frEntry.armorerFigKey) {
-            game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-            game.roundFigureAbilityUsed[`${_frEntry.armorerFigKey}_survival_is_strength`] = true;
-          }
-          await thread.send(`**${_frEntry.source}** forced reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
-        }
-      } else {
-        const dice = combat.defenseDiceResults || [];
-        const _frDefRerolled = combat.defenderRerolledIndices || [];
-        if (idx >= 0 && idx < dice.length && !_frDefRerolled.includes(idx)) { // G12: reject already-rerolled
-          const oldDie = dice[idx];
-          const newDie = rollSingleDefenseDie(oldDie.color);
-          dice[idx] = newDie;
-          combat.defenseDiceResults = dice;
-          const totals = recalcDefenseTotals(dice);
-          combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
-          _frEntry.remaining -= 1;
-          // G12: mark this die index as rerolled (forced)
-          if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-          if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
-          const dodgeTag = newDie.dodge ? '/DODGE' : '';
-          await thread.send(`**${_frEntry.source}** forced reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
-          // Demoralizing Monologue (Moff Gideon): after the forced defense reroll,
-          // the caster MAY reveal their hand. If they reveal 2+ cards, the rerolled
-          // die's results are removed from defense. Pause the queue, post the prompt;
-          // continue via handleDemoralizingMonologueReveal.
-          if (_frEntry.demoralizingMonologue) {
-            const _dmCasterPN = _frEntry.casterPlayerNum || combat.attackerPlayerNum;
-            const _dmCasterId = getPlayerId(game, _dmCasterPN);
-            combat.demoralizingMonologuePending = {
-              rerolledDieIdx: idx,
-              rerolledDieBlock: newDie.block || 0,
-              rerolledDieEvade: newDie.evade || 0,
-              rerolledDieDodge: !!newDie.dodge,
-              casterPlayerNum: _dmCasterPN,
-            };
-            const _dmRow = new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`demoralizing_reveal_use_${gameId}`).setLabel('Reveal Hand (need ≥2 cards)').setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId(`demoralizing_reveal_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-            );
-            await thread.send(sanitizeMentions({
-              content: `<@${_dmCasterId}> **Demoralizing Monologue** — Reveal your hand publicly? If you have 2+ cards, the rerolled die's results are removed from defense.`,
-              allowedMentions: { users: [_dmCasterId] },
-              components: [_dmRow],
-            })).catch(discordCatch);
-            saveGames(game.gameId);
-            return; // pause; reveal handler resumes the queue
-          }
-        }
-      }
-    }
-    // Transition: done or entry exhausted. Remove the matched entry
-    // (not necessarily index 0 — destruct 2026-05-08 mixed-side queue).
-    if (choice === 'done' || !_frEntry || _frEntry.remaining <= 0) {
-      if (_frEntry) {
-        const _frRemoveIdx = combat.forcedRerollQueue.indexOf(_frEntry);
-        if (_frRemoveIdx >= 0) combat.forcedRerollQueue.splice(_frRemoveIdx, 1);
-      }
-    }
-    // Continue THIS side's window if more entries match active side.
-    const _frActiveSideStill = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _frActiveSidePN);
-    if (_frActiveSideStill) {
-      await sendRerollUI(thread, game, combat, 'forced');
-      saveGames(game.gameId);
-      return;
-    }
-    // Active side's controlled rerolls done — fire the gate so dispatch
-    // routes correctly (atk side → defender phase; def side → step 4).
-    await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
-    saveGames(game.gameId);
-    return;
-  }
-
-  // --- Voluntary reroll phase handling ---
+  // --- Reroll phase handling (attacker / defender bucket) ---
   let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
@@ -5988,30 +5888,10 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     }
   }
 
-  // Lasat Honor Guard (Zeb Orrelios): after rerolls, may turn 1 die showing only a single attack icon to any other side
-  if (!combat.lasatHonorGuardUsed && combat.attackDiceResults?.length > 0) {
-    const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const atkDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-    const atkEff = getDcEff[atkDcName] || getDcEff[atkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((atkEff?.specialAbilityIds || []).includes('lasat_honor_guard')) {
-      // Per destruct 2026-05-07: "Icon refers to damage or surge symbols
-      // and does not count accuracy numbers." A face showing 1 damage OR
-      // 1 surge with NO other icons (and any accuracy) qualifies as a
-      // single attack icon. Accuracy is excluded from the icon count.
-      const eligibleIdxs = combat.attackDiceResults
-        .map((d, i) => ({ d, i }))
-        .filter(({ d }) => ((d.dmg || 0) + (d.surge || 0)) === 1)
-        .map(({ i }) => i);
-      if (eligibleIdxs.length > 0) {
-        combat.lasatHonorGuardPhase = true;
-        combat.lasatHonorGuardUsed = true;
-        combat.lasatEligibleDiceIndices = eligibleIdxs;
-        await sendLasatDiePicker(thread, game.gameId, combat, eligibleIdxs, ctx);
-        saveGames?.(game.gameId);
-        return;
-      }
-    }
-  }
+  // Lasat Honor Guard moved to _enterStep4 per alexanbv 2026-05-11
+  // (strictly between reroll buckets and step-4 modifiers). lasatHonorGuardUsed
+  // is set there before proceedAfterRerolls runs; this block stays
+  // intentionally empty as a marker.
 
   // ── CRR step 4: DEFENDER modifiers (after attacker modifiers per CRR p.10
   //    + Destruct: "modifiers stage. Attacker modifiers first, then defender.") ──
@@ -8265,8 +8145,18 @@ async function _resumeAttackerModifiersAfterLasat(thread, game, combat, ctx) {
   combat.lasatHonorGuardPhase = false;
   combat.lasatEligibleDiceIndices = null;
   combat.lasatChosenDieIndex = null;
-  if (thread && typeof proceedAfterRerolls === 'function') {
-    await proceedAfterRerolls(thread, game, combat, ctx).catch((err) => console.error('Lasat resume failed:', err));
+  // Post-Lasat (per alexanbv 2026-05-11): Lasat fires strictly between
+  // reroll buckets and step-4 modifiers. After it resolves, advance into
+  // the step-4 modifier window the same way _enterStep4 does normally.
+  if (!thread) return;
+  if (game.selfPlay) {
+    combat.currentStep = 'step5';
+    if (typeof proceedAfterRerolls === 'function') {
+      await proceedAfterRerolls(thread, game, combat, ctx).catch((err) => console.error('Lasat resume failed:', err));
+    }
+  } else {
+    combat.currentStep = 'step4-attacker';
+    await sendModsYn(thread, game, combat, 'attacker').catch((err) => console.error('Lasat resume failed:', err));
   }
 }
 
