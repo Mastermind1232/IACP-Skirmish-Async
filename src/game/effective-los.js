@@ -78,6 +78,114 @@ export function losStateFingerprint(game) {
 }
 
 /**
+ * Team-agnostic LOS check between any two figures on the board.
+ *
+ * Resolves each figure's position and footprint regardless of which
+ * team owns it, then computes effective mapSpaces (closed doors,
+ * shields, smoke, broken walls) and figure-blocking coords. Uses the
+ * picker's canonical blocking rules (Camouflage reciprocal, Massive,
+ * companion exemptions).
+ *
+ * Use cases:
+ *   - Post-declare combat probe (handleCombatRoll)
+ *   - Same-team LoS for friendly-targeted abilities (Gideon Argus,
+ *     Force Deflection, Distracting Fire, etc.)
+ *   - Any future surface that needs "can X see Y?"
+ *
+ * Deliberately does NOT consult combat state — pure geometry +
+ * figure-blocking. Caller passes any per-attack overrides via opts.
+ *
+ * @param {object} game
+ * @param {string} fromFigureKey - source figure
+ * @param {string} toFigureKey - target figure
+ * @param {object} ctx - getDcEffects, getFigureSize, getMapData,
+ *   getMapTokensData (or any subset; falls back to module-level
+ *   data-loader imports via the caller's bag)
+ * @param {object} [opts]
+ * @param {boolean} [opts.marksmanActive] - figures don't block this attack
+ * @param {boolean} [opts.attackerIgnoresFigureBlocking] - Priority Target
+ *   / Massive attacker / Clawdite Scout-form: figures don't block
+ * @returns {boolean}
+ */
+export function hasLosBetweenFigures(game, fromFigureKey, toFigureKey, ctx, opts = {}) {
+  if (!game || !fromFigureKey || !toFigureKey) return false;
+  const mapId = game.selectedMap?.id;
+  if (!mapId) return false;
+  const { getDcEffects, getFigureSize, getFootprintCells: _getFp } = ctx || {};
+  if (!getDcEffects || !getFigureSize || !_getFp) return false;
+  // Resolve figure positions across both teams.
+  let fromPos = null, fromPN = null;
+  let toPos = null, toPN = null;
+  for (const pn of [1, 2]) {
+    const fp = game.figurePositions?.[pn] || {};
+    if (!fromPos && fp[fromFigureKey]) { fromPos = fp[fromFigureKey]; fromPN = pn; }
+    if (!toPos && fp[toFigureKey]) { toPos = fp[toFigureKey]; toPN = pn; }
+  }
+  if (!fromPos || !toPos) return false;
+  const fromDcName = dcNameFromFigureKey(fromFigureKey);
+  const toDcName = dcNameFromFigureKey(toFigureKey);
+  const fromSize = game.figureOrientations?.[fromFigureKey] || getFigureSize(fromDcName);
+  const toSize = game.figureOrientations?.[toFigureKey] || getFigureSize(toDcName);
+  const fromFp = _getFp(fromPos, fromSize);
+  const toFp = _getFp(toPos, toSize);
+  const effMs = _buildLosEffectiveMs(game, ctx);
+  if (!effMs) return false;
+  // Build figure-blocking-coords using the picker's canonical helper
+  // (Camo reciprocal, MASSIVE, companion exemptions, marksman, ignore-blocking).
+  // Imported lazily to avoid circular handler→game import.
+  // Note: buildFigureBlockingCoords lives in handlers/dc-play-area.js;
+  // we replicate the inline logic here to keep this game-layer module
+  // free of handler imports.
+  const fromKws = (getDcEffects()?.[fromDcName]?.keywords || []).map((k) => String(k).toUpperCase());
+  const fromAbilityText = String(getDcEffects()?.[fromDcName]?.abilityText || '').toLowerCase();
+  let ignoreBlocking = !!opts.attackerIgnoresFigureBlocking
+    || !!opts.marksmanActive
+    || (fromAbilityText.includes('priority target') && fromAbilityText.includes('line of sight'))
+    || fromKws.includes('MASSIVE');
+  let blocking = null;
+  if (!ignoreBlocking) {
+    const fromFpSet = new Set(fromFp.map((c) => String(c).toLowerCase()));
+    const blockSet = new Set();
+    for (const pn of [1, 2]) {
+      const poses = game.figurePositions?.[pn] || {};
+      for (const [fk, pos] of Object.entries(poses)) {
+        if (!pos || fromFpSet.has(String(pos).toLowerCase())) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = getDcEffects()?.[fkDcName] || getDcEffects()?.[(fkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+        if (fkEff?.companion === true) continue;
+        if ((fkEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        // Camo reciprocal: only excludes figures on the OPPOSITE team
+        // from the source. For same-team source/destination (friendly
+        // LoS), Camo doesn't apply since the source isn't a "hostile
+        // figure" per the card text.
+        if (pn !== fromPN && (fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id))) {
+          const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase())));
+          if (dist >= 4) continue;
+        }
+        const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
+        for (const cell of _getFp(pos, fkSize)) blockSet.add(String(cell).toLowerCase());
+      }
+    }
+    // Strip target's full footprint.
+    const toEff = getDcEffects()?.[toDcName] || getDcEffects()?.[(toDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    const toMassive = (toEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE');
+    if (toMassive) {
+      blocking = null;
+    } else {
+      const toFpSet = new Set(toFp.map((c) => String(c).toLowerCase()));
+      for (const c of toFpSet) blockSet.delete(c);
+      blocking = blockSet;
+    }
+  }
+  for (const ac of fromFp) {
+    for (const tc of toFp) {
+      if (hasLineOfSight(ac, tc, effMs, blocking)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Build the effective mapSpaces for LOS calculations: merge closed doors,
  * energy shields, smoke tokens, broken-wall edges. Shared by the picker
  * (buildAndSendAttackTargets) and the post-declare probe in handleCombatRoll.

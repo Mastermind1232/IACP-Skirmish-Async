@@ -17,6 +17,12 @@ const COMBAT_DEPS = [
   'SURGE_LABELS', 'parseSurgeEffect', 'getAbility', 'resolveSurgeAbility',
   'getSurgeAbilityLabel', 'getRange', 'hasLineOfSight',
   'hasLineOfSightByCoord', 'hasFigureLineOfSight', 'getFigureFootprint', 'getAllFigureFootprints', 'getFigureSize',
+  // Geometry helpers required by buildFigureBlockingCoords +
+  // _buildLosEffectiveMs (post-declare LoS probe in handleCombatRoll,
+  // any future same-team LoS check like Gideon Argus). Previously
+  // omitted; the probe silently aborted attacks when these were
+  // undefined. Now strictly required.
+  'getFootprintCells', 'getMapTokensData',
   'getDiceData',
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons', 'getFiguresAdjacentToCoord',
   'calculateKillVp', 'checkHuntDissent', 'checkThisIsTheWay', 'decrementActivationIfGroupDefeated',

@@ -3155,8 +3155,8 @@ export async function handleCombatRoll(interaction, ctx) {
   //   - Cara Dune CC / Ahsoka CC / Force Push removed the attacker
   //   - LAM repositioned the target out of LOS
   // CRITICAL: this probe MUST match the picker's LoS check exactly —
-  // it calls the same buildFigureBlockingCoords + hasLineOfSight pair
-  // used by buildAndSendAttackTargets so Camo / PT / MASSIVE / Clawdite
+  // both go through hasLosBetweenFigures (game/effective-los.js), the
+  // single team-agnostic LoS oracle. Camo / PT / MASSIVE / Clawdite
   // Scout / Marksman / multi-cell footprints all resolve identically.
   // Marksman flag is consumed at declare time (combat.js:1343) so we
   // read combat.attackIgnoredFigureLOS (snapshot taken at declare).
@@ -3195,69 +3195,34 @@ export async function handleCombatRoll(interaction, ctx) {
     const _avFpDeclare = combat.declareLosFingerprint || '';
     const _avStateUnchanged = _avFpDeclare && _avFpNow === _avFpDeclare;
     if (game.selectedMap?.id && !_avStateUnchanged) {
-      const _avMod = await import('./dc-play-area.js');
-      const _avLosMod = await import('../game/effective-los.js');
-      const { buildFigureBlockingCoords } = _avMod;
-      const { _buildLosEffectiveMs } = _avLosMod;
-      const _avAtkDcName = dcNameFromFigureKey(combat.attackerFigureKey);
-      const _avAtkEff = ctx.getDcEffects?.()?.[_avAtkDcName] || ctx.getDcEffects?.()?.[(_avAtkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      const _avAtkText = String(_avAtkEff?.abilityText || '').toLowerCase();
-      const _avAtkKws = (_avAtkEff?.keywords || []).map(k => String(k).toUpperCase());
-      let _avAtkIgnoreBlocking = (_avAtkText.includes('priority target') && _avAtkText.includes('line of sight'))
-        || _avAtkKws.includes('MASSIVE');
-      if (!_avAtkIgnoreBlocking) {
-        try {
-          const { getConfig } = await import('../game/figure-config.js');
-          if (getConfig(game, combat.attackerFigureKey)?.form === 'Scout') _avAtkIgnoreBlocking = true;
-        } catch { /* optional */ }
-      }
-      const _avAtkSize = game.figureOrientations?.[combat.attackerFigureKey] || ctx.getFigureSize(_avAtkDcName);
-      const _avTgtSize = game.figureOrientations?.[combat.target.figureKey] || ctx.getFigureSize(dcNameFromFigureKey(combat.target.figureKey));
-      // IMPORTANT: combat ctx (COMBAT_DEPS in context-factory.js) does NOT
-      // include getFootprintCells / getMapTokensData. Import-bound
-      // getFootprintCells is used directly here; for buildFigureBlockingCoords
-      // and _buildLosEffectiveMs we shim ctx with the needed helpers.
-      // Without this shim, buildFigureBlockingCoords's destructure pulls
-      // undefined for getFootprintCells / getMapData, throws or returns
-      // empty blocking, and LoS resolves wrong — the live source of the
-      // "neither figure moved but LoS failed" reports.
+      // Team-agnostic LoS via the shared hasLosBetweenFigures helper.
+      // Same calculator used (or usable by) Gideon Argus / Force
+      // Deflection / Distracting Fire / any future same-team LoS check.
+      // Shims missing combat-ctx helpers (getFootprintCells,
+      // getMapTokensData — see context-factory.js COMBAT_DEPS gap).
+      let _avAtkScoutForm = false;
+      try {
+        const { getConfig } = await import('../game/figure-config.js');
+        _avAtkScoutForm = getConfig(game, combat.attackerFigureKey)?.form === 'Scout';
+      } catch { /* optional */ }
+      const { hasLosBetweenFigures } = await import('../game/effective-los.js');
       const _avLosCtx = {
-        ...ctx,
+        getDcEffects: ctx.getDcEffects || getDcEffectsGlobal,
+        getFigureSize: ctx.getFigureSize || getFigureSize,
         getFootprintCells,
         getMapData,
         getMapTokensData,
-        getDcEffects: ctx.getDcEffects || getDcEffectsGlobal,
-        getFigureSize: ctx.getFigureSize || getFigureSize,
       };
-      const _avAtkFp = getFootprintCells(_avAtkPos, _avAtkSize);
-      const _avTgtFp = getFootprintCells(_avTgtPosNow, _avTgtSize);
-      const _avEffMs = _buildLosEffectiveMs(game, _avLosCtx);
-      const _avMarksmanActive = !!combat.attackIgnoredFigureLOS;
-      const _avBlockingCoords = buildFigureBlockingCoords(game, attackerPlayerNum, _avAtkPos, _avAtkSize, _avLosCtx, {
-        marksmanActive: _avMarksmanActive,
-        ignoreBlocking: _avAtkIgnoreBlocking,
-      });
-      // Massive target cannot be hidden behind other figures.
-      const _avTgtDcName = dcNameFromFigureKey(combat.target.figureKey);
-      const _avTgtEff = ctx.getDcEffects?.()?.[_avTgtDcName] || ctx.getDcEffects?.()?.[(_avTgtDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      const _avTgtMassive = (_avTgtEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE');
-      // Strip target's full footprint from blocking set — mirror picker
-      // (dc-play-area.js:1193-1194). Without this, for multi-cell or
-      // multi-figure-group targets, the OTHER target cells stay in the
-      // blocking set and can intercept the LoS line from ac → tc1, even
-      // though they're the target itself.
-      let _avLosCoords = _avTgtMassive ? null : _avBlockingCoords;
-      if (_avLosCoords) {
-        const _avTgtFpSet = new Set(_avTgtFp.map(c => String(c).toLowerCase()));
-        _avLosCoords = new Set([..._avLosCoords].filter(c => !_avTgtFpSet.has(c)));
-      }
-      let _avLos = false;
-      for (const ac of _avAtkFp) {
-        for (const tc of _avTgtFp) {
-          if (ctx.hasLineOfSight(ac, tc, _avEffMs, _avLosCoords)) { _avLos = true; break; }
-        }
-        if (_avLos) break;
-      }
+      const _avLos = hasLosBetweenFigures(
+        game,
+        combat.attackerFigureKey,
+        combat.target.figureKey,
+        _avLosCtx,
+        {
+          marksmanActive: !!combat.attackIgnoredFigureLOS,
+          attackerIgnoresFigureBlocking: _avAtkScoutForm,
+        },
+      );
       if (!_avLos) {
         await _forceMissAndStep8(thread, game, combat, ctx, '🚫 **Attack aborted (counted as a miss)** — attacker no longer has line of sight to the target.');
         saveGames(game.gameId);
