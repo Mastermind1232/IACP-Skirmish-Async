@@ -535,12 +535,19 @@ test('parseSurgeEffect deadly_spin returns cleave 3 + cancel dodge', () => {
   assert.strictEqual(r.surgeCancelDodge, true);
 });
 
-test('parseSurgeEffect shrapnel returns blast 1', () => {
-  // Drokkatta card text: "Shrapnel: Choose one: This attack gains Blast 1,
-  // or ..." — Blast 1 (was incorrectly Blast 2 prior to 2026-05-06 audit).
-  // The "or splash" alternate is a player choice not yet wired.
+test('parseSurgeEffect shrapnel returns surgeShrapnel marker, not auto-blast', () => {
+  // Drokkatta card text (alexanbv 2026-05-10): "Shrapnel: Choose one:
+  // This attack gains Blast 2, or after this attack resolves, if it
+  // did not miss, each figure and object within 2 spaces of the
+  // target space suffers 1 Damage." The choice is made via the
+  // combat_passive_shrapnel_blast / _splash picker after the surge
+  // is spent. parseSurgeEffect sets the surgeShrapnel marker so the
+  // surge-done gate posts the picker; the chosen effect is applied
+  // by handleCombatPassive (Blast 2 → combat.surgeBlast += 2) or
+  // queued for after-attack-resolve (Splash → fireShrapnelSplash).
   const r = parseSurgeEffect('shrapnel');
-  assert.strictEqual(r.blast, 1);
+  assert.strictEqual(r.surgeShrapnel, true);
+  assert.strictEqual(r.blast, 0);
 });
 
 // --- getInnateRerolls ---

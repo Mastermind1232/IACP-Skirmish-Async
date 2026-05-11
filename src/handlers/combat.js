@@ -5229,6 +5229,22 @@ export async function handleCombatPassive(interaction, ctx) {
     }
     combat.defensibleResolved = true;
     delete combat.pendingCombatPassive;
+  } else if (abilityKey === 'shrapnel') {
+    // Drokkatta Shrapnel: Blast 2 vs Splash. Blast applies to this
+    // attack's damage; Splash queues a post-resolve AoE. After choice
+    // resolves, fall through to sendReadyToResolveRolls so combat
+    // resumes (was paused at the surge-done gate).
+    if (choice === 'blast') {
+      combat.surgeBlast = (combat.surgeBlast || 0) + 2;
+      await thread.send('🧨 **Shrapnel** — **Blast 2** applied to this attack.');
+    } else if (choice === 'splash') {
+      combat.surgeShrapnelSplash = true;
+      await thread.send('🧨 **Shrapnel** — **Splash** queued (1 Damage to each figure/object within 2 of target, post-resolve if attack didn\'t miss).');
+    }
+    delete combat.shrapnelChoicePending;
+    saveGames(game.gameId);
+    await sendReadyToResolveRolls(thread, gameId, game, ctx);
+    return;
   } else if (abilityKey === 'getdown') {
     if (combat.getDownFigKey) {
       game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
@@ -6579,6 +6595,13 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
+      // Shrapnel (Drokkatta): mark for picker — Blast 2 vs Splash. The
+      // gate at the "Done" transition (sendReadyToResolveRolls call)
+      // posts the choice picker if shrapnelChoicePending is set.
+      if (mod.surgeShrapnel) {
+        combat.surgeShrapnel = true;
+        combat.shrapnelChoicePending = true;
+      }
       if (mod.surgeAgitate) combat.surgeAgitate = true;
       if (mod.surgeFellSwoop) combat.surgeFellSwoop = true;
       if (mod.surgeMastery) combat.surgeMastery = true;
@@ -6758,6 +6781,21 @@ export async function handleCombatSurge(interaction, ctx) {
   }
   if (combat.surgeRemaining <= 0 || choice === 'done') {
     combat.surgeRemaining = 0;
+    // Shrapnel (Drokkatta) picker — fires once between surge-spend and
+    // ready-to-resolve. Blast 2 must be set BEFORE damage step (step 7);
+    // Splash queues for post-resolve (step 8). Player picks one.
+    if (combat.shrapnelChoicePending) {
+      const btns = [
+        new ButtonBuilder().setCustomId(`combat_passive_${gameId}_shrapnel_blast`).setLabel('Blast 2 (this attack)').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`combat_passive_${gameId}_shrapnel_splash`).setLabel('Splash (1 Dmg within 2 of target, post-resolve)').setStyle(ButtonStyle.Primary),
+      ];
+      await thread.send({
+        content: `🧨 **Shrapnel** — Choose: **Blast 2** on this attack, OR **Splash** (each figure/object within 2 spaces of the target suffers 1 Damage after the attack resolves, if it didn't miss).`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+      }).catch(discordCatch);
+      saveGames?.(game.gameId);
+      return;
+    }
     await sendReadyToResolveRolls(thread, gameId, game, ctx);
   } else {
     const surgeAbilities = getAttackerSurgeAbilities(combat);

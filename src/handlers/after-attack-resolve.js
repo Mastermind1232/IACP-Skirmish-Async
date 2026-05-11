@@ -287,6 +287,16 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: `Bladestorm: AoE ${combat.postAttackAoeDamage} damage`,
     });
   }
+  // Shrapnel Splash (Drokkatta): player picked Splash at the surge-spend
+  // gate; fire 1 Damage to each figure within 2 of the target space if
+  // the attack didn't miss. Fire handler also gates on _step7Hit.
+  if (combat.surgeShrapnelSplash && combat._step7Hit && combat.target?.figureKey) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'shrapnel_splash',
+      label: 'Shrapnel Splash: 1 Dmg within 2 of target',
+    });
+  }
   // Wild Fury REMOVED 2026-05-09: per CRR + user clarification, Wild
   // Fury's Stun + Bleed apply at END OF ACTIVATION (handleDcEndActivation
   // in activation.js), not after each attack. Step-8 attacker queue is

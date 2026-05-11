@@ -778,6 +778,57 @@ async function fireBladestorm(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Shrapnel Splash (Drokkatta) — picker-chosen splash alternative to
+ * Blast 2. Card text: "after this attack resolves, if it did not miss,
+ * each figure and object within 2 spaces of the target space suffers
+ * 1 Damage." Per alexanbv 2026-05-10: choice is made via the surge-
+ * spend picker (combat_passive_shrapnel_blast vs _splash); this fire
+ * handler runs only on the splash branch, gated on the attack not
+ * missing (combat._step7Hit).
+ */
+async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
+  const { dcHealthState, logGameAction, client, findDcMessageIdForFigure, deps } = ctx;
+  if (!combat.surgeShrapnelSplash) return;
+  combat.surgeShrapnelSplash = false;
+  if (!combat._step7Hit) {
+    await thread?.send?.('🧨 **Shrapnel Splash** — Attack missed; splash does not fire.').catch(discordCatch);
+    return;
+  }
+  const tgtFk = combat.target?.figureKey;
+  const defPn = combat.defenderPlayerNum;
+  if (!tgtFk || !defPn) return;
+  const tgtPos = game.figurePositions?.[defPn]?.[tgtFk];
+  if (!tgtPos) return;
+  const atkPn = combat.attackerPlayerNum;
+  const atkFk = combat.attackerFigureKey;
+  const lines = [];
+  // Both players' figures within 2 of target space (excluding the target itself).
+  for (const pn of [1, 2]) {
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!coord || fk === tgtFk) continue;
+      if (countGameSpaces(game, tgtPos, coord) > 2) continue;
+      const fMsgId = findDcMessageIdForFigure?.(game.gameId, pn, fk);
+      if (!fMsgId) continue;
+      const { figureIndex } = parseFigureKey(fk);
+      const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+        figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
+        amount: 1, controllerPlayerNum: pn,
+        attackerPlayerNum: atkPn,
+        attackerFigureKey: atkFk,
+        source: 'Shrapnel Splash', combat,
+      });
+      lines.push(`**${dcNameFromFigureKey(fk)}** 1 Dmg (${prevHp}→${newHp})`);
+    }
+  }
+  if (lines.length && thread) {
+    await thread.send(`🧨 **Shrapnel Splash** — Figures within 2 of target: ${lines.join(', ')}`).catch(discordCatch);
+  } else if (thread) {
+    await thread.send('🧨 **Shrapnel Splash** — no figures within 2 of target space.').catch(discordCatch);
+  }
+  // Objects (crates, doors) within 2: TODO when object-damage pipeline lands.
+}
+
+/**
  * Sidewinder (Jyn Odan): "after this attack, suffer 1 Strain to move
  * up to 2 spaces. Limit once per round." Posts the same yes/skip prompt
  * the inline path used to auto-post after combat close. Existing
@@ -1544,6 +1595,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'bladestorm':
       await fireBladestorm(thread, game, combat, effect, ctx);
+      return;
+    case 'shrapnel_splash':
+      await fireShrapnelSplash(thread, game, combat, effect, ctx);
       return;
     case 'sidewinder':
       await fireSidewinder(thread, game, combat, effect, ctx);
