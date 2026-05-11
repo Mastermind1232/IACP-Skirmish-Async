@@ -1557,12 +1557,11 @@ WHEN_DEFEATED_HOOKS.push({
 /**
  * Forward Vengeance (Royal Guard Elite): when an adjacent, friendly,
  * non-GUARDIAN, non-companion figure is defeated, each adjacent Royal
- * Guard (Elite) becomes Focused AND may move 1 space. Per alexanbv
- * 2026-05-10.
+ * Guard (Elite) becomes Focused AND may move 1 space (MOVE-X picker).
+ * Per alexanbv 2026-05-10.
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'forward_vengeance_royal_guard_elite',
-  sync: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     const defeatedDc = dcNameFromFigureKey(opts.figureKey);
@@ -1582,10 +1581,11 @@ WHEN_DEFEATED_HOOKS.push({
     }
     return false;
   },
-  apply: (game, opts, ctx) => {
+  apply: async (game, opts, ctx) => {
     const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
     if (!defeatedPos) return;
     const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};
+    const findMsgId = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
     const triggered = [];
     for (const [fk, pos] of Object.entries(friendly)) {
       if (!pos || fk === opts.figureKey) continue;
@@ -1596,13 +1596,42 @@ WHEN_DEFEATED_HOOKS.push({
       if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Focus');
       triggered.push({ fk, dcName: dcN });
     }
-    if (triggered.length > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
-      ctx.logGameAction(
+    if (triggered.length === 0) return;
+    if (typeof ctx?.logGameAction === 'function' && ctx?.client) {
+      await ctx.logGameAction(
         game,
         ctx.client,
-        `🛡️ **Forward Vengeance** — adjacent **${triggered.map((t) => t.dcName).join(', ')}** became Focused and may move 1 space (friendly non-GUARDIAN non-companion defeated). 1-space move must be resolved via Spend MP from bank if MP granted; otherwise resolve manually.`,
+        `🛡️ **Forward Vengeance** — adjacent **${triggered.map((t) => t.dcName).join(', ')}** became Focused (friendly non-GUARDIAN non-companion defeated). Each may move 1 space.`,
         { phase: 'ROUND', icon: 'card' },
       ).catch(() => {});
+    }
+    // Set up a pendingMoveX (1 space) for each triggered Royal Guard and
+    // post the Move-X picker. Player resolves each independently (or
+    // declines via the End Movement button — MP stays in their bank).
+    if (!findMsgId || ctx?.client?._isFakeClient) return;
+    try {
+      const { postMoveXPicker } = await import('../handlers/move-x-handler.js');
+      for (const { fk, dcName: dcN } of triggered) {
+        const rgMsgId = findMsgId(game.gameId, opts.controllerPlayerNum, fk);
+        if (!rgMsgId) continue;
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[rgMsgId] = {
+          remaining: 1,
+          source: 'Forward Vengeance',
+          playerNum: opts.controllerPlayerNum,
+          figureKey: fk,
+          dcName: dcN,
+          threadId: null,
+          msgId: rgMsgId,
+          bypassCosts: false, // Standard movement — terrain costs apply.
+          nextAction: null,
+        };
+        await postMoveXPicker(game, ctx, rgMsgId).catch((err) =>
+          console.error('Forward Vengeance MOVE-X picker failed:', err?.message ?? err),
+        );
+      }
+    } catch (err) {
+      console.error('Forward Vengeance MOVE-X integration failed:', err?.message ?? err);
     }
   },
 });
