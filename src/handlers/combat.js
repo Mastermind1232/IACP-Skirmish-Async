@@ -3196,7 +3196,16 @@ export async function handleCombatRoll(interaction, ctx) {
       const _avTgtDcName = dcNameFromFigureKey(combat.target.figureKey);
       const _avTgtEff = ctx.getDcEffects?.()?.[_avTgtDcName] || ctx.getDcEffects?.()?.[(_avTgtDcName || '').replace(/\s*\[.*\]\s*$/, '')];
       const _avTgtMassive = (_avTgtEff?.keywords || []).some(k => String(k).toUpperCase() === 'MASSIVE');
-      const _avLosCoords = _avTgtMassive ? null : _avBlockingCoords;
+      // Strip target's full footprint from blocking set — mirror picker
+      // (dc-play-area.js:1193-1194). Without this, for multi-cell or
+      // multi-figure-group targets, the OTHER target cells stay in the
+      // blocking set and can intercept the LoS line from ac → tc1, even
+      // though they're the target itself.
+      let _avLosCoords = _avTgtMassive ? null : _avBlockingCoords;
+      if (_avLosCoords) {
+        const _avTgtFpSet = new Set(_avTgtFp.map(c => String(c).toLowerCase()));
+        _avLosCoords = new Set([..._avLosCoords].filter(c => !_avTgtFpSet.has(c)));
+      }
       let _avLos = false;
       for (const ac of _avAtkFp) {
         for (const tc of _avTgtFp) {
