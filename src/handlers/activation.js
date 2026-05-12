@@ -749,6 +749,9 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   game.dcFinishedPinged = game.dcFinishedPinged || {};
   game.dcFinishedPinged[msgId] = true;
+  // Per alexanbv 2026-05-12: End Activation is a save-worthy boundary.
+  // The atomicOpts.commitFn drains this flag on lock release.
+  game._pendingSave = true;
 
   // EoA orchestrator (alexanbv 2026-05-11): enumerate player-triggered
   // end-of-activation abilities. The chooser posts as a non-blocking

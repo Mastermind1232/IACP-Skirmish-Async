@@ -1019,9 +1019,22 @@ const atomicOpts = {
   getGame,
   setGame,
   // Per-game commit: withAtomicGameLock passes the locked gameId here.
-  // Prior shape `() => saveGames()` marked ALL games dirty at handler
-  // exit, widening one-game work to all-game writes (audit 2026-05-04).
-  commitFn: (gameId) => saveGames(gameId),
+  // Per alexanbv 2026-05-12: save only at activation boundaries
+  // (End Activation), phase transitions (SoR → activation → EoR), and
+  // deployment completion — not on every button click. Handlers that
+  // reach a save-worthy boundary set game._pendingSave = true; this
+  // commit drains the flag. Mid-flight prompts (target picks, dice
+  // rolls, ability picks, token spends) intentionally don't persist —
+  // the trade-off the user requested to free per-click lock-hold time.
+  // Other inline saveGames(gameId) calls in handlers stay untouched.
+  commitFn: (gameId) => {
+    const g = getGame(gameId);
+    if (g?._pendingSave) {
+      g._pendingSave = false;
+      return saveGames(gameId);
+    }
+    return undefined;
+  },
   onRollback: (gid) => repopulateDcMapsForGame(gid),
 };
 

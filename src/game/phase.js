@@ -99,6 +99,7 @@ export function setPhase(game, phase, roundPhase = null, opts = {}) {
     console.warn(`[Phase] Refusing setPhase ${from} → ${phase}: pending ${blocker} response must resolve first.`);
     return false;
   }
+  if (game.phase !== phase) game._pendingSave = true;
   game.phase = phase;
   game.roundPhase = phase === 'round_active' ? (roundPhase || game.roundPhase) : null;
   return true;
@@ -133,6 +134,7 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
   if (from !== roundPhase && game.massivePushedThisPhase) {
     delete game.massivePushedThisPhase;
   }
+  if (from !== roundPhase) game._pendingSave = true;
   game.roundPhase = roundPhase;
   return true;
 }

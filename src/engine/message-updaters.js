@@ -189,7 +189,12 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     }
   }
 
-  if (data?.messageId) {
+  // Per alexanbv 2026-05-12: run the activation-thread edit and the
+  // play-area DC embed edit in parallel — they touch independent
+  // channels + messages and Discord's API serializes per-channel
+  // anyway. Cuts the round-trip cost roughly in half.
+  const _activationEditTask = (async () => {
+    if (!data?.messageId) return;
     try {
       const thread = await fetchGameChannel(client, data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
@@ -227,9 +232,11 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     } catch (err) {
       console.error('Failed to update DC actions message:', err);
     }
-  }
+  })();
+
   // P4/P5: Refresh the DC embed in the play area with live action count + power tokens
-  if (meta && game) {
+  const _playAreaEditTask = (async () => {
+    if (!(meta && game)) return;
     try {
       const _chId = deps.getPlayAreaId(game, meta.playerNum);
       const _ch = await fetchGameChannel(client, _chId);
@@ -240,7 +247,9 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
     } catch (_err) {
       console.error('Failed to update DC embed with action count/tokens:', _err);
     }
-  }
+  })();
+
+  await Promise.all([_activationEditTask, _playAreaEditTask]);
 
   // Defer End Activation prompt while any action (combat / move grid / space pick) is mid-resolution.
   // The action cost is decremented at button-press time, so remaining can be 0 before the action
