@@ -27,6 +27,7 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { markMapDirty } from '../game/game-helpers.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
 import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
 import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
@@ -1784,6 +1785,7 @@ export async function handleMoveXStep(interaction, ctx) {
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
   game.figurePositions[pending.playerNum][pending.figureKey] = match.topLeft;
+  markMapDirty(game);
 
   const cost = match.stepCost ?? 1;
   pending.remaining = Math.max(0, pending.remaining - cost);
@@ -1961,6 +1963,7 @@ export async function handleMoveXRotate(interaction, ctx) {
   game.figurePositions = game.figurePositions || {};
   game.figurePositions[pending.playerNum] = game.figurePositions[pending.playerNum] || {};
   game.figurePositions[pending.playerNum][pending.figureKey] = match.topLeft;
+  markMapDirty(game);
   game.figureOrientations = game.figureOrientations || {};
   game.figureOrientations[pending.figureKey] = match.rotatedSize;
 

@@ -8,6 +8,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getDcEffects, getMapData } from '../data-loader.js';
 import { bottomLeftCoord, getFootprintCells, normalizeCoord, parseSizeString } from '../game/coords.js';
 import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } from '../game/index.js';
+import { markMapDirty } from '../game/game-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
@@ -858,6 +859,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   const newTopLeft = targetInfo.topLeft;
   game.figurePositions[playerNum][figureKey] = newTopLeft;
+  markMapDirty(game);
   // Track that this figure has moved (used by Tripod, etc.)
   if (!game.figureMoved) game.figureMoved = {};
   game.figureMoved[figureKey] = true;

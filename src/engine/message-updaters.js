@@ -198,10 +198,30 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
         content: deps.getActionsCounterContent(data.remaining, data.total),
         components,
       };
-      const actMinimap = await deps.getActivationMinimapAttachment(game, msgId);
-      if (actMinimap) {
-        editPayload.files = [actMinimap];
-        editPayload.attachments = []; // replace old minimap image rather than accumulating
+      // Per alexanbv 2026-05-12: only render the minimap PNG when map
+      // state has actually changed (move / damage / defeat / door /
+      // map-token). Otherwise omit files/attachments from the edit so
+      // the existing image stays attached on Discord's side. Cuts the
+      // dominant per-click cost (800px canvas render + upload) on every
+      // click that doesn't move a figure or apply damage. Users can
+      // call refresh_map manually if a render is ever needed.
+      const _mapVersion = game?._mapStateVersion || 0;
+      const _renderedVersion = data._minimapRenderedVersion || 0;
+      const _renderedForMsg = data._minimapRenderedForMessageId || null;
+      const _minimapStale = (
+        !data._minimapEverRendered
+        || _renderedVersion !== _mapVersion
+        || _renderedForMsg !== data.messageId
+      );
+      if (_minimapStale) {
+        const actMinimap = await deps.getActivationMinimapAttachment(game, msgId);
+        if (actMinimap) {
+          editPayload.files = [actMinimap];
+          editPayload.attachments = []; // replace old minimap image rather than accumulating
+          data._minimapEverRendered = true;
+          data._minimapRenderedVersion = _mapVersion;
+          data._minimapRenderedForMessageId = data.messageId;
+        }
       }
       await msg.edit(editPayload).catch(deps.discordCatch);
     } catch (err) {

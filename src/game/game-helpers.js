@@ -5,6 +5,24 @@
 import { getMaxPowerTokens } from './dc-helpers.js';
 
 /**
+ * Marks the activation minimap stale so the next updateDcActionsMessage
+ * re-renders the PNG. Per alexanbv 2026-05-12: the minimap is the
+ * dominant per-click cost; skip the render on clicks that don't move a
+ * figure or apply damage. Call this from movement settle, damage
+ * application, defeat removal, door opens, and token-placement helpers.
+ *
+ * The minimap is keyed per DC msgId via data._minimapRenderedVersion in
+ * dcActionsData. updateDcActionsMessage compares each msgId's last
+ * version against game._mapStateVersion and only re-renders when they
+ * diverge; otherwise the edit payload omits files/attachments so the
+ * existing image stays attached on Discord's side.
+ */
+export function markMapDirty(game) {
+  if (!game) return;
+  game._mapStateVersion = (game._mapStateVersion || 0) + 1;
+}
+
+/**
  * Grant movement points to a figure's movement bank.
  * Initializes the bank and entry if needed.
  * @param {object} game

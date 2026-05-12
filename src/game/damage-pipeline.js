@@ -40,6 +40,7 @@
 import { reduceHp } from './damage-helpers.js';
 import { getPlayableReactionCardsForTiming } from './cc-timing.js';
 import { opponentPlayerNum } from './player-helpers.js';
+import { markMapDirty } from './game-helpers.js';
 
 /**
  * @typedef {Object} DamageOpts
@@ -226,6 +227,9 @@ export async function applyDamage(game, ctx, opts) {
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
   const defeatedPos = result.wasDefeated ? defeatedPosCandidate : null;
+  // Health-state change re-colors figure on minimap; defeat removes it.
+  // Mark the map dirty so the next updateDcActionsMessage re-renders.
+  if (result.prevHp !== result.newHp) markMapDirty(game);
 
   // 2. WHEN_DAMAGED hooks (post-reduce). Side effects only — amount
   //    has already applied.
@@ -323,6 +327,7 @@ export function applyDamageSync(game, ctx, opts) {
     ctx.dcHealthState, game, opts.msgId, opts.figIndex, amount, opts.controllerPlayerNum,
   );
   const defeatedPos = result.wasDefeated ? defeatedPosCandidate : null;
+  if (result.prevHp !== result.newHp) markMapDirty(game);
 
   // WHEN_DAMAGED hooks fire post-reduceHp (side effects only).
   for (const hook of WHEN_DAMAGED_HOOKS) {

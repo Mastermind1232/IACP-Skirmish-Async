@@ -1,4 +1,5 @@
 import { getDcBaseName } from './dc-helpers.js';
+import { markMapDirty } from './game-helpers.js';
 
 // ── Opponent helper ─────────────────────────────────────────────────────────
 
@@ -124,6 +125,7 @@ export function removeFigurePosition(game, pn, figureKey) {
   if (game.figurePositions?.[pn]) delete game.figurePositions[pn][figureKey];
   if (game.deviceTokens?.[figureKey]) delete game.deviceTokens[figureKey];
   if (game.figureConditions?.[figureKey]) delete game.figureConditions[figureKey];
+  markMapDirty(game);
 }
 
 /**
@@ -137,6 +139,7 @@ export function pushFigure(game, playerNum, figureKey, newSpace) {
   const prevPos = positions[figureKey];
   if (prevPos == null) return null;
   positions[figureKey] = String(newSpace).toLowerCase();
+  markMapDirty(game);
   return { prevPos, newPos: positions[figureKey] };
 }
 
