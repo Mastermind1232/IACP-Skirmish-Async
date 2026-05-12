@@ -7220,8 +7220,35 @@ export async function handleCombatToken(interaction, ctx) {
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId) return;
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+
+  // Permission check FIRST — per alexanbv 2026-05-12: pre-fix the
+  // visual-feedback block below ran BEFORE the requirePlayer check at
+  // line ~7312, so a wrong-player click (e.g. attacker clicking the
+  // defender's token prompt) would disable every button on the
+  // message via interaction.message.edit, locking the actual owner
+  // out of their own prompt. Compute the expected player from the
+  // role/state and reject early if the clicker is the wrong player.
+  let _expectedPlayerNum = null;
+  if (role === 'wild') {
+    if (combat.pendingWildRole) {
+      _expectedPlayerNum = combat.pendingWildRole === 'attacker'
+        ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+        : opponentPlayerNum(combat.attackerPlayerNum);
+    }
+  } else {
+    const _isAtkRole = role === 'att';
+    _expectedPlayerNum = _isAtkRole
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+      : opponentPlayerNum(combat.attackerPlayerNum);
+  }
+  if (_expectedPlayerNum != null) {
+    if (!await requirePlayer(interaction, game, interaction.user.id, _expectedPlayerNum, canActAsPlayer, 'Only the correct player may spend their token.')) return;
+  }
+
   // Visual feedback: highlight the clicked button green, disable all others.
-  // Matches the Extra Armor color-toggle pattern.
+  // Matches the Extra Armor color-toggle pattern. Only runs AFTER the
+  // permission check passes so wrong-player clicks don't disable the
+  // actual owner's prompt.
   try {
     const clickedId = interaction.customId;
     const newRows = (interaction.message?.components || []).map((row) => {
