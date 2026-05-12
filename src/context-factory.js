@@ -238,6 +238,10 @@ const CONTEXT_GROUPS = {
     'getGame', 'refreshAllGameComponents', 'logGameErrorToBotLogs', 'saveGames', 'client',
   ],
 
+  clearStaleCombat: [
+    'getGame', 'client',
+  ],
+
   undo: [
     'getGame', 'saveGames', 'updateMovementBankMessage', 'buildBoardMapPayload',
     'logGameAction', 'updateDeployPromptMessages',

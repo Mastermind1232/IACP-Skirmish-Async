@@ -14,6 +14,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { captureManualKillDiagnostic } from '../ai/self-play.js';
 import { restoreGameStateInPlace } from './checkpoint.js';
 import { repopulateDcMapsForGame } from '../game-state.js';
+import { resolvePendingCombat } from '../game/combat-stack.js';
 
 /** Build a short description of the current game state after an undo, so players know what to do next. */
 function describeGameState(game) {
@@ -81,6 +82,36 @@ function describeGameState(game) {
     return `Round ${game.currentRound} — <@${game.currentActivationTurnPlayerId}>'s turn.`;
   }
   return null;
+}
+
+/**
+ * Force-clear a stale pendingCombat. Exposed via the End Activation
+ * refusal message when the blocker is `pendingCombat` and the user
+ * suspects the combat is left over from an interrupted rebuild. Wipes
+ * game.pendingCombat (popping any nested frame), logs the discard to
+ * the game log, and tells the user to retry End Activation.
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - getGame, saveGames, client
+ */
+export async function handleClearStaleCombat(interaction, ctx) {
+  const { getGame, client } = ctx;
+  const customId = interaction.customId; // clear_stale_combat_${gameId}_${msgId}
+  const rest = customId.slice('clear_stale_combat_'.length);
+  const underscore = rest.indexOf('_');
+  const gameId = underscore === -1 ? rest : rest.slice(0, underscore);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requireParticipant(interaction, game, 'force-clear stale combat')) return;
+  if (!game.pendingCombat) {
+    await interaction.followUp({ content: 'No pending combat to clear. Try End Activation again.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _atk = game.pendingCombat.attackerDcName || 'attacker';
+  const _def = game.pendingCombat.target?.label || game.pendingCombat.defenderDcName || 'target';
+  resolvePendingCombat(game);
+  game._pendingSave = true;
+  await logGameAction(game, client, `🧹 Stale pending combat discarded (**${_atk}** → **${_def}**). Use this if a rebuild interrupted an attack.`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  await interaction.followUp({ content: '✓ Stale combat cleared. Click **End Activation** again.', ephemeral: true }).catch(discordCatch);
 }
 
 /**

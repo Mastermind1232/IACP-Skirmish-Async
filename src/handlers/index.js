@@ -10,6 +10,7 @@ import {
   handleUndo,
   handleKillGame,
   handleDefaultDeck,
+  handleClearStaleCombat,
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
@@ -229,6 +230,7 @@ register('request_resolve_', handleRequestResolve, 'requests');
 register('request_reject_', handleRequestReject, 'requests');
 register('refresh_map_', handleRefreshMap, 'refreshMap');
 register('refresh_all_', handleRefreshAll, 'refreshAll');
+register('clear_stale_combat_', handleClearStaleCombat, 'clearStaleCombat');
 register('undo_', handleUndo, 'undo');
 register('kill_game_', handleKillGame, 'killGame');
 register('default_deck_', handleDefaultDeck, 'defaultDeck');

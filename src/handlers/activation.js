@@ -746,10 +746,28 @@ export async function handleDcEndActivation(interaction, ctx) {
   const _blockReason = describeActivationActionInProgress(game, msgId);
   if (_blockReason) {
     console.warn(`[end-activation] Blocked for msgId=${msgId}: ${_blockReason}`);
-    await interaction.followUp({
+    // Per alexanbv 2026-05-12: a rebuild that interrupts an attack can
+    // leave game.pendingCombat populated forever — neither player can
+    // resolve it because the in-thread Ready buttons reference a
+    // combat thread that's now stale. Expose a "Force Clear" recovery
+    // button alongside the refusal so the activation owner can nuke
+    // the stale pendingCombat and re-end the activation.
+    const _isPendingCombat = _blockReason.startsWith('combat in progress');
+    const _payload = {
       content: `⏳ An action is still resolving: **${_blockReason}**. Finish or cancel it before ending the activation.`,
       ephemeral: true,
-    }).catch(discordCatch);
+    };
+    if (_isPendingCombat) {
+      const _clearRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`clear_stale_combat_${game.gameId}_${msgId}`)
+          .setLabel('Force Clear Stale Combat')
+          .setStyle(ButtonStyle.Danger),
+      );
+      _payload.components = [_clearRow];
+      _payload.content += '\n\nIf this combat is left over from an interrupted rebuild, use the button below to discard it. **This nukes the pending attack** — only use if the combat thread is dead.';
+    }
+    await interaction.followUp(_payload).catch(discordCatch);
     return;
   }
   const otherPlayerNum = opponentPlayerNum(meta.playerNum);
