@@ -140,6 +140,28 @@ async function _finishPicker(game, ctx, msgId) {
   if (_isMassive) {
     await _runMassiveDisplacement(game, ctx, pending);
   }
+  // Per alexanbv 2026-05-12: if MASSIVE displacement created a
+  // pendingMassivePush prompt, DEFER both the sequence-afterAction
+  // AND the single-figure nextAction. Both fire from the
+  // resumeDeferredAfterMassivePush helper once the displacement
+  // queue drains via the massive-push dispatcher. Without this gate,
+  // post-deploy and post-move-X chains race past the push and the
+  // player loses the prompt entirely.
+  if (game.pendingMassivePush) {
+    // Defer single-figure nextAction (sdpExplode / freeAttackPrompt /
+    // grantPowerToken / etc.) onto the unified deferral queue. The
+    // sequence-afterAction deferral is added by _advanceMoveXSequence
+    // below if it runs.
+    if (nextAction) {
+      const q = _ensureDeferredQueue(game);
+      q.push({ kind: 'finishPickerNextAction', msgId, pending, nextAction });
+    }
+    if (game.pendingMoveXSequence && game.pendingMoveXSequence.currentMsgId === msgId) {
+      await _advanceMoveXSequence(game, ctx);
+    }
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
   // Multi-figure MP-gain orchestration: if a sequence is active and
   // this figure was the current one, mark it complete and advance
   // (post the next order-pick if more figures remain, else clear).
@@ -147,6 +169,16 @@ async function _finishPicker(game, ctx, msgId) {
     await _advanceMoveXSequence(game, ctx);
   }
   if (!nextAction) return;
+  await _runFinishPickerNextAction(game, ctx, msgId, pending, nextAction);
+}
+
+/**
+ * Dispatch the single-figure Move-X nextAction. Extracted from
+ * `_finishPicker` so the post-MASSIVE resume helper can fire the
+ * same dispatch when the displacement queue drains.
+ */
+async function _runFinishPickerNextAction(game, ctx, msgId, pending, nextAction) {
+  if (!nextAction || !nextAction.type) return;
   if (nextAction.type === 'rollOneDieSpacePick') {
     await _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, nextAction);
   } else if (nextAction.type === 'sdpExplode') {
@@ -884,15 +916,16 @@ async function _advanceMoveXSequence(game, ctx) {
   if (seq.queue.length === 0) {
     const afterAction = seq.afterAction || null;
     delete game.pendingMoveXSequence;
-    // Per alexanbv 2026-05-12: if a MASSIVE displacement is in flight
-    // (e.g. AT-DP post-deploy Scavenged Walker move ended overlapping
-    // 3 figures), DO NOT fire the post-sequence continuation yet —
-    // post-deploy would silently advance to the next ability before
-    // the player gets to resolve the push. Stash the afterAction on
-    // game state; the massive-push dispatcher fires it via
-    // `resumeDeferredAfterAction` when the queue drains.
+    // Per alexanbv 2026-05-12: if a MASSIVE displacement is in flight,
+    // DO NOT fire the post-sequence continuation yet — post-deploy or
+    // post-move chains would silently advance past the push before
+    // the player resolves it. Stash on the unified deferral queue;
+    // the massive-push dispatcher drains via
+    // `resumeDeferredAfterMassivePush` when the displacement queue
+    // empties.
     if (game.pendingMassivePush && afterAction) {
-      game._deferredAfterMassivePush = afterAction;
+      const q = _ensureDeferredQueue(game);
+      q.push({ kind: 'sequenceAfterAction', afterAction });
       ctx.saveGames?.(game.gameId);
       return;
     }
@@ -907,17 +940,51 @@ async function _advanceMoveXSequence(game, ctx) {
   ctx.saveGames?.(game.gameId);
 }
 
+/** Lazy-init the post-MASSIVE deferral queue. */
+function _ensureDeferredQueue(game) {
+  if (!Array.isArray(game._deferredAfterMassivePush)) {
+    game._deferredAfterMassivePush = [];
+  }
+  return game._deferredAfterMassivePush;
+}
+
 /**
- * Resume a deferred afterAction stashed by _advanceMoveXSequence
- * when it encountered pendingMassivePush mid-flight. Called from the
- * massive-push dispatcher in movement.js once the queue drains.
+ * Resume any deferred continuations stashed by `_finishPicker` /
+ * `_advanceMoveXSequence` when they encountered pendingMassivePush
+ * mid-flight. Called from the massive-push dispatcher in movement.js
+ * once the displacement queue drains.
+ *
+ * Each queue entry is either:
+ *   - { kind: 'sequenceAfterAction', afterAction } — post-Move-X-sequence
+ *     continuation (Scavenged Walker postDeployAdvance, Strike Team
+ *     token distrib, etc.).
+ *   - { kind: 'finishPickerNextAction', msgId, pending, nextAction } —
+ *     single-figure Move-X continuation (sdpExplode, freeAttackPrompt,
+ *     etc.).
+ *
+ * Drains in FIFO order — sequence afterActions typically queue first
+ * (the sequence finishes before the single nextAction fires), so the
+ * post-deploy advance runs before any chained per-figure prompt.
  */
 export async function resumeDeferredAfterMassivePush(game, ctx) {
   const stashed = game._deferredAfterMassivePush;
-  if (!stashed) return;
+  if (!Array.isArray(stashed) || stashed.length === 0) {
+    if (stashed) delete game._deferredAfterMassivePush;
+    return;
+  }
   delete game._deferredAfterMassivePush;
   ctx.saveGames?.(game.gameId);
-  await _runSequenceAfterAction(game, ctx, stashed);
+  for (const entry of stashed) {
+    try {
+      if (entry?.kind === 'sequenceAfterAction') {
+        await _runSequenceAfterAction(game, ctx, entry.afterAction);
+      } else if (entry?.kind === 'finishPickerNextAction') {
+        await _runFinishPickerNextAction(game, ctx, entry.msgId, entry.pending, entry.nextAction);
+      }
+    } catch (err) {
+      console.error('[move-x] resumeDeferredAfterMassivePush entry failed:', err?.message ?? err);
+    }
+  }
 }
 
 /**
