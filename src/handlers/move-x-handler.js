@@ -884,6 +884,18 @@ async function _advanceMoveXSequence(game, ctx) {
   if (seq.queue.length === 0) {
     const afterAction = seq.afterAction || null;
     delete game.pendingMoveXSequence;
+    // Per alexanbv 2026-05-12: if a MASSIVE displacement is in flight
+    // (e.g. AT-DP post-deploy Scavenged Walker move ended overlapping
+    // 3 figures), DO NOT fire the post-sequence continuation yet —
+    // post-deploy would silently advance to the next ability before
+    // the player gets to resolve the push. Stash the afterAction on
+    // game state; the massive-push dispatcher fires it via
+    // `resumeDeferredAfterAction` when the queue drains.
+    if (game.pendingMassivePush && afterAction) {
+      game._deferredAfterMassivePush = afterAction;
+      ctx.saveGames?.(game.gameId);
+      return;
+    }
     ctx.saveGames?.(game.gameId);
     // Dispatch sequence-completion continuation, if any.
     if (afterAction) {
@@ -893,6 +905,19 @@ async function _advanceMoveXSequence(game, ctx) {
   }
   await _postSequenceOrderPicker(game, ctx);
   ctx.saveGames?.(game.gameId);
+}
+
+/**
+ * Resume a deferred afterAction stashed by _advanceMoveXSequence
+ * when it encountered pendingMassivePush mid-flight. Called from the
+ * massive-push dispatcher in movement.js once the queue drains.
+ */
+export async function resumeDeferredAfterMassivePush(game, ctx) {
+  const stashed = game._deferredAfterMassivePush;
+  if (!stashed) return;
+  delete game._deferredAfterMassivePush;
+  ctx.saveGames?.(game.gameId);
+  await _runSequenceAfterAction(game, ctx, stashed);
 }
 
 /**

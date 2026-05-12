@@ -92,8 +92,13 @@ export async function renderMassivePushSpacePrompt(game, client, opts = {}) {
   while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
   const from = prevPos ? String(prevPos).toUpperCase() : '?';
   const controllerTag = pending.phase === 'friendly' ? 'your figure' : 'opponent\'s figure';
+  // Per alexanbv 2026-05-12: fall through threadId → opts fallback
+  // → game.generalId so the prompt always lands somewhere (post-deploy
+  // MASSIVE pushes have empty dcActionsData and silently dropped pre-fix).
   const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find((d) => d.threadId)?.threadId : null;
-  const channel = threadId ? await fetchGameChannel(client, threadId) : (opts.fallbackChannel || null);
+  let channel = threadId ? await fetchGameChannel(client, threadId) : null;
+  if (!channel && opts.fallbackChannel) channel = opts.fallbackChannel;
+  if (!channel && game.generalId) channel = await fetchGameChannel(client, game.generalId);
   if (!channel) return;
   const sent = await channel.send({
     content: `**Massive Displacement** — Place **${entry.dcName}** (${controllerTag}, currently at **${from}**) to which space?`,
@@ -125,8 +130,18 @@ export async function renderMassivePushFigurePrompt(game, client, opts = {}) {
   const rows = [];
   while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
   const phaseLabel = pending.phase === 'friendly' ? 'your figures' : 'opponent\'s figures';
+  // Per alexanbv 2026-05-12: pre-2026-05-12 this only searched
+  // `game.dcActionsData` for a thread. During POST-DEPLOY movement
+  // (e.g. AT-DP Scavenged Walker), `dcActionsData` is empty because
+  // activations haven't started yet — so threadId was null,
+  // opts.fallbackChannel was unset, and the prompt SILENTLY DROPPED.
+  // The MASSIVE-displaced log line fired but no picker posted and the
+  // figures stayed overlapping. Now: fall through threadId → opts
+  // fallback → game.generalId so the picker always lands somewhere.
   const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find((d) => d.threadId)?.threadId : null;
-  const channel = threadId ? await fetchGameChannel(client, threadId) : (opts.fallbackChannel || null);
+  let channel = threadId ? await fetchGameChannel(client, threadId) : null;
+  if (!channel && opts.fallbackChannel) channel = opts.fallbackChannel;
+  if (!channel && game.generalId) channel = await fetchGameChannel(client, game.generalId);
   if (!channel) return;
   const sent = await channel.send({
     content: `**Massive Displacement** — Pick which of **${phaseLabel}** to place next.`,
@@ -163,6 +178,14 @@ async function _dispatchNextMassivePush(game, result, interaction, ctx) {
     // pendingMassivePush. No-op if nothing was deferred.
     const { resumeDeferredPostDeployMove } = await import('./post-deploy.js');
     await resumeDeferredPostDeployMove(game, gameId, client, ctx);
+    // Resume any deferred sequence afterAction (e.g. Scavenged Walker's
+    // postDeployAdvance) stashed by _advanceMoveXSequence when it
+    // encountered pendingMassivePush mid-flight. Per alexanbv
+    // 2026-05-12: prevents the post-deploy flow from advancing to the
+    // next ability while figures are still overlapping the MASSIVE
+    // figure's footprint.
+    const { resumeDeferredAfterMassivePush } = await import('./move-x-handler.js');
+    await resumeDeferredAfterMassivePush(game, ctx);
     if (saveGames) saveGames(game.gameId);
     return;
   }
