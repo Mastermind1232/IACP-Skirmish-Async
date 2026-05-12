@@ -2577,13 +2577,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
       consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
-      // Per alexanbv 2026-05-10: for dc_special_ button clicks, defer the
-      // "finished all actions" prompt until after resolveAbility settles.
-      // The ability may return requiresChoice (refunds the action), in
-      // which case firing "finished" here would be wrong. The
-      // requiresChoice refund path + the applied-result path both call
-      // updateDcActionsMessage afterward without this suppression.
-      const _suppressFinished = buttonKey === 'dc_special_';
+      // Per alexanbv 2026-05-10/12: defer the "finished all actions"
+      // prompt for any multi-step interactive action button. The action
+      // cost is decremented at click time, so remaining can hit 0 before
+      // the action actually resolves (target pick, attack roll, move
+      // grid). Firing "finished" between the click and the resolution
+      // produces the BT-1 bug class (final notice posted before the
+      // attack log line). Downstream resolution paths
+      // (combat-bridge end / movement finalize / requiresChoice refund)
+      // call updateDcActionsMessage again without this suppression.
+      const _suppressFinished = (
+        buttonKey === 'dc_special_'
+        || buttonKey === 'dc_attack_'
+        || buttonKey === 'dc_move_'
+      );
       await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: _suppressFinished });
     }
   }
