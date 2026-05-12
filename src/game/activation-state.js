@@ -380,27 +380,36 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null
  * enumerate-and-drift pattern is intentional.
  */
 export function isActivationActionInProgress(game, msgId) {
-  if (!msgId) return false;
-  if (game.pendingCombat) return true;
+  return describeActivationActionInProgress(game, msgId) !== null;
+}
+
+/**
+ * Same checks as isActivationActionInProgress but returns a short
+ * human-readable description of WHICH flag is blocking, or null if
+ * nothing is blocking. Used by handleDcEndActivation so the player
+ * sees the actual cause when their End Activation click is refused
+ * (per alexanbv 2026-05-12: bare "action still resolving" is too
+ * vague when a stale flag survives a fix).
+ */
+export function describeActivationActionInProgress(game, msgId) {
+  if (!msgId) return null;
+  if (game.pendingCombat) return 'combat in progress (pendingCombat)';
   if (game.moveInProgress) {
     const prefix = `${msgId}_`;
     for (const k of Object.keys(game.moveInProgress)) {
-      if (k.startsWith(prefix)) return true;
+      if (k.startsWith(prefix)) return `move grid open (moveInProgress[${k}])`;
     }
   }
   if (game.pendingSpacePick) {
     for (const k of Object.keys(game.pendingSpacePick)) {
-      if (k.includes(msgId)) return true;
+      if (k.includes(msgId)) return `space pick pending (pendingSpacePick[${k}])`;
     }
   }
-  // SoA orchestrator: while a chooser bucket is open, the activation has not
-  // finished its start-of-activation phase. Block "End Activation" so the
-  // player can't dismiss the activation with SoA decisions still pending.
   if (game.pendingSoaResolution) {
     const ctx = game.pendingSoaResolution.activationContext;
-    if (ctx?.activatorMsgId === msgId) return true;
+    if (ctx?.activatorMsgId === msgId) return 'start-of-activation chooser open (pendingSoaResolution)';
   }
-  return false;
+  return null;
 }
 
 /**

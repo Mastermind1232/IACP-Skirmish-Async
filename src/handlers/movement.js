@@ -62,6 +62,24 @@ export function discardOpenMoveGrids(game, msgId) {
       _cleanupMoveState(game, moveKey, msgId);
     }
   }
+  // Belt-and-suspenders: even when moveInProgress is already gone (e.g.
+  // a prior cleanup path that didn't sync pendingSpacePick), drop any
+  // pendingSpacePick entries that are movement picks for this msgId.
+  // Movement picks are identified by cellPrefix starting with
+  // 'move_pick_' (set at the 4 register sites in movement.js +
+  // dc-play-area.js). The msgId is encoded in that cellPrefix, so the
+  // marker also tells us the entry belongs to this msgId — disambiguates
+  // safely from other ability picks that share the key schema (pounce,
+  // p2, etc.).
+  if (game.pendingSpacePick) {
+    const cellMarker = `move_pick_${msgId}_`;
+    for (const ctxKey of Object.keys(game.pendingSpacePick)) {
+      const entry = game.pendingSpacePick[ctxKey];
+      if (entry?.cellPrefix && entry.cellPrefix.startsWith(cellMarker)) {
+        delete game.pendingSpacePick[ctxKey];
+      }
+    }
+  }
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
 }
 

@@ -10,7 +10,7 @@ import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingI
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
-import { cleanupActivation, isActivationActionInProgress, figureKeyForActivation } from '../game/activation-state.js';
+import { cleanupActivation, isActivationActionInProgress, describeActivationActionInProgress, figureKeyForActivation } from '../game/activation-state.js';
 import { discardOpenMoveGrids } from './movement.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels, isConditionImmune, HARMFUL_CONDITIONS } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -743,9 +743,11 @@ export async function handleDcEndActivation(interaction, ctx) {
   // target picks (non-movement pendingSpacePick), and SoA chooser
   // buckets still block as before.
   discardOpenMoveGrids(game, msgId);
-  if (isActivationActionInProgress(game, msgId)) {
+  const _blockReason = describeActivationActionInProgress(game, msgId);
+  if (_blockReason) {
+    console.warn(`[end-activation] Blocked for msgId=${msgId}: ${_blockReason}`);
     await interaction.followUp({
-      content: '⏳ An action is still resolving (target pick pending or combat in progress). Finish or cancel it before ending the activation.',
+      content: `⏳ An action is still resolving: **${_blockReason}**. Finish or cancel it before ending the activation.`,
       ephemeral: true,
     }).catch(discordCatch);
     return;
