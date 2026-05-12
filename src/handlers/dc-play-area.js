@@ -3407,15 +3407,21 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
-  // Deduct action (was refunded when showing choice buttons)
+  // Deduct action (was refunded when showing choice buttons).
+  // Per alexanbv 2026-05-12: suppress the "finished all actions"
+  // prompt while the action consumption + resolveResult logging are
+  // still in progress. Without the suppress, the prompt fires BEFORE
+  // the ability's own log line (e.g. "Inform — Baze became Focused")
+  // posts. The trailing un-suppressed updateDcActionsMessage fires
+  // the prompt at the correct moment.
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
     consumeActionForCurrentFigure(actionsData, 1, game, msgId);
-    await updateDcActionsMessage(game, msgId, client);
+    await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: true });
   }
   if (resolveResult.freeAction && actionsData) {
     actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
-    await updateDcActionsMessage(game, msgId, client);
+    await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: true });
   }
   const doneRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -3431,6 +3437,11 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   // Log resolved choice outcome to game-logs channel
   if (resolveResult.applied && resolveResult.logMessage && logGameAction) {
     await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+  }
+  // Now that the ability has fully resolved + logged, re-evaluate the
+  // "finished all actions" prompt at its true post-resolution timing.
+  if (actionsData) {
+    await updateDcActionsMessage(game, msgId, client);
   }
   saveGames(game.gameId);
 }
