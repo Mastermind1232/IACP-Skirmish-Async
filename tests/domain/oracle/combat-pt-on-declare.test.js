@@ -39,28 +39,32 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'dispatchCombatGateAdvance must not call the deleted proceedToTokenPhase');
   });
 
-  it('on_declare gate posts sendOnDeclareTokenWindow inline so cards + tokens land in same player window', () => {
-    // The merge replaces the legacy "all cards first, then tokens
-    // sequentially" with a per-player combined window. Source-pin the
-    // wiring at the attack-declaration site.
+  it('attack-declare site posts sendOnDeclareYn (sequential per-player Y/N gate)', () => {
+    // Per alexanbv 2026-05-12: on-declare effects use the same Y/N
+    // shape as step-4 sendModsYn — single prompt per player, attacker
+    // first, sequential. Replaces the prior parallel "Ready button +
+    // auto-posted token window" pair which gave each player two
+    // simultaneous prompts.
     assert.match(H_CB_SRC,
-      /await sendCombatGate\(thread, game, game\.pendingCombat, 'on_declare', ctx\);\s*\n\s*await sendOnDeclareTokenWindow\(thread, game, game\.pendingCombat, 'attacker', ctx\);/,
-      'attack-declare must post on_declare gate AND attacker token window inline — destruct 2026-05-08');
+      /await sendOnDeclareYn\(thread, game, game\.pendingCombat, 'attacker'\);/,
+      'attack-declare must post sendOnDeclareYn for the attacker (sequential Y/N gate)');
   });
 
-  it('handleCombatGateReady posts defender token window after attacker acks on_declare', () => {
-    // Bug found 2026-05-11: live combat_gate_ flow only posted the
-    // attacker's token window — defender saw the gate Ready button but
-    // never got a token-spend UI. Fix: post sendOnDeclareTokenWindow
-    // for the defender during the attacker→defender rotation, scoped
-    // to the on_declare phase only.
-    const fnMatch = H_CB_SRC.match(/export async function handleCombatGateReady\(interaction, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'handleCombatGateReady body must be locatable');
-    const body = fnMatch[0];
-    assert.match(body, /sendOnDeclareTokenWindow\(thread, game, combat, 'defender', ctx\)/,
-      'handleCombatGateReady must post defender on-declare token window after attacker acks');
-    assert.match(body, /gate\.phase === 'on_declare' && effectivePn === atkPn/,
-      'defender token-window post must be guarded by phase=on_declare AND attacker-just-acked');
+  it('sendOnDeclareYn body opens the token window only inside the Yes branch of handleCombatOnDeclareYn', () => {
+    // The token window is no longer auto-posted alongside the gate.
+    // It opens only when the player clicks Yes, alongside the
+    // "Done with on-declare — continue" follow-up.
+    const handlerMatch = H_CB_SRC.match(/export async function handleCombatOnDeclareYn\(interaction, ctx\) \{[\s\S]*?^}/m);
+    assert.ok(handlerMatch, 'handleCombatOnDeclareYn body must be locatable');
+    const body = handlerMatch[0];
+    assert.match(body, /sendOnDeclareTokenWindow\(thread, game, combat, isAtk \? 'attacker' : 'defender', ctx\)/,
+      "Yes branch must open the on-declare token window for the clicker's role");
+    assert.match(body, /combat_on_declare_yn_\$\{gameId\}_\$\{side\}_continue/,
+      'Yes branch must post a Continue follow-up button');
+    assert.match(body, /sendOnDeclareYn\(thread, game, combat, 'defender'\)/,
+      "Attacker's No/Continue must advance to defender Y/N");
+    assert.match(body, /postRollDiceButton\(thread, game, combat, ctx\)/,
+      "Defender's No/Continue must advance to dice roll");
   });
 
   it('proceedToTokenPhase has been removed', () => {

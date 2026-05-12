@@ -3042,19 +3042,12 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
-  // On-declare per-player window. Per destruct 2026-05-08: each player
-  // gets a single combined window for cards-from-hand AND tokens; the
-  // player picks the order. Token window posts inline with the gate
-  // (sendOnDeclareTokenWindow); CCs are played from each player's hand
-  // channel as usual; the gate Ready button advances to the next role.
-  // Per alexanbv 2026-05-12: gate + attacker token-window post are
-  // independent — both go to the combat thread but mutate disjoint
-  // fields on combat (combatGate vs tokenPhase/onDeclareTokenContext).
-  // Run them in parallel so the API roundtrips overlap.
-  await Promise.all([
-    sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx),
-    sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx),
-  ]);
+  // Per alexanbv 2026-05-12: sequential per-player Y/N gate for
+  // on-declare effects, matching the step-4 sendModsYn UX. Attacker
+  // sees ONE prompt; Yes → token window + Continue, No → defender's
+  // Y/N. Replaces the prior parallel "Ready button + token window"
+  // pair which posted two prompts to each player simultaneously.
+  await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
   saveGames(game.gameId);
 }
 
@@ -4035,8 +4028,10 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
         .setLabel('No — skip')
         .setStyle(ButtonStyle.Secondary),
     );
+    // Per alexanbv 2026-05-12: match the step-4 sendModsYn label style
+    // so step 3 / step 4 read identically (one Y/N per player per step).
     await thread.send({
-      content: `<@${atkOwnerId}> — **Reroll attack dice?**`,
+      content: `<@${atkOwnerId}> — **Attacker: Reroll attack dice?** (CRR step 3)`,
       components: [row],
       allowedMentions: { users: [atkOwnerId] },
     }).catch(discordCatch);
@@ -4064,7 +4059,7 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
         .setStyle(ButtonStyle.Secondary),
     );
     await thread.send({
-      content: `<@${defOwnerId}> — **Reroll defense dice?**`,
+      content: `<@${defOwnerId}> — **Defender: Reroll defense dice?** (CRR step 3)`,
       components: [row],
       allowedMentions: { users: [defOwnerId] },
     }).catch(discordCatch);
@@ -5709,6 +5704,130 @@ export async function handleCombatPassive(interaction, ctx) {
 
   saveGames(game.gameId);
   await proceedAfterRerolls(thread, game, combat, ctx);
+}
+
+/**
+ * Sequential per-player "Apply on-declare effects? Y/N" prompt (CRR
+ * steps 1+2). Per alexanbv 2026-05-12: matches the step-4 sendModsYn
+ * format — single Y/N per player, attacker first, sequential.
+ *
+ * - Yes → posts a "Done with on-declare — continue" button and the
+ *   token-spend window inline (so the player has CC + token UI in
+ *   their own moment), then advances when they click Continue.
+ * - No → immediately advances to the next role (or to the dice roll
+ *   when the defender finishes).
+ *
+ * Replaces the parallel Ready-button gate + auto-posted token window
+ * that posted both prompts simultaneously to each player.
+ */
+export async function sendOnDeclareYn(thread, game, combat, role) {
+  const gameId = game.gameId;
+  const isAtk = role === 'attacker';
+  const playerNum = isAtk
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+  combat.currentStep = isAtk ? 'step1+2-attacker' : 'step1+2-defender';
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_on_declare_yn_${gameId}_${isAtk ? 'atk' : 'def'}_yes`)
+      .setLabel('Yes — applying on-declare effects')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`combat_on_declare_yn_${gameId}_${isAtk ? 'atk' : 'def'}_no`)
+      .setLabel('No — skip')
+      .setStyle(ButtonStyle.Secondary),
+  );
+  const label = isAtk ? 'Attacker' : 'Defender';
+  await thread.send({
+    content: `<@${ownerId}> — **${label}: Apply on-declare CCs / abilities / power tokens?** (CRR steps 1+2) Play any from your hand channel + spend tokens, then click below.`,
+    components: [row],
+    allowedMentions: { users: [ownerId] },
+  }).catch(discordCatch);
+}
+
+/**
+ * Handle the sequential "Apply on-declare effects? Y/N" buttons. Yes
+ * opens the on-declare token window and posts a Continue button.
+ * No / Continue advances to the next role (defender → next), or to
+ * the dice roll once the defender confirms.
+ */
+export async function handleCombatOnDeclareYn(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^combat_on_declare_yn_([^_]+)_(atk|def)_(yes|no|continue)$/);
+  if (!m) return;
+  const [, gameId, side, choice] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) return;
+
+  const isAtk = side === 'atk';
+  const expectedPn = isAtk
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+  const expectedId = expectedPn === 1 ? game.player1Id : game.player2Id;
+  if (interaction.user.id !== expectedId) {
+    await interaction.followUp({
+      content: `Only the ${isAtk ? 'attacker' : 'defender'} can click that button.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+
+  try {
+    const clickedId = interaction.customId;
+    const newRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) {
+        const btn = ButtonBuilder.from(c);
+        btn.setDisabled(true);
+        if (c.customId === clickedId) {
+          btn.setStyle(choice === 'no' ? ButtonStyle.Secondary : ButtonStyle.Success);
+        }
+        newRow.addComponents(btn);
+      }
+      return newRow;
+    });
+    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
+  } catch (_e) { /* non-fatal */ }
+
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!thread) return;
+
+  if (choice === 'yes') {
+    // Open the on-declare token spend window (own tokens + squad cohesion
+    // proxies) so the player can spend in this moment. Then post a
+    // "Continue" follow-up button so they confirm done.
+    await sendOnDeclareTokenWindow(thread, game, combat, isAtk ? 'attacker' : 'defender', ctx);
+    const continueRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat_on_declare_yn_${gameId}_${side}_continue`)
+        .setLabel('Done with on-declare — continue')
+        .setStyle(ButtonStyle.Primary),
+    );
+    await thread.send({
+      content: `<@${expectedId}> — Spend tokens above and play any CCs / abilities from your hand channel. Click **Continue** when done.`,
+      components: [continueRow],
+      allowedMentions: { users: [expectedId] },
+    }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  // 'no' or 'continue' — advance to next role / dice roll.
+  if (isAtk) {
+    await sendOnDeclareYn(thread, game, combat, 'defender');
+  } else {
+    // Defender finished — advance to roll (mirrors
+    // dispatchCombatGateAdvance('on_declare') behavior).
+    combat.onDeclareTokenContext = false;
+    combat.tokenPhase = null;
+    combat.currentStep = 'roll';
+    await postRollDiceButton(thread, game, combat, ctx);
+  }
+  saveGames(game.gameId);
 }
 
 /**
@@ -8733,13 +8852,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-  // Per destruct 2026-05-08: tokens are merged into the on_declare
-  // per-player window. Even for False Orders / Lure attacks, the
-  // controller (acting as attacker) and the target's owner each get
-  // a window for cards + tokens. Post the gate + attacker token
-  // window; defender token window posts on the gate transition.
-  await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
-  await sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx);
+  // Per alexanbv 2026-05-12: sequential per-player Y/N (matches
+  // sendModsYn step-4 format). Yes → token window + Continue, No →
+  // next role / dice roll. Same flow for False Orders / Lure.
+  await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
   saveGames(game.gameId);
 }
 

@@ -11,7 +11,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { setActivatedDcIndices, recomputeActivationCounts } from '../game/player-helpers.js';
 import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
-import { sendCombatGate, sendOnDeclareTokenWindow } from '../handlers/combat.js';
+import { sendOnDeclareYn } from '../handlers/combat.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -253,9 +253,8 @@ async function mutateToCombat(game, client, deps, userId) {
     content: `**Pre-combat window** — <@${game.player1Id}> (attacker: **${attackerDcName}**) vs <@${game.player2Id}> (defender: **${defenderDcName}**)\nResolve any Command Cards / power tokens via the prompts below, then click **Ready**.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
-  const _ctx = { saveGames, client };
-  await sendCombatGate(generalChannel, game, game.pendingCombat, 'on_declare', _ctx);
-  await sendOnDeclareTokenWindow(generalChannel, game, game.pendingCombat, 'attacker', _ctx);
+  // Per alexanbv 2026-05-12: sequential Y/N matches step-4 sendModsYn UX.
+  await sendOnDeclareYn(generalChannel, game, game.pendingCombat, 'attacker');
 
   await updatePlayAreaDcButtons(game, client);
   saveGames(game.gameId);
