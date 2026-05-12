@@ -7894,6 +7894,15 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
     const [, gameId] = skipMatch;
     const game = await requireGame(interaction, getGame, gameId, { silent: true });
     if (!game) return;
+    if (!game.pendingRogueOneTokenPick) {
+      await interaction.followUp({ content: 'No pending Rogue One token pick.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    // Per alexanbv 2026-05-12: permission check FIRST. Wrong-player skip
+    // click previously cleared the pending state AND wiped the buttons —
+    // locking the real attacker out of their own Rogue One choice.
+    const { attackerPlayerNum: _r1AttPN } = game.pendingRogueOneTokenPick;
+    if (!await requirePlayer(interaction, game, interaction.user.id, _r1AttPN, canActAsPlayer, 'Only the attacker may skip Rogue One.')) return;
     clearPendingRogueOneTokenPick(game);
     const combat = game.pendingCombat;
     if (!combat) return;
