@@ -251,27 +251,34 @@ describe('B-C-SURGE: Surge spending and tracking', () => {
 // ── B-C-REROLL: Reroll queue ordering ────────────────────────────────────────
 
 describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
-  it('B-C-REROLL-001: attacker phase with no own rerolls + def-controlled forced → falls through to defender phase', async () => {
-    // destruct 2026-05-08: defender-controlled cross-side rerolls
-    // belong to the DEFENDER's reroll window, not the attacker's.
-    // sendRerollUI('attacker') with 0 own rerolls and only a
-    // def-controlled queue entry must skip past forced and land in
-    // defender phase (where def's own + def-controlled fold together).
+  it('B-C-REROLL-001: attacker phase with no own rerolls + def-controlled forced → no attacker dice buttons render (Y/N already answered)', async () => {
+    // destruct 2026-05-08 / alexanbv 2026-05-12: defender-controlled
+    // cross-side rerolls belong to the DEFENDER's reroll window, not
+    // the attacker's. Under the always-prompt-Y/N model (CRR step-3
+    // matches step-4 cadence), the attacker gets a Y/N prompt first;
+    // simulate the post-Yes path (rerollYnAskedAttacker=true) so the
+    // picker renders. With 0 own rerolls and only a def-controlled
+    // queue entry, the picker must NOT surface that def-controlled
+    // entry — it stays in the defender's bucket.
     const combat = makeCombat({
       rerollPhase: 'attacker',
       attackerRerollsRemaining: 0, // already exhausted
       forcedRerollQueue: [{ source: 'Doubt', pool: 'attack', remaining: 1, controlPlayer: 2 }],
       defenderRerollsRemaining: 1,
+      rerollYnAskedAttacker: true, // bypass Y/N — picker path
     });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const thread = mockThread();
 
     await sendRerollUI(thread, game, combat, 'attacker');
 
-    assert.strictEqual(combat.rerollPhase, 'defender',
-      'fell through to defender phase — def-controlled forced does NOT fire in attacker window');
-    assert.strictEqual(combat.controlledRerollSide, 2,
-      'controlledRerollSide tracks defender for def\'s window');
+    // Picker rendered, but no def-controlled "Use Doubt" button — that
+    // belongs to the defender bucket. Attacker bucket only shows the
+    // owner's own rerolls (which are 0 here) + Done.
+    const _sent = thread._sent || [];
+    const _payload = _sent.length > 0 ? (typeof _sent[0] === 'string' ? _sent[0] : JSON.stringify(_sent[0])) : '';
+    assert.ok(!_payload.includes('Doubt'),
+      'def-controlled Doubt does NOT surface in attacker bucket');
   });
 
   it('B-C-REROLL-002: sendRerollUI drops globally-exhausted controlled entries from the queue', async () => {
@@ -280,7 +287,9 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
     // as buttons. Verify the filtered view via the bucket-owner's
     // rendering: only entries with remaining>0 should appear, and the
     // bucket should still surface (because Zeal still has remaining>0
-    // on the attacker side).
+    // on the attacker side). alexanbv 2026-05-12: also bypass the
+    // always-prompt Y/N via rerollYnAskedAttacker=true to hit the
+    // picker path directly.
     const combat = makeCombat({
       rerollPhase: 'attacker',
       controlledRerollSide: 1,
@@ -289,6 +298,7 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
         { source: 'Zeal', pool: 'defense', remaining: 1, controlPlayer: 1 },
       ],
       attackerRerollsRemaining: 0,
+      rerollYnAskedAttacker: true,
     });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const thread = mockThread();

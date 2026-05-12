@@ -265,12 +265,13 @@ describe('B-CTIME2-004: handleCombatReroll integration — attacker rerolls die'
 // ── B-CTIME2-005: handleCombatReroll — "done" → combatGate ─────────────────
 
 describe('B-CTIME2-005: handleCombatReroll — attacker "done" auto-advances gate', () => {
-  it('005: attacker clicks done → post_attacker_reroll auto-advances (no "Both Ready" UI)', async () => {
+  it('005: attacker clicks done → post_attacker_reroll auto-advances into defender step-3 Y/N', async () => {
     // Per destruct 2026-05-08: rerolls are sequential per-player via
     // sendRerollUI; the post_*_reroll "both Ready" gate was redundant
-    // padding. Auto-advance means the gate dispatches immediately and
-    // currentStep moves on. With no defender rerolls + no forced rerolls
-    // here, dispatch lands on step4-attacker (Mods Y/N).
+    // padding. Per alexanbv 2026-05-12: every player gets a step-3 Y/N
+    // (CC-played rerolls can fire in-window, so the bot can't
+    // shortcut). Dispatch lands on step3-defender (defender Y/N) when
+    // attacker's bucket closes, regardless of pre-window counts.
     const game = makeGame({
       pendingCombat: makeCombat({
         rerollPhase: 'attacker',
@@ -287,10 +288,10 @@ describe('B-CTIME2-005: handleCombatReroll — attacker "done" auto-advances gat
     const combat = game.pendingCombat;
     assert.strictEqual(combat.combatGate, undefined,
       'combatGate consumed by AUTO_ADVANCE — no Ready UI posted');
-    assert.strictEqual(combat.rerollPhase, null,
-      'rerollPhase cleared after dispatch');
-    assert.strictEqual(combat.currentStep, 'step4-attacker',
-      'currentStep advanced past rerolls into step-4 Mods Y/N');
+    assert.strictEqual(combat.rerollPhase, 'defender',
+      'rerollPhase advanced to defender for the defender step-3 Y/N');
+    assert.strictEqual(combat.currentStep, 'step3-defender',
+      'currentStep advanced to step3-defender (Y/N — defender may still play a CC for a reroll)');
     // rerollsRemaining unchanged (done doesn't consume a reroll)
     assert.strictEqual(combat.attackerRerollsRemaining, 2,
       'attackerRerollsRemaining unchanged — "done" doesn\'t spend a reroll');
@@ -490,12 +491,12 @@ describe('B-CTIME2-011: Phase sequencing invariant across reroll → surge → t
 // ── B-CTIME2-012: Reroll exhaustion → auto-gate ────────────────────────────
 
 describe('B-CTIME2-012: Reroll exhaustion auto-advances when rerollsRemaining hits 0', () => {
-  it('012: last reroll (remaining=1) → rerollsRemaining=0, post_attacker_reroll auto-advances', async () => {
-    // destruct 2026-05-08: when the final reroll is consumed,
-    // sendCombatGate('post_attacker_reroll') still fires but is now in
-    // AUTO_ADVANCE_SUB_PHASES — the gate is consumed and dispatch
-    // moves currentStep on. With no defender rerolls here, dispatch
-    // lands on step4-attacker.
+  it('012: last reroll (remaining=1) → rerollsRemaining=0, post_attacker_reroll auto-advances into defender step-3 Y/N', async () => {
+    // destruct 2026-05-08 / alexanbv 2026-05-12: when the final reroll
+    // is consumed, sendCombatGate('post_attacker_reroll') is still in
+    // AUTO_ADVANCE_SUB_PHASES, but dispatch now always lands on the
+    // defender's step-3 Y/N (CC-played rerolls can fire in-window —
+    // step 3 cadence matches step-4 sendModsYn: one Y/N per player).
     const game = makeGame({
       pendingCombat: makeCombat({
         rerollPhase: 'attacker',
@@ -517,8 +518,8 @@ describe('B-CTIME2-012: Reroll exhaustion auto-advances when rerollsRemaining hi
       'die index 0 recorded in rerolledIndices');
     assert.strictEqual(combat.combatGate, undefined,
       'No gate left behind — auto-advance consumed it on exhaustion');
-    assert.strictEqual(combat.currentStep, 'step4-attacker',
-      'currentStep advanced past rerolls into step-4 Mods Y/N');
+    assert.strictEqual(combat.currentStep, 'step3-defender',
+      'currentStep advanced to step3-defender (defender Y/N — may still play a CC for a reroll)');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });

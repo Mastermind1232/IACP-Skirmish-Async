@@ -204,7 +204,7 @@ describe('B-E2E-001: selfPlay baseline — full pipeline auto-runs to resolution
 // ── B-E2E-002: Attacker reroll path ────────────────────────────────────────
 
 describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', () => {
-  it('002: post_roll gate → attacker reroll → post_attacker_reroll gate → step4-attacker Mods Y/N prompt (CRR step 4)', async () => {
+  it('002: post_roll gate → attacker reroll → post_attacker_reroll gate → defender step-3 Y/N (CRR step 3)', async () => {
     const thread = mockThread();
     const client = mockClientWithThread(thread);
     const combat = makeCombat({
@@ -220,7 +220,8 @@ describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', 
       'Step 1: combatGate = post_roll');
 
     // Step 2: Both players ready → dispatchCombatGateAdvance('post_roll')
-    //   → attackerRerollsRemaining=1 → rerollPhase='attacker', sendRerollUI
+    //   → always set rerollPhase='attacker' (alexanbv 2026-05-12: every
+    //   player gets a Y/N at step 3; CCs can grant rerolls in-window).
     await advanceGate(game, client, ctx);
     assert.strictEqual(combat.combatGate, undefined,
       'Step 2: gate consumed after both ready');
@@ -228,21 +229,18 @@ describe('B-E2E-002: Attacker reroll path — reroll → gates → resolution', 
       'Step 2: rerollPhase set to attacker');
 
     // Step 3: Attacker clicks "done" → sendCombatGate('post_attacker_reroll'),
-    // which now AUTO-ADVANCES (destruct 2026-05-08 — the "both Ready" check
-    // between reroll phases was redundant padding; sendRerollUI already runs
-    // sequentially per-player). Dispatch fires immediately:
-    //   no forced, no defender rerolls → currentStep='step4-attacker'
-    //   → sendModsYn(attacker)
+    // which AUTO-ADVANCES (destruct 2026-05-08). Dispatch now always lands
+    // on step3-defender (defender Y/N — may still play a CC for a reroll).
     const rerollInteraction = mockInteraction('combat_reroll_42_atk_done', 'player1', client);
     await handleCombatReroll(rerollInteraction, ctx);
     assert.strictEqual(combat.combatGate, undefined,
       'Step 3: gate consumed by AUTO_ADVANCE — no "both Ready" UI');
-    assert.strictEqual(combat.rerollPhase, null,
-      'Step 3: rerollPhase cleared to null');
-    assert.strictEqual(combat.currentStep, 'step4-attacker',
-      'Step 3: currentStep advanced to step4-attacker — Mods Y/N owns the window');
+    assert.strictEqual(combat.rerollPhase, 'defender',
+      'Step 3: rerollPhase advanced to defender for the step-3 Y/N');
+    assert.strictEqual(combat.currentStep, 'step3-defender',
+      'Step 3: currentStep is step3-defender (defender Y/N owns the window)');
     assert.strictEqual(calls.resolveCombatAfterRolls.length, 0,
-      'Step 3: resolveCombatAfterRolls NOT called — Mods Y/N prompt intervenes');
+      'Step 3: resolveCombatAfterRolls NOT called — defender Y/N intervenes');
   });
 });
 

@@ -472,19 +472,31 @@ export async function handleCombatGateReady(interaction, ctx) {
  * owns the active controlled-reroll window. Per destruct 2026-05-08.
  */
 async function _enterDefenderRerollPhase(thread, game, combat, ctx, defPN) {
-  // Per alexanbv 2026-05-11: defender bucket = voluntary defender rerolls
-  // + defender-owned controlled abilities (any pool). Cross Training also
-  // lives here. If none → step 4.
-  const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
-  const _defCtAvail = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
-  if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrl || _defCtAvail) {
-    combat.rerollPhase = 'defender';
-    combat.controlledRerollSide = defPN;
-    combat.currentStep = 'step3-defender';
-    await sendRerollUI(thread, game, combat, 'defender');
+  // Per alexanbv 2026-05-12: ALWAYS post the step-3 Y/N for the
+  // defender. CCs like Targeting Network can be played in this moment
+  // to grant a reroll, so the bot can't shortcut the prompt based on
+  // pre-window counts. Mirrors the step-4 sendModsYn cadence — every
+  // player gets exactly one prompt per step.
+  // Self-play short-circuit: skip Y/N entirely. If pre-window
+  // counts/controlled abilities exist, drive sendRerollUI; else
+  // jump to step 4.
+  if (game.selfPlay) {
+    const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
+    const _defCtAvail = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+    if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrl || _defCtAvail) {
+      combat.rerollPhase = 'defender';
+      combat.controlledRerollSide = defPN;
+      combat.currentStep = 'step3-defender';
+      await sendRerollUI(thread, game, combat, 'defender');
+      return;
+    }
+    await _enterStep4(thread, game, combat, ctx);
     return;
   }
-  await _enterStep4(thread, game, combat, ctx);
+  combat.rerollPhase = 'defender';
+  combat.controlledRerollSide = defPN;
+  combat.currentStep = 'step3-defender';
+  await sendRerollUI(thread, game, combat, 'defender');
 }
 
 /**
@@ -549,21 +561,34 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
     }
 
     case 'post_roll': {
-      // Per alexanbv 2026-05-11: two reroll buckets — attacker side and
-      // defender side. Each bucket = (own voluntary rerolls + own
-      // controlled cross-side abilities). Owner picks any order in their
-      // bucket. Legacy `forced` middle phase fully retired.
+      // Per alexanbv 2026-05-12: ALWAYS post the step-3 Y/N for the
+      // attacker (and later the defender). Step 3 is an open window —
+      // a CC like Targeting Network can be played in this moment to
+      // grant a reroll, so the bot can't shortcut the prompt based on
+      // pre-roll reroll counts. Each player gets one prompt per step,
+      // matching the step-4 sendModsYn UX.
       const atkPN = combat.attackerPlayerNum || 1;
       const defPN = opponentPlayerNum(atkPN);
-      const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
-      if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrl) {
-        combat.rerollPhase = 'attacker';
-        combat.controlledRerollSide = atkPN;
-        combat.currentStep = 'step3-attacker';
-        await sendRerollUI(thread, game, combat, 'attacker');
-      } else {
-        await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
+      // Self-play short-circuit: skip Y/N entirely. If pre-roll
+      // counts/controlled abilities exist, drive the picker
+      // automatically via sendRerollUI; else jump to defender entry
+      // (which has the same selfPlay short-circuit), then step 4.
+      if (game.selfPlay) {
+        const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
+        if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrl) {
+          combat.rerollPhase = 'attacker';
+          combat.controlledRerollSide = atkPN;
+          combat.currentStep = 'step3-attacker';
+          await sendRerollUI(thread, game, combat, 'attacker');
+        } else {
+          await _enterDefenderRerollPhase(thread, game, combat, ctx, defPN);
+        }
+        break;
       }
+      combat.rerollPhase = 'attacker';
+      combat.controlledRerollSide = atkPN;
+      combat.currentStep = 'step3-attacker';
+      await sendRerollUI(thread, game, combat, 'attacker');
       break;
     }
 
@@ -4010,28 +4035,36 @@ function formatDefenseDie(d, i) {
  */
 async function maybePromptRerollYn(thread, game, combat, phase) {
   const gameId = game.gameId;
+  // Per alexanbv 2026-05-12: always post the Y/N so each player gets
+  // exactly one prompt per step (matches step-4 sendModsYn cadence).
+  // The reroll pool is NOT finalized at step entry — Targeting Network
+  // and similar CCs can be played in this window to grant a reroll —
+  // so the bot must give the player a moment regardless of pre-window
+  // counts. Self-play skips via the early returns in sendRerollUI.
   if (phase === 'attacker') {
     if (combat.rerollYnAskedAttacker) return false;
     if ((combat.pendingPreRerolls || []).length > 0) return false; // pre-roll abilities use their own prompts
-    const remaining = combat.attackerRerollsRemaining || 0;
-    if (remaining <= 0) return false;
     combat.rerollYnAskedAttacker = true;
     const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
     const atkOwnerId = atkPn === 1 ? game.player1Id : game.player2Id;
+    const remaining = combat.attackerRerollsRemaining || 0;
+    const _atkPnGate = combat.attackerPlayerNum || 1;
+    const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _atkPnGate && (e.remaining ?? 0) > 0);
+    const yesLabel = (remaining > 0 || _atkCtrl)
+      ? `Yes — pick dice (${remaining} reroll${remaining !== 1 ? 's' : ''})`
+      : 'Yes — play a CC for a reroll';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_yn_${gameId}_atk_yes`)
-        .setLabel(`Yes — pick dice (${remaining} reroll${remaining !== 1 ? 's' : ''})`)
+        .setLabel(yesLabel)
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`combat_reroll_yn_${gameId}_atk_no`)
         .setLabel('No — skip')
         .setStyle(ButtonStyle.Secondary),
     );
-    // Per alexanbv 2026-05-12: match the step-4 sendModsYn label style
-    // so step 3 / step 4 read identically (one Y/N per player per step).
     await thread.send({
-      content: `<@${atkOwnerId}> — **Attacker: Reroll attack dice?** (CRR step 3)`,
+      content: `<@${atkOwnerId}> — **Attacker: Reroll attack dice?** (CRR step 3) Play any CCs / abilities that grant rerolls from your hand channel, then click below.`,
       components: [row],
       allowedMentions: { users: [atkOwnerId] },
     }).catch(discordCatch);
@@ -4039,19 +4072,23 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
   }
   if (phase === 'defender') {
     if (combat.rerollYnAskedDefender) return false;
-    const remaining = combat.defenderRerollsRemaining || 0;
-    const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
-    if (remaining <= 0 && !ctAvailable) return false;
     combat.rerollYnAskedDefender = true;
     const defPn = opponentPlayerNum(combat.attackerPlayerNum ?? 1);
     const defOwnerId = defPn === 1 ? game.player1Id : game.player2Id;
+    const remaining = combat.defenderRerollsRemaining || 0;
+    const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
+    const _defPnGate = opponentPlayerNum(combat.attackerPlayerNum || 1);
+    const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _defPnGate && (e.remaining ?? 0) > 0);
     const parts = [];
     if (remaining > 0) parts.push(`${remaining} reroll${remaining !== 1 ? 's' : ''}`);
     if (ctAvailable) parts.push('Cross Training');
+    const yesLabel = (remaining > 0 || ctAvailable || _defCtrl)
+      ? `Yes — pick (${parts.join(' + ') || 'controlled reroll'})`.slice(0, 80)
+      : 'Yes — play a CC for a reroll';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_yn_${gameId}_def_yes`)
-        .setLabel(`Yes — pick (${parts.join(' + ')})`.slice(0, 80))
+        .setLabel(yesLabel)
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`combat_reroll_yn_${gameId}_def_no`)
@@ -4059,7 +4096,7 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
         .setStyle(ButtonStyle.Secondary),
     );
     await thread.send({
-      content: `<@${defOwnerId}> — **Defender: Reroll defense dice?** (CRR step 3)`,
+      content: `<@${defOwnerId}> — **Defender: Reroll defense dice?** (CRR step 3) Play any CCs / abilities that grant rerolls from your hand channel, then click below.`,
       components: [row],
       allowedMentions: { users: [defOwnerId] },
     }).catch(discordCatch);
