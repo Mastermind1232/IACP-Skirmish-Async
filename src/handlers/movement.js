@@ -30,6 +30,31 @@ function _cleanupMoveState(game, moveKey, msgId) {
 }
 
 /**
+ * Discard any open move-grid state for a DC msgId. Called by
+ * handleDcEndActivation per alexanbv 2026-05-12 — unspent MP must not
+ * block End Activation. Drops moveInProgress entries for this msgId,
+ * the matching pendingSpacePick entries (move grids use a context key
+ * of `${gameId}_${msgId}_${figureIndex}` so we delete it alongside the
+ * moveInProgress entry, guaranteeing we only remove move-grid picks
+ * and not other ability picks that happen to share the schema), and
+ * the activation movement bank. The stale grid buttons remain in
+ * Discord — cleanup is best-effort if a channel is reachable.
+ */
+export function discardOpenMoveGrids(game, msgId) {
+  if (!game || !msgId) return;
+  const prefix = `${msgId}_`;
+  if (game.moveInProgress) {
+    for (const moveKey of Object.keys(game.moveInProgress)) {
+      if (!moveKey.startsWith(prefix)) continue;
+      const ctxKey = `${game.gameId}_${moveKey}`;
+      if (game.pendingSpacePick?.[ctxKey]) delete game.pendingSpacePick[ctxKey];
+      _cleanupMoveState(game, moveKey, msgId);
+    }
+  }
+  if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+}
+
+/**
  * Show space picker buttons for a massive-push displaced figure.
  * Stores controller + validSpaces on pending, then delegates rendering to
  * renderMassivePushSpacePrompt so the reconciler can re-post from state alone.

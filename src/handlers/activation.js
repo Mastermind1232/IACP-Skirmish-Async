@@ -11,6 +11,7 @@ import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
 import { cleanupActivation, isActivationActionInProgress, figureKeyForActivation } from '../game/activation-state.js';
+import { discardOpenMoveGrids } from './movement.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels, isConditionImmune, HARMFUL_CONDITIONS } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getValidPushDestinations } from '../game/movement.js';
@@ -735,9 +736,16 @@ export async function handleDcEndActivation(interaction, ctx) {
     await interaction.followUp({ content: 'Only the owner can end this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Per alexanbv 2026-05-12: unspent MP / an open move grid must not
+  // block End Activation. Discard any open move-grid state for this
+  // msgId before the in-progress check — moveInProgress is just stale
+  // UI once the player has signalled they're done. Combat, ability
+  // target picks (non-movement pendingSpacePick), and SoA chooser
+  // buckets still block as before.
+  discardOpenMoveGrids(game, msgId);
   if (isActivationActionInProgress(game, msgId)) {
     await interaction.followUp({
-      content: '⏳ An action is still resolving (move grid open, target pick pending, or combat in progress). Finish or cancel it before ending the activation.',
+      content: '⏳ An action is still resolving (target pick pending or combat in progress). Finish or cancel it before ending the activation.',
       ephemeral: true,
     }).catch(discordCatch);
     return;
