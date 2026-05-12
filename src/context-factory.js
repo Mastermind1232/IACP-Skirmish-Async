@@ -174,6 +174,21 @@ const CONTEXT_GROUPS = {
     'postKryknaPushButtons', 'postFluctuationSwapButtons',
     'postArmsDistributionPrompt', 'postPrototypeMovePrompt',
     'client', 'sendPhaseGateMessages',
+    // 2026-05-12 production-bug fix (game ia00002 stuck post-deploy):
+    // round handlers like handleExtraArmorConfirm reach into
+    // advanceFromDeployment → autoDrawAllStartingHands →
+    // drawStartingHandForPlayer, which destructures `shuffleArray`
+    // from ctx. Round group was missing it.
+    'shuffleArray',
+    // Follow-on for the same stall (game ia00001 / ia00002): after
+    // hands auto-draw, advanceFromCcDraw runs and reads
+    // `runStartOfRoundContinuation` from ctx. If missing, the
+    // `if (runStartOfRoundContinuation)` guard silently skips and
+    // the game never posts the first activation phase message.
+    'runStartOfRoundContinuation',
+    // Helpers reached by the post-deploy → cc_draw chain.
+    'runPostDeployPhase', 'clearPreGameSetup', 'getCcShuffleDrawButton',
+    'updatePlayAreaDcButtons',
   ],
 
   startOfRound: [
