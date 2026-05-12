@@ -3292,7 +3292,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       console.error('Failed to update DC embed:', err);
     }
   }
-  if (game.boardId && game.selectedMap) {
+  // Per alexanbv 2026-05-12: board-channel post + activation-thread
+  // minimap refresh hit different channels, no data dependency — run
+  // them in parallel.
+  const _boardPostTask = (async () => {
+    if (!(game.boardId && game.selectedMap)) return;
     try {
       const boardChannel = await fetchGameChannel(client, game.boardId);
       const payload = await buildBoardMapPayload(game.gameId, game.selectedMap, game);
@@ -3300,11 +3304,12 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     } catch (err) {
       console.error('Failed to update map after attack:', err);
     }
-  }
-  // Refresh activation thread minimap after combat (conditions/actions may have changed)
-  if (combat.attackerMsgId) {
+  })();
+  const _dcRefreshTask = (async () => {
+    if (!combat.attackerMsgId) return;
     await updateDcActionsMessage(game, combat.attackerMsgId, client).catch(discordCatch);
-  }
+  })();
+  await Promise.all([_boardPostTask, _dcRefreshTask]);
   // G73: Power Token Overflow — if any tokens were granted beyond the cap during combat
   // resolution, prompt the owning player to discard down.
   if (game.pendingPowerTokenOverflow?.length > 0 && thread) {

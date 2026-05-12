@@ -3047,8 +3047,14 @@ export async function handleAttackTarget(interaction, ctx) {
   // player picks the order. Token window posts inline with the gate
   // (sendOnDeclareTokenWindow); CCs are played from each player's hand
   // channel as usual; the gate Ready button advances to the next role.
-  await sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx);
-  await sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx);
+  // Per alexanbv 2026-05-12: gate + attacker token-window post are
+  // independent — both go to the combat thread but mutate disjoint
+  // fields on combat (combatGate vs tokenPhase/onDeclareTokenContext).
+  // Run them in parallel so the API roundtrips overlap.
+  await Promise.all([
+    sendCombatGate(thread, game, game.pendingCombat, 'on_declare', ctx),
+    sendOnDeclareTokenWindow(thread, game, game.pendingCombat, 'attacker', ctx),
+  ]);
   saveGames(game.gameId);
 }
 
