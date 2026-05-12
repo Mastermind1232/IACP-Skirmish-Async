@@ -5749,6 +5749,48 @@ export async function sendModsYn(thread, game, combat, role) {
     }
   }
 
+  // Per alexanbv 2026-05-12: Zillo Technique discard is a step-4
+  // defender modifier (timing-wise it goes alongside other defender
+  // step-4 choices — Guidance Systems analogue for the defense side).
+  // Previously fired inside proceedAfterRerolls AFTER step 4 — that
+  // produced a confusing second prompt after the mods Y/N. Fire it
+  // here before the basic Y/N; the Zillo handler re-enters sendModsYn
+  // after resolution so the defender still sees the Y/N gate.
+  if (!isAtk && !combat.zilloDiscardResolved && combat.target?.figureKey && !combat.target.isNpc) {
+    const _ztDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _ztDcList = getDcList(game, _ztDefPN) || [];
+    const _ztDcMsgIds = getDcMessageIds(game, _ztDefPN) || [];
+    let _ztMsgId = null;
+    for (let _ztI = 0; _ztI < _ztDcList.length; _ztI++) {
+      if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
+    }
+    if (_ztMsgId) {
+      const _ztHandKey = ccHandKey(_ztDefPN);
+      const _ztHand = game[_ztHandKey] || [];
+      if (_ztHand.length > 0) {
+        const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
+        setPendingZilloDiscard(game, { defenderPN: _ztDefPN, combatThreadId: thread.id });
+        const _ztYesNoRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`zillo_use_yes_${gameId}`)
+            .setLabel('Yes — discard 1 CC for +1 Block')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`zillo_discard_skip_${gameId}`)
+            .setLabel('No — skip')
+            .setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send(sanitizeMentions({
+          content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack, CRR step 4)`,
+          allowedMentions: { users: [_ztDefOwnerId] },
+          components: [_ztYesNoRow],
+        })).catch(discordCatch);
+        return;
+      }
+      combat.zilloDiscardResolved = true;
+    }
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat_mods_yn_${gameId}_${isAtk ? 'atk' : 'def'}_yes`)
@@ -6234,47 +6276,11 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     combat.getDownResolved = true;
   }
 
-  // Zillo Technique (I51-I52) — discard 1 CC for +1 Block. CRR step 4 result
-  // modifier ("Apply Modifiers" stage; defender modifiers fire after attacker
-  // modifiers per Destruct). Once-per-attack via combat.zilloDiscardResolved.
-  if (!combat.zilloDiscardResolved && combat.target?.figureKey && !combat.target.isNpc) {
-    const _ztDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-    const _ztDcList = getDcList(game, _ztDefPN) || [];
-    const _ztDcMsgIds = getDcMessageIds(game, _ztDefPN) || [];
-    let _ztMsgId = null;
-    for (let _ztI = 0; _ztI < _ztDcList.length; _ztI++) {
-      if (_ztDcList[_ztI]?.dcName === '[Zillo Technique]') { _ztMsgId = _ztDcMsgIds[_ztI] || null; break; }
-    }
-    if (_ztMsgId) {
-      const _ztHandKey = ccHandKey(_ztDefPN);
-      const _ztHand = game[_ztHandKey] || [];
-      if (_ztHand.length > 0) {
-        const _ztDefOwnerId = getPlayerId(game, _ztDefPN);
-        // Privacy: post a Yes/No prompt in the combat thread (no card names),
-        // then if Yes the defender gets a private card picker in their hand
-        // channel. Avoids leaking the defender's hand to the attacker.
-        setPendingZilloDiscard(game, { defenderPN: _ztDefPN, combatThreadId: thread.id });
-        const _ztYesNoRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`zillo_use_yes_${game.gameId}`)
-            .setLabel('Yes — discard 1 CC for +1 Block')
-            .setStyle(ButtonStyle.Primary),
-          new ButtonBuilder()
-            .setCustomId(`zillo_discard_skip_${game.gameId}`)
-            .setLabel('No — skip')
-            .setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send(sanitizeMentions({
-          content: `<@${_ztDefOwnerId}> **Zillo Technique** — Discard 1 Command card for **+1 Block**? (once per attack)`,
-          allowedMentions: { users: [_ztDefOwnerId] },
-          components: [_ztYesNoRow],
-        })).catch(discordCatch);
-        saveGames?.(game.gameId);
-        return;
-      }
-    }
-    combat.zilloDiscardResolved = true;
-  }
+  // Zillo Technique discard moved to sendModsYn(defender) per alexanbv
+  // 2026-05-12 — it's a CRR step-4 defender modifier, posted alongside
+  // (before) the basic mods Y/N. handleZilloDiscard re-enters
+  // sendModsYn(defender) after resolution so the step-4 gate still
+  // closes correctly.
 
   // Elusive (CC): while defending, defender chooses 1 attack die to nullify, then worst defense die also nullified
   if (combat.elusiveActive && !combat.elusiveResolved && combat.attackDiceResults?.length > 0) {
@@ -9055,11 +9061,14 @@ export async function handleZilloDiscard(interaction, ctx) {
       if (thread) await thread.send(`**Zillo Technique** — Defender discarded **${cardName}** for **+1 Block**.`).catch(discordCatch);
     }
   }
-  // Mark resolved (Skip or use): per-attack once-per-attack limit. Re-enter the
-  // step-4 modifier sequence so subsequent DEF / surge / resolve steps continue.
+  // Mark resolved (Skip or use): per-attack once-per-attack limit. Per
+  // alexanbv 2026-05-12 — Zillo discard is now a CRR step-4 defender
+  // modifier, posted by sendModsYn(defender). Re-enter THAT (not
+  // proceedAfterRerolls) so the defender still sees the basic mods
+  // Y/N gate. Proceeding to step 5 happens after the Y/N closes.
   combat.zilloDiscardResolved = true;
   saveGames(game.gameId);
-  if (thread) await proceedAfterRerolls(thread, game, combat, ctx);
+  if (thread) await sendModsYn(thread, game, combat, 'defender');
 }
 
 /**
