@@ -25,6 +25,17 @@ const SPACE_ROWS_ON_FIRST = 4;
 /** Clean up all movement-related state flags for a completed/cancelled move. */
 function _cleanupMoveState(game, moveKey, msgId) {
   delete game.moveInProgress[moveKey];
+  // Per alexanbv 2026-05-12: the paired pendingSpacePick entry must
+  // clear here too. Move grids register a pick at
+  // `${gameId}_${moveKey}` (see lines that set
+  // game.pendingSpacePick[moveContextKey]). Previously only
+  // moveInProgress was dropped — leaving the pendingSpacePick entry
+  // stuck so isActivationActionInProgress kept reporting true after
+  // End Movement, blocking End Activation with an unspent bank.
+  if (game.gameId && game.pendingSpacePick) {
+    const ctxKey = `${game.gameId}_${moveKey}`;
+    if (game.pendingSpacePick[ctxKey]) delete game.pendingSpacePick[ctxKey];
+  }
   if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
 }
