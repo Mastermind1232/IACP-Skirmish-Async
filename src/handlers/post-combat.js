@@ -85,7 +85,11 @@ export async function handleReactionUse(interaction, ctx) {
     const attackerName = dcNameFromFigureKey(attackerFigKey);
     if (thread) await thread.send(`**Payback** — Dengar may now counter-attack **${attackerName}**. Use the Attack button on Dengar's DC card. **+2 Surge** will be applied automatically to that attack.`).catch(discordCatch);
   } else if (cardName === 'Dangerous Prey') {
-    // Dangerous Prey: attacker suffers 1 Damage (3 if adjacent to Bossk)
+    // Dangerous Prey: attacker suffers 1 Damage (3 if adjacent), THEN
+    // move up to 2 spaces. Per alexanbv 2026-05-11: "move up to N
+    // spaces" is the Move-X-spaces pipeline (bypassCosts: true),
+    // NOT a bank grant. Fires out of own activation (defender side
+    // during attacker's turn).
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
     const bosskPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
     const ms = getMapData(game.selectedMap?.id);
@@ -94,12 +98,26 @@ export async function handleReactionUse(interaction, ctx) {
     const dmg = isAdj ? 3 : 1;
     const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
     const attackerName = dcNameFromFigureKey(attackerFigKey);
-    if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ' (adjacent to Bossk)' : ''}. Bossk gains **2 MP**.`).catch(discordCatch);
+    const defenderName = dcNameFromFigureKey(targetFigKey);
+    if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ` (adjacent to ${defenderName})` : ''}. ${defenderName} may move up to 2 spaces.`).catch(discordCatch);
     await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, null, 'Dangerous Prey');
-    // Add 2 MP to Bossk's movement bank
-    const bosskMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
-    if (bosskMsgId) {
-      grantMovementBank(game, bosskMsgId, 2);
+    // Stamp Move-X picker: 2 spaces, bypassCosts=true (per CRR MOVE-017)
+    const defMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
+    if (defMsgId) {
+      try {
+        const { setupPendingMoveX } = await import('./move-x-handler.js');
+        await setupPendingMoveX(game, { client, logGameAction: ctx.logGameAction, saveGames }, {
+          msgId: defMsgId,
+          figureKey: targetFigKey,
+          playerNum: defenderPlayerNum,
+          spaces: 2,
+          source: 'Dangerous Prey',
+          threadId: thread?.id || null,
+          bypassCosts: true,
+        });
+      } catch (err) {
+        console.error('[post-combat] Dangerous Prey Move-X stamp failed:', err?.message ?? err);
+      }
     }
   } else if (cardName === "Right Back At Ya!") {
     // Right Back At Ya! (Ahsoka): attacker suffers 1 Damage (3 if defender spends Block Token)
