@@ -118,23 +118,82 @@ export function recalcDefenseTotals(dice) {
 }
 
 /**
- * Determine innate reroll counts from DC ability text.
- * Parses common patterns: "you may reroll N attack/defense di(c)e"
+ * Determine innate reroll abilities from DC ability text.
+ *
+ * Per alexanbv 2026-05-13: reroll abilities are NEVER pooled into an
+ * anonymous count. Each ability surfaces as its own bucket button with
+ * the ability's name. This helper returns an array of ability
+ * descriptors that the attack-roll detection block then registers
+ * into `combat.rerollAbilities`.
+ *
+ * Returned shape:
+ *   [{ id, label, pool, remainingUses }]
+ *     - id: stable kebab-case identifier (per attack)
+ *     - label: button text (e.g. "Use Professional")
+ *     - pool: 'attack' | 'defense' | 'any'
+ *     - remainingUses: number of times this ability can be invoked
+ *       during the attack (1 by default; Elite Sniper / Sling
+ *       Barrage have variable counts handled at register time).
+ *
+ * Only unconditional "While attacking/defending, you may reroll N"
+ * patterns are surfaced here; conditional passives (Cower, Sniper
+ * range-gate, Squad Training adjacency, Coordinated Hunt LoS) are
+ * detected in handleCombatRoll's per-passive block and register
+ * their own descriptors when the condition is met.
+ *
+ * @param {string} dcName
+ * @returns {Array<{id:string,label:string,pool:string,remainingUses:number}>}
  */
-export function getInnateRerolls(dcName) {
+export function getInnateRerollAbilities(dcName) {
   const card = getDcEffect(dcName);
   const text = (card?.abilityText || '').toLowerCase();
-  let attackReroll = 0, defenseReroll = 0;
-  // Match unconditional rerolls only — "while defending/attacking" must be
-  // directly followed by "(you may) reroll …", with no extra conditional
-  // clause ("while adjacent…", "if …", "when …") in between. Conditional
-  // rerolls (Cower, Soresu Form, Squad Training) have dedicated handlers
-  // in src/handlers/combat.js that gate on the runtime condition.
+  const abilities = [];
+  // Use whitelisted ability names where possible so the button label
+  // matches the printed card. Falls back to generic "While Attacking
+  // Reroll" / "While Defending Reroll" for cards whose ability is
+  // unnamed in the text.
   const atkMatch = text.match(/while attacking,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
-  if (atkMatch) attackReroll = parseInt(atkMatch[1], 10) || 1;
-  else if (/professional/i.test(text)) attackReroll = 1;
+  if (atkMatch) {
+    const n = parseInt(atkMatch[1], 10) || 1;
+    abilities.push({
+      id: 'while-attacking-reroll',
+      label: n === 1 ? 'Reroll 1 Attack Die' : `Reroll up to ${n} Attack Dice`,
+      pool: 'attack',
+      remainingUses: n,
+    });
+  } else if (/professional/i.test(text)) {
+    abilities.push({ id: 'professional', label: 'Use Professional', pool: 'attack', remainingUses: 1 });
+  }
+  if (/targeting computer/i.test(text)) {
+    abilities.push({ id: 'targeting-computer', label: 'Use Targeting Computer', pool: 'attack', remainingUses: 1 });
+  }
   const defMatch = text.match(/while defending,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+defense?\s+di/);
-  if (defMatch) defenseReroll = parseInt(defMatch[1], 10) || 1;
+  if (defMatch) {
+    const n = parseInt(defMatch[1], 10) || 1;
+    abilities.push({
+      id: 'while-defending-reroll',
+      label: n === 1 ? 'Reroll 1 Defense Die' : `Reroll up to ${n} Defense Dice`,
+      pool: 'defense',
+      remainingUses: n,
+    });
+  }
+  return abilities;
+}
+
+/**
+ * Legacy shim — back-compat for callers still expecting integer
+ * counts. Will be removed once all consumers migrate to
+ * getInnateRerollAbilities + the rerollAbilities registry.
+ *
+ * @deprecated 2026-05-13
+ */
+export function getInnateRerolls(dcName) {
+  const abilities = getInnateRerollAbilities(dcName);
+  let attackReroll = 0, defenseReroll = 0;
+  for (const ab of abilities) {
+    if (ab.pool === 'attack') attackReroll += ab.remainingUses;
+    else if (ab.pool === 'defense') defenseReroll += ab.remainingUses;
+  }
   return { attackReroll, defenseReroll };
 }
 
