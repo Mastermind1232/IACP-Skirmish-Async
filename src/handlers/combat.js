@@ -4041,9 +4041,16 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
   // and similar CCs can be played in this window to grant a reroll —
   // so the bot must give the player a moment regardless of pre-window
   // counts. Self-play skips via the early returns in sendRerollUI.
+  // Per alexanbv 2026-05-13: skip the Y/N when pre-roll abilities
+  // (Twin Sabers, Resourceful, Shrewd Scoundrel, Trained) already
+  // posted their own attacker-side prompts — those WERE the
+  // attacker's step-3 moment, so a separate Y/N after them is a
+  // redundant second prompt. Defender branch never has pre-rerolls
+  // (they're attacker-side only).
   if (phase === 'attacker') {
     if (combat.rerollYnAskedAttacker) return false;
     if ((combat.pendingPreRerolls || []).length > 0) return false; // pre-roll abilities use their own prompts
+    if (combat.preRerollsProcessed) return false; // pre-rerolls served as the step-3 window already
     combat.rerollYnAskedAttacker = true;
     const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
     const atkOwnerId = atkPn === 1 ? game.player1Id : game.player2Id;
