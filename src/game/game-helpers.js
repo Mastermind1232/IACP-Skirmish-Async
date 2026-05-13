@@ -23,16 +23,58 @@ export function markMapDirty(game) {
 }
 
 /**
+ * Get the active per-figure MP bank for `msgId`. If figureIndex is
+ * passed AND a per-figure entry exists, returns that figure's bank;
+ * otherwise returns the top-level bank entry (single-figure path).
+ *
+ * Per alexanbv 2026-05-13: MP bank is per-figure. Each figure's MP
+ * persists across figure-switches; figure 0's leftover MP is intact
+ * when activating figure 1 and back.
+ *
+ * @param {object} game
+ * @param {string} msgId - DC message ID
+ * @param {number|null} [figureIndex] - figure index for per-figure bank
+ * @returns {object|null} bank object { total, remaining } or null if no entry
+ */
+export function getMovementBankForFigure(game, msgId, figureIndex) {
+  const top = game.movementBank?.[msgId];
+  if (!top) return null;
+  if (figureIndex != null && top.perFig?.[figureIndex]) {
+    return top.perFig[figureIndex];
+  }
+  return top;
+}
+
+/**
  * Grant movement points to a figure's movement bank.
  * Initializes the bank and entry if needed.
+ *
+ * Per alexanbv 2026-05-13: MP bank is per-figure. When figureIndex
+ * is provided, the grant goes to that figure's nested bank
+ * (`movementBank[msgId].perFig[figureIndex]`). Each figure has its
+ * own MP, not shared with siblings.
+ *
+ * Without figureIndex (legacy single-figure callers), MP goes to the
+ * top-level entry. The top-level entry also carries UI metadata
+ * (threadId, messageId, displayName).
+ *
  * @param {object} game
  * @param {string} msgId - DC message ID
  * @param {number} amount - MP to grant
+ * @param {number} [figureIndex] - figure index for per-figure bank
  */
-export function grantMovementBank(game, msgId, amount) {
+export function grantMovementBank(game, msgId, amount, figureIndex) {
   if (!msgId || !amount) return;
   game.movementBank = game.movementBank || {};
   game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
+  if (figureIndex != null) {
+    const top = game.movementBank[msgId];
+    top.perFig = top.perFig || {};
+    top.perFig[figureIndex] = top.perFig[figureIndex] || { total: 0, remaining: 0 };
+    top.perFig[figureIndex].total = (top.perFig[figureIndex].total || 0) + amount;
+    top.perFig[figureIndex].remaining = (top.perFig[figureIndex].remaining || 0) + amount;
+    return;
+  }
   game.movementBank[msgId].total = (game.movementBank[msgId].total || 0) + amount;
   game.movementBank[msgId].remaining = (game.movementBank[msgId].remaining || 0) + amount;
 }
@@ -41,23 +83,30 @@ export function grantMovementBank(game, msgId, amount) {
  * Spend MP from a figure's movement bank. Clamps at 0 (can't go
  * negative). No-op if msgId has no bank entry or amount is 0.
  *
- * Use this everywhere instead of inline
- * `game.movementBank[msgId].remaining -= N` so future bank-related
- * effects (audit logs, "out of activation" gating, etc.) have a
- * single chokepoint.
+ * Per alexanbv 2026-05-13: When figureIndex is provided AND a per-
+ * figure entry exists, the spend comes out of that figure's nested
+ * bank. Otherwise it spends from the top-level entry.
  *
  * @param {object} game
  * @param {string} msgId - DC message ID
  * @param {number} amount - MP to consume (positive)
+ * @param {number} [figureIndex] - figure index for per-figure bank
  * @returns {number} - MP actually consumed (clamped at the available remaining)
  */
-export function consumeMovementPoints(game, msgId, amount) {
+export function consumeMovementPoints(game, msgId, amount, figureIndex) {
   if (!msgId || !amount || amount <= 0) return 0;
-  const bank = game.movementBank?.[msgId];
-  if (!bank) return 0;
-  const have = bank.remaining || 0;
+  const top = game.movementBank?.[msgId];
+  if (!top) return 0;
+  if (figureIndex != null && top.perFig?.[figureIndex]) {
+    const figBank = top.perFig[figureIndex];
+    const have = figBank.remaining || 0;
+    const spent = Math.min(have, amount);
+    figBank.remaining = have - spent;
+    return spent;
+  }
+  const have = top.remaining || 0;
   const spent = Math.min(have, amount);
-  bank.remaining = have - spent;
+  top.remaining = have - spent;
   return spent;
 }
 

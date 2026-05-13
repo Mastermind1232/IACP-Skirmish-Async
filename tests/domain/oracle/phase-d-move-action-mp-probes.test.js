@@ -28,8 +28,14 @@ describe('PROBE-PD-MOVE-004: Move-action grants MP equal to Speed', () => {
     const tail = src.slice(getSpeedIdx, getSpeedIdx + 2000);
     assert.ok(tail.includes('mpRemaining = currentMp + speed'),
       'Move-action handler must add speed to current MP — CRR-MOVE-004');
-    assert.ok(tail.includes('total: speed'),
-      'Movement bank total must be seeded with speed on first Move action — CRR-MOVE-004');
+    // Per alexanbv 2026-05-13: MP bank is per-figure. The first Move
+    // for a figure writes to perFig[figureIndex].total and mirrors to
+    // top-level via `_top.total = (_top.total ?? 0) + speed`. Confirm
+    // both the perFig write and the top-level mirror exist.
+    assert.ok(tail.includes('_top.perFig[figureIndex].total'),
+      'Move-action handler must seed perFig[figureIndex].total with speed — CRR-MOVE-004');
+    assert.ok(tail.includes('_top.total = (_top.total ?? 0) + speed'),
+      'Move-action handler must mirror speed to the top-level total for back-compat — CRR-MOVE-004');
   });
 
   it('004b: getEffectiveSpeed returns the DC stat-line speed when no modifiers apply', () => {

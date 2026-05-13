@@ -37,7 +37,10 @@ describe('PROBE-PD-MOVE-006: Move action completes at MP-grant, not at MP-spend'
   });
 
   it('006b: source — Move grants MP (speed) to movementBank before deducting the action', () => {
-    const grantIdx = DCPA_SRC.indexOf("game.movementBank[msgId].remaining = mpRemaining;");
+    // Per alexanbv 2026-05-13: MP bank is per-figure. The grant writes
+    // to the activating figure's perFig entry; top-level remaining is
+    // mirrored for back-compat. Check the mirror-write site.
+    const grantIdx = DCPA_SRC.indexOf("_top.remaining = mpRemaining;");
     const deductIdx = DCPA_SRC.indexOf("actData.remaining = Math.max(0, actData.remaining - 1);");
     assert.ok(grantIdx > 0, 'MP-grant write must exist');
     assert.ok(deductIdx > 0, 'action-deduct must exist');

@@ -1134,7 +1134,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   moveState.movementCache = null;
   moveState.cacheMaxMp = 0;
   if (game.movementBank?.[msgId]) {
-    game.movementBank[msgId].remaining = Math.max(0, newMp);
+    // Per alexanbv 2026-05-13: write to the per-figure bank as well as
+    // the top-level mirror.
+    const _mvTop = game.movementBank[msgId];
+    _mvTop.remaining = Math.max(0, newMp);
+    if (_mvTop.perFig?.[figureIndex]) {
+      _mvTop.perFig[figureIndex].remaining = Math.max(0, newMp);
+    }
     await updateMovementBankMessage(game, msgId, client);
   }
   const destDisplay = bottomLeftCoord(newTopLeft, newSize).toUpperCase();

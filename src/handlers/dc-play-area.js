@@ -1534,10 +1534,22 @@ export async function handleDcFigPick(interaction, ctx) {
   // figure-switch — figure B's specials list is empty until B uses one.
   const _newRem = _ad.perFigureRemaining?.[figIdx] ?? 2;
   _ad.remaining = _newRem;
-  // movementBank is being migrated to per-figureKey 2026-05-13. Until
-  // the migration lands, delete the prior figure's bank so figure B
-  // starts with zero MP (matches the new per-figure semantic).
-  if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
+  // Per alexanbv 2026-05-13: MP bank is per-figure. On figure switch,
+  // sync the top-level mirror (remaining/total) to the NEW figure's
+  // perFig entry so the UI shows that figure's MP. Each figure's MP
+  // persists across switches.
+  if (game.movementBank?.[msgId]) {
+    const _swTop = game.movementBank[msgId];
+    const _swFig = _swTop.perFig?.[figIdx];
+    if (_swFig) {
+      _swTop.remaining = _swFig.remaining ?? 0;
+      _swTop.total = _swFig.total ?? 0;
+    } else {
+      // New figure has no bank yet — zero out the mirror.
+      _swTop.remaining = 0;
+      _swTop.total = 0;
+    }
+  }
   // Wipe msgId-keyed per-activation flags for this msgId so they don't
   // leak from figure A's activation into figure B's. Excludes group-level
   // state (perFigureRemaining, figureLocked, figureSoaFired/figureEoaFired,
@@ -2073,8 +2085,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const stats = getDcStats(meta.dcName);
-      const bank = game.movementBank?.[msgId];
-      const currentMp = bank?.remaining ?? 0;
+      // Per alexanbv 2026-05-13: MP bank is per-figure. Read the
+      // currently-activating figure's bank (perFig[figureIndex]),
+      // falling back to the top-level entry for legacy single-figure
+      // banks that haven't been bumped to perFig yet.
+      const topBank = game.movementBank?.[msgId];
+      const figBank = topBank?.perFig?.[figureIndex];
+      const currentMp = figBank?.remaining ?? (figureIndex === 0 && !topBank?.perFig ? (topBank?.remaining ?? 0) : 0);
       let mpRemaining;
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
@@ -2103,19 +2120,27 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         if (_tgrMoveUpgrades.includes("The General's Ranks") && !game.dcActionsData?.[msgId]?.threadId) {
           mpRemaining += 2;
         }
+        // Init top-level entry (UI metadata) if absent.
         if (!game.movementBank[msgId]) {
           game.movementBank[msgId] = {
-            total: speed,
-            remaining: mpRemaining,
-            threadId: bank?.threadId ?? null,
-            messageId: bank?.messageId ?? null,
+            total: 0,
+            remaining: 0,
+            threadId: topBank?.threadId ?? null,
+            messageId: topBank?.messageId ?? null,
             displayName: figLabel,
           };
         } else {
           game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
-          game.movementBank[msgId].remaining = mpRemaining;
-          game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + speed;
         }
+        // Write to the activating figure's per-figure bank.
+        const _top = game.movementBank[msgId];
+        _top.perFig = _top.perFig || {};
+        _top.perFig[figureIndex] = _top.perFig[figureIndex] || { total: 0, remaining: 0 };
+        _top.perFig[figureIndex].remaining = mpRemaining;
+        _top.perFig[figureIndex].total = (_top.perFig[figureIndex].total ?? 0) + speed;
+        // Mirror to top-level so legacy readers see the active figure's MP.
+        _top.remaining = mpRemaining;
+        _top.total = (_top.total ?? 0) + speed;
       }
       await ensureMovementBankMessage(game, msgId, client);
       const boardState = getBoardStateForMovement(game, figureKey);
