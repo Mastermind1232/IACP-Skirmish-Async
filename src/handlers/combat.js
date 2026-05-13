@@ -4049,8 +4049,13 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
   // (they're attacker-side only).
   if (phase === 'attacker') {
     if (combat.rerollYnAskedAttacker) return false;
-    if ((combat.pendingPreRerolls || []).length > 0) return false; // pre-roll abilities use their own prompts
-    if (combat.preRerollsProcessed) return false; // pre-rerolls served as the step-3 window already
+    // Per alexanbv 2026-05-13: there is no separate "pre-reroll" phase.
+    // Twin Sabers / Resourceful / Shrewd Scoundrel / Trained are step-3
+    // reroll abilities and belong inside the single unified attacker
+    // step-3 Y/N window. The Y/N fires FIRST regardless of pending
+    // ability prompts; on Yes, sendRerollUI's picker walks through
+    // those abilities then voluntary die-picks; on No, all pending
+    // attacker-side reroll abilities are skipped together.
     combat.rerollYnAskedAttacker = true;
     const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
     const atkOwnerId = atkPn === 1 ? game.player1Id : game.player2Id;
@@ -4139,8 +4144,22 @@ export async function sendRerollUI(thread, game, combat, phase) {
       await _enterDefenderRerollPhase(thread, game, combat, /*ctx*/ undefined, defPN);
       return;
     }
+    // Per alexanbv 2026-05-13: defender side with nothing left to do
+    // must actually advance to step 4. The prior shape just cleared
+    // rerollPhase and returned, leaving combat stalled (the bug
+    // triggered when neither player had reroll abilities and the
+    // defender clicked Yes on the always-on step-3 Y/N).
+    // Synthesize a defender 'done' click to route through the
+    // existing post_defender_reroll dispatch which advances to step 4.
     combat.rerollPhase = null;
     combat.controlledRerollSide = null;
+    await sendCombatGate(thread, game, combat, 'post_defender_reroll', {
+      saveGames: () => {},
+      // dispatchCombatGateAdvance('post_defender_reroll') calls
+      // _enterStep4 which only uses ctx for the Lasat picker + the
+      // selfPlay branch. In the always-Y/N path we're on, neither
+      // is reachable here, so the stripped ctx is sufficient.
+    });
   };
   // Per alexanbv 2026-05-11: rerolls are bucketed by which player's
   // ABILITY triggered them (attacker-owned vs defender-owned), not by

@@ -379,6 +379,10 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
 
   it('B-C-REROLL-006: multiple pre-rerolls process sequentially', async () => {
     const sharedThread = mockThread();
+    // alexanbv 2026-05-13: pre-roll abilities now sit BEHIND the
+    // attacker step-3 Y/N (unified format). Set rerollYnAskedAttacker
+    // to true to simulate the post-"Yes" state and exercise the
+    // sequential pre-roll chain as before.
     const combat = makeCombat({
       rerollPhase: 'attacker',
       pendingPreRerolls: [
@@ -387,6 +391,7 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
       ],
       preRerollsProcessed: false,
       attackerRerollsRemaining: 0,
+      rerollYnAskedAttacker: true,
     });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const { ctx } = buildCtx(game);
