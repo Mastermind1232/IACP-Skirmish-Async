@@ -2145,7 +2145,9 @@ function getActiveDcHasSpecial(game, playerNum, dcMessageMeta) {
   const specials = eff?.specials || [];
   if (specials.length === 0) return 0;
 
-  const specialsUsed = actionsData?.specialsUsed || [];
+  // Per alexanbv 2026-05-13: specialsUsedByFig is per-figure.
+  const _suFigIdx = actionsData?.selectedFigure ?? 0;
+  const specialsUsed = actionsData?.specialsUsedByFig?.[_suFigIdx] || [];
   for (let si = 0; si < specials.length; si++) {
     if (!specialsUsed.includes(si) && remaining >= 1) return 1;
   }

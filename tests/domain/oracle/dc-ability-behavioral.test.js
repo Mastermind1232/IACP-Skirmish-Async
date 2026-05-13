@@ -530,7 +530,8 @@ describe('B-DC-006: handleDcAction guards', () => {
   it('rejects duplicate special (specialsUsed)', async () => {
     const { interaction, responses } = buildMockInteraction(`dc_special_0_${MSG_ID}`, PLAYER1_ID);
     const game = makeActionGame();
-    game.dcActionsData[MSG_ID].specialsUsed = [0]; // specialIdx 0 already used
+    // Per alexanbv 2026-05-13: specialsUsedByFig is per-figure.
+    game.dcActionsData[MSG_ID].specialsUsedByFig = { 0: [0] };
     const ctx = buildActionCtx({
       game,
       meta: { _msgId: MSG_ID, gameId: 'test1', playerNum: 1, dcName: 'Test DC', displayName: 'Test DC [DG 1]' },

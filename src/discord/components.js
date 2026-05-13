@@ -962,9 +962,12 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining, specialsUsed: [] };
+  const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining };
   const actionsRemaining = actionsData.remaining ?? 2;
-  const specialsUsed = Array.isArray(actionsData.specialsUsed) ? actionsData.specialsUsed : [];
+  // Per alexanbv 2026-05-13: specialsUsed is per-figure. UI reads the
+  // currently-selected figure's list for the "already used" disable state.
+  const _suFigIdx = actionsData.selectedFigure ?? 0;
+  const specialsUsed = actionsData.specialsUsedByFig?.[_suFigIdx] || [];
   const noActions = (actionsRemaining ?? 2) <= 0;
   const playerNum = game ? (getPlayerNumForMsgId(msgId) ?? 1) : 1;
   const selectedFigure = actionsData.selectedFigure ?? null;

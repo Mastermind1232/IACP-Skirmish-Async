@@ -1527,13 +1527,16 @@ export async function handleDcFigPick(interaction, ctx) {
   // activation lock on this exact figure so other figures' rows + the
   // paired companion/host are gated until this figure ends.
   game.activationLockKey = `${msgId}_f${figIdx}`;
-  // Per-figure separate activation (alexanbv 2026-05-09: multifigure groups
-  // behave the same as host+companion; nothing carries between figures).
-  // Reset shared action bank, MP bank, specials-used, and every msgId-
-  // keyed per-activation flag so the new figure starts with a clean slate.
+  // Per-figure separate activation (alexanbv 2026-05-09 + 2026-05-13:
+  // multifigure groups behave the same as host+companion; nothing
+  // carries between figures). Reset shared action bank for the new
+  // figure. specialsUsedByFig is per-figure so no wipe needed across
+  // figure-switch — figure B's specials list is empty until B uses one.
   const _newRem = _ad.perFigureRemaining?.[figIdx] ?? 2;
   _ad.remaining = _newRem;
-  _ad.specialsUsed = [];
+  // movementBank is being migrated to per-figureKey 2026-05-13. Until
+  // the migration lands, delete the prior figure's bank so figure B
+  // starts with zero MP (matches the new per-figure semantic).
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
   // Wipe msgId-keyed per-activation flags for this msgId so they don't
   // leak from figure A's activation into figure B's. Excludes group-level
@@ -2017,8 +2020,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (buttonKey === 'dc_special_') {
     const parts = splitCustomId(interaction.customId, 'dc_special_');
     const specialIdx = parseInt(parts[0], 10);
-    const specialsUsed = actionsData?.specialsUsed ?? [];
-    if (specialsUsed.includes(specialIdx)) {
+    // Per alexanbv 2026-05-13: specialsUsed is per-figure. Each figure
+    // in a multifigure group can use the same special action once on
+    // its own turn. We track via specialsUsedByFig[figureIndex] and
+    // keep the legacy flat specialsUsed array as a back-compat mirror
+    // for any reader not yet migrated.
+    const _suFigIdx = actionsData?.selectedFigure ?? 0;
+    const _suByFig = actionsData?.specialsUsedByFig?.[_suFigIdx] ?? [];
+    if (_suByFig.includes(specialIdx)) {
       await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(discordCatch);
       return;
     }
@@ -2034,8 +2043,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     // Snapshot state before any DC special changes (undo restores from this)
     if (pushUndo) pushUndo(game, { type: 'dc_special', label: action, msgId, gameLogMessageId: null });
-    if (!Array.isArray(actionsData.specialsUsed)) actionsData.specialsUsed = [];
-    actionsData.specialsUsed.push(specialIdx);
+    if (!actionsData.specialsUsedByFig) actionsData.specialsUsedByFig = {};
+    if (!Array.isArray(actionsData.specialsUsedByFig[_suFigIdx])) actionsData.specialsUsedByFig[_suFigIdx] = [];
+    actionsData.specialsUsedByFig[_suFigIdx].push(specialIdx);
   }
 
   if (action === 'Move' || action === 'SpendMp') {
@@ -2642,7 +2652,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         // Refund action + undo
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
-          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
+          {
+            const _refFigIdx = actionsData.selectedFigure ?? 0;
+            if (actionsData.specialsUsedByFig?.[_refFigIdx]) {
+              actionsData.specialsUsedByFig[_refFigIdx] = actionsData.specialsUsedByFig[_refFigIdx].filter(i => i !== specialIdx);
+            }
+          }
           await updateDcActionsMessage(game, msgId, client);
         }
         saveGames(game.gameId);
@@ -2684,7 +2700,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await thread.send(`**Vader's Finest** — Focus already used this round for this group.`).catch(discordCatch);
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
-          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
+          {
+            const _refFigIdx = actionsData.selectedFigure ?? 0;
+            if (actionsData.specialsUsedByFig?.[_refFigIdx]) {
+              actionsData.specialsUsedByFig[_refFigIdx] = actionsData.specialsUsedByFig[_refFigIdx].filter(i => i !== specialIdx);
+            }
+          }
           await updateDcActionsMessage(game, msgId, client);
         }
         saveGames(game.gameId);
@@ -2712,7 +2734,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await thread.send(`**Vader's Finest** — This figure has ${printedDiceCount} dice in its printed attack pool (need < 2). Cannot Focus.`).catch(discordCatch);
         if (actionsData) {
           actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
-          actionsData.specialsUsed = (actionsData.specialsUsed || []).filter(i => i !== specialIdx);
+          // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
+          {
+            const _refFigIdx = actionsData.selectedFigure ?? 0;
+            if (actionsData.specialsUsedByFig?.[_refFigIdx]) {
+              actionsData.specialsUsedByFig[_refFigIdx] = actionsData.specialsUsedByFig[_refFigIdx].filter(i => i !== specialIdx);
+            }
+          }
           await updateDcActionsMessage(game, msgId, client);
         }
         saveGames(game.gameId);

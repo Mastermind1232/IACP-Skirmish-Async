@@ -1673,14 +1673,19 @@ export async function handleActPassive(interaction, ctx) {
       // Slam's specialIdx into actionsData.specialsUsed so the dc_special_
       // button click handler at dc-play-area.js:1318 correctly refuses a
       // second (paid) Slam in the same activation.
+      // Per alexanbv 2026-05-13: specialsUsedByFig is per-figure. Push
+      // Slam's specialIdx for the currently-selected figure so a paid
+      // Slam from that same figure is refused.
       const _waActData = game.dcActionsData?.[msgId];
       if (_waActData) {
         const _waDcSpecials = (getDcEffects()?.[meta.dcName]?.specials) || [];
         const _waSlamIdx = _waDcSpecials.indexOf('Slam');
         if (_waSlamIdx >= 0) {
-          _waActData.specialsUsed = _waActData.specialsUsed || [];
-          if (!_waActData.specialsUsed.includes(_waSlamIdx)) {
-            _waActData.specialsUsed.push(_waSlamIdx);
+          const _waFigIdx = _waActData.selectedFigure ?? 0;
+          if (!_waActData.specialsUsedByFig) _waActData.specialsUsedByFig = {};
+          if (!_waActData.specialsUsedByFig[_waFigIdx]) _waActData.specialsUsedByFig[_waFigIdx] = [];
+          if (!_waActData.specialsUsedByFig[_waFigIdx].includes(_waSlamIdx)) {
+            _waActData.specialsUsedByFig[_waFigIdx].push(_waSlamIdx);
           }
         }
       }

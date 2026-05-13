@@ -200,7 +200,7 @@ describe('B-DCATT-001: VF: Focus — legal activation', () => {
 
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1,
       'remaining decremented 2→1');
-    assert.ok(game.dcActionsData[MSG_ID].specialsUsed.includes(1),
+    assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(1),
       'specialIdx 1 added to specialsUsed');
     assert.ok(calls.saveGames.length > 0, 'game saved');
   });
@@ -223,7 +223,7 @@ describe('B-DCATT-002: VF: Focus — guard/rejection + refund', () => {
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 2,
       'remaining restored to 2 after refund');
     // specialsUsed cleaned
-    assert.ok(!game.dcActionsData[MSG_ID].specialsUsed.includes(1),
+    assert.ok(!game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(1),
       'specialIdx 1 removed from specialsUsed');
     // No Focus applied
     assert.ok(!game.figureConditions?.['Test Trooper-1-0']?.includes('Focus'),
@@ -247,7 +247,7 @@ describe('B-DCATT-002: VF: Focus — guard/rejection + refund', () => {
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 2,
       'remaining restored after dice-count rejection');
     // specialsUsed cleaned
-    assert.ok(!game.dcActionsData[MSG_ID].specialsUsed.includes(1),
+    assert.ok(!game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(1),
       'specialIdx removed from specialsUsed');
     // No Focus applied, no round flag
     assert.ok(!game.figureConditions?.['Test Trooper-1-0']?.includes('Focus'));
@@ -289,7 +289,7 @@ describe('B-DCATT-003: Autofire — legal activation', () => {
     await handleDcAction(interaction, ctx, 'dc_special_');
 
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1, 'remaining 2→1');
-    assert.ok(game.dcActionsData[MSG_ID].specialsUsed.includes(0));
+    assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(0));
   });
 });
 
@@ -393,7 +393,7 @@ describe('B-DCREF-001: Inline attachment failure refund (VF: Focus)', () => {
     // Verify: action deducted (line 1736) then refunded (line 1820)
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 2,
       'action refunded: remaining back to 2');
-    assert.ok(!game.dcActionsData[MSG_ID].specialsUsed.includes(1),
+    assert.ok(!game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(1),
       'specialsUsed cleaned: index 1 removed');
   });
 
@@ -487,7 +487,7 @@ describe('B-DCREF-002: requiresChoice temporary refund (multi-phase ability)', (
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.ok(game.dcActionsData[MSG_ID].specialsUsed.includes(0),
+    assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(0),
       'specialIdx 0 stays in specialsUsed to prevent re-click');
   });
 });
@@ -512,7 +512,7 @@ describe('B-DCREF-003: No refund for manual fallback (applied:false + manualMess
     // Action was deducted and NOT refunded — by design, the action is spent
     assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1,
       'action consumed (remaining 2→1), no refund for manual fallback');
-    assert.ok(game.dcActionsData[MSG_ID].specialsUsed.includes(0),
+    assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(0),
       'specialsUsed still contains the index');
   });
 });

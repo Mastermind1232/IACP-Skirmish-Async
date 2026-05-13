@@ -86,7 +86,8 @@ export function buildGraph(game, playerNum, dcHealthState, dcMessageMeta) {
       const activeEff = dcEffectsData?.[activeDcName] || (ciKey ? dcEffectsData[ciKey] : null);
       const specials = activeEff?.specials || [];
       if (specials.length > 0) {
-        const specialsUsed = actionsData?.specialsUsed || [];
+        // Per alexanbv 2026-05-13: specialsUsedByFig is per-figure.
+        const specialsUsed = actionsData?.specialsUsedByFig?.[activeFigIdx] || [];
         const remaining = actionsData?.remaining ?? 2;
         const figKey = `${activeDcName}-1-${activeFigIdx}`;
         const isStunned = (game.figureConditions?.[figKey] || []).includes('Stun');

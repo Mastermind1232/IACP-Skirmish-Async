@@ -849,7 +849,10 @@ function getActivationActions(game, playerNum, deps) {
         const specials = dcStats?.specials || [];
         const specialIds = dcStats?.specialIds || [];
         const specialCosts = dcStats?.specialCosts || [];
-        const specialsUsed = data.specialsUsed || [];
+        // Per alexanbv 2026-05-13: specialsUsed is per-figure. Each figure
+        // in a multifigure group can use the same special action once on
+        // its own turn.
+        const specialsUsed = data.specialsUsedByFig?.[figureIndex] || [];
         const isStunned = (game.figureConditions?.[`${meta.dcName}-1-${figureIndex}`] || []).includes('Stun');
 
         for (let si = 0; si < specials.length; si++) {
