@@ -269,15 +269,25 @@ export async function handleVetInstincts(interaction, ctx) {
       // G12: ensure per-die reroll tracking arrays exist
       if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
       if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-      if (atkRem > 0 || hasStep3Abilities) {
+      // alexanbv 2026-05-13: 'forced' phase retired during step-3
+      // unification. Queue entries are surfaced via the holder's
+      // bucket (atk or def). Route by who owns any remaining queue
+      // entries; default to attacker (most forced entries are
+      // attacker-controlled — Versatile Weaponry, Shared Calculations,
+      // Precision held by attacker, etc.).
+      const _atkPN2 = combat.attackerPlayerNum || 1;
+      const _defPN2 = combat.defenderPlayerNum ?? (_atkPN2 === 1 ? 2 : 1);
+      const _atkHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _atkPN2 && (e.remaining ?? 0) > 0);
+      const _defHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _defPN2 && (e.remaining ?? 0) > 0);
+      if (atkRem > 0 || hasStep3Abilities || _atkHasQueue) {
         combat.rerollPhase = 'attacker';
         await sendRerollUI(thread, game, combat, 'attacker');
-      } else if (hasForced) {
-        combat.rerollPhase = 'forced';
-        await sendRerollUI(thread, game, combat, 'forced');
-      } else {
+      } else if (defRem > 0 || _defHasQueue) {
         combat.rerollPhase = 'defender';
         await sendRerollUI(thread, game, combat, 'defender');
+      } else {
+        combat.rerollPhase = null;
+        await proceedAfterRerolls(thread, game, combat, ctx);
       }
     } else {
       combat.rerollPhase = null;
@@ -614,13 +624,19 @@ export async function handlePowerConverter(interaction, ctx) {
     // pre-reroll queue retired 2026-05-13 — step-3 abilities live on
     // combat.rerollAbilities (initialized at attack-roll time).
     combat.rerollAbilities = combat.rerollAbilities || {};
+    // alexanbv 2026-05-13: 'forced' phase retired. Route to the holder's
+    // bucket based on which side has remaining queue entries.
+    const _pcAtkPN2 = combat.attackerPlayerNum || 1;
+    const _pcDefPN2 = combat.defenderPlayerNum ?? (_pcAtkPN2 === 1 ? 2 : 1);
+    const _pcAtkHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _pcAtkPN2 && (e.remaining ?? 0) > 0);
+    const _pcDefHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _pcDefPN2 && (e.remaining ?? 0) > 0);
     if (atkRem > 0 || defRem > 0 || hasForced) {
-      if (atkRem > 0) {
+      if (atkRem > 0 || _pcAtkHasQueue) {
         combat.rerollPhase = 'attacker';
         if (thread) await sendRerollUI(thread, game, combat, 'attacker');
-      } else if (hasForced) {
-        combat.rerollPhase = 'forced';
-        if (thread) await sendRerollUI(thread, game, combat, 'forced');
+      } else if (defRem > 0 || _pcDefHasQueue) {
+        combat.rerollPhase = 'defender';
+        if (thread) await sendRerollUI(thread, game, combat, 'defender');
       } else {
         combat.rerollPhase = 'defender';
         if (thread) await sendRerollUI(thread, game, combat, 'defender');
@@ -988,12 +1004,18 @@ export async function handleDoubtReroll(interaction, ctx) {
     combat.defenderRerollsRemaining = defRem;
     if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
     if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-    if (atkRem > 0 || hasStep3Abilities) {
+    // alexanbv 2026-05-13: 'forced' phase retired. Route to the
+    // bucket whose holder has remaining queue entries.
+    const _dbtAtkPN2 = combat.attackerPlayerNum || 1;
+    const _dbtDefPN2 = combat.defenderPlayerNum ?? (_dbtAtkPN2 === 1 ? 2 : 1);
+    const _dbtAtkHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _dbtAtkPN2 && (e.remaining ?? 0) > 0);
+    const _dbtDefHasQueue = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _dbtDefPN2 && (e.remaining ?? 0) > 0);
+    if (atkRem > 0 || hasStep3Abilities || _dbtAtkHasQueue) {
       combat.rerollPhase = 'attacker';
       await sendRerollUI(thread, game, combat, 'attacker');
-    } else if (hasForced) {
-      combat.rerollPhase = 'forced';
-      await sendRerollUI(thread, game, combat, 'forced');
+    } else if (defRem > 0 || _dbtDefHasQueue) {
+      combat.rerollPhase = 'defender';
+      await sendRerollUI(thread, game, combat, 'defender');
     } else {
       combat.rerollPhase = 'defender';
       await sendRerollUI(thread, game, combat, 'defender');

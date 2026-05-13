@@ -818,7 +818,11 @@ describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
     assert.strictEqual(game.p2DepletedDcMessageIds, undefined, 'card not depleted');
   });
 
-  it('B-CR-DOUBT-003: enters forced reroll phase when queue has entries', async () => {
+  it('B-CR-DOUBT-003: enters defender reroll phase when only Doubt queue entry exists', async () => {
+    // alexanbv 2026-05-13: 'forced' phase retired during step-3
+    // unification. Doubt's forcedRerollQueue entry has
+    // controlPlayer=defender, so the bucket renders in defender
+    // phase (defender clicks "Use [Doubt]" → opens atk-die picker).
     const combat = makeCombat();
     combat.doubtMsgId = 'doubt-msg-1';
     combat.doubtPendingAtkRerolls = 0;
@@ -833,8 +837,8 @@ describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
     await handleDoubtReroll(mockInteraction('doubt_reroll_use_g1', 'player2'), ctx);
 
     assert.strictEqual(calls.sendRerollUI.length, 1, 'reroll UI sent');
-    assert.strictEqual(calls.sendRerollUI[0].phase, 'forced', 'enters forced reroll phase');
-    assert.strictEqual(combat.rerollPhase, 'forced');
+    assert.strictEqual(calls.sendRerollUI[0].phase, 'defender', 'enters defender reroll phase');
+    assert.strictEqual(combat.rerollPhase, 'defender');
   });
 
   it('B-CR-DOUBT-004: resumes attacker reroll when attacker has rerolls remaining', async () => {
