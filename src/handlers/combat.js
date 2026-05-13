@@ -3945,6 +3945,30 @@ export async function handleCombatRoll(interaction, ctx) {
       if (game.selfAugmentationMsgId?.[combat.attackerMsgId]) {
         _pushVoluntary(attackerPlayerNum, 'attack', 'Self-Augmentation');
       }
+      // Per alexanbv 2026-05-13: The Darksaber attachment (Maul or
+      // Sabine Wren ONLY) — "Exhaust this card while attacking to
+      // reroll 1 attack die." Detection: attacker's DC has the
+      // attached SU "[The Darksaber]" AND it's not already exhausted.
+      // Registered as a queue entry with exhaustAttachment payload
+      // so the card exhausts ONLY when the player clicks "Use The
+      // Darksaber" and resolves the reroll (lazy exhaust per
+      // alexanbv 2026-05-13 rule).
+      {
+        const _dsAtts = game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || [];
+        if (cardNameIncludes(_dsAtts, 'The Darksaber')) {
+          const _dsExh = game.exhaustedSkirmishUpgrades?.[combat.attackerMsgId] || [];
+          if (!cardNameIncludes(_dsExh, 'The Darksaber')) {
+            combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+            combat.forcedRerollQueue.push({
+              controlPlayer: attackerPlayerNum,
+              pool: 'attack',
+              remaining: 1,
+              source: 'The Darksaber',
+              exhaustAttachment: { msgId: combat.attackerMsgId, name: 'The Darksaber' },
+            });
+          }
+        }
+      }
       // Guardian Stance / defenderRerollDiceMax (CC that grants the
       // defender a flexible reroll pool). Each unit becomes one entry
       // with pool='any' so the picker shows attack + defense dice.
@@ -4167,6 +4191,65 @@ async function _fireExhaustOnConsume(game, entry, thread) {
     if (!game[_depKey].includes(entry.depleteDc.msgId)) {
       game[_depKey].push(entry.depleteDc.msgId);
     }
+  }
+}
+
+/**
+ * Per alexanbv 2026-05-13: shared post-reroll trigger helper. The
+ * legacy voluntary-reroll decrement path (lines ~4830) and the
+ * controlled-reroll sub-picker path (lines ~4700) both need to fire:
+ *   - Advanced Targeting Computer (Dark Trooper Mk III): rerolled
+ *     atk die has fewer Hits → +1 Hit, limit once per attack.
+ *   - Tough Luck eligibility prompt: per CRR + alexanbv 2026-05-13,
+ *     EITHER the die's owner OR the player who caused the reroll
+ *     may play Tough Luck on the rerolled die.
+ *
+ * Without this helper the sub-picker path would skip both triggers,
+ * silently dropping ATC's conditional bonus and the rerolling
+ * player's Tough Luck window.
+ */
+async function _fireAttackerPostRerollTriggers({ game, combat, thread, ctx, gameId, oldDie, newDie, idx, attackerPlayerNum, defenderPlayerNum, abilityHolderPN }) {
+  // Advanced Targeting Computer (atk-side, limit 1/attack)
+  if (!combat.advTcBonusApplied) {
+    try {
+      const _atcDcEff = ctx?.getDcEffects ? ctx.getDcEffects() : {};
+      const _atcDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
+      const _atcEff = _atcDcEff[_atcDcName] || _atcDcEff[_atcDcName?.replace(/\s*\[.*\]\s*$/, '')];
+      if (hasAdvTargetingComputerAbility(_atcEff?.specialAbilityIds || [])) {
+        if (advTcRerollLostHits(oldDie, newDie)) {
+          const _atcBonus = applyAdvTcHitBonus(combat);
+          combat.bonusHits = _atcBonus.bonusHits;
+          combat.advTcBonusApplied = true;
+          if (thread) await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Hit applied.').catch(() => {});
+        }
+      }
+    } catch { /* non-fatal */ }
+  }
+  // Tough Luck — offer to BOTH the die-owner side AND the player who
+  // caused the reroll, per user spec. The die just rerolled is an
+  // atk die owned by the attacker; the rerolling player is whoever
+  // controlled this queue entry (abilityHolderPN). If they differ,
+  // either side may have TL.
+  const _tlCandidates = new Set();
+  if (game.toughLuckPlayerNum) {
+    // The die's owner side (attacker for atk die). TL is the opponent
+    // of the die-owner — for an atk die that's the defender.
+    if (game.toughLuckPlayerNum === defenderPlayerNum) _tlCandidates.add(defenderPlayerNum);
+    // The rerolling player — e.g. defender's Doubt that just rerolled
+    // the attacker's die; if the rerolling player also has TL, they
+    // get a prompt too. For a sub-picker path the holder is in
+    // abilityHolderPN — TL ownership is read from game.toughLuckPlayerNum
+    // which is set per-player when their TL prep fires.
+    if (game.toughLuckPlayerNum === abilityHolderPN) _tlCandidates.add(abilityHolderPN);
+  }
+  for (const _tlPN of _tlCandidates) {
+    setPendingToughLuck(game, { side: 'atk', idx });
+    const _tlOwner = game[`player${_tlPN}Id`] ?? '';
+    const _tlRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    if (thread) await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch(() => {});
   }
 }
 
@@ -4741,6 +4824,12 @@ export async function handleCombatReroll(interaction, ctx) {
         // card unexhausted.
         await _fireExhaustOnConsume(game, _spEntry, thread);
         await thread.send(`**${_spEntry.source}** reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
+        // Per alexanbv 2026-05-13: post-reroll conditional triggers
+        // (Advanced Targeting Computer +1 Hit, Tough Luck prompt) must
+        // fire whether the reroll came from the legacy voluntary path
+        // or the controlled-reroll sub-picker. Shared helper covers
+        // both.
+        await _fireAttackerPostRerollTriggers({ game, combat, thread, ctx, gameId, oldDie, newDie, idx, attackerPlayerNum, defenderPlayerNum, abilityHolderPN: _spEntry.controlPlayer });
       }
     } else if (side === 'def' && (_spEntry.pool === 'defense' || _spEntry.pool === 'any')) {
       const dice = combat.defenseDiceResults || [];
@@ -4882,31 +4971,16 @@ export async function handleCombatReroll(interaction, ctx) {
           combat.doubleOrNothingApplied = true;
           game.doubleMatchingIconsOnReroll = null;
         }
-        // Advanced Targeting Computer (Dark Trooper Mk III): if rerolled die has fewer Hits, +1 Hit
-        if (!combat.advTcBonusApplied) {
-          const _atcDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-          const _atcDcName = dcNameFromFigureKey(combat.attackerFigureKey || '');
-          const _atcEff = _atcDcEff[_atcDcName] || _atcDcEff[_atcDcName?.replace(/\s*\[.*\]\s*$/, '')];
-          if (hasAdvTargetingComputerAbility(_atcEff?.specialAbilityIds || [])) {
-            if (advTcRerollLostHits(oldDie, newDie)) {
-              const _atcBonus = applyAdvTcHitBonus(combat);
-              combat.bonusHits = _atcBonus.bonusHits;
-              combat.advTcBonusApplied = true;
-              await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Hit applied.');
-            }
-          }
-        }
-        // Tough Luck: if defender set TL, they may remove this rerolled die
-        if (game.toughLuckPlayerNum === defenderPlayerNum) {
-          setPendingToughLuck(game, { side: 'atk', idx });
-          const _tlOwner = game[`player${defenderPlayerNum}Id`] ?? '';
-          const _tlRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch(discordCatch);
-          _tlTriggered = true;
-        }
+        // Per alexanbv 2026-05-13: ATC + Tough Luck triggers now live
+        // in the shared _fireAttackerPostRerollTriggers helper so they
+        // fire from both the legacy voluntary path and the
+        // controlled-reroll sub-picker.
+        await _fireAttackerPostRerollTriggers({
+          game, combat, thread, ctx, gameId, oldDie, newDie, idx,
+          attackerPlayerNum, defenderPlayerNum,
+          abilityHolderPN: attackerPlayerNum, // voluntary path: attacker's own reroll
+        });
+        if (game.pendingToughLuck) _tlTriggered = true;
       }
     } else {
       const dice = combat.defenseDiceResults || [];

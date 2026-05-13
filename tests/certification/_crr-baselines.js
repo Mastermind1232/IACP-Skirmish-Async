@@ -65,8 +65,12 @@ export const DD_BASELINE = {
   dcName_equality: 63,
   dcName_includes: 5,
   dcName_startsWith: 4,
-  cardNameIncludes: 99,
+  cardNameIncludes: 100,
 };
+// 2026-05-13: cardNameIncludes 99→100. The Darksaber attachment detection
+// in handleCombatRoll uses cardNameIncludes calls (attachment-present +
+// not-exhausted check) to register a lazy-exhaust queue entry for
+// "Exhaust this card while attacking to reroll 1 attack die".
 // 2026-05-10: cardNameIncludes 97→99. Two new attachment-equality
 // checks: (a) `getDcActionButtons` (components.js) gates the
 // "Free Slam (Wookiee Avenger)" button via cardNameIncludes; (b)
