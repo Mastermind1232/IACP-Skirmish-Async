@@ -352,9 +352,11 @@ export function resolveAbility(abilityId, context) {
       }
       const targetOwner = _findOwner(targetFigureKey);
       const { prevPos } = pushFigure(game, targetOwner, targetFigureKey, chosenSpace) || { prevPos: null };
-      // Deduct MP cost if applicable
+      // Deduct MP cost if applicable.
+      // Per alexanbv 2026-05-13: per-figure MP bank.
       if (entry.mpCostToActivate) {
-        consumeMovementPoints(game, msgId, entry.mpCostToActivate);
+        const _mpFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        consumeMovementPoints(game, msgId, entry.mpCostToActivate, _mpFigIdx);
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = dcNameFromFigureKey(targetFigureKey);
@@ -3434,9 +3436,11 @@ export function resolveAbility(abilityId, context) {
         game.ancillaryTokens.rubble = [...(game.ancillaryTokens.rubble || []), spaceNorm];
         results.push(`rubble token placed at **${String(chosenSpace).toUpperCase()}**`);
       }
-      // Deduct MP cost if specified (e.g. Wrist Flamethrower costs 2 MP)
+      // Deduct MP cost if specified (e.g. Wrist Flamethrower costs 2 MP).
+      // Per alexanbv 2026-05-13: per-figure MP bank.
       if (entry.mpCost > 0) {
-        const _spent = consumeMovementPoints(game, msgId, entry.mpCost);
+        const _mpFigIdx2 = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+        const _spent = consumeMovementPoints(game, msgId, entry.mpCost, _mpFigIdx2);
         if (_spent > 0) results.push(`spent ${_spent} MP`);
       }
       const spaceUpper = String(chosenSpace).toUpperCase();

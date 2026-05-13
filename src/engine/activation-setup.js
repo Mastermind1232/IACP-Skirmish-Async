@@ -936,9 +936,16 @@ export async function finalizeActivation({
       const imgFiles = [];
       if (fCard?.imagePath) try { imgFiles.push(new AttachmentBuilder(join(getRootDir(), fCard.imagePath))); } catch {}
       await thread.send({ content: `🔄 **Form: ${chosenForm}** — ${fCard?.abilityText || 'Apply form abilities.'}`, files: imgFiles }).catch(discordCatch);
-      // Fleet (Streetrat): gain MP
+      // Fleet (Streetrat): gain MP.
+      // Per alexanbv 2026-05-13: per-figure bank. Fleet applies at
+      // start-of-activation to figure 0 (the first activator).
       if (fCard?.fleetMp && fCard.fleetMp > 0) {
-        grantMovementBank(game, msgId, fCard.fleetMp);
+        grantMovementBank(game, msgId, fCard.fleetMp, 0);
+        // Mirror top-level so legacy readers see the grant.
+        if (game.movementBank?.[msgId]) {
+          game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + fCard.fleetMp;
+          game.movementBank[msgId].remaining = (game.movementBank[msgId].remaining ?? 0) + fCard.fleetMp;
+        }
         await thread.send({ content: `🏃 **Fleet** — **${dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(discordCatch);
       }
       // Conspire (Senator)
