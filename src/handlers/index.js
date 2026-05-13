@@ -542,8 +542,10 @@ register('illicit_arms_skip_', handleIllicitArms, 'combatReactions');
 register('illicit_arms_pick_', handleIllicitArms, 'combatReactions');
 register('force_exhaustion_yes_', handleForceExhaustion, 'combatReactions');
 register('force_exhaustion_no_', handleForceExhaustion, 'combatReactions');
-register('doubt_reroll_use_', handleDoubtReroll, 'combatReactions');
-register('doubt_reroll_skip_', handleDoubtReroll, 'combatReactions');
+// alexanbv 2026-05-13: doubt_reroll_use_/skip_ buttons retired.
+// [Doubt] now registers directly into the defender's reroll bucket
+// via handleCombatRoll detection; no on-declare/post-roll prompt.
+// handleDoubtReroll function kept exported for back-compat callers.
 
 // --- Post-combat ---
 register('reaction_skip_', handleReactionSkip, 'postCombat');

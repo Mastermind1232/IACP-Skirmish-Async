@@ -4034,8 +4034,14 @@ export async function handleCombatRoll(interaction, ctx) {
     // one-time token distributor, not a per-attack/defense bonus
     // opportunity. Tokens are granted on play; the legacy "active
     // during attacks/defenses" flag was an over-implementation.
-    // [Doubt] SU: defender may deplete to force 1 attack die reroll
-    if (!combat.doubtRerollChecked) {
+    // [Doubt] SU: per alexanbv 2026-05-13 the deplete-to-force-atk-
+    // reroll happens DURING step 3 (the reroll phase), not via an
+    // auto-prompt between dice-roll and reroll buckets. Register as a
+    // forcedRerollQueue entry with a depleteDc payload — defender
+    // sees "Use [Doubt]" in their bucket and clicking it opens the
+    // pool-filtered atk-die picker; reroll consumes the entry and
+    // deplete fires lazily via _fireExhaustOnConsume.
+    {
       const _dbtDcList = getDcList(game, defenderPlayerNum) || [];
       const _dbtMsgIds = getDcMessageIds(game, defenderPlayerNum) || [];
       for (let i = 0; i < _dbtDcList.length; i++) {
@@ -4045,19 +4051,15 @@ export async function handleCombatRoll(interaction, ctx) {
         if (!_dbtMid) continue;
         const _dbtDepleted = (game.p1DepletedDcMessageIds || []).includes(_dbtMid) || (game.p2DepletedDcMessageIds || []).includes(_dbtMid);
         if (_dbtDepleted) continue;
-        // Found usable Doubt — prompt defender
-        combat.doubtRerollChecked = true;
-        combat.doubtPendingAtkRerolls = atkRerolls;
-        combat.doubtPendingDefRerolls = defRerolls;
-        combat.doubtMsgId = _dbtMid;
-        const defId = game[`player${defenderPlayerNum}Id`] || '';
-        const _dbtRow = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`doubt_reroll_use_${gameId}`).setLabel('Use Doubt (Deplete → force 1 ATK reroll)').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`doubt_reroll_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `**[Doubt]** — <@${defId}> Deplete to force your opponent to reroll 1 attack die?`, components: [_dbtRow] }).catch(discordCatch);
-        saveGames(game.gameId);
-        return;
+        combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+        combat.forcedRerollQueue.push({
+          controlPlayer: defenderPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: '[Doubt]',
+          depleteDc: { msgId: _dbtMid, playerNum: defenderPlayerNum },
+        });
+        break; // one Doubt per defender per attack
       }
     }
     // alexanbv 2026-05-13: deprecated count-field assignment removed.
