@@ -119,16 +119,19 @@ export async function applyAbilityResult(result, opts) {
       await updateHandVisualMessage(game, 1, client);
       await updateHandVisualMessage(game, 2, client);
     }
-    const drewCount = result.drewCards.length;
-    if (logGameAction) {
-      await logGameAction(game, client, `CC effect: Drew ${drewCount} Command card${drewCount === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' });
-    }
   }
 
   // --- Log message (applied) ---
-  if (result.applied && result.logMessage && !result.drewCards?.length) {
-    if (logGameAction) {
+  // If resolveAbility returned a logMessage, prefer that — the ability
+  // author knows what to expose (e.g. Black Market Prices names the
+  // DISCARDED card + VP swing, but drewCards stays count-only inside
+  // that message). Otherwise fall back to a generic "Drew N" line.
+  if (result.applied) {
+    if (result.logMessage && logGameAction) {
       await logGameAction(game, client, `CC effect: ${result.logMessage}`, { phase: 'ACTION', icon: 'card' });
+    } else if (result.drewCards?.length && logGameAction) {
+      const drewCount = result.drewCards.length;
+      await logGameAction(game, client, `CC effect: Drew ${drewCount} Command card${drewCount === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' });
     }
   }
 

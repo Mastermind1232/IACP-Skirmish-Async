@@ -9527,7 +9527,9 @@ export function resolveAbility(abilityId, context) {
           const ownHand = [...(game[ownHandKey] || [])];
           ownHand.push(drawn);
           game[ownHandKey] = ownHand;
-          drawNote = ` Cost ≤1 — You drew **${drawn}**.`;
+          // Per alexanbv 2026-05-13: Foresee only reveals the
+          // DISCARDED card. The bonus self-draw stays secret.
+          drawNote = ' Cost ≤1 — You drew 1 Command card.';
         } else {
           drawNote = ' Cost ≤1 but your deck is empty (no draw).';
         }
