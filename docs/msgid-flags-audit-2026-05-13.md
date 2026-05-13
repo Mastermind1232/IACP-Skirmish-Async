@@ -68,16 +68,27 @@ Commit map (this session continuation, 7 more commits):
   msgId-keyed maps). Static Pulse + Force Card Pick also moved off
   ROUND_OBJECT_FLAGS (which resets to `{}`) to ROUND_DELETE_FLAGS
   (latent bug: truthy `{}` would suppress first-call gate).
+- `1f47e3d9` (BIG) — pendingOverrideAttackDice → FIGKEY across 8 source
+  files + 6 test files. ~50 sites total. Every special-action dice
+  override (Saber Strike, Bo-Rifle, Darksaber, Saber Orbit, Multi-Fire,
+  Overheated, Feral Swipes, Hair Trigger, Definition: 'Love',
+  Continually Unexpected, Sling Barrage, Flurry of Blows, Heavy
+  Repeater, Arsenal/Epic Arsenal, Vanguard, EE-3 Carbine, Missile
+  Salvo, Meditation, Face Me!, Overcharged Weapons, plus the generic
+  overrideAttackDice + overrideAttackType branches) now keys by the
+  attacker's figureKey.
 
-## Pending migration (remaining queue)
+## Migration sprint COMPLETE 2026-05-13
 
-**The big one (deferred — own commit night):**
-- `pendingOverrideAttackDice` (~66 sites — attack-dice override for many
-  special actions: Arsenal, Vanguard, Bo-Rifle Staff, Saber Strike,
-  Darksaber, Wookie Sling Barrage, Heavy Repeater, etc.). Each write
-  site has different context for the figure derivation. Migration
-  surface too large for the same session as forcedAttackTarget;
-  belongs in its own focused commit.
+The remaining queue below is principle-only — no behavior change today
+because every entry is either:
+- a genuine per-DC UI keeper (action card state, message ids), or
+- a picker state machine tied to a single-figure deployment group, or
+- dead in production (no live writers).
+
+The substantive migration is shipped. `pendingOverrideAttackDice`
+landed in `1f47e3d9` (~50 sites across 8 files), which was the last
+multifigure-correctness flag of meaningful size.
 
 **Picker state machines — single-figure or 1-attack scope today:**
 Most of these are tied to single-figure deployment groups (Bantha,
