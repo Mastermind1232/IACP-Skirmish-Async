@@ -587,7 +587,9 @@ export const PARITY_SCENARIOS = [
       };
       const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Stormtrooper (Regular)');
       enableAttackFor(game, attackerMsgId);
-      game.fireMissionActive = { [attackerMsgId]: true };
+      // Per alexanbv 2026-05-13: fireMissionActive is keyed by figureKey
+      // (the attacking figure).
+      game.fireMissionActive = { 'Stormtrooper (Regular)-1-0': true };
       return {
         ...built,
         attacker: {

@@ -2055,10 +2055,10 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.defenderFireproof = true;
   }
   // Autofire: add chain attack surge ability + mark on combat
-  if (game.autofireActive?.[msgId]) {
+  if (game.autofireActive?.[attackerFigureKey]) {
     game.pendingCombat.bonusSurgeAbilities.push('autofire_chain');
     game.pendingCombat.autofireAttack = true;
-    delete game.autofireActive[msgId]; // consumed
+    delete game.autofireActive[attackerFigureKey]; // consumed
   }
   // Barrage (CT-1701) second attack: mark on combat so defender adds 1
   // white die. Per-figureKey 2026-05-13 (alexanbv).
@@ -2067,10 +2067,10 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.barrageDefenseBonus[attackerFigureKey]; // consumed
   }
   // Fire Mission: +Blast 1
-  if (game.fireMissionActive?.[msgId]) {
+  if (game.fireMissionActive?.[attackerFigureKey]) {
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + 1;
     game.pendingCombat.fireMissionAttack = true;
-    delete game.fireMissionActive[msgId]; // consumed
+    delete game.fireMissionActive[attackerFigureKey]; // consumed
     await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(discordCatch);
   }
 

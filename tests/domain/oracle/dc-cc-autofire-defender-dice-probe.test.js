@@ -35,8 +35,10 @@ const src = readFileSync(COMBAT_PATH, 'utf8');
 
 describe('DC-CC: Z-6 Autofire — defender +1 white die reads the right flag', () => {
   it('attack-declare block sets combat.autofireAttack and deletes game.autofireActive', () => {
+    // Per alexanbv 2026-05-13: autofireActive is keyed by figureKey
+    // (attackerFigureKey) post-migration. Pattern updated to match.
     const declareBlock = src.match(
-      /if \(game\.autofireActive\?\.\[msgId\]\)[\s\S]{0,400}?delete game\.autofireActive\[msgId\];/,
+      /if \(game\.autofireActive\?\.\[attackerFigureKey\]\)[\s\S]{0,400}?delete game\.autofireActive\[attackerFigureKey\];/,
     );
     assert.ok(declareBlock, 'expected autofire declare block with set-then-delete pattern');
     assert.ok(

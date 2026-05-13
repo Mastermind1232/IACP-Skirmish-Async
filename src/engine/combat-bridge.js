@@ -3104,9 +3104,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   if (combat.autofireChainPending && combat.attackerFigureKey) {
     game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
     game.fellSwoopFreeAttack[combat.attackerFigureKey] = true;
-    if (combat.autofireChainTargetSpace) {
+    if (combat.autofireChainTargetSpace && combat.attackerFigureKey) {
+      // Per alexanbv 2026-05-13: per-figureKey.
       game.autofireChainTargetSpace = game.autofireChainTargetSpace || {};
-      game.autofireChainTargetSpace[combat.attackerMsgId] = combat.autofireChainTargetSpace;
+      game.autofireChainTargetSpace[combat.attackerFigureKey] = combat.autofireChainTargetSpace;
     }
     await logGameAction(game, client, `**Autofire** — Chain attack available! Target must be within 3 of the original target space.`, { phase: 'ROUND', icon: 'attack' });
   }

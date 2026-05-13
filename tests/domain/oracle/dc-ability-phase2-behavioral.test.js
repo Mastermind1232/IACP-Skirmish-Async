@@ -269,8 +269,9 @@ describe('B-DCATT-003: Autofire — legal activation', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.autofireActive?.[MSG_ID], true,
-      'autofireActive flag set');
+    // Per alexanbv 2026-05-13: autofireActive is keyed by figureKey.
+    assert.strictEqual(game.autofireActive?.['Test Trooper-1-0'], true,
+      'autofireActive flag set on the active figure');
     // figureKey-keyed per IACP rule 2026-05-09
     assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'],
       'freeAttackBonusPending set');
@@ -351,7 +352,8 @@ describe('B-DCATT-005: Fire Mission — double-action cost', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.fireMissionActive?.[MSG_ID], true, 'fireMissionActive set');
+    // Per alexanbv 2026-05-13: fireMissionActive is keyed by figureKey.
+    assert.strictEqual(game.fireMissionActive?.['Test Trooper-1-0'], true, 'fireMissionActive set on the active figure');
     // figureKey-keyed per IACP rule 2026-05-09
     assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'], 'freeAttackBonusPending set');
   });

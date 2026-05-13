@@ -1214,7 +1214,7 @@ async function buildAndSendAttackTargets(
       }
     }
     // Fire Mission: LOS from any figure in the group (not just acting figure)
-    if (!los && game.fireMissionActive?.[msgId]) {
+    if (!los && game.fireMissionActive?.[figureKey]) {
       const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
       const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
@@ -1333,11 +1333,12 @@ async function buildAndSendAttackTargets(
     if (ptTargets.length > 0) targets.splice(0, targets.length, ...ptTargets);
   }
   // Autofire chain attack: restrict targets to within 3 spaces of original target
-  if (game.autofireChainTargetSpace?.[msgId]) {
-    const _chainSpace = game.autofireChainTargetSpace[msgId];
+  // Per alexanbv 2026-05-13: per-figureKey.
+  if (game.autofireChainTargetSpace?.[figureKey]) {
+    const _chainSpace = game.autofireChainTargetSpace[figureKey];
     const _chainFiltered = targets.filter(t => countSpaces(ms, _chainSpace, t.coord, closedDoorEdges) <= 3);
     if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
-    delete game.autofireChainTargetSpace[msgId];
+    delete game.autofireChainTargetSpace[figureKey];
   }
   // Barrage (CT-1701) second attack: restrict targets to within 3 spaces of first target.
   // Per-figureKey 2026-05-13 (alexanbv).
@@ -2735,24 +2736,26 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       return;
     }
 
-    // Z-6 Trooper Autofire: perform an attack (defender +1 white die, surge: chain attack within 3)
+    // Z-6 Trooper Autofire: perform an attack (defender +1 white die, surge: chain attack within 3).
+    // Per alexanbv 2026-05-13: per-figureKey.
     if (_suHandler === 'Autofire') {
-      game.autofireActive = game.autofireActive || {};
-      game.autofireActive[msgId] = true;
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _afFk = figureKeyForActivation(game, msgId, figureIndex);
+      game.autofireActive = game.autofireActive || {};
+      if (_afFk) game.autofireActive[_afFk] = true;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       if (_afFk) game.freeAttackBonusPending[_afFk] = { from: 'Autofire' };
       await thread.send(`**Autofire** — Your next attack: defender adds **1 white die**. Surge: **Chain attack** targeting a figure within 3 of target space.`).catch(discordCatch);
       saveGames(game.gameId);
       return;
     }
 
-    // Mortar Trooper Fire Mission: double-action attack with LOS from any group figure + Blast 1
+    // Mortar Trooper Fire Mission: double-action attack with LOS from
+    // any group figure + Blast 1. Per alexanbv 2026-05-13: per-figureKey.
     if (_suHandler === 'Fire Mission') {
-      game.fireMissionActive = game.fireMissionActive || {};
-      game.fireMissionActive[msgId] = true;
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _fmFk2 = figureKeyForActivation(game, msgId, figureIndex);
+      game.fireMissionActive = game.fireMissionActive || {};
+      if (_fmFk2) game.fireMissionActive[_fmFk2] = true;
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       if (_fmFk2) game.freeAttackBonusPending[_fmFk2] = { from: 'Fire Mission' };
       await thread.send(`**Fire Mission** — Your next attack: LOS from **any figure in this group** (range from acting figure). **+Blast 1**.`).catch(discordCatch);
       saveGames(game.gameId);

@@ -2336,7 +2336,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     // covers Z-6 / Mortar / Riot Trooper squad upgrades that bump the group
     // size by 1. Blast 1 is a combat-resolution concern, not target
     // enumeration, so out of scope here.
-    if (!los && game.fireMissionActive?.[msgId]) {
+    if (!los && game.fireMissionActive?.[figureKey]) {
       const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
       const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];

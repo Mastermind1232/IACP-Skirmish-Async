@@ -93,9 +93,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'dcActivationLogMessageIds',
   'defenderThreadData',
   'deviceRerollGranted',
-  'autofireActive',
-  'fireMissionActive',
-  'autofireChainTargetSpace',
+  // autofireActive + fireMissionActive + autofireChainTargetSpace
+  // MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   // darksaberSecondAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // saberOrbitAttacksRemaining + unstableDevicesUsedThisActivation
   // moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope).
@@ -210,6 +209,12 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'nextAttackIgnoreFigureLOS',
   'optimalBombardmentBlastBonus',
   'activationDamagedFigures',
+  // alexanbv 2026-05-13 seventh-wave: Autofire / Fire Mission per-figure
+  // (Z-6 Trooper Autofire + Mortar Trooper Fire Mission both grant
+  // per-figure next-attack bonuses).
+  'autofireActive',
+  'fireMissionActive',
+  'autofireChainTargetSpace',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
