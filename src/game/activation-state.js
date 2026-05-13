@@ -64,7 +64,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // the msgId-cleanup loop never matched, leaving stale state if the
   // attack handler skipped its own delete on an error path).
   'pendingCombatResupply',
-  'pendingPostAttackConditions',
+  // pendingPostAttackConditions DROPPED 2026-05-13 — only consumer was
+  // gated by `if (false && ...)`; no live writers anywhere. Dead code.
+  // pendingMpBonus retained — no live writers in main, but the
+  // activation-cost-behavioral test asserts cleanup, and pending-state-
+  // lint locks the readers in activation-setup.js.
   'pendingMpBonus',
   // freeAttackBonusPending moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09
   // (per IACP rule clarification: "free attack bonus" is per-figure, not
@@ -127,7 +131,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // per figure not per group").
   // focusFireActive + multiFireActive + multiFireBlockedTarget moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
-  'spotWeldPending',
+  // spotWeldPending DROPPED 2026-05-13 — no live readers/writers
+  // anywhere in src/. Dead registry entry.
   'pendingMissileSalvo',
   'pendingPounceSpaceChoice',
   // Audit 2026-05-05: per-activation msgId-keyed fields surfaced by
@@ -139,7 +144,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // activationDoubleSpecialAction MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   'companionActivatedBefore',
   'falseOrdersAttackTargets',
-  'paybackBonusSurge',
+  // paybackBonusSurge MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (write site at post-combat.js:82 already keys by targetFigureKey;
+  // read in combat.js at attackerFigureKey. msgId cleanup never matched).
   // pounceAttackPending MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (alexanbv: per-figure; the Pounce attack belongs to the figure
   // that triggered it, not the group).
@@ -234,6 +241,9 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'freeAttackDifferentTargets',
   // alexanbv 2026-05-13 ninth-wave: Trample chained-picker continuation.
   'pendingMultiTargetRoll',
+  // alexanbv 2026-05-13 tenth-wave: Payback CC (already keyed by
+  // attackerFigureKey at write site; was miscategorized in MSGID list).
+  'paybackBonusSurge',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

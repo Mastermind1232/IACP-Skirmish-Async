@@ -1547,7 +1547,7 @@ export async function handleDcFigPick(interaction, ctx) {
     'imperialRetrofittingMultiAttack', 'arcingShotActive',
     'wookieeAvengerSlamUsed', 'specialActionUsedThisActivation',
     'activationDoubleSpecialAction', 'falseOrdersAttackTargets',
-    'paybackBonusSurge', 'falseOrdersUpgrade', 'setTrapSpace',
+    'falseOrdersUpgrade', 'setTrapSpace',
     'reverseEngineerActive', 'deviceRerollGranted',
     'selfDestructProtocolTriggered',
   ];
