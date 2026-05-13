@@ -116,7 +116,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // saberOrbitAttacksRemaining + unstableDevicesUsedThisActivation
   // moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope).
   'pendingOverwatchPlacement',
-  'activationKills',
+  // activationKills MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (write sites at combat-bridge.js:1236 + after-attack-fire.js:141
+  // both key by combat.attackerFigureKey; msgId cleanup never matched).
   // activationDamagedFigures MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (alexanbv: "AIM on rebel troopers is tracked per figure").
   'yhsiwOptions',
@@ -244,6 +246,9 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // alexanbv 2026-05-13 tenth-wave: Payback CC (already keyed by
   // attackerFigureKey at write site; was miscategorized in MSGID list).
   'paybackBonusSurge',
+  // alexanbv 2026-05-13 eleventh-wave: activation-kills counter (already
+  // keyed by attackerFigureKey at both write sites; was miscategorized).
+  'activationKills',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

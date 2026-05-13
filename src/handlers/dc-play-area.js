@@ -1537,25 +1537,14 @@ export async function handleDcFigPick(interaction, ctx) {
   // state (perFigureRemaining, figureLocked, figureSoaFired/figureEoaFired,
   // companionActivatedBefore, dcActivationLogMessageIds) and pending
   // interrupt-state buckets which span figures by design.
-  const _PER_FIGURE_RESET_MSGID_FLAGS = [
-    'overrunThisActivation', 'overrunDamagedThisMove',
-    'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
-    'closeQuartersActive', 'mobileMovementActive',
-    'autofireActive', 'fireMissionActive', 'autofireChainTargetSpace',
-    'activationKills', 'activationDamagedFigures',
-    'activationExtraActionThenStun', 'beastTamerInteractOverride',
-    'imperialRetrofittingMultiAttack', 'arcingShotActive',
-    'wookieeAvengerSlamUsed', 'specialActionUsedThisActivation',
-    'activationDoubleSpecialAction', 'falseOrdersAttackTargets',
-    'falseOrdersUpgrade', 'setTrapSpace',
-    'reverseEngineerActive', 'deviceRerollGranted',
-    'selfDestructProtocolTriggered',
-  ];
-  for (const _f of _PER_FIGURE_RESET_MSGID_FLAGS) {
-    if (game[_f] && Object.prototype.hasOwnProperty.call(game[_f], msgId)) {
-      delete game[_f][msgId];
-    }
-  }
+  // Per alexanbv 2026-05-13: this block previously wiped 20+ msgId-
+  // keyed per-activation flags on figure-switch. All but 2 have since
+  // migrated to ACTIVATION_FIGKEY_FLAGS / PLAYERNUM_FLAGS / ROUND_*,
+  // so each new figure starts with figure-scoped state by construction
+  // (msgId-delete on figureKey-keyed maps is a no-op). The remaining
+  // genuinely msgId-keyed flags (falseOrdersAttackTargets,
+  // falseOrdersUpgrade) span figures by design and shouldn't be wiped
+  // on figure-switch. Block removed.
   // Per destruct 2026-05-07: each figure has individual SoA. Fire
   // figure-scoped start-of-activation effects once per figure.
   _ad.figureSoaFired = _ad.figureSoaFired || {};
