@@ -764,7 +764,12 @@ describe('B-CR-PC: Power Converter multi-step reroll', () => {
 // ── B-CR-DOUBT: Doubt Reroll ────────────────────────────────────────────────
 
 describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
-  it('B-CR-DOUBT-001: use depletes card and adds forced reroll to queue', async () => {
+  it('B-CR-DOUBT-001: use adds forced reroll to queue with deferred deplete payload', async () => {
+    // alexanbv 2026-05-13: Doubt now defers depletion to actual reroll
+    // consumption. The Use button only adds the queue entry with a
+    // `depleteDc` payload; the card stays undepleted until the defender
+    // rerolls a die via the bucket. Skipping via Continue preserves the
+    // card.
     const combat = makeCombat({
       attackerRerollsRemaining: 0,
       defenderRerollsRemaining: 0,
@@ -781,14 +786,17 @@ describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
     const { ctx } = buildCtx(game);
     await handleDoubtReroll(mockInteraction('doubt_reroll_use_g1', 'player2'), ctx);
 
-    // Card depleted
-    assert.ok(game.p2DepletedDcMessageIds?.includes('doubt-msg-1'), 'doubt card depleted');
-    // Forced reroll queued
+    // Card NOT yet depleted (deferred to actual reroll consumption)
+    assert.ok(!game.p2DepletedDcMessageIds?.includes('doubt-msg-1'),
+      'doubt card NOT yet depleted — deplete fires on reroll consumption');
+    // Forced reroll queued with deferred-deplete payload
     assert.strictEqual(combat.forcedRerollQueue.length, 1, 'one forced reroll queued');
     assert.strictEqual(combat.forcedRerollQueue[0].source, 'Doubt');
     assert.strictEqual(combat.forcedRerollQueue[0].pool, 'attack');
     assert.strictEqual(combat.forcedRerollQueue[0].remaining, 1);
     assert.strictEqual(combat.forcedRerollQueue[0].controlPlayer, 2, 'defender controls the forced reroll');
+    assert.deepStrictEqual(combat.forcedRerollQueue[0].depleteDc, { msgId: 'doubt-msg-1', playerNum: 2 },
+      'deplete deferred — payload encodes the target card');
   });
 
   it('B-CR-DOUBT-002: skip does not modify forcedRerollQueue', async () => {

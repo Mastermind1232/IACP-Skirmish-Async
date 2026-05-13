@@ -3888,12 +3888,22 @@ export async function handleCombatRoll(interaction, ctx) {
             const _taAtts = game.p1DcAttachments?.[_taMid] || game.p2DcAttachments?.[_taMid] || [];
             if (!cardNameIncludes(_taAtts, 'Trusted Ally')) break;
             if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[_taMid], 'Trusted Ally')) break;
-            // Auto-exhaust and grant reroll
-            game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-            game.exhaustedSkirmishUpgrades[_taMid] = [...(game.exhaustedSkirmishUpgrades[_taMid] || []), 'Trusted Ally'];
-            _pushVoluntary(attackerPlayerNum, 'attack', `Trusted Ally (${fn})`);
+            // Per alexanbv 2026-05-13: register queue entry WITHOUT
+            // exhausting the attachment. The exhaust fires only when
+            // the player clicks "Use Trusted Ally" and resolves the
+            // reroll (see _fireExhaustOnConsume in handleCombatReroll
+            // sub-picker path). Skipping the reroll via Continue
+            // leaves the attachment unexhausted.
+            combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+            combat.forcedRerollQueue.push({
+              controlPlayer: attackerPlayerNum,
+              pool: 'attack',
+              remaining: 1,
+              source: `Trusted Ally (${fn})`,
+              exhaustAttachment: { msgId: _taMid, name: 'Trusted Ally' },
+            });
             combat._trustedAllyGrantedThisAttack = true;
-            await thread.send(`**Trusted Ally** (${fn}) — Exhausted: friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
+            await thread.send(`**Trusted Ally** (${fn}) — friendly within 3 spaces: +1 attack reroll button added. Attachment exhausts only if you click "Use Trusted Ally".`).catch(discordCatch);
             break;
           }
           if (combat._trustedAllyGrantedThisAttack) break; // only one Trusted Ally bonus per attack
@@ -3975,10 +3985,16 @@ export async function handleCombatRoll(interaction, ctx) {
     if (atkSIds.includes('trained_rancor')) {
       combat.rerollAbilities.trained = { playerNum: attackerPlayerNum, used: false };
     }
-    // Power Converter (Saska Teft): if attacker has Device token and a friendly DC has power_converter_saska, ping hand channel
-    if (!game.powerConverterUsedThisRound && !combat.powerConverterChecked
+    // Per alexanbv 2026-05-13: Power Converter (Saska Teft) — was an
+    // auto-prompt to attacker's hand channel. Now a complex
+    // rerollAbilities entry that surfaces as a "Use Power Converter
+    // (Saska)" attacker bucket button. Click → die picker → color
+    // picker → swap + reroll → mark used. Skipping via Continue does
+    // NOT consume the round flag. Eligibility: attacker has Device
+    // token AND a friendly DC has power_converter_saska AND not
+    // already used this round.
+    if (!game.powerConverterUsedThisRound
         && (game.deviceTokens?.[combat.attackerFigureKey] || 0) > 0) {
-      // Scan attacker's DCs for power_converter_saska
       const _pcDcList = getDcList(game, attackerPlayerNum) || [];
       let _pcFound = false;
       for (let i = 0; i < _pcDcList.length; i++) {
@@ -3987,25 +4003,7 @@ export async function handleCombatRoll(interaction, ctx) {
         if ((_pcEff?.specialAbilityIds || []).includes('power_converter_saska')) { _pcFound = true; break; }
       }
       if (_pcFound) {
-        // Store reroll counts so the handler can resume
-        combat.pcPendingAtkRerolls = atkRerolls;
-        combat.pcPendingDefRerolls = defRerolls;
-        combat.powerConverterChecked = true;
-        setPendingPowerConverter(game, { gameId });
-        // Send prompt to attacker's hand channel
-        const _pcHandId = attackerPlayerNum === 1 ? game.p1HandId : game.p2HandId;
-        if (_pcHandId) {
-          const _pcHand = await fetchGameChannel(interaction.client, _pcHandId);
-          if (_pcHand) {
-            const _pcRow = new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId(`power_converter_approve_${gameId}`).setLabel('Use Power Converter').setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId(`power_converter_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-            );
-            await _pcHand.send({ content: `⚡ **Power Converter** — **${combat.attackerDcName}** has a Device token. Reroll 1 attack die (may swap die color first)?\n<@${game[`player${attackerPlayerNum}Id`] ?? ''}>`, components: [_pcRow] }).catch(discordCatch);
-          }
-        }
-        saveGames(game.gameId);
-        return;
+        combat.rerollAbilities.powerConverter = { playerNum: attackerPlayerNum, used: false };
       }
     }
     // Veteran Instincts defense prompt REMOVED 2026-05-09: card is a
@@ -4134,6 +4132,44 @@ function formatDefenseDie(d, i) {
  * @param {'attack'|'defense'} pool - which die pool to consider
  * @returns {number} sum of remaining uses across matching queue entries
  */
+/**
+ * Per alexanbv 2026-05-13: when a forcedRerollQueue entry is consumed
+ * (player actually rerolled a die), fire any deferred exhaust or
+ * deplete side-effects encoded on the entry. Skipping the reroll via
+ * Continue leaves the source card unspent — abilities
+ * should NEVER auto-use.
+ *
+ * Supported side-effect shapes on the entry:
+ *   - exhaustAttachment: { msgId, name } — exhausts a specific
+ *     skirmish-upgrade attachment on the DC at msgId.
+ *   - depleteDc: { msgId, playerNum } — depletes the DC card itself.
+ *
+ * @param {object} game
+ * @param {object} entry - the queue entry just consumed
+ * @param {object|null} thread - combat thread (optional, for log)
+ */
+async function _fireExhaustOnConsume(game, entry, thread) {
+  if (!entry) return;
+  if (entry.exhaustAttachment && entry.exhaustAttachment.msgId && entry.exhaustAttachment.name) {
+    const _msgId = entry.exhaustAttachment.msgId;
+    const _name = entry.exhaustAttachment.name;
+    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
+    const _prev = game.exhaustedSkirmishUpgrades[_msgId] || [];
+    if (!_prev.includes(_name)) {
+      game.exhaustedSkirmishUpgrades[_msgId] = [..._prev, _name];
+      if (thread) await thread.send(`**${_name}** — Attachment exhausted on use.`).catch(() => {});
+    }
+  }
+  if (entry.depleteDc && entry.depleteDc.msgId && entry.depleteDc.playerNum) {
+    const _pn = entry.depleteDc.playerNum;
+    const _depKey = _pn === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
+    game[_depKey] = game[_depKey] || [];
+    if (!game[_depKey].includes(entry.depleteDc.msgId)) {
+      game[_depKey].push(entry.depleteDc.msgId);
+    }
+  }
+}
+
 function _countQueueRerollsForSide(combat, controlPlayer, pool) {
   if (!combat) return 0;
   const queueCount = (combat.forcedRerollQueue || [])
@@ -4183,6 +4219,7 @@ const _REROLL_ABILITY_LABELS = {
   resourceful: 'Use Resourceful',
   shrewdScoundrel: 'Use Shrewd Scoundrel',
   trained: 'Use Trained',
+  powerConverter: 'Use Power Converter (Saska)',
 };
 
 function _countUnusedRerollAbilitiesForPlayer(combat, playerNum) {
@@ -4699,6 +4736,10 @@ export async function handleCombatReroll(interaction, ctx) {
           game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
           game.roundFigureAbilityUsed[`${_spEntry.armorerFigKey}_survival_is_strength`] = true;
         }
+        // Per alexanbv 2026-05-13: lazy exhaust/deplete fires here, on
+        // actual reroll consumption. Skipping via Continue leaves the
+        // card unexhausted.
+        await _fireExhaustOnConsume(game, _spEntry, thread);
         await thread.send(`**${_spEntry.source}** reroll ATK ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
       }
     } else if (side === 'def' && (_spEntry.pool === 'defense' || _spEntry.pool === 'any')) {
@@ -4712,6 +4753,7 @@ export async function handleCombatReroll(interaction, ctx) {
         const totals = recalcDefenseTotals(dice);
         combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
         _spEntry.remaining -= 1;
+        await _fireExhaustOnConsume(game, _spEntry, thread);
         if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
         if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
@@ -5185,6 +5227,40 @@ export async function handlePreReroll(interaction, ctx) {
         new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_no`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({ content: `**Trained** — <@${playerId}> suffer 1 Strain to reroll 1 attack die?`, components: [row] });
+    } else if (abilityKey === 'powerConverter') {
+      // Per alexanbv 2026-05-13: Power Converter (Saska) sub-picker
+      // opens the existing handlePowerConverter die-pick UI inside
+      // the combat thread (was previously auto-prompted to the
+      // attacker's hand channel at attack-roll time).
+      const dice = combat.attackDiceResults || [];
+      const alreadyRerolled = combat.attackerRerolledIndices || [];
+      const _pcDieBtns = [];
+      for (let _i = 0; _i < dice.length; _i++) {
+        if (alreadyRerolled.includes(_i)) continue;
+        const _d = dice[_i];
+        _pcDieBtns.push(
+          new ButtonBuilder()
+            .setCustomId(`power_converter_die_${gameId}_${_i}`)
+            .setLabel(`Pick ${_d.color} #${_i + 1}: ${_d.acc}a/${_d.dmg}d/${_d.surge}s`)
+            .setStyle(ButtonStyle.Primary),
+        );
+      }
+      _pcDieBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`pre_reroll_${gameId}_skip`)
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      if (_pcDieBtns.length <= 1) {
+        await thread.send(`**Power Converter** — No eligible attack dice (all already rerolled).`).catch(discordCatch);
+        combat.openedRerollAbility = null;
+        await sendRerollUI(thread, game, combat, 'attacker');
+        saveGames(game.gameId);
+        return;
+      }
+      const _pcRows = [];
+      for (let _r = 0; _r < _pcDieBtns.length; _r += 5) _pcRows.push(new ActionRowBuilder().addComponents(_pcDieBtns.slice(_r, _r + 5)));
+      await thread.send({ content: `⚡ **Power Converter** — <@${playerId}> pick an attack die. You'll choose its color next.`, components: _pcRows.slice(0, 5) });
     }
     saveGames(game.gameId);
     return;

@@ -702,6 +702,14 @@ export async function handlePowerConverter(interaction, ctx) {
       const totals = recalcAttackTotals(dice);
       combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
       game.powerConverterUsedThisRound = true;
+      // Per alexanbv 2026-05-13: mark the complex rerollAbilities
+      // entry used so the "Use Power Converter (Saska)" bucket button
+      // disappears on the next render. Round flag above also blocks
+      // future-attack eligibility.
+      if (combat.rerollAbilities?.powerConverter) {
+        combat.rerollAbilities.powerConverter.used = true;
+      }
+      combat.openedRerollAbility = null;
       // G12: mark this die index as rerolled (cannot be voluntarily rerolled again)
       if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
       if (!combat.attackerRerolledIndices.includes(dieIdx)) combat.attackerRerolledIndices.push(dieIdx);
@@ -710,6 +718,9 @@ export async function handlePowerConverter(interaction, ctx) {
       if (logGameAction) await logGameAction(game, client, `⚡ **Power Converter** — Rerolled attack die${swapMsg}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     }
     delete combat.powerConverterDieIndex;
+    // Per alexanbv 2026-05-13: _resumeRerollFlow handles the VI
+    // defender-prompt + reroll-window re-entry. The bucket
+    // re-renders inside that flow via sendRerollUI(... 'attacker').
     await _resumeRerollFlow();
     saveGames(game.gameId);
     return;
@@ -945,17 +956,20 @@ export async function handleDoubtReroll(interaction, ctx) {
   try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* already handled */ } }
 
   if (action === 'use') {
-    // Deplete the Doubt card
-    const dbtMsgId = combat.doubtMsgId;
-    if (dbtMsgId) {
-      const depKey = defPN === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
-      game[depKey] = game[depKey] || [];
-      if (!game[depKey].includes(dbtMsgId)) game[depKey].push(dbtMsgId);
-    }
-    // Add forced reroll to queue
+    // Per alexanbv 2026-05-13: deferred deplete. The depletion fires
+    // only when the queue entry is actually consumed (i.e. the
+    // defender clicks "Use Doubt" in the reroll bucket AND rerolls a
+    // die). Skipping the reroll via Continue leaves the Doubt card
+    // unspent. Encoded via depleteDc on the queue entry; the
+    // shared _fireExhaustOnConsume helper in handlers/combat.js
+    // handles the actual depletion at consume time.
     combat.forcedRerollQueue = combat.forcedRerollQueue || [];
-    combat.forcedRerollQueue.push({ controlPlayer: defPN, pool: 'attack', remaining: 1, source: 'Doubt' });
-    if (thread) await thread.send('**[Doubt]** — Depleted. Defender forces 1 attack die reroll.').catch(discordCatch);
+    const _dbtEntry = { controlPlayer: defPN, pool: 'attack', remaining: 1, source: 'Doubt' };
+    if (combat.doubtMsgId) {
+      _dbtEntry.depleteDc = { msgId: combat.doubtMsgId, playerNum: defPN };
+    }
+    combat.forcedRerollQueue.push(_dbtEntry);
+    if (thread) await thread.send('**[Doubt]** — Defender added "Use Doubt" to the reroll bucket. Depletion fires only on actual reroll.').catch(discordCatch);
   } else {
     if (thread) await thread.send('**[Doubt]** — Skipped.').catch(discordCatch);
   }
