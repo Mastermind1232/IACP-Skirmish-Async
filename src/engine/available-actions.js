@@ -1191,9 +1191,15 @@ function getCombatActions(game, playerNum, deps) {
         sideKey = 'atk'; // Used for done button
       } else {
         sideKey = phase === 'attacker' ? 'atk' : 'def';
-        rerollsRemaining = phase === 'attacker'
-          ? (combat.attackerRerollsRemaining ?? 0)
-          : (combat.defenderRerollsRemaining ?? 0);
+        // alexanbv 2026-05-13: deprecated count fields gone. Sum
+        // queue entries that the current phase's holder controls.
+        const _aiHolderPN = phase === 'attacker'
+          ? (combat.attackerPlayerNum || 1)
+          : (combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1));
+        const _aiPool = phase === 'attacker' ? 'attack' : 'defense';
+        rerollsRemaining = (combat.forcedRerollQueue || [])
+          .filter(e => e.controlPlayer === _aiHolderPN && (e.pool === _aiPool || e.pool === 'any'))
+          .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0);
         diceResults = phase === 'attacker' ? combat.attackDiceResults : combat.defenseDiceResults;
         alreadyRerolled = phase === 'attacker' ? (combat.attackerRerolledIndices || []) : (combat.defenderRerolledIndices || []);
 

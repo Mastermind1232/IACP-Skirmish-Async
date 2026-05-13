@@ -483,7 +483,7 @@ async function _enterDefenderRerollPhase(thread, game, combat, ctx, defPN) {
   if (game.selfPlay) {
     const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
     const _defCtAvail = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
-    if ((combat.defenderRerollsRemaining || 0) > 0 || _defCtrl || _defCtAvail) {
+    if (_countQueueRerollsForSide(combat, defPN, 'defense') > 0 || _defCtrl || _defCtAvail) {
       combat.rerollPhase = 'defender';
       combat.controlledRerollSide = defPN;
       combat.currentStep = 'step3-defender';
@@ -575,7 +575,7 @@ async function dispatchCombatGateAdvance(thread, game, combat, subPhase, ctx) {
       // (which has the same selfPlay short-circuit), then step 4.
       if (game.selfPlay) {
         const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
-        if ((combat.attackerRerollsRemaining || 0) > 0 || _atkCtrl) {
+        if (_atkCtrl) {
           combat.rerollPhase = 'attacker';
           combat.controlledRerollSide = atkPN;
           combat.currentStep = 'step3-attacker';
@@ -4038,8 +4038,12 @@ export async function handleCombatRoll(interaction, ctx) {
         return;
       }
     }
-    combat.attackerRerollsRemaining = atkRerolls;
-    combat.defenderRerollsRemaining = defRerolls;
+    // alexanbv 2026-05-13: deprecated count-field assignment removed.
+    // Queue entries (combat.forcedRerollQueue) are now the single
+    // source of truth for reroll availability; atkRerolls/defRerolls
+    // are computed but unused — kept only because the back-compat
+    // shim getInnateRerolls + the AI engine still read them.
+    void atkRerolls; void defRerolls;
     // G12: Track which die indices have been rerolled (each die max once)
     combat.attackerRerolledIndices = [];
     combat.defenderRerolledIndices = [];
@@ -4117,6 +4121,39 @@ function formatAttackDie(d, i) {
 }
 function formatDefenseDie(d, i) {
   return `${d.color} #${i + 1}: ${d.block}blk/${d.evade}evd${d.dodge ? '/DODGE' : ''}`;
+}
+
+/**
+ * Helper (alexanbv 2026-05-13): count unused reroll-queue entries
+ * controlled by a player and applicable to a given die pool. Replaces
+ * the deprecated combat.attackerRerollsRemaining / defenderRerollsRemaining
+ * count fields after the unified-reroll refactor.
+ *
+ * @param {object} combat - game.pendingCombat
+ * @param {number} controlPlayer - 1 or 2
+ * @param {'attack'|'defense'} pool - which die pool to consider
+ * @returns {number} sum of remaining uses across matching queue entries
+ */
+function _countQueueRerollsForSide(combat, controlPlayer, pool) {
+  if (!combat) return 0;
+  const queueCount = (combat.forcedRerollQueue || [])
+    .filter(e => e.controlPlayer === controlPlayer && (e.pool === pool || e.pool === 'any'))
+    .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0);
+  // Back-compat (alexanbv 2026-05-13): tests and a handful of legacy
+  // callers still set combat.attackerRerollsRemaining /
+  // defenderRerollsRemaining directly without populating the queue.
+  // Treat any positive legacy count as an additional available
+  // reroll so those paths continue to function during the migration.
+  // Will be removed once tests are rewritten to use queue entries.
+  const atkPN = combat.attackerPlayerNum || 1;
+  if (controlPlayer === atkPN && pool === 'attack') {
+    return queueCount + Math.max(0, combat.attackerRerollsRemaining ?? 0);
+  }
+  const defPN = combat.defenderPlayerNum ?? (atkPN === 1 ? 2 : 1);
+  if (controlPlayer === defPN && pool === 'defense') {
+    return queueCount + Math.max(0, combat.defenderRerollsRemaining ?? 0);
+  }
+  return queueCount;
 }
 
 /** Show reroll UI for the current phase (attacker or defender) */
@@ -4213,11 +4250,10 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
     combat.rerollYnAskedAttacker = true;
     const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
     const atkOwnerId = atkPn === 1 ? game.player1Id : game.player2Id;
-    const remaining = combat.attackerRerollsRemaining || 0;
     const _atkPnGate = combat.attackerPlayerNum || 1;
-    const _atkCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _atkPnGate && (e.remaining ?? 0) > 0);
-    const yesLabel = (remaining > 0 || _atkCtrl)
-      ? `Yes — pick dice (${remaining} reroll${remaining !== 1 ? 's' : ''})`
+    const _atkQueueCount = _countQueueRerollsForSide(combat, _atkPnGate, 'attack');
+    const yesLabel = _atkQueueCount > 0
+      ? `Yes — open reroll bucket (${_atkQueueCount} ability button${_atkQueueCount === 1 ? '' : 's'})`
       : 'Yes — play a CC for a reroll';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -4241,15 +4277,14 @@ async function maybePromptRerollYn(thread, game, combat, phase) {
     combat.rerollYnAskedDefender = true;
     const defPn = opponentPlayerNum(combat.attackerPlayerNum ?? 1);
     const defOwnerId = defPn === 1 ? game.player1Id : game.player2Id;
-    const remaining = combat.defenderRerollsRemaining || 0;
     const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
     const _defPnGate = opponentPlayerNum(combat.attackerPlayerNum || 1);
-    const _defCtrl = (combat.forcedRerollQueue || []).some(e => e.controlPlayer === _defPnGate && (e.remaining ?? 0) > 0);
+    const _defQueueCount = _countQueueRerollsForSide(combat, _defPnGate, 'defense');
     const parts = [];
-    if (remaining > 0) parts.push(`${remaining} reroll${remaining !== 1 ? 's' : ''}`);
+    if (_defQueueCount > 0) parts.push(`${_defQueueCount} ability button${_defQueueCount === 1 ? '' : 's'}`);
     if (ctAvailable) parts.push('Cross Training');
-    const yesLabel = (remaining > 0 || ctAvailable || _defCtrl)
-      ? `Yes — pick (${parts.join(' + ') || 'controlled reroll'})`.slice(0, 80)
+    const yesLabel = (_defQueueCount > 0 || ctAvailable)
+      ? `Yes — open reroll bucket (${parts.join(' + ')})`.slice(0, 80)
       : 'Yes — play a CC for a reroll';
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -4425,9 +4460,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
       components: buildRerollRows(dieButtons, trailing),
     });
   } else {
-    const remaining = combat.defenderRerollsRemaining || 0;
     // Per alexanbv 2026-05-13: bucket renders ONLY named "Use X"
-    // ability buttons. No anonymous die-picks.
+    // ability buttons. No anonymous die-picks. The deprecated
+    // combat.defenderRerollsRemaining read is gone — the bucket
+    // sources solely from forcedRerollQueue + rerollAbilities +
+    // Cross Training.
     const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
     const defPN = opponentPlayerNum(combat.attackerPlayerNum || 1);
     const _defCtrl = (combat.forcedRerollQueue || [])
@@ -4716,22 +4753,58 @@ export async function handleCombatReroll(interaction, ctx) {
   }
 
   // --- Reroll phase handling (attacker / defender bucket) ---
+  //
+  // Per alexanbv 2026-05-13: the bucket no longer surfaces anonymous
+  // die-pick buttons — every reroll fires via the controlled-reroll
+  // sub-picker (combat.controlledRerollActiveIdx) handled earlier in
+  // this function. The voluntary die-pick branches below are reached
+  // only by stale customIds (e.g. a click on a button posted before
+  // Slice 3 went live). We still process them so live games in
+  // mid-attack don't strand; the die-pick decrements the matching
+  // queue entry instead of the deleted attackerRerollsRemaining /
+  // defenderRerollsRemaining count fields. Each branch consumes the
+  // FIRST eligible voluntary queue entry (one whose pool matches the
+  // die's pool and the active side).
+  const _consumeQueueEntryForSide = (poolForSide) => {
+    const _side = poolForSide === 'attack' ? attackerPlayerNum : defenderPlayerNum;
+    const q = combat.forcedRerollQueue || [];
+    for (const entry of q) {
+      if (entry.controlPlayer !== _side) continue;
+      if (entry.pool !== poolForSide && entry.pool !== 'any') continue;
+      if ((entry.remaining ?? 0) <= 0) continue;
+      entry.remaining = (entry.remaining ?? 0) - 1;
+      return true;
+    }
+    // Back-compat: legacy callers/tests still set the count fields
+    // directly (no queue entry). Decrement them as a fallback so the
+    // die-reroll flow records the consumption.
+    if (poolForSide === 'attack' && (combat.attackerRerollsRemaining ?? 0) > 0) {
+      combat.attackerRerollsRemaining -= 1;
+      return true;
+    }
+    if (poolForSide === 'defense' && (combat.defenderRerollsRemaining ?? 0) > 0) {
+      combat.defenderRerollsRemaining -= 1;
+      return true;
+    }
+    return false;
+  };
   let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
     if (side === 'atk') {
       const dice = combat.attackDiceResults || [];
       const _atkAlreadyRerolled = combat.attackerRerolledIndices || [];
+      const _atkQueueAvail = _countQueueRerollsForSide(combat, attackerPlayerNum, 'attack');
       // Overpower (RGC): one slot of the attacker reroll budget is locked to
       // the configured color (red). Picking a non-locked-color die requires
       // at least 1 non-Overpower slot remaining; picking a matching-color die
       // consumes the locked slot first.
-      if (idx >= 0 && idx < dice.length && combat.attackerRerollsRemaining > 0 && !_atkAlreadyRerolled.includes(idx)) {
+      if (idx >= 0 && idx < dice.length && _atkQueueAvail > 0 && !_atkAlreadyRerolled.includes(idx)) {
         const _opLockColor = combat.overpowerAtkColorLocked;
         const _opLockAvail = !!combat.overpowerAtkLockedAvailable;
         const _opPickColor = dice[idx]?.color;
         if (_opLockColor && _opPickColor && _opPickColor !== _opLockColor) {
-          const _opNonLocked = combat.attackerRerollsRemaining - (_opLockAvail ? 1 : 0);
+          const _opNonLocked = _atkQueueAvail - (_opLockAvail ? 1 : 0);
           if (_opNonLocked <= 0) {
             await interaction.followUp({ content: `🚫 **Overpower** restricts this reroll to **${_opLockColor}** dice — no other reroll budget available for a ${_opPickColor} die.`, ephemeral: true }).catch(discordCatch);
             return;
@@ -4743,7 +4816,7 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.attackDiceResults = dice;
         const totals = recalcAttackTotals(dice);
         combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
-        combat.attackerRerollsRemaining -= 1;
+        _consumeQueueEntryForSide('attack');
         // Overpower locked-slot bookkeeping: prefer to consume locked slot
         // when the picked die matches the locked color.
         if (_opLockColor && _opLockAvail && _opPickColor === _opLockColor) {
@@ -4796,14 +4869,15 @@ export async function handleCombatReroll(interaction, ctx) {
     } else {
       const dice = combat.defenseDiceResults || [];
       const _defAlreadyRerolled = combat.defenderRerolledIndices || [];
+      const _defQueueAvail = _countQueueRerollsForSide(combat, defenderPlayerNum, 'defense');
       // Overpower (RGC): one slot of defender reroll budget is locked to
       // the configured color (black) — same scheme as the attacker side.
-      if (idx >= 0 && idx < dice.length && combat.defenderRerollsRemaining > 0 && !_defAlreadyRerolled.includes(idx)) {
+      if (idx >= 0 && idx < dice.length && _defQueueAvail > 0 && !_defAlreadyRerolled.includes(idx)) {
         const _opDefLockColor = combat.overpowerDefColorLocked;
         const _opDefLockAvail = !!combat.overpowerDefLockedAvailable;
         const _opDefPickColor = dice[idx]?.color;
         if (_opDefLockColor && _opDefPickColor && _opDefPickColor !== _opDefLockColor) {
-          const _opDefNonLocked = combat.defenderRerollsRemaining - (_opDefLockAvail ? 1 : 0);
+          const _opDefNonLocked = _defQueueAvail - (_opDefLockAvail ? 1 : 0);
           if (_opDefNonLocked <= 0) {
             await interaction.followUp({ content: `🚫 **Overpower** restricts this reroll to **${_opDefLockColor}** dice — no other reroll budget available for a ${_opDefPickColor} die.`, ephemeral: true }).catch(discordCatch);
             return;
@@ -4815,7 +4889,7 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.defenseDiceResults = dice;
         const totals = recalcDefenseTotals(dice);
         combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
-        combat.defenderRerollsRemaining -= 1;
+        _consumeQueueEntryForSide('defense');
         if (_opDefLockColor && _opDefLockAvail && _opDefPickColor === _opDefLockColor) {
           combat.overpowerDefLockedAvailable = false;
         }
@@ -4857,13 +4931,13 @@ export async function handleCombatReroll(interaction, ctx) {
   if (_tlTriggered) { saveGames(game.gameId); return; }
 
   // Check if current side is done (clicked done or exhausted rerolls)
-  if (side === 'atk' && (choice === 'done' || combat.attackerRerollsRemaining <= 0)) {
+  if (side === 'atk' && (choice === 'done' || _countQueueRerollsForSide(combat, attackerPlayerNum, 'attack') <= 0)) {
     // Combat gate: both players review attacker rerolls before proceeding
     await sendCombatGate(thread, game, combat, 'post_attacker_reroll', ctx);
     saveGames(game.gameId);
     return;
   }
-  if (side === 'def' && (choice === 'done' || (combat.defenderRerollsRemaining <= 0 && !(combat.crossTrainingAvailable && !combat.crossTrainingUsed)))) {
+  if (side === 'def' && (choice === 'done' || (_countQueueRerollsForSide(combat, defenderPlayerNum, 'defense') <= 0 && !(combat.crossTrainingAvailable && !combat.crossTrainingUsed)))) {
     // Combat gate: both players review defender rerolls before modifications
     await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
     saveGames(game.gameId);
@@ -4992,7 +5066,7 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
 
     // Check if defender still has rerolls or should finish
     const ctStillAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
-    if (combat.defenderRerollsRemaining <= 0 && !ctStillAvailable) {
+    if (_countQueueRerollsForSide(combat, defenderPlayerNum, 'defense') <= 0 && !ctStillAvailable) {
       await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
       saveGames(game.gameId);
       return;

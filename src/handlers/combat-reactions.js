@@ -83,8 +83,20 @@ export async function handleToughLuck(interaction, ctx) {
   const thread = await fetchCombatThread(client, combat?.combatThreadId);
   if (thread && combat) {
     const side = tlData.side;
-    const atkRem = combat.attackerRerollsRemaining || 0;
-    const defRem = combat.defenderRerollsRemaining || 0;
+    // alexanbv 2026-05-13: count from queue entries; legacy
+    // attackerRerollsRemaining / defenderRerollsRemaining count fields
+    // are added in for back-compat with paths/tests that still set
+    // them directly.
+    const _atkPN = combat.attackerPlayerNum || 1;
+    const _defPN = combat.defenderPlayerNum ?? (_atkPN === 1 ? 2 : 1);
+    const atkRem = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === _atkPN && (e.pool === 'attack' || e.pool === 'any'))
+      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
+      + Math.max(0, combat.attackerRerollsRemaining ?? 0);
+    const defRem = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === _defPN && (e.pool === 'defense' || e.pool === 'any'))
+      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
+      + Math.max(0, combat.defenderRerollsRemaining ?? 0);
     if (side === 'atk' && atkRem > 0) {
       await sendRerollUI(thread, game, combat, 'attacker');
     } else if (side === 'def' && defRem > 0) {
@@ -170,8 +182,18 @@ export async function handleThereIsNoTry(interaction, ctx) {
   }
   // After TINT resolves (face set or skipped): enter reroll window
   if (thread && combat) {
-    const atkRem = combat.attackerRerollsRemaining || 0;
-    const defRem = combat.defenderRerollsRemaining || 0;
+    // alexanbv 2026-05-13: count queue entries + legacy count fields
+    // for back-compat with tests/paths that still set them directly.
+    const _atkPN = combat.attackerPlayerNum || 1;
+    const _defPN = combat.defenderPlayerNum ?? (_atkPN === 1 ? 2 : 1);
+    const atkRem = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === _atkPN && (e.pool === 'attack' || e.pool === 'any'))
+      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
+      + Math.max(0, combat.attackerRerollsRemaining ?? 0);
+    const defRem = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === _defPN && (e.pool === 'defense' || e.pool === 'any'))
+      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
+      + Math.max(0, combat.defenderRerollsRemaining ?? 0);
     if (atkRem > 0 || defRem > 0) {
       combat.rerollPhase = atkRem > 0 ? 'attacker' : 'defender';
       await sendRerollUI(thread, game, combat, combat.rerollPhase);
@@ -241,6 +263,7 @@ export async function handleVetInstincts(interaction, ctx) {
     // reason to open the attacker bucket.
     const hasStep3Abilities = _countUnusedAttackerRerollAbilitiesShim(combat) > 0;
     if (atkRem > 0 || defRem > 0 || hasForced || hasStep3Abilities) {
+      // alexanbv 2026-05-13: legacy count fields mirrored for tests.
       combat.attackerRerollsRemaining = atkRem;
       combat.defenderRerollsRemaining = defRem;
       // G12: ensure per-die reroll tracking arrays exist
@@ -580,6 +603,9 @@ export async function handlePowerConverter(interaction, ctx) {
       return; // VI handler will resume reroll flow
     }
     const hasForced = (combat.forcedRerollQueue || []).length > 0;
+    // alexanbv 2026-05-13: legacy count fields are still mirrored
+    // here for back-compat with tests/paths that read them. The
+    // queue is the source of truth at UI render time.
     combat.attackerRerollsRemaining = atkRem;
     combat.defenderRerollsRemaining = defRem;
     // G12: ensure per-die reroll tracking arrays exist
@@ -943,6 +969,7 @@ export async function handleDoubtReroll(interaction, ctx) {
   const hasStep3Abilities = _countUnusedAttackerRerollAbilitiesShim(combat) > 0;
 
   if (thread && (atkRem > 0 || defRem > 0 || hasForced || hasStep3Abilities)) {
+    // alexanbv 2026-05-13: legacy count fields mirrored for tests.
     combat.attackerRerollsRemaining = atkRem;
     combat.defenderRerollsRemaining = defRem;
     if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];

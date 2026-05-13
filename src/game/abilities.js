@@ -4325,7 +4325,15 @@ export function resolveAbility(abilityId, context) {
       // Combat Suit), defender-side reroll allowances, and damage-cap (Iron Will).
       if (combat.defenderIgnorePierce) { cancelledEffects.push(`Pierce ignored`); delete combat.defenderIgnorePierce; }
       if (combat.defenderReducePierce) { cancelledEffects.push(`Pierce reduced by ${combat.defenderReducePierce}`); delete combat.defenderReducePierce; }
-      if (combat.defenderRerollDiceMax) { cancelledEffects.push(`defender reroll allowance`); delete combat.defenderRerollDiceMax; }
+      // alexanbv 2026-05-13: defenderRerollDiceMax is gone — Guardian
+      // Stance now registers named queue entries. Strip any from the
+      // queue to preserve the cancel-prior-defender-CC-effects semantic.
+      if (combat.defenderRerollDiceMax) { delete combat.defenderRerollDiceMax; }
+      if (Array.isArray(combat.forcedRerollQueue)) {
+        const _gsBefore = combat.forcedRerollQueue.length;
+        combat.forcedRerollQueue = combat.forcedRerollQueue.filter(e => e.source !== 'Guardian Stance');
+        if (combat.forcedRerollQueue.length !== _gsBefore) cancelledEffects.push('Guardian Stance reroll allowance');
+      }
       if (combat.maxDamageToDefender != null) { cancelledEffects.push(`damage cap (${combat.maxDamageToDefender})`); delete combat.maxDamageToDefender; }
       if (cancelledEffects.length > 0) {
         const cancelNote = ` Cancelled prior defender CC effects: ${cancelledEffects.join(', ')}.`;
@@ -8120,12 +8128,25 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'You may reroll 1 attack die.' };
   }
 
-  // ccEffect: defenderRerollDiceMax (Guardian Stance) — while adjacent friendly is defending
+  // ccEffect: defenderRerollDiceMax (Guardian Stance) — while adjacent
+  // friendly is defending. alexanbv 2026-05-13: register N named
+  // queue entries (pool='any') instead of incrementing the deprecated
+  // defenderRerollDiceMax count. Each entry surfaces as a "Use
+  // Guardian Stance" bucket button.
   if (entry.type === 'ccEffect' && typeof entry.defenderRerollDiceMax === 'number' && entry.defenderRerollDiceMax > 0) {
     const { game, combat } = context;
     const cbt = combat || game?.combat || game?.pendingCombat;
     if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while adjacent friendly is defending.' };
-    cbt.defenderRerollDiceMax = (cbt.defenderRerollDiceMax || 0) + entry.defenderRerollDiceMax;
+    const _gsDefPN = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
+    cbt.forcedRerollQueue = cbt.forcedRerollQueue || [];
+    for (let _i = 0; _i < entry.defenderRerollDiceMax; _i++) {
+      cbt.forcedRerollQueue.push({
+        controlPlayer: _gsDefPN,
+        pool: 'any',
+        remaining: 1,
+        source: 'Guardian Stance',
+      });
+    }
     return { applied: true, logMessage: `You may reroll up to ${entry.defenderRerollDiceMax} attack or defense die.` };
   }
 
