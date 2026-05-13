@@ -10795,9 +10795,16 @@ export function resolveAbility(abilityId, context) {
     // Phase 2: apply the reroll
     if (chosenFigureKey) {
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      if (combat?.attackerRerollsRemaining != null) {
-        // Mid-combat: add directly to attacker rerolls (the friendly just rolled dice)
-        combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+      if (combat) {
+        // alexanbv 2026-05-13: register as named queue entry — surfaces
+        // as a "Use Battlefield Awareness" bucket button.
+        combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+        combat.forcedRerollQueue.push({
+          controlPlayer: combat.attackerPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: `Battlefield Awareness (${dcName})`,
+        });
         return { applied: true, logMessage: `**Battlefield Awareness** — Added 1 reroll for **${dcName}** in the current attack.` };
       }
       // Otherwise: grant +1 to round attack reroll pool for this player
@@ -10891,14 +10898,26 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
     if (choiceIndex !== undefined && choiceIndex !== null) {
+      // alexanbv 2026-05-13: register named queue entries instead of
+      // incrementing the deprecated count fields.
+      combat.forcedRerollQueue = combat.forcedRerollQueue || [];
       if (choiceIndex === 0) {
-        // Attacker die — set DON flag so the doubling check fires after the reroll
-        combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+        combat.forcedRerollQueue.push({
+          controlPlayer: combat.attackerPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: 'Double or Nothing',
+        });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'atk' };
         return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
       } else {
-        // Defender die
-        combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+        const _defPN = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
+        combat.forcedRerollQueue.push({
+          controlPlayer: _defPN,
+          pool: 'defense',
+          remaining: 1,
+          source: 'Double or Nothing',
+        });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'def' };
         return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
       }

@@ -1821,8 +1821,16 @@ export async function handleAttackTarget(interaction, ctx) {
       const _fmbInline = _fmbSameRow || _fmbSameCol;
       if (_fmbInline) {
         // Inline → +1 attacker reroll (player chooses which die in the
-        // reroll window).
-        game.pendingCombat.attackerRerollsRemaining = (game.pendingCombat.attackerRerollsRemaining || 0) + 1;
+        // reroll window). alexanbv 2026-05-13: register as named
+        // forced-queue entry — surfaces as a "Use Forward Mounted
+        // Blasters" bucket button.
+        game.pendingCombat.forcedRerollQueue = game.pendingCombat.forcedRerollQueue || [];
+        game.pendingCombat.forcedRerollQueue.push({
+          controlPlayer: attackerPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: 'Forward Mounted Blasters',
+        });
         await thread.send('🎯 **Forward Mounted Blasters** — Target inline with speeder: may reroll 1 attack die.').catch(discordCatch);
       } else {
         // Not inline → −1 Damage (bonusHits is the same modifier slot
@@ -2815,7 +2823,15 @@ export async function handleAttackTarget(interaction, ctx) {
         break;
       }
       if (_dpFound) {
-        game.pendingCombat.attackerRerollsRemaining = (game.pendingCombat.attackerRerollsRemaining || 0) + 1;
+        // alexanbv 2026-05-13: register as named forced-queue entry —
+        // surfaces as a "Use Dead Precise (Ko-Tun)" bucket button.
+        game.pendingCombat.forcedRerollQueue = game.pendingCombat.forcedRerollQueue || [];
+        game.pendingCombat.forcedRerollQueue.push({
+          controlPlayer: attackerPlayerNum,
+          pool: 'attack',
+          remaining: 1,
+          source: 'Dead Precise (Ko-Tun)',
+        });
         game.pendingCombat.bonusDodge = (game.pendingCombat.bonusDodge || 0) - 1;
         game.pendingCombat.deadPreciseApplied = true;
         await thread.send('**Dead Precise** (Ko-Tun within 3) — attacker spent a Power Token: +1 attack-die reroll, −1 Dodge to attack results.');
@@ -5161,17 +5177,22 @@ export async function handlePreReroll(interaction, ctx) {
     const skipNote = skipped.length > 0 ? `\nSkipped (already rerolled): ${skipped.join(', ')}` : '';
     await thread.send(`**Twin Sabers** — Force rerolled ${rerolledIndices.length} defense die${rerolledIndices.length === 1 ? '' : 's'} simultaneously:\n${details.join('\n') || '(no eligible dice)'}\nNew totals: ${defTotals.block} block, ${defTotals.evade} evade${defTotals.dodge ? ' DODGE' : ''}${skipNote}`);
   } else if (choice === 'resourceful_atk') {
-    combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
+    // alexanbv 2026-05-13: register a named queue entry instead of
+    // incrementing the count. Surfaces as "Use Resourceful (Reroll 1
+    // ATK die)" in the bucket on the next render.
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({ controlPlayer: abilityState.playerNum, pool: 'attack', remaining: 1, source: 'Resourceful (Reroll 1 ATK die)' });
     combat.resourcefulSide = 'atk';
     abilityState.used = true;
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
-    await thread.send(`**Resourceful** — +1 attack reroll.${gambitNote}`);
+    await thread.send(`**Resourceful** — Reroll 1 attack die added to your bucket.${gambitNote}`);
   } else if (choice === 'resourceful_def') {
-    combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({ controlPlayer: abilityState.playerNum, pool: 'defense', remaining: 1, source: 'Resourceful (Reroll 1 DEF die)' });
     combat.resourcefulSide = 'def';
     abilityState.used = true;
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
-    await thread.send(`**Resourceful** — +1 defense reroll.${gambitNote}`);
+    await thread.send(`**Resourceful** — Reroll 1 defense die added to your bucket.${gambitNote}`);
   } else if (choice === 'trained_yes') {
     // Trained Rancor: "While attacking, you may suffer 1 Strain to reroll
     // 1 attack die." Strain routed through the new applyStrain handler so
@@ -5227,8 +5248,16 @@ registerStrainFollowup('trained_grant_reroll', async (game, ctx, _payload) => {
   if (!combat) return;
   const thread = await fetchCombatThread(ctx.client, combat.combatThreadId);
   if (!thread) return;
-  combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
-  await thread.send('**Trained** — +1 attack reroll granted.').catch(discordCatch);
+  // alexanbv 2026-05-13: register a named queue entry instead of
+  // incrementing the deleted count.
+  combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+  combat.forcedRerollQueue.push({
+    controlPlayer: combat.attackerPlayerNum,
+    pool: 'attack',
+    remaining: 1,
+    source: 'Trained (Reroll 1 ATK die)',
+  });
+  await thread.send('**Trained** — Reroll 1 attack die added to your bucket.').catch(discordCatch);
   await sendRerollUI(thread, game, combat, 'attacker');
 });
 
