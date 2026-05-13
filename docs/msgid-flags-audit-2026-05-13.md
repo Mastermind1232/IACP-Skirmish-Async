@@ -28,43 +28,79 @@ exception, only when card text explicitly says "group".** Specifically:
 
 ## Already migrated this session (alexanbv 2026-05-13)
 
-- ✅ `attackPerformedThisActivation` — commit `997b5cc3`
-- ✅ `pounceAttackPending` — commit `165ce220`
-- ✅ `fellSwoopFreeAttack` — commit `165ce220`
-- ✅ `pummelTwoAttacksThisActivation` — commit `165ce220`
-- ✅ `pummelAttacksRemaining` — commit `165ce220`
-- ✅ `imperialRetrofittingMultiAttack` — commit `165ce220`
-- ✅ `stayDownPendingMsgId` — this commit
-- ✅ `burstFirePendingMsgId` — this commit
-- ✅ `cripplingBlowPending` — this commit
-- ✅ `disruptorRiflePending` — this commit
-- ✅ `tonfaStrikeSecondAttack` — this commit
-- ✅ `barrageSecondAttack` — this commit
-- ✅ `barrageTargetSpace` — this commit
-- ✅ `barrageDefenseBonus` — this commit
-- ✅ `overrunThisActivation` — this commit (alexanbv: "during this activation" = per-figure)
-- ✅ `overrunDamagedThisMove` — this commit
-- 🔄 `setTrapSpace` — this commit (reclassified ROUND_OBJECT_FLAGS, not ACTIVATION_FIGKEY)
+**8 grouped commits, ~42 flags now per-figureKey.**
 
-## KEEP — per-DC (UI / attack-frame / card-state)
+Commit map:
+- `997b5cc3` — attackPerformedThisActivation (original multifig bug)
+- `165ce220` — pounceAttackPending, fellSwoopFreeAttack, pummelTwoAttacksThisActivation, pummelAttacksRemaining, imperialRetrofittingMultiAttack
+- `9af310ce` — stayDownPendingMsgId, burstFirePendingMsgId, cripplingBlowPending, disruptorRiflePending, tonfaStrikeSecondAttack, barrageSecondAttack, barrageTargetSpace, barrageDefenseBonus, overrunThisActivation, overrunDamagedThisMove; setTrapSpace → ROUND_OBJECT_FLAGS
+- `58e76a98` — wookieeAvengerSlamUsed, specialActionUsedThisActivation, activationDoubleSpecialAction, activationKills, paybackBonusSurge
+- `78204a92` — closeQuartersActive, mobileMovementActive, darksaberSecondAttack, attackDicePenaltyForMsgId, pendingSlingBarrage, arcingShotActive
+- `a0580129` — selfDestructProtocolTriggered, selfDefeatsAfterAttackMsgId, postActivationConditions, nextAttackIgnoreFigureLOS, optimalBombardmentBlastBonus, activationDamagedFigures (key migration only)
+- `f48fe2…` (autofire trio) — autofireActive, fireMissionActive, autofireChainTargetSpace
+- (Aim rewrite + figureKey-keyed) — Aim now reads `figureMoved[attackerFigureKey]` per the card's "if you have not exited your space" text; printed Elite "group" wording flagged as incorrect
+- (this commit) — activationExtraActionThenStun, beastTamerInteractOverride, freeAttackDifferentTargets
 
-These are inherently per-DC and not per-figure:
+## Pending migration (queued for follow-up commits)
 
-- `dcActionsData` — DC card's action counter UI (tracks the active
-  `selectedFigure` cursor; per-figure work happens via the cursor, not
-  via separate dcActionsData entries).
-- `movementBank` — movement-points bank displayed on the DC card.
-- `dcFinishedPinged` — UI "finished all actions" prompt for the DC.
+Multi-step picker state machines — risky to migrate without careful
+picker-continuation testing. Each needs its own dedicated commit:
+
+- `pendingMissileSalvo` (10+ sites — BT-1 multi-die salvo picker; BT-1
+  is single-figure so msgId↔figureKey equivalence today)
+- `pendingPounceSpaceChoice` (8 sites — Loth-cat / Force Leap empty-space
+  picker continuation; multi-step `validSpaces` + `targetFigureKey`)
+- `pendingBoRifle` (3 sites — Bo-Rifle melee-die-type picker)
+- `pendingBombDrop` (4 sites — Devaron B mission Bomb Drop space picker)
+- `pendingOverwatchPlacement` (5 sites — Overwatch token placement)
+- `pendingCombatResupply` (4 sites — Resupply CC pick-CC-from-deck)
+- `pendingPostAttackConditions` (4 sites — after-attack condition apply queue)
+- `pendingMpBonus` (4 sites — read at SoA but no live writers; effectively dead)
+- `forcedAttackTarget` (~15 sites — Return Fire / Focus Fire / Mandalorian
+  Whip / Battlefield Leadership / Slow on the Draw chain-attack target lock.
+  Many different write sources keying off different msgId contexts. **Risky
+  single-commit migration**; needs careful per-flow audit.)
+- `pendingOverrideAttackDice` (~66 sites — attack-dice override for many
+  special actions. **Biggest surface — needs own commit.**)
+- `falseOrdersAttackTargets` (3 sites — False Orders eligible targets list)
+- `rushPending` / `shoulderRushPending` (push-interrupt msgId state)
+
+## KEEP — per-DC / per-attack (UI state + per-attack-frame)
+
+**Per alexanbv 2026-05-13 corrections, the genuine KEEPs are limited
+to UI rendering anchors + per-attack-frame state.** Earlier-flagged
+"KEEPs" that are actually per-figure (`dcActionsData` actions/specials
+counting, `movementBank`, `pendingMoveX`, `activationDamagedFigures` for
+Aim, `reverseEngineerActive`) need their own migration work.
+
+True KEEPs:
+- `dcFinishedPinged` — UI "finished all actions" prompt for the DC card.
 - `pendingEndTurn` — end-turn confirmation prompt for the DC.
 - `dcActivationLogMessageIds` — log message ids for the DC's activation.
-- `defenderThreadData` — per-attack combat thread data.
+- `defenderThreadData` — per-attack combat thread data (clears on
+  pendingCombat resolve; could be promoted to a per-pendingCombat
+  field instead of a msgId map — follow-up).
 - `falseOrdersUpgrade` — per-DC CC marker (False Orders is target-DC scoped).
-- `reverseEngineerActive` — per-attack flag on the active attack frame.
-- `pendingMoveX` — per-figure move-X picker, but currently keyed by
-  msgId with compound-key fallbacks. Already partially figure-aware
-  via `selectedFigure`; documentation-level keep.
 - `companionActivatedBefore` — per-DC companion lifecycle flag.
-- `defenderThreadData` — combat thread data per attack.
+
+**Pending KEEP-→-MIGRATE re-classification** (per alexanbv 2026-05-13):
+- `dcActionsData` — UI rendering anchor is per-DC, but the
+  action-counter / specials-used data INSIDE dcActionsData needs to be
+  tracked per-figure. Refactor: separate the UI msgId-keyed record
+  from the action-accounting figureKey-keyed record. Big surface area,
+  own commit.
+- `movementBank` — same shape: per-DC display, per-figure bank value.
+- `pendingMoveX` — already partially per-figure via compound key
+  `${msgId}_${figureIndex}`; finish the migration.
+- `activationDamagedFigures` — currently keyed by attackerFigureKey post-
+  Aim rewrite; Aim no longer reads it, so the field is now vestigial.
+- `reverseEngineerActive` — should reset on attack-end, not activation-end.
+  Migrate to a per-pendingCombat flag.
+
+UX refactor queued:
+- **End Turn vs End Activation** — each figure has its own End Activation
+  button. Finishing one figure offers buttons to activate remaining
+  group-mates. End Turn (distinct button) finishes the whole group.
 
 ## MIGRATE — per-figure candidates (queue)
 
