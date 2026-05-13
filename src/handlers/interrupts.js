@@ -1181,8 +1181,9 @@ export async function handleDbhPostMove(interaction, ctx) {
   // dbh_post_attack_: set free-attack pending + -1 die penalty.
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   if (figKey) game.freeAttackBonusPending[figKey] = true;
+  // Per alexanbv 2026-05-13: per-figureKey.
   game.attackDicePenaltyForMsgId = game.attackDicePenaltyForMsgId || {};
-  game.attackDicePenaltyForMsgId[msgId] = 1;
+  if (figKey) game.attackDicePenaltyForMsgId[figKey] = 1;
   game.attackDicePenaltyLabel = 'Driven by Hatred';
   const ownerId = getPlayerId(game, meta.playerNum);
   await logGameAction(game, client,

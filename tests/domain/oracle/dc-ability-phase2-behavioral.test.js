@@ -317,9 +317,9 @@ describe('B-DCATT-004: Darksaber Strike — multi-pending setup', () => {
     assert.ok(game.freeAttackBonusPending?.['Test Trooper-1-0'],
       'freeAttackBonusPending set');
 
-    // darksaberSecondAttack
-    assert.strictEqual(game.darksaberSecondAttack?.[MSG_ID], true,
-      'darksaberSecondAttack flag set');
+    // darksaberSecondAttack — figureKey-keyed per alexanbv 2026-05-13.
+    assert.strictEqual(game.darksaberSecondAttack?.['Test Trooper-1-0'], true,
+      'darksaberSecondAttack flag set on the activating figure');
   });
 
   it('004b: action deducted correctly', async () => {

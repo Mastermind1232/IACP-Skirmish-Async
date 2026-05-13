@@ -1355,7 +1355,7 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
   // Arcing Shot: validate target is adjacent to an empty space in attacker's LOS
-  if (game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar) {
+  if (game.arcingShotActive?.[_attackerFkEarly] || game.arcingShotActiveScalar) {
     const _arcValid = target.arcingShotValid;
     if (_arcValid === false) {
       // Warn but allow override (bot may not have perfect LOS/map data)
@@ -1365,7 +1365,7 @@ export async function handleAttackTarget(interaction, ctx) {
       }).catch(discordCatch);
     }
     // Clear the flag now that an attack target has been selected
-    if (game.arcingShotActive?.[msgId]) delete game.arcingShotActive[msgId];
+    if (game.arcingShotActive?.[_attackerFkEarly]) delete game.arcingShotActive[_attackerFkEarly];
     if (game.arcingShotActiveScalar) delete game.arcingShotActiveScalar;
   }
   // Ballistics Matrix / Marksman: capture the per-attack flag and clear it.
@@ -1484,8 +1484,8 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.pendingOverrideAttackDice[msgId];
   }
   // Close Quarters: override attack with adjacent hostile's dice/type, +1 Accuracy, -1 defense die
-  if (game.closeQuartersActive?.[msgId]) {
-    delete game.closeQuartersActive[msgId];
+  if (game.closeQuartersActive?.[attackerFigureKey]) {
+    delete game.closeQuartersActive[attackerFigureKey];
     const cqMapId = game.selectedMap?.id;
     if (cqMapId) {
       const cqActData = game.dcActionsData?.[msgId];
@@ -2194,12 +2194,13 @@ export async function handleAttackTarget(interaction, ctx) {
   // attack declares, prompt the player to remove 1 die from the
   // attack pool. Reuses the existing pendingDbhDiePick + handleDbhPickDie
   // flow so the player picks WHICH die to drop (not auto-removed).
-  if (game.attackDicePenaltyForMsgId?.[msgId] > 0) {
+  // Per alexanbv 2026-05-13: per-figureKey.
+  if (game.attackDicePenaltyForMsgId?.[attackerFigureKey] > 0) {
     const _adpLabel = game.attackDicePenaltyLabel || 'Attack penalty';
     const _adpDice = [...(game.pendingCombat.attackInfo.dice || [])];
-    const _adpToRemove = game.attackDicePenaltyForMsgId[msgId];
+    const _adpToRemove = game.attackDicePenaltyForMsgId[attackerFigureKey];
     if (_adpDice.length === 0 || _adpToRemove <= 0) {
-      delete game.attackDicePenaltyForMsgId[msgId];
+      delete game.attackDicePenaltyForMsgId[attackerFigureKey];
       if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
       delete game.attackDicePenaltyLabel;
     } else {
@@ -2215,7 +2216,7 @@ export async function handleAttackTarget(interaction, ctx) {
       });
       // pendingDbhDiePick gates the roll until the player picks.
       game.pendingDbhDiePick = { msgId, attackerPlayerNum, dice: _adpDice };
-      delete game.attackDicePenaltyForMsgId[msgId];
+      delete game.attackDicePenaltyForMsgId[attackerFigureKey];
       if (Object.keys(game.attackDicePenaltyForMsgId).length === 0) delete game.attackDicePenaltyForMsgId;
       delete game.attackDicePenaltyLabel;
       const _adpAtkOwnerId = game[`player${attackerPlayerNum}Id`];
@@ -3810,8 +3811,8 @@ export async function handleCombatRoll(interaction, ctx) {
 
     // Sling Barrage (Ewok Warrior Elite): +1 atk reroll per OTHER figure in the same group with LOS to defender.
     // "Group" = same DC name + same deployment-group index (figure-key prefix `${dcName}-${dgIndex}-`).
-    if (game.pendingSlingBarrage?.[combat.attackerMsgId]) {
-      delete game.pendingSlingBarrage[combat.attackerMsgId];
+    if (combat.attackerFigureKey && game.pendingSlingBarrage?.[combat.attackerFigureKey]) {
+      delete game.pendingSlingBarrage[combat.attackerFigureKey];
       const sbMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       const sbDefCoord = combat.target?.coord ? String(combat.target.coord).toLowerCase() : null;
       if (sbMapSp && sbDefCoord && ctx.hasLineOfSightByCoord) {

@@ -38,8 +38,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // ACTIVATION_FIGKEY_FLAGS (alexanbv: every attack-frame grant is
   // per-figure unless card text says "group").
   'pendingMultiTargetRoll',
-  'closeQuartersActive',
-  'mobileMovementActive',
+  // closeQuartersActive + mobileMovementActive MIGRATED 2026-05-13 →
+  // ACTIVATION_FIGKEY_FLAGS (alexanbv: "all specials are per figure").
   'pendingMoveX',
   // On a Mission per-step push prompt: pauses the picker between steps
   // so the player can push a SMALL figure 1 space (or skip).
@@ -49,9 +49,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // once per activation. Status-phase context tracked separately via
   // ROUND_OBJECT_FLAGS.wildBeastUsedThisStatusPhase.
   'wildBeastUsedThisActivation',
-  // Lord of the Sith / [Driven by Hatred]: per-msgId one-shot dice
-  // penalty consumed at handleCombatDeclare.
-  'attackDicePenaltyForMsgId',
+  // attackDicePenaltyForMsgId MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure since the penalty applies to a specific
+  // attacking figure's pool).
   'rushPending',
   'shoulderRushPending',
   'forcedAttackTarget',
@@ -69,7 +69,7 @@ const ACTIVATION_MSGID_FLAGS = [
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   'pendingOverrideAttackDice',
-  'pendingSlingBarrage',
+  // pendingSlingBarrage MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // attackTypeOverride + overheatedActive moved to
   // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
   // Static Pulse per-target chained choice state — cleared at round
@@ -96,7 +96,7 @@ const ACTIVATION_MSGID_FLAGS = [
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',
-  'darksaberSecondAttack',
+  // darksaberSecondAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // saberOrbitAttacksRemaining + unstableDevicesUsedThisActivation
   // moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope).
   'pendingOverwatchPlacement',
@@ -107,11 +107,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingBombDrop',
   'activationExtraActionThenStun',
   'beastTamerInteractOverride',
-  // imperialRetrofittingMultiAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
-  // (alexanbv: per-figure; one figure using IR's multi-attack does not
-  // grant it to siblings in the group. IR's exhaust gate is per-DC and
-  // unaffected — that handles the once-per-round.)
-  'arcingShotActive',
+  // imperialRetrofittingMultiAttack + arcingShotActive MIGRATED 2026-05-13
+  // → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   // wookieeAvengerSlamUsed + specialActionUsedThisActivation MIGRATED
   // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: "all specials are
   // per figure not per group").
@@ -197,6 +194,13 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'wookieeAvengerSlamUsed',
   'specialActionUsedThisActivation',
   'activationDoubleSpecialAction',
+  // alexanbv 2026-05-13 fifth-wave: attack-frame special-action flags.
+  'closeQuartersActive',
+  'mobileMovementActive',
+  'darksaberSecondAttack',
+  'attackDicePenaltyForMsgId',
+  'pendingSlingBarrage',
+  'arcingShotActive',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

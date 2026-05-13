@@ -37,7 +37,7 @@ function _cleanupMoveState(game, moveKey, msgId) {
     const ctxKey = `${game.gameId}_${moveKey}`;
     if (game.pendingSpacePick[ctxKey]) delete game.pendingSpacePick[ctxKey];
   }
-  if (game.mobileMovementActive?.[msgId]) delete game.mobileMovementActive[msgId];
+  if (game.mobileMovementActive?.[figureKey]) delete game.mobileMovementActive[figureKey];
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
 }
 
@@ -421,7 +421,7 @@ export async function handleMoveMp(interaction, ctx) {
   }
   const profile = moveState.movementProfile || getMovementProfile(meta.dcName, figureKey, game);
   // Force Jump: mobileMovementActive grants MOBILE movement (pass through figures/doors)
-  if (game.mobileMovementActive?.[msgId]) {
+  if (game.mobileMovementActive?.[figureKey]) {
     profile.isMobile = true;
     profile.ignoreBlocking = true;
     profile.ignoreFigureCost = true;
@@ -582,7 +582,7 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     return;
   }
   const nextProfile = getMovementProfile(meta.dcName, figureKey, game);
-  if (game.mobileMovementActive?.[msgId]) {
+  if (game.mobileMovementActive?.[figureKey]) {
     nextProfile.isMobile = true;
     nextProfile.ignoreBlocking = true;
     nextProfile.ignoreFigureCost = true;
@@ -804,7 +804,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   }
   const profile = getMovementProfile(meta.dcName, figureKey, game);
   // Force Jump: mobileMovementActive grants MOBILE movement (pass through figures/doors)
-  if (game.mobileMovementActive?.[msgId]) {
+  if (game.mobileMovementActive?.[figureKey]) {
     profile.isMobile = true;
     profile.ignoreBlocking = true;
     profile.ignoreFigureCost = true;

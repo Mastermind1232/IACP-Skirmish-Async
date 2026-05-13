@@ -3112,8 +3112,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     await logGameAction(game, client, `**Autofire** — Chain attack available! Target must be within 3 of the original target space.`, { phase: 'ROUND', icon: 'attack' });
   }
   // The Darksaber: "then you may perform an attack" — grant second free attack
-  if (game.darksaberSecondAttack?.[combat.attackerMsgId]) {
-    delete game.darksaberSecondAttack[combat.attackerMsgId];
+  if (combat.attackerFigureKey && game.darksaberSecondAttack?.[combat.attackerFigureKey]) {
+    delete game.darksaberSecondAttack[combat.attackerFigureKey];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Darksaber Strike' };
     // Clear the override so the second attack uses normal dice

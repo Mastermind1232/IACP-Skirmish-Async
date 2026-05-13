@@ -1348,7 +1348,7 @@ async function buildAndSendAttackTargets(
     delete game.barrageTargetSpace[figureKey];
   }
   // Arcing Shot: validate each target — must be adjacent to an empty space in attacker's LOS
-  if (game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar) {
+  if (game.arcingShotActive?.[figureKey] || game.arcingShotActiveScalar) {
     // Build set of all occupied spaces (both players' figures)
     const _arcOccupied = new Set();
     for (const pn of [1, 2]) {
@@ -1381,7 +1381,7 @@ async function buildAndSendAttackTargets(
   }
   const displayName = meta.displayName || meta.dcName;
   const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
-  const _arcActive = game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar;
+  const _arcActive = game.arcingShotActive?.[figureKey] || game.arcingShotActiveScalar;
   const targetBtns = targets.map((t, targetIndex) => {
     const noLOS = t.hasLOS === false;
     const marksmanTag = t.requiresMarksman ? ' [Marksman]' : '';
@@ -2766,9 +2766,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _dsFk = figureKeyForActivation(game, msgId, figureIndex);
       if (_dsFk) game.freeAttackBonusPending[_dsFk] = { from: 'Darksaber Strike' };
-      // Grant a second free attack after this one (the "then may perform an attack")
+      // Grant a second free attack after this one (the "then may perform
+      // an attack"). Per alexanbv 2026-05-13: per-figureKey.
       game.darksaberSecondAttack = game.darksaberSecondAttack || {};
-      game.darksaberSecondAttack[msgId] = true;
+      if (_dsFk) game.darksaberSecondAttack[_dsFk] = true;
       await thread.send(`**Darksaber Strike** — Your next attack: **1 red die, Melee**. **Blast → Cleave** conversion. Then you may perform another attack.`).catch(discordCatch);
       saveGames(game.gameId);
       return;

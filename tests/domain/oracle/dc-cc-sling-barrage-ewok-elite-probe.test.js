@@ -54,7 +54,8 @@ describe('DC-CC: Ewok Warrior (Elite) — Sling Barrage wiring', () => {
     const game = {};
     const result = resolveAbility('sling_barrage_ewok_elite', { game, msgId: 'M1' });
     assert.equal(result.applied, true);
-    assert.equal(game.pendingSlingBarrage?.M1, true);
+    // Per alexanbv 2026-05-13: pendingSlingBarrage is figureKey-keyed.
+    assert.equal(game.pendingSlingBarrage?.['Ewok Warrior (Elite)-1-0'], true);
     assert.equal(game.freeAttackBonusPending?.['Ewok Warrior (Elite)-1-0']?.from, 'Sling Barrage');
     assert.equal(game.pendingOverrideAttackDice?.M1?.type, 'ranged');
     assert.ok(/Sling Barrage/.test(result.logMessage));

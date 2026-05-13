@@ -1941,8 +1941,9 @@ export function resolveAbility(abilityId, context) {
       if (_sbFk) game.freeAttackBonusPending[_sbFk] = { from: 'Sling Barrage' };
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+      // Per alexanbv 2026-05-13: per-figureKey (specials are per-figure).
       game.pendingSlingBarrage = game.pendingSlingBarrage || {};
-      game.pendingSlingBarrage[msgId] = true;
+      if (_sbFk) game.pendingSlingBarrage[_sbFk] = true;
     }
     return {
       applied: true,
@@ -2399,8 +2400,10 @@ export function resolveAbility(abilityId, context) {
     }
     // Close Quarters: at attack time, override dice with adjacent hostile's pool + remove 1 defense die
     if (entry.closeQuartersOverride) {
+      // Per alexanbv 2026-05-13: per-figureKey (specials are per-figure).
       game.closeQuartersActive = game.closeQuartersActive || {};
-      game.closeQuartersActive[msgId] = true;
+      const _cqFk = figureKeyForActivation(game, msgId);
+      if (_cqFk) game.closeQuartersActive[_cqFk] = true;
     }
     // overrideAttackType (Face to Face, Dying Lunge, Final Stand, Lightsaber Throw): force attack type without overriding dice
     if (entry.overrideAttackType) {
@@ -3504,10 +3507,11 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       if (_figureKey) game.freeAttackBonusPending[_figureKey] = true;
     }
-    // mobileMovement (Lift Off): grant Mobile movement for these MP
+    // mobileMovement (Lift Off): grant Mobile movement for these MP.
+    // Per alexanbv 2026-05-13: per-figureKey (specials are per-figure).
     if (entry.mobileMovement) {
       game.mobileMovementActive = game.mobileMovementActive || {};
-      game.mobileMovementActive[msgId] = true;
+      if (_figureKey) game.mobileMovementActive[_figureKey] = true;
     }
     return {
       applied: true,
@@ -4660,7 +4664,9 @@ export function resolveAbility(abilityId, context) {
       };
       if (entry.mobileMovement) {
         game.mobileMovementActive = game.mobileMovementActive || {};
-        game.mobileMovementActive[msgId] = true;
+        // Per alexanbv 2026-05-13: per-figureKey.
+        const _mmFkA = figureKeyForActivation(game, msgId);
+        if (_mmFkA) game.mobileMovementActive[_mmFkA] = true;
       }
       const _imxMobileSuffix = entry.mobileMovement ? ' MOBILE movement active — treat doors and figures as open terrain.' : '';
       return {
@@ -4691,10 +4697,13 @@ export function resolveAbility(abilityId, context) {
       }
       if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
     }
-    // mobileMovement (Force Jump): during this move ignore figures and doors for pathing; cannot end in blocking terrain
+    // mobileMovement (Force Jump): during this move ignore figures and
+    // doors for pathing; cannot end in blocking terrain.
+    // Per alexanbv 2026-05-13: per-figureKey.
     if (entry.mobileMovement) {
       game.mobileMovementActive = game.mobileMovementActive || {};
-      game.mobileMovementActive[msgId] = true;
+      const _mmFkB = figureKeyForActivation(game, msgId);
+      if (_mmFkB) game.mobileMovementActive[_mmFkB] = true;
       msg += ' MOBILE movement active \u2014 treat doors and figures as open terrain; cannot end in blocking terrain.';
     }
     return { applied: true, logMessage: entry.logMessage || msg, refreshMovementBank: true, activeMsgId: msgId };
@@ -6343,13 +6352,14 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: 'Resolve manually: play before declaring an attack (as the attacker).' };
     }
     cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + (entry.attackAccuracyBonus || 0);
-    // Set flag so target selection validates adjacent empty space in attacker's LOS
-    const msgId = context.msgId || (dcMessageMeta && cbt.attackerMsgId);
-    if (msgId) {
+    // Set flag so target selection validates adjacent empty space in
+    // attacker's LOS. Per alexanbv 2026-05-13: per-figureKey.
+    const _asFk = cbt.attackerFigureKey || null;
+    if (_asFk) {
       game.arcingShotActive = game.arcingShotActive || {};
-      game.arcingShotActive[msgId] = true;
+      game.arcingShotActive[_asFk] = true;
     } else {
-      // Fallback: set scalar flag
+      // Fallback: set scalar flag (no active combat yet — pre-declare).
       game.arcingShotActiveScalar = true;
     }
     return {
@@ -11123,8 +11133,9 @@ export function resolveAbility(abilityId, context) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         const _losFk = figureKeyForActivation(game, msgId);
         if (_losFk) game.freeAttackBonusPending[_losFk] = true;
+        // Per alexanbv 2026-05-13: per-figureKey (the figure whose attack will be penalized).
         game.attackDicePenaltyForMsgId = game.attackDicePenaltyForMsgId || {};
-        game.attackDicePenaltyForMsgId[msgId] = 1;
+        if (_losFk) game.attackDicePenaltyForMsgId[_losFk] = 1;
         game.attackDicePenaltyLabel = 'Lord of the Sith';
         return {
           applied: true,
