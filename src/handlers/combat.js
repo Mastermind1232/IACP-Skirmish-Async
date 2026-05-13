@@ -4367,35 +4367,21 @@ export async function sendRerollUI(thread, game, combat, phase) {
     // each render a "Use X" button in the bucket; the player picks
     // any order. Click → sub-picker → resolve → mark used → bucket
     // re-renders. Eligibility is tracked on combat.rerollAbilities.
-    const remaining = combat.attackerRerollsRemaining || 0;
+    // Per alexanbv 2026-05-13: bucket renders ONLY named "Use X"
+    // ability buttons. No anonymous die-picks — every reroll ability
+    // (passive +1, forced, complex) is its own bucket button. Click
+    // any ability button → controlled-reroll sub-picker filters by
+    // pool and excludes alreadyRerolled.
     const atkPN = combat.attackerPlayerNum || 1;
     const _atkCtrl = (combat.forcedRerollQueue || [])
       .map((e, i) => ({ e, i }))
       .filter(({ e }) => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
     const _atkAvailableAbilities = _countUnusedAttackerRerollAbilities(combat);
-    if (remaining <= 0 && _atkCtrl.length === 0 && _atkAvailableAbilities === 0) {
+    if (_atkCtrl.length === 0 && _atkAvailableAbilities === 0) {
       await _advanceFromForced();
       return;
     }
-    const dice = combat.attackDiceResults || [];
-    const alreadyRerolled = combat.attackerRerolledIndices || [];
     const dieButtons = [];
-    if (remaining > 0) {
-      for (let i = 0; i < dice.length; i++) {
-        if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        dieButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`combat_reroll_${gameId}_atk_${i}`)
-            .setLabel(`Reroll ${formatAttackDie(dice[i], i)}`)
-            .setStyle(ButtonStyle.Secondary)
-        );
-      }
-    }
-    // Attacker-owned controlled abilities (Versatile Weaponry, Shared
-    // Calculations, Precision, Fyrnock Style while attacking, Imperial
-    // Raider, etc.) appear as additional buttons. Each is voluntary
-    // and the attacker picks any order; clicking opens the pool die
-    // sub-picker via combat.controlledRerollActiveIdx.
     for (const { e, i } of _atkCtrl) {
       const _poolHint = e.pool === 'any' ? '' : ` (${e.pool})`;
       dieButtons.push(
@@ -4405,53 +4391,38 @@ export async function sendRerollUI(thread, game, combat, phase) {
           .setStyle(ButtonStyle.Primary),
       );
     }
-    // Per alexanbv 2026-05-13: step-3 reroll abilities (Twin Sabers,
-    // Resourceful, Shrewd Scoundrel, Trained) each render a "Use X"
-    // button in the bucket. Click → handlePreReroll posts the sub-
-    // picker → resolution marks the ability used and re-renders.
+    // Complex step-3 abilities (Twin Sabers, Resourceful, Shrewd
+    // Scoundrel, Trained). Each opens its own sub-picker via
+    // handlePreReroll.
     const _atkAbilityCount = _appendAttackerRerollAbilityButtons(gameId, combat, dieButtons);
     const trailing = [
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
-        .setLabel('Done (skip remaining)')
+        .setLabel('Continue (no more rerolls)')
         .setStyle(ButtonStyle.Primary),
     ];
     const _atkParts = [];
-    if (remaining > 0) _atkParts.push(`${remaining} voluntary reroll${remaining > 1 ? 's' : ''}`);
-    if (_atkCtrl.length > 0) _atkParts.push(`${_atkCtrl.length} ability button${_atkCtrl.length > 1 ? 's' : ''}`);
-    if (_atkAbilityCount > 0) _atkParts.push(`${_atkAbilityCount} reroll-ability button${_atkAbilityCount > 1 ? 's' : ''}`);
+    if (_atkCtrl.length > 0) _atkParts.push(`${_atkCtrl.length} reroll-ability button${_atkCtrl.length > 1 ? 's' : ''}`);
+    if (_atkAbilityCount > 0) _atkParts.push(`${_atkAbilityCount} complex-ability button${_atkAbilityCount > 1 ? 's' : ''}`);
     await thread.send({
-      content: `**Reroll Window (Attacker)** — ${_atkParts.join(' + ')}. Pick any in any order, or Done.`,
+      content: `**Reroll Window (Attacker)** — ${_atkParts.join(' + ')}. Pick any in any order, or Continue.`,
       components: buildRerollRows(dieButtons, trailing),
     });
   } else {
     const remaining = combat.defenderRerollsRemaining || 0;
+    // Per alexanbv 2026-05-13: bucket renders ONLY named "Use X"
+    // ability buttons. No anonymous die-picks.
     const ctAvailable = combat.crossTrainingAvailable && !combat.crossTrainingUsed;
     const defPN = opponentPlayerNum(combat.attackerPlayerNum || 1);
     const _defCtrl = (combat.forcedRerollQueue || [])
       .map((e, i) => ({ e, i }))
       .filter(({ e }) => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
     const _defAvailableAbilities = _countUnusedRerollAbilitiesForPlayer(combat, defPN);
-    if (remaining <= 0 && !ctAvailable && _defCtrl.length === 0 && _defAvailableAbilities === 0) {
+    if (!ctAvailable && _defCtrl.length === 0 && _defAvailableAbilities === 0) {
       await _advanceFromForced();
       return;
     }
-    const dice = combat.defenseDiceResults || [];
-    const alreadyRerolled = combat.defenderRerolledIndices || [];
     const dieButtons = [];
-    if (remaining > 0) {
-      for (let i = 0; i < dice.length; i++) {
-        if (alreadyRerolled.includes(i)) continue; // G12: each die rerolled max once
-        dieButtons.push(
-          new ButtonBuilder()
-            .setCustomId(`combat_reroll_${gameId}_def_${i}`)
-            .setLabel(`Reroll ${formatDefenseDie(dice[i], i)}`)
-            .setStyle(ButtonStyle.Secondary)
-        );
-      }
-    }
-    // Defender-owned controlled abilities (Fyrnock Style while defending,
-    // Precision when defender is GI, Survival is Strength, Doubt, etc.)
     for (const { e, i } of _defCtrl) {
       const _poolHint = e.pool === 'any' ? '' : ` (${e.pool})`;
       dieButtons.push(
@@ -4461,10 +4432,8 @@ export async function sendRerollUI(thread, game, combat, phase) {
           .setStyle(ButtonStyle.Primary),
       );
     }
-    // Per alexanbv 2026-05-13: defender-side complex reroll abilities
-    // (Resourceful when Lando is defender, Shrewd Scoundrel ditto)
-    // surface as "Use X" buttons in the defender bucket. Routed by
-    // playerNum stored on combat.rerollAbilities[X].
+    // Complex step-3 abilities for the defender (Resourceful when
+    // Lando is defender, Shrewd Scoundrel ditto, Guardian Stance).
     _appendRerollAbilityButtonsForPlayer(gameId, combat, defPN, dieButtons);
     const trailing = [];
     if (ctAvailable) {
@@ -4478,16 +4447,16 @@ export async function sendRerollUI(thread, game, combat, phase) {
     trailing.push(
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_def_done`)
-        .setLabel('Done (skip remaining)')
+        .setLabel('Continue (no more rerolls)')
         .setStyle(ButtonStyle.Primary)
     );
     const actionRows = buildRerollRows(dieButtons, trailing);
     const parts = [];
-    if (remaining > 0) parts.push(`${remaining} voluntary reroll${remaining > 1 ? 's' : ''}`);
     if (ctAvailable) parts.push('Cross Training');
-    if (_defCtrl.length > 0) parts.push(`${_defCtrl.length} ability button${_defCtrl.length > 1 ? 's' : ''}`);
+    if (_defCtrl.length > 0) parts.push(`${_defCtrl.length} reroll-ability button${_defCtrl.length > 1 ? 's' : ''}`);
+    if (_defAvailableAbilities > 0) parts.push(`${_defAvailableAbilities} complex-ability button${_defAvailableAbilities > 1 ? 's' : ''}`);
     await thread.send({
-      content: `**Reroll Window (Defender)** — ${parts.join(' + ')}. Pick any in any order, or Done.`,
+      content: `**Reroll Window (Defender)** — ${parts.join(' + ')}. Pick any in any order, or Continue.`,
       components: actionRows,
     });
   }
