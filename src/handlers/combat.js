@@ -5829,12 +5829,12 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat
   }
   const uniqueTokens = [...seen.values()];
 
+  // Per alexanbv 2026-05-13: Wild is gain-time only and never in the
+  // bank — the `allowed` filter above excludes it from this list.
   const btns = uniqueTokens.slice(0, 4).map(({ type, index, count }) =>
     new ButtonBuilder()
       .setCustomId(`combat_token_${gameId}_${prefix}_${index}`)
-      .setLabel(type === 'Wild'
-        ? `Wild${count > 1 ? ` (${count})` : ''}`
-        : `Spend ${type}${count > 1 ? ` (have ${count})` : ''}`)
+      .setLabel(`Spend ${type}${count > 1 ? ` (have ${count})` : ''}`)
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -5853,7 +5853,7 @@ async function sendTokenWindow(thread, gameId, role, tokens, displayName, combat
       btns.push(
         new ButtonBuilder()
           .setCustomId(`combat_token_${gameId}_${prefix}_sc${scIdx}`)
-          .setLabel(sc.type === 'Wild' ? `Wild from ${sc.ownerName}` : `${sc.type} from ${sc.ownerName}`)
+          .setLabel(`${sc.type} from ${sc.ownerName}`)
           .setStyle(ButtonStyle.Secondary)
       );
     });

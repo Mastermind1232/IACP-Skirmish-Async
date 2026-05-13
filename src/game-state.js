@@ -126,12 +126,19 @@ function migrateGame(g) {
   if (g.player1Squad?.ccList) sanitizeCcNames(g.player1Squad.ccList);
   if (g.player2Squad?.ccList) sanitizeCcNames(g.player2Squad.ccList);
 
-  // Migrate 'Hit' power tokens to 'Damage' (renamed for IACP correctness)
+  // Migrate 'Hit' power tokens to 'Damage' (renamed for IACP correctness).
+  // Also scrub 'Wild' tokens from any legacy save (alexanbv 2026-05-13):
+  // Wild is a gain-time selector per CRR p.50, not a stored token type —
+  // any 'Wild' in the bank from a pre-fix save is removed on load.
   if (g.figurePowerTokens) {
     for (const fk of Object.keys(g.figurePowerTokens)) {
       const arr = g.figurePowerTokens[fk];
-      if (Array.isArray(arr)) {
-        for (let i = 0; i < arr.length; i++) { if (arr[i] === 'Hit') arr[i] = 'Damage'; }
+      if (!Array.isArray(arr)) continue;
+      for (let i = 0; i < arr.length; i++) { if (arr[i] === 'Hit') arr[i] = 'Damage'; }
+      // Filter out any 'Wild' that snuck into the bank.
+      const cleaned = arr.filter((t) => t !== 'Wild');
+      if (cleaned.length !== arr.length) {
+        g.figurePowerTokens[fk] = cleaned;
       }
     }
   }
