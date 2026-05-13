@@ -8382,14 +8382,17 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: activationDoubleSpecialAction (Single Purpose)
+  // ccEffect: activationDoubleSpecialAction (Single Purpose).
+  // Per alexanbv 2026-05-13: specials are per-figure → per-figureKey.
   if (entry.type === 'ccEffect' && entry.activationDoubleSpecialAction) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at start of your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const _adsaFk = figureKeyForActivation(game, msgId);
+    if (!_adsaFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.activationDoubleSpecialAction = game.activationDoubleSpecialAction || {};
-    game.activationDoubleSpecialAction[msgId] = true;
+    game.activationDoubleSpecialAction[_adsaFk] = true;
     return {
       applied: true,
       logMessage: 'You may use the same special action up to twice during this activation.',

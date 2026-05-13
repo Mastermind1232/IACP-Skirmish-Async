@@ -1028,9 +1028,10 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // use Slam without spending an action." Surfaces as a sibling
   // free-action button alongside Attack, available ANYTIME during the
   // activation (alexanbv 2026-05-10). Gated on the existing
-  // wookieeAvengerSlamUsed[msgId] flag.
+  // wookieeAvengerSlamUsed flag (per alexanbv 2026-05-13: keyed by
+  // figureKey now, not msgId — reuse _figureKeyForOncePerAct above).
   const _hasWaSlam = !!(_suUpgrades.length && cardNameIncludes(_suUpgrades, 'Wookiee Avenger'));
-  const _waSlamUsed = !!game?.wookieeAvengerSlamUsed?.[msgId];
+  const _waSlamUsed = !!game?.wookieeAvengerSlamUsed?.[_figureKeyForOncePerAct];
   const _showWaSlam = _hasWaSlam && !_waSlamUsed;
 
   const rows = [];

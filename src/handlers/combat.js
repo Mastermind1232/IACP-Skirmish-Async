@@ -2159,11 +2159,12 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Payback (Dengar CC reaction): if attacker has a pending Payback surge bonus, apply it now
-  const paybackBonus = game.paybackBonusSurge?.[msgId];
+  // Payback (Dengar CC reaction): if attacker has a pending Payback
+  // surge bonus, apply it now. Per alexanbv 2026-05-13: per-figureKey.
+  const paybackBonus = game.paybackBonusSurge?.[attackerFigureKey];
   if (paybackBonus) {
     game.pendingCombat.surgeBonus = (game.pendingCombat.surgeBonus || 0) + paybackBonus;
-    delete game.paybackBonusSurge[msgId];
+    delete game.paybackBonusSurge[attackerFigureKey];
     await thread.send(`**Payback** — +${paybackBonus} Surge applied to this counter-attack.`).catch(discordCatch);
   }
 

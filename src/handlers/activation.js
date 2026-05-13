@@ -1660,9 +1660,11 @@ export async function handleActPassive(interaction, ctx) {
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);
-      // Mark Slam as used this activation
+      // Mark Slam as used this activation. Per alexanbv 2026-05-13:
+      // per-figure (specials are per-figure, not per-group).
+      const _waFk = figureKeyForActivation(game, msgId);
       game.wookieeAvengerSlamUsed = game.wookieeAvengerSlamUsed || {};
-      game.wookieeAvengerSlamUsed[msgId] = true;
+      if (_waFk) game.wookieeAvengerSlamUsed[_waFk] = true;
       // CRR: "A figure can perform each special action ability only once
       // per activation." WA's free Slam IS the Special Action — consuming
       // it consumes Chewie's once-per-activation right to use Slam. Push
@@ -1680,9 +1682,10 @@ export async function handleActPassive(interaction, ctx) {
           }
         }
       }
-      // Track as special action for CC purposes (To the Limit, All in a Day's Work)
+      // Track as special action for CC purposes (To the Limit, All in a
+      // Day's Work). Per alexanbv 2026-05-13: per-figure.
       game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
-      game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
+      if (_waFk) game.specialActionUsedThisActivation[_waFk] = (game.specialActionUsedThisActivation[_waFk] || 0) + 1;
       // Roll 1 red die
       const faces = getDiceData()?.attack?.red;
       if (!faces?.length) {
@@ -2169,9 +2172,10 @@ export async function handleActPassive(interaction, ctx) {
       game.ancillaryTokens = game.ancillaryTokens || {};
       game.ancillaryTokens.energyShield = game.ancillaryTokens.energyShield || [];
       game.ancillaryTokens.energyShield.push(space);
-      // Track as special action for CC purposes
+      // Track as special action for CC purposes. Per alexanbv 2026-05-13: per-figure.
+      const _suFk = figureKeyForActivation(game, msgId);
       game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
-      game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
+      if (_suFk) game.specialActionUsedThisActivation[_suFk] = (game.specialActionUsedThisActivation[_suFk] || 0) + 1;
       await interaction.message.edit({ content: `🛡️ **Shields Up** — Energy shield placed at **${space.toUpperCase()}**.`, components: [] }).catch(discordCatch);
       await logGameAction?.(game, client, `🛡️ **Shields Up** — Energy shield placed at **${space.toUpperCase()}**.`, { phase: 'ACTIVATION', icon: 'activate' });
     }

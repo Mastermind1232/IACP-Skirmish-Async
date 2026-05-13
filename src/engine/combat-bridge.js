@@ -734,6 +734,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
 
   // Track figures damaged by this group's activation (for Aim: Rebel Trooper Elite, etc.)
   if (damage > 0 && combat.attackerMsgId && combat.target?.figureKey) {
+    // Aim (Rebel Trooper Elite) reads this list with "during this
+    // group's activation" wording → kept msgId-keyed (per-group) as
+    // one of the rare card-text-says-group exceptions to alexanbv's
+    // 2026-05-13 "default per-figure" principle.
     game.activationDamagedFigures = game.activationDamagedFigures || {};
     game.activationDamagedFigures[combat.attackerMsgId] = game.activationDamagedFigures[combat.attackerMsgId] || [];
     if (!game.activationDamagedFigures[combat.attackerMsgId].includes(combat.target.figureKey)) {
@@ -1229,10 +1233,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // Achievement: activation kill streak (Double Kill / Triple Kill / PENTAKILL)
         if (combat.attackerMsgId) {
           game.activationKills = game.activationKills || {};
-          game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
+          // Per alexanbv 2026-05-13: per-figureKey (kills are per-figure).
+          if (combat.attackerFigureKey) {
+            game.activationKills[combat.attackerFigureKey] = (game.activationKills[combat.attackerFigureKey] || 0) + 1;
+          }
           if (isDbConfigured() && achievementsChannelId) {
             const _akUserId = getPlayerId(game, attackerPlayerNum);
-            checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _akUserId, 'activation_kills', game.activationKills[combat.attackerMsgId])
+            checkAndPostAchievements(checkAndGrantAchievements, postAchievementNotification, client, achievementsChannelId, _akUserId, 'activation_kills', game.activationKills[combat.attackerFigureKey])
               .catch((err) => console.error('[Achievements] activation_kills check failed:', err.message));
           }
         }

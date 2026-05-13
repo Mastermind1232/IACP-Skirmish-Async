@@ -75,12 +75,11 @@ export async function handleReactionUse(interaction, ctx) {
   const thread = await fetchCombatThread(client, pending.combatThreadId);
 
   if (cardName === 'Payback') {
-    // Payback: Dengar counter-attacks the attacker with +2 Surge bonus
-    // Set a pending bonus surge for Dengar's next attack (keyed by Dengar's DC msgId)
-    const dengarMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
-    if (dengarMsgId) {
+    // Payback: Dengar counter-attacks the attacker with +2 Surge bonus.
+    // Per alexanbv 2026-05-13: per-figureKey (Dengar's figureKey).
+    if (targetFigKey) {
       game.paybackBonusSurge = game.paybackBonusSurge || {};
-      game.paybackBonusSurge[dengarMsgId] = (game.paybackBonusSurge[dengarMsgId] || 0) + 2;
+      game.paybackBonusSurge[targetFigKey] = (game.paybackBonusSurge[targetFigKey] || 0) + 2;
     }
     const attackerName = dcNameFromFigureKey(attackerFigKey);
     if (thread) await thread.send(`**Payback** — Dengar may now counter-attack **${attackerName}**. Use the Attack button on Dengar's DC card. **+2 Surge** will be applied automatically to that attack.`).catch(discordCatch);

@@ -1706,7 +1706,11 @@ export async function handleDcWaSlam(interaction, ctx) {
     await interaction.followUp({ content: 'Wookiee Avenger is not attached.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (game.wookieeAvengerSlamUsed?.[msgId]) {
+  // Per alexanbv 2026-05-13: wookieeAvengerSlamUsed is per-figureKey.
+  // Derive the slam-attempting figure's key from the click params.
+  const _waDgMatch_early = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const _waSelfFk_early = `${meta.dcName}-${_waDgMatch_early ? _waDgMatch_early[1] : '1'}-${figIdx}`;
+  if (game.wookieeAvengerSlamUsed?.[_waSelfFk_early]) {
     await interaction.followUp({ content: 'Free Slam was already used this activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -3122,10 +3126,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await logGameAction(game, client, `<@${oppOwnerId}> **You Have Something I Want** — **${dcNameFromFigureKey(_yhsiw.targetFk)}**'s **${_yhsiw.token}** is targeted by **Moff Gideon**. Choose: transfer the token or suffer 3 Damage.`, { components: [_yhsiwRow], allowedMentions: { users: [oppOwnerId] } });
     }
   }
-  // Track special action usage for CC purposes (To the Limit, All in a Day's Work)
+  // Track special action usage for CC purposes (To the Limit, All in a
+  // Day's Work). Per alexanbv 2026-05-13: per-figureKey.
   if (buttonKey === 'dc_special_' && resolveResult.applied) {
+    const _sauFk = figureKeyForActivation(game, msgId);
     game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
-    game.specialActionUsedThisActivation[msgId] = (game.specialActionUsedThisActivation[msgId] || 0) + 1;
+    if (_sauFk) game.specialActionUsedThisActivation[_sauFk] = (game.specialActionUsedThisActivation[_sauFk] || 0) + 1;
   }
   // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action
   if (buttonKey === 'dc_special_' && abilityId !== 'expertise' && actionsData) {

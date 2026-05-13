@@ -135,8 +135,11 @@ async function fireBlast(thread, game, combat, effect, ctx) {
         source: 'Blast',
       }, { ...(deps || {}), client });
       if (combat.attackerMsgId) {
+        // Per alexanbv 2026-05-13: per-figureKey.
         game.activationKills = game.activationKills || {};
-        game.activationKills[combat.attackerMsgId] = (game.activationKills[combat.attackerMsgId] || 0) + 1;
+        if (combat.attackerFigureKey) {
+          game.activationKills[combat.attackerFigureKey] = (game.activationKills[combat.attackerFigureKey] || 0) + 1;
+        }
       }
     }
   }
