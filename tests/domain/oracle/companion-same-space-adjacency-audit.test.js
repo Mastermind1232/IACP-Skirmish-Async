@@ -36,8 +36,10 @@ const MOVEMENT = readFileSync(resolve(ROOT, 'src/handlers/movement.js'), 'utf8')
 
 describe('CRR companion-same-space adjacency audit', () => {
   it('Cower: includes self-coord in adjacency set AND skips defender-self in iteration', () => {
-    // Find the Cower block
-    const block = COMBAT.match(/Cower \(C-3PO[\s\S]{0,1200}?defSpecialReroll \+= 1[\s\S]{0,200}?\}\s*\}\s*\}/);
+    // alexanbv 2026-05-13: migrated from `defSpecialReroll += 1` to
+    // `_pushVoluntary` queue registration; assertion now anchors on
+    // the Cower source-string of the push.
+    const block = COMBAT.match(/Cower \(C-3PO[\s\S]{0,1500}?'Cower'\);?[\s\S]{0,200}?\}\s*\}\s*\}/);
     assert.ok(block, 'Cower block locatable');
     const src = block[0];
     // (a) same-space inclusion
@@ -49,7 +51,9 @@ describe('CRR companion-same-space adjacency audit', () => {
   });
 
   it('Squad Training: includes self-coord in adjacency set AND skips attacker-self in iteration', () => {
-    const block = COMBAT.match(/Squad Training[\s\S]{0,1500}?applySquadTrainingReroll[\s\S]{0,200}?\}\s*\}\s*\}\s*\}/);
+    // alexanbv 2026-05-13: migrated from `applySquadTrainingReroll`
+    // to `_pushVoluntary('Squad Training')` queue registration.
+    const block = COMBAT.match(/Squad Training[\s\S]{0,2000}?'Squad Training'\);?[\s\S]{0,200}?\}\s*\}\s*\}\s*\}/);
     assert.ok(block, 'Squad Training block locatable');
     const src = block[0];
     assert.match(src, /stAdj\.add\(_stPosLower\)/,

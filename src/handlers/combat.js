@@ -3563,41 +3563,59 @@ export async function handleCombatRoll(interaction, ctx) {
     const defEffR = getDcEff()[defenderDcName] || getDcEff()[(defenderDcName || '').replace(/\s*\[.*\]\s*$/, '')];
     const atkSIds = atkEffR?.specialAbilityIds || [];
     const defSIds = defEffR?.specialAbilityIds || [];
+    // Per alexanbv 2026-05-13: every detected +1 reroll registers as
+    // its own named entry in combat.forcedRerollQueue with the holder
+    // as controlPlayer. The bucket renders one "Use X" button per
+    // entry; the controlled-reroll sub-picker filters by pool when the
+    // button is clicked. No anonymous count.
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    const _pushVoluntary = (controlPlayer, pool, source) => {
+      combat.forcedRerollQueue.push({ controlPlayer, pool, remaining: 1, source });
+    };
     let atkSpecialReroll = 0;
     let defSpecialReroll = 0;
     // Targeting Computer family (HK Assassin Elite, IG-11, Probe Droid Elite,
     // Sentry Droid Elite/Reg, AT-ST, Dark Trooper Mk III ATC): +1 atk reroll
-    if (hasTargetingComputerAbility(atkSIds)) atkSpecialReroll = applyTargetingComputerReroll(atkSpecialReroll);
+    if (hasTargetingComputerAbility(atkSIds)) {
+      _pushVoluntary(attackerPlayerNum, 'attack', 'Targeting Computer');
+    }
     // Overpower (Royal Guard Champion): +1 atk reroll restricted to RED die when
-    // attacking, +1 def reroll restricted to BLACK die when defending. destruct
-    // 2026-05-06: "overpower is restricted to red die when attacking, and black
-    // die when defending." The +1 enters the standard rerolls budget but
-    // handleCombatReroll's voluntary path enforces color via combat.overpower*
-    // flags (one slot of the budget is locked to the matching color).
+    // attacking, +1 def reroll restricted to BLACK die when defending. Color
+    // restriction is preserved on the combat.overpower* flags so the picker
+    // can enforce it when the queue entry's sub-picker opens.
     if (hasOverpowerAbility(atkSIds)) {
-      atkSpecialReroll = applyOverpowerAttackerReroll(atkSpecialReroll);
+      _pushVoluntary(attackerPlayerNum, 'attack', 'Overpower (red die only)');
       combat.overpowerAtkColorLocked = 'red';
       combat.overpowerAtkLockedAvailable = true;
     }
     if (hasOverpowerAbility(defSIds)) {
-      defSpecialReroll = applyOverpowerDefenderReroll(defSpecialReroll);
+      _pushVoluntary(defenderPlayerNum, 'defense', 'Overpower (black die only)');
       combat.overpowerDefColorLocked = 'black';
       combat.overpowerDefLockedAvailable = true;
     }
     // Foresight (Darth Vader defending): +1 def reroll
-    if (hasForesightAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
-    // Defensive Stance (Diala Passil defending): +1 def reroll
-    // (Dodge-conversion clause lives in later phase, see ~line 4400)
-    if (hasDefensiveStanceAbility(defSIds)) defSpecialReroll = applyDefensiveReroll(defSpecialReroll);
+    if (hasForesightAbility(defSIds)) {
+      _pushVoluntary(defenderPlayerNum, 'defense', 'Foresight');
+    }
+    // Defensive Stance (Diala Passil defending): +1 def reroll. The
+    // Dodge-conversion clause is handled at the post-reroll step where
+    // combat.defensiveStanceUsed gates it; the queue entry surfaces the
+    // ability as a "Use Defensive Stance" bucket button.
+    if (hasDefensiveStanceAbility(defSIds)) {
+      _pushVoluntary(defenderPlayerNum, 'defense', 'Defensive Stance');
+    }
     // Charge Generators (AT-DP attacking): +1 atk reroll + +1 Hit if < 9 damage suffered
     if (hasChargeGeneratorsAbility(atkSIds)) {
       const atkHpA = dcHS?.get(combat.attackerMsgId) || [];
       const atkFHp = atkHpA[combat.attackerFigureIndex ?? 0];
       const atkDs = atkFHp ? Math.max(0, (atkFHp[1] ?? atkFHp[0] ?? 0) - (atkFHp[0] ?? 0)) : 0;
       if (chargeGeneratorsApplies(atkDs)) {
-        const { bonusHits, atkSpecialReroll: newReroll } = applyChargeGeneratorsBonus(combat, atkSpecialReroll);
+        // applyChargeGeneratorsBonus returns the +1 Hit; we only need
+        // the bonusHits half here — the reroll piece registers as a
+        // queue entry instead of summing into a count.
+        const { bonusHits } = applyChargeGeneratorsBonus(combat, 0);
         combat.bonusHits = bonusHits;
-        atkSpecialReroll = newReroll;
+        _pushVoluntary(attackerPlayerNum, 'attack', 'Charge Generators');
       }
     }
     // Inspiring (Luke Skywalker on attacker's team): +1 atk reroll for another friendly within 3 spaces
@@ -3611,8 +3629,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
         if (!hasInspiringAbility(fe?.specialAbilityIds)) continue;
         if (atkPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), INSPIRING_RANGE)) {
-          const r = applyInspiringReroll({ atkSpecialReroll });
-          atkSpecialReroll = r.atkSpecialReroll;
+          _pushVoluntary(attackerPlayerNum, 'attack', `Inspiring (${fn})`);
           await thread.send(`**Inspiring** (${fn}) — friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
           break;
         }
@@ -3628,7 +3645,7 @@ export async function handleCombatRoll(interaction, ctx) {
         const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
         if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
         if (defPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
-          defSpecialReroll += 1;
+          _pushVoluntary(defenderPlayerNum, 'defense', `Soresu Form (${fn})`);
           combat.soresuFormFigKey = fk;
           break;
         }
@@ -3652,7 +3669,7 @@ export async function handleCombatRoll(interaction, ctx) {
         for (const [fk, pos] of Object.entries(defFigsC)) {
           if (fk === combat.target?.figureKey) continue;
           if (adjToDefC.has(String(pos).toLowerCase())) {
-            defSpecialReroll += 1;
+            _pushVoluntary(defenderPlayerNum, 'defense', 'Cower');
             break;
           }
         }
@@ -3675,7 +3692,7 @@ export async function handleCombatRoll(interaction, ctx) {
           const fn = dcNameFromFigureKey(fk);
           const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
           if ((fe?.keywords || []).some(k => String(k).toUpperCase() === 'TROOPER')) {
-            atkSpecialReroll = applySquadTrainingReroll(atkSpecialReroll); break;
+            _pushVoluntary(attackerPlayerNum, 'attack', 'Squad Training'); break;
           }
         }
       }
@@ -3687,7 +3704,8 @@ export async function handleCombatRoll(interaction, ctx) {
     {
       let _chApplied = false;
       if (atkSIds.includes('coordinated_hunt_purge_commander')) {
-        atkSpecialReroll += 1; _chApplied = true;
+        _pushVoluntary(attackerPlayerNum, 'attack', 'Coordinated Hunt');
+        _chApplied = true;
       }
       if (!_chApplied && !combat.noFriendliesActive) {
         const atkKwsCH = (atkEffR?.keywords || []).map(k => String(k).toUpperCase());
@@ -3702,7 +3720,8 @@ export async function handleCombatRoll(interaction, ctx) {
               const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
               if (!(fe?.specialAbilityIds || []).includes('coordinated_hunt_purge_commander')) continue;
               if (pos && ctx.hasLineOfSightByCoord(game, String(pos).toLowerCase(), String(chAtkPos).toLowerCase(), chMapSp, ctx.getFigureSize)) {
-                atkSpecialReroll += 1; _chApplied = true; break;
+                _pushVoluntary(attackerPlayerNum, 'attack', `Coordinated Hunt (${fn})`);
+                _chApplied = true; break;
               }
             }
           }
@@ -3715,7 +3734,7 @@ export async function handleCombatRoll(interaction, ctx) {
       const liuMapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (liuStartPos && combat.target?.coord && liuMapSp && ctx.hasLineOfSightByCoord) {
         const targetHadLos = ctx.hasLineOfSightByCoord(game, String(combat.target.coord).toLowerCase(), String(liuStartPos).toLowerCase(), liuMapSp, ctx.getFigureSize);
-        if (!targetHadLos) atkSpecialReroll += 1;
+        if (!targetHadLos) _pushVoluntary(attackerPlayerNum, 'attack', 'Light It Up');
       }
     }
 
@@ -3738,15 +3757,20 @@ export async function handleCombatRoll(interaction, ctx) {
             if (ctx.hasLineOfSightByCoord(game, String(pos).toLowerCase(), sbDefCoord, sbMapSp, ctx.getFigureSize)) sbBonus += 1;
           }
           if (sbBonus > 0) {
-            atkSpecialReroll += sbBonus;
+            for (let _sbI = 0; _sbI < sbBonus; _sbI++) {
+              _pushVoluntary(attackerPlayerNum, 'attack', `Sling Barrage #${_sbI + 1}`);
+            }
             await thread.send(`**Sling Barrage** — ${sbBonus} other group-mate${sbBonus === 1 ? '' : 's'} with LOS to defender: +${sbBonus} attack reroll${sbBonus === 1 ? '' : 's'}.`).catch(discordCatch);
           }
         }
       }
     }
 
-    // Build forced reroll queue for Batch 2B abilities
-    combat.forcedRerollQueue = [];
+    // Build forced reroll queue for Batch 2B abilities. NB (alexanbv
+    // 2026-05-13): voluntary +1 reroll abilities also live on this
+    // queue now via `_pushVoluntary` above, so we must NOT reset the
+    // queue here — append-only.
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
     // Versatile Weaponry (HK Assassin Elite): attacker forces 1 def die reroll
     if (atkSIds.includes('versatile_weaponry_hk_elite')) {
       combat.forcedRerollQueue.push({ controlPlayer: attackerPlayerNum, pool: 'defense', remaining: 1, source: 'Versatile Weaponry' });
@@ -3851,17 +3875,68 @@ export async function handleCombatRoll(interaction, ctx) {
             // Auto-exhaust and grant reroll
             game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
             game.exhaustedSkirmishUpgrades[_taMid] = [...(game.exhaustedSkirmishUpgrades[_taMid] || []), 'Trusted Ally'];
-            atkSpecialReroll += 1;
+            _pushVoluntary(attackerPlayerNum, 'attack', `Trusted Ally (${fn})`);
+            combat._trustedAllyGrantedThisAttack = true;
             await thread.send(`**Trusted Ally** (${fn}) — Exhausted: friendly within 3 spaces, +1 attack reroll granted.`).catch(discordCatch);
             break;
           }
-          if (atkSpecialReroll > 0) break; // only one Trusted Ally bonus per attack
+          if (combat._trustedAllyGrantedThisAttack) break; // only one Trusted Ally bonus per attack
         }
       }
     }
-    const selfAugReroll = game.selfAugmentationMsgId?.[combat.attackerMsgId] ? 1 : 0;
-    const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll + selfAugReroll;
-    const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll;
+    // Migrate remaining +1 reroll sources to named queue entries
+    // (alexanbv 2026-05-13). atkSpecialReroll / defSpecialReroll are
+    // 0 at this point — every special-ability detection above pushes
+    // directly via _pushVoluntary. Innate text-parsed rerolls,
+    // attachment grants, round CCs, and Self-Augmentation each push
+    // their own named entry too.
+    {
+      // Innate text-parsed (Driven by Hatred, Saber Strike, Han Solo
+      // Scoundrel, generic "While attacking, you may reroll N" cards).
+      const _atkInnateAbs = getInnateRerollAbilities(combat.attackerDcName);
+      for (const ab of _atkInnateAbs) {
+        if (ab.pool !== 'attack' && ab.pool !== 'any') continue;
+        for (let _i = 0; _i < (ab.remainingUses || 1); _i++) {
+          _pushVoluntary(attackerPlayerNum, ab.pool, ab.label || 'Innate Attack Reroll');
+        }
+      }
+      const _defInnateAbs = getInnateRerollAbilities(defenderDcName);
+      for (const ab of _defInnateAbs) {
+        if (ab.pool !== 'defense' && ab.pool !== 'any') continue;
+        for (let _i = 0; _i < (ab.remainingUses || 1); _i++) {
+          _pushVoluntary(defenderPlayerNum, ab.pool, ab.label || 'Innate Defense Reroll');
+        }
+      }
+      // Targeting Computer attachment.
+      for (let _i = 0; _i < (combat.rerollOneAttackDie || 0); _i++) {
+        _pushVoluntary(attackerPlayerNum, 'attack', 'Targeting Computer (attachment)');
+      }
+      // Round-scoped CC effect that grants attack rerolls.
+      for (let _i = 0; _i < (game.roundAttackRerollDice?.[attackerPlayerNum] || 0); _i++) {
+        _pushVoluntary(attackerPlayerNum, 'attack', 'Round CC Reroll');
+      }
+      // Self-Augmentation attachment.
+      if (game.selfAugmentationMsgId?.[combat.attackerMsgId]) {
+        _pushVoluntary(attackerPlayerNum, 'attack', 'Self-Augmentation');
+      }
+      // Guardian Stance / defenderRerollDiceMax (CC that grants the
+      // defender a flexible reroll pool). Each unit becomes one entry
+      // with pool='any' so the picker shows attack + defense dice.
+      for (let _i = 0; _i < (combat.defenderRerollDiceMax || 0); _i++) {
+        _pushVoluntary(defenderPlayerNum, 'any', 'Guardian Stance');
+      }
+    }
+    // Legacy count fields kept for back-compat with handleCombatReroll
+    // decrement paths during the migration. Set from the queue size so
+    // existing "remaining <= 0" exit conditions still work; will be
+    // deleted in Slice 4 once the bucket renderer/done-condition use
+    // queue length only.
+    const atkRerolls = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === attackerPlayerNum && (e.pool === 'attack' || e.pool === 'any'))
+      .reduce((n, e) => n + (e.remaining ?? 0), 0);
+    const defRerolls = (combat.forcedRerollQueue || [])
+      .filter(e => e.controlPlayer === defenderPlayerNum && (e.pool === 'defense' || e.pool === 'any'))
+      .reduce((n, e) => n + (e.remaining ?? 0), 0);
     // Per alexanbv 2026-05-13: there is no "pre-reroll" phase. Each
     // step-3 reroll ability surfaces as its own button in the
     // attacker/defender bucket and is user-controlled in any order.
