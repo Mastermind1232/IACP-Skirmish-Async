@@ -25,11 +25,12 @@ const ACTIVATION_MSGID_FLAGS = [
   'movementBank',
   'dcFinishedPinged',
   'pendingEndTurn',
-  'fellSwoopFreeAttack',
+  // fellSwoopFreeAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure, not per-group).
   'overrunThisActivation',
   'overrunDamagedThisMove',
-  'pummelTwoAttacksThisActivation',
-  'pummelAttacksRemaining',
+  // pummelTwoAttacksThisActivation + pummelAttacksRemaining MIGRATED
+  // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   'stayDownPendingMsgId',
   'burstFirePendingMsgId',
   'cripplingBlowPending',
@@ -107,7 +108,10 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingBombDrop',
   'activationExtraActionThenStun',
   'beastTamerInteractOverride',
-  'imperialRetrofittingMultiAttack',
+  // imperialRetrofittingMultiAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure; one figure using IR's multi-attack does not
+  // grant it to siblings in the group. IR's exhaust gate is per-DC and
+  // unaffected — that handles the once-per-round.)
   'arcingShotActive',
   'wookieeAvengerSlamUsed',
   'specialActionUsedThisActivation',
@@ -126,7 +130,9 @@ const ACTIVATION_MSGID_FLAGS = [
   'companionActivatedBefore',
   'falseOrdersAttackTargets',
   'paybackBonusSurge',
-  'pounceAttackPending',
+  // pounceAttackPending MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure; the Pounce attack belongs to the figure
+  // that triggered it, not the group).
 ];
 
 /**
@@ -162,6 +168,15 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // Without Assault, each figure in a multifigure group can still
   // attack once on its own turn.
   'attackPerformedThisActivation',
+  // alexanbv 2026-05-13 second-wave migration: Pounce, Fell Swoop,
+  // Pummel, Imperial Retrofitting multi-attack grants are ALL per-figure.
+  // Using these abilities on figure[0] does not grant them to siblings.
+  // IR's once-per-round gate lives in the per-DC exhaust state, not here.
+  'pounceAttackPending',
+  'fellSwoopFreeAttack',
+  'pummelTwoAttacksThisActivation',
+  'pummelAttacksRemaining',
+  'imperialRetrofittingMultiAttack',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

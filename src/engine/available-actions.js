@@ -774,11 +774,14 @@ function getActivationActions(game, playerNum, deps) {
       const alreadyAttacked = !!game.attackPerformedThisActivation?.[figureKey];
       let attackBlocked = false;
       if (alreadyAttacked) {
+        // Per alexanbv 2026-05-13: every free-attack flag below is now
+        // per-figureKey. The DEFAULT scope is per-figure unless a card
+        // explicitly says "group".
         const hasFreeAttack = game.freeAttackBonusPending?.[figureKey] != null
-          || game.pounceAttackPending?.[msgId] != null
-          || game.fellSwoopFreeAttack?.[msgId]
-          || game.pummelTwoAttacksThisActivation?.[msgId];
-        const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[msgId];
+          || game.pounceAttackPending?.[figureKey] != null
+          || game.fellSwoopFreeAttack?.[figureKey]
+          || game.pummelTwoAttacksThisActivation?.[figureKey];
+        const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[figureKey];
         if (!hasFreeAttack && !hasIRMultiAttack) {
           const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
           const hasAssault = /\bAssault:/i.test(dcAbilityText);

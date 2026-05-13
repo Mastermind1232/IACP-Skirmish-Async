@@ -168,8 +168,10 @@ describe('B-I-SFT: Still Faster Than You', () => {
       assert.strictEqual(pmx.nextAction?.type, 'freeAttackPrompt', 'freeAttackPrompt continuation queued');
     }
 
-    // Free attack flag (consumed when the freeAttackPrompt fires post-move)
-    assert.strictEqual(game.fellSwoopFreeAttack?.['1001'], true, 'fellSwoopFreeAttack set');
+    // Free attack flag (consumed when the freeAttackPrompt fires post-move).
+    // Per alexanbv 2026-05-13: keyed by figureKey now, not msgId.
+    assert.strictEqual(game.fellSwoopFreeAttack?.['Rebel Trooper-1-0'], true,
+      'fellSwoopFreeAttack set on the picked figure (figureKey-keyed post-2026-05-13)');
 
     // Exclusion: the activating hostile is excluded from the free attack
     assert.strictEqual(game.stillFasterExcludeMsgId, '2001', 'stillFasterExcludeMsgId = activating DC');

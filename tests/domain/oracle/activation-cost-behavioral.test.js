@@ -640,10 +640,12 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
   });
 
   it('004b: ACTIVATION_MSGID_FLAGS cleaned on un-activate', async () => {
+    // fellSwoopFreeAttack moved to ACTIVATION_FIGKEY_FLAGS 2026-05-13;
+    // cleanup still applies via cleanupActivation's figureKey-flag pass.
     const game = makeGame({
       dcActionsData: { '3001': { remaining: 2, total: 2 } },
       dcFinishedPinged: { '3001': true },
-      fellSwoopFreeAttack: { '3001': true },
+      fellSwoopFreeAttack: { 'Rebel Trooper-1-0': true },
       pendingMpBonus: { '3001': 3 },
       p1ActivatedDcIndices: [0],
     });
@@ -651,8 +653,8 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
     await handleDcUnactivate(mockInteraction('dc_unactivate_3001', 'player1'), ctx);
 
     assert.strictEqual(game.dcFinishedPinged?.['3001'], undefined, 'dcFinishedPinged cleaned');
-    assert.strictEqual(game.fellSwoopFreeAttack?.['3001'], undefined,
-      'fellSwoopFreeAttack cleaned (was previously leaked)');
+    assert.strictEqual(game.fellSwoopFreeAttack?.['Rebel Trooper-1-0'], undefined,
+      'fellSwoopFreeAttack cleaned for the activated figure (figureKey-keyed post-2026-05-13)');
     assert.strictEqual(game.pendingMpBonus?.['3001'], undefined,
       'pendingMpBonus cleaned (was previously leaked)');
   });

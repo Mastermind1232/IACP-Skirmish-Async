@@ -1251,6 +1251,12 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
   const attackerPlayerNum = meta.playerNum;
+  // Compute attacker's figureKey early so per-figure flags (Fell Swoop,
+  // Pounce, Pummel, IR multi-attack, Focus Fire, Multi-Fire) can be
+  // read uniformly. Per alexanbv 2026-05-13: the default per-figure
+  // scope unless card text says "group" explicitly.
+  const _attackerDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _attackerFkEarly = `${meta.dcName}-${_attackerDgIdx}-${figureIndex}`;
   const { hasLineOfSight, hasLineOfSightByCoord, getFigureSize } = ctx;
   // Compute graph-distance dependencies for countSpaces calls
   const _csMapId = game.selectedMap?.id;
@@ -1299,17 +1305,17 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
   // Still Faster Than You: free attack must target a different hostile than the activating one
-  if (game.fellSwoopFreeAttack?.[msgId] && game.stillFasterExcludeMsgId && target.figureKey && !target.isNpc) {
+  // Per alexanbv 2026-05-13: fellSwoopFreeAttack is figureKey-keyed.
+  if (game.fellSwoopFreeAttack?.[_attackerFkEarly] && game.stillFasterExcludeMsgId && target.figureKey && !target.isNpc) {
     const excMeta = dcMessageMeta?.get(game.stillFasterExcludeMsgId);
     if (excMeta && target.figureKey.startsWith(`${excMeta.dcName}-`)) {
       await interaction.followUp({ content: '🚫 **Still Faster Than You** — must target a **different** hostile figure than the one that just activated.', ephemeral: true }).catch(discordCatch);
       return;
     }
   }
-  // Compute the attacker's figureKey for per-figure once-per-activation
-  // gates (Focus Fire, Multi-Fire) per IACP rule 2026-05-09.
-  const _atkDgForGate = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-  const _atkFkForGate = `${meta.dcName}-${_atkDgForGate}-${figureIndex}`;
+  // Per alexanbv 2026-05-13: reuse the early-computed figureKey for
+  // all per-figure gates below (Focus Fire, Multi-Fire, etc.).
+  const _atkFkForGate = _attackerFkEarly;
 
   // Forced attack target validation (Mandalorian Whip, Focus Fire, etc.) — must target a specific figure
   if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
@@ -1377,7 +1383,8 @@ export async function handleAttackTarget(interaction, ctx) {
   if (actionsData) {
     const pendingBL = game.pendingBattlefieldLeadership;
     const isBLFreeAttack = pendingBL?.forMsgId === msgId;
-    const isFellSwoopFreeAttack = !!game.fellSwoopFreeAttack?.[msgId];
+    // Per alexanbv 2026-05-13: fellSwoopFreeAttack is figureKey-keyed.
+    const isFellSwoopFreeAttack = !!game.fellSwoopFreeAttack?.[_attackerFkEarly];
     const isEmperorFreeAttack = game.pendingEmperorInterrupt?.forMsgId === msgId;
     const isExecOrderFreeAttack = game.pendingExecutiveOrder?.forMsgId === msgId;
     const isBombardmentFreeAttack = game.pendingBombardmentSorin?.forMsgId === msgId;
@@ -1387,7 +1394,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (isBLFreeAttack) {
       clearPendingBattlefieldLeadership(game);
     } else if (isFellSwoopFreeAttack) {
-      delete game.fellSwoopFreeAttack[msgId];
+      delete game.fellSwoopFreeAttack[_attackerFkEarly];
       // Clear SFTY exclude once the free attack fires
       if (game.stillFasterExcludeMsgId) game.stillFasterExcludeMsgId = null;
     } else if (isEmperorFreeAttack) {

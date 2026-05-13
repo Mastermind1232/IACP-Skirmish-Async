@@ -8630,14 +8630,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: "Choose a hostile figure adjacent to your TROOPER or GUARDIAN; that figure's group must activate next if able." };
   }
 
-  // ccEffect: pummelTwoAttacksThisActivation (Pummel)
+  // ccEffect: pummelTwoAttacksThisActivation (Pummel) — per-figureKey
+  // per alexanbv 2026-05-13 (each figure in a multifigure group has its
+  // own Pummel grant; sibling figures don't share).
   if (entry.type === 'ccEffect' && entry.pummelTwoAttacksThisActivation) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const _pummelFk = figureKeyForActivation(game, msgId);
+    if (!_pummelFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.pummelTwoAttacksThisActivation = game.pummelTwoAttacksThisActivation || {};
-    game.pummelTwoAttacksThisActivation[msgId] = true;
+    game.pummelTwoAttacksThisActivation[_pummelFk] = true;
     return { applied: true, logMessage: 'If you have MELEE attack type, perform 2 attacks.' };
   }
 
@@ -11829,8 +11833,11 @@ export function resolveAbility(abilityId, context) {
         refreshBoard: true,
       };
     }
+    // Per alexanbv 2026-05-13: Pounce is per-figure. Key by figureKey
+    // so the free attack belongs to the figure that pounced, not the
+    // whole DC group.
     game.pounceAttackPending = game.pounceAttackPending || {};
-    game.pounceAttackPending[msgId] = { figureKey: fk, figureIndex: 0 };
+    game.pounceAttackPending[fk] = { figureKey: fk, figureIndex: 0 };
     return {
       applied: true,
       logMessage: `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. May now perform an attack (free — use Attack button).`,

@@ -1998,8 +1998,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const ownerId = getPlayerId(game, meta.playerNum);
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
-  const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[msgId];
-  const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[msgId]);
+  // Per alexanbv 2026-05-13: Pounce / Fell Swoop / Pummel / IR multi-
+  // attack grants are figureKey-keyed (default per-figure scope unless
+  // card text says "group"). Derive the current activating figure's
+  // figureKey from the action data.
+  const _curActFigKey = figureKeyForActivation(game, msgId);
+  const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[_curActFigKey];
+  const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[_curActFigKey]);
   const isMpBasedSpecial = buttonKey === 'dc_special_' && _effectiveActionCost === 0;
   if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack && !isMpBasedSpecial) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
@@ -2257,10 +2262,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // so siblings in a multifigure group each get their own attack).
     // Free attacks bypass.
     if (game.attackPerformedThisActivation?.[figureKey]) {
+      // Per alexanbv 2026-05-13: every bypass flag below is per-figureKey.
       const isFreeAttack = hasFellSwoopFreeAttack || hasPummelFreeAttack ||
-        game.freeAttackBonusPending?.[figureKey] != null || game.pounceAttackPending?.[msgId] != null;
-      // Imperial Retrofitting: multi-attack bypass
-      const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[msgId];
+        game.freeAttackBonusPending?.[figureKey] != null || game.pounceAttackPending?.[figureKey] != null;
+      // Imperial Retrofitting: multi-attack bypass (per-figure).
+      const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[figureKey];
       if (!isFreeAttack && !hasIRMultiAttack) {
         const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
         let hasAssault = /\bAssault:/i.test(dcAbilityText);
@@ -2527,12 +2533,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // each figure in a multifigure group has its own pending free-attack flag.
     const _ahDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
     const _ahFigureKey = `${meta.dcName}-${_ahDgIndex}-${figureIndex}`;
-    // Free pounce attack: Pounce special grants one free attack (already paid as special action)
-    const isPounceAttack = action === 'Attack' && game.pounceAttackPending?.[msgId] != null;
+    // Free pounce attack: Pounce special grants one free attack to the
+    // POUNCING FIGURE (alexanbv 2026-05-13: per-figureKey, not per-group).
+    const isPounceAttack = action === 'Attack' && game.pounceAttackPending?.[_ahFigureKey] != null;
     // Free heroic attack: Heroic ability grants one free attack (action restored via freeAction flag on the special)
     const isHeroicAttack = action === 'Attack' && game.freeAttackBonusPending?.[_ahFigureKey] != null;
     if (isPounceAttack) {
-      delete game.pounceAttackPending[msgId];
+      delete game.pounceAttackPending[_ahFigureKey];
     } else if (isHeroicAttack) {
       const _fabCount = game.freeAttackBonusPending[_ahFigureKey];
       if (typeof _fabCount === 'number' && _fabCount > 1) {
@@ -2564,13 +2571,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         }
       }
     } else if (hasPummelFreeAttack) {
-      // Pummel: grants 2 free attacks; track remaining count
+      // Pummel: grants 2 free attacks to this FIGURE (alexanbv 2026-05-13:
+      // per-figureKey, not per-group). Track remaining count per figure.
       game.pummelAttacksRemaining = game.pummelAttacksRemaining || {};
-      if (game.pummelAttacksRemaining[msgId] === undefined) game.pummelAttacksRemaining[msgId] = 2;
-      game.pummelAttacksRemaining[msgId] = Math.max(0, game.pummelAttacksRemaining[msgId] - 1);
-      if (game.pummelAttacksRemaining[msgId] <= 0) {
-        delete game.pummelTwoAttacksThisActivation[msgId];
-        delete game.pummelAttacksRemaining[msgId];
+      if (game.pummelAttacksRemaining[_ahFigureKey] === undefined) game.pummelAttacksRemaining[_ahFigureKey] = 2;
+      game.pummelAttacksRemaining[_ahFigureKey] = Math.max(0, game.pummelAttacksRemaining[_ahFigureKey] - 1);
+      if (game.pummelAttacksRemaining[_ahFigureKey] <= 0) {
+        delete game.pummelTwoAttacksThisActivation[_ahFigureKey];
+        delete game.pummelAttacksRemaining[_ahFigureKey];
       }
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;

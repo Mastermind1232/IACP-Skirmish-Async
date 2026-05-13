@@ -382,7 +382,9 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     'p1DcAttachments', 'p2DcAttachments',
     'p1CcAttachments', 'p2CcAttachments',
     'exhaustedSkirmishUpgrades',
-    'fellSwoopFreeAttack', 'pummelTwoAttacksThisActivation', 'pummelAttacksRemaining',
+    // fellSwoopFreeAttack, pummelTwoAttacksThisActivation, pummelAttacksRemaining
+    // MIGRATED 2026-05-13 → per-figureKey (alexanbv). Each is keyed
+    // by figureKey now and survives cross-lobby intact without remap.
     // dcFinishedPinged — msgId-keyed boolean tracking the end-of-activation
     // ping for each DC. Save gate refuses mid-activation so this is usually
     // empty at load, but a stale entry would otherwise survive cross-lobby

@@ -114,11 +114,12 @@ describe('ORACLE-TELEMOVE-001: Teleport sites set figureMoved', () => {
 
   it('Pounce (abilities.js) sets figureMoved[fk]', () => {
     const src = readSrc('src/game/abilities.js');
-    // Find the Pounce teleport block (near pounceAttackPending)
+    // Find the Pounce teleport block (near pounceAttackPending).
+    // Lookback widened to 800 chars to accommodate the comment block
+    // added for the 2026-05-13 per-figureKey migration.
     const pounceIdx = src.indexOf('pounceAttackPending');
     assert.ok(pounceIdx > 0, 'Pounce site found');
-    // figureMoved[fk] should appear before pounceAttackPending
-    const block = src.slice(Math.max(0, pounceIdx - 300), pounceIdx);
+    const block = src.slice(Math.max(0, pounceIdx - 800), pounceIdx);
     assert.ok(block.includes('figureMoved[fk] = true'), 'Pounce must set figureMoved[fk]');
   });
 

@@ -60,7 +60,8 @@ function buildMidActivation(attackerDc, defenderDc) {
 describe('PROBE-ATK-029-A: Pounce bypass is single-use — post-Pounce gate re-blocks', () => {
   it('pounceAttackPending=true → attack offered (bypass active)', () => {
     const { game, deps, dc } = buildMidActivation('Bossk', 'Greedo');
-    game.pounceAttackPending = { [dc.msgId]: true };
+    // figureKey-keyed per alexanbv 2026-05-13.
+    game.pounceAttackPending = { [dc.figKey]: true };
     const actions = getAvailableActions(game, 1, deps);
     const attacks = actions.filter((a) => a.type === 'attack_target');
     assert.ok(attacks.length > 0,

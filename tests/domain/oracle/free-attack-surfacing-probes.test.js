@@ -94,8 +94,9 @@ describe('PROBE-FA-002: imperialRetrofittingMultiAttack bypasses already-attacke
   it('002: flag set → attack_target offered despite already attacked', () => {
     const { game, deps, dc } = buildAttackScenario('Bossk', 'Greedo');
 
-    // Set the Imperial Retrofitting multi-attack flag
-    game.imperialRetrofittingMultiAttack = { [dc.msgId]: true };
+    // Set the Imperial Retrofitting multi-attack flag (figureKey-keyed
+    // per alexanbv 2026-05-13 — IR grant is per-figure).
+    game.imperialRetrofittingMultiAttack = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const attacks = actions.filter(a => a.type === 'attack_target');
@@ -111,8 +112,9 @@ describe('PROBE-FA-003: fellSwoopFreeAttack bypasses already-attacked gate', () 
   it('003: flag set → attack_target offered despite already attacked', () => {
     const { game, deps, dc } = buildAttackScenario('Bossk', 'Greedo');
 
-    // Set the Fell Swoop free-attack flag
-    game.fellSwoopFreeAttack = { [dc.msgId]: true };
+    // Set the Fell Swoop free-attack flag (figureKey-keyed per alexanbv
+    // 2026-05-13).
+    game.fellSwoopFreeAttack = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const attacks = actions.filter(a => a.type === 'attack_target');

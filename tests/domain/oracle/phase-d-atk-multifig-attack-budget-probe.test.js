@@ -100,6 +100,91 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
       'Per-figure budget: figure that already attacked is blocked from a second attack (no Assault, no free-attack).');
   });
 
+  it('pounceAttackPending is keyed by figureKey — sibling gets no Pounce when figure[0] pounced', () => {
+    // Per alexanbv 2026-05-13: Pounce is per-figure. Setting Pounce on
+    // figure[0] grants the bypass only to figure[0], not the group.
+    const { game, deps, dcMessageMeta } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Alliance Ranger (Regular)' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }])
+      .inRound(1)
+      .build();
+
+    const dc = getDcInfo(game, dcMessageMeta, 1, 'Alliance Ranger (Regular)');
+    const groupFks = Object.keys(game.figurePositions[1] || {})
+      .filter((fk) => fk.startsWith('Alliance Ranger (Regular)-'));
+    const fig0 = groupFks[0];
+    const fig1 = groupFks[1];
+    const p2FigKey = Object.keys(game.figurePositions[2])[0];
+    // Place fig1 (the currently-active figure) in range of P2 target.
+    game.figurePositions[1][fig1] = 'j10';
+    game.figurePositions[2][p2FigKey] = 'j11';
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    // fig1 already attacked; Pounce flag only on fig0 — must NOT bypass for fig1.
+    game.attackPerformedThisActivation = { [fig1]: true };
+    game.pounceAttackPending = { [fig0]: { figureKey: fig0, figureIndex: 0 } };
+
+    const actions = getAvailableActions(game, 1, deps);
+    const attacks = actions.filter((a) => a.type === 'attack_target');
+    assert.equal(attacks.length, 0,
+      'Pounce on a sibling figure must NOT grant the bypass to a different figure.');
+  });
+
+  it('fellSwoopFreeAttack / pummel / IR multi-attack — all per-figureKey', () => {
+    // Per alexanbv 2026-05-13: every free-attack bypass keyed by figureKey.
+    // This probe locks the migration shape — a SIBLING flag must not bypass.
+    const { game, deps, dcMessageMeta } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Alliance Ranger (Regular)' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }])
+      .inRound(1)
+      .build();
+    const dc = getDcInfo(game, dcMessageMeta, 1, 'Alliance Ranger (Regular)');
+    const groupFks = Object.keys(game.figurePositions[1] || {})
+      .filter((fk) => fk.startsWith('Alliance Ranger (Regular)-'));
+    const fig0 = groupFks[0];
+    const fig1 = groupFks[1];
+    const p2FigKey = Object.keys(game.figurePositions[2])[0];
+    game.figurePositions[1][fig1] = 'j10';
+    game.figurePositions[2][p2FigKey] = 'j11';
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    game.attackPerformedThisActivation = { [fig1]: true };
+    // Set ALL the bypass flags on fig0 only. fig1 must remain blocked.
+    game.fellSwoopFreeAttack = { [fig0]: true };
+    game.pummelTwoAttacksThisActivation = { [fig0]: true };
+    game.imperialRetrofittingMultiAttack = { [fig0]: true };
+
+    const actions = getAvailableActions(game, 1, deps);
+    const attacks = actions.filter((a) => a.type === 'attack_target');
+    assert.equal(attacks.length, 0,
+      'Bypass flags set on sibling figure must NOT grant the bypass to a different figure.');
+  });
+
+  it('fellSwoopFreeAttack / pummel / IR multi-attack — bypass active on the right figure', () => {
+    const { game, deps, dcMessageMeta } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Alliance Ranger (Regular)' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }])
+      .inRound(1)
+      .build();
+    const dc = getDcInfo(game, dcMessageMeta, 1, 'Alliance Ranger (Regular)');
+    const groupFks = Object.keys(game.figurePositions[1] || {})
+      .filter((fk) => fk.startsWith('Alliance Ranger (Regular)-'));
+    const fig1 = groupFks[1];
+    const p2FigKey = Object.keys(game.figurePositions[2])[0];
+    game.figurePositions[1][fig1] = 'j10';
+    game.figurePositions[2][p2FigKey] = 'j11';
+    game.dcActionsData = game.dcActionsData || {};
+    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    game.attackPerformedThisActivation = { [fig1]: true };
+    // Bypass on the active figure — attack should be offered.
+    game.fellSwoopFreeAttack = { [fig1]: true };
+
+    const actions = getAvailableActions(game, 1, deps);
+    const attacks = actions.filter((a) => a.type === 'attack_target');
+    assert.ok(attacks.length > 0,
+      'fellSwoopFreeAttack on the active figure must bypass the already-attacked gate.');
+  });
+
   it('flag is keyed by figureKey, not msgId — gate does not fire when only msgId entry exists', () => {
     const { game, deps, dcMessageMeta } = createTestGame()
       .withPlayer1Army([{ dcName: 'Alliance Ranger (Regular)' }])

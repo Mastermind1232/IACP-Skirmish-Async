@@ -102,8 +102,6 @@ export async function handleStillFaster(interaction, ctx) {
     // Free-attack exclusion (must target a DIFFERENT hostile than the
     // activating one) is set via stillFasterExcludeMsgId before the
     // picker fires; handleAttackTarget reads it during the attack pass.
-    sftGame.fellSwoopFreeAttack = sftGame.fellSwoopFreeAttack || {};
-    sftGame.fellSwoopFreeAttack[sftPickedMsgId] = true;
     sftGame.stillFasterExcludeMsgId = sftActivatingMsgId;
     sftGame.stillFasterPlayerNum = null;
     clearPendingStillFaster(sftGame);
@@ -113,6 +111,13 @@ export async function handleStillFaster(interaction, ctx) {
       ? Object.keys(sftGame.figurePositions?.[1] || {}).filter(k => k.startsWith((sftMeta?.dcName || '') + '-'))
       : Object.keys(sftGame.figurePositions?.[2] || {}).filter(k => k.startsWith((sftMeta?.dcName || '') + '-'));
     const sftFigureKey = sftPickerFigKeys[0] || null;
+    // Per alexanbv 2026-05-13: fellSwoopFreeAttack is figureKey-keyed.
+    // Set after we've resolved the picked figure so the free attack
+    // belongs to that specific figure.
+    if (sftFigureKey) {
+      sftGame.fellSwoopFreeAttack = sftGame.fellSwoopFreeAttack || {};
+      sftGame.fellSwoopFreeAttack[sftFigureKey] = true;
+    }
     if (!sftFigureKey) {
       await interaction.deferUpdate().catch(discordCatch);
       await interaction.followUp({ content: `**Still Faster Than You** — could not locate **${sftLabel}**'s figure; resolve manually.`, ephemeral: false }).catch(discordCatch);

@@ -2403,7 +2403,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   //
   // Move-X 2-space budget: routes through pendingMoveX (immediate,
   // per-effect, no bank). Hide + free-attack flag fire alongside; the
-  // free attack is gated separately by fellSwoopFreeAttack[msgId].
+  // free attack is gated separately by fellSwoopFreeAttack[figureKey].
   // Fell Swoop inline disabled 2026-05-09 → fireFellSwoop. Fire handler
   // applies Hide + presents Move 2 picker; chain attack waits for
   // defender step 8 to close (combat._pendingChainAttacks).
@@ -2413,8 +2413,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (!game.roundFigureAbilityUsed[fsKey]) {
       game.roundFigureAbilityUsed[fsKey] = true;
       _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      // Per alexanbv 2026-05-13: Fell Swoop is per-figure.
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
-      game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
+      game.fellSwoopFreeAttack[combat.attackerFigureKey] = true;
       const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
       await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**, then make a free attack.`).catch(discordCatch);
       // Stamp pendingMoveX with the freeAttackPrompt continuation so
@@ -3092,9 +3093,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     } catch {}
   }
   // Autofire chain attack: grant free attack restricted to within 3 of target
-  if (combat.autofireChainPending && combat.attackerMsgId) {
+  // Per alexanbv 2026-05-13: fellSwoopFreeAttack is per-figureKey; the
+  // chain attack belongs to the original attacker figure.
+  if (combat.autofireChainPending && combat.attackerFigureKey) {
     game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
-    game.fellSwoopFreeAttack[combat.attackerMsgId] = true;
+    game.fellSwoopFreeAttack[combat.attackerFigureKey] = true;
     if (combat.autofireChainTargetSpace) {
       game.autofireChainTargetSpace = game.autofireChainTargetSpace || {};
       game.autofireChainTargetSpace[combat.attackerMsgId] = combat.autofireChainTargetSpace;
@@ -3371,7 +3374,12 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (_fabFkForEntry) game.freeAttackBonusPending[_fabFkForEntry] = _entry.flagValue ?? true;
     } else if (_entry.flagKey === 'fellSwoopFreeAttack') {
       game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
-      game.fellSwoopFreeAttack[_entry.msgId] = _entry.flagValue ?? true;
+      // Per alexanbv 2026-05-13: keyed by figureKey. Chain-attack
+      // entries carry figureKey explicitly; fall back to combat's
+      // attackerFigureKey if a legacy entry omits it.
+      const _fsFkForEntry = _entry.figureKey
+        || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_fsFkForEntry) game.fellSwoopFreeAttack[_fsFkForEntry] = _entry.flagValue ?? true;
     }
     if (_entry.pendingOverrideAttackDice) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};

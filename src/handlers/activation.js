@@ -2010,9 +2010,13 @@ export async function handleActPassive(interaction, ctx) {
       const _irAction = _irParts[0]; // 'multiattack', 'move', or 'focus'
       const _irCardMsgId = _irParts.slice(1).join('_'); // the IR card's msgId
       if (_irAction === 'multiattack') {
-        // Allow multiple attacks this activation, then exhaust IR
+        // Per alexanbv 2026-05-13: the IR multi-attack grant is
+        // per-figure. Using IR on figure[0] does not grant multi-attack
+        // to siblings in the group. The exhaust gate (per-DC) handles
+        // the once-per-round limit separately.
+        const _irFk = figureKeyForActivation(game, msgId);
         game.imperialRetrofittingMultiAttack = game.imperialRetrofittingMultiAttack || {};
-        game.imperialRetrofittingMultiAttack[msgId] = true;
+        if (_irFk) game.imperialRetrofittingMultiAttack[_irFk] = true;
         exhaustAttachment(game, _irCardMsgId, 'Imperial Retrofitting');
         await interaction.message.edit({ content: `**Imperial Retrofitting** — Exhausted. **${displayName}** may perform **multiple attacks** this activation.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Imperial Retrofitting** exhausted — **${displayName}** may perform multiple attacks this activation.`, { phase: 'ACTIVATION', icon: 'card' });
