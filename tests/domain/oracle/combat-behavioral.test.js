@@ -360,52 +360,51 @@ describe('B-C-REROLL: Reroll queue ordering and phase transitions', () => {
     assert.deepStrictEqual(combat.attackDiceResults[0].acc, origDie.acc, 'die not rerolled');
   });
 
-  it('B-C-REROLL-005: pre-reroll shift drains queue and sets preRerollsProcessed', async () => {
+  it('B-C-REROLL-005: skip on opened reroll ability marks it used', async () => {
+    // alexanbv 2026-05-13: there is no pendingPreRerolls queue. Step-3
+    // reroll abilities live on combat.rerollAbilities[key] = {playerNum, used}
+    // and surface as "Use X" buttons in the bucket. Each resolves in any
+    // player-chosen order. The shared 'skip' button reads combat.openedRerollAbility
+    // to know which ability the player was canceling out of.
     const combat = makeCombat({
       rerollPhase: 'attacker',
-      pendingPreRerolls: [{ type: 'trained', playerNum: 1 }],
-      preRerollsProcessed: false,
+      rerollAbilities: { trained: { playerNum: 1, used: false } },
+      openedRerollAbility: 'trained',
       attackerRerollsRemaining: 1,
     });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const { ctx } = buildCtx(game);
 
-    // Skip pre-reroll
+    // Skip the opened ability
     await handlePreReroll(mockInteraction('pre_reroll_g1_skip', 'player1'), ctx);
 
-    assert.strictEqual(combat.pendingPreRerolls.length, 0, 'pre-reroll queue drained');
-    assert.strictEqual(combat.preRerollsProcessed, true, 'preRerollsProcessed set');
+    assert.strictEqual(combat.rerollAbilities.trained.used, true, 'trained marked used after skip');
+    assert.strictEqual(combat.openedRerollAbility, null, 'openedRerollAbility cleared');
   });
 
-  it('B-C-REROLL-006: multiple pre-rerolls process sequentially', async () => {
+  it('B-C-REROLL-006: multiple reroll abilities — any order, each marks itself used', async () => {
+    // alexanbv 2026-05-13: bucket renders one "Use X" button per
+    // unused ability; the player picks any order. Resolving an ability
+    // marks it used and re-renders the bucket so remaining abilities
+    // stay available. No sequential queue.
     const sharedThread = mockThread();
-    // alexanbv 2026-05-13: pre-roll abilities now sit BEHIND the
-    // attacker step-3 Y/N (unified format). Set rerollYnAskedAttacker
-    // to true to simulate the post-"Yes" state and exercise the
-    // sequential pre-roll chain as before.
     const combat = makeCombat({
       rerollPhase: 'attacker',
-      pendingPreRerolls: [
-        { type: 'trained', playerNum: 1 },
-        { type: 'resourceful', playerNum: 1 },
-      ],
-      preRerollsProcessed: false,
+      rerollAbilities: {
+        trained: { playerNum: 1, used: false },
+        resourceful: { playerNum: 1, used: false },
+      },
       attackerRerollsRemaining: 0,
       rerollYnAskedAttacker: true,
     });
     const game = { gameId: 'g1', player1Id: 'player1', player2Id: 'player2', pendingCombat: combat };
     const { ctx } = buildCtx(game);
 
-    // Skip first pre-reroll (trained)
+    // Player skips Trained — Resourceful remains available for a later click.
     await handlePreReroll(mockInteraction('pre_reroll_g1_trained_no', 'player1', sharedThread), ctx);
 
-    assert.strictEqual(combat.pendingPreRerolls.length, 1, 'first drained, second remains');
-    assert.strictEqual(combat.pendingPreRerolls[0].type, 'resourceful', 'resourceful is next');
-    // Thread should show resourceful prompt
-    assert.ok(sharedThread._sent.some(m => {
-      const c = typeof m === 'string' ? m : m?.content || '';
-      return c.includes('Resourceful');
-    }), 'resourceful prompt shown');
+    assert.strictEqual(combat.rerollAbilities.trained.used, true, 'trained marked used');
+    assert.strictEqual(combat.rerollAbilities.resourceful.used, false, 'resourceful still available');
   });
 
   it('B-C-REROLL-007: attacker voluntary reroll marks index and decrements remaining', async () => {
@@ -497,11 +496,14 @@ describe('B-C-PENDING: Pending-state cleanup invariants', () => {
     assert.strictEqual(combat.surgeRemaining, 0, 'surgeRemaining zeroed on done');
   });
 
-  it('B-C-PEND-004: pre-reroll skip clears queue entry without leaving orphan', async () => {
+  it('B-C-PEND-004: reroll-ability skip marks the opened ability used (no orphan)', async () => {
+    // alexanbv 2026-05-13: skip clears the active reroll-ability slot
+    // by marking combat.rerollAbilities[key].used=true and resetting
+    // combat.openedRerollAbility. No leftover state for that ability.
     const combat = makeCombat({
       rerollPhase: 'attacker',
-      pendingPreRerolls: [{ type: 'trained', playerNum: 1 }],
-      preRerollsProcessed: false,
+      rerollAbilities: { trained: { playerNum: 1, used: false } },
+      openedRerollAbility: 'trained',
       attackerRerollsRemaining: 0,
       forcedRerollQueue: [],
       defenderRerollsRemaining: 0,
@@ -511,10 +513,8 @@ describe('B-C-PENDING: Pending-state cleanup invariants', () => {
 
     await handlePreReroll(mockInteraction('pre_reroll_g1_skip', 'player1'), ctx);
 
-    assert.strictEqual(combat.pendingPreRerolls.length, 0, 'queue empty');
-    assert.strictEqual(combat.preRerollsProcessed, true, 'processed flag set');
-    // With no rerolls of any kind, rerollPhase should be null
-    assert.strictEqual(combat.rerollPhase, null, 'rerollPhase null when no rerolls available');
+    assert.strictEqual(combat.rerollAbilities.trained.used, true, 'trained marked used on skip');
+    assert.strictEqual(combat.openedRerollAbility, null, 'no leftover opened-ability slot');
   });
 });
 

@@ -3862,22 +3862,27 @@ export async function handleCombatRoll(interaction, ctx) {
     const selfAugReroll = game.selfAugmentationMsgId?.[combat.attackerMsgId] ? 1 : 0;
     const atkRerolls = (combat.rerollOneAttackDie || 0) + (game.roundAttackRerollDice?.[attackerPlayerNum] || 0) + atkInnate.attackReroll + atkSpecialReroll + selfAugReroll;
     const defRerolls = (combat.defenderRerollDiceMax || 0) + defInnate.defenseReroll + defSpecialReroll;
-    // Build pre-reroll prompt queue early (before any interrupts that might save+return)
-    combat.pendingPreRerolls = [];
+    // Per alexanbv 2026-05-13: there is no "pre-reroll" phase. Each
+    // step-3 reroll ability surfaces as its own button in the
+    // attacker/defender bucket and is user-controlled in any order.
+    // Detect eligibility now; the bucket renderer in sendRerollUI
+    // shows a "Use X" button per available ability. Each resolves
+    // and marks itself used, then returns to the bucket.
+    combat.rerollAbilities = combat.rerollAbilities || {};
     if (atkSIds.includes('twin_sabers_ahsoka')) {
-      combat.pendingPreRerolls.push({ type: 'twin_sabers', playerNum: attackerPlayerNum });
+      combat.rerollAbilities.twinSabers = { playerNum: attackerPlayerNum, used: false };
     }
     if (atkSIds.includes('resourceful_lando') || defSIds.includes('resourceful_lando')) {
       const _resPlayer = atkSIds.includes('resourceful_lando') ? attackerPlayerNum : defenderPlayerNum;
       const _resSIds = atkSIds.includes('resourceful_lando') ? atkSIds : defSIds;
       if (_resSIds.includes('shrewd_scoundrel_lando')) {
-        combat.pendingPreRerolls.push({ type: 'shrewd_scoundrel', playerNum: _resPlayer });
+        combat.rerollAbilities.shrewdScoundrel = { playerNum: _resPlayer, used: false };
       }
       if (_resSIds.includes('gambit_lando')) combat.gambitActive = true;
-      combat.pendingPreRerolls.push({ type: 'resourceful', playerNum: _resPlayer });
+      combat.rerollAbilities.resourceful = { playerNum: _resPlayer, used: false };
     }
     if (atkSIds.includes('trained_rancor')) {
-      combat.pendingPreRerolls.push({ type: 'trained', playerNum: attackerPlayerNum });
+      combat.rerollAbilities.trained = { playerNum: attackerPlayerNum, used: false };
     }
     // Power Converter (Saska Teft): if attacker has Device token and a friendly DC has power_converter_saska, ping hand channel
     if (!game.powerConverterUsedThisRound && !combat.powerConverterChecked
@@ -4033,6 +4038,45 @@ function formatDefenseDie(d, i) {
  * Skips the prompt for forced rerolls (they're not optional) and for
  * pre-reroll abilities (they have their own prompt format).
  */
+/**
+ * Per alexanbv 2026-05-13: step-3 reroll abilities (Twin Sabers,
+ * Resourceful, Shrewd Scoundrel, Trained) appear as "Use X" buttons
+ * inside the attacker bucket. Helpers below render those buttons and
+ * report eligibility; each ability is tracked via
+ * combat.rerollAbilities[name] = { playerNum, used }.
+ */
+const _REROLL_ABILITY_LABELS = {
+  twinSabers: 'Use Twin Sabers',
+  resourceful: 'Use Resourceful',
+  shrewdScoundrel: 'Use Shrewd Scoundrel',
+  trained: 'Use Trained',
+};
+
+function _countUnusedAttackerRerollAbilities(combat) {
+  const abilities = combat.rerollAbilities || {};
+  let count = 0;
+  for (const key of Object.keys(_REROLL_ABILITY_LABELS)) {
+    if (abilities[key] && !abilities[key].used) count += 1;
+  }
+  return count;
+}
+
+function _appendAttackerRerollAbilityButtons(gameId, combat, buttons) {
+  const abilities = combat.rerollAbilities || {};
+  let added = 0;
+  for (const [key, label] of Object.entries(_REROLL_ABILITY_LABELS)) {
+    if (!abilities[key] || abilities[key].used) continue;
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`pre_reroll_${gameId}_open_${key}`)
+        .setLabel(label)
+        .setStyle(ButtonStyle.Primary),
+    );
+    added += 1;
+  }
+  return added;
+}
+
 async function maybePromptRerollYn(thread, game, combat, phase) {
   const gameId = game.gameId;
   // Per alexanbv 2026-05-12: always post the Y/N so each player gets
@@ -4224,57 +4268,18 @@ export async function sendRerollUI(thread, game, combat, phase) {
   }
 
   if (phase === 'attacker') {
-    // Pre-reroll prompts: show before any reroll dice are offered
-    if (!combat.preRerollsProcessed && (combat.pendingPreRerolls || []).length > 0) {
-      const pr = combat.pendingPreRerolls[0];
-      const playerId = game[`player${pr.playerNum}Id`] ?? '';
-      if (pr.type === 'twin_sabers') {
-        const atkCount = (combat.attackDiceResults || []).length;
-        const defCount = (combat.defenseDiceResults || []).length;
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_atk`).setLabel(`Reroll all ${atkCount} ATK dice`).setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_def`).setLabel(`Force reroll all ${defCount} DEF dice`).setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `**Twin Sabers** — <@${playerId}> choose:`, components: [row] });
-        return;
-      }
-      if (pr.type === 'shrewd_scoundrel') {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_0`).setLabel('Guess 0 Damage').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_1`).setLabel('Guess 1 Damage').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_2`).setLabel('Guess 2 Damage').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip (no guess)').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `**Shrewd Scoundrel** — <@${playerId}> guess the number of Hit results after rerolls (0-2):`, components: [row] });
-        return;
-      }
-      if (pr.type === 'resourceful') {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_atk`).setLabel('Reroll 1 ATK die').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_def`).setLabel('Reroll 1 DEF die').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `**Resourceful** — <@${playerId}> choose:`, components: [row] });
-        return;
-      }
-      if (pr.type === 'trained') {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_yes`).setLabel('Suffer 1 Strain, +1 ATK reroll').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_no`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        );
-        await thread.send({ content: `**Trained** — <@${playerId}> suffer 1 Strain to reroll 1 attack die?`, components: [row] });
-        return;
-      }
-      // Unknown type — skip it
-      combat.pendingPreRerolls.shift();
-    }
+    // Per alexanbv 2026-05-13: no pre-reroll phase. Step-3 reroll
+    // abilities (Twin Sabers, Resourceful, Shrewd Scoundrel, Trained)
+    // each render a "Use X" button in the bucket; the player picks
+    // any order. Click → sub-picker → resolve → mark used → bucket
+    // re-renders. Eligibility is tracked on combat.rerollAbilities.
     const remaining = combat.attackerRerollsRemaining || 0;
     const atkPN = combat.attackerPlayerNum || 1;
     const _atkCtrl = (combat.forcedRerollQueue || [])
       .map((e, i) => ({ e, i }))
       .filter(({ e }) => e.controlPlayer === atkPN && (e.remaining ?? 0) > 0);
-    if (remaining <= 0 && _atkCtrl.length === 0) {
+    const _atkAvailableAbilities = _countUnusedAttackerRerollAbilities(combat);
+    if (remaining <= 0 && _atkCtrl.length === 0 && _atkAvailableAbilities === 0) {
       await _advanceFromForced();
       return;
     }
@@ -4306,6 +4311,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
           .setStyle(ButtonStyle.Primary),
       );
     }
+    // Per alexanbv 2026-05-13: step-3 reroll abilities (Twin Sabers,
+    // Resourceful, Shrewd Scoundrel, Trained) each render a "Use X"
+    // button in the bucket. Click → handlePreReroll posts the sub-
+    // picker → resolution marks the ability used and re-renders.
+    const _atkAbilityCount = _appendAttackerRerollAbilityButtons(gameId, combat, dieButtons);
     const trailing = [
       new ButtonBuilder()
         .setCustomId(`combat_reroll_${gameId}_atk_done`)
@@ -4315,6 +4325,7 @@ export async function sendRerollUI(thread, game, combat, phase) {
     const _atkParts = [];
     if (remaining > 0) _atkParts.push(`${remaining} voluntary reroll${remaining > 1 ? 's' : ''}`);
     if (_atkCtrl.length > 0) _atkParts.push(`${_atkCtrl.length} ability button${_atkCtrl.length > 1 ? 's' : ''}`);
+    if (_atkAbilityCount > 0) _atkParts.push(`${_atkAbilityCount} reroll-ability button${_atkAbilityCount > 1 ? 's' : ''}`);
     await thread.send({
       content: `**Reroll Window (Attacker)** — ${_atkParts.join(' + ')}. Pick any in any order, or Done.`,
       components: buildRerollRows(dieButtons, trailing),
@@ -4906,9 +4917,31 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
 }
 
 /**
- * Handle pre-reroll button clicks (pre_reroll_{gameId}_{choice})
- * Choices: twin_sabers_atk, twin_sabers_def, resourceful_atk, resourceful_def,
- *   trained_yes, trained_no, shrewd_0/1/2, skip
+ * Handle step-3 reroll-ability button clicks
+ * (pre_reroll_{gameId}_{choice}).
+ *
+ * Per alexanbv 2026-05-13: step-3 reroll abilities (Twin Sabers,
+ * Resourceful, Shrewd Scoundrel, Trained) live as "Use X" buttons in
+ * the attacker bucket and resolve in any player-chosen order. There is
+ * no pre-reroll queue — eligibility is tracked on
+ * combat.rerollAbilities[name] = { playerNum, used }.
+ *
+ * Customary shapes handled here:
+ *   open_<ability>      — post the ability's sub-picker (atk/def/skip
+ *                         for Twin Sabers, guess buttons for Shrewd
+ *                         Scoundrel, suffer/skip for Trained, etc.).
+ *   twin_sabers_(atk|def)        — resolve Twin Sabers choice.
+ *   resourceful_(atk|def)        — resolve Resourceful choice.
+ *   trained_(yes|no)             — resolve Trained choice.
+ *   shrewd_(0|1|2)               — resolve Shrewd Scoundrel guess.
+ *   skip                         — skip the most recently opened ability
+ *                                  (used by Twin Sabers / Resourceful /
+ *                                  Shrewd Scoundrel sub-picker Skip
+ *                                  buttons).
+ *
+ * Every resolution path marks the corresponding
+ * combat.rerollAbilities entry as used and re-renders the bucket so
+ * the player can pick another ability or click Done.
  */
 export async function handlePreReroll(interaction, ctx) {
   const { getGame, replyIfGameEnded, rollSingleAttackDie, rollSingleDefenseDie, recalcAttackTotals, recalcDefenseTotals, saveGames } = ctx;
@@ -4923,15 +4956,82 @@ export async function handlePreReroll(interaction, ctx) {
     await interaction.followUp({ content: 'No active combat.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const pr = (combat.pendingPreRerolls || [])[0];
-  if (!pr) { await interaction.followUp({ content: 'No pending pre-reroll.', ephemeral: true }).catch(discordCatch); return; }
-  if (!await requirePlayer(interaction, game, interaction.user.id, pr.playerNum, canActAsPlayer, `Only **${getPlayerDisplayName(game, pr.playerNum, interaction.client)}** can make this choice.`)) return;
+  const abilities = combat.rerollAbilities || {};
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+
+  // Identify the ability this click belongs to. open_<X> posts a
+  // sub-picker; the existing choice strings (twin_sabers_*, etc.)
+  // resolve their ability. 'skip' is the most-recently-opened
+  // ability's skip button — we read it off combat.openedRerollAbility.
+  const abilityFromChoice = (c) => {
+    if (c.startsWith('open_')) return c.slice('open_'.length);
+    if (c.startsWith('twin_sabers_')) return 'twinSabers';
+    if (c.startsWith('resourceful_')) return 'resourceful';
+    if (c.startsWith('trained_')) return 'trained';
+    if (c.startsWith('shrewd_')) return 'shrewdScoundrel';
+    if (c === 'skip') return combat.openedRerollAbility || null;
+    return null;
+  };
+  const abilityKey = abilityFromChoice(choice);
+  if (!abilityKey) {
+    await interaction.followUp({ content: 'Unknown reroll-ability choice.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const abilityState = abilities[abilityKey];
+  if (!abilityState) {
+    await interaction.followUp({ content: 'That reroll ability is no longer available.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, abilityState.playerNum, canActAsPlayer, `Only **${getPlayerDisplayName(game, abilityState.playerNum, interaction.client)}** can make this choice.`)) return;
+  if (abilityState.used) {
+    await interaction.followUp({ content: 'That reroll ability has already been used this attack.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // open_<X> — post the sub-picker, store opened ability for the
+  // shared 'skip' button to know which ability to mark used.
+  if (choice.startsWith('open_')) {
+    combat.openedRerollAbility = abilityKey;
+    const playerId = abilityState.playerNum === 1 ? game.player1Id : game.player2Id;
+    if (abilityKey === 'twinSabers') {
+      const atkCount = (combat.attackDiceResults || []).length;
+      const defCount = (combat.defenseDiceResults || []).length;
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_atk`).setLabel(`Reroll all ${atkCount} ATK dice`).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_twin_sabers_def`).setLabel(`Force reroll all ${defCount} DEF dice`).setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Twin Sabers** — <@${playerId}> choose:`, components: [row] });
+    } else if (abilityKey === 'shrewdScoundrel') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_0`).setLabel('Guess 0 Damage').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_1`).setLabel('Guess 1 Damage').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_shrewd_2`).setLabel('Guess 2 Damage').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Cancel (no guess)').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Shrewd Scoundrel** — <@${playerId}> guess the number of Hit results after rerolls (0-2):`, components: [row] });
+    } else if (abilityKey === 'resourceful') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_atk`).setLabel('Reroll 1 ATK die').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_resourceful_def`).setLabel('Reroll 1 DEF die').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_skip`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Resourceful** — <@${playerId}> choose:`, components: [row] });
+    } else if (abilityKey === 'trained') {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_yes`).setLabel('Suffer 1 Strain, +1 ATK reroll').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pre_reroll_${gameId}_trained_no`).setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+      );
+      await thread.send({ content: `**Trained** — <@${playerId}> suffer 1 Strain to reroll 1 attack die?`, components: [row] });
+    }
+    saveGames(game.gameId);
+    return;
+  }
 
   // Process choice
   if (choice === 'skip') {
-    combat.pendingPreRerolls.shift();
-    await thread.send(`Pre-reroll choice skipped.`);
+    abilityState.used = true;
+    await thread.send(`Reroll ability skipped.`);
   } else if (choice === 'twin_sabers_atk') {
     // R28/R29: Reroll ALL attack dice that haven't been rerolled yet.
     // Per alexanbv 2026-05-10: "a die can only be rerolled once. If an
@@ -4958,7 +5058,7 @@ export async function handlePreReroll(interaction, ctx) {
     const atkTotals = recalcAttackTotals(atkDice);
     combat.attackRoll = { acc: atkTotals.acc, dmg: atkTotals.dmg, surge: atkTotals.surge };
     combat.attackerRerolledIndices = [...(combat.attackerRerolledIndices || []), ...rerolledIndices];
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     const skipNote = skipped.length > 0 ? `\nSkipped (already rerolled): ${skipped.join(', ')}` : '';
     await thread.send(`**Twin Sabers** — Rerolled ${rerolledIndices.length} attack die${rerolledIndices.length === 1 ? '' : 's'} simultaneously:\n${details.join('\n') || '(no eligible dice)'}\nNew totals: ${atkTotals.acc} acc, ${atkTotals.dmg} dmg, ${atkTotals.surge} surge${skipNote}`);
   } else if (choice === 'twin_sabers_def') {
@@ -4985,19 +5085,19 @@ export async function handlePreReroll(interaction, ctx) {
     const defTotals = recalcDefenseTotals(defDice);
     combat.defenseRoll = { block: defTotals.block, evade: defTotals.evade, dodge: defTotals.dodge };
     combat.defenderRerolledIndices = [...(combat.defenderRerolledIndices || []), ...rerolledIndices];
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     const skipNote = skipped.length > 0 ? `\nSkipped (already rerolled): ${skipped.join(', ')}` : '';
     await thread.send(`**Twin Sabers** — Force rerolled ${rerolledIndices.length} defense die${rerolledIndices.length === 1 ? '' : 's'} simultaneously:\n${details.join('\n') || '(no eligible dice)'}\nNew totals: ${defTotals.block} block, ${defTotals.evade} evade${defTotals.dodge ? ' DODGE' : ''}${skipNote}`);
   } else if (choice === 'resourceful_atk') {
     combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
     combat.resourcefulSide = 'atk';
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
     await thread.send(`**Resourceful** — +1 attack reroll.${gambitNote}`);
   } else if (choice === 'resourceful_def') {
     combat.defenderRerollsRemaining = (combat.defenderRerollsRemaining || 0) + 1;
     combat.resourcefulSide = 'def';
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     const gambitNote = combat.gambitActive ? ' (Gambit: you may swap die color before rerolling)' : '';
     await thread.send(`**Resourceful** — +1 defense reroll.${gambitNote}`);
   } else if (choice === 'trained_yes') {
@@ -5005,7 +5105,7 @@ export async function handlePreReroll(interaction, ctx) {
     // 1 attack die." Strain routed through the new applyStrain handler so
     // the player gets the deck-discard option (+ Paz exception, UD pre-
     // prompt). Reroll is granted in the followup AFTER strain resolves.
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     await applyStrain(game, ctx, {
       figureKey: combat.attackerFigureKey,
       controllerPlayerNum: combat.attackerPlayerNum,
@@ -5016,7 +5116,7 @@ export async function handlePreReroll(interaction, ctx) {
     saveGames(game.gameId);
     return;
   } else if (choice === 'trained_no') {
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
     await thread.send(`**Trained** — Skipped.`);
   } else if (choice.startsWith('shrewd_')) {
     const guess = parseInt(choice.replace('shrewd_', ''), 10);
@@ -5024,61 +5124,32 @@ export async function handlePreReroll(interaction, ctx) {
       combat.shrewdScoundrelGuess = guess;
       await thread.send(`**Shrewd Scoundrel** — Guessed **${guess}** Hit result${guess !== 1 ? 's' : ''}.`);
     }
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
   } else {
-    combat.pendingPreRerolls.shift();
+    abilityState.used = true;
   }
 
-  await _advancePreRerollChain(game, ctx, combat, thread);
-}
-
-/**
- * Advance the pre-reroll queue: if more pre-roll abilities remain prompt
- * the next one; otherwise transition into the actual reroll window
- * (attacker → forced → defender → proceedAfterRerolls).
- *
- * Extracted so strain followups (Trained Rancor) can re-enter the
- * post-choice flow after the strain prompt resolves async.
- */
-async function _advancePreRerollChain(game, ctx, combat, thread) {
-  const { saveGames } = ctx;
-  // Check if more pre-rerolls remain
-  if ((combat.pendingPreRerolls || []).length > 0) {
-    combat.rerollPhase = 'attacker';
-    await sendRerollUI(thread, game, combat, 'attacker');
-    saveGames(game.gameId);
-    return;
-  }
-
-  // All pre-rerolls done — enter the actual reroll window
-  combat.preRerollsProcessed = true;
-  const hasForcedRerolls = (combat.forcedRerollQueue || []).length > 0;
-  const atkR = combat.attackerRerollsRemaining || 0;
-  const defR = combat.defenderRerollsRemaining || 0;
-  if (atkR > 0 || defR > 0 || hasForcedRerolls) {
-    if (atkR > 0) {
-      combat.rerollPhase = 'attacker';
-      await sendRerollUI(thread, game, combat, 'attacker');
-    } else if (hasForcedRerolls) {
-      combat.rerollPhase = 'forced';
-      await sendRerollUI(thread, game, combat, 'forced');
-    } else {
-      combat.rerollPhase = 'defender';
-      await sendRerollUI(thread, game, combat, 'defender');
-    }
-    saveGames(game.gameId);
-    return;
-  }
-  // No rerolls — proceed directly
-  combat.rerollPhase = null;
-  await proceedAfterRerolls(thread, game, combat, ctx);
+  // Per alexanbv 2026-05-13: after the ability resolves, re-render the
+  // attacker bucket so the player can pick another ability or click
+  // Done. No queue-advancing — the bucket renderer iterates
+  // combat.rerollAbilities directly and only shows unused entries.
+  combat.openedRerollAbility = null;
+  await sendRerollUI(thread, game, combat, 'attacker');
   saveGames(game.gameId);
 }
 
-// Strain followup: Trained Rancor "suffer 1 strain to reroll 1 attack die".
-// After applyStrain resolves the player's choice (damage / deck-discard /
-// Paz-return), grant the +1 attack reroll and continue the pre-reroll
-// chain (handlePreReroll's tail logic, extracted to _advancePreRerollChain).
+// _advancePreRerollChain retired 2026-05-13. Per alexanbv: there is no
+// pre-reroll queue — step-3 reroll abilities live as buttons inside the
+// attacker bucket and resolution returns to that same bucket via
+// sendRerollUI(... 'attacker'). The legacy chain advanced through a
+// sequential pendingPreRerolls queue, which forced a fixed order; the
+// bucket renderer iterates combat.rerollAbilities directly so the
+// player picks any order.
+
+// Strain followup: Trained Rancor "suffer 1 strain to reroll 1 attack
+// die". After applyStrain resolves the player's choice (damage / deck-
+// discard / Paz-return), grant the +1 attack reroll and re-render the
+// attacker bucket so the player can pick another ability or click Done.
 registerStrainFollowup('trained_grant_reroll', async (game, ctx, _payload) => {
   const combat = game.pendingCombat;
   if (!combat) return;
@@ -5086,7 +5157,7 @@ registerStrainFollowup('trained_grant_reroll', async (game, ctx, _payload) => {
   if (!thread) return;
   combat.attackerRerollsRemaining = (combat.attackerRerollsRemaining || 0) + 1;
   await thread.send('**Trained** — +1 attack reroll granted.').catch(discordCatch);
-  await _advancePreRerollChain(game, ctx, combat, thread);
+  await sendRerollUI(thread, game, combat, 'attacker');
 });
 
 // Delegate to src/game/spatial.js (canonical implementation)

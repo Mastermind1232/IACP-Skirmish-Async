@@ -43,7 +43,6 @@ export const INTERRUPT_TYPES = Object.freeze({
   COMBAT_RESUPPLY:       'combat-resupply',
   COVER_FIRE:            'cover-fire',
   GUIDANCE_SYSTEMS:      'guidance-systems',
-  PRE_REROLL:            'pre-reroll',
   POWER_TOKEN_OVERFLOW:  'power-token-overflow',
 
   // CC-driven prompts

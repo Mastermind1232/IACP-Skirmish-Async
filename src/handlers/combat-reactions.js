@@ -1,4 +1,19 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
+
+/**
+ * Local shim (alexanbv 2026-05-13): count unused step-3 reroll
+ * abilities on combat.rerollAbilities. Same logic as the helper in
+ * handlers/combat.js — duplicated here to avoid a cross-file import
+ * cycle (combat.js already imports from combat-reactions.js).
+ */
+function _countUnusedAttackerRerollAbilitiesShim(combat) {
+  const abilities = combat?.rerollAbilities || {};
+  let count = 0;
+  for (const key of ['twinSabers', 'resourceful', 'shrewdScoundrel', 'trained']) {
+    if (abilities[key] && !abilities[key].used) count += 1;
+  }
+  return count;
+}
 import { resolvePendingCombat, pushNestedCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
@@ -220,14 +235,18 @@ export async function handleVetInstincts(interaction, ctx) {
     const atkRem = combat.viPendingAtkRerolls || 0;
     const defRem = combat.viPendingDefRerolls || 0;
     const hasForced = (combat.forcedRerollQueue || []).length > 0;
-    const hasPreRerolls = (combat.pendingPreRerolls || []).length > 0;
-    if (atkRem > 0 || defRem > 0 || hasForced || hasPreRerolls) {
+    // Per alexanbv 2026-05-13: step-3 reroll abilities live on
+    // combat.rerollAbilities; the bucket renderer surfaces unused
+    // entries as "Use X" buttons. Treat any unused ability as a
+    // reason to open the attacker bucket.
+    const hasStep3Abilities = _countUnusedAttackerRerollAbilitiesShim(combat) > 0;
+    if (atkRem > 0 || defRem > 0 || hasForced || hasStep3Abilities) {
       combat.attackerRerollsRemaining = atkRem;
       combat.defenderRerollsRemaining = defRem;
       // G12: ensure per-die reroll tracking arrays exist
       if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
       if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-      if (atkRem > 0 || hasPreRerolls) {
+      if (atkRem > 0 || hasStep3Abilities) {
         combat.rerollPhase = 'attacker';
         await sendRerollUI(thread, game, combat, 'attacker');
       } else if (hasForced) {
@@ -566,7 +585,9 @@ export async function handlePowerConverter(interaction, ctx) {
     // G12: ensure per-die reroll tracking arrays exist
     if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
     if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-    if (!combat.pendingPreRerolls) combat.pendingPreRerolls = [];
+    // pre-reroll queue retired 2026-05-13 — step-3 abilities live on
+    // combat.rerollAbilities (initialized at attack-roll time).
+    combat.rerollAbilities = combat.rerollAbilities || {};
     if (atkRem > 0 || defRem > 0 || hasForced) {
       if (atkRem > 0) {
         combat.rerollPhase = 'attacker';
@@ -917,14 +938,16 @@ export async function handleDoubtReroll(interaction, ctx) {
   const atkRem = combat.doubtPendingAtkRerolls || 0;
   const defRem = combat.doubtPendingDefRerolls || 0;
   const hasForced = (combat.forcedRerollQueue || []).length > 0;
-  const hasPreRerolls = (combat.pendingPreRerolls || []).length > 0;
+  // Per alexanbv 2026-05-13: step-3 abilities live on combat.rerollAbilities;
+  // bucket renderer surfaces unused entries as "Use X" buttons.
+  const hasStep3Abilities = _countUnusedAttackerRerollAbilitiesShim(combat) > 0;
 
-  if (thread && (atkRem > 0 || defRem > 0 || hasForced || hasPreRerolls)) {
+  if (thread && (atkRem > 0 || defRem > 0 || hasForced || hasStep3Abilities)) {
     combat.attackerRerollsRemaining = atkRem;
     combat.defenderRerollsRemaining = defRem;
     if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
     if (!combat.defenderRerolledIndices) combat.defenderRerolledIndices = [];
-    if (atkRem > 0 || hasPreRerolls) {
+    if (atkRem > 0 || hasStep3Abilities) {
       combat.rerollPhase = 'attacker';
       await sendRerollUI(thread, game, combat, 'attacker');
     } else if (hasForced) {
