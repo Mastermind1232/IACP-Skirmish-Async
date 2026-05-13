@@ -2668,7 +2668,11 @@ export function resolveAbility(abilityId, context) {
       // Multi-target variant (Trample): auto-target all adjacent hostiles (up to N), single die roll
       if (entry.rollOneDieMaxTargets && entry.rollOneDieMaxTargets > 1) {
         const maxTgts = entry.rollOneDieMaxTargets;
-        const pendingKey = msgId;
+        // Per alexanbv 2026-05-13: keyed by activating figureKey so the
+        // chained-picker continuation is tied to the figure that started
+        // it, not the whole group's msgId. _rollOneDieSelfFigureKey was
+        // already computed above from selectedFigure.
+        const pendingKey = _rollOneDieSelfFigureKey || msgId;
         const pendingMT = game.pendingMultiTargetRoll?.[pendingKey];
         // Helper: roll once and apply to all targets
         const _rollAndApplyMulti = (targets) => {

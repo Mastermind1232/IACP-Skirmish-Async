@@ -37,9 +37,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // barrageTargetSpace, barrageDefenseBonus MIGRATED 2026-05-13 →
   // ACTIVATION_FIGKEY_FLAGS (alexanbv: every attack-frame grant is
   // per-figure unless card text says "group").
-  'pendingMultiTargetRoll',
   // closeQuartersActive + mobileMovementActive MIGRATED 2026-05-13 →
   // ACTIVATION_FIGKEY_FLAGS (alexanbv: "all specials are per figure").
+  // pendingMultiTargetRoll MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: Trample is per-figure; the chained picker belongs to the
+  // figure that started it).
   'pendingMoveX',
   // On a Mission per-step push prompt: pauses the picker between steps
   // so the player can push a SMALL figure 1 space (or skip).
@@ -87,7 +89,11 @@ const ACTIVATION_MSGID_FLAGS = [
   'falseOrdersUpgrade',
   // setTrapSpace MIGRATED 2026-05-13 → ROUND_OBJECT_FLAGS (alexanbv:
   // "Set a Trap is SoR/EoR" — round-scoped, not per-activation).
-  'reverseEngineerActive',
+  // reverseEngineerActive RECATEGORIZED 2026-05-13 →
+  // ACTIVATION_PLAYERNUM_FLAGS (write at abilities.js sets
+  // `game.reverseEngineerActive[playerNum] = true`; consumed at attack-
+  // declare in combat.js which deletes by playerNum. msgId cleanup
+  // never matched.)
   // findsmanMeditationTarget RECATEGORIZED 2026-05-13 →
   // ACTIVATION_PLAYERNUM_FLAGS (write at abilities.js sets
   // `game.findsmanMeditationTarget[playerNum] = chosenDcName`; msgId
@@ -226,6 +232,8 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'activationExtraActionThenStun',
   'beastTamerInteractOverride',
   'freeAttackDifferentTargets',
+  // alexanbv 2026-05-13 ninth-wave: Trample chained-picker continuation.
+  'pendingMultiTargetRoll',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
@@ -272,6 +280,7 @@ const ACTIVATION_PLAYERNUM_FLAGS = [
   'findsmanMeditationTarget',
   'deflectionPending',
   'deflectionUnconditional',
+  'reverseEngineerActive',
 ];
 
 /**
