@@ -4776,7 +4776,9 @@ export async function handleCombatReroll(interaction, ctx) {
 
   // --- Sub-picker for an attacker/defender bucket controlled ability ---
   // (Modern path: user clicked "Use {ability}", now picking a pool die.)
-  if (combat.controlledRerollActiveIdx != null && combat.rerollPhase !== 'forced') {
+  // alexanbv 2026-05-13: 'forced' phase retired; the guard is now just
+  // "is an ability sub-picker open?".
+  if (combat.controlledRerollActiveIdx != null) {
     const _spIdx = combat.controlledRerollActiveIdx;
     const _spEntry = (combat.forcedRerollQueue || [])[_spIdx];
     if (!_spEntry || (_spEntry.remaining ?? 0) <= 0) {

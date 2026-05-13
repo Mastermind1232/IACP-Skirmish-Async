@@ -1144,75 +1144,35 @@ function getCombatActions(game, playerNum, deps) {
     return actions;
   }
 
-  // Reroll phase — list each eligible die for reroll + done option
+  // Reroll phase — list each eligible die for reroll + done option.
+  // alexanbv 2026-05-13: 'forced' phase retired. Only 'attacker' and
+  // 'defender' phases exist; every reroll ability (voluntary +1 grant,
+  // forced/controlled queue entry, complex ability) is surfaced in the
+  // holder's bucket and the sub-picker filters dice by entry.pool.
   if (combat.rerollPhase) {
-    let rerollPn;
-    if (combat.rerollPhase === 'attacker') {
-      rerollPn = attackerPn;
-    } else if (combat.rerollPhase === 'forced') {
-      rerollPn = (combat.forcedRerollQueue || [])[0]?.controlPlayer ?? attackerPn;
-    } else {
-      rerollPn = defenderPn;
-    }
+    const phase = combat.rerollPhase;
+    const rerollPn = phase === 'attacker' ? attackerPn : defenderPn;
     if (playerNum === rerollPn) {
-      const phase = combat.rerollPhase;
-      // For forced rerolls, determine which dice pool based on queue entry
-      let sideKey, rerollsRemaining, diceResults, alreadyRerolled;
-      if (phase === 'forced') {
-        const entry = (combat.forcedRerollQueue || [])[0];
-        rerollsRemaining = entry?.remaining ?? 0;
-        // Forced rerolls can target attack, defense, or any
-        const atkDice = combat.attackDiceResults || [];
-        const defDice = combat.defenseDiceResults || [];
-        const atkRerolled = combat.attackerRerolledIndices || [];
-        const defRerolled = combat.defenderRerolledIndices || [];
-        if (entry?.pool === 'attack' || entry?.pool === 'any') {
-          for (let i = 0; i < atkDice.length; i++) {
-            if (atkRerolled.includes(i)) continue;
-            actions.push({
-              type: ACTION_TYPES.COMBAT_REROLL,
-              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: 'atk', dieIndex: i }),
-              description: `Force reroll atk die ${i + 1} (${atkDice[i]?.color || 'unknown'})`,
-              params: { side: 'atk', dieIndex: i },
-            });
-          }
-        }
-        if (entry?.pool === 'defense' || entry?.pool === 'any') {
-          for (let i = 0; i < defDice.length; i++) {
-            if (defRerolled.includes(i)) continue;
-            actions.push({
-              type: ACTION_TYPES.COMBAT_REROLL,
-              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: 'def', dieIndex: i }),
-              description: `Force reroll def die ${i + 1} (${defDice[i]?.color || 'unknown'})`,
-              params: { side: 'def', dieIndex: i },
-            });
-          }
-        }
-        sideKey = 'atk'; // Used for done button
-      } else {
-        sideKey = phase === 'attacker' ? 'atk' : 'def';
-        // alexanbv 2026-05-13: deprecated count fields gone. Sum
-        // queue entries that the current phase's holder controls.
-        const _aiHolderPN = phase === 'attacker'
-          ? (combat.attackerPlayerNum || 1)
-          : (combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1));
-        const _aiPool = phase === 'attacker' ? 'attack' : 'defense';
-        rerollsRemaining = (combat.forcedRerollQueue || [])
-          .filter(e => e.controlPlayer === _aiHolderPN && (e.pool === _aiPool || e.pool === 'any'))
-          .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0);
-        diceResults = phase === 'attacker' ? combat.attackDiceResults : combat.defenseDiceResults;
-        alreadyRerolled = phase === 'attacker' ? (combat.attackerRerolledIndices || []) : (combat.defenderRerolledIndices || []);
+      const sideKey = phase === 'attacker' ? 'atk' : 'def';
+      const _aiHolderPN = phase === 'attacker'
+        ? (combat.attackerPlayerNum || 1)
+        : (combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1));
+      const _aiPool = phase === 'attacker' ? 'attack' : 'defense';
+      const rerollsRemaining = (combat.forcedRerollQueue || [])
+        .filter(e => e.controlPlayer === _aiHolderPN && (e.pool === _aiPool || e.pool === 'any'))
+        .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0);
+      const diceResults = phase === 'attacker' ? combat.attackDiceResults : combat.defenseDiceResults;
+      const alreadyRerolled = phase === 'attacker' ? (combat.attackerRerolledIndices || []) : (combat.defenderRerolledIndices || []);
 
-        if (rerollsRemaining > 0 && diceResults?.length) {
-          for (let i = 0; i < diceResults.length; i++) {
-            if (alreadyRerolled.includes(i)) continue;
-            actions.push({
-              type: ACTION_TYPES.COMBAT_REROLL,
-              customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: sideKey, dieIndex: i }),
-              description: `Reroll ${phase} die ${i + 1} (${diceResults[i]?.color || 'unknown'})`,
-              params: { side: sideKey, dieIndex: i },
-            });
-          }
+      if (rerollsRemaining > 0 && diceResults?.length) {
+        for (let i = 0; i < diceResults.length; i++) {
+          if (alreadyRerolled.includes(i)) continue;
+          actions.push({
+            type: ACTION_TYPES.COMBAT_REROLL,
+            customId: buildCustomId(ACTION_TYPES.COMBAT_REROLL, { gameId, side: sideKey, dieIndex: i }),
+            description: `Reroll ${phase} die ${i + 1} (${diceResults[i]?.color || 'unknown'})`,
+            params: { side: sideKey, dieIndex: i },
+          });
         }
       }
 
