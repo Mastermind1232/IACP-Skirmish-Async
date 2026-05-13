@@ -110,14 +110,18 @@ export async function applyAbilityResult(result, opts) {
   }
 
   // --- Drew cards (refresh both players' hands since draw effects can affect either) ---
+  // Per alexanbv 2026-05-13: Command cards are SECRET. Never list drawn
+  // card names in the public game log — they only become visible to the
+  // drawing player via their private hand visual. Reveal abilities are
+  // the only legitimate exception (and they handle their own logging).
   if (result.applied && result.drewCards?.length) {
     if (updateHandVisualMessage) {
       await updateHandVisualMessage(game, 1, client);
       await updateHandVisualMessage(game, 2, client);
     }
-    const drewList = result.drewCards.map((c) => `**${c}**`).join(', ');
+    const drewCount = result.drewCards.length;
     if (logGameAction) {
-      await logGameAction(game, client, `CC effect: Drew ${drewList}.`, { phase: 'ACTION', icon: 'card' });
+      await logGameAction(game, client, `CC effect: Drew ${drewCount} Command card${drewCount === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' });
     }
   }
 

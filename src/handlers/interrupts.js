@@ -755,7 +755,10 @@ export async function handleBelReorder(interaction, ctx) {
   const _belDeck = _belGame[_belData.deckKey] || [];
   _belGame[_belData.deckKey] = [..._belNewOrder, ..._belDeck.slice(_belData.cards.length)];
   clearPendingBELReorder(_belGame);
-  await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered to: ${_belNewOrder.map(c => `**${c}**`).join(', ')}.`, { phase: 'ROUND', icon: 'card' });
+  // Per alexanbv 2026-05-13: Command cards are SECRET. The reordering
+  // player saw the cards in their private picker, but the public log
+  // must not name them — the cards stay face-down on opponent's deck.
+  await logGameAction(_belGame, client, `**Behind Enemy Lines** — Opponent's deck top 3 reordered.`, { phase: 'ROUND', icon: 'card' });
   saveGames(_belGame.gameId); return;
 }
 

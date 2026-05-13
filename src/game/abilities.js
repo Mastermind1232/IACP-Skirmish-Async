@@ -3824,11 +3824,14 @@ export function resolveAbility(abilityId, context) {
     hand.push(toReturn);
     game[discardKey] = discard;
     game[handKey] = hand;
+    // Discard piles are public per IACP, so the returned-card name is
+    // fine to log. But drawn cards are SECRET (alexanbv 2026-05-13) —
+    // log a count only, no names.
     const logParts = [`Returned **${toReturn}** from discard to hand.`];
     let drewCards = [];
     if (typeof entry.draw === 'number' && entry.draw > 0) {
       drewCards = drawCcCards(game, playerNum, entry.draw);
-      if (drewCards.length > 0) logParts.push(`Drew ${drewCards.map((c) => `**${c}**`).join(', ')}.`);
+      if (drewCards.length > 0) logParts.push(`Drew ${drewCards.length} Command card${drewCards.length === 1 ? '' : 's'}.`);
     }
     return {
       applied: true,
@@ -8577,9 +8580,12 @@ export function resolveAbility(abilityId, context) {
     game[handKey] = hand;
     deck.unshift(...picked);
     game[deckKey] = deck;
+    // Per alexanbv 2026-05-13: Command cards are SECRET. The placed
+    // cards go onto the deck (face-down) — their names must not leak
+    // in the public log.
     return {
       applied: true,
-      logMessage: `Opponent placed ${n} random card(s) from hand on top of their Command deck: ${picked.map((c) => `**${c}**`).join(', ')}.`,
+      logMessage: `Opponent placed ${n} random card(s) from hand on top of their Command deck.`,
       refreshOpponentHand: true,
     };
   }
@@ -9563,7 +9569,9 @@ export function resolveAbility(abilityId, context) {
       hand.push(chosen);
       game[deckKey] = deck;
       game[handKey] = hand;
-      return { applied: true, logMessage: `**Built on Hope** — Drew **${chosen}** from top 3. Other card(s) returned to top of deck.` };
+      // Per alexanbv 2026-05-13: Command cards are SECRET. Don't leak
+      // the chosen card name in the public log.
+      return { applied: true, logMessage: `**Built on Hope** — Drew 1 Command card from top 3. Other card(s) returned to top of deck.` };
     }
     return {
       requiresChoice: true,
@@ -10877,7 +10885,9 @@ export function resolveAbility(abilityId, context) {
           [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         game[deckKey] = deck;
-        return { applied: true, logMessage: `**Devotion** — Drew **${cardName}** from Command deck. Deck shuffled (${deck.length} cards remaining).` };
+        // Per alexanbv 2026-05-13: Command cards are SECRET. Log only
+        // the count, not the chosen card name.
+        return { applied: true, logMessage: `**Devotion** — Drew 1 Command card from deck. Deck shuffled (${deck.length} cards remaining).` };
       }
       // Phase 2: figure chosen → search deck for cards matching figure's traits
       const dcName = dcNameFromFigureKey(chosenFigureKey);
@@ -10923,7 +10933,10 @@ export function resolveAbility(abilityId, context) {
           [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         game[deckKey] = deck;
-        return { applied: true, logMessage: `**Devotion** — Drew **${cardName}** (matched **${dcName}**). Deck shuffled (${deck.length} cards remaining).` };
+        // Per alexanbv 2026-05-13: Command cards are SECRET. The
+        // matching DC name is public (figure on board), but the drawn
+        // card name is not.
+        return { applied: true, logMessage: `**Devotion** — Drew 1 Command card matching **${dcName}**. Deck shuffled (${deck.length} cards remaining).` };
       }
       return { requiresChoice: true, choiceOptions: matches.map(c => `Draw: ${c}`), choiceValues: matches.map(c => `devotion_draw|${c}`) };
     }
@@ -12248,11 +12261,14 @@ export function resolveAbility(abilityId, context) {
     }
     game[deckKey] = deck;
     game[handKey] = [...(game[handKey] || []), chosenOption];
+    // Per alexanbv 2026-05-13: Command cards are SECRET. Don't reveal
+    // the chosen card name in the public log. (apply-ability-result
+    // will refresh the private hand visual for the drawing player.)
     return {
       applied: true,
       drewCards: [chosenOption],
       refreshHand: true,
-      logMessage: `**${entry.label}** — Searched deck and added **${chosenOption}** to hand. Deck shuffled.`,
+      logMessage: `**${entry.label}** — Searched deck and added 1 card to hand. Deck shuffled.`,
     };
   }
 
