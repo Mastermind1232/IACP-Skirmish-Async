@@ -401,7 +401,7 @@ function remapMsgIdKeyedFields(game, oldP1Ids, oldP2Ids) {
     // msgId, so it survives cross-lobby intact and never matched here anyway.
     // moveCleaveActive + roundDcAbilityUsed removed: declared but never written
     // anywhere in the codebase.
-    'overrunDamagedThisMove',
+    // overrunDamagedThisMove MIGRATED 2026-05-13 → figureKey-keyed (alexanbv).
     // Audit 2026-05-05: persistent / round-scoped msgId-keyed fields surfaced by
     // tests/certification/msgid-flags-completeness.test.js. These survive
     // mid-round (or longer) and would silently no-op on cross-lobby load

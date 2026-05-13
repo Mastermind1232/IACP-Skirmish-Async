@@ -183,9 +183,9 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
     });
   }
   // Burst Fire (Imperial Loadout): on damage, stun all figures adjacent
-  // to the target (excluding target). Per-msgId pre-attack flag from
-  // game.burstFirePendingMsgId; consumed by fireBurstFire.
-  if (game?.burstFirePendingMsgId?.[combat.attackerMsgId] && combat._step7Hit && combat._step7Damage > 0) {
+  // to the target (excluding target). Per-figureKey pre-attack flag
+  // (alexanbv 2026-05-13 migration); consumed by fireBurstFire.
+  if (game?.burstFirePendingMsgId?.[combat.attackerFigureKey] && combat._step7Hit && combat._step7Damage > 0) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'burst_fire',
@@ -193,8 +193,8 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
     });
   }
   // Crippling Blow (Imperial Loadout): if attack didn't miss, stun the
-  // defender. Hit-gated; damage not required.
-  if (game?.cripplingBlowPending?.[combat.attackerMsgId] && combat._step7Hit && combat.target?.figureKey) {
+  // defender. Hit-gated; damage not required. (Per-figureKey 2026-05-13.)
+  if (game?.cripplingBlowPending?.[combat.attackerFigureKey] && combat._step7Hit && combat.target?.figureKey) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'crippling_blow',
@@ -204,7 +204,8 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   // Disruptor Rifle (Imperial Loadout): if attack hit AND defender at
   // exactly 1 HP, deal 1 more damage (defeat). Eligibility re-checked at
   // fire time because step-8 effects may have lowered HP further.
-  if (game?.disruptorRiflePending?.[combat.attackerMsgId] && combat._step7Hit && combat.target?.figureKey) {
+  // (Per-figureKey 2026-05-13.)
+  if (game?.disruptorRiflePending?.[combat.attackerFigureKey] && combat._step7Hit && combat.target?.figureKey) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'disruptor_rifle',
@@ -234,7 +235,8 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   // an additional attack." No prep besides the prompt; arms
   // freeAttackBonusPending. Per user spec the new attack must wait for
   // defender step 8 — fireTonfaStrike defers via combat._pendingChainAttacks.
-  if (combat.attackerMsgId && game?.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
+  // Per-figureKey 2026-05-13.
+  if (combat.attackerFigureKey && game?.tonfaStrikeSecondAttack?.[combat.attackerFigureKey]) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'tonfa_strike',
@@ -243,8 +245,8 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   }
   // Barrage (CT-1701): "after first attack, perform a second attack
   // (target within 3 of first; defender +1 white die)." Fire handler
-  // stages target-window + defense bonus on combat.
-  if (combat.attackerMsgId && game?.barrageSecondAttack?.[combat.attackerMsgId]) {
+  // stages target-window + defense bonus on combat. (Per-figureKey 2026-05-13.)
+  if (combat.attackerFigureKey && game?.barrageSecondAttack?.[combat.attackerFigureKey]) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'barrage',

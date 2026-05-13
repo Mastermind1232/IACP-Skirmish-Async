@@ -14,14 +14,37 @@ This document classifies every entry in `ACTIVATION_MSGID_FLAGS`
 
 ---
 
+## Canonical principle (alexanbv 2026-05-13)
+
+**Default: per-figure (ACTIVATION_FIGKEY_FLAGS). Per-group is the
+exception, only when card text explicitly says "group".** Specifically:
+
+- All special-action grants → per-figure
+- All "during this activation" effects → per-figure activation
+- All free-attack / bypass / chain-attack flags → per-figure
+- UI / per-DC / per-attack-frame state stays msgId-keyed (KEEP list)
+- Round-scoped state (SoR/EoR triggers) → ROUND_OBJECT_FLAGS, not
+  ACTIVATION_MSGID_FLAGS
+
 ## Already migrated this session (alexanbv 2026-05-13)
 
 - ✅ `attackPerformedThisActivation` — commit `997b5cc3`
-- ✅ `pounceAttackPending` — commit (pending)
-- ✅ `fellSwoopFreeAttack` — commit (pending)
-- ✅ `pummelTwoAttacksThisActivation` — commit (pending)
-- ✅ `pummelAttacksRemaining` — commit (pending)
-- ✅ `imperialRetrofittingMultiAttack` — commit (pending)
+- ✅ `pounceAttackPending` — commit `165ce220`
+- ✅ `fellSwoopFreeAttack` — commit `165ce220`
+- ✅ `pummelTwoAttacksThisActivation` — commit `165ce220`
+- ✅ `pummelAttacksRemaining` — commit `165ce220`
+- ✅ `imperialRetrofittingMultiAttack` — commit `165ce220`
+- ✅ `stayDownPendingMsgId` — this commit
+- ✅ `burstFirePendingMsgId` — this commit
+- ✅ `cripplingBlowPending` — this commit
+- ✅ `disruptorRiflePending` — this commit
+- ✅ `tonfaStrikeSecondAttack` — this commit
+- ✅ `barrageSecondAttack` — this commit
+- ✅ `barrageTargetSpace` — this commit
+- ✅ `barrageDefenseBonus` — this commit
+- ✅ `overrunThisActivation` — this commit (alexanbv: "during this activation" = per-figure)
+- ✅ `overrunDamagedThisMove` — this commit
+- 🔄 `setTrapSpace` — this commit (reclassified ROUND_OBJECT_FLAGS, not ACTIVATION_FIGKEY)
 
 ## KEEP — per-DC (UI / attack-frame / card-state)
 

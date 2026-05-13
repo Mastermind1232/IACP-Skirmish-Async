@@ -1606,20 +1606,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     game.freeAttackBonusPending[combat.attackerFigureKey] = true;
     await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
   }
-  // Barrage inline disabled 2026-05-09 → fireBarrage.
-  if (false && game.barrageSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
-    delete game.barrageSecondAttack[combat.attackerMsgId];
+  // Barrage inline disabled 2026-05-09 → fireBarrage. Per-figureKey 2026-05-13.
+  if (false && game.barrageSecondAttack?.[combat.attackerFigureKey]) { // eslint-disable-line no-constant-condition
+    delete game.barrageSecondAttack[combat.attackerFigureKey];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerFigureKey] = true;
     // Store first target's position so second attack target must be within 3 spaces
     const _barrageTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
     if (_barrageTargetPos) {
       game.barrageTargetSpace = game.barrageTargetSpace || {};
-      game.barrageTargetSpace[combat.attackerMsgId] = _barrageTargetPos;
+      game.barrageTargetSpace[combat.attackerFigureKey] = _barrageTargetPos;
     }
     // Mark that the next attack from this figure adds 1 white die to defense pool
     game.barrageDefenseBonus = game.barrageDefenseBonus || {};
-    game.barrageDefenseBonus[combat.attackerMsgId] = true;
+    game.barrageDefenseBonus[combat.attackerFigureKey] = true;
     await thread.send('**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.');
   }
   // Imperial Loadout post-attack effects.
@@ -3385,13 +3385,18 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[_entry.msgId] = _entry.pendingOverrideAttackDice;
     }
+    // Per alexanbv 2026-05-13: keyed by figureKey. Chain-attack entries
+    // carry figureKey; fall back to combat's attackerFigureKey only if
+    // a legacy entry omits it.
     if (_entry.barrageTargetSpace) {
       game.barrageTargetSpace = game.barrageTargetSpace || {};
-      game.barrageTargetSpace[_entry.msgId] = _entry.barrageTargetSpace;
+      const _bts_fk = _entry.figureKey || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_bts_fk) game.barrageTargetSpace[_bts_fk] = _entry.barrageTargetSpace;
     }
     if (_entry.barrageDefenseBonus) {
       game.barrageDefenseBonus = game.barrageDefenseBonus || {};
-      game.barrageDefenseBonus[_entry.msgId] = true;
+      const _bdb_fk = _entry.figureKey || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_bdb_fk) game.barrageDefenseBonus[_bdb_fk] = true;
     }
     // Return Fire (defender chain) forces target onto the original attacker.
     if (_entry.forcedTargetFigureKey) {

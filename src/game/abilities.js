@@ -2363,35 +2363,39 @@ export function resolveAbility(abilityId, context) {
         if (_lastTgt) game.freeAttackDifferentTargets[msgId].push(_lastTgt);
       }
     }
+    // alexanbv 2026-05-13: per-figure migration for attack-frame flags.
+    // Each attack-bound flag is keyed by the activating figure's key
+    // so siblings in a multi-figure group don't share state.
+    const _afkActivating = figureKeyForActivation(game, msgId);
     // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed
     if (entry.label === 'Stay Down') {
       game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};
-      game.stayDownPendingMsgId[msgId] = true;
+      if (_afkActivating) game.stayDownPendingMsgId[_afkActivating] = true;
     }
     // Burst Fire: mark so adjacent Stun is applied when the free attack resolves with damage
     if (entry.label === 'Burst Fire') {
       game.burstFirePendingMsgId = game.burstFirePendingMsgId || {};
-      game.burstFirePendingMsgId[msgId] = true;
+      if (_afkActivating) game.burstFirePendingMsgId[_afkActivating] = true;
     }
     // Crippling Blow: mark so Stun is applied to defender if attack doesn't miss
     if (entry.label === 'Crippling Blow') {
       game.cripplingBlowPending = game.cripplingBlowPending || {};
-      game.cripplingBlowPending[msgId] = true;
+      if (_afkActivating) game.cripplingBlowPending[_afkActivating] = true;
     }
     // Disruptor Rifle: mark so extra damage is applied if defender at 1 HP after non-miss attack
     if (entry.label === 'Disruptor Rifle') {
       game.disruptorRiflePending = game.disruptorRiflePending || {};
-      game.disruptorRiflePending[msgId] = true;
+      if (_afkActivating) game.disruptorRiflePending[_afkActivating] = true;
     }
     // Tonfa Strike: mark so second free attack is granted after first resolves
     if (entry.label === 'Tonfa Strike') {
       game.tonfaStrikeSecondAttack = game.tonfaStrikeSecondAttack || {};
-      game.tonfaStrikeSecondAttack[msgId] = true;
+      if (_afkActivating) game.tonfaStrikeSecondAttack[_afkActivating] = true;
     }
     // Barrage (CT-1701): mark so second free attack is granted after first resolves (defender +1 white die, within 3 of first target)
     if (entry.label === 'Barrage') {
       game.barrageSecondAttack = game.barrageSecondAttack || {};
-      game.barrageSecondAttack[msgId] = true;
+      if (_afkActivating) game.barrageSecondAttack[_afkActivating] = true;
     }
     // Close Quarters: at attack time, override dice with adjacent hostile's pool + remove 1 defense die
     if (entry.closeQuartersOverride) {
@@ -8741,14 +8745,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `When you defeat a hostile figure within 3 spaces, gain ${entry.whenDefeatHostileWithin3GainBlockTokens} Block tokens.` };
   }
 
-  // ccEffect: overrunThisActivation (Overrun) — keyed by activation msgId
+  // ccEffect: overrunThisActivation (Overrun) — per alexanbv 2026-05-13,
+  // "during this activation" = per-figure activation. Keyed by figureKey
+  // so siblings in a multi-figure group don't share the Overrun grant.
   if (entry.type === 'ccEffect' && entry.overrunThisActivation) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually: play at start of activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const _ovrFk = figureKeyForActivation(game, msgId);
+    if (!_ovrFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.overrunThisActivation = game.overrunThisActivation || {};
-    game.overrunThisActivation[msgId] = true;
+    game.overrunThisActivation[_ovrFk] = true;
     return { applied: true, logMessage: 'This activation, when you enter a hostile figure\'s space, that figure suffers 2 Damage (limit once per hostile).' };
   }
 

@@ -27,18 +27,16 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingEndTurn',
   // fellSwoopFreeAttack MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (alexanbv: per-figure, not per-group).
-  'overrunThisActivation',
-  'overrunDamagedThisMove',
+  // overrunThisActivation + overrunDamagedThisMove MIGRATED 2026-05-13
+  // → ACTIVATION_FIGKEY_FLAGS (alexanbv: "During this activation" =
+  // per-figure activation).
   // pummelTwoAttacksThisActivation + pummelAttacksRemaining MIGRATED
   // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
-  'stayDownPendingMsgId',
-  'burstFirePendingMsgId',
-  'cripplingBlowPending',
-  'disruptorRiflePending',
-  'tonfaStrikeSecondAttack',
-  'barrageSecondAttack',
-  'barrageTargetSpace',
-  'barrageDefenseBonus',
+  // stayDownPendingMsgId, burstFirePendingMsgId, cripplingBlowPending,
+  // disruptorRiflePending, tonfaStrikeSecondAttack, barrageSecondAttack,
+  // barrageTargetSpace, barrageDefenseBonus MIGRATED 2026-05-13 →
+  // ACTIVATION_FIGKEY_FLAGS (alexanbv: every attack-frame grant is
+  // per-figure unless card text says "group").
   'pendingMultiTargetRoll',
   'closeQuartersActive',
   'mobileMovementActive',
@@ -84,7 +82,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // figure scope per IACP multifigure-independent-activation rule).
   'selfDestructProtocolTriggered',
   'falseOrdersUpgrade',
-  'setTrapSpace',
+  // setTrapSpace MIGRATED 2026-05-13 → ROUND_OBJECT_FLAGS (alexanbv:
+  // "Set a Trap is SoR/EoR" — round-scoped, not per-activation).
   'reverseEngineerActive',
   'findsmanMeditationTarget',
   'nextAttackIgnoreFigureLOS',
@@ -177,6 +176,22 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'pummelTwoAttacksThisActivation',
   'pummelAttacksRemaining',
   'imperialRetrofittingMultiAttack',
+  // alexanbv 2026-05-13 third-wave: attack-frame grants per-figure.
+  // CC-special-action grants (Burst Fire, Crippling Blow, Disruptor
+  // Rifle, Tonfa Strike, Barrage) tag a single figure to receive the
+  // free attack / post-attack effect. Stay Down attaches Stun to the
+  // figure that took the free attack. Overrun's "during this activation"
+  // is per-figure activation.
+  'stayDownPendingMsgId',
+  'burstFirePendingMsgId',
+  'cripplingBlowPending',
+  'disruptorRiflePending',
+  'tonfaStrikeSecondAttack',
+  'barrageSecondAttack',
+  'barrageTargetSpace',
+  'barrageDefenseBonus',
+  'overrunThisActivation',
+  'overrunDamagedThisMove',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
@@ -447,6 +462,9 @@ const ROUND_OBJECT_FLAGS = [
   // pending queue empties.
   'firingSquadLockedTarget',
   'aphraExcavationOptions',
+  // setTrapSpace — alexanbv 2026-05-13: Set a Trap is SoR/EoR scope, so
+  // it resets at round boundary (not per-activation).
+  'setTrapSpace',
   // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
   // start; status-phase context = once per round-scoped status phase.
   'wildBeastUsedThisStatusPhase',
@@ -509,7 +527,8 @@ const ROUND_OBJECT_FLAGS = [
   'findsmanMeditationTarget',
   'vanishImmunityUntilNextActivation',
   'falseOrdersUpgrade',
-  'setTrapSpace',
+  // setTrapSpace listed earlier in this same array (alexanbv 2026-05-13
+  // reclassification).
   'reverseEngineerActive',
   'pendingMpBonus',
   'pummelTwoAttacksThisActivation',

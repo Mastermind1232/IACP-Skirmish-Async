@@ -964,12 +964,13 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       }
     }
   } catch (_lofErr) { /* fail-open */ }
-  // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session)
-  if (game.overrunThisActivation?.[msgId]) {
+  // Overrun: when entering a hostile's space, deal 2 damage (once per hostile per move session).
+  // Per alexanbv 2026-05-13: "during this activation" = per-figure activation; keyed by figureKey.
+  if (game.overrunThisActivation?.[figureKey]) {
     const hostilePlayerNum = opponentPlayerNum(playerNum);
     const hostilePositions = game.figurePositions?.[hostilePlayerNum] || {};
     game.overrunDamagedThisMove = game.overrunDamagedThisMove || {};
-    if (!game.overrunDamagedThisMove[msgId]) game.overrunDamagedThisMove[msgId] = [];
+    if (!game.overrunDamagedThisMove[figureKey]) game.overrunDamagedThisMove[figureKey] = [];
     const hostileDcList = getDcList(game, hostilePlayerNum) || [];
     const hostileMsgIds = getDcMessageIds(game, hostilePlayerNum) || [];
     const _dcHealthState = ctx.dcHealthState;
@@ -978,7 +979,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     const _movingFootprint = new Set(getNormalizedFootprint(newTopLeft, _movingSize));
     for (const [hostileFigureKey, hostilePos] of Object.entries(hostilePositions)) {
       if (!hostilePos) continue;
-      if (game.overrunDamagedThisMove[msgId].includes(hostileFigureKey)) continue;
+      if (game.overrunDamagedThisMove[figureKey].includes(hostileFigureKey)) continue;
       const hFkMatch = hostileFigureKey.match(/^(.+)-(\d+)-(\d+)$/);
       if (!hFkMatch) continue;
       const [, hostileDcName, hostileDgIndex, hostileFigIndexStr] = hFkMatch;
@@ -986,7 +987,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       const hostileFootprint = new Set(getNormalizedFootprint(hostilePos, hostileSize));
       const overlaps = [..._movingFootprint].some((s) => hostileFootprint.has(s));
       if (!overlaps) continue;
-      game.overrunDamagedThisMove[msgId].push(hostileFigureKey);
+      game.overrunDamagedThisMove[figureKey].push(hostileFigureKey);
       if (!_dcHealthState) continue;
       let hostileMsgId = null;
       for (const [hMsgId, hMeta] of dcMessageMeta) {

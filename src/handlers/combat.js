@@ -2056,10 +2056,11 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.autofireAttack = true;
     delete game.autofireActive[msgId]; // consumed
   }
-  // Barrage (CT-1701) second attack: mark on combat so defender adds 1 white die
-  if (game.barrageDefenseBonus?.[msgId]) {
+  // Barrage (CT-1701) second attack: mark on combat so defender adds 1
+  // white die. Per-figureKey 2026-05-13 (alexanbv).
+  if (game.barrageDefenseBonus?.[attackerFigureKey]) {
     game.pendingCombat.barrageAttack = true;
-    delete game.barrageDefenseBonus[msgId]; // consumed
+    delete game.barrageDefenseBonus[attackerFigureKey]; // consumed
   }
   // Fire Mission: +Blast 1
   if (game.fireMissionActive?.[msgId]) {

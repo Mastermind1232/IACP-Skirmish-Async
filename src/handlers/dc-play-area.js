@@ -1339,12 +1339,13 @@ async function buildAndSendAttackTargets(
     if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
     delete game.autofireChainTargetSpace[msgId];
   }
-  // Barrage (CT-1701) second attack: restrict targets to within 3 spaces of first target
-  if (game.barrageTargetSpace?.[msgId]) {
-    const _barrageSpace = game.barrageTargetSpace[msgId];
+  // Barrage (CT-1701) second attack: restrict targets to within 3 spaces of first target.
+  // Per-figureKey 2026-05-13 (alexanbv).
+  if (game.barrageTargetSpace?.[figureKey]) {
+    const _barrageSpace = game.barrageTargetSpace[figureKey];
     const _barrageFiltered = targets.filter(t => countSpaces(ms, _barrageSpace, t.coord, closedDoorEdges) <= 3);
     if (_barrageFiltered.length > 0) targets.splice(0, targets.length, ..._barrageFiltered);
-    delete game.barrageTargetSpace[msgId];
+    delete game.barrageTargetSpace[figureKey];
   }
   // Arcing Shot: validate each target — must be adjacent to an empty space in attacker's LOS
   if (game.arcingShotActive?.[msgId] || game.arcingShotActiveScalar) {

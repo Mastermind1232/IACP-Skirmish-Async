@@ -473,8 +473,8 @@ async function fireVadersFinestMove(thread, game, combat, effect, ctx) {
  */
 async function fireBurstFire(thread, game, combat, effect, ctx) {
   const { logGameAction, client, getMapData } = ctx;
-  if (combat.attackerMsgId && game.burstFirePendingMsgId?.[combat.attackerMsgId]) {
-    delete game.burstFirePendingMsgId[combat.attackerMsgId];
+  if (combat.attackerFigureKey && game.burstFirePendingMsgId?.[combat.attackerFigureKey]) {
+    delete game.burstFirePendingMsgId[combat.attackerFigureKey];
   }
   if (!combat._blastTargetCoord || !game.selectedMap?.id) return;
   const ms = getMapData?.(game.selectedMap.id);
@@ -506,8 +506,8 @@ async function fireBurstFire(thread, game, combat, effect, ctx) {
  */
 async function fireCripplingBlow(thread, game, combat, effect, ctx) {
   const { logGameAction, client } = ctx;
-  if (combat.attackerMsgId && game.cripplingBlowPending?.[combat.attackerMsgId]) {
-    delete game.cripplingBlowPending[combat.attackerMsgId];
+  if (combat.attackerFigureKey && game.cripplingBlowPending?.[combat.attackerFigureKey]) {
+    delete game.cripplingBlowPending[combat.attackerFigureKey];
   }
   const fk = combat.target?.figureKey;
   if (!fk) return;
@@ -530,8 +530,8 @@ async function fireCripplingBlow(thread, game, combat, effect, ctx) {
  */
 async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
   const { dcHealthState, logGameAction, client, deps } = ctx;
-  if (combat.attackerMsgId && game.disruptorRiflePending?.[combat.attackerMsgId]) {
-    delete game.disruptorRiflePending[combat.attackerMsgId];
+  if (combat.attackerFigureKey && game.disruptorRiflePending?.[combat.attackerFigureKey]) {
+    delete game.disruptorRiflePending[combat.attackerFigureKey];
   }
   const fk = combat.target?.figureKey;
   const targetMsgId = combat.target?.msgId;
@@ -653,8 +653,9 @@ function _stageChainAttack(combat, entry) {
  */
 async function fireTonfaStrike(thread, game, combat, effect, ctx) {
   if (!combat.attackerMsgId) return;
-  if (game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) {
-    delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
+  // Per-figureKey 2026-05-13: each figure has its own Tonfa Strike grant.
+  if (combat.attackerFigureKey && game.tonfaStrikeSecondAttack?.[combat.attackerFigureKey]) {
+    delete game.tonfaStrikeSecondAttack[combat.attackerFigureKey];
   }
   _stageChainAttack(combat, {
     source: 'Tonfa Strike',
@@ -673,8 +674,9 @@ async function fireTonfaStrike(thread, game, combat, effect, ctx) {
  */
 async function fireBarrage(thread, game, combat, effect, ctx) {
   if (!combat.attackerMsgId) return;
-  if (game.barrageSecondAttack?.[combat.attackerMsgId]) {
-    delete game.barrageSecondAttack[combat.attackerMsgId];
+  // Per-figureKey 2026-05-13.
+  if (combat.attackerFigureKey && game.barrageSecondAttack?.[combat.attackerFigureKey]) {
+    delete game.barrageSecondAttack[combat.attackerFigureKey];
   }
   // Capture target's position now (target may move/be removed during
   // defender step 8); chain-attack post-close uses this for the within-3 gate.
