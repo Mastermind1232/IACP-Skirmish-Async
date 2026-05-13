@@ -50,7 +50,10 @@ function buildMidActivation(attackerDc, defenderDc) {
   game.figurePositions[2][p2FigKey] = 'j11';
   game.dcActionsData = game.dcActionsData || {};
   game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-  game.attackPerformedThisActivation = { [dc.msgId]: true };
+  // attackPerformedThisActivation is keyed per-figureKey per IACP rule
+  // (alexanbv 2026-05-13) — each figure in a multifigure group has its
+  // own attack budget.
+  game.attackPerformedThisActivation = { [dc.figKey]: true };
   return { game, deps, dc };
 }
 

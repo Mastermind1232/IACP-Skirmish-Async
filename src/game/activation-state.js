@@ -157,6 +157,11 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // its own complete activation; a figure's pending free attack must not
   // be consumed by another figure in the group.
   'freeAttackBonusPending',
+  // Migrated 2026-05-13 from ACTIVATION_MSGID_FLAGS — same rule. The
+  // standard "1 attack per activation" cap is PER FIGURE, not per group.
+  // Without Assault, each figure in a multifigure group can still
+  // attack once on its own turn.
+  'attackPerformedThisActivation',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
@@ -534,7 +539,10 @@ const ROUND_OBJECT_FLAGS = [
   'priceBounties',
   'diplomaticMissionEvade',
   'lastResortTriggered',
-  'attackPerformedThisActivation',
+  // attackPerformedThisActivation MIGRATED 2026-05-13 to ACTIVATION_FIGKEY_FLAGS
+  // per alexanbv: in a multifigure group without Assault, EACH figure
+  // can attack once, not just one figure per group. Keying by msgId
+  // (group) was sharing the gate across figures and blocking siblings.
   'vadersFocusUsedThisRound',
   // Vader's Finest Attack+Move special: per-msgId flag set when the
   // special action button is clicked. Consumed in

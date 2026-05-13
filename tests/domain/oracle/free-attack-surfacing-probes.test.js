@@ -51,10 +51,11 @@ function buildAttackScenario(attackerDc, defenderDc) {
   game.figurePositions[1][dc.figKey] = 'j10';
   game.figurePositions[2][p2FigKey] = 'j11';
 
-  // Mid-activation: 1 action remaining, already attacked
+  // Mid-activation: 1 action remaining, this figure already attacked
+  // (figureKey-keyed per alexanbv 2026-05-13).
   game.dcActionsData = game.dcActionsData || {};
   game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-  game.attackPerformedThisActivation = { [dc.msgId]: true };
+  game.attackPerformedThisActivation = { [dc.figKey]: true };
 
   return { game, deps, dc };
 }

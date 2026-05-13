@@ -611,10 +611,15 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   game.lastAttackAttackerMsgId = combat.attackerMsgId ?? null;
   game.lastAttackAttackerFigureIndex = combat.attackerFigureIndex ?? 0;
   game.lastAttackTargetFigureKey = combat.target?.figureKey ?? null;
-  // Track that an attack was performed during this activation (for On a Diplomatic Mission, etc.)
-  if (combat.attackerMsgId) {
+  // Track that an attack was performed during this activation (for On a
+  // Diplomatic Mission, etc.). Per alexanbv 2026-05-13: keyed by the
+  // ATTACKING FIGURE, not the group's msgId — each figure in a multi-
+  // figure group has its own independent activation and the "1 attack
+  // per activation" cap is per-figure (Assault relaxes that for the
+  // figure, not the group).
+  if (combat.attackerFigureKey) {
     game.attackPerformedThisActivation = game.attackPerformedThisActivation || {};
-    game.attackPerformedThisActivation[combat.attackerMsgId] = true;
+    game.attackPerformedThisActivation[combat.attackerFigureKey] = true;
   }
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState

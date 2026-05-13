@@ -50,10 +50,12 @@ describe('PROBE-AS-001: No second attack after already attacked (without Assault
     const dc = getP1DcInfo(game, dcMessageMeta);
     assert.ok(dc, 'Should find P1 DC');
 
-    // Mid-activation: 1 action remaining, already attacked this activation
+    // Mid-activation: 1 action remaining, this figure already attacked
+    // this activation. Per alexanbv 2026-05-13: the flag is keyed by
+    // figureKey (per-figure), not msgId (per-group).
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-    game.attackPerformedThisActivation = { [dc.msgId]: true };
+    game.attackPerformedThisActivation = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const attackActions = actions.filter(a => a.type === 'attack_target');

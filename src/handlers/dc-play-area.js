@@ -2252,8 +2252,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** is **Stunned** and cannot Move or Attack this activation.`, ephemeral: true }).catch(discordCatch);
       return;
     }
-    // Assault rule: non-Assault DCs can only perform 1 attack per activation (free attacks exempt)
-    if (game.attackPerformedThisActivation?.[msgId]) {
+    // Assault rule: non-Assault DCs can only perform 1 attack per
+    // activation, per figure (alexanbv 2026-05-13: keyed by figureKey
+    // so siblings in a multifigure group each get their own attack).
+    // Free attacks bypass.
+    if (game.attackPerformedThisActivation?.[figureKey]) {
       const isFreeAttack = hasFellSwoopFreeAttack || hasPummelFreeAttack ||
         game.freeAttackBonusPending?.[figureKey] != null || game.pounceAttackPending?.[msgId] != null;
       // Imperial Retrofitting: multi-attack bypass

@@ -1038,7 +1038,11 @@ export async function handleDcEndActivation(interaction, ctx) {
   {
     const _odmUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _odmExh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
-    if (cardNameIncludes(_odmUpgrades, 'On a Diplomatic Mission') && !cardNameIncludes(_odmExh, 'On a Diplomatic Mission') && !game.attackPerformedThisActivation?.[msgId]) {
+    // attackPerformedThisActivation is now figureKey-keyed (alexanbv
+    // 2026-05-13). Group-scope "no attack" means none of the group's
+    // figures attacked this activation.
+    const _odmAnyFigAttacked = figureKeys.some((fk) => !!game.attackPerformedThisActivation?.[fk]);
+    if (cardNameIncludes(_odmUpgrades, 'On a Diplomatic Mission') && !cardNameIncludes(_odmExh, 'On a Diplomatic Mission') && !_odmAnyFigAttacked) {
       const _odmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_evade`).setLabel('+1 Evade (rest of round)').setStyle(ButtonStyle.Primary),
@@ -1051,8 +1055,13 @@ export async function handleDcEndActivation(interaction, ctx) {
       });
     }
   }
-  // Clean up attack tracking for this activation
-  if (game.attackPerformedThisActivation?.[msgId]) delete game.attackPerformedThisActivation[msgId];
+  // Clean up attack tracking for this activation — per-figureKey now
+  // (alexanbv 2026-05-13). Clear every figure in the activated group.
+  if (game.attackPerformedThisActivation) {
+    for (const fk of figureKeys) {
+      if (game.attackPerformedThisActivation[fk]) delete game.attackPerformedThisActivation[fk];
+    }
+  }
 
   // Squad Swarm: after ending activation, offer to activate another DC with the same name (combined cost ≤ 15)
   if (game.squadSwarmPlayerNum === meta.playerNum) {

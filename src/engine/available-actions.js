@@ -766,9 +766,12 @@ function getActivationActions(game, playerNum, deps) {
       }
 
       // Attack: compute individual targets if deps available (stunned figures cannot attack)
-      // Enforce 1-attack-per-activation rule: if already attacked, only offer attack if
-      // the DC has Assault, or a free/bonus attack is pending.
-      const alreadyAttacked = !!game.attackPerformedThisActivation?.[msgId];
+      // Enforce 1-attack-per-activation rule PER FIGURE (alexanbv
+      // 2026-05-13): if THIS figure already attacked, only offer attack
+      // if the DC has Assault, or a free/bonus attack is pending. The
+      // flag is keyed by figureKey so siblings in a multifigure group
+      // remain eligible.
+      const alreadyAttacked = !!game.attackPerformedThisActivation?.[figureKey];
       let attackBlocked = false;
       if (alreadyAttacked) {
         const hasFreeAttack = game.freeAttackBonusPending?.[figureKey] != null
