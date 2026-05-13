@@ -790,9 +790,12 @@ export async function handleIllicitArms(interaction, ctx) {
     clearPendingIllicitArms(game);
     if (game.pendingCombat) game.pendingCombat.illicitArmsResolved = true;
     saveGames(game.gameId);
+    // Per alexanbv 2026-05-13: Illicit Arms is a step-4 ATTACKER
+    // modifier now (migrated from proceedAfterRerolls). Re-enter
+    // sendModsYn(attacker) so the basic mods Y/N gate still fires
+    // after the Illicit Arms decision.
     if (thread && game.pendingCombat) {
-      const { proceedAfterRerolls } = await import('./combat.js');
-      await proceedAfterRerolls(thread, game, game.pendingCombat, ctx);
+      await sendModsYn(thread, game, game.pendingCombat, 'attacker');
     }
     return;
   }
@@ -871,9 +874,10 @@ export async function handleIllicitArms(interaction, ctx) {
     clearPendingIllicitArms(game);
     if (game.pendingCombat) game.pendingCombat.illicitArmsResolved = true;
     saveGames(game.gameId);
+    // Per alexanbv 2026-05-13: re-enter sendModsYn(attacker) so the
+    // basic step-4 mods Y/N still fires after the Illicit Arms pick.
     if (thread && game.pendingCombat) {
-      const { proceedAfterRerolls } = await import('./combat.js');
-      await proceedAfterRerolls(thread, game, game.pendingCombat, ctx);
+      await sendModsYn(thread, game, game.pendingCombat, 'attacker');
     }
     return;
   }

@@ -1588,23 +1588,32 @@ export async function handleAttackTarget(interaction, ctx) {
     game.nextAttackBonusSurgeAbilities[attackerFigureKey] = game.nextAttackBonusSurgeAbilities[attackerFigureKey] || [];
     game.nextAttackBonusSurgeAbilities[attackerFigureKey].push('utinni_vp_1');
   }
-  // Merciless (HK Assassin Droid Elite): if defender has harmful conditions, 1 Damage
+  // Merciless (HK Assassin Droid Elite): "When you declare an attack,
+  // if the defender has any HARMFUL conditions, it suffers 1 Damage."
+  // Per alexanbv 2026-05-13: this is an on-declare ability and the
+  // attacker controls when it fires (other on-declare effects may
+  // add HARMFUL conditions first). Register eligibility for the
+  // on-declare ability bucket; the actual damage application fires
+  // when the attacker clicks "Use Merciless" via handleMercilessUse.
+  // The click re-checks the HARMFUL condition at click time so the
+  // ability respects mid-window condition changes.
   if ((_atkEff?.passives || []).includes('Merciless')) {
     const _merDefConds = game.figureConditions?.[target.figureKey] || [];
     const _merHarmful = ['Bleed', 'Stun', 'Weaken'].some(c => _merDefConds.includes(c));
     if (_merHarmful) {
       const _merDefPn2 = opponentPlayerNum(attackerPlayerNum);
       const _merTargetMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, _merDefPn2, target.figureKey) : null;
-      if (_merTargetMsgId && dcHealthState) {
-        const _merFkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
-        const _merFigIdx = _merFkMatch ? parseInt(_merFkMatch[2], 10) : 0;
-        await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-          figureKey: target.figureKey, msgId: _merTargetMsgId, figIndex: _merFigIdx,
-          amount: 1, controllerPlayerNum: _merDefPn2,
-          attackerPlayerNum, source: 'Merciless',
-        });
+      if (_merTargetMsgId) {
+        // Eligibility recorded for the on-declare bucket; the actual
+        // damage fires on user click (handleMercilessUse).
+        game.pendingCombat.mercilessAvailable = {
+          targetFigureKey: target.figureKey,
+          targetMsgId: _merTargetMsgId,
+          attackerPlayerNum,
+          defenderPlayerNum: _merDefPn2,
+          targetLabel: target.label,
+        };
       }
-      await logGameAction(game, client, `⚡ **Merciless** — **${target.label}** suffers 1 Damage (has harmful condition).`, { phase: 'ROUND', icon: 'attack' });
     }
   }
   // Aim (Rebel Trooper Elite): if the target has already suffered damage during this group's activation, +1 Hit +2 Accuracy
@@ -4197,6 +4206,80 @@ async function _fireExhaustOnConsume(game, entry, thread) {
 }
 
 /**
+ * Per alexanbv 2026-05-13: Merciless (HK Assassin Droid Elite) is an
+ * on-declare ability the ATTACKER controls. Card text: "When you
+ * declare an attack, if the defender has any HARMFUL conditions, it
+ * suffers 1 Damage." Surfaces as a "Use Merciless" button in the
+ * attacker's on-declare window. Click → re-check defender has a
+ * HARMFUL condition (skip if not — mid-window changes respected) →
+ * apply 1 Damage via the pipeline → mark used.
+ *
+ * Skip button: `merciless_skip_<gameId>` records the player's
+ * decision so the bucket button doesn't re-render after a sub-window
+ * re-entry. The ability stays unused for the rest of the attack.
+ */
+export async function handleMerciless(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames, client, dcHealthState, logGameAction } = ctx;
+  const isUse = interaction.customId.startsWith('merciless_use_');
+  const isSkip = interaction.customId.startsWith('merciless_skip_');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'merciless_use_' : 'merciless_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || !combat.mercilessAvailable) {
+    await interaction.followUp({ content: 'Merciless is no longer available.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const _mercInfo = combat.mercilessAvailable;
+  if (!await requirePlayer(interaction, game, interaction.user.id, _mercInfo.attackerPlayerNum, canActAsPlayer, 'Only the attacker can resolve Merciless.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  try {
+    const _disabledRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) newRow.addComponents(ButtonBuilder.from(c).setDisabled(true));
+      return newRow;
+    });
+    if (_disabledRows.length > 0) await interaction.message.edit({ components: _disabledRows }).catch(discordCatch);
+  } catch { /* non-fatal */ }
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (isSkip) {
+    combat.mercilessUsed = true; // record decision; ability won't re-prompt
+    delete combat.mercilessAvailable;
+    if (thread) await thread.send('**Merciless** — Skipped.').catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  // Re-check HARMFUL condition at click time — mid-window effects may
+  // have added or removed conditions.
+  const _mercConds = game.figureConditions?.[_mercInfo.targetFigureKey] || [];
+  const _mercHarmful = ['Bleed', 'Stun', 'Weaken'].some(c => _mercConds.includes(c));
+  if (!_mercHarmful) {
+    combat.mercilessUsed = true;
+    delete combat.mercilessAvailable;
+    if (thread) await thread.send(`**Merciless** — Defender no longer has a HARMFUL condition; ability has no effect.`).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  const _mercFkMatch = _mercInfo.targetFigureKey.match(/-(\d+)-(\d+)$/);
+  const _mercFigIdx = _mercFkMatch ? parseInt(_mercFkMatch[2], 10) : 0;
+  await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+    figureKey: _mercInfo.targetFigureKey,
+    msgId: _mercInfo.targetMsgId,
+    figIndex: _mercFigIdx,
+    amount: 1,
+    controllerPlayerNum: _mercInfo.defenderPlayerNum,
+    attackerPlayerNum: _mercInfo.attackerPlayerNum,
+    source: 'Merciless',
+  });
+  if (logGameAction) await logGameAction(game, client, `⚡ **Merciless** — **${_mercInfo.targetLabel}** suffers 1 Damage (has HARMFUL condition).`, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  if (thread) await thread.send(`⚡ **Merciless** — **${_mercInfo.targetLabel}** suffers 1 Damage.`).catch(discordCatch);
+  combat.mercilessUsed = true;
+  delete combat.mercilessAvailable;
+  saveGames(game.gameId);
+}
+
+/**
  * Per alexanbv 2026-05-13: shared post-reroll trigger helper. The
  * legacy voluntary-reroll decrement path (lines ~4830) and the
  * controlled-reroll sub-picker path (lines ~4700) both need to fire:
@@ -6341,6 +6424,40 @@ export async function sendModsYn(thread, game, combat, role) {
       }).catch(discordCatch);
       return;
     }
+    // Per alexanbv 2026-05-13: Illicit Arms (Bib Fortuna passive) is a
+    // step-4 ATTACKER modifier. Previously fired from proceedAfterRerolls
+    // — AFTER both attacker and defender mods. That's the wrong stage.
+    // Detect eligibility here and post the prompt before the basic Y/N;
+    // handleIllicitArms re-enters sendModsYn(attacker) after resolution.
+    if (!combat.illicitArmsResolved && !game.pendingIllicitArms) {
+      const _iaDcEff = getDcEffectsGlobal() || {};
+      const _iaFriendlyPos = game.figurePositions?.[combat.attackerPlayerNum] || {};
+      for (const [_iaFk, _iaPos] of Object.entries(_iaFriendlyPos)) {
+        if (!_iaPos) continue;
+        const _iaFkDcName = dcNameFromFigureKey(_iaFk);
+        const _iaFkEff = _iaDcEff[_iaFkDcName] || _iaDcEff[_iaFkDcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!isIllicitArmsEligibleFigure(_iaFkEff)) continue;
+        const _iaHand = getCcHand(game, combat.attackerPlayerNum) || [];
+        if (_iaHand.length === 0) { combat.illicitArmsResolved = true; break; }
+        setPendingIllicitArms(game, {
+          gameId: game.gameId,
+          playerNum: combat.attackerPlayerNum,
+          bibFigureKey: _iaFk,
+          bibDcName: _iaFkDcName,
+          combatThreadId: thread.id,
+        });
+        const _iaRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`illicit_arms_use_${gameId}`).setLabel('Use Illicit Arms (+1 Damage)').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId(`illicit_arms_skip_${gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+        );
+        await thread.send(sanitizeMentions({
+          content: `<@${ownerId}> **Illicit Arms** (${_iaFkDcName}) — Step 4 attacker modifier: discard 1 Command card to apply **+1 Hit** to this attack?`,
+          components: [_iaRow],
+          allowedMentions: { users: [ownerId] },
+        })).catch(discordCatch);
+        return;
+      }
+    }
   }
 
   // Per alexanbv 2026-05-12: Zillo Technique discard is a step-4
@@ -6651,47 +6768,10 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     combat.heavyRepeaterResolved = true;
   }
 
-  // Illicit Arms (Bib Fortuna): step-4 attacker modifier — while a friendly
-  // figure with Illicit Arms is in the attacker's army, attacker may
-  // discard 1 CC from hand to apply +1 Hit to this attack. Limit once per
-  // attack. Moved here from attack-declare per alexanbv 2026-05-09.
-  if (!combat.illicitArmsResolved && !game.pendingIllicitArms) {
-    const _iaDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const friendlyPosIA = game.figurePositions?.[combat.attackerPlayerNum] || {};
-    let bibFound = false;
-    for (const [fk, pos] of Object.entries(friendlyPosIA)) {
-      if (bibFound) break;
-      if (!pos) continue;
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = _iaDcEff[fkDcName] || _iaDcEff[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-      if (!isIllicitArmsEligibleFigure(fkEff)) continue;
-      const bibOwnerHand = getCcHand(game, combat.attackerPlayerNum) || [];
-      if (bibOwnerHand.length === 0) {
-        combat.illicitArmsResolved = true;
-        bibFound = true;
-        break;
-      }
-      const atkOwnerId = getPlayerId(game, combat.attackerPlayerNum);
-      setPendingIllicitArms(game, {
-        gameId: game.gameId,
-        playerNum: combat.attackerPlayerNum,
-        bibFigureKey: fk,
-        bibDcName: fkDcName,
-        combatThreadId: thread.id,
-      });
-      const iaRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`illicit_arms_use_${game.gameId}`).setLabel('Use Illicit Arms (+1 Damage)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`illicit_arms_skip_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-      );
-      await thread.send(sanitizeMentions({
-        content: `<@${atkOwnerId}> **Illicit Arms** (${fkDcName}) — Step 4 modifier: discard 1 Command card to apply **+1 Hit** to this attack?`,
-        components: [iaRow],
-        allowedMentions: { users: [atkOwnerId] },
-      })).catch(discordCatch);
-      saveGames?.(game.gameId);
-      return;
-    }
-  }
+  // Illicit Arms (Bib Fortuna) moved to sendModsYn(attacker) per
+  // alexanbv 2026-05-13 — it's a step-4 ATTACKER modifier, so it
+  // belongs alongside Guidance Systems in the attacker mods window,
+  // BEFORE defender mods. Detection block lives in sendModsYn now.
 
   // Lasat Honor Guard moved to _enterStep4 per alexanbv 2026-05-11
   // (strictly between reroll buckets and step-4 modifiers). lasatHonorGuardUsed
@@ -7015,6 +7095,30 @@ export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) 
   // Post the picker(s) once per attack BEFORE the token window opens.
   if (role === 'attacker') {
     await _postOnDeclareDieSwapPrompts(thread, game, combat, ctx);
+    // Per alexanbv 2026-05-13: Merciless (HK Assassin Elite) is an
+    // on-declare ability the attacker controls. Surface as a "Use
+    // Merciless" button if eligibility was registered at attack
+    // declare (combat.mercilessAvailable). Click re-checks the
+    // HARMFUL condition at click time so mid-window changes are
+    // respected.
+    if (combat.mercilessAvailable && !combat.mercilessUsed) {
+      const _mercBtn = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`merciless_use_${game.gameId}`)
+          .setLabel(`Use Merciless (1 Damage to ${combat.mercilessAvailable.targetLabel})`)
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`merciless_skip_${game.gameId}`)
+          .setLabel('Skip Merciless')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      const _mercOwnerId = combat.mercilessAvailable.attackerPlayerNum === 1 ? game.player1Id : game.player2Id;
+      await thread.send(sanitizeMentions({
+        content: `<@${_mercOwnerId}> **Merciless** — On-declare: deal 1 Damage to the defender (currently has HARMFUL condition).`,
+        allowedMentions: { users: [_mercOwnerId] },
+        components: [_mercBtn],
+      })).catch(discordCatch);
+    }
   }
   const ownTokens = getEligibleTokens(game, figKey, role);
   const cohesion = (combat.squadCohesionTokens?.[role] || []);
