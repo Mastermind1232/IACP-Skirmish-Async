@@ -28,42 +28,82 @@ exception, only when card text explicitly says "group".** Specifically:
 
 ## Already migrated this session (alexanbv 2026-05-13)
 
-**8 grouped commits, ~42 flags now per-figureKey.**
+**16 grouped commits, ~60 flags now per-figureKey / properly categorized.**
 
-Commit map:
+Commit map (first 8 commits, earlier batch):
 - `997b5cc3` — attackPerformedThisActivation (original multifig bug)
 - `165ce220` — pounceAttackPending, fellSwoopFreeAttack, pummelTwoAttacksThisActivation, pummelAttacksRemaining, imperialRetrofittingMultiAttack
 - `9af310ce` — stayDownPendingMsgId, burstFirePendingMsgId, cripplingBlowPending, disruptorRiflePending, tonfaStrikeSecondAttack, barrageSecondAttack, barrageTargetSpace, barrageDefenseBonus, overrunThisActivation, overrunDamagedThisMove; setTrapSpace → ROUND_OBJECT_FLAGS
 - `58e76a98` — wookieeAvengerSlamUsed, specialActionUsedThisActivation, activationDoubleSpecialAction, activationKills, paybackBonusSurge
 - `78204a92` — closeQuartersActive, mobileMovementActive, darksaberSecondAttack, attackDicePenaltyForMsgId, pendingSlingBarrage, arcingShotActive
 - `a0580129` — selfDestructProtocolTriggered, selfDefeatsAfterAttackMsgId, postActivationConditions, nextAttackIgnoreFigureLOS, optimalBombardmentBlastBonus, activationDamagedFigures (key migration only)
-- `f48fe2…` (autofire trio) — autofireActive, fireMissionActive, autofireChainTargetSpace
-- (Aim rewrite + figureKey-keyed) — Aim now reads `figureMoved[attackerFigureKey]` per the card's "if you have not exited your space" text; printed Elite "group" wording flagged as incorrect
-- (this commit) — activationExtraActionThenStun, beastTamerInteractOverride, freeAttackDifferentTargets
+- `a136447f` (autofire trio) — autofireActive, fireMissionActive, autofireChainTargetSpace
+- `b0e082ad` — activationExtraActionThenStun, beastTamerInteractOverride, freeAttackDifferentTargets
+- `b6edcfc7` (Aim rewrite) — Aim now reads `figureMoved[attackerFigureKey]` per the card's "if you have not exited your space" text
 
-## Pending migration (queued for follow-up commits)
+Commit map (this session continuation, 7 more commits):
+- `c15038c0` — recategorize 4 playerNum-keyed flags off the MSGID list:
+  applySelfStunAfterAttackFigureKey, findsmanMeditationTarget,
+  deflectionPending, deflectionUnconditional → ACTIVATION_PLAYERNUM_FLAGS
+- `d08b65c3` — reverseEngineerActive → PLAYERNUM (was playerNum-keyed);
+  pendingMultiTargetRoll (Trample chained picker) → FIGKEY
+- `40e48da4` — paybackBonusSurge → FIGKEY (already keyed by
+  attackerFigureKey at writes); dropped dead spotWeldPending +
+  pendingPostAttackConditions registrations
+- `eaa0c752` — activationKills → FIGKEY (already keyed by
+  attackerFigureKey at writes); removed obsolete 22-flag
+  _PER_FIGURE_RESET_MSGID_FLAGS block in handleDcFigurePick (every
+  entry had already migrated to FIGKEY/PLAYERNUM/ROUND)
+- `76283c7e` (BIG) — forcedAttackTarget → FIGKEY across 7 source files
+  + 2 test files. Firing Squad redesigned to use firingSquadLockedTarget
+  as fallback at attack-declare gate (lock is invocation-scoped, not
+  per-figure, since Kayn can grant attacks to multiple troopers in
+  the same group). Battlefield Leadership grantee, Shoulder Rush,
+  Leia/Jyn Hair Trigger, Mandalorian Whip, Focus Fire, Return Fire all
+  now key by attacker figureKey.
+- `6d2ca0c1` — falseOrdersAttackTargets → FIGKEY (keyed by
+  controlledFigureKey, not the group msgId)
+- `67495b3a` — pendingStaticPulse, pendingForceCardPick, yhsiwOptions
+  recategorized → ACTIVATION_SCALAR_FLAGS (global objects/arrays, not
+  msgId-keyed maps). Static Pulse + Force Card Pick also moved off
+  ROUND_OBJECT_FLAGS (which resets to `{}`) to ROUND_DELETE_FLAGS
+  (latent bug: truthy `{}` would suppress first-call gate).
 
-Multi-step picker state machines — risky to migrate without careful
-picker-continuation testing. Each needs its own dedicated commit:
+## Pending migration (remaining queue)
 
-- `pendingMissileSalvo` (10+ sites — BT-1 multi-die salvo picker; BT-1
-  is single-figure so msgId↔figureKey equivalence today)
-- `pendingPounceSpaceChoice` (8 sites — Loth-cat / Force Leap empty-space
-  picker continuation; multi-step `validSpaces` + `targetFigureKey`)
-- `pendingBoRifle` (3 sites — Bo-Rifle melee-die-type picker)
-- `pendingBombDrop` (4 sites — Devaron B mission Bomb Drop space picker)
-- `pendingOverwatchPlacement` (5 sites — Overwatch token placement)
-- `pendingCombatResupply` (4 sites — Resupply CC pick-CC-from-deck)
-- `pendingPostAttackConditions` (4 sites — after-attack condition apply queue)
-- `pendingMpBonus` (4 sites — read at SoA but no live writers; effectively dead)
-- `forcedAttackTarget` (~15 sites — Return Fire / Focus Fire / Mandalorian
-  Whip / Battlefield Leadership / Slow on the Draw chain-attack target lock.
-  Many different write sources keying off different msgId contexts. **Risky
-  single-commit migration**; needs careful per-flow audit.)
+**The big one (deferred — own commit night):**
 - `pendingOverrideAttackDice` (~66 sites — attack-dice override for many
-  special actions. **Biggest surface — needs own commit.**)
-- `falseOrdersAttackTargets` (3 sites — False Orders eligible targets list)
-- `rushPending` / `shoulderRushPending` (push-interrupt msgId state)
+  special actions: Arsenal, Vanguard, Bo-Rifle Staff, Saber Strike,
+  Darksaber, Wookie Sling Barrage, Heavy Repeater, etc.). Each write
+  site has different context for the figure derivation. Migration
+  surface too large for the same session as forcedAttackTarget;
+  belongs in its own focused commit.
+
+**Picker state machines — single-figure or 1-attack scope today:**
+Most of these are tied to single-figure deployment groups (Bantha,
+BT-1, Cad Bane, Bodhi) or to an action whose msgId↔figureKey is 1:1
+during the picker window. Migration is principle-only:
+
+- `pendingMissileSalvo` (10+ sites — BT-1 single-figure)
+- `pendingPounceSpaceChoice` (8 sites — Loth-cat / Force Leap continuation;
+  also wired into AI/self-play, more sites)
+- `pendingBoRifle` (3 sites — Bo-Rifle die-type picker)
+- `pendingBombDrop` (4 sites — Devaron B mission)
+- `pendingOverwatchPlacement` (5 sites — Overwatch token placement)
+- `pendingCombatResupply` (4 sites — Bodhi single-figure)
+- `pendingOnAMissionPush` (move-x per-step push hook)
+- `wildBeastUsedThisActivation` (Bantha single-figure)
+
+**Dead in production (tests still exercise legacy reader path):**
+- `rushPending` / `shoulderRushPending` — Rush + Shoulder Rush moved to
+  pendingMoveX continuation (`nextAction.type: rushPostMove` /
+  `shoulderRushPostMove`); no production writers remain, but the
+  movement.js legacy reader is still tested.
+- `pendingMpBonus` — readers in activation-setup.js still consume any
+  value present; no writers in main. Kept registered so the
+  activation-cost-behavioral cleanup test still passes.
+- `deviceRerollGranted` — already noted as unused in
+  `RF_BASELINE_UNUSED`; no live sites.
 
 ## KEEP — per-DC / per-attack (UI state + per-attack-frame)
 
