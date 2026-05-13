@@ -307,8 +307,9 @@ describe('B-DCATT-004: Darksaber Strike — multi-pending setup', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    // pendingOverrideAttackDice with red die + melee + darksaberBlastToCleave
-    const override = game.pendingOverrideAttackDice?.[MSG_ID];
+    // pendingOverrideAttackDice with red die + melee + darksaberBlastToCleave.
+    // Per alexanbv 2026-05-13: keyed by activator figureKey.
+    const override = game.pendingOverrideAttackDice?.['Test Trooper-1-0'];
     assert.ok(override, 'pendingOverrideAttackDice set');
     assert.deepStrictEqual(override.dice, ['red'], 'override dice = [red]');
     assert.strictEqual(override.type, 'melee', 'override type = melee');

@@ -338,7 +338,9 @@ export async function handleDcUnactivate(interaction, ctx) {
   if (game.dcFinishedPinged?.[msgId]) delete game.dcFinishedPinged[msgId];
   if (game.pendingEndTurn?.[msgId]) delete game.pendingEndTurn[msgId];
   if (game.hitAndRunPendingMp?.msgId === msgId) delete game.hitAndRunPendingMp;
-  if (game.pendingOverrideAttackDice?.[msgId]) delete game.pendingOverrideAttackDice[msgId];
+  // pendingOverrideAttackDice migrated to figureKey-keyed 2026-05-13.
+  // cleanupActivation below wipes via ACTIVATION_FIGKEY_FLAGS for each
+  // figure of this DC, so no explicit per-msgId delete is needed here.
   // saberOrbitAttacksRemaining is figureKey-keyed (2026-05-09) and
   // cleared by ACTIVATION_FIGKEY_FLAGS in cleanupActivation; no manual
   // msgId sweep here.
@@ -1068,8 +1070,9 @@ async function buildAndSendAttackTargets(
   { dgIndex, attackerPos, attackerKws, minRange, effectiveMaxRange, ms, playerNum, enemyPlayerNum, stats, excludeFigureKeys }
 ) {
   const { getDcEffects, getDcStats, getFigureSize, getFootprintCells, getRange, hasLineOfSight, dcMessageMeta, FIGURE_LETTERS, getMapTokensData } = ctx;
-  // Definition: 'Love' (attackOverrideOpts.minRange) — override minRange before target filtering
-  const _overrideMinRange = game.pendingOverrideAttackDice?.[msgId]?.minRange;
+  // Definition: 'Love' (attackOverrideOpts.minRange) — override minRange before target filtering.
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+  const _overrideMinRange = game.pendingOverrideAttackDice?.[figureKey]?.minRange;
   if (_overrideMinRange != null && _overrideMinRange > minRange) minRange = _overrideMinRange;
   // Priority Target (LOS-ignoring): Loku Kanoloa + Rebel Saboteur Elite have it in abilityText.
   // MASSIVE figures also ignore figure blocking. (Intercept-defender PT is checked separately below.)
@@ -1134,7 +1137,7 @@ async function buildAndSendAttackTargets(
   // the attack-target click handler.)
   const _ccHand = game[ccHandKey(playerNum)] || [];
   const marksmanInHand = !marksmanActive
-    && (stats?.attack?.type === 'range' || (game.pendingOverrideAttackDice?.[msgId]?.type === 'range'))
+    && (stats?.attack?.type === 'range' || (game.pendingOverrideAttackDice?.[figureKey]?.type === 'range'))
     && cardNameIncludes(_ccHand, 'Marksman');
   const allFigureBlockingCoords = buildFigureBlockingCoords(game, playerNum, attackerPos, attackerSize, ctx, {
     marksmanActive,
@@ -1802,8 +1805,9 @@ export async function handleDcBoRifleAttack(interaction, ctx) {
   game.boRifleStaffUsedThisActivation[_brFigureKey] = true;
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   game.freeAttackBonusPending[_brFigureKey] = true;
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
   game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-  game.pendingOverrideAttackDice[msgId] = { type: 'melee', dice: ['red', 'red'], pierce: 0, bonusAccuracy: 0 };
+  game.pendingOverrideAttackDice[_brFigureKey] = { type: 'melee', dice: ['red', 'red'], pierce: 0, bonusAccuracy: 0 };
   const _newId = `dc_attack_${msgId}_f${figureIndexStr}`;
   try {
     Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
@@ -2309,7 +2313,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const atkSpecialIds = attackerEffects?.specialAbilityIds || [];
     const hasArsenal = atkSpecialIds.includes('arsenal');
     const hasEpicArsenal = atkSpecialIds.includes('epic_arsenal');
-    if ((hasArsenal || hasEpicArsenal) && !game.pendingOverrideAttackDice?.[msgId]) {
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    if ((hasArsenal || hasEpicArsenal) && !game.pendingOverrideAttackDice?.[figureKey]) {
       const diceCount = hasEpicArsenal ? 3 : 2;
       const abilityName = hasEpicArsenal ? 'Epic Arsenal' : 'Arsenal';
       const displayName_ = meta.displayName || meta.dcName;
@@ -2381,7 +2386,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (hasVanguard && game.pendingVanguardSwap?.[msgId] === 'decided') {
       delete game.pendingVanguardSwap[msgId];
     }
-    if (hasVanguard && !game.pendingVanguardSwap?.[msgId] && !game.pendingOverrideAttackDice?.[msgId]) {
+    if (hasVanguard && !game.pendingVanguardSwap?.[msgId] && !game.pendingOverrideAttackDice?.[figureKey]) {
       // Only offer if at least one valid hostile is within 3 of the
       // attacker (regular opp figure OR hostility != 'neutral' NPC).
       const _vgOppPN = opponentPlayerNum(playerNum);
@@ -2434,7 +2439,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     } // end legacy pre-target die-swap pickers (retired)
     // Bo-Rifle (Agent Kallus): before declaring attack, may switch to melee (replace blue→red)
-    if (atkSpecialIds.includes('bo_rifle_kallus') && !game.pendingOverrideAttackDice?.[msgId]) {
+    if (atkSpecialIds.includes('bo_rifle_kallus') && !game.pendingOverrideAttackDice?.[figureKey]) {
       const baseDice = stats.attack?.dice || [];
       if (baseDice.includes('blue') && stats.attack?.type === 'range') {
         const meleeDice = baseDice.map(d => d === 'blue' ? 'red' : d);
@@ -2754,11 +2759,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
     // The Darksaber: Special Action — Melee attack with 1 red die, Blast→Cleave, then may perform an attack
     if (_suHandler === 'Darksaber Strike') {
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { dice: ['red'], type: 'melee', darksaberBlastToCleave: true };
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _dsFk = figureKeyForActivation(game, msgId, figureIndex);
-      if (_dsFk) game.freeAttackBonusPending[_dsFk] = { from: 'Darksaber Strike' };
+      // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+      if (_dsFk) {
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[_dsFk] = { dice: ['red'], type: 'melee', darksaberBlastToCleave: true };
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[_dsFk] = { from: 'Darksaber Strike' };
+      }
       // Grant a second free attack after this one (the "then may perform
       // an attack"). Per alexanbv 2026-05-13: per-figureKey.
       game.darksaberSecondAttack = game.darksaberSecondAttack || {};
@@ -3632,8 +3640,12 @@ export async function handleArsenalPick(interaction, ctx) {
   if (await replyIfGameEnded(game, interaction)) return;
 
   const chosenDice = interaction.values[0].split(',');
-  game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-  game.pendingOverrideAttackDice[msgId] = { dice: chosenDice };
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+  const _arsFk = figureKeyForActivation(game, msgId, figureIndex);
+  if (_arsFk) {
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[_arsFk] = { dice: chosenDice };
+  }
   saveGames(game.gameId);
 
   const stats = getDcStats(meta.dcName);
@@ -3695,8 +3707,12 @@ export async function handleEe3DiePick(interaction, ctx) {
     const baseDice = [...(stats.attack?.dice || ['red'])];
     const idx = baseDice.indexOf(color);
     if (idx !== -1) baseDice[idx] = 'red';
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { dice: baseDice };
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    const _ee3Fk = figureKeyForActivation(game, msgId, figureIndex);
+    if (_ee3Fk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_ee3Fk] = { dice: baseDice };
+    }
   }
   game.pendingEe3Carbine[msgId] = 'decided';
   saveGames(game.gameId);
@@ -3759,8 +3775,12 @@ export async function handleVanguardDiePick(interaction, ctx) {
     const baseDice = [...(stats.attack?.dice || ['red'])];
     const idx = baseDice.indexOf(color);
     if (idx !== -1) baseDice[idx] = 'red';
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { dice: baseDice };
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    const _vgFk = figureKeyForActivation(game, msgId, figureIndex);
+    if (_vgFk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_vgFk] = { dice: baseDice };
+    }
     // Tag so the post-target check can revert if target ends up >3 spaces.
     game.pendingVanguardSwap[msgId] = 'swapped';
     await interaction.message.edit({ content: `**Vanguard** — ${color[0].toUpperCase() + color.slice(1)} → Red.`, components: [] }).catch(discordCatch);
@@ -3820,10 +3840,14 @@ export async function handleBoRiflePick(interaction, ctx) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
 
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+  const _brHandlerFk = figureKeyForActivation(game, msgId, figureIndex);
   if (choice === 'use' && game.pendingBoRifle?.[msgId]) {
     const meleeDice = game.pendingBoRifle[msgId].meleeDice;
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { dice: meleeDice, type: 'melee' };
+    if (_brHandlerFk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_brHandlerFk] = { dice: meleeDice, type: 'melee' };
+    }
     await interaction.message.edit({ content: `**Bo-Rifle** — Melee mode active (${meleeDice.map(d => d[0].toUpperCase() + d.slice(1)).join('+')}).`, components: [] }).catch(discordCatch);
   } else {
     await interaction.message.edit({ content: '**Bo-Rifle** — Skipped (normal ranged attack).', components: [] }).catch(discordCatch);
@@ -3840,8 +3864,9 @@ export async function handleBoRiflePick(interaction, ctx) {
   const _brFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const _loadoutCard = getLoadoutCards()[getConfig(game, _brFigKey)?.loadout];
   const hasReach = attackerKws.includes('REACH') || (attackerEffects?.passives || []).some((p) => String(p).toUpperCase() === 'REACH') || !!game.nextAttackReach?.[_brFigKey] || _loadoutCard?.passive === 'Reach' || _hasFuryReach(game, meta.playerNum, attackerKws);
-  // If Bo-Rifle mode, override range to melee
-  const brOverride = game.pendingOverrideAttackDice?.[msgId];
+  // If Bo-Rifle mode, override range to melee.
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+  const brOverride = game.pendingOverrideAttackDice?.[_brHandlerFk];
   const effectiveMinRange = brOverride?.type === 'melee' ? 1 : minRange;
   const effectiveMaxRange_ = brOverride?.type === 'melee' ? (hasReach ? 2 : 1) : (hasReach && maxRange < 2 ? 2 : maxRange);
   const ms = getMapData(game.selectedMap?.id);

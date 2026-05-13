@@ -81,7 +81,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // freeAttackDifferentTargets MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
-  'pendingOverrideAttackDice',
+  // pendingOverrideAttackDice MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure attack-frame override; was the largest
+  // remaining msgId-keyed surface ~50 sites).
   // pendingSlingBarrage MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // attackTypeOverride + overheatedActive moved to
   // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
@@ -264,6 +266,10 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // alexanbv 2026-05-13 thirteenth-wave: False Orders target list
   // keyed by controlledFigureKey (the figure being controlled).
   'falseOrdersAttackTargets',
+  // alexanbv 2026-05-13 fourteenth-wave: per-figure attack-frame override
+  // (Arsenal, Vanguard, Bo-Rifle, Saber Strike, Darksaber, Wookie Sling,
+  // Heavy Repeater, Saber Orbit, Overheated, Multi-Fire, etc.).
+  'pendingOverrideAttackDice',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

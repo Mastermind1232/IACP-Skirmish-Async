@@ -1478,8 +1478,9 @@ export async function handleAttackTarget(interaction, ctx) {
     attackInfo = { ...attackInfo, range: [attackInfo.range?.[0] ?? 1, Math.max(attackInfo.range?.[1] ?? 3, 99)], attackType: 'Ranged' };
   }
 
-  // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Definition: 'Love'): replace dice/type/pierce for this attack
-  const overrideDice = game.pendingOverrideAttackDice?.[msgId];
+  // pendingOverrideAttackDice (Saber Strike, Bo-Rifle Staff Strike, Definition: 'Love'): replace dice/type/pierce for this attack.
+  // Per alexanbv 2026-05-13: keyed by attacker figureKey.
+  const overrideDice = game.pendingOverrideAttackDice?.[_attackerFkEarly];
   const overrideDiceSource = overrideDice?.source; // capture before deletion for Heir to the Jedi check
   if (overrideDice) {
     if (overrideDice.dice) attackInfo = { ...attackInfo, dice: overrideDice.dice };
@@ -1500,7 +1501,7 @@ export async function handleAttackTarget(interaction, ctx) {
     if (overrideDice.blockSurgeAbilities) {
       game._pendingBlockSurgeAbilities = true;
     }
-    delete game.pendingOverrideAttackDice[msgId];
+    delete game.pendingOverrideAttackDice[_attackerFkEarly];
   }
   // Close Quarters: override attack with adjacent hostile's dice/type, +1 Accuracy, -1 defense die
   if (game.closeQuartersActive?.[attackerFigureKey]) {

@@ -60,8 +60,9 @@ describe('PROBE-PD-ATK-018: pool modifications resolve BEFORE the roll (Step 2 s
   });
 
   it('018d: source — pendingOverrideAttackDice is consumed BEFORE the roll (rewrites attackInfo, then deletes)', () => {
-    const overrideIdx = H_CB_SRC.indexOf('const overrideDice = game.pendingOverrideAttackDice?.[msgId];');
-    const deleteIdx = H_CB_SRC.indexOf('delete game.pendingOverrideAttackDice[msgId];');
+    // Per alexanbv 2026-05-13: keyed by attacker figureKey (_attackerFkEarly).
+    const overrideIdx = H_CB_SRC.indexOf('const overrideDice = game.pendingOverrideAttackDice?.[_attackerFkEarly];');
+    const deleteIdx = H_CB_SRC.indexOf('delete game.pendingOverrideAttackDice[_attackerFkEarly];');
     const rollIdx = H_CB_SRC.indexOf('const result = rollAttackDice(dice);');
     assert.ok(overrideIdx > 0, 'override read must be locatable');
     assert.ok(deleteIdx > 0, 'override delete must be locatable');

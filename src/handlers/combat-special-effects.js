@@ -739,12 +739,15 @@ export async function handleMissileSalvoDie(interaction, ctx) {
   }
   // Remove chosen die from available pool
   game.pendingMissileSalvo[msgId].diceAvailable = diceAvailable.filter((c) => c !== color);
-  // Set up overridden ranged attack with this die + +3 accuracy
-  game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-  game.pendingOverrideAttackDice[msgId] = { dice: [color], type: 'ranged', bonusAccuracy: 3 };
-  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  // Set up overridden ranged attack with this die + +3 accuracy.
+  // Per alexanbv 2026-05-13: keyed by activator figureKey.
   const _msFk = figureKeyForActivation(game, msgId);
-  if (_msFk) game.freeAttackBonusPending[_msFk] = true;
+  if (_msFk) {
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[_msFk] = { dice: [color], type: 'ranged', bonusAccuracy: 3 };
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[_msFk] = true;
+  }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
   const salvoThread = await fetchCombatThread(client, threadId);

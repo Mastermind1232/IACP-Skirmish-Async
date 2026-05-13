@@ -57,7 +57,8 @@ describe('DC-CC: Ewok Warrior (Elite) — Sling Barrage wiring', () => {
     // Per alexanbv 2026-05-13: pendingSlingBarrage is figureKey-keyed.
     assert.equal(game.pendingSlingBarrage?.['Ewok Warrior (Elite)-1-0'], true);
     assert.equal(game.freeAttackBonusPending?.['Ewok Warrior (Elite)-1-0']?.from, 'Sling Barrage');
-    assert.equal(game.pendingOverrideAttackDice?.M1?.type, 'ranged');
+    // Per alexanbv 2026-05-13: keyed by activator figureKey.
+    assert.equal(game.pendingOverrideAttackDice?.['Ewok Warrior (Elite)-1-0']?.type, 'ranged');
     assert.ok(/Sling Barrage/.test(result.logMessage));
   });
 

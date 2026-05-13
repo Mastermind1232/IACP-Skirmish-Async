@@ -1885,10 +1885,13 @@ function getArsenalPickActions(game, playerNum, msgId, deps) {
   const hasArsenal = specialIds.includes('arsenal');
   const hasEpicArsenal = specialIds.includes('epic_arsenal');
   if (!hasArsenal && !hasEpicArsenal) return [];
-  if (game.pendingOverrideAttackDice?.[msgId]) return []; // already picked
-  const gameId = game.gameId;
+  // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
   const data = game.dcActionsData?.[msgId];
   const figureIndex = data?.selectedFigure ?? 0;
+  const _dgM = (dcMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const _arsActFk = `${dcMeta.dcName}-${_dgM ? _dgM[1] : '1'}-${figureIndex}`;
+  if (game.pendingOverrideAttackDice?.[_arsActFk]) return []; // already picked
+  const gameId = game.gameId;
   // Arsenal: 2 dice combos; Epic Arsenal: 3 dice combos
   const diceCount = hasEpicArsenal ? 3 : 2;
   const colors = ['red', 'blue', 'yellow', 'green'];

@@ -58,7 +58,9 @@ describe('PROBE-PD-ATK-004: alternate-pool attacks retain the attacker DC surge 
     // The override-handling block touches attackInfo.{dice,range,attackType} and
     // pendingCombat flags, but never `combat.attackerDcName`, `card.surgeAbilities`,
     // or `combat.blockSurgeAbilities` (except when explicitly set by the override).
-    const ovBlock = H_CB_SRC.match(/const overrideDice = game\.pendingOverrideAttackDice\?\.\[msgId\];[\s\S]*?delete game\.pendingOverrideAttackDice\[msgId\];/);
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by attacker
+    // figureKey (_attackerFkEarly) instead of msgId.
+    const ovBlock = H_CB_SRC.match(/const overrideDice = game\.pendingOverrideAttackDice\?\.\[_attackerFkEarly\];[\s\S]*?delete game\.pendingOverrideAttackDice\[_attackerFkEarly\];/);
     assert.ok(ovBlock, 'override block must be locatable');
     assert.doesNotMatch(ovBlock[0], /combat\.attackerDcName\s*=/,
       'override must not rewrite attackerDcName — CRR-ATK-004');

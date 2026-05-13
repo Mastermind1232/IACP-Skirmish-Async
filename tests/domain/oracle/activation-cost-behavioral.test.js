@@ -582,7 +582,8 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
       nextAttacksBonusConditions: { 'Rebel Trooper-1-0': ['Stun'] },
       nextAttackBonusSurgeAbilities: { 'Rebel Trooper-1-0': [{ surge: 1 }] },
       nextAttackBonusPierce: { 'Rebel Trooper-1-0': 1 },
-      pendingOverrideAttackDice: { '3001': { dice: ['red'] } },
+      // Per alexanbv 2026-05-13: keyed by attacker figureKey.
+      pendingOverrideAttackDice: { 'Rebel Trooper-1-0': { dice: ['red'] } },
       // saberOrbitAttacksRemaining migrated to figureKey-keyed
       // 2026-05-09 (per-figure scope per IACP rule clarification).
       saberOrbitAttacksRemaining: { 'Rebel Trooper-1-0': 2 },
@@ -604,7 +605,7 @@ describe('B-UNACT-003: Un-activate cleans core activation state', () => {
     assert.strictEqual(game.nextAttacksBonusConditions?.['Rebel Trooper-1-0'], undefined, 'nextAttacksBonusConditions cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.nextAttackBonusSurgeAbilities?.['Rebel Trooper-1-0'], undefined, 'nextAttackBonusSurgeAbilities cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.nextAttackBonusPierce?.['Rebel Trooper-1-0'], undefined, 'nextAttackBonusPierce cleaned (figureKey-keyed 2026-05-09)');
-    assert.strictEqual(game.pendingOverrideAttackDice?.['3001'], undefined, 'pendingOverrideAttackDice cleaned');
+    assert.strictEqual(game.pendingOverrideAttackDice?.['Rebel Trooper-1-0'], undefined, 'pendingOverrideAttackDice cleaned (figureKey-keyed 2026-05-13)');
     assert.strictEqual(game.saberOrbitAttacksRemaining?.['Rebel Trooper-1-0'], undefined, 'saberOrbitAttacksRemaining cleaned (figureKey-keyed 2026-05-09)');
     assert.strictEqual(game.pendingMissileSalvo?.['3001'], undefined, 'pendingMissileSalvo cleaned');
     // saveGames called

@@ -1199,9 +1199,10 @@ export async function finalizeActivation({
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _natFk = figureKeyForActivation(game, msgId);
       if (_natFk) game.freeAttackBonusPending[_natFk] = true;
-      if (_natData?.dice) {
+      if (_natData?.dice && _natFk) {
+        // Per alexanbv 2026-05-13: keyed by activator figureKey.
         game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-        game.pendingOverrideAttackDice[msgId] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };
+        game.pendingOverrideAttackDice[_natFk] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };
       }
       delete game.nextActivationFreeAttack[playerNum];
       if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free Melee attack (1 red + 1 yellow) available this activation.`, { phase: 'ROUND', icon: 'card' });

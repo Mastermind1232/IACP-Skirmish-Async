@@ -1694,8 +1694,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         game.roundFigureAbilityUsed[_fobKey] = true;
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[combat.attackerFigureKey] = true;
+        // Per alexanbv 2026-05-13: keyed by attacker figureKey.
         game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-        game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['green'], type: 'melee', bonusHits: 1 };
+        game.pendingOverrideAttackDice[combat.attackerFigureKey] = { dice: ['green'], type: 'melee', bonusHits: 1 };
         await thread.send('**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.');
       }
     }
@@ -3119,8 +3120,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     delete game.darksaberSecondAttack[combat.attackerFigureKey];
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Darksaber Strike' };
-    // Clear the override so the second attack uses normal dice
-    if (game.pendingOverrideAttackDice?.[combat.attackerMsgId]) delete game.pendingOverrideAttackDice[combat.attackerMsgId];
+    // Clear the override so the second attack uses normal dice.
+    // Per alexanbv 2026-05-13: keyed by attacker figureKey.
+    if (game.pendingOverrideAttackDice?.[combat.attackerFigureKey]) delete game.pendingOverrideAttackDice[combat.attackerFigureKey];
     await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
   }
   // Battlefield Leadership (Leia Organa): card text "Perform an attack,
@@ -3207,9 +3209,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       // Block same target for second attack
       game.multiFireBlockedTarget = game.multiFireBlockedTarget || {};
       game.multiFireBlockedTarget[combat.attackerFigureKey] = combat.defenderFigureKey;
-      // Apply -1 Hit to second attack too
+      // Apply -1 Hit to second attack too. Per alexanbv 2026-05-13: figureKey-keyed.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1 };
+      game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1 };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Multi-Fire' };
       await thread.send(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (\u22121 Hit). Use the Attack button.`).catch(discordCatch);
@@ -3227,8 +3229,9 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const oh = game.overheatedActive[combat.attackerFigureKey];
     oh.attacksRemaining -= 1;
     if (oh.attacksRemaining > 0) {
+      // Per alexanbv 2026-05-13: keyed by attacker figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[combat.attackerMsgId] = { bonusHits: -1, source: 'Overheated' };
+      game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Overheated' };
       await thread.send(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Use the Attack button.`).catch(discordCatch);
@@ -3247,9 +3250,10 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     game.saberOrbitAttacksRemaining[combat.attackerFigureKey] -= 1;
     const soRemaining = game.saberOrbitAttacksRemaining[combat.attackerFigureKey];
     if (soRemaining > 0) {
-      // Re-set the override dice for the next Saber Orbit attack
+      // Re-set the override dice for the next Saber Orbit attack.
+      // Per alexanbv 2026-05-13: keyed by attacker figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[combat.attackerMsgId] = { dice: ['red'], type: 'melee', pierce: 0, bonusAccuracy: 0 };
+      game.pendingOverrideAttackDice[combat.attackerFigureKey] = { dice: ['red'], type: 'melee', pierce: 0, bonusAccuracy: 0 };
       await thread.send(`**Saber Orbit** — ${soRemaining} attack${soRemaining !== 1 ? 's' : ''} remaining (1 red die, Melee). Use the Attack button.`).catch(discordCatch);
     } else {
       delete game.saberOrbitAttacksRemaining[combat.attackerFigureKey];
@@ -3394,8 +3398,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (_fsFkForEntry) game.fellSwoopFreeAttack[_fsFkForEntry] = _entry.flagValue ?? true;
     }
     if (_entry.pendingOverrideAttackDice) {
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[_entry.msgId] = _entry.pendingOverrideAttackDice;
+      // Per alexanbv 2026-05-13: keyed by figureKey. Chain-attack
+      // entries carry figureKey explicitly; fall back to combat's
+      // attackerFigureKey only if a legacy entry omits it.
+      const _poadFk = _entry.figureKey || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_poadFk) {
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[_poadFk] = _entry.pendingOverrideAttackDice;
+      }
     }
     // Per alexanbv 2026-05-13: keyed by figureKey. Chain-attack entries
     // carry figureKey; fall back to combat's attackerFigureKey only if

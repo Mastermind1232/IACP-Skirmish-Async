@@ -1799,12 +1799,15 @@ export function resolveAbility(abilityId, context) {
     if (hitCount + surgeCount < 2) {
       return { applied: false, manualMessage: `**Continually Unexpected** — Need 2 Damage/Surge Tokens (have ${hitCount} Damage + ${surgeCount} Surge).` };
     }
-    // Grant free Ranged attack using own attack pool
+    // Grant free Ranged attack using own attack pool.
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     const _cuFk = figureKeyForActivation(game, msgId);
-    if (_cuFk) game.freeAttackBonusPending[_cuFk] = true;
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+    if (_cuFk) {
+      game.freeAttackBonusPending[_cuFk] = true;
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_cuFk] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+    }
     return { applied: true, logMessage: `**Continually Unexpected** — K-2S0 has ${hitCount} Damage + ${surgeCount} Surge Tokens. Your next attack costs no action and is **Ranged** (uses your normal dice pool). *(Token requirement met — no tokens consumed.)*` };
   }
 
@@ -1943,9 +1946,12 @@ export function resolveAbility(abilityId, context) {
     if (game && msgId) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _sbFk = figureKeyForActivation(game, msgId);
-      if (_sbFk) game.freeAttackBonusPending[_sbFk] = { from: 'Sling Barrage' };
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+      if (_sbFk) {
+        game.freeAttackBonusPending[_sbFk] = { from: 'Sling Barrage' };
+        // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[_sbFk] = { type: 'ranged', dice: null, pierce: 0, bonusAccuracy: 0 };
+      }
       // Per alexanbv 2026-05-13: per-figureKey (specials are per-figure).
       game.pendingSlingBarrage = game.pendingSlingBarrage || {};
       if (_sbFk) game.pendingSlingBarrage[_sbFk] = true;
@@ -1992,9 +1998,10 @@ export function resolveAbility(abilityId, context) {
       // Grant a free attack for the second shot
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[_mfFigureKey] = { from: 'Multi-Fire' };
-      // Apply -1 Hit to all attacks during Multi-Fire
+      // Apply -1 Hit to all attacks during Multi-Fire.
+      // Per alexanbv 2026-05-13: keyed by activator figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { bonusHits: -1 };
+      game.pendingOverrideAttackDice[_mfFigureKey] = { bonusHits: -1 };
       // Track Multi-Fire state: second attack must target different figure
       game.multiFireActive = game.multiFireActive || {};
       game.multiFireActive[_mfFigureKey] = { attacksRemaining: 2, firstTargetFigureKey: null };
@@ -2264,15 +2271,23 @@ export function resolveAbility(abilityId, context) {
       const _odFk = figureKeyForActivation(game, msgId);
       if (_odFk) game.freeAttackBonusPending[_odFk] = true;
     }
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = {
-      dice: entry.overrideAttackDice,
-      type: entry.overrideAttackType || null,
-      pierce: entry.overrideAttackPierce || 0,
-      bonusAccuracy: entry.overrideBonusAccuracy || 0,
-      mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
-      blockSurgeAbilities: entry.blockSurgeAbilities || false,
-    };
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by activator
+    // figureKey. Saber Orbit chain uses its own figureKey computed above;
+    // single-attack overrides fall back to figureKeyForActivation.
+    const _odadFk = (entry.saberOrbitChain > 1)
+      ? `${(context.meta || dcMessageMeta?.get?.(msgId))?.dcName || 'unknown'}-${((context.meta || dcMessageMeta?.get?.(msgId))?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1'}-${game.dcActionsData?.[msgId]?.selectedFigure ?? 0}`
+      : figureKeyForActivation(game, msgId);
+    if (_odadFk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_odadFk] = {
+        dice: entry.overrideAttackDice,
+        type: entry.overrideAttackType || null,
+        pierce: entry.overrideAttackPierce || 0,
+        bonusAccuracy: entry.overrideBonusAccuracy || 0,
+        mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
+        blockSurgeAbilities: entry.blockSurgeAbilities || false,
+      };
+    }
     // strainCostToSelf (Brutal Cleave / Trained / etc.): figure pays N
     // Strain to activate the ability. The strain is fired through the
     // applyStrain pipeline (Fireproof / Headhunter / Under Duress /
@@ -2413,15 +2428,19 @@ export function resolveAbility(abilityId, context) {
       const _cqFk = figureKeyForActivation(game, msgId);
       if (_cqFk) game.closeQuartersActive[_cqFk] = true;
     }
-    // overrideAttackType (Face to Face, Dying Lunge, Final Stand, Lightsaber Throw): force attack type without overriding dice
+    // overrideAttackType (Face to Face, Dying Lunge, Final Stand, Lightsaber Throw): force attack type without overriding dice.
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
     if (entry.overrideAttackType) {
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = {
-        type: entry.overrideAttackType, dice: null, pierce: 0,
-        bonusAccuracy: entry.overrideBonusAccuracy || 0,
-        mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
-        blockSurgeAbilities: entry.blockSurgeAbilities || false,
-      };
+      const _oatFk = _afkActivating || figureKeyForActivation(game, msgId);
+      if (_oatFk) {
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[_oatFk] = {
+          type: entry.overrideAttackType, dice: null, pierce: 0,
+          bonusAccuracy: entry.overrideBonusAccuracy || 0,
+          mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
+          blockSurgeAbilities: entry.blockSurgeAbilities || false,
+        };
+      }
     }
     // selfDefeatsAfterAttack (Dying Lunge, Final Stand): attacker figure
     // defeated when free attack resolves. Per alexanbv 2026-05-13: per-figureKey.
@@ -8960,12 +8979,15 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta } = context;
     const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
     if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: play before declaring your attack this activation.' };
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { ...entry.attackOverrideOpts };
-    if (entry.freeAttackBonus) {
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      const _aoFk = figureKeyForActivation(game, msgId);
-      if (_aoFk) game.freeAttackBonusPending[_aoFk] = true;
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    const _aoFk = figureKeyForActivation(game, msgId);
+    if (_aoFk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_aoFk] = { ...entry.attackOverrideOpts };
+      if (entry.freeAttackBonus) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[_aoFk] = true;
+      }
     }
     const rangeNote = entry.attackOverrideOpts.minRange ? ` Target must be **${entry.attackOverrideOpts.minRange}+** spaces away.` : '';
     const dieNote = entry.attackOverrideOpts.removeDieColor ? ` Remove 1 **${entry.attackOverrideOpts.removeDieColor}** die from your attack pool.` : '';
@@ -9816,14 +9838,17 @@ export function resolveAbility(abilityId, context) {
     const dcEffects = getDcEffects();
     const normalDice = dcEffects[dcName]?.attack?.dice || ['red'];
     const diceCount = normalDice.length;
-    // Override first attack to 1 red die (melee)
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { dice: ['red'], type: 'melee' };
-    // Grant (diceCount - 1) more free attacks
-    if (diceCount > 1) {
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      const _fsFk = figureKeyForActivation(game, msgId);
-      if (_fsFk) game.freeAttackBonusPending[_fsFk] = diceCount - 1;
+    // Override first attack to 1 red die (melee).
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    const _fsFk = figureKeyForActivation(game, msgId);
+    if (_fsFk) {
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_fsFk] = { dice: ['red'], type: 'melee' };
+      // Grant (diceCount - 1) more free attacks
+      if (diceCount > 1) {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[_fsFk] = diceCount - 1;
+      }
     }
     return { applied: true, logMessage: `**Feral Swipes** — **${dcName}** performs ${diceCount} Melee attack${diceCount !== 1 ? 's' : ''} (1 red die each). First attack override set. Each remaining free attack: use 1 red die.` };
   }
@@ -9909,8 +9934,9 @@ export function resolveAbility(abilityId, context) {
       //   (b) on attacksRemaining=0, flip attackTypeOverride[figureKey] = 'melee'
       game.overheatedActive = game.overheatedActive || {};
       game.overheatedActive[selfFk] = { attacksRemaining: 2 };
+      // Per alexanbv 2026-05-13: keyed by figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { bonusHits: -1, source: 'Overheated' };
+      game.pendingOverrideAttackDice[selfFk] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[selfFk] = { from: 'Overheated' };
       return {
@@ -10012,9 +10038,12 @@ export function resolveAbility(abilityId, context) {
       const { prevPos: _fmPrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _fmFk = figureKeyForActivation(game, msgId);
-      if (_fmFk) game.freeAttackBonusPending[_fmFk] = true;
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[msgId] = { type: 'melee' };
+      if (_fmFk) {
+        game.freeAttackBonusPending[_fmFk] = true;
+        // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+        game.pendingOverrideAttackDice[_fmFk] = { type: 'melee' };
+      }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const { pathStr: _fmPathStr, warnings: _fmWarnings } = computePushPathAndWarnings(game, _fmPrevPos, chosenSpace, oppNum);
       let _fmLogMsg = `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}${_fmPathStr}. Use the Melee Attack button for 1 free attack.`;
@@ -11307,9 +11336,12 @@ export function resolveAbility(abilityId, context) {
     // Grant free attack with Pierce 2
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     const _ocwFk = figureKeyForActivation(game, msgId);
-    if (_ocwFk) game.freeAttackBonusPending[_ocwFk] = true;
-    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-    game.pendingOverrideAttackDice[msgId] = { ...(game.pendingOverrideAttackDice[msgId] || {}), pierce: (game.pendingOverrideAttackDice[msgId]?.pierce || 0) + 2 };
+    if (_ocwFk) {
+      game.freeAttackBonusPending[_ocwFk] = true;
+      // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+      game.pendingOverrideAttackDice[_ocwFk] = { ...(game.pendingOverrideAttackDice[_ocwFk] || {}), pierce: (game.pendingOverrideAttackDice[_ocwFk]?.pierce || 0) + 2 };
+    }
     // Apply Weaken to activating figure (respects immunity)
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     actKeys.forEach((fk) => { if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Weaken'); });

@@ -458,8 +458,9 @@ describe('PROBE-LOADOUT-07: flurry_of_blows — free melee override queued on hi
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
     // Flurry queues a free melee attack with 1 green die + 1 bonus hit.
-    const override = game.pendingOverrideAttackDice?.[attackerMsgId];
-    assert.ok(override, `flurry_of_blows must queue pendingOverrideAttackDice for attacker msgId=${attackerMsgId}. ` +
+    // Per alexanbv 2026-05-13: keyed by attackerFigureKey.
+    const override = game.pendingOverrideAttackDice?.[combat.attackerFigureKey];
+    assert.ok(override, `flurry_of_blows must queue pendingOverrideAttackDice for attacker figureKey=${combat.attackerFigureKey}. ` +
       `Got: ${JSON.stringify(game.pendingOverrideAttackDice)}`);
     assert.deepStrictEqual(override.dice, ['green'],
       `Flurry override must specify dice=['green']. Got: ${JSON.stringify(override.dice)}`);
@@ -508,7 +509,8 @@ describe('PROBE-LOADOUT-07: flurry_of_blows — free melee override queued on hi
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
     // No fresh pendingOverrideAttackDice entry should be created.
-    assert.strictEqual(game.pendingOverrideAttackDice?.[attackerMsgId], undefined,
+    // Per alexanbv 2026-05-13: keyed by attacker figureKey.
+    assert.strictEqual(game.pendingOverrideAttackDice?.[combat.attackerFigureKey], undefined,
       `flurry_of_blows must not re-queue pendingOverrideAttackDice when the ` +
       `once-per-activation flag is already set. Got: ${JSON.stringify(game.pendingOverrideAttackDice)}`);
   });
