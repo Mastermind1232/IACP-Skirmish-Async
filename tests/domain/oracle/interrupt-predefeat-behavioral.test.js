@@ -129,7 +129,7 @@ describe('B-I-PREDEFEAT: Self-Destruct Protocol, Last Resort, Executor', () => {
         damage: 3, hit: true, resultText: 'test', totalBlast: 0,
         ownerId: 'player1', targetFigIndex: 0,
       },
-      selfDestructProtocolTriggered: { dc2: true },
+      selfDestructProtocolTriggered: { 'Rebel Trooper-1-0': true },
       figurePositions: { 1: {}, 2: { 'Rebel Trooper-1-0': 'a1' } },
       selectedMap: { id: 'test_map' },
     });

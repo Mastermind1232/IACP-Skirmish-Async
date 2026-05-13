@@ -732,16 +732,14 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     return;
   }
 
-  // Track figures damaged by this group's activation (for Aim: Rebel Trooper Elite, etc.)
-  if (damage > 0 && combat.attackerMsgId && combat.target?.figureKey) {
-    // Aim (Rebel Trooper Elite) reads this list with "during this
-    // group's activation" wording → kept msgId-keyed (per-group) as
-    // one of the rare card-text-says-group exceptions to alexanbv's
-    // 2026-05-13 "default per-figure" principle.
+  // Track figures damaged by this figure (for Aim: Rebel Trooper Elite).
+  // Per alexanbv 2026-05-13 correction: Aim is per-figure tracking, not
+  // per-group. Key by combat.attackerFigureKey.
+  if (damage > 0 && combat.attackerFigureKey && combat.target?.figureKey) {
     game.activationDamagedFigures = game.activationDamagedFigures || {};
-    game.activationDamagedFigures[combat.attackerMsgId] = game.activationDamagedFigures[combat.attackerMsgId] || [];
-    if (!game.activationDamagedFigures[combat.attackerMsgId].includes(combat.target.figureKey)) {
-      game.activationDamagedFigures[combat.attackerMsgId].push(combat.target.figureKey);
+    game.activationDamagedFigures[combat.attackerFigureKey] = game.activationDamagedFigures[combat.attackerFigureKey] || [];
+    if (!game.activationDamagedFigures[combat.attackerFigureKey].includes(combat.target.figureKey)) {
+      game.activationDamagedFigures[combat.attackerFigureKey].push(combat.target.figureKey);
     }
   }
 
@@ -1929,9 +1927,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Dying Lunge / Final Stand: attacker defeats itself after the attack resolves
-  if (game.selfDefeatsAfterAttackMsgId?.[combat.attackerMsgId] && combat.attackerMsgId) {
-    delete game.selfDefeatsAfterAttackMsgId[combat.attackerMsgId];
+  // Dying Lunge / Final Stand: attacker defeats itself after the attack
+  // resolves. Per alexanbv 2026-05-13: per-figureKey.
+  if (game.selfDefeatsAfterAttackMsgId?.[combat.attackerFigureKey] && combat.attackerFigureKey) {
+    delete game.selfDefeatsAfterAttackMsgId[combat.attackerFigureKey];
     const _sdaMsgId = combat.attackerMsgId;
     const _sdaFigKey = combat.attackerFigureKey;
     const _sdaFigIdx = combat.attackerFigureIndex ?? 0;

@@ -1128,12 +1128,14 @@ export async function handleDcEndActivation(interaction, ctx) {
   // queue populated when Wild Fury was played; applies Stun + Bleed
   // (or whatever was queued) to figure 0 of the activating DC, with
   // Condition Immunity filtering harmful conditions on immune figures.
-  if (game.postActivationConditions?.[msgId]) {
-    let waConds = game.postActivationConditions[msgId];
-    delete game.postActivationConditions[msgId];
+  // Per alexanbv 2026-05-13: postActivationConditions is figureKey-keyed.
+  // Iterate every figure in the group; apply queued conditions per-figure.
+  for (const _pacFk of figureKeys) {
+    if (!game.postActivationConditions?.[_pacFk]) continue;
+    let waConds = game.postActivationConditions[_pacFk];
+    delete game.postActivationConditions[_pacFk];
     if (Array.isArray(waConds) && waConds.length > 0) {
-      const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-      const waFigureKey = `${meta.dcName}-${dgIndex}-0`;
+      const waFigureKey = _pacFk;
       const _waImmune = (game.figurePositions?.[meta.playerNum]?.[waFigureKey]) ? isConditionImmune(game, waFigureKey) : false;
       if (_waImmune) {
         waConds = waConds.filter((c) => !HARMFUL_CONDITIONS.includes(c));

@@ -1127,7 +1127,7 @@ async function buildAndSendAttackTargets(
   //     compute the no-figures-block LOS so figures-out-of-LOS can be offered
   //     as Marksman targets (button labeled [Marksman]; clicking auto-plays
   //     the card before resolving the attack). Ranged-only per card text.
-  const marksmanActive = game.nextAttackIgnoreFigureLOS?.[msgId];
+  const marksmanActive = game.nextAttackIgnoreFigureLOS?.[figureKey];
   // Note: nextAttackIgnoreFigureLOS is consumed by handleDcAttackTarget on the
   // actual attack, not here at target-render time. Re-rendering must not
   // wipe it. (The previous delete here is a known bug; deferring its fix to

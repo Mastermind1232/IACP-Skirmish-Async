@@ -1288,8 +1288,9 @@ export async function handleAttackTarget(interaction, ctx) {
     game[ccHandKey(attackerPlayerNum)] = _mmHand;
     const _mmDiscardKey = ccDiscardKey(attackerPlayerNum);
     game[_mmDiscardKey] = [...(game[_mmDiscardKey] || []), 'Marksman'];
+    // Per alexanbv 2026-05-13: per-figureKey.
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
-    game.nextAttackIgnoreFigureLOS[msgId] = true;
+    game.nextAttackIgnoreFigureLOS[_attackerFkEarly] = true;
     await logGameAction(game, client, `🎯 **Marksman** played — figures do not block LOS for this Ranged attack.`, { phase: 'ROUND', icon: 'card' });
   }
   // Etiquette and Protocol: block attacks between paired figures this round
@@ -1376,8 +1377,9 @@ export async function handleAttackTarget(interaction, ctx) {
   // block semantic for THIS attack. Without the snapshot, the probe sees
   // marksmanActive=false and may abort an attack the picker correctly
   // allowed.
-  const _atkIgnoredFigureLOS = !!game.nextAttackIgnoreFigureLOS?.[msgId];
-  if (_atkIgnoredFigureLOS) delete game.nextAttackIgnoreFigureLOS[msgId];
+  // Per alexanbv 2026-05-13: per-figureKey.
+  const _atkIgnoredFigureLOS = !!game.nextAttackIgnoreFigureLOS?.[_attackerFkEarly];
+  if (_atkIgnoredFigureLOS) delete game.nextAttackIgnoreFigureLOS[_attackerFkEarly];
   delete game.attackTargets[`${msgId}_${figureIndex}`];
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
@@ -1621,10 +1623,12 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
   }
-  // Aim (Rebel Trooper Elite): if the target has already suffered damage during this group's activation, +1 Hit +2 Accuracy
+  // Aim (Rebel Trooper Elite): if the target has already suffered damage
+  // during THIS FIGURE'S activation, +1 Hit +2 Accuracy. Per alexanbv
+  // 2026-05-13: per-figure tracking, not per-group.
   let _aimFired = false;
   if ((_atkEff?.passives || []).includes('Aim')) {
-    const _aimDamaged = game.activationDamagedFigures?.[msgId] || [];
+    const _aimDamaged = game.activationDamagedFigures?.[attackerFigureKey] || [];
     if (target.figureKey && _aimDamaged.includes(target.figureKey)) {
       _aimFired = true;
     }

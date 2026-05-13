@@ -2228,7 +2228,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     (_attackerAbilityText.includes('priority target') && _attackerAbilityText.includes('line of sight')) ||
     _attackerKws.includes('MASSIVE') ||
     _clawditeForm === 'Scout' ||
-    !!game.nextAttackIgnoreFigureLOS?.[msgId];
+    !!game.nextAttackIgnoreFigureLOS?.[figureKey];
 
   const figureBlockingCoords = _attackerIgnoresFigureBlocking ? null : new Set();
   // Attacker footprint cells for multi-cell LOS origin iteration.

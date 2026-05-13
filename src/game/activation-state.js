@@ -55,9 +55,9 @@ const ACTIVATION_MSGID_FLAGS = [
   'rushPending',
   'shoulderRushPending',
   'forcedAttackTarget',
-  'selfDefeatsAfterAttackMsgId',
+  // selfDefeatsAfterAttackMsgId + postActivationConditions MIGRATED
+  // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   'applySelfStunAfterAttackFigureKey',
-  'postActivationConditions',
   'pendingCombatResupply',
   'pendingPostAttackConditions',
   'pendingMpBonus',
@@ -80,14 +80,14 @@ const ACTIVATION_MSGID_FLAGS = [
   'pendingForceCardPick',
   // nextAttackReach moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-
   // figure scope per IACP multifigure-independent-activation rule).
-  'selfDestructProtocolTriggered',
+  // selfDestructProtocolTriggered MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   'falseOrdersUpgrade',
   // setTrapSpace MIGRATED 2026-05-13 → ROUND_OBJECT_FLAGS (alexanbv:
   // "Set a Trap is SoR/EoR" — round-scoped, not per-activation).
   'reverseEngineerActive',
   'findsmanMeditationTarget',
-  'nextAttackIgnoreFigureLOS',
-  'optimalBombardmentBlastBonus',
+  // nextAttackIgnoreFigureLOS + optimalBombardmentBlastBonus MIGRATED
+  // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   'deflectionPending',
   'deflectionUnconditional',
   'dcActivationLogMessageIds',
@@ -101,7 +101,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope).
   'pendingOverwatchPlacement',
   'activationKills',
-  'activationDamagedFigures',
+  // activationDamagedFigures MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: "AIM on rebel troopers is tracked per figure").
   'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
@@ -201,6 +202,14 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'attackDicePenaltyForMsgId',
   'pendingSlingBarrage',
   'arcingShotActive',
+  // alexanbv 2026-05-13 sixth-wave: defeat-prevention + post-attack
+  // self-effects + per-attack LoS overrides + Aim damage tracking.
+  'selfDestructProtocolTriggered',
+  'selfDefeatsAfterAttackMsgId',
+  'postActivationConditions',
+  'nextAttackIgnoreFigureLOS',
+  'optimalBombardmentBlastBonus',
+  'activationDamagedFigures',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

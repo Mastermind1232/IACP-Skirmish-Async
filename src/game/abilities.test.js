@@ -1033,6 +1033,11 @@ test('resolveAbility Dying Lunge stamps pendingMoveX (Move-X) when figure deploy
     figurePositions: { 1: { [figureKey]: 'a1' } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-dl', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
+  // Per alexanbv 2026-05-13: selfDefeatsAfterAttackMsgId is figureKey-keyed
+  // and the write derives the figureKey via figureKeyForActivation, which
+  // reads from the module-level meta registry. Register here so the
+  // derivation finds Luke's figureKey.
+  _registerDcMessageMeta(dcMessageMeta);
   const result = resolveAbility('Dying Lunge', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   // Move-X path: pendingMoveX with bypassCosts: true, no bank.
@@ -1043,7 +1048,8 @@ test('resolveAbility Dying Lunge stamps pendingMoveX (Move-X) when figure deploy
   assert.strictEqual(result.pendingMoveXMsgId, msgId);
   assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X discards remainder');
   // selfDefeatsAfterAttack still flagged for the post-attack defeat.
-  assert.ok(game.selfDefeatsAfterAttackMsgId?.[msgId]);
+  // Per alexanbv 2026-05-13: keyed by figureKey now.
+  assert.ok(game.selfDefeatsAfterAttackMsgId?.[figureKey]);
 });
 
 test('resolveAbility Out of Time applies strain = round number via scaleStrainToRound', () => {

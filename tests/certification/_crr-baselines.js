@@ -453,7 +453,8 @@ export const PARITY_SCENARIOS = [
       };
       const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Bossk');
       enableAttackFor(game, attackerMsgId);
-      game.nextAttackIgnoreFigureLOS = { [attackerMsgId]: true };
+      // Per alexanbv 2026-05-13: nextAttackIgnoreFigureLOS migrated to per-figureKey.
+      game.nextAttackIgnoreFigureLOS = { 'Bossk-1-0': true };
       return {
         ...built,
         attacker: { playerNum: 1, figureKey: 'Bossk-1-0', msgId: attackerMsgId, figureIndex: 0 },
@@ -461,7 +462,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Engine now reads game.nextAttackIgnoreFigureLOS[msgId] and nulls the figure-blocking set when set (fixed 2026-04-17; available-actions.js:2205-2220). Both sides agree. Handler consumes the flag at attack resolution; engine target enumeration remains read-only.',
+    reason: 'Engine now reads game.nextAttackIgnoreFigureLOS[figureKey] and nulls the figure-blocking set when set (per-figureKey post-2026-05-13). Both sides agree. Handler consumes the flag at attack resolution; engine target enumeration remains read-only.',
   },
 
   // 7. Clawdite Shapeshifter Scout form — handler-only LOS bypass via figure config

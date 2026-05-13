@@ -2415,15 +2415,19 @@ export function resolveAbility(abilityId, context) {
         blockSurgeAbilities: entry.blockSurgeAbilities || false,
       };
     }
-    // selfDefeatsAfterAttack (Dying Lunge, Final Stand): attacker figure defeated when free attack resolves
+    // selfDefeatsAfterAttack (Dying Lunge, Final Stand): attacker figure
+    // defeated when free attack resolves. Per alexanbv 2026-05-13: per-figureKey.
     if (entry.selfDefeatsAfterAttack) {
+      const _sdaFk = figureKeyForActivation(game, msgId);
       game.selfDefeatsAfterAttackMsgId = game.selfDefeatsAfterAttackMsgId || {};
-      game.selfDefeatsAfterAttackMsgId[msgId] = true;
+      if (_sdaFk) game.selfDefeatsAfterAttackMsgId[_sdaFk] = true;
     }
-    // postActivationConditions (Wild Fury): apply conditions after last free attack
+    // postActivationConditions (Wild Fury): apply conditions after last
+    // free attack. Per alexanbv 2026-05-13: per-figureKey.
     if (Array.isArray(entry.postActivationConditions) && entry.postActivationConditions.length > 0) {
+      const _pacFk = figureKeyForActivation(game, msgId);
       game.postActivationConditions = game.postActivationConditions || {};
-      game.postActivationConditions[msgId] = entry.postActivationConditions;
+      if (_pacFk) game.postActivationConditions[_pacFk] = entry.postActivationConditions;
     }
     // nextAttackBonusAccuracy (Charged Shot): grant bonus accuracy on next attack (per-figure 2026-05-09)
     if (typeof entry.nextAttackBonusAccuracy === 'number' && entry.nextAttackBonusAccuracy > 0 && _fabFk) {
@@ -8923,13 +8927,17 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Guerilla Warfare** — Applied Block Token and Hidden to **${qualified.length}** isolated friendly figure(s): ${names}.` };
   }
 
-  // ccEffect: nextAttackIgnoreFigureLOS (Marksman) — for next attack, figures do not block line of sight
+  // ccEffect: nextAttackIgnoreFigureLOS (Marksman) — for next attack,
+  // figures do not block line of sight. Per alexanbv 2026-05-13:
+  // per-figureKey (the activating figure's attack).
   if (entry.type === 'ccEffect' && entry.nextAttackIgnoreFigureLOS) {
     const { game, playerNum, dcMessageMeta } = context;
     const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
     if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: play before declaring your attack this activation.' };
+    const _mksFk = figureKeyForActivation(game, msgId);
+    if (!_mksFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
-    game.nextAttackIgnoreFigureLOS[msgId] = true;
+    game.nextAttackIgnoreFigureLOS[_mksFk] = true;
     return { applied: true, logMessage: `**Marksman** — For your next Ranged attack this activation, figures do not block line of sight.` };
   }
 
@@ -9839,8 +9847,9 @@ export function resolveAbility(abilityId, context) {
       if (figMsgId) {
         game.freeAttackBonusPending[fk] = true;
         if (blastBonus > 0) {
+          // Per alexanbv 2026-05-13: per-figureKey (the chosen friendly).
           game.optimalBombardmentBlastBonus = game.optimalBombardmentBlastBonus || {};
-          game.optimalBombardmentBlastBonus[figMsgId] = blastBonus;
+          game.optimalBombardmentBlastBonus[fk] = blastBonus;
         }
         count++;
       }
@@ -11463,13 +11472,13 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.ballisticsMatrixEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Bug fix 2026-05-09: was keying by playerNum, but the consumption sites
-    // (combat.js + available-actions.js + dc-play-area.js) read by msgId to
-    // match Marksman's keying. Align both arming paths on msgId.
+    // Per alexanbv 2026-05-13: align with Marksman migration to per-figureKey.
     const _bmMsgId = dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
     if (!_bmMsgId) return { applied: false, manualMessage: entry.label || 'Resolve manually: no activation in progress.' };
+    const _bmFk = figureKeyForActivation(game, _bmMsgId);
+    if (!_bmFk) return { applied: false, manualMessage: entry.label || 'Resolve manually: cannot resolve activating figure.' };
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
-    game.nextAttackIgnoreFigureLOS[_bmMsgId] = true;
+    game.nextAttackIgnoreFigureLOS[_bmFk] = true;
     return { applied: true, logMessage: `**Ballistics Matrix** — For your next attack, intervening figures do **not** block line of sight. Declare your attack normally.` };
   }
 

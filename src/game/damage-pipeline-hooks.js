@@ -415,7 +415,8 @@ WHEN_DEFEATED_HOOKS.push({
  * is defeated."
  *
  * Detection: specialAbilityIds includes 'self_destruct_protocol'.
- * Once-per-figure flag `game.selfDestructProtocolTriggered[msgId]`.
+ * Once-per-figure flag `game.selfDestructProtocolTriggered[figureKey]`
+ * (per alexanbv 2026-05-13: per-figure default).
  *
  * Returns preventDefeat=true; sets pendingSelfDestruct. Handler in
  * interrupts.js (handleSelfDestructProtocol → handleSelfDestructMovePick)
@@ -429,7 +430,7 @@ BEFORE_DEFEATED_HOOKS.push({
   requiresDamage: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.msgId || !opts.controllerPlayerNum) return false;
-    if (game.selfDestructProtocolTriggered?.[opts.msgId]) return false;
+    if (game.selfDestructProtocolTriggered?.[opts.figureKey]) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const eff = getDcEffects()?.[dcName];
     return (eff?.specialAbilityIds || []).includes('self_destruct_protocol');
@@ -442,7 +443,7 @@ BEFORE_DEFEATED_HOOKS.push({
     if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
     if (ctx?.client?._isFakeClient) return null;
     game.selfDestructProtocolTriggered = game.selfDestructProtocolTriggered || {};
-    game.selfDestructProtocolTriggered[opts.msgId] = true;
+    game.selfDestructProtocolTriggered[opts.figureKey] = true;
     setPendingSelfDestruct(game, {
       gameId: game.gameId,
       figureKey: opts.figureKey,
