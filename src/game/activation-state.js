@@ -85,12 +85,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // pendingSlingBarrage MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // attackTypeOverride + overheatedActive moved to
   // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
-  // Static Pulse per-target chained choice state — cleared at round
-  // boundary in case a player abandons the picker mid-flight.
-  'pendingStaticPulse',
-  // Chaotic / Corrupting / Balancing Force shared per-player picker
-  // state — cleared at round boundary in case picker is abandoned.
-  'pendingForceCardPick',
+  // pendingStaticPulse RECATEGORIZED 2026-05-13 → ACTIVATION_SCALAR_FLAGS
+  // (stored as a global object, not msgId-keyed; msgId cleanup never
+  // matched. Round-boundary already clears via ROUND_OBJECT_FLAGS).
+  // pendingForceCardPick RECATEGORIZED 2026-05-13 → ACTIVATION_SCALAR_FLAGS
+  // (stored as a global object, not msgId-keyed).
   // nextAttackReach moved to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-
   // figure scope per IACP multifigure-independent-activation rule).
   // selfDestructProtocolTriggered MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
@@ -125,7 +124,6 @@ const ACTIVATION_MSGID_FLAGS = [
   // both key by combat.attackerFigureKey; msgId cleanup never matched).
   // activationDamagedFigures MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (alexanbv: "AIM on rebel troopers is tracked per figure").
-  'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
   // activationExtraActionThenStun + beastTamerInteractOverride MIGRATED
@@ -139,6 +137,8 @@ const ACTIVATION_MSGID_FLAGS = [
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   // spotWeldPending DROPPED 2026-05-13 — no live readers/writers
   // anywhere in src/. Dead registry entry.
+  // yhsiwOptions RECATEGORIZED 2026-05-13 → ACTIVATION_SCALAR_FLAGS
+  // (stored as a global array, not an msgId-keyed map).
   'pendingMissileSalvo',
   'pendingPounceSpaceChoice',
   // Audit 2026-05-05: per-activation msgId-keyed fields surfaced by
@@ -341,6 +341,13 @@ const ACTIVATION_SCALAR_FLAGS = [
   'arcingShotActiveScalar',
   'pendingWookSlamPush',
   'pendingSurgeOverflow',
+  // alexanbv 2026-05-13: globals stored without an msgId/figureKey
+  // index. Previously registered in ACTIVATION_MSGID_FLAGS where the
+  // cleanup loop never matched. Round-boundary already resets these via
+  // ROUND_OBJECT_FLAGS; SCALAR-style delete here covers activation-end.
+  'pendingStaticPulse',
+  'pendingForceCardPick',
+  'yhsiwOptions',
 ];
 
 /**
@@ -575,12 +582,10 @@ const ROUND_OBJECT_FLAGS = [
   'pendingSlingBarrage',
   // attackTypeOverride + overheatedActive moved to
   // ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP rule).
-  // Static Pulse per-target chained choice state — cleared at round
-  // boundary in case a player abandons the picker mid-flight.
-  'pendingStaticPulse',
-  // Chaotic / Corrupting / Balancing Force shared per-player picker
-  // state — cleared at round boundary in case picker is abandoned.
-  'pendingForceCardPick',
+  // pendingStaticPulse + pendingForceCardPick MOVED 2026-05-13 to
+  // ROUND_DELETE_FLAGS — these are global objects, not msgId-keyed
+  // maps, so resetting to {} (truthy) breaks the `!game.field`
+  // first-call gate. Cleared outright at round boundary instead.
   'nextAttackReach',
   'fellSwoopFreeAttack',
   // Lord of the Sith / [Driven by Hatred]: msgId-keyed "remove N dice
@@ -875,6 +880,12 @@ const ROUND_DELETE_FLAGS = [
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
   'onTheLamActive',
+  // Recategorized 2026-05-13: global picker objects (not msgId-keyed
+  // maps). Stored as { ... } so the `!game.field` first-call gate must
+  // see undefined after reset — ROUND_OBJECT_FLAGS' `= {}` reset breaks
+  // that gate (truthy empty object).
+  'pendingStaticPulse',
+  'pendingForceCardPick',
   'jundlandTerrorPlayedThisEor',
   'reinforcementsPlayedThisSor',
   'pendingBlackMarket',
