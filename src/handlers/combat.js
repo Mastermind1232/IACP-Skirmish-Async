@@ -4849,7 +4849,11 @@ export async function handleCombatReroll(interaction, ctx) {
         if (!combat.defenderRerolledIndices.includes(idx)) combat.defenderRerolledIndices.push(idx);
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**${_spEntry.source}** reroll DEF ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
-        // Demoralizing Monologue post-reroll reveal prompt (preserved).
+        // Demoralizing Monologue post-reroll reveal prompt. The
+        // reveal-hand prompt is a follow-up; the queue entry itself
+        // is consumed normally. Cleanup runs BEFORE the prompt so the
+        // entry doesn't linger at remaining=0 between this consume
+        // and the reveal-hand resolution.
         if (_spEntry.demoralizingMonologue) {
           const _dmCasterPN = _spEntry.casterPlayerNum || combat.attackerPlayerNum;
           const _dmCasterId = getPlayerId(game, _dmCasterPN);
@@ -4860,6 +4864,14 @@ export async function handleCombatReroll(interaction, ctx) {
             rerolledDieDodge: !!newDie.dodge,
             casterPlayerNum: _dmCasterPN,
           };
+          // Cleanup the consumed entry now so the bucket re-render
+          // after the reveal-hand prompt resolves doesn't show a
+          // stale "Use Demoralizing Monologue" button at remaining=0.
+          if ((_spEntry.remaining ?? 0) <= 0) {
+            const _dmRemoveAt = combat.forcedRerollQueue.indexOf(_spEntry);
+            if (_dmRemoveAt >= 0) combat.forcedRerollQueue.splice(_dmRemoveAt, 1);
+          }
+          combat.controlledRerollActiveIdx = null;
           const _dmRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`demoralizing_reveal_use_${gameId}`).setLabel('Reveal Hand (need ≥2 cards)').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`demoralizing_reveal_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
@@ -9710,18 +9722,15 @@ export async function handleDemoralizingMonologueReveal(interaction, ctx) {
     await interaction.message.edit({ content: '**Demoralizing Monologue** — Skipped (no reveal).', components: [] }).catch(discordCatch);
   }
   delete combat.demoralizingMonologuePending;
-  // Advance the forced-reroll queue: shift the entry (it's now resolved) and continue.
-  if (Array.isArray(combat.forcedRerollQueue) && combat.forcedRerollQueue.length > 0) {
-    const _entry = combat.forcedRerollQueue[0];
-    if (_entry?.demoralizingMonologue) combat.forcedRerollQueue.shift();
-  }
+  // Per alexanbv 2026-05-13: the DM queue entry was already removed
+  // by the sub-picker cleanup before the reveal-hand prompt fired
+  // (combat.js DM branch in handleCombatReroll). No queue manipulation
+  // needed here. Re-render the holder's bucket via the current
+  // rerollPhase — no more retired 'forced' / 'post_forced_reroll'
+  // phases.
   saveGames(game.gameId);
   if (thread) {
-    if ((combat.forcedRerollQueue || []).length > 0) {
-      await sendRerollUI(thread, game, combat, 'forced');
-    } else {
-      await sendCombatGate(thread, game, combat, 'post_forced_reroll', ctx);
-    }
+    await sendRerollUI(thread, game, combat, combat.rerollPhase || 'attacker');
   }
 }
 
