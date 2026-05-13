@@ -998,7 +998,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const noAttack = noActions || isStunned || _curFigOutOfActions || _activationLocked;
 
   // To the Limit (C75): extra action cannot be a Move
-  const toTheLimitActive = !!game?.activationExtraActionThenStun?.[msgId];
+  const toTheLimitActive = !!game?.activationExtraActionThenStun?.[_figureKeyForOncePerAct];
   // Move blocked by Stun + To-the-Limit + no-actions + activation lock.
   const noMove = noActions || isStunned || toTheLimitActive || _curFigOutOfActions || _activationLocked;
 

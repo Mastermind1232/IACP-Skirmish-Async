@@ -37,10 +37,11 @@ describe('PROBE-AS-005: activationExtraActionThenStun blocks move_figure', () =>
     const dc = getDcInfo(game, dcMessageMeta, 1, 'Bossk');
     assert.ok(dc, 'Should find Bossk DC');
 
-    // Mid-activation with extra-action-then-stun flag set
+    // Mid-activation with extra-action-then-stun flag set.
+    // Per alexanbv 2026-05-13: keyed by figureKey.
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-    game.activationExtraActionThenStun = { [dc.msgId]: true };
+    game.activationExtraActionThenStun = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const moveActions = actions.filter(a => a.type === 'move_figure');

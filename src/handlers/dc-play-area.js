@@ -2017,7 +2017,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     return;
   }
   // C75 — To the Limit: extra action cannot be Move
-  if (action === 'Move' && game.activationExtraActionThenStun?.[msgId]) {
+  if (action === 'Move' && game.activationExtraActionThenStun?.[_curActFigKey]) {
     await interaction.followUp({ content: '**To the Limit** — the extra action cannot be a Move. Choose Attack, Special, or Interact.', ephemeral: true }).catch(discordCatch);
     return;
   }
@@ -2487,7 +2487,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // Non-Sentient: creatures with this trait cannot interact unless Beast Tamer override
     const _intEff = getDcEffects()?.[meta.dcName];
     const _intAbilityText = _intEff?.abilityText || '';
-    if (_intAbilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[msgId]) {
+    if (_intAbilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[figureKey]) {
       await interaction.followUp({ content: `**${meta.displayName || meta.dcName}** has the **Non-Sentient** trait and cannot interact.`, ephemeral: true }).catch(discordCatch);
       return;
     }
@@ -2554,7 +2554,8 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         delete game.freeAttackBonusPending[_ahFigureKey];
         // Brutality / Sarlacc Sweep: clear different-target tracker once the
         // last free attack is consumed.
-        if (game.freeAttackDifferentTargets?.[msgId]) delete game.freeAttackDifferentTargets[msgId];
+        // Per alexanbv 2026-05-13: per-figureKey.
+        if (game.freeAttackDifferentTargets?.[_ahFigureKey]) delete game.freeAttackDifferentTargets[_ahFigureKey];
         // Wild Fury REMOVED 2026-05-09: post-activation conditions now
         // apply at end of activation (handleDcEndActivation), not on the
         // last free attack click. The original conversion to

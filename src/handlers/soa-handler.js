@@ -23,6 +23,7 @@ import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { registerStrainFollowup } from './strain-handler.js';
 import { applyCondition as _applyConditionGlobal } from '../game/conditions.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
+import { figureKeyForActivation } from '../game/activation-state.js';
 
 // Strain followup: Madness Focus applied after the strain resolves.
 registerStrainFollowup('madness_focus', async (game, ctx, payload) => {
@@ -909,8 +910,10 @@ export async function handleSoaFire(interaction, ctx) {
       if (logGameAction) await logGameAction(game, client, `\u{1F436} **Beast Tamer** — ${displayName} +${speed} MP.`, { phase: 'ROUND', icon: 'card' });
     } else if (choiceKey === 'override') {
       _markExhausted();
+      // Per alexanbv 2026-05-13: per-figureKey (specials/grants are per-figure).
+      const _btFk = figureKeyForActivation(game, desc.sourceMsgId);
       game.beastTamerInteractOverride = game.beastTamerInteractOverride || {};
-      game.beastTamerInteractOverride[desc.sourceMsgId] = true;
+      if (_btFk) game.beastTamerInteractOverride[_btFk] = true;
       await interaction.message.edit({ content: `\u{1F436} **Beast Tamer** — **${displayName}** exhausted for **Interact Override** (Non-Sentient).`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F436} **Beast Tamer** — ${displayName} can interact (Non-Sentient override).`, { phase: 'ROUND', icon: 'card' });
     } else if (choiceKey === 'skip') {

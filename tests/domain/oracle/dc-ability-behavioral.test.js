@@ -447,6 +447,10 @@ describe('B-DC-006: handleDcAction guards', () => {
   function buildActionCtx({ game, meta, specials = ['TestSpecial'], specialCosts } = {}) {
     const dcMessageMeta = new Map();
     if (meta) dcMessageMeta.set(meta._msgId || MSG_ID, meta);
+    // Per alexanbv 2026-05-13 migration: figureKeyForActivation reads
+    // from the module-level meta registry. Register here so per-figure
+    // flag reads work in tests.
+    _registerDcMessageMeta(dcMessageMeta);
     return {
       getGame: () => game,
       replyIfGameEnded: async () => false,
@@ -576,8 +580,9 @@ describe('B-DC-006: handleDcAction guards', () => {
 
   it('To the Limit blocks Move action', async () => {
     const { interaction, responses } = buildMockInteraction(`dc_move_${MSG_ID}_f0`, PLAYER1_ID);
+    // Per alexanbv 2026-05-13: activationExtraActionThenStun is keyed by figureKey.
     const game = makeActionGame({
-      activationExtraActionThenStun: { [MSG_ID]: true },
+      activationExtraActionThenStun: { 'Test DC-1-0': true },
     });
     const ctx = buildActionCtx({
       game,

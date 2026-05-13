@@ -750,7 +750,7 @@ function getActivationActions(game, playerNum, deps) {
       // Stunned/no-position/massive-locked/To-the-Limit figures cannot Move
       if (!isStunned && hasPosition
           && !game.massiveMovementLocked?.[figureKey]
-          && !game.activationExtraActionThenStun?.[msgId]) {
+          && !game.activationExtraActionThenStun?.[figureKey]) {
         actions.push({
           type: ACTION_TYPES.MOVE_FIGURE,
           customId: buildCustomId(ACTION_TYPES.MOVE_FIGURE, { msgId, figureIndex }),
@@ -818,7 +818,7 @@ function getActivationActions(game, playerNum, deps) {
       if (mapId) {
         const dcEff = getDcEffects()?.[meta.dcName];
         const abilityText = dcEff?.abilityText || '';
-        const isNonSentient = abilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[msgId];
+        const isNonSentient = abilityText.includes('Non-Sentient') && !game.beastTamerInteractOverride?.[figureKey];
         const isCompanion = isDcCompanion(meta.dcName);
         if (!isNonSentient && !isCompanion) {
           const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;

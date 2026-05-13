@@ -2354,14 +2354,17 @@ export function resolveAbility(abilityId, context) {
     // Initialize an empty target-tracker; handlers/combat.js handleAttackTarget pushes
     // each chosen figureKey and refuses duplicates while this entry is set.
     if (entry.differentTargetsRequired) {
+      // Per alexanbv 2026-05-13: per-figureKey (Brutality / Sarlacc Sweep
+      // require different targets *per the activating figure*).
+      const _fadtFk = figureKeyForActivation(game, msgId);
       game.freeAttackDifferentTargets = game.freeAttackDifferentTargets || {};
-      game.freeAttackDifferentTargets[msgId] = [];
+      if (_fadtFk) game.freeAttackDifferentTargets[_fadtFk] = [];
       // Post-attack triggers like Brutal Cleave fire AFTER an attack
       // resolved — seed the tracker with the most-recent target so the
       // free attack must pick a different figure (per alexanbv 2026-05-11).
-      if (entry.seedDifferentTargetFromLastAttack) {
+      if (entry.seedDifferentTargetFromLastAttack && _fadtFk) {
         const _lastTgt = game.lastAttackTargetByMsgId?.[msgId];
-        if (_lastTgt) game.freeAttackDifferentTargets[msgId].push(_lastTgt);
+        if (_lastTgt) game.freeAttackDifferentTargets[_fadtFk].push(_lastTgt);
       }
     }
     // alexanbv 2026-05-13: per-figure migration for attack-frame flags.
@@ -8568,8 +8571,10 @@ export function resolveAbility(abilityId, context) {
     if (actionsData && typeof actionsData.remaining === 'number') {
       actionsData.remaining = Math.min(actionsData.total ?? 2, actionsData.remaining + 1);
     }
+    // Per alexanbv 2026-05-13: per-figureKey.
+    const _ttlFk = figureKeyForActivation(game, msgId);
     game.activationExtraActionThenStun = game.activationExtraActionThenStun || {};
-    game.activationExtraActionThenStun[msgId] = true;
+    if (_ttlFk) game.activationExtraActionThenStun[_ttlFk] = true;
     // Determine the activating figure key for immunity check
     const meta = dcMessageMeta.get(msgId);
     const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];

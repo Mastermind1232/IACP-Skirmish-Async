@@ -110,8 +110,9 @@ describe('PROBE-INT-004: beastTamerInteractOverride allows Non-Sentient to inter
   it('004: Nexu + beastTamerInteractOverride → interact offered', () => {
     const { game, deps, dc } = buildInteractScenario('Nexu (Regular)');
 
-    // Set Beast Tamer override for this DC
-    game.beastTamerInteractOverride = { [dc.msgId]: true };
+    // Set Beast Tamer override for the interact-attempting figure.
+    // Per alexanbv 2026-05-13: keyed by figureKey.
+    game.beastTamerInteractOverride = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const interacts = actions.filter(a => a.type === 'interact');

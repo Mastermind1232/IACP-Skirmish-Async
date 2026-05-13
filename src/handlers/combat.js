@@ -1340,13 +1340,14 @@ export async function handleAttackTarget(interaction, ctx) {
   // free-attack chain is active, each attack must target a different figure
   // than any previously-attacked target in the chain. destruct 2026-05-06:
   // "Brutality is one action to perform 2 attacks targeting different figures."
-  // freeAttackDifferentTargets[msgId] tracks figureKeys already attacked.
-  if (Array.isArray(game.freeAttackDifferentTargets?.[msgId]) && target.figureKey) {
-    if (game.freeAttackDifferentTargets[msgId].includes(target.figureKey)) {
+  // freeAttackDifferentTargets[figureKey] tracks figureKeys already
+  // attacked. Per alexanbv 2026-05-13: per-figure.
+  if (Array.isArray(game.freeAttackDifferentTargets?.[_attackerFkEarly]) && target.figureKey) {
+    if (game.freeAttackDifferentTargets[_attackerFkEarly].includes(target.figureKey)) {
       await interaction.followUp({ content: '🚫 **Different target required** — this multi-attack ability requires each attack to target a different figure. Pick another target.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    game.freeAttackDifferentTargets[msgId].push(target.figureKey);
+    game.freeAttackDifferentTargets[_attackerFkEarly].push(target.figureKey);
   }
   // Droid Arm (Migs Mayfeld): deduct 1 Power Token when attacking a target only visible via Droid Arm
   if (target.droidArmLOS) {

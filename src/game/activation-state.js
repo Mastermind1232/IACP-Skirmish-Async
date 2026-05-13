@@ -65,7 +65,7 @@ const ACTIVATION_MSGID_FLAGS = [
   // (per IACP rule clarification: "free attack bonus" is per-figure, not
   // per-multifigure-group; figureKey-keyed so figure 1's pending free
   // attack is not consumed by figure 0's attack).
-  'freeAttackDifferentTargets',
+  // freeAttackDifferentTargets MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
   'pendingOverrideAttackDice',
@@ -105,8 +105,8 @@ const ACTIVATION_MSGID_FLAGS = [
   'yhsiwOptions',
   'pendingBoRifle',
   'pendingBombDrop',
-  'activationExtraActionThenStun',
-  'beastTamerInteractOverride',
+  // activationExtraActionThenStun + beastTamerInteractOverride MIGRATED
+  // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   // imperialRetrofittingMultiAttack + arcingShotActive MIGRATED 2026-05-13
   // → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   // wookieeAvengerSlamUsed + specialActionUsedThisActivation MIGRATED
@@ -215,6 +215,10 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'autofireActive',
   'fireMissionActive',
   'autofireChainTargetSpace',
+  // alexanbv 2026-05-13 eighth-wave: more per-figure activation grants.
+  'activationExtraActionThenStun',
+  'beastTamerInteractOverride',
+  'freeAttackDifferentTargets',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
