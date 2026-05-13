@@ -57,7 +57,10 @@ const ACTIVATION_MSGID_FLAGS = [
   'forcedAttackTarget',
   // selfDefeatsAfterAttackMsgId + postActivationConditions MIGRATED
   // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
-  'applySelfStunAfterAttackFigureKey',
+  // applySelfStunAfterAttackFigureKey RECATEGORIZED 2026-05-13 →
+  // ACTIVATION_PLAYERNUM_FLAGS (write site keys by playerNum, not msgId;
+  // the msgId-cleanup loop never matched, leaving stale state if the
+  // attack handler skipped its own delete on an error path).
   'pendingCombatResupply',
   'pendingPostAttackConditions',
   'pendingMpBonus',
@@ -85,11 +88,15 @@ const ACTIVATION_MSGID_FLAGS = [
   // setTrapSpace MIGRATED 2026-05-13 → ROUND_OBJECT_FLAGS (alexanbv:
   // "Set a Trap is SoR/EoR" — round-scoped, not per-activation).
   'reverseEngineerActive',
-  'findsmanMeditationTarget',
+  // findsmanMeditationTarget RECATEGORIZED 2026-05-13 →
+  // ACTIVATION_PLAYERNUM_FLAGS (write at abilities.js sets
+  // `game.findsmanMeditationTarget[playerNum] = chosenDcName`; msgId
+  // cleanup never matched).
   // nextAttackIgnoreFigureLOS + optimalBombardmentBlastBonus MIGRATED
   // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
-  'deflectionPending',
-  'deflectionUnconditional',
+  // deflectionPending + deflectionUnconditional RECATEGORIZED 2026-05-13
+  // → ACTIVATION_PLAYERNUM_FLAGS (writes by playerNum, msgId cleanup
+  // never matched; round-boundary still resets via ROUND_OBJECT_FLAGS).
   'dcActivationLogMessageIds',
   'defenderThreadData',
   'deviceRerollGranted',
@@ -255,6 +262,16 @@ const ACTIVATION_FIGKEY_FLAGS = [
 const ACTIVATION_PLAYERNUM_FLAGS = [
   'groupNextAttacksBonusHits',
   'groupNextAttacksBonusConditions',
+  // Recategorized 2026-05-13: these were registered in
+  // ACTIVATION_MSGID_FLAGS but every write site keys them by playerNum.
+  // Their msgId-cleanup loop never matched, so they relied entirely on
+  // handler self-cleanup. Round-boundary still resets via
+  // ROUND_OBJECT_FLAGS; this gives activation-end cleanup the right
+  // shape for safety nets on error paths.
+  'applySelfStunAfterAttackFigureKey',
+  'findsmanMeditationTarget',
+  'deflectionPending',
+  'deflectionUnconditional',
 ];
 
 /**
