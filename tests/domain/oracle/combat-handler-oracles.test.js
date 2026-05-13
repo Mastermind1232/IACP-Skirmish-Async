@@ -509,8 +509,10 @@ describe('ORACLE-HANDLER-007: M22 Migs Return Fire — 0-Damage Hit', () => {
     assert.strictEqual(game.freeAttackBonusPending?.[migsFigKey], true,
       'M22: Migs Return Fire must set freeAttackBonusPending despite 0 damage');
 
-    // Witness 3: forcedAttackTarget points to the attacker
-    assert.strictEqual(game.forcedAttackTarget?.[migsMsgId], attackerFigKey,
+    // Witness 3: forcedAttackTarget points to the attacker.
+    // Per alexanbv 2026-05-13: keyed by Migs's figureKey (the figure
+    // that received the free-attack grant).
+    assert.strictEqual(game.forcedAttackTarget?.[migsFigKey], attackerFigKey,
       'M22: Migs Return Fire must target the attacker');
 
     // Witness 4: once-per-round gate set

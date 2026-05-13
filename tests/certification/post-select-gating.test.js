@@ -97,8 +97,9 @@ function decideAfterTargetSelect({ game, attackerFigureKey, msgId, targetFigureK
   }
 
   // 3. Forced attack target mismatch (combat.js:894–902)
-  //    Mandalorian Whip / Focus Fire / similar single-target locks
-  const forced = game.forcedAttackTarget?.[msgId];
+  //    Mandalorian Whip / Focus Fire / similar single-target locks.
+  //    Per alexanbv 2026-05-13: keyed by attacker figureKey.
+  const forced = game.forcedAttackTarget?.[attackerFigureKey];
   if (forced && targetFigureKey && targetFigureKey !== forced) {
     return { outcome: 'block', reason: 'forced-target-mismatch' };
   }
@@ -257,8 +258,9 @@ const SCENARIOS = [
       };
       const attackerMsgId = findDcMsgId(dcMessageMeta, game.gameId, 1, 'Bossk');
       enableAttackFor(game, attackerMsgId);
-      // Forced to Greedo, but scenario picks Jawa Scavenger → block
-      game.forcedAttackTarget = { [attackerMsgId]: 'Greedo-1-0' };
+      // Forced to Greedo, but scenario picks Jawa Scavenger → block.
+      // Per alexanbv 2026-05-13: keyed by attacker figureKey.
+      game.forcedAttackTarget = { 'Bossk-1-0': 'Greedo-1-0' };
       return {
         ...built,
         attacker: { playerNum: 1, figureKey: 'Bossk-1-0', msgId: attackerMsgId, figureIndex: 0 },
@@ -266,7 +268,7 @@ const SCENARIOS = [
       };
     },
     expected: { outcome: 'block', reason: 'forced-target-mismatch' },
-    reason: 'Forced-target lock (Focus Fire, Mandalorian Whip, similar): when game.forcedAttackTarget[msgId] is set, only that exact figureKey is legal. Handler returns early at combat.js:895–900.',
+    reason: 'Forced-target lock (Focus Fire, Mandalorian Whip, similar): when game.forcedAttackTarget[attackerFigureKey] is set, only that exact target figureKey is legal. Handler returns early at combat.js:895–900.',
   },
 
   // 5. pendingFiringSquad consumes the attack

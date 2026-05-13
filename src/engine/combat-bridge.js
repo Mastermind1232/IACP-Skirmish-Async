@@ -2974,8 +2974,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           if (_rfDefMsgId) {
             game.freeAttackBonusPending = game.freeAttackBonusPending || {};
             game.freeAttackBonusPending[_rfDefFk] = true;
+            // Per alexanbv 2026-05-13: forcedAttackTarget keyed by the
+            // forced figure's figureKey, not the group msgId. Return Fire
+            // forces the defender (now-attacker) onto the original attacker.
             game.forcedAttackTarget = game.forcedAttackTarget || {};
-            game.forcedAttackTarget[_rfDefMsgId] = combat.attackerFigureKey;
+            game.forcedAttackTarget[_rfDefFk] = combat.attackerFigureKey;
             const _rfOwnerId = getPlayerId(game, _rfDefPN);
             const _rfLabel = _rfDefIds.includes('return_fire_migs') ? 'Return Fire (Migs)' : 'Return Fire';
             await thread.send(sanitizeMentions({
@@ -3183,9 +3186,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     const ff = game.focusFireActive[combat.attackerFigureKey];
     ff.attacksRemaining -= 1;
     if (ff.attacksRemaining > 0) {
-      // Store first target — second attack must hit the same figure
+      // Store first target — second attack must hit the same figure.
+      // Per alexanbv 2026-05-13: keyed by attackerFigureKey so other
+      // figures in the same multifig group are not also forced.
       game.forcedAttackTarget = game.forcedAttackTarget || {};
-      game.forcedAttackTarget[combat.attackerMsgId] = combat.defenderFigureKey;
+      game.forcedAttackTarget[combat.attackerFigureKey] = combat.defenderFigureKey;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Focus Fire' };
       await thread.send(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Use the Attack button.`).catch(discordCatch);
@@ -3406,9 +3411,15 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (_bdb_fk) game.barrageDefenseBonus[_bdb_fk] = true;
     }
     // Return Fire (defender chain) forces target onto the original attacker.
+    // Per alexanbv 2026-05-13: keyed by attacker figureKey. Chain-attack
+    // entries carry figureKey explicitly; fall back to combat's
+    // attackerFigureKey only if a legacy entry omits it.
     if (_entry.forcedTargetFigureKey) {
-      game.forcedAttackTarget = game.forcedAttackTarget || {};
-      game.forcedAttackTarget[_entry.msgId] = _entry.forcedTargetFigureKey;
+      const _ftFk = _entry.figureKey || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : null);
+      if (_ftFk) {
+        game.forcedAttackTarget = game.forcedAttackTarget || {};
+        game.forcedAttackTarget[_ftFk] = _entry.forcedTargetFigureKey;
+      }
     }
     if (_entry.message && thread) {
       await thread.send(_entry.message).catch(discordCatch);

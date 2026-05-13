@@ -358,13 +358,18 @@ export function resolveAbility(abilityId, context) {
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = dcNameFromFigureKey(targetFigureKey);
-      // Post-push free attack (Mandalorian Whip): grant free attack targeting the pushed figure
+      // Post-push free attack (Mandalorian Whip): grant free attack targeting the pushed figure.
+      // Per alexanbv 2026-05-13: forcedAttackTarget keyed by attacker
+      // figureKey so a granted free-attack target on figure 0 does not
+      // lock figure 1's choice in a multifig group.
       if (entry.postPushFreeAttack) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         const _mwFk = figureKeyForActivation(game, msgId);
-        if (_mwFk) game.freeAttackBonusPending[_mwFk] = true;
-        game.forcedAttackTarget = game.forcedAttackTarget || {};
-        game.forcedAttackTarget[msgId] = targetFigureKey;
+        if (_mwFk) {
+          game.freeAttackBonusPending[_mwFk] = true;
+          game.forcedAttackTarget = game.forcedAttackTarget || {};
+          game.forcedAttackTarget[_mwFk] = targetFigureKey;
+        }
       }
       // Compute path and adjacency-exit warnings for the push
       const { pathStr: _pushPathStr, warnings: _pushWarnings } = computePushPathAndWarnings(game, prevPos, chosenSpace, targetOwner);

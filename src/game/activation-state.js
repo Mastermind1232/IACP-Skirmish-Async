@@ -56,7 +56,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // attacking figure's pool).
   'rushPending',
   'shoulderRushPending',
-  'forcedAttackTarget',
+  // forcedAttackTarget MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure; the forced-target lock applies to the
+  // specific figure that received the grant, not the whole group).
+  // Firing Squad's cross-trooper lock lives separately in
+  // firingSquadLockedTarget (per-invocation, not per-figure).
   // selfDefeatsAfterAttackMsgId + postActivationConditions MIGRATED
   // 2026-05-13 → ACTIVATION_FIGKEY_FLAGS (alexanbv: per-figure).
   // applySelfStunAfterAttackFigureKey RECATEGORIZED 2026-05-13 →
@@ -249,6 +253,12 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // alexanbv 2026-05-13 eleventh-wave: activation-kills counter (already
   // keyed by attackerFigureKey at both write sites; was miscategorized).
   'activationKills',
+  // alexanbv 2026-05-13 twelfth-wave: forced-attack-target lock. The
+  // lock is per-figure (Mandalorian Whip, Focus Fire, Battlefield
+  // Leadership, Shoulder Rush, Leia/Jyn Hair Trigger). Firing Squad's
+  // cross-trooper invocation lock lives separately in
+  // firingSquadLockedTarget; combat.js attack-declare checks both.
+  'forcedAttackTarget',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.

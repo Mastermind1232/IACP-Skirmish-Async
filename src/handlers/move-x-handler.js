@@ -766,7 +766,9 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
   // gain los, in which case it does not attack." If no LoS, do not
   // post the attack button; clean up forced-target + BL pending state
   // and log the outcome.
-  const forcedTargetFk = game.forcedAttackTarget?.[granteeMsgId];
+  // Per alexanbv 2026-05-13: forcedAttackTarget keyed by grantee
+  // figureKey post-migration.
+  const forcedTargetFk = game.forcedAttackTarget?.[granteeFigureKey];
   if (forcedTargetFk) {
     try {
       const { hasLineOfSightByCoord } = await import('../game/spatial.js').catch(() => ({}));
@@ -780,7 +782,7 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
         const hasLos = hasLineOfSightByCoord(game, granteePos, targetPos, ms, getFigureSize);
         if (!hasLos) {
           // No LoS: free attack skipped. Clean up state.
-          delete game.forcedAttackTarget[granteeMsgId];
+          delete game.forcedAttackTarget[granteeFigureKey];
           if (game.pendingBattlefieldLeadership) {
             try {
               const { clearPendingBattlefieldLeadership } = await import('../game/interrupts.js');

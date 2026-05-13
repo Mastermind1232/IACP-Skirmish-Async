@@ -1318,15 +1318,35 @@ export async function handleAttackTarget(interaction, ctx) {
   // all per-figure gates below (Focus Fire, Multi-Fire, etc.).
   const _atkFkForGate = _attackerFkEarly;
 
-  // Forced attack target validation (Mandalorian Whip, Focus Fire, etc.) — must target a specific figure
-  if (game.forcedAttackTarget?.[msgId] && target.figureKey) {
-    if (target.figureKey !== game.forcedAttackTarget[msgId]) {
-      const forcedName = dcNameFromFigureKey(game.forcedAttackTarget[msgId]);
-      const reason = game.focusFireActive?.[_atkFkForGate] ? 'Focus Fire — must target the **same figure**' : 'You must target the specified figure';
+  // Forced attack target validation (Mandalorian Whip, Focus Fire, etc.) — must target a specific figure.
+  // Per alexanbv 2026-05-13: keyed by attacker figureKey so a forced-
+  // target lock on figure 0 does not bleed onto figure 1's free choice.
+  // Firing Squad lock is per-invocation (across multiple troopers whose
+  // figureKey isn't known until each picks); read it as a fallback when
+  // no figureKey-keyed lock is set for this attacker.
+  let _forcedTargetFk = game.forcedAttackTarget?.[_attackerFkEarly] || null;
+  let _forcedTargetFromFiringSquad = false;
+  if (!_forcedTargetFk && Array.isArray(game.pendingFiringSquad)) {
+    const _fsEntryForGate = game.pendingFiringSquad.find(p => p.forMsgId === msgId);
+    if (_fsEntryForGate) {
+      _forcedTargetFk = game.firingSquadLockedTarget?.[_fsEntryForGate.triggeredByMsgId] || null;
+      _forcedTargetFromFiringSquad = !!_forcedTargetFk;
+    }
+  }
+  if (_forcedTargetFk && target.figureKey) {
+    if (target.figureKey !== _forcedTargetFk) {
+      const forcedName = dcNameFromFigureKey(_forcedTargetFk);
+      const reason = _forcedTargetFromFiringSquad
+        ? 'Firing Squad — must target the **same figure** as the first Trooper'
+        : (game.focusFireActive?.[_atkFkForGate] ? 'Focus Fire — must target the **same figure**' : 'You must target the specified figure');
       await interaction.followUp({ content: `**${reason}** (**${forcedName.replace(/_/g, ' ')}**).`, ephemeral: true }).catch(discordCatch);
       return;
     }
-    delete game.forcedAttackTarget[msgId];
+    // Consume the per-figureKey lock only — Firing Squad lock lives in
+    // firingSquadLockedTarget and is cleaned when its queue empties.
+    if (!_forcedTargetFromFiringSquad && game.forcedAttackTarget?.[_attackerFkEarly]) {
+      delete game.forcedAttackTarget[_attackerFkEarly];
+    }
   }
   // Multi-Fire: second attack must target a DIFFERENT figure
   if (game.multiFireBlockedTarget?.[_atkFkForGate] && target.figureKey) {
@@ -1410,22 +1430,18 @@ export async function handleAttackTarget(interaction, ctx) {
       // Firing Squad same-target lock (alexanbv 2026-05-11): the first
       // chosen Trooper's target locks the target for any remaining
       // Troopers in the same Firing Squad invocation. Captured on the
-      // entry's `triggeredByMsgId` (Kayn's msgId) — populated on first
-      // attack, read on subsequent attacks via forcedAttackTarget.
+      // entry's `triggeredByMsgId` (Kayn's msgId). Per alexanbv 2026-05-13:
+      // forcedAttackTarget keyed by attacker figureKey, but Firing Squad
+      // locks the target across MULTIPLE troopers whose attacking figureKey
+      // isn't known until each trooper picks. So the lock lives entirely
+      // in firingSquadLockedTarget[triggeredByMsgId] and the attack-declare
+      // gate above already pulls it via the Firing-Squad fallback (see
+      // `_fsLockFallbackTarget` block).
       const _fsEntry = (game.pendingFiringSquad || []).find(p => p.forMsgId === msgId);
       if (_fsEntry && target?.figureKey) {
         game.firingSquadLockedTarget = game.firingSquadLockedTarget || {};
-        const _fsLock = game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId];
-        if (!_fsLock) {
-          // First Trooper to attack — record the target and apply forced
-          // target to every OTHER pending entry for this invocation.
+        if (!game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId]) {
           game.firingSquadLockedTarget[_fsEntry.triggeredByMsgId] = target.figureKey;
-          game.forcedAttackTarget = game.forcedAttackTarget || {};
-          for (const _fsOther of (game.pendingFiringSquad || [])) {
-            if (_fsOther.triggeredByMsgId !== _fsEntry.triggeredByMsgId) continue;
-            if (_fsOther.forMsgId === msgId) continue;
-            game.forcedAttackTarget[_fsOther.forMsgId] = target.figureKey;
-          }
         }
       }
       game.pendingFiringSquad = (game.pendingFiringSquad || []).filter(p => p.forMsgId !== msgId);
@@ -9249,8 +9265,9 @@ export async function handleBlFriendlyPick(interaction, ctx) {
     triggeredByMsgId: pendingBL.leiaMsgId,
   });
   // Force the friendly's attack to target the figure Leia just attacked.
+  // Per alexanbv 2026-05-13: keyed by friendly figureKey.
   game.forcedAttackTarget = game.forcedAttackTarget || {};
-  game.forcedAttackTarget[friendlyMsgId] = capturedTarget;
+  game.forcedAttackTarget[friendlyFigureKey] = capturedTarget;
   // Set up the 1-space MOVE-X with bypassCosts + free-attack prompt.
   game.pendingMoveX = game.pendingMoveX || {};
   game.pendingMoveX[friendlyMsgId] = {

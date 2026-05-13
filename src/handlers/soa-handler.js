@@ -1037,8 +1037,9 @@ export async function handleSoaFire(interaction, ctx) {
       game.jynHairTriggerUsed[jynMsgId] = true;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       if (jynFk) game.freeAttackBonusPending[jynFk] = true;
+      // Per alexanbv 2026-05-13: keyed by Jyn's figureKey.
       game.forcedAttackTarget = game.forcedAttackTarget || {};
-      game.forcedAttackTarget[jynMsgId] = targetFk;
+      if (jynFk) game.forcedAttackTarget[jynFk] = targetFk;
       const _jynFkMatch = String(jynFk || '').match(/-(\d+)-(\d+)$/);
       const _jynFigIdx = _jynFkMatch ? _jynFkMatch[2] : '0';
       const _haBtn = new ButtonBuilder()

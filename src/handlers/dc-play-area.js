@@ -3551,7 +3551,10 @@ export async function handlePounceSpacePick(interaction, ctx) {
         .setLabel('Done')
         .setStyle(ButtonStyle.Success)
     );
-    const hasForcedTarget = game.forcedAttackTarget?.[msgId];
+    // Per alexanbv 2026-05-13: forcedAttackTarget keyed by activator
+    // figureKey post-migration. Read by the activator's figureKey.
+    const _ftActFk = figureKeyForActivation(game, msgId);
+    const hasForcedTarget = _ftActFk ? game.forcedAttackTarget?.[_ftActFk] : null;
     const editContent = abilityId === 'pounce'
       ? `**Pounce**: placed at **${String(chosenSpace).toUpperCase()}**. Use the **Attack** button for your free pounce attack (no action cost), or press **Done** to skip.`
       : hasForcedTarget
@@ -4343,8 +4346,9 @@ export async function handleShoulderRushFig(interaction, ctx) {
     // figure, no push.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
+    // Per alexanbv 2026-05-13: keyed by activator figureKey.
     game.forcedAttackTarget = game.forcedAttackTarget || {};
-    game.forcedAttackTarget[msgId] = targetFk;
+    if (pending.activatorFigureKey) game.forcedAttackTarget[pending.activatorFigureKey] = targetFk;
     const reason = !isSmall ? 'not SMALL' : 'push-immune';
     const logMsg = `**Shoulder Rush** — Targeting **${targetName}** (${reason}, no push). Attack that figure (free action).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
@@ -4370,8 +4374,9 @@ export async function handleShoulderRushFig(interaction, ctx) {
     // No room to push — grant free attack without push
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
+    // Per alexanbv 2026-05-13: keyed by activator figureKey.
     game.forcedAttackTarget = game.forcedAttackTarget || {};
-    game.forcedAttackTarget[msgId] = targetFk;
+    if (pending.activatorFigureKey) game.forcedAttackTarget[pending.activatorFigureKey] = targetFk;
     const logMsg = `**Shoulder Rush** — **${targetName}** is SMALL but no room to push. Attack that figure (free action).`;
     if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
     await updateDcActionsMessage(game, msgId, client).catch(discordCatch);
@@ -4431,11 +4436,12 @@ export async function handleShoulderRushSpace(interaction, ctx) {
   if (pending.activatorFigureKey && pending.activatorPos && prevPos) {
     pushFigure(game, pending.playerNum, pending.activatorFigureKey, prevPos);
   }
-  // Grant free attack targeting the pushed figure
+  // Grant free attack targeting the pushed figure.
+  // Per alexanbv 2026-05-13: keyed by activator figureKey.
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   if (pending.activatorFigureKey) game.freeAttackBonusPending[pending.activatorFigureKey] = true;
   game.forcedAttackTarget = game.forcedAttackTarget || {};
-  game.forcedAttackTarget[msgId] = targetFk;
+  if (pending.activatorFigureKey) game.forcedAttackTarget[pending.activatorFigureKey] = targetFk;
   const logMsg = `**Shoulder Rush** — Pushed **${targetName}** from ${prevPos?.toUpperCase() ?? '?'} → ${chosenSpace.toUpperCase()}. Entered vacated space. Attack that figure (free action).`;
   if (logGameAction) await logGameAction(game, client, logMsg, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   // Refresh board
