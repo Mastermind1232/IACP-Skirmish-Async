@@ -1623,13 +1623,21 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
   }
-  // Aim (Rebel Trooper Elite): if the target has already suffered damage
-  // during THIS FIGURE'S activation, +1 Hit +2 Accuracy. Per alexanbv
-  // 2026-05-13: per-figure tracking, not per-group.
+  // Aim (Rebel Trooper Regular AND Elite): "If you have not exited your
+  // space during this activation, apply +1 Damage and +2 Accuracy to
+  // your attack results."
+  //
+  // Per alexanbv 2026-05-13: BOTH Regular and Elite use the same Aim
+  // mechanic — per-FIGURE activation, checked against the attacker's
+  // own movement history (game.figureMoved[attackerFigureKey]).
+  //
+  // NOTE: The Elite card art as printed reads "during your group's
+  // activation" but alexanbv has confirmed this is INCORRECT card text;
+  // the actual ruling is the same per-figure scope as Regular. Treat
+  // both variants identically until the printed card is errata-corrected.
   let _aimFired = false;
   if ((_atkEff?.passives || []).includes('Aim')) {
-    const _aimDamaged = game.activationDamagedFigures?.[attackerFigureKey] || [];
-    if (target.figureKey && _aimDamaged.includes(target.figureKey)) {
+    if (!game.figureMoved?.[attackerFigureKey]) {
       _aimFired = true;
     }
   }
