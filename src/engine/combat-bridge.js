@@ -14,6 +14,7 @@ import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList } from '
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
 /**
  * Send a "you have N reaction card(s) playable now" notice to the player's
  * private Hand channel. Mirrors src/handlers/combat.js — combat thread is
@@ -1749,13 +1750,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   const _sfUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
   const _sfExh = game.exhaustedSkirmishUpgrades?.[combat.attackerMsgId] || [];
   if (cardNameIncludes(_sfUpgrades, 'Suppressive Fire') && !cardNameIncludes(_sfExh, 'Suppressive Fire') && combat.isRanged && damage > 0) {
-    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-    game.exhaustedSkirmishUpgrades[combat.attackerMsgId] = [..._sfExh, 'Suppressive Fire'];
-    // Apply Weaken to the target
+    // Apply Weaken to the target, then exhaust Suppressive Fire (effect resolves)
     const _sfTargetFk = combat.target?.figureKey;
     if (_sfTargetFk && !isConditionImmune(game, _sfTargetFk)) {
       _applyCondition(game, _sfTargetFk, 'Weaken');
     }
+    exhaustAttachment(game, combat.attackerMsgId, 'Suppressive Fire');
     const _sfTargetName = dcNameFromFigureKey(combat.target?.figureKey) || combat.defenderDcName;
     // Find SMALL friendly figures within 3 spaces of attacker for MP grant
     const _sfAttackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];

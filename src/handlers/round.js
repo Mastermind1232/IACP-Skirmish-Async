@@ -15,6 +15,7 @@ import { edgeKey } from '../game/coords.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect, hasMissionFlag } from '../data-loader.js';
 import { setPendingMissionSorReveal, clearPendingMissionSorReveal, setPendingChannelTheForceStrain, clearPendingChannelTheForceStrain } from '../game/interrupts.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -297,8 +298,7 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     const _ctfMid = _ctfPn === 1 ? p1CtFMsgId : p2CtFMsgId;
     if (!_ctfMid || hadCutLines) continue;
     // Exhaust the card
-    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-    game.exhaustedSkirmishUpgrades[_ctfMid] = [...(game.exhaustedSkirmishUpgrades[_ctfMid] || []), 'Channel the Force'];
+    exhaustAttachment(game, _ctfMid, 'Channel the Force');
     // Find FORCE USER cards in deck
     const _ctfDeckKey = _ctfPn === 1 ? 'player1CcDeck' : 'player2CcDeck';
     const _ctfDeck = game[_ctfDeckKey] || [];

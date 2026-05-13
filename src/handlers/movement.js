@@ -18,6 +18,7 @@ import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { setPendingRushPush, setPendingShoulderRush, setPendingMassivePush, clearPendingMassivePush, setPendingDioFollow, clearPendingDioFollow } from '../game/interrupts.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
@@ -1540,12 +1541,9 @@ export async function handleOverwatchInterruptUse(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
 
-  // Exhaust the Overwatch card
-  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-  game.exhaustedSkirmishUpgrades[owMsgId] = [...(game.exhaustedSkirmishUpgrades[owMsgId] || []), 'Overwatch'];
-
-  // Remove the token
+  // Remove the token, then exhaust the Overwatch card (effect fully resolves)
   if (game.overwatchTokenPosition) delete game.overwatchTokenPosition[owMsgId];
+  exhaustAttachment(game, owMsgId, 'Overwatch');
 
   // Determine DC name
   let dcDisplayName = 'E-Web Engineer';

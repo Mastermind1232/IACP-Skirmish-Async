@@ -16,6 +16,7 @@ import { resolveStartOfRoundEffect } from './round.js';
 import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -700,8 +701,7 @@ export async function handleOnDiplomatic(interaction, ctx) {
     await logGameAction(_odmGame, client, '**On a Diplomatic Mission** — Skipped.', { phase: 'ROUND', icon: 'card' });
   } else {
     // Exhaust the card
-    _odmGame.exhaustedSkirmishUpgrades = _odmGame.exhaustedSkirmishUpgrades || {};
-    _odmGame.exhaustedSkirmishUpgrades[_odmMsgId] = [...(_odmGame.exhaustedSkirmishUpgrades[_odmMsgId] || []), 'On a Diplomatic Mission'];
+    exhaustAttachment(_odmGame, _odmMsgId, 'On a Diplomatic Mission');
     if (_odmChoice === 'mp') {
       grantMovementBank(_odmGame, _odmMsgId, 2);
       await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
@@ -1414,14 +1414,11 @@ export async function handlePunishingStrike(interaction, ctx) {
     return;
   }
 
-  // Exhaust Punishing Strike
-  const _psExhKey = `ps_army_p${attackerPn}`;
-  game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-  game.exhaustedSkirmishUpgrades[_psExhKey] = [...(game.exhaustedSkirmishUpgrades[_psExhKey] || []), 'Punishing Strike'];
-
-  // Remove original condition, apply new one
+  // Remove original condition, apply new one, then exhaust Punishing Strike
   filterCondition(game, targetFigureKey, originalCondition);
   applyCondition(game, targetFigureKey, choice);
+  const _psExhKey = `ps_army_p${attackerPn}`;
+  exhaustAttachment(game, _psExhKey, 'Punishing Strike');
 
   const targetName = dcNameFromFigureKey(targetFigureKey);
   clearPendingPunishingStrike(game);

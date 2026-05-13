@@ -43,6 +43,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDcMessageIds, getDcAttachments, getCcHand, ccHandKey, ccDiscardKey, getPlayerId } from '../game/player-helpers.js';
+import { exhaustAttachment, depleteDc } from '../game/card-state-helpers.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import {
   STRAIN_OPTIONS,
@@ -182,8 +183,7 @@ export async function applyStrain(game, ctx, opts) {
       // keyed by msgId tracks the active activation thread.
       if (!game.dcActionsData?.[_hhMid]?.threadId) continue;
       amount = Math.max(0, amount - 1);
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
+      exhaustAttachment(game, _hhMid, 'Headhunter');
       const _hhHandKey = ccHandKey(controllerPN);
       const _hhHand = game[_hhHandKey] || [];
       if (_hhHand.length > 0) {
@@ -394,9 +394,7 @@ export async function handleStrainUdDeplete(interaction, ctx) {
   // its deplete state lives in p[1|2]DepletedDcMessageIds (NOT in the
   // attachment-deplete map).
   if (ev.udMsgId) {
-    const depKey = oppPN === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
-    if (!Array.isArray(game[depKey])) game[depKey] = [];
-    if (!game[depKey].includes(ev.udMsgId)) game[depKey].push(ev.udMsgId);
+    depleteDc(game, ev.udMsgId, oppPN);
   }
   ev.controllerPN = oppPN;
   ev.costMultiplier = 2;

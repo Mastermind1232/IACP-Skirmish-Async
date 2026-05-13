@@ -22,6 +22,7 @@ import { healHp, reduceHp } from '../game/damage-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { registerStrainFollowup } from './strain-handler.js';
 import { applyCondition as _applyConditionGlobal } from '../game/conditions.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
 
 // Strain followup: Madness Focus applied after the strain resolves.
 registerStrainFollowup('madness_focus', async (game, ctx, payload) => {
@@ -49,11 +50,7 @@ registerStrainFollowup('unshakable_remove', async (game, ctx, payload) => {
   filterCondition(game, payload.targetFk, payload.removedCond);
   // Exhaust Unshakable card (caller already provided usMsgId).
   if (payload.usMsgId) {
-    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-    const _existing = game.exhaustedSkirmishUpgrades[payload.usMsgId] || [];
-    if (!_existing.includes('Unshakable')) {
-      game.exhaustedSkirmishUpgrades[payload.usMsgId] = [..._existing, 'Unshakable'];
-    }
+    exhaustAttachment(game, payload.usMsgId, 'Unshakable');
   }
   await ctx.logGameAction?.(game, ctx.client,
     `**Unshakable** — Removed **${payload.removedCond}** from **${dcNameFromFigureKey(payload.targetFk)}** (post-strain). Card exhausted.`,
@@ -902,9 +899,7 @@ export async function handleSoaFire(interaction, ctx) {
   // (Non-Sentient only). Both options exhaust the upgrade.
   } else if (desc.subPromptKey === 'beast_tamer') {
     const _markExhausted = () => {
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[desc.sourceMsgId] = game.exhaustedSkirmishUpgrades[desc.sourceMsgId] || [];
-      game.exhaustedSkirmishUpgrades[desc.sourceMsgId].push('Beast Tamer');
+      exhaustAttachment(game, desc.sourceMsgId, 'Beast Tamer');
     };
     if (choiceKey === 'mp') {
       _markExhausted();
@@ -1009,11 +1004,7 @@ export async function handleSoaFire(interaction, ctx) {
       filterCondition(game, targetFk, chosenCond);
       // Exhaust Unshakable.
       const usMsgId = desc.extras?.unshakableMsgId || desc.sourceMsgId;
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[usMsgId] = game.exhaustedSkirmishUpgrades[usMsgId] || [];
-      if (!game.exhaustedSkirmishUpgrades[usMsgId].includes('Unshakable')) {
-        game.exhaustedSkirmishUpgrades[usMsgId].push('Unshakable');
-      }
+      exhaustAttachment(game, usMsgId, 'Unshakable');
       await interaction.message.edit({ content: `\u{1F6E1}\u{FE0F} **Unshakable** — **${targetDcName}** discarded **${chosenCond}**. Now suffering **1 Strain**...`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F6E1}\u{FE0F} **Unshakable** — ${targetDcName} -${chosenCond}, +1 strain.`, { phase: 'ROUND', icon: 'card' });
       // Strain via the player-choice subroutine (UD prompt, Fireproof,

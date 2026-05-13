@@ -9,15 +9,18 @@
  * Implementation: depleted-card state is tracked per-player as two
  *   message-id arrays on the game object, `game.p1DepletedDcMessageIds`
  *   and `game.p2DepletedDcMessageIds`. Every write across the source
- *   tree is an additive `.push(msgId)` (after a `|| []` lazy-init). No
- *   code path ever removes an entry: there is no `splice`, `filter`,
- *   `pop`, `shift`, `delete`, or `= []` reassignment targeting either
- *   array anywhere in `src/`. When `checkWinConditions` sets
- *   `game.ended`, the game terminates with no reset pass. Because
- *   each skirmish game == one mission, the "end of mission reset" rule
- *   has no cross-mission scope to operate on, and the invariant
- *   "depletion is terminal within a skirmish game" is the
- *   skirmish-scope shape of CRR-DPL-002.
+ *   tree now flows through one canonical helper —
+ *   `depleteDc(game, msgId, playerNum)` in
+ *   `src/game/card-state-helpers.js` — which does an additive
+ *   `.push(msgId)` (after a `|| []` lazy-init). No code path ever
+ *   removes an entry: there is no `splice`, `filter`, `pop`, `shift`,
+ *   `delete`, or `= []` reassignment targeting either array anywhere
+ *   in `src/`. When `checkWinConditions` sets `game.ended`, the game
+ *   terminates with no reset pass. Because each skirmish game == one
+ *   mission, the "end of mission reset" rule has no cross-mission
+ *   scope to operate on, and the invariant "depletion is terminal
+ *   within a skirmish game" is the skirmish-scope shape of
+ *   CRR-DPL-002.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -50,21 +53,32 @@ describe('PROBE-PD-DPL-002: skirmish has no end-of-mission depletion reset; rule
       'isDepletedRemovedFromGame must be a pure read — CRR-DPL-002');
   });
 
-  it('002c: source — every write to the depletion arrays is a `.push(msgId)` (additive only)', () => {
-    let pushSites = 0;
+  it('002c: source — the canonical `depleteDc` helper is an additive `.push(msgId)` and is called from multiple sites; no non-push mutations exist anywhere', () => {
+    // 1. The canonical write lives in card-state-helpers.js and is a push.
+    const HELPER_SRC = readFileSync(resolve(ROOT, 'src/game/card-state-helpers.js'), 'utf8');
+    assert.match(HELPER_SRC,
+      /export function depleteDc\(game, msgId, playerNum\)[\s\S]*?game\[key\]\.push\(msgId\)/,
+      'depleteDc must be an additive .push(msgId) — CRR-DPL-002');
+
+    // 2. Multiple sites call the helper (Imperial Retrofitting, dc_deplete_,
+    //    Under Duress, etc.).
+    let callSites = 0;
     let nonPushWriteSites = [];
     for (const p of walkFiles(resolve(ROOT, 'src'))) {
+      if (p.endsWith('card-state-helpers.js')) continue;
       const src = readFileSync(p, 'utf8');
-      const pushes = src.match(/p[12]DepletedDcMessageIds\.push\(/g) || [];
-      pushSites += pushes.length;
-      // Look for any non-push mutation: splice / pop / shift / filter-reassign / delete / = []
-      const bad = src.match(/p[12]DepletedDcMessageIds\s*=\s*\[\s*\]|p[12]DepletedDcMessageIds\.(?:splice|pop|shift|fill)\(|delete\s+game\.p[12]DepletedDcMessageIds/g);
+      const calls = src.match(/\bdepleteDc\s*\(/g) || [];
+      callSites += calls.length;
+      // Look for any non-push mutation outside the helper: splice / pop /
+      // shift / filter-reassign / delete / = [] / direct .push (which would
+      // mean someone bypassed the helper).
+      const bad = src.match(/p[12]DepletedDcMessageIds\s*=\s*\[\s*\]|p[12]DepletedDcMessageIds\.(?:splice|pop|shift|fill|push)\(|delete\s+game\.p[12]DepletedDcMessageIds/g);
       if (bad) nonPushWriteSites.push(p.replace(ROOT + '/', '') + ': ' + bad.join(','));
     }
-    assert.ok(pushSites >= 3,
-      `must have >=3 push sites across src/ (Imperial Retrofitting, dc_deplete_, Under Duress, Doubt) — found ${pushSites} — CRR-DPL-002`);
+    assert.ok(callSites >= 3,
+      `must have >=3 depleteDc() call sites across src/ — found ${callSites} — CRR-DPL-002`);
     assert.deepEqual(nonPushWriteSites, [],
-      'no source file may reset, splice, pop, shift, or delete either depletion array — CRR-DPL-002');
+      'no source file may reset, splice, pop, shift, delete, or bypass-push either depletion array — CRR-DPL-002');
   });
 
   it('002d: source — no file under src/ references "flip faceup", "reset depleted", or an end-of-mission depletion-reset helper', () => {

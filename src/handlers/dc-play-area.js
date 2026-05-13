@@ -21,6 +21,7 @@ import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
+import { depleteDc } from '../game/card-state-helpers.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import {
@@ -674,13 +675,7 @@ export async function handleDcDeplete(interaction, ctx) {
     await interaction.followUp({ content: 'This upgrade was already depleted and removed from the game.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  if (meta.playerNum === 1) {
-    game.p1DepletedDcMessageIds = game.p1DepletedDcMessageIds || [];
-    if (!game.p1DepletedDcMessageIds.includes(msgId)) game.p1DepletedDcMessageIds.push(msgId);
-  } else {
-    game.p2DepletedDcMessageIds = game.p2DepletedDcMessageIds || [];
-    if (!game.p2DepletedDcMessageIds.includes(msgId)) game.p2DepletedDcMessageIds.push(msgId);
-  }
+  depleteDc(game, msgId, meta.playerNum);
   const displayName = meta.displayName || meta.dcName;
   const { embed, files } = await renderDcEmbed(game, msgId, ctx, { exhausted: false, healthState: [] });
   embed.setTitle(`REMOVED FROM GAME (Depleted) — ${displayName}`);

@@ -18,6 +18,7 @@ import { getConfig } from '../game/figure-config.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
+import { exhaustAttachment, depleteDc } from '../game/card-state-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
@@ -717,8 +718,7 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
       if (_hhAtts.includes('Headhunter') && !_hhExh.includes('Headhunter')) {
         headhunterTriggered = true;
         amount = Math.max(0, amount - 1); // reduce Strain by 1
-        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-        game.exhaustedSkirmishUpgrades[_hhMid] = [..._hhExh, 'Headhunter'];
+        exhaustAttachment(game, _hhMid, 'Headhunter');
         // Opponent discards random CC or figure suffers 1 Damage
         const oppHand = getCcHand(game, playerNum) || [];
         if (oppHand.length > 0) {
@@ -1105,9 +1105,7 @@ export async function handleUnderDuress(interaction, ctx) {
     // Deplete Under Duress — mark as depleted
     const udMsgId = pending.underDuressDepleteMsgId;
     if (udMsgId) {
-      const depKey = udOwnerNum === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
-      game[depKey] = game[depKey] || [];
-      if (!game[depKey].includes(udMsgId)) game[depKey].push(udMsgId);
+      depleteDc(game, udMsgId, udOwnerNum);
     }
     // The UD owner now controls the strain choice
     pending.underDuressControllerPlayerNum = udOwnerNum;
@@ -1948,22 +1946,19 @@ export async function handleAttackTarget(interaction, ctx) {
     // Scavenged Weaponry: exhaust when declare attack → +1 Hit
     if (cardNameIncludes(_atkUpgrades, 'Scavenged Weaponry') && !cardNameIncludes(_exh, 'Scavenged Weaponry')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[msgId] = [..._exh, 'Scavenged Weaponry'];
+      exhaustAttachment(game, msgId, 'Scavenged Weaponry');
       await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch(discordCatch);
     }
     // Explosive Armaments: exhaust while attacking → Blast 1
     if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments') && !cardNameIncludes(_exh, 'Explosive Armaments')) {
       _pc.bonusBlast = (_pc.bonusBlast || 0) + 1;
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Explosive Armaments'];
+      exhaustAttachment(game, msgId, 'Explosive Armaments');
       await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
     }
     // The Darksaber: exhaust while attacking → reroll 1 attack die
     if (cardNameIncludes(_atkUpgrades, 'The Darksaber') && !cardNameIncludes(_exh, 'The Darksaber')) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'The Darksaber'];
+      exhaustAttachment(game, msgId, 'The Darksaber');
       await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch(discordCatch);
     }
     // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
@@ -1973,8 +1968,7 @@ export async function handleAttackTarget(interaction, ctx) {
       const _ffHp = _ffDefHs?.[_ffDefFi];
       if (_ffHp && _ffHp[0] < _ffHp[1]) {
         _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-        game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-        game.exhaustedSkirmishUpgrades[msgId] = [...(game.exhaustedSkirmishUpgrades[msgId] || []), 'Feeding Frenzy'];
+        exhaustAttachment(game, msgId, 'Feeding Frenzy');
         await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
       }
     }
@@ -4188,20 +4182,12 @@ async function _fireExhaustOnConsume(game, entry, thread) {
   if (entry.exhaustAttachment && entry.exhaustAttachment.msgId && entry.exhaustAttachment.name) {
     const _msgId = entry.exhaustAttachment.msgId;
     const _name = entry.exhaustAttachment.name;
-    game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-    const _prev = game.exhaustedSkirmishUpgrades[_msgId] || [];
-    if (!_prev.includes(_name)) {
-      game.exhaustedSkirmishUpgrades[_msgId] = [..._prev, _name];
-      if (thread) await thread.send(`**${_name}** — Attachment exhausted on use.`).catch(() => {});
+    if (exhaustAttachment(game, _msgId, _name) && thread) {
+      await thread.send(`**${_name}** — Attachment exhausted on use.`).catch(() => {});
     }
   }
   if (entry.depleteDc && entry.depleteDc.msgId && entry.depleteDc.playerNum) {
-    const _pn = entry.depleteDc.playerNum;
-    const _depKey = _pn === 1 ? 'p1DepletedDcMessageIds' : 'p2DepletedDcMessageIds';
-    game[_depKey] = game[_depKey] || [];
-    if (!game[_depKey].includes(entry.depleteDc.msgId)) {
-      game[_depKey].push(entry.depleteDc.msgId);
-    }
+    depleteDc(game, entry.depleteDc.msgId, entry.depleteDc.playerNum);
   }
 }
 
@@ -5273,8 +5259,7 @@ export async function handleCrossTrainingReroll(interaction, ctx) {
     // Exhaust the upgrade
     const ctMsgId = combat.crossTrainingDefMsgId;
     if (ctMsgId) {
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      game.exhaustedSkirmishUpgrades[ctMsgId] = [...(game.exhaustedSkirmishUpgrades[ctMsgId] || []), 'Cross Training'];
+      exhaustAttachment(game, ctMsgId, 'Cross Training');
     }
     const dodgeTag = newDie.dodge ? '/DODGE' : '';
     await thread.send(`**Cross Training** — Exhausted. Swapped ${oldColor} → ${newColor} die #${dieIdx + 1}, rerolled: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
@@ -9640,9 +9625,7 @@ export async function handleZilloPierceCancel(interaction, ctx) {
   if (isUse) {
     const ztMsgId = combat.zilloPierceCancelMsgId;
     if (ztMsgId) {
-      game.exhaustedSkirmishUpgrades = game.exhaustedSkirmishUpgrades || {};
-      const exh = game.exhaustedSkirmishUpgrades[ztMsgId] || [];
-      game.exhaustedSkirmishUpgrades[ztMsgId] = [...exh, 'Zillo Technique'];
+      exhaustAttachment(game, ztMsgId, 'Zillo Technique');
     }
     combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2;
     await interaction.message.edit({
