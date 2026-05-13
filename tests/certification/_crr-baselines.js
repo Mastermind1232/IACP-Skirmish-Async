@@ -203,6 +203,8 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingSuppressiveFireMp',
   'pendingStrikeMeDown',
   'pendingSlowOnTheDraw',
+  'pendingForceIsWithMe',
+  'pendingFlawlessExecution',
   'pendingScavengedWeaponryTransfer',
   'pendingRightBackAtYa',
   'pendingOrbitalBombardment',

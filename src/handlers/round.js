@@ -1173,8 +1173,10 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           });
         }
 
-        // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
-        if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
+        // Shift (Clawdite Shapeshifter): form re-pick at start of round.
+        // Shape (initial Form pick at post-deploy) is handled in
+        // src/handlers/setup.js — do NOT add `shape_clawdite_*` here.
+        if (sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
           const ownerId = getPlayerId(game, playerNum);
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;
@@ -1447,8 +1449,10 @@ export async function handleEndStartOfRound(interaction, ctx) {
           await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
-        // Shape/Shift (Clawdite Shapeshifter): form picker at start of round
-        if (sIds.includes('shape_clawdite_elite') || sIds.includes('shape_clawdite_reg') || sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
+        // Shift (Clawdite Shapeshifter): form re-pick at start of round.
+        // Shape (initial Form pick at post-deploy) is handled in
+        // src/handlers/setup.js — do NOT add `shape_clawdite_*` here.
+        if (sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
           const ownerId = getPlayerId(game, playerNum);
           const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
           const _curForm = _fk ? getConfig(game, _fk)?.form : null;

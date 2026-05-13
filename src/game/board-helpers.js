@@ -18,6 +18,34 @@ import {
   isDcCompanion,
 } from '../data-loader.js';
 
+/**
+ * Active terminals for the current mission — the map's terminals minus
+ * any that were discarded by BD-1's **Terminal Slicing** (Double Action
+ * Special). Discarded terminals are tracked additively on
+ * `game.discardedTerminals`. Use this helper at every terminal-read
+ * site so Scomp Link / Terminal Network / control counting / Use
+ * Terminal interact all respect Terminal Slicing.
+ *
+ * @param {object} game
+ * @param {string} mapId
+ * @returns {string[]} terminal coords (canonical case from map-tokens) still in play
+ */
+export function getActiveTerminals(game, mapId) {
+  const mapData = getMapTokensData()?.[mapId];
+  const all = mapData?.terminals || [];
+  const discarded = game?.discardedTerminals || [];
+  if (discarded.length === 0) return all;
+  const discardedSet = new Set(discarded.map((c) => normalizeCoord(c)));
+  return all.filter((t) => !discardedSet.has(normalizeCoord(t)));
+}
+
+/** True iff the given terminal coord has been discarded this game. */
+export function isTerminalDiscarded(game, coord) {
+  if (!game?.discardedTerminals || !coord) return false;
+  const c = normalizeCoord(coord);
+  return game.discardedTerminals.some((d) => normalizeCoord(d) === c);
+}
+
 /** Compute the set of edge keys for closed (not-yet-opened) doors on the current map. */
 export function getClosedDoorEdges(game) {
   const mapId = game?.selectedMap?.id;
@@ -336,7 +364,7 @@ export function getLegalInteractOptions(game, playerNum, figureKey, mapId) {
     }
   }
 
-  const terminals = mapData.terminals || [];
+  const terminals = getActiveTerminals(game, mapId);
   if (terminals.length && isFigureAdjacentOrOnAny(game, playerNum, figureKey, mapId, toLowerSet(terminals))) {
     options.push({ id: 'use_terminal', label: 'Use Terminal', missionSpecific: false });
   }
@@ -582,8 +610,8 @@ export function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
 
 /** Count terminals exclusively controlled by player (on or adjacent; only they have presence). */
 export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
-  const mapData = getMapTokensData()[mapId];
-  if (!mapData?.terminals?.length) return 0;
+  const terminals = getActiveTerminals(game, mapId);
+  if (!terminals.length) return 0;
   const mapSpaces = getBoundedMapSpaces(mapId);
   if (!mapSpaces?.adjacency) return 0;
   const adjacency = mapSpaces.adjacency || {};
@@ -594,7 +622,7 @@ export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const p2Cells = getPlayerOccupiedCellsForControl(game, 2);
 
   let count = 0;
-  for (const term of mapData.terminals) {
+  for (const term of terminals) {
     const t = normalizeCoord(term);
     const controlSet = new Set([t, ...(adjacency[t] || []).map((n) => normalizeCoord(n))]);
     if (_npcBlocksControlIn(game, controlSet)) continue; // Thug adjacent → uncontrolled

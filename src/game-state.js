@@ -205,6 +205,7 @@ function ensureGameShape(game) {
     'crippledFigures', 'disabledFigures',
     'p1ActivatedDcIndices', 'p2ActivatedDcIndices',
     'p1DepletedDcMessageIds', 'p2DepletedDcMessageIds',
+    'discardedTerminals',
     'initiativeDeployMessageIds', 'nonInitiativeDeployMessageIds',
     'nonInitiativeDeployedConfirmIds', 'attachRedoNoticeIds',
     'setupLogMessageIds',

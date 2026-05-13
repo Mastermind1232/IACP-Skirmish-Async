@@ -900,9 +900,12 @@ export async function finalizeActivation({
     await thread.send({ content: `🎯 **Hunt Dissent** — When you or a friendly TROOPER within 3 spaces defeats a hostile figure, gain 1 Block Token.` }).catch(discordCatch);
   }
 
-  // D30. Air Support (Bodhi)
+  // D30. Air Support (Bodhi Rook): when a friendly figure spends a Power
+  // Token while attacking and the attacker does NOT have Focus, apply +2
+  // Accuracy to the attack results. Auto-applies at the attacker
+  // token-spend site in combat.js via `_maybeApplyAirSupport`.
   if (_abilityIds.includes('air_support_bodhi')) {
-    await thread.send({ content: `✈️ **Air Support** — After a friendly figure resolves an attack, if the target is in Bodhi's LOS, the target suffers 1 additional Damage.` }).catch(discordCatch);
+    await thread.send({ content: `✈️ **Air Support** — When a friendly figure spends a Power Token while attacking and is **not Focused**, +2 Accuracy is applied to the attack.` }).catch(discordCatch);
   }
 
   // D31. Fast Learner (Mara Jade)

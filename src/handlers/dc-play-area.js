@@ -3418,7 +3418,10 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   // the prompt at the correct moment.
   const actionsData = game.dcActionsData?.[msgId];
   if (actionsData) {
-    consumeActionForCurrentFigure(actionsData, 1, game, msgId);
+    // Double Action Specials (BD-1 Terminal Slicing, etc.) cost both
+    // actions; standard Special Action costs 1.
+    const actionCost = resolveResult.doubleAction ? 2 : 1;
+    consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
     await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: true });
   }
   if (resolveResult.freeAction && actionsData) {

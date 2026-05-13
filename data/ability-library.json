@@ -4762,6 +4762,15 @@
       },
       "wiredStatus": "wired"
     },
+    "terminal_slicing_bd1": {
+      "type": "dcSpecial",
+      "category": "active",
+      "label": "Terminal Slicing",
+      "description": "Double Action Special: discard an adjacent terminal to draw 1 Command card.",
+      "terminalSlicing": true,
+      "doubleAction": true,
+      "wiredStatus": "wired"
+    },
     "Stimulants": {
       "type": "ccEffect",
       "label": "You or an adjacent friendly suffers 1 Damage; then gain 1 MP and become Focused",

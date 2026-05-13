@@ -26,7 +26,8 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI, sendModsYn } from './combat.js';
-import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol, clearPendingForceIsWithMe } from '../game/interrupts.js';
+import { getDcMessageIds as _getDcMessageIdsFiwm } from '../game/player-helpers.js';
 
 export async function handleToughLuck(interaction, ctx) {
   const {
@@ -554,6 +555,90 @@ export async function handleSlowOnTheDrawResume(interaction, ctx) {
   if (thread) await thread.send('**Slow on the Draw** — Interrupt complete. Greedo\'s attack resumes.').catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, '**Slow on the Draw** — Interrupt resolved. Original attack resumed.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 
+  saveGames(game.gameId);
+}
+
+/**
+ * The Force is With Me (Chirrut Imwe): defender (Chirrut's owner) picks an
+ * adjacent hostile figure when a Ranged attack targets Chirrut. The chosen
+ * hostile takes 1 Damage AND -1 Damage is applied to the attack results
+ * (defender modifier — combat.defenderDamageReduction).
+ *
+ * Per alexanbv 2026-05-13: previously auto-picked the first adjacent
+ * hostile and incorrectly subtracted from bonusHits. Both fixed.
+ *
+ * Button prefixes:
+ *   force_with_me_pick_<gameId>_<idx>  → pick adjacent hostile at idx
+ *   force_with_me_skip_<gameId>        → decline
+ */
+export async function handleForceIsWithMe(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, dcHealthState } = ctx;
+  const customId = interaction.customId;
+  const isSkip = customId.startsWith('force_with_me_skip_');
+  const gameId = parseCustomId(customId, isSkip ? 'force_with_me_skip_' : 'force_with_me_pick_').split('_')[0];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingForceIsWithMe;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending Force is With Me.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const defPN = pending.defenderPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defPN, canActAsPlayer, 'Only Chirrut\'s owner may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ content: interaction.message.content, components: [] }).catch(discordCatch);
+
+  if (isSkip) {
+    await interaction.channel.send('**The Force is With Me** — Skipped.').catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, '**The Force is With Me** — Chirrut declined.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    clearPendingForceIsWithMe(game);
+    saveGames(game.gameId);
+    return;
+  }
+
+  // Parse the picked index from `force_with_me_pick_<gameId>_<idx>`.
+  const rest = parseCustomId(customId, 'force_with_me_pick_');
+  const parts = rest.split('_');
+  const pickedIdx = parseInt(parts[1] ?? parts[0], 10);
+  const chosenFk = pending.adjacentHostiles?.[pickedIdx];
+  if (!chosenFk) {
+    await interaction.followUp({ content: 'Invalid pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Apply -1 Damage to the attack results (defender modifier — kicks in
+  // at computeCombatResult via combat.defenderDamageReduction).
+  if (game.pendingCombat) {
+    game.pendingCombat.defenderDamageReduction = (game.pendingCombat.defenderDamageReduction || 0) + 1;
+  }
+
+  // Apply 1 Damage to the chosen adjacent hostile via the damage pipeline.
+  const chosenDcName = dcNameFromFigureKey(chosenFk);
+  const _fkMatch = chosenFk.match(/^(.+)-(\d+)-(\d+)$/);
+  if (_fkMatch && dcHealthState) {
+    const [, _dcN, , _fiStr] = _fkMatch;
+    const _msgIds = _getDcMessageIdsFiwm(game, pending.attackerPlayerNum) || [];
+    const _dcList = getDcList(game, pending.attackerPlayerNum) || [];
+    let _chosenMsgId = null;
+    for (let i = 0; i < _msgIds.length; i++) {
+      if (_dcList[i]?.dcName === _dcN) { _chosenMsgId = _msgIds[i]; break; }
+    }
+    if (_chosenMsgId) {
+      await _applyDamage(game, { dcHealthState, logGameAction, client }, {
+        figureKey: chosenFk,
+        msgId: _chosenMsgId,
+        figIndex: parseInt(_fiStr, 10),
+        amount: 1,
+        controllerPlayerNum: pending.attackerPlayerNum,
+        source: 'The Force is With Me',
+      });
+    }
+  }
+
+  await interaction.channel.send(`**The Force is With Me** — **${chosenDcName}** suffers 1 Damage; -1 Damage applied to the attack results.`).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `**The Force is With Me** — Chirrut picks ${chosenDcName} (1 dmg) and reduces attack damage by 1.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+
+  clearPendingForceIsWithMe(game);
   saveGames(game.gameId);
 }
 

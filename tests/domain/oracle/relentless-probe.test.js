@@ -53,17 +53,31 @@ describe('PROBE-RELENTLESS-002: hasRelentlessAbility', () => {
 });
 
 describe('PROBE-RELENTLESS-003: relentlessInRange', () => {
-  it('distance ≤ 3 → true', () => {
+  it('distance ≤ 3 → true (range-restricted ids, no ids passed)', () => {
     for (const d of [0, 1, 2, 3]) assert.equal(relentlessInRange(d), true, `d=${d}`);
   });
-  it('distance > 3 → false', () => {
+  it('distance > 3 → false (range-restricted ids, no ids passed)', () => {
     assert.equal(relentlessInRange(4), false);
     assert.equal(relentlessInRange(10), false);
   });
-  it('non-finite → false', () => {
+  it('non-finite → false (range-restricted ids, no ids passed)', () => {
     assert.equal(relentlessInRange(NaN), false);
     assert.equal(relentlessInRange(Infinity), false);
     assert.equal(relentlessInRange(undefined), false);
+  });
+  it('Fifth Brother (fifth_brother_relentless) — no range gate, any distance → true', () => {
+    for (const d of [0, 1, 5, 99, Infinity, NaN]) {
+      assert.equal(relentlessInRange(d, ['fifth_brother_relentless']), true, `d=${d}`);
+    }
+  });
+  it('Trandoshan / IG-88 still range-3 gated when ids are passed', () => {
+    assert.equal(relentlessInRange(3, ['relentless_ig88']), true);
+    assert.equal(relentlessInRange(4, ['relentless_ig88']), false);
+    assert.equal(relentlessInRange(3, ['relentless_trandoshan_elite']), true);
+    assert.equal(relentlessInRange(4, ['relentless_trandoshan_reg']), false);
+  });
+  it('mixed ids — if ANY id is unrestricted, fire at any distance', () => {
+    assert.equal(relentlessInRange(99, ['relentless_ig88', 'fifth_brother_relentless']), true);
   });
 });
 

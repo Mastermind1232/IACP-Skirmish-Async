@@ -437,7 +437,11 @@ export function computeCombatResult(combat) {
   // handlers/combat.js handleCombatSurge alongside Weakened's surge
   // penalty. computeCombatResult only surfaces the flag here.)
   const attackerHidden = !!combat.attackerConds?.includes('Hide');
-  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock) : 0;
+  // Defender-side flat damage reduction (e.g. Chirrut Imwe's "The Force
+  // is With Me" → -1 Damage to the attack results when the defender
+  // picks an adjacent hostile to take 1 Damage instead).
+  const defenderDamageReduction = combat.defenderDamageReduction || 0;
+  let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock - defenderDamageReduction) : 0;
   if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
   const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
   if (combat.attackResultReplaceWithStun && damage > 0) {

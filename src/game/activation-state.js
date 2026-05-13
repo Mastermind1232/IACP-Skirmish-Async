@@ -711,6 +711,8 @@ const ROUND_NULL_FLAGS = [
   'pendingLastStand',
   'pendingErgChoices',
   'pendingSlowOnTheDraw',
+  'pendingForceIsWithMe',
+  'pendingFlawlessExecution',
   'pendingForceExhaustion',
   'slowOnTheDrawInterrupt',
   // Movement/activation pendings — safety net

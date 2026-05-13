@@ -1150,10 +1150,12 @@
         "black"
       ],
       "specialAbilityIds": [
-        "stim_canister_bd1"
+        "stim_canister_bd1",
+        "terminal_slicing_bd1"
       ],
       "specials": [
-        "Stim Canister"
+        "Stim Canister",
+        "Terminal Slicing"
       ],
       "attachment": false,
       "companion": true,

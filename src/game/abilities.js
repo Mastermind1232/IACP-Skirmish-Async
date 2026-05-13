@@ -11,7 +11,7 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.j
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { countGameSpaces } from './board-helpers.js';
+import { countGameSpaces, getActiveTerminals } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 
 
@@ -5907,9 +5907,9 @@ export function resolveAbility(abilityId, context) {
     const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const figKey = figureKeys[selectedFig] || figureKeys[0];
     const figPos = figKey ? game.figurePositions?.[meta.playerNum]?.[figKey] : null;
-    // Get terminal positions for current map
+    // Active terminals (filter out BD-1 Terminal-Slicing discards).
     const mapId = game.selectedMap?.id;
-    const terminals = (mapId && getMapTokensData) ? (getMapTokensData()[mapId]?.terminals || []) : [];
+    const terminals = mapId ? getActiveTerminals(game, mapId) : [];
     // Check adjacency: Manhattan distance === 1 to any terminal
     let adjacentTerminal = null;
     if (figPos && terminals.length > 0) {
@@ -5929,6 +5929,85 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `**Scomp Link** — R2-D2 is adjacent to terminal **${String(adjacentTerminal).toUpperCase()}**. Drew ${drew.length} Command card${drew.length !== 1 ? 's' : ''}.`,
       drewCards: drew,
+    };
+  }
+
+  // dcSpecial: terminal_slicing_bd1 (BD-1, Double Action Special) — discard
+  // an adjacent terminal to draw 1 Command card.
+  //
+  // Picker semantics: if multiple terminals are adjacent, return a target
+  // choice list (via requiresChoice with space-style entries). With one
+  // adjacent terminal it resolves immediately.
+  //
+  // Side effects on apply:
+  //   - Push the chosen terminal coord to `game.discardedTerminals`
+  //     (additive; all downstream terminal readers go through
+  //     getActiveTerminals so the terminal disappears from the board
+  //     model for the rest of the game).
+  //   - Draw 1 CC into the activator's hand.
+  //   - Result `doubleAction: true` signals the dc-play-area caller to
+  //     consume a second action on top of the standard +1 cost.
+  if (entry.type === 'dcSpecial' && entry.terminalSlicing) {
+    const { game, meta, msgId, choiceIndex } = context;
+    if (!game || !meta) return { applied: false, manualMessage: '**Terminal Slicing** — Resolve manually.' };
+    const mapId = game.selectedMap?.id;
+    const terminals = mapId ? getActiveTerminals(game, mapId) : [];
+    if (terminals.length === 0) {
+      return { applied: false, manualMessage: '**Terminal Slicing** — No terminals remain on this map.' };
+    }
+    const figureKeys = getFigureKeysForDcMsg(game, meta.playerNum, meta);
+    const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const figKey = figureKeys[selectedFig] || figureKeys[0];
+    const figPos = figKey ? game.figurePositions?.[meta.playerNum]?.[figKey] : null;
+    if (!figPos) {
+      return { applied: false, manualMessage: '**Terminal Slicing** — BD-1 has no position on the board.' };
+    }
+    const fp = parseCoord(figPos);
+    const adjacentTerminals = terminals.filter((t) => {
+      const tp = parseCoord(String(t).toLowerCase());
+      return Math.abs(fp.col - tp.col) + Math.abs(fp.row - tp.row) === 1;
+    });
+    if (adjacentTerminals.length === 0) {
+      return { applied: false, manualMessage: '**Terminal Slicing** — BD-1 is not adjacent to a terminal.' };
+    }
+    // Phase 1: multiple adjacent → present picker. Phase 2: resolve.
+    let chosenTerminal;
+    if (adjacentTerminals.length === 1) {
+      chosenTerminal = adjacentTerminals[0];
+    } else if (choiceIndex != null && choiceIndex >= 0 && choiceIndex < adjacentTerminals.length) {
+      chosenTerminal = adjacentTerminals[choiceIndex];
+    } else {
+      return {
+        requiresChoice: true,
+        choices: adjacentTerminals.map((t, i) => ({
+          index: i,
+          label: `Discard ${String(t).toUpperCase()}`,
+          targetFigureKey: null,
+          value: t,
+        })),
+        choiceLabel: '**Terminal Slicing** — Choose an adjacent terminal to discard:',
+      };
+    }
+    // Discard terminal (append-only) and draw 1 CC.
+    game.discardedTerminals = game.discardedTerminals || [];
+    if (!game.discardedTerminals.includes(chosenTerminal)) {
+      game.discardedTerminals.push(chosenTerminal);
+    }
+    const drew = drawCcCards(game, meta.playerNum, 1);
+    if (!drew.length) {
+      return {
+        applied: true,
+        doubleAction: true,
+        logMessage: `**Terminal Slicing** — Discarded terminal **${String(chosenTerminal).toUpperCase()}** (no Command cards left in deck to draw).`,
+        refreshDcEmbed: true,
+      };
+    }
+    return {
+      applied: true,
+      doubleAction: true,
+      logMessage: `**Terminal Slicing** — Discarded terminal **${String(chosenTerminal).toUpperCase()}**. Drew 1 Command card.`,
+      drewCards: drew,
+      refreshDcEmbed: true,
     };
   }
 

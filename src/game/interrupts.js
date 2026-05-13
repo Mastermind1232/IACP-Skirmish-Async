@@ -107,6 +107,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   SUPPRESSIVE_FIRE_MP:   'suppressive-fire-mp',
   STRIKE_ME_DOWN:        'strike-me-down',
   SLOW_ON_THE_DRAW:      'slow-on-the-draw',
+  FORCE_IS_WITH_ME:      'force-is-with-me',
   SCAVENGED_WEAPONRY_TRANSFER: 'scavenged-weaponry-transfer',
   RIGHT_BACK_AT_YA:      'right-back-at-ya',
   ORBITAL_BOMBARDMENT:   'orbital-bombardment',
@@ -604,6 +605,9 @@ export function clearPendingStrikeMeDown(game) { _clearDual(game, 'pendingStrike
 
 export function setPendingSlowOnTheDraw(game, payload) { _setDual(game, 'pendingSlowOnTheDraw', INTERRUPT_TYPES.SLOW_ON_THE_DRAW, payload); }
 export function clearPendingSlowOnTheDraw(game) { _clearDual(game, 'pendingSlowOnTheDraw', INTERRUPT_TYPES.SLOW_ON_THE_DRAW); }
+
+export function setPendingForceIsWithMe(game, payload) { _setDual(game, 'pendingForceIsWithMe', INTERRUPT_TYPES.FORCE_IS_WITH_ME, payload); }
+export function clearPendingForceIsWithMe(game) { _clearDual(game, 'pendingForceIsWithMe', INTERRUPT_TYPES.FORCE_IS_WITH_ME); }
 
 export function setPendingScavengedWeaponryTransfer(game, payload) { _setDual(game, 'pendingScavengedWeaponryTransfer', INTERRUPT_TYPES.SCAVENGED_WEAPONRY_TRANSFER, payload); }
 export function clearPendingScavengedWeaponryTransfer(game) { _clearDual(game, 'pendingScavengedWeaponryTransfer', INTERRUPT_TYPES.SCAVENGED_WEAPONRY_TRANSFER); }

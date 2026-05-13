@@ -257,10 +257,15 @@ export function buildLabelCountsFromGame(game) {
   return Object.keys(counts).length ? counts : null;
 }
 
-export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token', strainMap = null, fluctuationPositions = null, labelCounts = null) {
+export function getMapTokensForRender(mapId, missionVariant, openedDoors = [], ancillaryTokens = null, tokenLabel = 'Token', strainMap = null, fluctuationPositions = null, labelCounts = null, discardedTerminals = []) {
   const mapData = getMapTokensData()[mapId];
   if (!mapData) return { terminals: [], missionA: [], missionB: [], doors: [], smoke: [], rubble: [], energyShield: [], device: [], napalm: [] };
-  const terminals = mapData.terminals || [];
+  // Filter out terminals discarded by BD-1's Terminal Slicing.
+  const allTerminals = mapData.terminals || [];
+  const discardedSet = new Set((discardedTerminals || []).map((c) => String(c).toLowerCase()));
+  const terminals = discardedSet.size === 0
+    ? allTerminals
+    : allTerminals.filter((t) => !discardedSet.has(String(t).toLowerCase()));
   const missionA = buildMissionTokens(mapData.missionA, tokenLabel, labelCounts);
   // If fluctuation positions are provided (post-swap), build missionB with overridden positions
   let missionBData = mapData.missionB;

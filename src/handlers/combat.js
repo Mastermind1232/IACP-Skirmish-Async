@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -224,7 +224,7 @@ import {
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -2304,7 +2304,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // destruct 2026-05-06: routed through applyStrain so the target's controller
   // gets the per-strain choice prompt + Under Duress pre-prompt fires for the
   // attacker (UD prompt fires regardless of who caused the strain).
-  if (hasRelentlessAbility(atkSpecialIds) && relentlessInRange(distanceToTarget)) {
+  if (hasRelentlessAbility(atkSpecialIds) && relentlessInRange(distanceToTarget, atkSpecialIds)) {
     await applyStrain(game, ctx, {
       figureKey: target.figureKey,
       controllerPlayerNum: defenderPlayerNum,
@@ -2322,17 +2322,67 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Flawless Execution (Cad Bane): become Focused; if already Focused → Wild token + yellow die
+  // Flawless Execution (Cad Bane): "Before you declare an attack, you
+  // become Focused. If you are already Focused, you may gain 1 Power
+  // Token and add 1 attack die of any color to your attack pool instead
+  // of 1 green die."
+  //
+  // Per alexanbv 2026-05-13: when already-Focused, Cad Bane CHOOSES the
+  // die color AND the power token type (and he may immediately spend
+  // that token on this attack). For AI play, default to red die +
+  // damage token.
   if (atkSpecialIds.includes('flawless_execution')) {
     if (!attackerConds.includes('Focus')) {
       game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'green'] };
       resetCondition(game, attackerFigureKey, 'Focus');
       await thread.send('**Flawless Execution** — Cad Bane is **Focused** before attacking (+1 green die).');
     } else {
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'yellow'] };
-      game.pendingPowerTokenGrant = { grants: [{ figureKey: attackerFigureKey, figName: meta.dcName, count: 1 }], channelId: thread.id, playerNum: attackerPlayerNum };
-      await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 yellow die. Choose a power token type:');
-      await sendPowerTokenChoicePrompt(thread, game.gameId, game.pendingPowerTokenGrant.grants);
+      const attackerOwnerId = getPlayerId(game, attackerPlayerNum);
+      const isAiAttacker = game.selfPlay || isAiUserId(attackerOwnerId);
+      if (isAiAttacker) {
+        // AI default: red die + damage token. Token is granted via the
+        // attacker's power-token bank so it can be spent immediately in
+        // the upcoming token phase (or carried).
+        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'red'] };
+        game.figurePowerTokens = game.figurePowerTokens || {};
+        const _curTokens = game.figurePowerTokens[attackerFigureKey] || [];
+        game.figurePowerTokens[attackerFigureKey] = [..._curTokens, 'Damage'];
+        await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 **red** die and +1 **Damage** token (AI default).');
+      } else {
+        // Human attacker: post die-color + power-token-type pickers.
+        // Set pending state so the click handlers know to add the
+        // chosen die to attackInfo + grant the chosen token. The
+        // attacker can click both before clicking Ready on the
+        // on-declare gate, so the modifications land before rolls.
+        game.pendingFlawlessExecution = {
+          gameId: game.gameId,
+          attackerPlayerNum,
+          attackerFigureKey,
+          attackerDcName: meta.dcName,
+          dieChosen: false,
+          tokenChosen: false,
+        };
+        const _feDieBtns = ['red', 'blue', 'green', 'yellow'].map((c) =>
+          new ButtonBuilder()
+            .setCustomId(`flawless_die_${game.gameId}_${c}`)
+            .setLabel(c.charAt(0).toUpperCase() + c.slice(1))
+            .setStyle(ButtonStyle.Primary)
+        );
+        const _feTokBtns = ['Damage', 'Surge', 'Block', 'Evade'].map((t) =>
+          new ButtonBuilder()
+            .setCustomId(`flawless_token_${game.gameId}_${t.toLowerCase()}`)
+            .setLabel(t)
+            .setStyle(ButtonStyle.Secondary)
+        );
+        await thread.send(sanitizeMentions({
+          content: `<@${attackerOwnerId}> **Flawless Execution** — Cad Bane was already Focused. Pick an extra **attack die** AND a **power token** type (you may immediately spend the token on this attack):`,
+          components: [
+            new ActionRowBuilder().addComponents(..._feDieBtns),
+            new ActionRowBuilder().addComponents(..._feTokBtns),
+          ],
+          allowedMentions: { users: [attackerOwnerId] },
+        }));
+      }
     }
   }
 
@@ -2924,43 +2974,52 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.optimalBombardmentBlastBonus[msgId];
   }
 
-  // The Force is With Me (Chirrut): ranged attack targeting Chirrut — choose adjacent hostile; -1 Hit + 1 dmg to chosen
+  // The Force is With Me (Chirrut Imwe): when a Ranged attack targeting
+  // Chirrut is declared, Chirrut's owner may CHOOSE an adjacent hostile.
+  // If they do, apply -1 Damage to the attack results (defender modifier
+  // via combat.defenderDamageReduction) and the chosen hostile suffers
+  // 1 Damage.
+  //
+  // Per alexanbv 2026-05-13: previously this auto-picked the first
+  // adjacent hostile and incorrectly applied "-1 Hit". Both fixed —
+  // it's now a player-choice picker AND a defender Damage modifier.
   if (isRanged && defSpecialIds.includes('the_force_is_with_me_chirrut') && mapSpaces && targetCoord) {
     const adjToChirrut = (mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase());
     const atkFigPos = game.figurePositions?.[attackerPlayerNum] || {};
-    let _tfiwmTarget = null;
+    const adjacentHostiles = [];
     for (const [fk, pos] of Object.entries(atkFigPos)) {
-      if (adjToChirrut.includes(String(pos).toLowerCase())) {
-        _tfiwmTarget = fk;
-        break;
+      if (pos && adjToChirrut.includes(String(pos).toLowerCase())) {
+        adjacentHostiles.push(fk);
       }
     }
-    if (_tfiwmTarget) {
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
-      const _tfiwmDcName = dcNameFromFigureKey(_tfiwmTarget);
-      // Deal 1 damage to the adjacent hostile
-      const _tfiwmMatch = _tfiwmTarget.match(/^(.+)-(\d+)-(\d+)$/);
-      if (_tfiwmMatch) {
-        const [, _tfDcN, _tfDgI, _tfFiStr] = _tfiwmMatch;
-        const _tfMsgIds = getDcMessageIds(game, attackerPlayerNum) || [];
-        const _tfDcList = getDcList(game, attackerPlayerNum) || [];
-        const _tfDcHs = ctx.dcHealthState;
-        if (_tfDcHs) {
-          let _tfMsgId = null;
-          for (let i = 0; i < _tfMsgIds.length; i++) {
-            if (_tfDcList[i]?.dcName === _tfDcN) { _tfMsgId = _tfMsgIds[i]; break; }
-          }
-          if (_tfMsgId) {
-            const _tfFi = parseInt(_tfFiStr, 10);
-            await _applyDamage(game, { dcHealthState: _tfDcHs, logGameAction, client }, {
-              figureKey: _tfiwmTarget, msgId: _tfMsgId, figIndex: _tfFi,
-              amount: 1, controllerPlayerNum: attackerPlayerNum,
-              source: 'The Force is With Me',
-            });
-          }
-        }
-      }
-      await thread.send(`**The Force is With Me** — Ranged attack targeting Chirrut. Adjacent hostile **${_tfiwmDcName}** suffers 1 Damage. -1 Hit applied to attack.`);
+    if (adjacentHostiles.length > 0) {
+      setPendingForceIsWithMe(game, {
+        gameId: game.gameId,
+        defenderPlayerNum,
+        attackerPlayerNum,
+        chirrutFigureKey: target.figureKey,
+        adjacentHostiles,
+      });
+      const defOwnerId = getPlayerId(game, defenderPlayerNum);
+      // Cap at 4 picker buttons so the Skip still fits in a 5-button row.
+      const _fiwmSlice = adjacentHostiles.slice(0, 4);
+      const btns = _fiwmSlice.map((fk, i) =>
+        new ButtonBuilder()
+          .setCustomId(`force_with_me_pick_${game.gameId}_${i}`)
+          .setLabel(`Hit ${dcNameFromFigureKey(fk)}`)
+          .setStyle(ButtonStyle.Primary)
+      );
+      btns.push(
+        new ButtonBuilder()
+          .setCustomId(`force_with_me_skip_${game.gameId}`)
+          .setLabel('Skip')
+          .setStyle(ButtonStyle.Secondary)
+      );
+      await thread.send(sanitizeMentions({
+        content: `<@${defOwnerId}> **The Force is With Me** — Ranged attack targeting Chirrut. Choose an adjacent hostile figure to take 1 Damage (and apply **-1 Damage** to the attack results), or Skip:`,
+        components: [new ActionRowBuilder().addComponents(btns)],
+        allowedMentions: { users: [defOwnerId] },
+      }));
     }
   }
 
@@ -4262,6 +4321,82 @@ export async function handleMerciless(interaction, ctx) {
   if (thread) await thread.send(`⚡ **Merciless** — **${_mercInfo.targetLabel}** suffers 1 Damage.`).catch(discordCatch);
   combat.mercilessUsed = true;
   delete combat.mercilessAvailable;
+  saveGames(game.gameId);
+}
+
+/**
+ * Flawless Execution (Cad Bane) — already-Focused branch picker.
+ *
+ * Per alexanbv 2026-05-13: Cad Bane chooses the extra die color AND
+ * the power token type. Each runs on a separate button click so the
+ * two choices are independent.
+ *
+ * Buttons:
+ *   flawless_die_<gameId>_<color>     → add an attack die of the chosen color
+ *   flawless_token_<gameId>_<type>    → grant a Damage/Surge/Block/Evade token
+ *
+ * Each click is one-shot (gated by combat.pendingFlawlessExecution flags
+ * dieChosen / tokenChosen) so the player can't double-tap.
+ */
+export async function handleFlawlessDie(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const rest = parseCustomId(interaction.customId, 'flawless_die_');
+  const [gameId, color] = rest.split('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingFlawlessExecution;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending Flawless Execution.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick.')) return;
+  if (pending.dieChosen) {
+    await interaction.followUp({ content: 'Already picked the extra die.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const validColors = ['red', 'blue', 'green', 'yellow'];
+  if (!validColors.includes(color)) return;
+  if (game.pendingCombat) {
+    game.pendingCombat.attackInfo = {
+      ...game.pendingCombat.attackInfo,
+      dice: [...(game.pendingCombat.attackInfo.dice || []), color],
+    };
+  }
+  pending.dieChosen = color;
+  await interaction.channel.send(`**Flawless Execution** — Added 1 **${color}** attack die.`).catch(discordCatch);
+  // If both picks done, clear pending. (Token picker can fire in any order.)
+  if (pending.dieChosen && pending.tokenChosen) delete game.pendingFlawlessExecution;
+  saveGames(game.gameId);
+}
+
+export async function handleFlawlessToken(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const rest = parseCustomId(interaction.customId, 'flawless_token_');
+  const [gameId, typeLower] = rest.split('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingFlawlessExecution;
+  if (!pending) {
+    await interaction.followUp({ content: 'No pending Flawless Execution.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.attackerPlayerNum, canActAsPlayer, 'Only the attacker can pick.')) return;
+  if (pending.tokenChosen) {
+    await interaction.followUp({ content: 'Already picked the power token.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch);
+  const typeMap = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
+  const tokenType = typeMap[typeLower];
+  if (!tokenType) return;
+  game.figurePowerTokens = game.figurePowerTokens || {};
+  const _cur = game.figurePowerTokens[pending.attackerFigureKey] || [];
+  game.figurePowerTokens[pending.attackerFigureKey] = [..._cur, tokenType];
+  pending.tokenChosen = tokenType;
+  await interaction.channel.send(`**Flawless Execution** — Cad Bane gains 1 **${tokenType}** token (may be spent immediately on this attack).`).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `**Flawless Execution** — +1 ${tokenType} token to Cad Bane.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  if (pending.dieChosen && pending.tokenChosen) delete game.pendingFlawlessExecution;
   saveGames(game.gameId);
 }
 
@@ -5874,6 +6009,51 @@ function removeSpentToken(game, figureKey, index) {
   if (!game.figurePowerTokens?.[figureKey]) return;
   game.figurePowerTokens[figureKey] = game.figurePowerTokens[figureKey].filter((_, i) => i !== index);
   if (game.figurePowerTokens[figureKey].length === 0) delete game.figurePowerTokens[figureKey];
+}
+
+/**
+ * Air Support (Bodhi Rook): "When a friendly figure spends a Power Token
+ * while attacking, apply +2 Accuracy to the attack results."
+ *
+ * Per alexanbv 2026-05-13 clarification: the +2 Accuracy fires only when
+ * the **attacker is not Focused** at the moment of token-spend (canonical
+ * card text — overrides the dc-effects.json paraphrase). Focus is checked
+ * at click time so mid-attack Focus changes are respected.
+ *
+ * Trigger condition (all four must hold):
+ *  - The token-spender is the attacker side (not defender).
+ *  - At least one friendly figure on the attacker's team has the
+ *    `air_support_bodhi` ability id.
+ *  - The attacker does not currently have the Focus condition.
+ *  - Bodhi is alive (has a position on the board).
+ *
+ * No range gate per card text — Bodhi grants air support board-wide.
+ */
+async function _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker) {
+  if (!isAttacker) return;
+  const atkPN = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+  if (!atkPN) return;
+  const dcEff = ctx?.getDcEffects ? ctx.getDcEffects() : getDcEffectsGlobal();
+  if (!dcEff) return;
+  const friendlyPositions = game.figurePositions?.[atkPN] || {};
+  let bodhiFigKey = null;
+  for (const [fk, pos] of Object.entries(friendlyPositions)) {
+    if (!pos) continue;
+    const fkDcName = dcNameFromFigureKey(fk);
+    const fkEff = dcEff[fkDcName] || dcEff[(fkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((fkEff?.specialAbilityIds || []).includes('air_support_bodhi')) {
+      bodhiFigKey = fk;
+      break;
+    }
+  }
+  if (!bodhiFigKey) return;
+  const atkConds = game.figureConditions?.[combat.attackerFigureKey] || [];
+  if (atkConds.includes('Focus')) return;
+  combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
+  const bodhiDcName = dcNameFromFigureKey(bodhiFigKey);
+  if (thread) {
+    await thread.send(`✈️ **Air Support** (${bodhiDcName}) — Attacker spent a Power Token while unfocused: **+2 Accuracy** applied.`).catch(discordCatch);
+  }
 }
 
 // --- Rogue One token sharing helpers ---
@@ -8003,6 +8183,8 @@ export async function handleCombatToken(interaction, ctx) {
     }
     // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
     if (combat.pendingWildRole === 'attacker') combat.attackerSpentPowerToken = true;
+    // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
+    await _maybeApplyAirSupport(thread, game, combat, ctx, combat.pendingWildRole === 'attacker');
     // Track defender modifications for Quick Strike (Electrostaff loadout)
     if (combat.pendingWildRole === 'defender') combat.defenderRerolledOrModified = true;
     // Track Block spending for Mandalorian Steel / Personal Combat Shield
@@ -8077,6 +8259,8 @@ export async function handleCombatToken(interaction, ctx) {
     await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${scTokenType} from ${scEntry.ownerName}`, { phase: 'ROUND', icon: 'attack' });
     if (isAttacker) combat.attackerSpentPowerToken = true;
+    // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
+    await _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker);
     if (!isAttacker) combat.defenderRerolledOrModified = true;
     if (!isAttacker && scTokenType === 'Block') combat.defenderSpentBlock = true;
     if (!isAttacker && scTokenType === 'Block') {
@@ -8127,6 +8311,8 @@ export async function handleCombatToken(interaction, ctx) {
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
   if (isAttacker) combat.attackerSpentPowerToken = true;
+  // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
+  await _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker);
   // Track defender modifications for Quick Strike (Electrostaff loadout)
   if (!isAttacker) combat.defenderRerolledOrModified = true;
   // Track Block token spending for Mandalorian Steel

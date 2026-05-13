@@ -237,14 +237,24 @@ describe('ORACLE-CONDDICE-005: Flawless Execution intentionally remains inline',
       'Flawless Execution must NOT use applyConditionWithDie (has else-branch)');
   });
 
-  it('Flawless Execution has yellow die else-branch', () => {
+  it('Flawless Execution else-branch presents player picker (alexanbv 2026-05-13)', () => {
+    // Per alexanbv 2026-05-13: the already-Focused branch must be a
+    // player choice for BOTH die color and power token type. AI play
+    // defaults to red die + Damage token; human play posts a picker.
     const src = readSrc('src/handlers/combat.js');
     const idx = src.indexOf("atkSpecialIds.includes('flawless_execution')");
-    const block = src.slice(idx, idx + 800);
-    assert.ok(block.includes("'yellow'"),
-      'Flawless Execution else-branch adds yellow die');
-    assert.ok(block.includes('pendingPowerTokenGrant'),
-      'Flawless Execution else-branch grants power token');
+    assert.ok(idx > 0, 'Flawless Execution site found');
+    const block = src.slice(idx, idx + 3000);
+    assert.ok(block.includes('pendingFlawlessExecution'),
+      'else-branch sets pendingFlawlessExecution for the human picker flow');
+    assert.ok(block.includes('flawless_die_'),
+      'else-branch posts a flawless_die_<color> picker');
+    assert.ok(block.includes('flawless_token_'),
+      'else-branch posts a flawless_token_<type> picker');
+    assert.ok(block.includes("'red'"),
+      'AI branch defaults to red die');
+    assert.ok(block.includes("'Damage'"),
+      'AI branch defaults to Damage token');
   });
 });
 
