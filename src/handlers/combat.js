@@ -4039,11 +4039,16 @@ function formatDefenseDie(d, i) {
  * pre-reroll abilities (they have their own prompt format).
  */
 /**
- * Per alexanbv 2026-05-13: step-3 reroll abilities (Twin Sabers,
- * Resourceful, Shrewd Scoundrel, Trained) appear as "Use X" buttons
- * inside the attacker bucket. Helpers below render those buttons and
- * report eligibility; each ability is tracked via
+ * Per alexanbv 2026-05-13: step-3 reroll abilities are classified as
+ * either SIMPLE (just grant +1 reroll — folded into
+ * attackerRerollsRemaining / defenderRerollsRemaining as a die-pick)
+ * or COMPLEX (have player choices — render as their own "Use X"
+ * button in the holder's bucket). Complex abilities are tracked on
  * combat.rerollAbilities[name] = { playerNum, used }.
+ *
+ * Bucket routing: each complex ability surfaces in the bucket of the
+ * side that holds it (attacker or defender). Resourceful (Lando) can
+ * be either — routed by the playerNum stored on the ability entry.
  */
 const _REROLL_ABILITY_LABELS = {
   twinSabers: 'Use Twin Sabers',
@@ -4052,20 +4057,25 @@ const _REROLL_ABILITY_LABELS = {
   trained: 'Use Trained',
 };
 
-function _countUnusedAttackerRerollAbilities(combat) {
+function _countUnusedRerollAbilitiesForPlayer(combat, playerNum) {
   const abilities = combat.rerollAbilities || {};
   let count = 0;
   for (const key of Object.keys(_REROLL_ABILITY_LABELS)) {
-    if (abilities[key] && !abilities[key].used) count += 1;
+    const ab = abilities[key];
+    if (!ab || ab.used) continue;
+    if (ab.playerNum !== playerNum) continue;
+    count += 1;
   }
   return count;
 }
 
-function _appendAttackerRerollAbilityButtons(gameId, combat, buttons) {
+function _appendRerollAbilityButtonsForPlayer(gameId, combat, playerNum, buttons) {
   const abilities = combat.rerollAbilities || {};
   let added = 0;
   for (const [key, label] of Object.entries(_REROLL_ABILITY_LABELS)) {
-    if (!abilities[key] || abilities[key].used) continue;
+    const ab = abilities[key];
+    if (!ab || ab.used) continue;
+    if (ab.playerNum !== playerNum) continue;
     buttons.push(
       new ButtonBuilder()
         .setCustomId(`pre_reroll_${gameId}_open_${key}`)
@@ -4075,6 +4085,15 @@ function _appendAttackerRerollAbilityButtons(gameId, combat, buttons) {
     added += 1;
   }
   return added;
+}
+
+// Backwards-compatible attacker-side helpers (callers in
+// combat-reactions.js + the attacker bucket use these wrappers).
+function _countUnusedAttackerRerollAbilities(combat) {
+  return _countUnusedRerollAbilitiesForPlayer(combat, combat.attackerPlayerNum || 1);
+}
+function _appendAttackerRerollAbilityButtons(gameId, combat, buttons) {
+  return _appendRerollAbilityButtonsForPlayer(gameId, combat, combat.attackerPlayerNum || 1, buttons);
 }
 
 async function maybePromptRerollYn(thread, game, combat, phase) {
@@ -4337,8 +4356,9 @@ export async function sendRerollUI(thread, game, combat, phase) {
     const _defCtrl = (combat.forcedRerollQueue || [])
       .map((e, i) => ({ e, i }))
       .filter(({ e }) => e.controlPlayer === defPN && (e.remaining ?? 0) > 0);
-    if (remaining <= 0 && !ctAvailable && _defCtrl.length === 0) {
-      combat.rerollPhase = null;
+    const _defAvailableAbilities = _countUnusedRerollAbilitiesForPlayer(combat, defPN);
+    if (remaining <= 0 && !ctAvailable && _defCtrl.length === 0 && _defAvailableAbilities === 0) {
+      await _advanceFromForced();
       return;
     }
     const dice = combat.defenseDiceResults || [];
@@ -4366,6 +4386,11 @@ export async function sendRerollUI(thread, game, combat, phase) {
           .setStyle(ButtonStyle.Primary),
       );
     }
+    // Per alexanbv 2026-05-13: defender-side complex reroll abilities
+    // (Resourceful when Lando is defender, Shrewd Scoundrel ditto)
+    // surface as "Use X" buttons in the defender bucket. Routed by
+    // playerNum stored on combat.rerollAbilities[X].
+    _appendRerollAbilityButtonsForPlayer(gameId, combat, defPN, dieButtons);
     const trailing = [];
     if (ctAvailable) {
       trailing.push(
@@ -4434,15 +4459,18 @@ export async function handleCombatRerollYn(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
-  // No: advance as if the user clicked "Done (no rerolls)" on the picker.
-  // Synthesize a 'done' click on combat_reroll_<gameId>_<side>_done.
-  const fakeInteraction = {
-    ...interaction,
-    customId: `combat_reroll_${gameId}_${side}_done`,
-    deferUpdate: async () => {},
-    followUp: async () => {},
-  };
-  await handleCombatReroll(fakeInteraction, ctx);
+  // No: advance directly via the post-reroll gate using the thread
+  // we already fetched. Previous shape synthesized a 'combat_reroll_*_done'
+  // click and called handleCombatReroll, which re-fetched the thread and
+  // threw "combat thread is null" when the second fetch came back empty
+  // (alexanbv 2026-05-13 live repro). Skip the synthetic interaction and
+  // dispatch the gate directly with our verified thread reference.
+  if (side === 'atk') {
+    await sendCombatGate(thread, game, combat, 'post_attacker_reroll', ctx);
+  } else {
+    await sendCombatGate(thread, game, combat, 'post_defender_reroll', ctx);
+  }
+  saveGames(game.gameId);
 }
 
 /**
