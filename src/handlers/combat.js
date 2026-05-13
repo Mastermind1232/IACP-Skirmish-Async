@@ -2260,29 +2260,12 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.hasCunning = r.hasCunning;
   }
 
-  // Distracting (Han Solo, C-3PO): if this figure is adjacent to the targeted space, +1 Evade for defender
-  // "Friendly figure defending" — check if any friendly figure with distracting is adjacent to target.coord
+  // Distracting (Han Solo, C-3PO) MOVED to step-4 defender via sendModsYn —
+  // per alexanbv 2026-05-13: the adjacency check should happen at step 4,
+  // not on-declare, because figures may move (CC plays, Wild Beast, etc.)
+  // between declare and damage resolution. See `_applyDistractingStep4`.
   const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
   const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
-  if (mapSpaces && targetCoord) {
-    const adjToTarget = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
-    adjToTarget.add(targetCoord); // figure in same space also counts
-    const defenderFigPositions = game.figurePositions?.[defenderPlayerNum] || {};
-    for (const [fk, pos] of Object.entries(defenderFigPositions)) {
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffect(fkDcName);
-      if (!hasDistractingAbility(fkEff?.specialAbilityIds)) continue;
-      if (!adjToTarget.has(String(pos).toLowerCase())) continue;
-      // Rogue Smuggler: "You lose Distracting" — skip if this figure's DC has the attachment
-      const _distMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
-      const _distUpg = _distMsgId ? (game.p1DcAttachments?.[_distMsgId] || game.p2DcAttachments?.[_distMsgId] || []) : [];
-      if (cardNameIncludes(_distUpg, 'Rogue Smuggler')) continue;
-      const r = applyDistractingEvade(game.pendingCombat);
-      game.pendingCombat.bonusEvade = r.bonusEvade;
-      await thread.send(`**Distracting** (${fkDcName}) — adjacent to target, +1 Evade for defender.`);
-      break; // only one Distracting bonus
-    }
-  }
 
   // Hunker Down (Cara Dune): if defender shares edge/corner with blocking/impassable/difficult terrain, +1 Evade
   if (hasHunkerDownAbility(defSpecialIds) && mapSpaces && targetCoord) {
@@ -6563,13 +6546,82 @@ export async function handleCombatOnDeclareYn(interaction, ctx) {
  * a moment" (player applies CCs from their hand channel, then clicks
  * Done). N means "no modifiers, advance".
  */
-export async function sendModsYn(thread, game, combat, role) {
+/**
+ * Distracting (Han Solo, C-3PO) — step-4 defender passive check.
+ *
+ * Per alexanbv 2026-05-13: moved from on-declare to step-4 defender so
+ * mid-attack movement (e.g., a CC repositions a Distracting figure) is
+ * reflected in the +1 Evade decision.
+ *
+ * Rules:
+ *  - Friendly defender figure with `distracting_*` ability id.
+ *  - That figure is adjacent to the targeted space (or on it).
+ *  - Rogue Smuggler attachment cancels the figure's Distracting.
+ *  - Only one +1 Evade per attack (first eligible Distracting figure
+ *    wins; subsequent figures are skipped).
+ *
+ * Posts a clear log line on the combat thread when the bonus applies.
+ */
+async function _applyDistractingStep4(thread, game, combat, ctx) {
+  if (!combat || combat.distractingResolved) return;
+  const target = combat.target;
+  if (!target || target.isNpc) return;
+  const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
+  if (!targetCoord) return;
+  const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
+  if (!mapSpaces) return;
+  const defenderPlayerNum = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const adjToTarget = new Set((mapSpaces.adjacency?.[targetCoord] || []).map((s) => String(s).toLowerCase()));
+  adjToTarget.add(targetCoord); // same-space counts.
+  const defenderFigPositions = game.figurePositions?.[defenderPlayerNum] || {};
+  const _findMid = ctx?.findDcMessageIdForFigure;
+  for (const [fk, pos] of Object.entries(defenderFigPositions)) {
+    if (!pos) continue;
+    const fkDcName = dcNameFromFigureKey(fk);
+    const fkEff = getDcEffect(fkDcName);
+    if (!hasDistractingAbility(fkEff?.specialAbilityIds)) continue;
+    if (!adjToTarget.has(String(pos).toLowerCase())) continue;
+    const _distMsgId = _findMid ? _findMid(game.gameId, defenderPlayerNum, fk) : null;
+    const _distUpg = _distMsgId ? (game.p1DcAttachments?.[_distMsgId] || game.p2DcAttachments?.[_distMsgId] || []) : [];
+    if (cardNameIncludes(_distUpg, 'Rogue Smuggler')) continue;
+    const r = applyDistractingEvade(combat);
+    combat.bonusEvade = r.bonusEvade;
+    if (thread) await thread.send(`🎭 **Distracting** (${fkDcName}) — adjacent to target at step 4: **+1 Evade** for the defender.`).catch(discordCatch);
+    return; // only one Distracting bonus per attack
+  }
+}
+
+export async function sendModsYn(thread, game, combat, role, ctx) {
   const gameId = game.gameId;
   const isAtk = role === 'attacker';
   const playerNum = isAtk
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
     : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
   const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
+
+  // Per alexanbv 2026-05-13 — step-4 announcements for passive auto-mods.
+  //
+  // (1) Distracting (Han Solo / C-3PO): at the moment of step-4 defender
+  // modifiers, check if any friendly defender figure with the
+  // `distracting_*` ability is adjacent to the targeted space, and apply
+  // +1 Evade if so. Previously checked on-declare; moved here because
+  // figures may relocate between declare and step 4 (CCs, Wild Beast,
+  // etc.).
+  //
+  // (2) Hidden attacker: announce the auto +1 Surge that fires later in
+  // computeCombatResult. The math is already applied at step 5 surge;
+  // this is the player-facing notification.
+  if (!isAtk && !combat.distractingResolved) {
+    await _applyDistractingStep4(thread, game, combat, ctx);
+    combat.distractingResolved = true;
+  }
+  if (isAtk && !combat.attackerHiddenAnnounced) {
+    const _ahConds = combat.attackerConds || game.figureConditions?.[combat.attackerFigureKey] || [];
+    if (_ahConds.includes('Hide') && !combat.attackerCondEffectsSuppressed) {
+      await thread.send('🥷 **Hidden** — Attacker is Hidden: **+1 Surge** will be applied to the attack results (auto, step 5).').catch(discordCatch);
+    }
+    combat.attackerHiddenAnnounced = true;
+  }
 
   // 2026-05-04 migration: Guidance Systems is a CRR step-4 modifier —
   // fire it HERE, not in the attack-roll block. Its handler re-enters
@@ -6763,7 +6815,7 @@ export async function handleCombatModsYn(interaction, ctx) {
   // modifiers → defender's modifier sub-window opens. Defender done → step 5.
   if (isAtk) {
     combat.currentStep = 'step4-defender';
-    await sendModsYn(thread, game, combat, 'defender');
+    await sendModsYn(thread, game, combat, 'defender', ctx);
   } else {
     combat.currentStep = 'step5';
     await proceedAfterRerolls(thread, game, combat, ctx);
@@ -9932,7 +9984,7 @@ export async function handleZilloDiscard(interaction, ctx) {
   // Y/N gate. Proceeding to step 5 happens after the Y/N closes.
   combat.zilloDiscardResolved = true;
   saveGames(game.gameId);
-  if (thread) await sendModsYn(thread, game, combat, 'defender');
+  if (thread) await sendModsYn(thread, game, combat, 'defender', ctx);
 }
 
 /**

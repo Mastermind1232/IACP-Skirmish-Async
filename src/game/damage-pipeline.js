@@ -41,6 +41,57 @@ import { reduceHp } from './damage-helpers.js';
 import { getPlayableReactionCardsForTiming } from './cc-timing.js';
 import { opponentPlayerNum } from './player-helpers.js';
 import { markMapDirty } from './game-helpers.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
+
+/**
+ * Canonical "X suffers N Damage (HP A→B)" message emitter (per
+ * alexanbv 2026-05-13). Fires from every successful damage application
+ * so every source — attack step 7 main target, Blast/Cleave/Direct-die
+ * splash, Special-Action damage (Flamethrower, Slam, Headbutt, Force
+ * Surge), Bleed, Strain→damage, Cut and Run, Tempt, Lure, Havoc Shot,
+ * etc. — surfaces a single consistent line in the right channel.
+ *
+ * Routing:
+ *  1. If `ctx.thread` is set (combat / interrupt thread) → post there.
+ *  2. Else if `game.pendingCombat.combatThreadId` exists AND `ctx.client`
+ *     can fetch it → post to the combat thread.
+ *  3. Else fall back to `ctx.logGameAction` (game log channel).
+ *
+ * Callers may set `opts.suppressDamageMessage: true` to opt out (e.g.,
+ * call sites that emit their own bespoke phrasing and haven't yet been
+ * migrated; will be removed during the per-site cleanup pass).
+ */
+async function _emitDamageMessage(game, ctx, opts, applied) {
+  if (!ctx || opts?.suppressDamageMessage) return;
+  if (!applied || applied <= 0) return;
+  const dcName = dcNameFromFigureKey(opts.figureKey) || opts.figureKey;
+  const source = opts.source ? ` (${opts.source})` : '';
+  const hpNote = (typeof opts._prevHp === 'number' && typeof opts._newHp === 'number')
+    ? ` — HP ${opts._prevHp} → ${opts._newHp}`
+    : '';
+  const defeatedTag = (typeof opts._newHp === 'number' && opts._newHp <= 0) ? ' **(defeated)**' : '';
+  const msg = `💢 **${dcName}** suffers **${applied} Damage**${source}${hpNote}${defeatedTag}`;
+  // 1. ctx.thread first.
+  if (ctx.thread && typeof ctx.thread.send === 'function') {
+    await ctx.thread.send(msg).catch(() => {});
+    return;
+  }
+  // 2. Active combat thread (fetch via client).
+  const combatThreadId = game?.pendingCombat?.combatThreadId;
+  if (combatThreadId && ctx.client && typeof ctx.client.channels?.fetch === 'function') {
+    try {
+      const t = await ctx.client.channels.fetch(combatThreadId);
+      if (t && typeof t.send === 'function') {
+        await t.send(msg).catch(() => {});
+        return;
+      }
+    } catch { /* fall through to log */ }
+  }
+  // 3. Game log fallback.
+  if (typeof ctx.logGameAction === 'function') {
+    await ctx.logGameAction(game, ctx.client, msg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
+  }
+}
 
 /**
  * @typedef {Object} DamageOpts
@@ -231,6 +282,14 @@ export async function applyDamage(game, ctx, opts) {
   // Mark the map dirty so the next updateDcActionsMessage re-renders.
   if (result.prevHp !== result.newHp) markMapDirty(game);
 
+  // Per alexanbv 2026-05-13: emit a single canonical "X suffers N
+  // Damage (HP A→B)" message routed to combat thread / log. Annotate
+  // opts so the emitter has HP context.
+  const _applied = Math.max(0, (result.prevHp || 0) - (result.newHp || 0));
+  if (_applied > 0) {
+    await _emitDamageMessage(game, ctx, { ...opts, _prevHp: result.prevHp, _newHp: result.newHp }, _applied);
+  }
+
   // 2. WHEN_DAMAGED hooks (post-reduce). Side effects only — amount
   //    has already applied.
   for (const hook of WHEN_DAMAGED_HOOKS) {
@@ -328,6 +387,14 @@ export function applyDamageSync(game, ctx, opts) {
   );
   const defeatedPos = result.wasDefeated ? defeatedPosCandidate : null;
   if (result.prevHp !== result.newHp) markMapDirty(game);
+
+  // Canonical damage message (alexanbv 2026-05-13). Sync caller can't
+  // await; we fire-and-forget the promise (logGameAction itself is
+  // typically a fire-and-forget Discord call).
+  const _appliedSync = Math.max(0, (result.prevHp || 0) - (result.newHp || 0));
+  if (_appliedSync > 0) {
+    void _emitDamageMessage(game, ctx, { ...opts, _prevHp: result.prevHp, _newHp: result.newHp }, _appliedSync);
+  }
 
   // WHEN_DAMAGED hooks fire post-reduceHp (side effects only).
   for (const hook of WHEN_DAMAGED_HOOKS) {

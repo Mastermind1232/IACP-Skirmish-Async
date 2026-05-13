@@ -57,7 +57,7 @@ describe('CRR-COMBAT-ZILLO-DISCARD-STEP4: discard-CC for +1 Block fires in sendM
   });
 
   it('sendModsYn body contains the Zillo discard-CC prompt for the defender branch', () => {
-    const fn = H_CB_SRC.match(/export async function sendModsYn\(thread, game, combat, role\) \{[\s\S]*?^}/m);
+    const fn = H_CB_SRC.match(/export async function sendModsYn\(thread, game, combat, role(?:,\s*ctx)?\) \{[\s\S]*?^}/m);
     assert.ok(fn, 'sendModsYn body must be locatable');
     const body = fn[0];
     assert.match(body, /Zillo Technique[\s\S]*?Discard 1 Command card for \*\*\+1 Block\*\*/,
@@ -74,7 +74,7 @@ describe('CRR-COMBAT-ZILLO-DISCARD-STEP4: discard-CC for +1 Block fires in sendM
     const body = fn[0];
     assert.match(body, /combat\.zilloDiscardResolved\s*=\s*true/,
       'must set the once-per-attack flag (Skip and use both consume the per-attack option)');
-    assert.match(body, /sendModsYn\(thread, game, combat, 'defender'\)/,
+    assert.match(body, /sendModsYn\(thread, game, combat, 'defender'(?:,\s*ctx)?\)/,
       'must re-enter sendModsYn(defender) so the basic mods Y/N gate still fires after the Zillo choice');
   });
 });
