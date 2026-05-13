@@ -608,8 +608,9 @@ describe('headless combat resolution', () => {
     // Trigger the False Orders attack action
     await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
 
-    // Check: falseOrdersAttackTargets should mark Luke at e5 as hasLOS: false
-    const targets = game.falseOrdersAttackTargets?.[p1MsgId] || [];
+    // Check: falseOrdersAttackTargets should mark Luke at e5 as hasLOS: false.
+    // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
+    const targets = game.falseOrdersAttackTargets?.[controlledFigKey] || [];
     const lukeTarget = targets.find(t => t.figureKey === lukeFigKey);
     if (lukeTarget) {
       assert.strictEqual(lukeTarget.hasLOS, false,
@@ -673,8 +674,9 @@ describe('headless combat resolution', () => {
 
     await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
 
-    // Check: Stormtrooper (Regular) at e5 should have hasLOS=true (MASSIVE AT-RT doesn't block)
-    const targets = game.falseOrdersAttackTargets?.[p1MsgId] || [];
+    // Check: Stormtrooper (Regular) at e5 should have hasLOS=true (MASSIVE AT-RT doesn't block).
+    // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
+    const targets = game.falseOrdersAttackTargets?.[controlledFigKey] || [];
     const regularTarget = targets.find(t => t.figureKey === regularFigs[0]);
     assert.ok(regularTarget, 'LOS-19b: Stormtrooper target at e5 appears in False Orders targets');
     assert.strictEqual(regularTarget.hasLOS, true,

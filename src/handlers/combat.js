@@ -9605,13 +9605,14 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   }
   const { controllerPlayerNum, controlledFigureKey, controlledPlayerNum } = fo;
   if (!await requirePlayer(interaction, game, interaction.user.id, controllerPlayerNum, canActAsPlayer, 'Only the controller may choose.')) return;
-  const targets = game.falseOrdersAttackTargets?.[msgId];
+  // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
+  const targets = game.falseOrdersAttackTargets?.[controlledFigureKey];
   const target = targets?.[targetIdx];
   if (!target) {
     await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  delete game.falseOrdersAttackTargets?.[msgId];
+  if (game.falseOrdersAttackTargets) delete game.falseOrdersAttackTargets[controlledFigureKey];
   clearPendingFalseOrders(game);
   const controlledName = dcNameFromFigureKey(controlledFigureKey);
   const controlledStats = getDcStats(controlledName);

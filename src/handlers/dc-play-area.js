@@ -4044,8 +4044,12 @@ export async function handleFalseOrdersAction(interaction, ctx) {
     await interaction.followUp({ content: `No valid targets for **${controlledName}** in range.`, ephemeral: false }).catch(discordCatch);
     return;
   }
+  // Per alexanbv 2026-05-13: keyed by controlledFigureKey (the figure
+  // being controlled), not the group msgId. False Orders targets the
+  // controlled figure's attack — for multifig groups this lock belongs
+  // to that one figure.
   game.falseOrdersAttackTargets = game.falseOrdersAttackTargets || {};
-  game.falseOrdersAttackTargets[msgId] = foTargets;
+  game.falseOrdersAttackTargets[controlledFigureKey] = foTargets;
   const targetBtns = foTargets.map((t, targetIndex) => {
     const noLOS = t.hasLOS === false;
     return new ButtonBuilder()

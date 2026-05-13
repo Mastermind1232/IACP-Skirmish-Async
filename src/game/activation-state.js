@@ -149,7 +149,9 @@ const ACTIVATION_MSGID_FLAGS = [
   // activation end, matching their actual lifecycle.
   // activationDoubleSpecialAction MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   'companionActivatedBefore',
-  'falseOrdersAttackTargets',
+  // falseOrdersAttackTargets MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
+  // (alexanbv: per-figure; the False Orders target list is for the
+  // specific controlled figure's attack, not the whole group).
   // paybackBonusSurge MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (write site at post-combat.js:82 already keys by targetFigureKey;
   // read in combat.js at attackerFigureKey. msgId cleanup never matched).
@@ -259,6 +261,9 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // cross-trooper invocation lock lives separately in
   // firingSquadLockedTarget; combat.js attack-declare checks both.
   'forcedAttackTarget',
+  // alexanbv 2026-05-13 thirteenth-wave: False Orders target list
+  // keyed by controlledFigureKey (the figure being controlled).
+  'falseOrdersAttackTargets',
   // Migrated 2026-05-09 from ACTIVATION_PLAYERNUM_FLAGS to per-figureKey
   // per IACP rule clarification 2026-05-09: figures in the same multifigure
   // group have completely independent activations — nothing carries over.
