@@ -34,6 +34,7 @@ export async function applyAbilityResult(result, opts) {
   const {
     logGameAction,
     updateHandVisualMessage,
+    updateHandChannelMessages,
     updateDiscardPileMessage,
     updateDcActionsMessage,
     ensureMovementBankMessage,
@@ -115,9 +116,17 @@ export async function applyAbilityResult(result, opts) {
   // drawing player via their private hand visual. Reveal abilities are
   // the only legitimate exception (and they handle their own logging).
   if (result.applied && result.drewCards?.length) {
+    // Public count visual (number-only in play area).
     if (updateHandVisualMessage) {
       await updateHandVisualMessage(game, 1, client);
       await updateHandVisualMessage(game, 2, client);
+    }
+    // Private hand channel (actual card buttons for the drawing
+    // player). Per alexanbv 2026-05-13: every draw path must refresh
+    // BOTH the public count AND the private hand UI, or the player
+    // can't see their newly-drawn cards.
+    if (updateHandChannelMessages) {
+      await updateHandChannelMessages(game, client);
     }
   }
 

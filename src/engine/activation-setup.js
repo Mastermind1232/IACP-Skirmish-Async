@@ -9,7 +9,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, ThreadAutoArchiveDuration, AttachmentBuilder } from 'discord.js';
 import { getDcEffects, getDcStats as _getDcStats, getMapData as _getMapData, getFigureSize, getLoadoutCards, getFormCards, getRootDir } from '../data-loader.js';
 import {
-  getPlayerId, getDcList, getDcMessageIds, getPlayAreaId,
+  getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
   getActivationsRemaining, setActivationsRemaining,
   getActivatedDcIndices, setActivatedDcIndices,
   getCcHand, opponentPlayerNum,
@@ -847,7 +847,12 @@ export async function finalizeActivation({
   // type) where N = round number capped at 4. Multi-step descriptor
   // in soa-orchestrator.js.
 
-  // D22. Strategize (Thrawn): look at top CC of each deck, may discard one
+  // D22. Strategize (Thrawn): look at top CC of each deck, may discard one.
+  // Per alexanbv 2026-05-13: the two top cards Thrawn looks at are
+  // SECRET — only Thrawn's player should see them. Post the picker to
+  // Thrawn's PRIVATE hand channel, not the shared activation thread.
+  // The activation thread gets a generic prompt-only note so both
+  // players know Strategize is resolving.
   if (_abilityIds.includes('strategize_thrawn')) {
     const _strOppNum = opponentPlayerNum(playerNum);
     const _strOwnDeck = game[ccDeckKey(playerNum)] || [];
@@ -858,10 +863,34 @@ export async function finalizeActivation({
     if (_strOwnDeck.length > 0) _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_strategize_own`).setLabel(`Discard yours: ${_strOwnTop.slice(0, 60)}`).setStyle(ButtonStyle.Danger));
     if (_strOppDeck.length > 0) _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_strategize_opp`).setLabel(`Discard opponent: ${_strOppTop.slice(0, 60)}`).setStyle(ButtonStyle.Danger));
     _strBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_strategize_skip`).setLabel('Discard neither').setStyle(ButtonStyle.Secondary));
+    const _strHandChId = getHandChannelId(game, playerNum);
+    let _strSent = false;
+    if (_strHandChId) {
+      try {
+        const _strHandCh = await fetchGameChannel(client, _strHandChId);
+        if (_strHandCh) {
+          await _strHandCh.send({
+            content: `🧠 **Strategize** — Top of each command deck:\n• **Your deck:** ${_strOwnTop}\n• **Opponent's deck:** ${_strOppTop}\n\nYou may discard one:`,
+            components: [new ActionRowBuilder().addComponents(_strBtns)],
+          }).catch(discordCatch);
+          _strSent = true;
+        }
+      } catch (err) { /* fall through */ }
+    }
+    // Activation thread gets a no-leak notice so both players know
+    // Strategize is resolving in Thrawn's private hand channel.
     await thread.send({
-      content: `🧠 **Strategize** — Top of each command deck:\n• **Your deck:** ${_strOwnTop}\n• **Opponent's deck:** ${_strOppTop}\n\nYou may discard one:`,
-      components: [new ActionRowBuilder().addComponents(_strBtns)],
+      content: `🧠 **Strategize** — Thrawn is reviewing the top of each command deck (resolution in his hand channel).`,
     }).catch(discordCatch);
+    // Fallback: if hand channel was unavailable, post the picker to
+    // the thread anyway so the game doesn't deadlock. This is the
+    // pre-2026-05-13 behavior but should rarely fire.
+    if (!_strSent) {
+      await thread.send({
+        content: `🧠 **Strategize** — (hand channel unavailable; falling back to thread): Top of each command deck:\n• **Your deck:** ${_strOwnTop}\n• **Opponent's deck:** ${_strOppTop}\n\nYou may discard one:`,
+        components: [new ActionRowBuilder().addComponents(_strBtns)],
+      }).catch(discordCatch);
+    }
   }
 
   // D23. Wisdom — migrated to SoA orchestrator (destruct 2026-05-07).
