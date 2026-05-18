@@ -205,7 +205,7 @@ WHEN_DAMAGED_HOOKS.push({
       new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
     if (logGameAction) {
-      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **Onar Koma** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] } });
+      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **Onar Koma** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] }, interrupt: true });
     }
     return null;
   },

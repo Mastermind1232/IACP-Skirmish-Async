@@ -336,7 +336,7 @@ async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
     .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
     .setStyle(ButtonStyle.Danger));
   const rows = chunkButtonsToRows(btns).slice(0, 5);
-  await logGameAction?.(game, client, `<@${ownerId}> 🩸 **Driven by Hatred** — choose an adjacent hostile to Force Choke (2 Dmg + 1 Strain):`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction?.(game, client, `<@${ownerId}> 🩸 **Driven by Hatred** — choose an adjacent hostile to Force Choke (2 Dmg + 1 Strain):`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /**
@@ -417,7 +417,7 @@ async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
     .setLabel(lbl.length > 80 ? lbl.slice(0, 77) + '…' : lbl)
     .setStyle(ButtonStyle.Danger));
   const rows = chunkButtonsToRows(btns).slice(0, 5);
-  await logGameAction?.(game, client, `<@${ownerId}> 🐂 **${label}** — choose an adjacent hostile to ram:`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction?.(game, client, `<@${ownerId}> 🐂 **${label}** — choose an adjacent hostile to ram:`, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /**
@@ -571,7 +571,7 @@ async function _runCahTargetPickContinuation(game, ctx, pending, next) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /**
@@ -605,7 +605,7 @@ async function _runLordOfSithChoiceContinuation(game, ctx, pending) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /** Push-immunity check shared by every Move-X-then-push continuation
@@ -697,7 +697,7 @@ async function _runRushPostMoveContinuation(game, ctx, pending) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack' });
+  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack', interrupt: true });
 }
 
 /**
@@ -738,7 +738,7 @@ async function _runShoulderRushPostMoveContinuation(game, ctx, pending) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack' });
+  await logGameAction?.(game, client, content, { components: rows, phase: 'ROUND', icon: 'attack', interrupt: true });
 }
 
 /**
@@ -824,7 +824,7 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+  await logGameAction?.(game, client, content, { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
 }
 
 // ── Multi-figure MP-gain sequencing ──────────────────────────────────
@@ -904,7 +904,7 @@ async function _postSequenceOrderPicker(game, ctx) {
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
 }
 
 async function _advanceMoveXSequence(game, ctx) {
@@ -1054,7 +1054,7 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
         .setStyle(ButtonStyle.Danger));
       const rows = chunkButtonsToRows(btns).slice(0, 5);
       const content = `<@${ownerId}> 🐺 **Pack Alpha** — choose a hostile figure. Damage = # of friendly CREATUREs adjacent to it.`;
-      await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+      await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
     } catch (err) {
       console.error('[move-x] packAlphaTarget failed:', err?.message ?? err);
     }
@@ -1156,7 +1156,7 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
         .setStyle(ButtonStyle.Danger));
       const rows = chunkButtonsToRows(btns).slice(0, 5);
       const content = `<@${ownerId}> 📡 **Triangulate** — choose a hostile (within 5 + LOS of at least one moved DROID). Damage = # of those DROIDs with LOS to the target.`;
-      await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+      await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
     } catch (err) {
       console.error('[move-x] triangulateTarget failed:', err?.message ?? err);
     }
@@ -1424,7 +1424,7 @@ async function _runRollOneDieSpacePickContinuation(game, ctx, msgId, pending, ne
       return;
     }
   }
-  await logGameAction?.(game, client, content, { components: rowBtns.slice(0, 5), phase: 'ROUND', icon: 'attack' });
+  await logGameAction?.(game, client, content, { components: rowBtns.slice(0, 5), phase: 'ROUND', icon: 'attack', interrupt: true });
 }
 
 /**
@@ -1740,7 +1740,7 @@ export async function postMoveXPicker(game, ctx, msgId) {
   const _isMultiCell = _figSize !== '1x1';
   const _anchorNote = _isMultiCell ? '\n_(coordinates show the **top-left** cell of the figure\'s footprint.)_' : '';
   const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** ${unitLabel} remaining${overlapNote}. Click an adjacent space to move 1 step:${_anchorNote}`;
-  const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' };
+  const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true };
 
   // Per alexanbv 2026-05-17: interrupt-grant pickers (Order, Tactical
   // Maneuver, Bombardment, etc.) should post in the ACTIVATOR's thread,
@@ -1854,7 +1854,7 @@ export async function handleMoveXStep(interaction, ctx) {
         const thread = await fetchCombatThread(client, pending.threadId);
         if (thread) await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
       } else {
-        await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
+        await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
       }
       saveGames?.(gameId);
       return;

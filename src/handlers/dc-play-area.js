@@ -1768,7 +1768,7 @@ export async function handleDcWaSlam(interaction, ctx) {
       await withDiscordRetry(() => thread.send({ content: `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without an action. Choose an adjacent hostile figure:`, components: [new ActionRowBuilder().addComponents(btns)] }));
     }
   } else if (logGameAction) {
-    await logGameAction(game, client, `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without an action. Choose an adjacent hostile figure:`, { components: [new ActionRowBuilder().addComponents(btns)], phase: 'ACTIVATION', icon: 'attack' });
+    await logGameAction(game, client, `**Wookiee Avenger** — **${meta.dcName}** may use **Slam** without an action. Choose an adjacent hostile figure:`, { components: [new ActionRowBuilder().addComponents(btns)], phase: 'ACTIVATION', icon: 'attack', interrupt: true });
   }
   if (saveGames) saveGames(game.gameId);
 }
@@ -3178,7 +3178,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       new ButtonBuilder().setCustomId(`yhsiw_damage_${game.gameId}`).setLabel('Suffer 3 Damage').setStyle(ButtonStyle.Danger),
     );
     if (logGameAction) {
-      await logGameAction(game, client, `<@${oppOwnerId}> **You Have Something I Want** — **${dcNameFromFigureKey(_yhsiw.targetFk)}**'s **${_yhsiw.token}** is targeted by **Moff Gideon**. Choose: transfer the token or suffer 3 Damage.`, { components: [_yhsiwRow], allowedMentions: { users: [oppOwnerId] } });
+      await logGameAction(game, client, `<@${oppOwnerId}> **You Have Something I Want** — **${dcNameFromFigureKey(_yhsiw.targetFk)}**'s **${_yhsiw.token}** is targeted by **Moff Gideon**. Choose: transfer the token or suffer 3 Damage.`, { components: [_yhsiwRow], allowedMentions: { users: [oppOwnerId] }, interrupt: true });
     }
   }
   // Track special action usage for CC purposes (To the Limit, All in a

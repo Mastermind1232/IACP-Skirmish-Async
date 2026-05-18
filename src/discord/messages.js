@@ -146,6 +146,28 @@ export async function logPhaseHeader(game, client, phase, roundNum = null) {
 }
 
 /** Log a game action with icon and clean formatting. Returns the sent message (or null) so callers can store gameLogMessageId for undo (F14). */
+/**
+ * Resolve the currently-active activation thread, if one exists.
+ * Per alexanbv 2026-05-17: all interrupt-style prompts (components-bearing
+ * messages with `interrupt: true`) post into the activator's combat
+ * thread, not the public game log.
+ *
+ * @param {object} game
+ * @returns {string|null} threadId or null
+ */
+export function getActiveActivationThreadId(game) {
+  // currentActivationTurnPlayerId points at the player whose turn it is
+  // to activate. Map that user-id to playerNum via game.player[12]Id.
+  const turnUserId = game.currentActivationTurnPlayerId || null;
+  let activeplayerNum = null;
+  if (turnUserId && game.player1Id === turnUserId) activeplayerNum = 1;
+  else if (turnUserId && game.player2Id === turnUserId) activeplayerNum = 2;
+  if (!activeplayerNum) return null;
+  const actorMsgId = game.lastActivationMsgIdByPlayer?.[activeplayerNum];
+  if (!actorMsgId) return null;
+  return game.dcActionsData?.[actorMsgId]?.threadId || null;
+}
+
 export async function logGameAction(game, client, content, options = {}) {
   try {
     // Clear the previous ping in the game log (fire-and-forget)
@@ -153,7 +175,16 @@ export async function logGameAction(game, client, content, options = {}) {
       _clearPreviousPing(game, client);
     }
 
-    const ch = await fetchGameChannel(client, game.generalId);
+    // Per alexanbv 2026-05-17: interrupt-style prompts route to the
+    // currently-active activation thread instead of the public game log.
+    // Caller opts in via `options.interrupt: true`. Falls back to the
+    // general log if no activation thread is available.
+    let routeChannelId = game.generalId;
+    if (options.interrupt) {
+      const threadId = getActiveActivationThreadId(game);
+      if (threadId) routeChannelId = threadId;
+    }
+    const ch = await fetchGameChannel(client, routeChannelId);
     const icon = options.icon ? `${ACTION_ICONS[options.icon] || ''} ` : '';
     const phase = options.phase;
     if (phase) {

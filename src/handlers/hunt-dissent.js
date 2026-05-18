@@ -133,7 +133,7 @@ async function _postHuntDissentPicker(game, ctx) {
     .setStyle(ButtonStyle.Secondary));
   const rows = chunkButtonsToRows(btns).slice(0, 5);
   const content = `<@${ownerId}> 🛡️ **Hunt Dissent** — Opponent played their first Command card. Distribute up to **2 Hit Tokens** among friendly figures within **${pending.range}** space${pending.range === 1 ? '' : 's'} of Agent Kallus (${remaining} remaining):`;
-  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /**

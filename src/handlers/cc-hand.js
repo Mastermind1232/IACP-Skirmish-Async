@@ -1998,7 +1998,7 @@ export async function triggerStartingHandIke(game, ctx) {
       new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
     );
-    await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, targetPN)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, targetPN)}> — Choose which card to **keep** (the other is removed from the game). Cards will be drawn for both players after this resolves.`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, targetPN)] } });
+    await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, targetPN)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, targetPN)}> — Choose which card to **keep** (the other is removed from the game). Cards will be drawn for both players after this resolves.`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, targetPN)] }, interrupt: true });
     saveGames?.(gameId);
     return true;
   }
@@ -2152,7 +2152,7 @@ export async function handleCcShuffleDraw(interaction, ctx) {
         new ButtonBuilder().setCustomId(`ike_keep_${gameId}_0`).setLabel(`Keep: ${revealed[0].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`ike_keep_${gameId}_1`).setLabel(`Keep: ${revealed[1].slice(0, 70)}`).setStyle(ButtonStyle.Primary),
       );
-      await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] } });
+      await logGameAction(game, client, `🕵️ **I Know Everything** — **Moff Gideon** reveals 2 cards from <@${getPlayerId(game, playerNum)}>'s Command deck:\n${cardLabels}\n\n<@${getPlayerId(game, playerNum)}> — Choose which card to **keep** (the other is removed from the game):`, { components: [keepRow], allowedMentions: { users: [getPlayerId(game, playerNum)] }, interrupt: true });
       saveGames(game.gameId);
       return;
     }

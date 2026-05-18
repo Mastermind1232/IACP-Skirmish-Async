@@ -190,7 +190,7 @@ export async function handleSpacesMoveInterruptPlay(interaction, ctx) {
       .setStyle(ButtonStyle.Success),
   );
   const ownerId = game[`player${op.triggerPlayerNum}Id`];
-  await logGameAction(game, client, `<@${ownerId}> Click **Continue Move** when **${cardName}** has resolved.`, { components: [continueRow], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' });
+  await logGameAction(game, client, `<@${ownerId}> Click **Continue Move** when **${cardName}** has resolved.`, { components: [continueRow], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
   saveGames?.(game.gameId);
 }
 
