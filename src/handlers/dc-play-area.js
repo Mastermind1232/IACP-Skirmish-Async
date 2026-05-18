@@ -3482,6 +3482,27 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     return;
   }
 
+  // pendingMoveXMsgId: abilities that stamp pendingMoveX synchronously
+  // (Officer Order, Bombardment grant-move variants, etc.) surface the
+  // grantee's msgId via resolveResult.pendingMoveXMsgId. Mirror the
+  // handleDcAction path (line ~3240) so the Move-X picker is posted
+  // when the chooser arrives via dc_ability_choice_ — without this
+  // block the figure-pick succeeds but the destination picker never
+  // appears (alexanbv 2026-05-17 Order bug report).
+  if (resolveResult.applied && resolveResult.pendingMoveXMsgId) {
+    const actionsData = game.dcActionsData?.[msgId];
+    if (actionsData) {
+      const actionCost = resolveResult.doubleAction ? 2 : 1;
+      consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
+      await updateDcActionsMessage(game, msgId, client);
+    }
+    if (logGameAction) await logGameAction(game, client, resolveResult.logMessage, { phase: 'ROUND', icon: 'activate' });
+    const { postMoveXPicker } = await import('./move-x-handler.js');
+    await postMoveXPicker(game, { client, logGameAction, saveGames }, resolveResult.pendingMoveXMsgId);
+    saveGames(game.gameId);
+    return;
+  }
+
   // Deduct action (was refunded when showing choice buttons).
   // Per alexanbv 2026-05-12: suppress the "finished all actions"
   // prompt while the action consumption + resolveResult logging are
