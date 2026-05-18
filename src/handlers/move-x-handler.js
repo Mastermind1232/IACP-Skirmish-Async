@@ -1742,8 +1742,20 @@ export async function postMoveXPicker(game, ctx, msgId) {
   const content = `<@${ownerId}> 🦿 **${pending.source}** — **${pending.dcName}** has **${pending.remaining}** ${unitLabel} remaining${overlapNote}. Click an adjacent space to move 1 step:${_anchorNote}`;
   const opts = { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' };
 
-  if (pending.threadId) {
-    const thread = await fetchCombatThread(client, pending.threadId);
+  // Per alexanbv 2026-05-17: interrupt-grant pickers (Order, Tactical
+  // Maneuver, Bombardment, etc.) should post in the ACTIVATOR's thread,
+  // not the general game log. If the caller didn't stamp a threadId,
+  // fall back to the currently-activating DC's thread for this player
+  // via lastActivationMsgIdByPlayer.
+  let _resolvedThreadId = pending.threadId;
+  if (!_resolvedThreadId) {
+    const _actorMsgId = game.lastActivationMsgIdByPlayer?.[pending.playerNum];
+    if (_actorMsgId) {
+      _resolvedThreadId = game.dcActionsData?.[_actorMsgId]?.threadId || null;
+    }
+  }
+  if (_resolvedThreadId) {
+    const thread = await fetchCombatThread(client, _resolvedThreadId);
     if (thread) {
       await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
       return;

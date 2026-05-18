@@ -1145,11 +1145,13 @@ export function resolveAbility(abilityId, context) {
       if (chosenMsgId) {
         // Rule 2 — special-action MP gain. Stamp pendingMoveX with
         // bypassCosts: false so terrain/figure adders apply, no bank.
+        // Per alexanbv 2026-05-17: picker posts in activator's thread.
+        const _tmThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};
         game.pendingMoveX[chosenMsgId] = {
           remaining: 2, source: 'Tactical Maneuver',
           playerNum, figureKey: targetFigureKey, dcName: chosenName,
-          threadId: null, bypassCosts: false, msgId: chosenMsgId,
+          threadId: _tmThreadId, bypassCosts: false, msgId: chosenMsgId,
         };
         return {
           applied: true,
@@ -1267,11 +1269,16 @@ export function resolveAbility(abilityId, context) {
       if (chosenMsgId) {
         // Rule 2 — special-action MP gain. Stamp pendingMoveX with
         // bypassCosts: false so terrain/figure adders apply, no bank.
+        // Per alexanbv 2026-05-17: interrupt-grant picker posts in the
+        // ACTIVATOR's thread (the Officer's activation thread), not
+        // the grantee's (no such thread exists for non-activating
+        // figures) and not the general game log.
+        const _orderThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};
         game.pendingMoveX[chosenMsgId] = {
           remaining: 2, source: 'Order',
           playerNum, figureKey: targetFigureKey, dcName: chosenName,
-          threadId: null, bypassCosts: false, msgId: chosenMsgId,
+          threadId: _orderThreadId, bypassCosts: false, msgId: chosenMsgId,
         };
         return {
           applied: true,
