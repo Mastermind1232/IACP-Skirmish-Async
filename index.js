@@ -1237,10 +1237,10 @@ async function refreshAllGameComponents(game, client) {
     recomputeActivationCounts, updateActivationsMessage,
     // DC-actions edit deps: refreshAllGameComponents calls
     // updateDcActionsMessage internally for each active activation thread,
-    // and that function reads deps.getDcActionButtons / deps.getActionsCounterContent.
-    // Missing these caused "deps.getDcActionButtons is not a function"
-    // crashes on every /resync and per-click auto-refresh path.
+    // so this deps bag must include every dep that fn reads.
     getDcActionButtons, getActionsCounterContent,
+    getActivationMinimapAttachment, getPlayerId, ACTION_ICONS,
+    GAME_PHASES, PHASE_COLOR, getInitiativePlayerNum,
     // Discord component builders for the round-activation refresh block
     // (pass-button rebuild). Missing these caused
     // "deps.ActionRowBuilder is not a constructor" on every auto-refresh
