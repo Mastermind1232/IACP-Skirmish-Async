@@ -1000,9 +1000,9 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const noAct = noActions || _curFigOutOfActions || _activationLocked;
   const noAttack = noActions || isStunned || _curFigOutOfActions || _activationLocked;
 
-  // To the Limit (C75): extra action cannot be a Move
+  const _selFigForOncePerAct = selectedFigure ?? 0;
+  const _figureKeyForOncePerAct = `${dcName}-${dgIndex}-${_selFigForOncePerAct}`;
   const toTheLimitActive = !!game?.activationExtraActionThenStun?.[_figureKeyForOncePerAct];
-  // Move blocked by Stun + To-the-Limit + no-actions + activation lock.
   const noMove = noActions || isStunned || toTheLimitActive || _curFigOutOfActions || _activationLocked;
 
   // Non-Combatant: DCs with no attack dice cannot attack
@@ -1012,12 +1012,6 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // attack without spending an action." Surfaces as a sibling Primary/blue
   // Attack button alongside the regular Attack — NOT as a Special Action.
   // (destruct 2026-05-06.) Disabled when used this activation OR Stunned.
-  // Per IACP rule 2026-05-09: "once per activation" applies to the
-  // active figure's activation, not the whole multifigure group.
-  // Compute figureKey for the currently-selected figure; gate Heroic
-  // / Bo-Rifle Staff visibility against figureKey-keyed flag.
-  const _selFigForOncePerAct = selectedFigure ?? 0;
-  const _figureKeyForOncePerAct = `${dcName}-${dgIndex}-${_selFigForOncePerAct}`;
   const _hasHeroic = Array.isArray(stats.rawSpecialIds) && stats.rawSpecialIds.includes('heroic');
   const _heroicUsed = !!game?.heroicUsedThisActivation?.[_figureKeyForOncePerAct];
   const _showHeroic = _hasHeroic && hasAttack && !_heroicUsed;
