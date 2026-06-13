@@ -23,6 +23,16 @@
 
 import { opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
+import { getDcEffects } from '../data-loader.js';
+
+// End-of-activation DC passive abilities, detected via the activating DC's
+// `passives` list in the card data. Per alexanbv 2026-06-13. 0-0-0's
+// "Unnerving" is not tagged in passives, so it's special-cased by dcName.
+const EOA_PASSIVE_ABILITIES = {
+  'Hold the Line': { subPromptKey: 'hold_the_line', label: 'Hold the Line (gain Block per hostile with LOS)' },
+  'Shield': { subPromptKey: 'shield', label: 'Shield (gain 1 Block if you have none)' },
+  'In The Shadows': { subPromptKey: 'in_the_shadows', label: 'In The Shadows (become Hidden)' },
+};
 
 /**
  * Enumerate End-of-Activation descriptors for the activator. Returns
@@ -64,17 +74,36 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     }
   }
 
-  // TODO (alexanbv 2026-05-11 batch 3): wire the remaining EoA abilities:
-  //   - Baze Malbus EoA half (passive trigger)
-  //   - Verena Talos EoA branch (TBD per card text)
-  //   - On a Diplomatic Mission
-  //   - 0-0-0
-  //   - Riot Trooper Regular + Elite
-  //   - ISB Infiltrator Regular + Elite
-  //   - Blend In
-  //   - Force Surge
-  //   - Rebel Graffiti
-  // Each adds a descriptor here + a sub-prompt branch in eoa-handler.js.
+  // DC passive EoA abilities (alexanbv 2026-06-13): detect via the
+  // activating DC's `passives` list. Each becomes a descriptor the owner
+  // resolves through the EoA chooser; the effect fires in eoa-handler.js.
+  const _dgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const _selFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+  const _selfFk = `${dcName}-${_dgIdx}-${_selFig}`;
+  const _passives = getDcEffects()?.[dcName]?.passives || [];
+  for (const [pname, info] of Object.entries(EOA_PASSIVE_ABILITIES)) {
+    if (!_passives.includes(pname)) continue;
+    descriptors.push({
+      id: `${info.subPromptKey}:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: info.label,
+      subPromptKey: info.subPromptKey,
+      extras: { dcName, selfFigureKey: _selfFk },
+    });
+  }
+  // 0-0-0 "Unnerving" — not tagged in passives; special-case by name.
+  // EoA: each adjacent hostile figure becomes Weakened.
+  if (dcName === '0-0-0') {
+    descriptors.push({
+      id: `unnerving:${msgId}`,
+      ownerPlayerNum: playerNum,
+      sourceMsgId: msgId,
+      sourceLabel: 'Unnerving (adjacent hostiles become Weakened)',
+      subPromptKey: 'unnerving',
+      extras: { dcName, selfFigureKey: _selfFk },
+    });
+  }
 
   return descriptors;
 }

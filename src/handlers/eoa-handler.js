@@ -20,6 +20,13 @@ import { grantPowerTokens } from '../game/game-helpers.js';
 import { healHp } from '../game/damage-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
+import { applyCondition } from '../game/conditions.js';
+import { opponentPlayerNum } from '../game/player-helpers.js';
+import { getMapData, getFigureSize } from '../data-loader.js';
+import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
+
+// EoA DC passive abilities resolved as a simple Apply/Skip (no sub-target).
+const EOA_AUTO_APPLY_KEYS = new Set(['hold_the_line', 'shield', 'in_the_shadows', 'unnerving']);
 
 /**
  * Re-post the bucket's chooser prompt after a trigger fires (or none yet
@@ -82,6 +89,17 @@ export async function handleEoaPick(interaction, ctx) {
     const row = new ActionRowBuilder().addComponents(buttons);
     await interaction.message.channel.send({
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
+      components: [row],
+    }).catch(discordCatch);
+  } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
+    // Auto-apply DC passive EoA abilities — single Apply/Skip prompt; the
+    // effect resolves in handleEoaFire on 'apply'. Per alexanbv 2026-06-13.
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F3C1} **${desc.sourceLabel}** — **${displayName}**: resolve this end-of-activation effect?`,
       components: [row],
     }).catch(discordCatch);
   } else {
@@ -148,6 +166,53 @@ export async function handleEoaFire(interaction, ctx) {
       parts.push(`both gained **1 Surge Token**`);
       await interaction.message.edit({ content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${displayName} + ${targetDcName} recover 1 Damage, gain 1 Surge Token.`, { phase: 'ROUND', icon: 'card' });
+    }
+  } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
+    const selfFk = desc.extras?.selfFigureKey;
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{1F3C1} **${desc.sourceLabel}** — Skipped.`, components: [] }).catch(discordCatch);
+    } else {
+      let summary = '';
+      if (desc.subPromptKey === 'in_the_shadows') {
+        // ISB Infiltrator: the activating figure becomes Hidden (per-figure
+        // EoA — fires at this figure's own activation end).
+        if (selfFk) applyCondition(game, selfFk, 'Hide');
+        summary = `**${displayName}** becomes **Hidden**`;
+      } else if (desc.subPromptKey === 'shield') {
+        // Riot Trooper: if the figure has no Block Tokens, gain 1.
+        const tokens = game.figurePowerTokens?.[selfFk] || [];
+        if (!tokens.includes('Block')) { grantPowerTokens(game, selfFk, 'Block', 1); summary = `**${displayName}** gains **1 Block Token**`; }
+        else summary = `**${displayName}** already has a Block Token — no gain`;
+      } else if (desc.subPromptKey === 'hold_the_line') {
+        // Baze Malbus: gain 1 Block Token per hostile figure with LOS.
+        const ms = getMapData(game.selectedMap?.id);
+        const selfPos = game.figurePositions?.[ownerPlayerNum]?.[selfFk];
+        let n = 0;
+        if (selfPos && ms) {
+          const enemyNum = opponentPlayerNum(ownerPlayerNum);
+          const allFp = getAllFigureFootprints(game, getFigureSize);
+          const selfFp = getFigureFootprint(game, ownerPlayerNum, selfFk, getFigureSize);
+          for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+            const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
+            if (eFp.length && hasFigureLineOfSight(selfFp, eFp, ms, allFp)) n++;
+          }
+        }
+        if (n > 0) grantPowerTokens(game, selfFk, 'Block', n);
+        summary = `**${displayName}** gains **${n} Block Token${n !== 1 ? 's' : ''}** (${n} hostile${n !== 1 ? 's' : ''} with LOS)`;
+      } else if (desc.subPromptKey === 'unnerving') {
+        // 0-0-0: each adjacent hostile figure becomes Weakened.
+        const enemyNum = opponentPlayerNum(ownerPlayerNum);
+        const selfPos = game.figurePositions?.[ownerPlayerNum]?.[selfFk];
+        const hit = [];
+        if (selfPos) {
+          for (const [eFk, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
+            if (ePos && countGameSpaces(game, selfPos, ePos) <= 1) { applyCondition(game, eFk, 'Weaken'); hit.push(dcNameFromFigureKey(eFk)); }
+          }
+        }
+        summary = hit.length ? `Weakened: ${hit.join(', ')}` : 'no adjacent hostiles';
+      }
+      await interaction.message.edit({ content: `\u{1F3C1} **${desc.sourceLabel}** — ${summary}.`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{1F3C1} **${desc.sourceLabel}** — ${summary}.`, { phase: 'ROUND', icon: 'card' });
     }
   } else {
     await interaction.followUp({ content: `Unknown EoA descriptor key: ${desc.subPromptKey}`, ephemeral: true }).catch(discordCatch);
