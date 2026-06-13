@@ -906,7 +906,10 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   game.initiativePlayerId = prevInitiative === game.player1Id ? game.player2Id : game.player1Id;
   game.currentRound = (game.currentRound || 1) + 1;
   setRoundPhase(game, ROUND_PHASES.START_OF_ROUND);
-  game.startOfRoundWhoseTurn = game.initiativePlayerId;
+  // Per alexanbv 2026-06-13: mission SoR rules resolve BEFORE either
+  // player's Start-of-Round window opens. The window (startOfRoundWhoseTurn)
+  // is now opened in _continueAfterMissionSor, which runs after the mission
+  // rules above (and on the pending-resume path), not here.
   cleanupRoundStart(game);
 
   // Status Phase summary log (posted before mission SOR may pause for player prompt)
@@ -978,6 +981,11 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
   } = ctx;
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
+
+  // Open the Start-of-Round window now — AFTER mission SoR rules have
+  // resolved (alexanbv 2026-06-13: mission rules happen first, before
+  // either player's window). Init player takes their window turn first.
+  if (!game.startOfRoundWhoseTurn) game.startOfRoundWhoseTurn = game.initiativePlayerId;
 
   // CC Passive Redraw: start-of-round trigger REMOVED 2026-05-09.
   // Rebel Graffiti now redraws inline at end-of-Sabine's-activation
