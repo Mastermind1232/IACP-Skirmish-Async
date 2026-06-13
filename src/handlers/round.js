@@ -121,16 +121,16 @@ export async function handleEndEndOfRound(interaction, ctx) {
   }
   game.endOfRoundWhoseTurn = null;
 
-  // Phase gate: both players confirm before advancing to status phase
-  const { sendPhaseGateMessages: _eorSendGate } = ctx;
-  if (_eorSendGate) {
-    if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-    await _eorSendGate(game, 'post_end_of_round', ctx);
-    saveGames(game.gameId);
-    return;
-  }
-  // Fallback: no gate function available, run status phase directly
-  await _runStatusPhaseLogic(game, gameId, interaction, ctx);
+  // alexanbv 2026-06-13: both players have taken their EoR window turn (init
+  // then non-init), AFTER the status-phase prefix (draw/ready/mission) and
+  // mission scoring already ran. Now run the suffix — DC EoR effects + the
+  // round tail / initiative swap into the next round. (Previously this went
+  // through a post_end_of_round gate into the full status phase, which is now
+  // run up front at pre_end_of_round.)
+  if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  await _runDcEorAndContinue(game, gameId, interaction, ctx, game._eorSuffixLogVars || {});
+  delete game._eorSuffixLogVars;
+  saveGames(game.gameId);
 }
 
 /**
@@ -385,8 +385,31 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
     }
   }
 
-  await _runDcEorAndContinue(game, gameId, interaction, ctx,
+  await _openEorWindowAfterMission(game, gameId, interaction, ctx,
     { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
+}
+
+/**
+ * Single post-mission-EoR continuation (alexanbv 2026-06-13): every path
+ * that finishes the mission EoR rules — the linear status-phase flow AND
+ * each async mission-effect resume (Krykna, Devaron, fluctuation, reveal) —
+ * funnels here. It opens the player End-of-Round window (init player first),
+ * which is steps 4-5 of the status phase, AFTER mission scoring (step 3).
+ * The window's "End EoR window" pass (handleEndEndOfRound → post_end_of_round
+ * gate) then runs the suffix (_runDcEorAndContinue: DC EoR effects + tail).
+ * logVars are stashed for that suffix.
+ */
+export async function _openEorWindowAfterMission(game, gameId, interaction, ctx, logVars) {
+  const { logGameAction, client, updateHandChannelMessages, getInitiativePlayerZoneLabel, saveGames } = ctx;
+  game._eorSuffixLogVars = logVars || {};
+  game.endOfRoundWhoseTurn = game.initiativePlayerId;
+  const _eorOtherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
+  const _eorInitZone = getInitiativePlayerZoneLabel ? getInitiativePlayerZoneLabel(game) : '';
+  if (logGameAction) {
+    await logGameAction(game, client, `**End of Round** — Mission rules resolved ✓. <@${game.initiativePlayerId}> (${_eorInitZone}Initiative) — play any end-of-round effects or CCs in any order, then click **End 'End of Round' window** in your Hand. Then <@${_eorOtherPlayerId}>.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, _eorOtherPlayerId] } });
+  }
+  if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
+  if (saveGames) saveGames(game.gameId);
 }
 
 /**
@@ -1059,7 +1082,8 @@ export async function continueAfterFluctuationSwap(game, gameId, interaction, ct
     if (ctx.saveGames) ctx.saveGames(game.gameId);
     return;
   }
-  await _runDcEorAndContinue(game, gameId, interaction, ctx, logVars);
+  // Mission EoR rules done → open the player window (alexanbv 2026-06-13).
+  await _openEorWindowAfterMission(game, gameId, interaction, ctx, logVars);
 }
 
 /**

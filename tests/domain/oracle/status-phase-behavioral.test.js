@@ -25,8 +25,37 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { handleStatusPhase } from '../../../src/handlers/activation.js';
-import { runStatusPhaseAfterEndOfRound } from '../../../src/handlers/round.js';
+import { runStatusPhaseAfterEndOfRound, handleEndEndOfRound } from '../../../src/handlers/round.js';
 import { recomputeActivationCounts, setActivatedDcIndices } from '../../../src/game/player-helpers.js';
+
+/**
+ * Drive the End-of-Round player window to completion (init player, then other).
+ *
+ * Per alexanbv 2026-06-13, runStatusPhaseAfterEndOfRound now only runs the
+ * status-phase PREFIX (ready DCs, draw CCs, mission EoR) and then OPENS the EoR
+ * player window. The SUFFIX — DC EoR auto-effects (Regenerate/Hardy),
+ * initiative swap, currentRound++, cleanupRoundStart — runs only after BOTH
+ * players pass the window via handleEndEndOfRound.
+ */
+async function passEorWindow(game, ctx) {
+  const mkInteraction = (userId) => {
+    const mockMsg = { id: 'eor-msg', delete: async () => ({}), edit: async () => ({}), components: [] };
+    return {
+      customId: `end_end_of_round_${game.gameId}`,
+      user: { id: userId },
+      followUp: async () => mockMsg,
+      deferUpdate: async () => ({}),
+      update: async () => ({}),
+      message: mockMsg,
+    };
+  };
+  const initId = game.endOfRoundWhoseTurn;
+  assert.ok(initId, 'EoR window should be open after the status-phase prefix');
+  await handleEndEndOfRound(mkInteraction(initId), ctx);
+  const otherId = game.endOfRoundWhoseTurn;
+  assert.ok(otherId && otherId !== initId, 'window should toggle to the non-initiative player');
+  await handleEndEndOfRound(mkInteraction(otherId), ctx);
+}
 
 // ── Mock helpers ────────────────────────────────────────────────────────────
 
@@ -556,7 +585,11 @@ describe('B-STATUS-005: runStatusPhaseAfterEndOfRound representative e2e path', 
       dcExhaustedState: dcExhausted,
     });
 
+    // Prefix: ready cards + draw CCs + open EoR window.
     await runStatusPhaseAfterEndOfRound(game, ctx);
+    // Suffix (DC EoR effects + initiative swap + round++ + cleanup) runs once
+    // both players pass the EoR window.
+    await passEorWindow(game, ctx);
 
     // STEP 1: Ready cards — activated indices cleared, counts recomputed
     assert.deepStrictEqual(game.p1ActivatedDcIndices, [],
@@ -634,6 +667,7 @@ describe('B-STATUS-006: Representative EoR effects', () => {
     });
 
     await runStatusPhaseAfterEndOfRound(game, ctx);
+    await passEorWindow(game, ctx); // suffix runs Regenerate DC EoR effect
 
     // Verify Bleed cleared (Regenerate clears Bleed)
     const conds = game.figureConditions['Bossk-1-0'] || [];
@@ -677,6 +711,7 @@ describe('B-STATUS-006: Representative EoR effects', () => {
     });
 
     await runStatusPhaseAfterEndOfRound(game, ctx);
+    await passEorWindow(game, ctx); // suffix runs Hardy DC EoR effect
 
     const conds = game.figureConditions['Trandoshan Hunter (Elite)-2-0'] || [];
     // Hardy clears Bleed, Stun, Weaken (HARMFUL conditions)

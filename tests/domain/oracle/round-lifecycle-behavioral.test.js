@@ -422,10 +422,17 @@ describe('B-RNDLC-009: handleEndEndOfRound toggles from initiative to opponent',
     assert.ok(calls.logGameAction.length > 0, 'logGameAction called');
   });
 
-  it('009b: opponent (non-initiative) presses → endOfRoundWhoseTurn cleared, phase gate fires', async () => {
+  it('009b: opponent (non-initiative) presses → endOfRoundWhoseTurn cleared, suffix runs', async () => {
+    // Per alexanbv 2026-06-13: when the NON-initiative player passes the EoR
+    // window it no longer fires a post_end_of_round phase gate. Instead it runs
+    // the suffix (_runDcEorAndContinue) inline — DC EoR effects, then the round
+    // tail (_runInitiativeSwapAndContinue): initiative swap + currentRound++ +
+    // cleanupRoundStart + the new round's pre_activation gate.
     const game = makeGame({
       endOfRoundWhoseTurn: 'player2',
       initiativePlayerId: 'player1', // player2 is NOT initiative
+      currentRound: 1,
+      selectedMap: { id: 'test-map' },
     });
     const { ctx, calls } = buildRoundCtx(game);
     const interaction = mockInteraction('end_end_of_round_42', 'player2');
@@ -433,9 +440,17 @@ describe('B-RNDLC-009: handleEndEndOfRound toggles from initiative to opponent',
 
     assert.strictEqual(game.endOfRoundWhoseTurn, null,
       'endOfRoundWhoseTurn cleared — both players done');
-    assert.ok(calls.sendPhaseGateMessages.length > 0, 'phase gate fired');
-    assert.strictEqual(calls.sendPhaseGateMessages[0], 'post_end_of_round',
-      'phase gate is post_end_of_round');
+    // Suffix ran: initiative swapped + round incremented.
+    assert.strictEqual(game.initiativePlayerId, 'player2',
+      'initiative swapped to opponent (suffix ran)');
+    assert.strictEqual(game.currentRound, 2,
+      'currentRound incremented (suffix ran)');
+    // The new round opens its activation window via the pre_activation gate
+    // (no post_end_of_round gate any more).
+    assert.ok(!calls.sendPhaseGateMessages.includes('post_end_of_round'),
+      'post_end_of_round gate no longer fired');
+    assert.ok(calls.sendPhaseGateMessages.includes('pre_activation'),
+      'pre_activation gate fired for the new round');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });

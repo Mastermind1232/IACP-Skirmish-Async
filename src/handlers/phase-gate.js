@@ -302,16 +302,14 @@ async function dispatchPhaseAdvance(game, phase, ctx) {
 
     case 'pre_end_of_round': {
       setRoundPhase(game, ROUND_PHASES.END_OF_ROUND);
-      game.endOfRoundWhoseTurn = game.initiativePlayerId;
-      const { getInitiativePlayerZoneLabel, updateHandChannelMessages } = ctx;
-      const _eorInitPlayerNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
-      const _eorOtherPlayerId = game.initiativePlayerId === game.player1Id ? game.player2Id : game.player1Id;
-      const _eorInitZone = getInitiativePlayerZoneLabel ? getInitiativePlayerZoneLabel(game) : '';
-      if (logGameAction) {
-        await logGameAction(game, client, `**End of Round** — 1. Mission Rules/Effects (resolve as needed). 2. <@${game.initiativePlayerId}> (${_eorInitZone}Initiative). 3. <@${_eorOtherPlayerId}>. 4. Next phase. Initiative player: play any end-of-round effects or CCs, then click **End 'End of Round' window** in your Hand.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, _eorOtherPlayerId] } });
-      }
-      if (updateHandChannelMessages) {
-        await updateHandChannelMessages(game, client);
+      // alexanbv 2026-06-13: run the status-phase prefix (draw, ready DCs,
+      // mission EoR rules/scoring = steps 1-3) FIRST. That flow ends in
+      // _openEorWindowAfterMission, which opens the player EoR window
+      // (steps 4-5: init then non-init) AFTER mission scoring. The player
+      // window no longer opens here before mission rules.
+      const { runStatusPhaseAfterEndOfRound: _eorRunStatus } = ctx;
+      if (_eorRunStatus) {
+        await _eorRunStatus(game, ctx);
       }
       break;
     }

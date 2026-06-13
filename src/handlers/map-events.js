@@ -427,8 +427,10 @@ async function _resumeKryknaEor(game, gameId, ctx) {
   if (!game._kryknaResumeLogVars) return;
   const logVars = game._kryknaResumeLogVars;
   delete game._kryknaResumeLogVars;
-  const { _runDcEorAndContinue } = await import('./round.js');
-  await _runDcEorAndContinue(game, gameId, null, ctx, logVars);
+  // Mission EoR (Krykna) done → open the player EoR window after mission
+  // scoring, not the DC-EoR suffix directly (alexanbv 2026-06-13).
+  const { _openEorWindowAfterMission } = await import('./round.js');
+  await _openEorWindowAfterMission(game, gameId, null, ctx, logVars);
 }
 
 // ── Arms Salvage (Devaron Garrison A) distribute handlers ─────────────────
