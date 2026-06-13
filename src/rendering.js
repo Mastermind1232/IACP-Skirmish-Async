@@ -39,6 +39,7 @@ import {
 } from './data-loader.js';
 import { dcMessageMeta } from './game-state.js';
 import { getSquad } from './game/player-helpers.js';
+import { sumFigureActionsRemaining } from './game/activation-state.js';
 import {
   buildScorecardEmbed,
   formatHealthSection,
@@ -559,7 +560,7 @@ export async function buildDcEmbedAndFiles(dcName, exhausted, displayName, healt
   const figures = stats.figures ?? 1;
   const variant = dcName?.includes('(Elite)') ? 'Elite' : dcName?.includes('(Regular)') ? 'Regular' : null;
   const healthSection = figureless ? null : formatHealthSection(Number(dgIndex), healthState, conditionsByFigure, tokensByFigure, nicknamesByFigure);
-  const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(actionsData.remaining, actionsData.total) : null;
+  const actionsLine = (actionsData != null && exhausted) ? getActionsCounterContent(sumFigureActionsRemaining(actionsData), Object.keys(actionsData.perFigureRemaining || {}).length * 2) : null;
   const loadoutLine = loadoutName ? `**Loadout:** ${loadoutName}` : null;
   // Imperial Citadel: show token inventory on the card
   let citadelTokenLine = null;

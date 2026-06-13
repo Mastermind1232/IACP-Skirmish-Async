@@ -690,12 +690,13 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
     for (let i = 0; i < _rsMsgIds.length; i++) {
       const _rsMid = _rsMsgIds[i];
       if (!cardNameIncludes(_rsAtts[_rsMid], 'Rogue Smuggler')) continue;
-      const _rsRoundKey = `${_rsMid}_rogueSmugglerEor`;
-      if (game.roundFigureAbilityUsed?.[_rsRoundKey]) continue;
       const _rsDc = _rsDcList[i];
       if (!_rsDc?.dcName || _rsDc.defeated) continue;
       const _rsDgIdx = (_rsDc.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _rsFk = `${_rsDc.dcName}-${_rsDgIdx}-0`;
+      // Per alexanbv 2026-06-13: per FIGURE (key by Han's figureKey, not the group msgId).
+      const _rsRoundKey = `${_rsFk}_rogueSmugglerEor`;
+      if (game.roundFigureAbilityUsed?.[_rsRoundKey]) continue;
       if (!game.figurePositions?.[pn]?.[_rsFk]) continue;
       const _rsOwnerId = game[`player${pn}Id`];
       const _rsRow = new ActionRowBuilder().addComponents(

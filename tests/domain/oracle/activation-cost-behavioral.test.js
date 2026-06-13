@@ -96,6 +96,7 @@ function buildUnactivateCtx(game, overrides = {}) {
       dcMessageMeta: new Map([
         ['3001', { dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [DG 1]', playerNum: 1, gameId: '42' }],
       ]),
+      DC_ACTIONS_PER_ACTIVATION: 2,
       dcExhaustedState: exhaustedState,
       dcHealthState: new Map([['3001', [[5, 6]]]]),
       renderDcEmbed: async () => ({ embed: {}, files: [] }),
@@ -137,26 +138,26 @@ function buildInteractCtx(game, overrides = {}) {
 describe('B-ACTCOST-001: Remove Stun costs 1 action', () => {
   it('001a: remaining decrements from 2 to 1', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       figureConditions: { 'Rebel Trooper-1-0': ['Stun'] },
     });
     const { ctx, calls } = buildRemoveStunCtx(game);
     await handleDcRemoveStun(mockInteraction('dc_remove_stun_3001_f0', 'player1'), ctx);
 
-    assert.strictEqual(game.dcActionsData['3001'].remaining, 1, 'remaining 2→1');
+    assert.strictEqual(game.dcActionsData['3001'].perFigureRemaining[0], 1, 'remaining 2→1');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
     assert.ok(calls.updateDcActionsMessage.length > 0, 'UI updated');
   });
 
   it('001b: remaining decrements from 1 to 0', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 1, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 1 }, figureLocked: {} } },
       figureConditions: { 'Rebel Trooper-1-0': ['Stun'] },
     });
     const { ctx } = buildRemoveStunCtx(game);
     await handleDcRemoveStun(mockInteraction('dc_remove_stun_3001_f0', 'player1'), ctx);
 
-    assert.strictEqual(game.dcActionsData['3001'].remaining, 0, 'remaining 1→0');
+    assert.strictEqual(game.dcActionsData['3001'].perFigureRemaining[0], 0, 'remaining 1→0');
   });
 
   it('001c: Stun condition is removed from figure', async () => {
@@ -177,7 +178,7 @@ describe('B-ACTCOST-001: Remove Stun costs 1 action', () => {
 describe('B-ACTCOST-002: Remove Stun gates at 0 remaining', () => {
   it('002: remaining=0 returns early with ephemeral message', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 0, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 0 }, figureLocked: { 0: true } } },
       figureConditions: { 'Rebel Trooper-1-0': ['Stun'] },
     });
     const { ctx, calls } = buildRemoveStunCtx(game);
@@ -185,7 +186,7 @@ describe('B-ACTCOST-002: Remove Stun gates at 0 remaining', () => {
     await handleDcRemoveStun(interaction, ctx);
 
     // Remaining unchanged
-    assert.strictEqual(game.dcActionsData['3001'].remaining, 0, 'remaining stays 0');
+    assert.strictEqual(game.dcActionsData['3001'].perFigureRemaining[0], 0, 'remaining stays 0');
     // Gate message sent
     const gateMsg = interaction._followUpCalls.find(m => m.ephemeral && m.content?.includes('No actions remaining'));
     assert.ok(gateMsg, 'ephemeral gate message sent');
@@ -317,7 +318,7 @@ describe('B-ACTCOST-006: Free attack path bypasses cost', () => {
 describe('B-ACTCOST-007: Interact costs 1', () => {
   it('007a: remaining 2→1 after interact choice', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' } },
       selectedMap: { id: 'test-map' },
     });
@@ -327,7 +328,7 @@ describe('B-ACTCOST-007: Interact costs 1', () => {
 
     await handleInteractChoice(interaction, ctx).catch(() => {});
 
-    assert.strictEqual(game.dcActionsData['3001'].remaining, 1, 'remaining 2→1');
+    assert.strictEqual(game.dcActionsData['3001'].perFigureRemaining[0], 1, 'remaining 2→1');
     assert.ok(calls.updateDcActionsMessage.length > 0, 'UI updated');
   });
 
@@ -523,7 +524,7 @@ describe('B-ACTCOST-012: Move action cost', () => {
 describe('B-UNACT-001: Un-activate rejects after actions spent', () => {
   it('001: remaining < total returns ephemeral rejection', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 1, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 1 }, figureLocked: {} } },
       p1ActivatedDcIndices: [0],
     });
     const { ctx, calls, exhaustedState } = buildUnactivateCtx(game);
@@ -547,8 +548,8 @@ describe('B-UNACT-001: Un-activate rejects after actions spent', () => {
 describe('B-UNACT-002: Un-activate rejects after MP spent', () => {
   it('002: bank.remaining < bank.total returns ephemeral rejection', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } }, // Actions full (gate 1 passes)
-      movementBank: { '3001': { remaining: 3, total: 4 } }, // MP spent (gate 2 rejects)
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } }, // Actions full (gate 1 passes)
+      movementBank: { '3001': { perFig: { 0: { remaining: 3, total: 4 } } } }, // MP spent (gate 2 rejects)
       p1ActivatedDcIndices: [0],
     });
     const { ctx, calls, exhaustedState } = buildUnactivateCtx(game);
@@ -568,8 +569,8 @@ describe('B-UNACT-002: Un-activate rejects after MP spent', () => {
 describe('B-UNACT-003: Un-activate cleans core activation state', () => {
   it('003: cleans dcActionsData, movementBank, activated indices, exhaust state', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
-      movementBank: { '3001': { remaining: 4, total: 4 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
+      movementBank: { '3001': { perFig: { 0: { remaining: 4, total: 4 } } } },
       p1ActivatedDcIndices: [0],
       p1ActivationsRemaining: 0,
       p1ActivationsTotal: 1,
@@ -626,7 +627,7 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
 
   it('004a: ACTIVATION_SCALAR_FLAGS cleared on un-activate', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       commsJammerActivePlayerNum: 2,
       onTheLamActive: true,
       p1ActivatedDcIndices: [0],
@@ -644,7 +645,7 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
     // fellSwoopFreeAttack moved to ACTIVATION_FIGKEY_FLAGS 2026-05-13;
     // cleanup still applies via cleanupActivation's figureKey-flag pass.
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       dcFinishedPinged: { '3001': true },
       fellSwoopFreeAttack: { 'Rebel Trooper-1-0': true },
       pendingMpBonus: { '3001': 3 },
@@ -662,7 +663,7 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
 
   it('004c: ACTIVATION_FIGKEY_FLAGS cleaned on un-activate', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       figureMoved: { 'Rebel Trooper-1-0': true, 'Enemy-2-0': true },
       p1ActivatedDcIndices: [0],
     });
@@ -677,7 +678,7 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
 
   it('004d: moveInProgress compound keys cleaned on un-activate', async () => {
     const game = makeGame({
-      dcActionsData: { '3001': { remaining: 2, total: 2 } },
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
       moveInProgress: { '3001_0': { mp: 3 }, '3002_0': { mp: 5 } },
       p1ActivatedDcIndices: [0],
     });

@@ -149,8 +149,8 @@ export function allocateCompanionBanksMidGame(game, playerNum, companionMsgId, c
   const actionsPerActivation = opts.actionsPerActivation ?? 2;
   game.dcActionsData = game.dcActionsData || {};
   game.dcActionsData[companionMsgId] = {
-    remaining: actionsPerActivation,
-    total: actionsPerActivation,
+    // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — no group-level
+    // remaining/total. Companions are single-figure.
     perFigureRemaining: { 0: actionsPerActivation },
     figureLocked: {},
     figureSoaFired: {},
@@ -163,11 +163,10 @@ export function allocateCompanionBanksMidGame(game, playerNum, companionMsgId, c
   };
   game.movementBank = game.movementBank || {};
   game.movementBank[companionMsgId] = {
-    total: 0,
-    remaining: 0,
     threadId: opts.threadId || null,
     messageId: null,
     displayName: companionName,
+    perFig: { 0: { total: 0, remaining: 0 } },
   };
   game.activationStartPositions = game.activationStartPositions || {};
   const prefix = `${companionName}-`;
@@ -317,10 +316,19 @@ export async function finalizeActivation({
   }
 
   // B10. Init movementBank (merge pendingMpBonus + deployBonusMp)
+  // Per alexanbv 2026-06-13: MP is strictly per-figure. The top-level
+  // movementBank[msgId] holds ONLY UI metadata; every figure of the group
+  // gets its own perFig[i] sub-bank. A pending MP bonus applies to each
+  // figure individually (per-figure semantics — no shared pool).
   game.movementBank = game.movementBank || {};
   const _pendingMp = game.pendingMpBonus?.[msgId] ?? 0;
   if (_pendingMp) delete game.pendingMpBonus[msgId];
-  game.movementBank[msgId] = { total: _pendingMp, remaining: _pendingMp, threadId: thread.id, messageId: null, displayName };
+  const _b10FigCount = Math.max(1, getDcEffect(dcName)?.figures ?? 1);
+  const _b10PerFig = {};
+  for (let _i = 0; _i < _b10FigCount; _i++) {
+    _b10PerFig[_i] = { total: _pendingMp, remaining: _pendingMp };
+  }
+  game.movementBank[msgId] = { threadId: thread.id, messageId: null, displayName, perFig: _b10PerFig };
 
   // Deploy bonus MP (legacy backward-compat)
   if (game.deployBonusMp) {
@@ -358,13 +366,12 @@ export async function finalizeActivation({
   // figure can act.
   const _b12Eff = getDcEffect(dcName);
   const _b12FigCount = Math.max(1, _b12Eff?.figures ?? 1);
-  const _b12Total = _b12FigCount * DC_ACTIONS_PER_ACTIVATION;
   const _b12PerFig = {};
   for (let _i = 0; _i < _b12FigCount; _i++) _b12PerFig[_i] = DC_ACTIONS_PER_ACTIVATION;
   game.dcActionsData = game.dcActionsData || {};
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — no group-level
+  // remaining/total counter. Each figure owns its budget in perFigureRemaining.
   game.dcActionsData[msgId] = {
-    remaining: _b12Total,
-    total: _b12Total,
     perFigureRemaining: _b12PerFig,
     figureLocked: {},
     // Per destruct 2026-05-07: each figure has individual SoA + EoA
@@ -400,10 +407,9 @@ export async function finalizeActivation({
       const _compInPlay = Object.keys(game.figurePositions?.[playerNum] || {})
         .some((fk) => fk.startsWith(_compPrefix));
       if (_companionMsgId && _compInPlay) {
-        const _compActions = DC_ACTIONS_PER_ACTIVATION;
         game.dcActionsData[_companionMsgId] = {
-          remaining: _compActions,
-          total: _compActions,
+          // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — no
+          // group-level remaining/total. Companions are single-figure.
           perFigureRemaining: { 0: DC_ACTIONS_PER_ACTIVATION },
           figureLocked: {},
           figureSoaFired: {},
@@ -417,11 +423,10 @@ export async function finalizeActivation({
         const _compPendingMp = game.pendingMpBonus?.[_companionMsgId] ?? 0;
         if (_compPendingMp) delete game.pendingMpBonus[_companionMsgId];
         game.movementBank[_companionMsgId] = {
-          total: _compPendingMp,
-          remaining: _compPendingMp,
           threadId: thread.id,
           messageId: null,
           displayName: _compInfo.companionName,
+          perFig: { 0: { total: _compPendingMp, remaining: _compPendingMp } },
         };
         for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
           if (fk.startsWith(_compPrefix)) game.activationStartPositions[fk] = pos;
@@ -969,12 +974,9 @@ export async function finalizeActivation({
       // Per alexanbv 2026-05-13: per-figure bank. Fleet applies at
       // start-of-activation to figure 0 (the first activator).
       if (fCard?.fleetMp && fCard.fleetMp > 0) {
+        // Per-figure bank: Fleet applies at start-of-activation to figure 0.
+        // grantMovementBank ensures the figure's perFig sub-bank exists.
         grantMovementBank(game, msgId, fCard.fleetMp, 0);
-        // Mirror top-level so legacy readers see the grant.
-        if (game.movementBank?.[msgId]) {
-          game.movementBank[msgId].total = (game.movementBank[msgId].total ?? 0) + fCard.fleetMp;
-          game.movementBank[msgId].remaining = (game.movementBank[msgId].remaining ?? 0) + fCard.fleetMp;
-        }
         await thread.send({ content: `🏃 **Fleet** — **${dcName}** gains **${fCard.fleetMp} MP** at start of activation.` }).catch(discordCatch);
       }
       // Conspire (Senator)

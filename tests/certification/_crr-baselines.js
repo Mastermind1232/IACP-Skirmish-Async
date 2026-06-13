@@ -278,8 +278,11 @@ function findDcMsgId(dcMessageMeta, gameId, playerNum, dcName) {
 }
 
 function enableAttackFor(game, msgId) {
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure. Seed the active
+  // figure's per-figure budget so anyFigureHasActions(data)/figureActionsRemaining
+  // see a full 2-action budget and the engine offers attack_target.
   game.dcActionsData = game.dcActionsData || {};
-  game.dcActionsData[msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+  game.dcActionsData[msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {}, selectedFigure: 0, specialsUsed: [] };
 }
 
 export const PARITY_SCENARIOS = [

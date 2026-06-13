@@ -54,7 +54,7 @@ describe('PROBE-AS-001: No second attack after already attacked (without Assault
     // this activation. Per alexanbv 2026-05-13: the flag is keyed by
     // figureKey (per-figure), not msgId (per-group).
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
     game.attackPerformedThisActivation = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);

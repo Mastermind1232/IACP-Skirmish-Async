@@ -40,7 +40,7 @@ describe('PROBE-AS-005: activationExtraActionThenStun blocks move_figure', () =>
     // Mid-activation with extra-action-then-stun flag set.
     // Per alexanbv 2026-05-13: keyed by figureKey.
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
     game.activationExtraActionThenStun = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
@@ -71,7 +71,7 @@ describe('PROBE-AS-006: massiveMovementLocked blocks move_figure', () => {
 
     // Mid-activation with massiveMovementLocked set for this figure
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
     game.massiveMovementLocked = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
@@ -97,8 +97,8 @@ describe('PROBE-AS-007: Assault keyword allows attack after attackPerformedThisA
 
     // Mid-activation: 1 action remaining, already attacked this activation
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-    game.attackPerformedThisActivation = { [dc.msgId]: true };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
+    game.attackPerformedThisActivation = { [dc.figKey]: true };
 
     const actions = getAvailableActions(game, 1, deps);
     const attackActions = actions.filter(a => a.type === 'attack_target');
@@ -118,8 +118,8 @@ describe('PROBE-AS-007: Assault keyword allows attack after attackPerformedThisA
 
     const dc2 = getDcInfo(game2, dcMeta2, 1, 'Bossk');
     game2.dcActionsData = game2.dcActionsData || {};
-    game2.dcActionsData[dc2.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-    game2.attackPerformedThisActivation = { [dc2.msgId]: true };
+    game2.dcActionsData[dc2.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
+    game2.attackPerformedThisActivation = { [dc2.figKey]: true };
 
     const actions2 = getAvailableActions(game2, 1, deps2);
     const attackActions2 = actions2.filter(a => a.type === 'attack_target');
@@ -150,8 +150,8 @@ describe('PROBE-AS-007: Assault keyword allows attack after attackPerformedThisA
     game3.figurePositions[2][p2FigKey] = 'j11';
 
     game3.dcActionsData = game3.dcActionsData || {};
-    game3.dcActionsData[dc3.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
-    game3.attackPerformedThisActivation = { [dc3.msgId]: true };
+    game3.dcActionsData[dc3.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
+    game3.attackPerformedThisActivation = { [dc3.figKey]: true };
 
     const actions3 = getAvailableActions(game3, 1, deps3);
     const attackActions3 = actions3.filter(a => a.type === 'attack_target');
@@ -175,7 +175,7 @@ describe('PROBE-AS-008: CC Double Action requires data.remaining >= 2', () => {
 
     // Mid-activation with 2 remaining
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
 
     // Mock the CC double action dep to return a card
     const depsWithCcDouble = {
@@ -201,7 +201,7 @@ describe('PROBE-AS-008: CC Double Action requires data.remaining >= 2', () => {
 
     // Mid-activation with only 1 remaining
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
 
     const depsWithCcDouble = {
       ...deps,

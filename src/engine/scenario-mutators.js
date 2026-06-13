@@ -199,9 +199,15 @@ async function mutateToCombat(game, client, deps, userId) {
     throw new ScenarioMutationError('mid_combat', 'no P1 DC message ID for attacker');
   }
 
-  // Set up activation state for attacker's DC
+  // Set up activation state for attacker's DC.
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — no group-level
+  // counter. Seed perFigureRemaining so per-figure gating works in scenario
+  // runs. (The legacy { actions, moved } shape was never read.)
   if (!game.dcActionsData) game.dcActionsData = {};
-  game.dcActionsData[attackerMsgId] = { actions: 2, moved: false };
+  game.dcActionsData[attackerMsgId] = {
+    perFigureRemaining: { 0: 2 },
+    figureLocked: {},
+  };
   dcExhaustedState.set(attackerMsgId, false);
 
   // Ensure activation phase

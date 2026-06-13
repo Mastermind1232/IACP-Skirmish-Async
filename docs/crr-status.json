@@ -42,8 +42,8 @@
       "ROUND_OBJECT_FLAGS": 111,
       "ROUND_NULL_FLAGS": 134,
       "ROUND_ARRAY_FLAGS": 5,
-      "ROUND_FALSE_FLAGS": 5,
-      "ROUND_DELETE_FLAGS": 28
+      "ROUND_FALSE_FLAGS": 4,
+      "ROUND_DELETE_FLAGS": 29
     },
     "totalUniqueKeys": 283,
     "baselineDuplicates": [],

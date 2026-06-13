@@ -1,4 +1,5 @@
 import { createDomainEvent } from '../events.js';
+import { anyFigureHasActions } from '../../game/activation-state.js';
 
 /**
  * Handles PerformAction command (Move/Attack/Interact/Special).
@@ -8,7 +9,7 @@ export function handlePerformAction(state, command) {
   const { gameId, playerId, payload } = command;
   const { msgId, actionType } = payload;
 
-  if (state.dcActionsData?.[msgId]?.remaining <= 0) {
+  if (!anyFigureHasActions(state.dcActionsData?.[msgId])) {
     return { events: [], error: 'No actions remaining' };
   }
 

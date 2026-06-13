@@ -61,45 +61,50 @@ describe('PROBE-DUBIOUS-COUNTERPARTS-001: isAphraAlive requires both DC in list 
 });
 
 describe('PROBE-DUBIOUS-COUNTERPARTS-002: action bump mirrors inline formula', () => {
-  it('remaining=0, total=2 → bumped to 1 (min(3, 1))', () => {
-    const a = { total: 2, remaining: 0 };
-    const r = applyDubiousCounterpartsActionBump(a, 2);
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure. The +1 bump
+  // applies to the active figure's perFigureRemaining[selectedFigure] (cap 3,
+  // i.e. base 2 + the one extra action this card grants). No top-level
+  // remaining/total group counter remains.
+  it('remaining=0 → bumped to 1 (min(3, 1))', () => {
+    const a = { perFigureRemaining: { 0: 0 }, figureLocked: {}, selectedFigure: 0 };
+    const r = applyDubiousCounterpartsActionBump(a);
     assert.equal(r, 1);
-    assert.equal(a.remaining, 1);
+    assert.equal(a.perFigureRemaining[0], 1);
   });
 
-  it('remaining=1, total=2 → bumped to 2 (min(3, 2))', () => {
-    const a = { total: 2, remaining: 1 };
-    applyDubiousCounterpartsActionBump(a, 2);
-    assert.equal(a.remaining, 2);
+  it('remaining=1 → bumped to 2 (min(3, 2))', () => {
+    const a = { perFigureRemaining: { 0: 1 }, figureLocked: {}, selectedFigure: 0 };
+    applyDubiousCounterpartsActionBump(a);
+    assert.equal(a.perFigureRemaining[0], 2);
   });
 
-  it('remaining=2, total=2 → bumped to 3 (cap is total+1, not total)', () => {
-    const a = { total: 2, remaining: 2 };
-    applyDubiousCounterpartsActionBump(a, 2);
-    assert.equal(a.remaining, 3);
+  it('remaining=2 → bumped to 3 (cap is total+1, not total)', () => {
+    const a = { perFigureRemaining: { 0: 2 }, figureLocked: {}, selectedFigure: 0 };
+    applyDubiousCounterpartsActionBump(a);
+    assert.equal(a.perFigureRemaining[0], 3);
   });
 
-  it('remaining=3, total=2 → stays at 3 (min(3, 4)=3)', () => {
-    const a = { total: 2, remaining: 3 };
-    applyDubiousCounterpartsActionBump(a, 2);
-    assert.equal(a.remaining, 3);
+  it('remaining=3 → stays at 3 (min(3, 4)=3)', () => {
+    const a = { perFigureRemaining: { 0: 3 }, figureLocked: {}, selectedFigure: 0 };
+    applyDubiousCounterpartsActionBump(a);
+    assert.equal(a.perFigureRemaining[0], 3);
   });
 
-  it('no total set → uses fallback 2 → cap is 3', () => {
-    const a = { remaining: 2 };
-    applyDubiousCounterpartsActionBump(a, 2);
-    assert.equal(a.remaining, 3);
+  it('untracked figure → starts from 0 → cap is 3', () => {
+    // perFigureRemaining seeded at 2 for figure 0; bump → 3.
+    const a = { perFigureRemaining: { 0: 2 }, figureLocked: {}, selectedFigure: 0 };
+    applyDubiousCounterpartsActionBump(a);
+    assert.equal(a.perFigureRemaining[0], 3);
   });
 
   it('fallback=DC_ACTIONS_PER_ACTIVATION (2) matches Invasive Procedure path', () => {
-    const a = { remaining: 1 };
-    applyDubiousCounterpartsActionBump(a, 2);
-    assert.equal(a.remaining, 2);
+    const a = { perFigureRemaining: { 0: 1 }, figureLocked: {}, selectedFigure: 0 };
+    applyDubiousCounterpartsActionBump(a);
+    assert.equal(a.perFigureRemaining[0], 2);
   });
 
   it('null actionsData returns null (safe no-op)', () => {
-    assert.equal(applyDubiousCounterpartsActionBump(null, 2), null);
+    assert.equal(applyDubiousCounterpartsActionBump(null), null);
   });
 });
 

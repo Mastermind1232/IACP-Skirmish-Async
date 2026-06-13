@@ -54,7 +54,7 @@ function buildAttackScenario(attackerDc, defenderDc) {
   // Mid-activation: 1 action remaining, this figure already attacked
   // (figureKey-keyed per alexanbv 2026-05-13).
   game.dcActionsData = game.dcActionsData || {};
-  game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+  game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
   game.attackPerformedThisActivation = { [dc.figKey]: true };
 
   return { game, deps, dc };

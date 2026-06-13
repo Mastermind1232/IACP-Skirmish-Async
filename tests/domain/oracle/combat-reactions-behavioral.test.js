@@ -682,7 +682,8 @@ describe('B-CR-PC: Power Converter multi-step reroll', () => {
     const { ctx } = buildCtx(game);
     await handlePowerConverter(mockInteraction('power_converter_color_g1_green', 'player1'), ctx);
 
-    assert.strictEqual(game.powerConverterUsedThisRound, true, 'once-per-round flag set');
+    // Per alexanbv 2026-06-13: once per round per player (any figure on that side).
+    assert.strictEqual(game.powerConverterUsedThisRound?.[1], true, 'once-per-round-per-player flag set');
     assert.strictEqual(combat.powerConverterDieIndex, undefined, 'temporary index cleaned up');
   });
 
@@ -701,7 +702,7 @@ describe('B-CR-PC: Power Converter multi-step reroll', () => {
     await handlePowerConverter(mockInteraction('power_converter_color_g1_skip', 'player1'), ctx);
 
     assert.strictEqual(combat.attackDiceResults[0].color, 'red', 'kept same color');
-    assert.strictEqual(game.powerConverterUsedThisRound, true, 'still counts as used');
+    assert.strictEqual(game.powerConverterUsedThisRound?.[1], true, 'still counts as used (per player)');
   });
 
   it('B-CR-PC-006: skip path resumes reroll flow without any mutation', async () => {

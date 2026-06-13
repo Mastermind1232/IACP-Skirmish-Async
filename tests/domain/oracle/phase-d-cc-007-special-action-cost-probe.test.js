@@ -42,9 +42,12 @@ describe('PROBE-PD-CC-007: CC special action icons cost 1 or 2 actions', () => {
   });
 
   it('007b: source — available-actions gates PLAY_CC_SPECIAL on remaining >= 1 with actionCost: 1', () => {
+    // Per alexanbv 2026-06-13: gating reads the CURRENT figure's per-figure
+    // budget via figureActionsRemaining(data, figureIndex), not a top-level
+    // data.remaining group counter.
     assert.match(AVAIL_SRC,
-      /if \(deps\.getPlayableCcSpecialsForDc && data\.remaining >= 1\) \{/,
-      'Special Action CCs must require at least 1 remaining action — CRR-CC-007');
+      /if \(deps\.getPlayableCcSpecialsForDc && figureActionsRemaining\(data, figureIndex\) >= 1\) \{/,
+      'Special Action CCs must require at least 1 remaining action (current figure) — CRR-CC-007');
     assert.match(AVAIL_SRC,
       /type: ACTION_TYPES\.PLAY_CC_SPECIAL,[\s\S]{0,400}?actionCost: 1 \}/,
       'PLAY_CC_SPECIAL offering must carry actionCost: 1 — CRR-CC-007');
@@ -52,22 +55,26 @@ describe('PROBE-PD-CC-007: CC special action icons cost 1 or 2 actions', () => {
 
   it('007c: source — available-actions gates PLAY_CC_DOUBLE on remaining >= 2 with actionCost: 2', () => {
     assert.match(AVAIL_SRC,
-      /if \(deps\.getPlayableCcDoubleActionsForDc && data\.remaining >= 2\) \{/,
-      'Double Action CCs must require at least 2 remaining actions — CRR-CC-007');
+      /if \(deps\.getPlayableCcDoubleActionsForDc && figureActionsRemaining\(data, figureIndex\) >= 2\) \{/,
+      'Double Action CCs must require at least 2 remaining actions (current figure) — CRR-CC-007');
     assert.match(AVAIL_SRC,
       /type: ACTION_TYPES\.PLAY_CC_DOUBLE,[\s\S]{0,400}?actionCost: 2 \}/,
       'PLAY_CC_DOUBLE offering must carry actionCost: 2 — CRR-CC-007');
   });
 
   it('007d: source — dc-play-area Special Action path decrements remaining by 1', () => {
+    // Per alexanbv 2026-06-13: Special Action consumes ONE action from the
+    // active figure via consumeActionForCurrentFigure (cost 1).
     assert.match(DCPA_SRC,
-      /if \(timingLabel === 'Special Action'\) \{\s*\n\s*const data = game\.dcActionsData\?\.\[msgId\];\s*\n\s*if \(data && typeof data\.remaining === 'number'\) data\.remaining = Math\.max\(0, data\.remaining - 1\);/,
-      'Special Action CC must decrement remaining by 1 — CRR-CC-007');
+      /if \(timingLabel === 'Special Action'\) \{[\s\S]{0,200}?if \(data\) consumeActionForCurrentFigure\(data, 1, game, msgId\);/,
+      'Special Action CC must consume 1 action from the active figure — CRR-CC-007');
   });
 
   it('007e: source — dc-play-area Double Action path zeroes remaining (spends both actions)', () => {
+    // Double Action consumes BOTH of the active figure's actions
+    // (cost = DC_ACTIONS_PER_ACTIVATION), zeroing the figure's budget.
     assert.match(DCPA_SRC,
-      /\} else if \(timingLabel === 'Double Action'\) \{\s*\n\s*const data = game\.dcActionsData\?\.\[msgId\];\s*\n\s*if \(data && typeof data\.remaining === 'number'\) data\.remaining = 0;/,
-      'Double Action CC must zero remaining (costs both actions) — CRR-CC-007');
+      /\} else if \(timingLabel === 'Double Action'\) \{[\s\S]{0,200}?if \(data\) consumeActionForCurrentFigure\(data, DC_ACTIONS_PER_ACTIVATION, game, msgId\);/,
+      'Double Action CC must consume both actions (DC_ACTIONS_PER_ACTIVATION) — CRR-CC-007');
   });
 });

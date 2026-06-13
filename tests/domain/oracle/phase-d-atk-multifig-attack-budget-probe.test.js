@@ -59,8 +59,8 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
     // with 1 action remaining. Figure 0 already attacked this activation.
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[dc.msgId] = {
-      remaining: 1,
-      total: 2,
+      perFigureRemaining: { 1: 1 },
+      figureLocked: {},
       specialsUsed: [],
       selectedFigure: 1, // figure 1 is now active
     };
@@ -89,7 +89,7 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
 
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[dc.msgId] = {
-      remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1,
+      perFigureRemaining: { 1: 1 }, figureLocked: {}, specialsUsed: [], selectedFigure: 1,
     };
     // THIS figure already attacked — gate should fire.
     game.attackPerformedThisActivation = { [fig1]: true };
@@ -119,7 +119,7 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
     game.figurePositions[1][fig1] = 'j10';
     game.figurePositions[2][p2FigKey] = 'j11';
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 1: 1 }, figureLocked: {}, specialsUsed: [], selectedFigure: 1 };
     // fig1 already attacked; Pounce flag only on fig0 — must NOT bypass for fig1.
     game.attackPerformedThisActivation = { [fig1]: true };
     game.pounceAttackPending = { [fig0]: { figureKey: fig0, figureIndex: 0 } };
@@ -147,7 +147,7 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
     game.figurePositions[1][fig1] = 'j10';
     game.figurePositions[2][p2FigKey] = 'j11';
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 1: 1 }, figureLocked: {}, specialsUsed: [], selectedFigure: 1 };
     game.attackPerformedThisActivation = { [fig1]: true };
     // Set ALL the bypass flags on fig0 only. fig1 must remain blocked.
     game.fellSwoopFreeAttack = { [fig0]: true };
@@ -174,7 +174,7 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
     game.figurePositions[1][fig1] = 'j10';
     game.figurePositions[2][p2FigKey] = 'j11';
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [], selectedFigure: 1 };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 1: 1 }, figureLocked: {}, specialsUsed: [], selectedFigure: 1 };
     game.attackPerformedThisActivation = { [fig1]: true };
     // Bypass on the active figure — attack should be offered.
     game.fellSwoopFreeAttack = { [fig1]: true };
@@ -202,7 +202,7 @@ describe('PROBE-ATK-MULTIFIG-001: per-figure attack budget in a multifigure grou
 
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[dc.msgId] = {
-      remaining: 1, total: 2, specialsUsed: [], selectedFigure: 0,
+      perFigureRemaining: { 0: 1 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0,
     };
     // Stale msgId entry from the pre-fix bug: should NOT block the
     // figure-0 attack (the gate reads figureKey, not msgId).

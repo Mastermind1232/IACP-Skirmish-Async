@@ -5,8 +5,8 @@
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapData, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
-import { figureKeyForActivation } from './activation-state.js';
-import { grantPowerTokens, consumeMovementPoints } from './game-helpers.js';
+import { figureKeyForActivation, grantActionToFigure } from './activation-state.js';
+import { grantPowerTokens, consumeMovementPoints, figureMpRemaining } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
@@ -194,30 +194,58 @@ function drawCcCards(game, playerNum, n) {
 }
 
 /**
- * Add N movement points to a figure's movement bank.
- * Initializes game.movementBank and the per-msgId entry if needed.
+ * Add N movement points to a SPECIFIC figure's per-figure MP sub-bank.
+ *
+ * Per alexanbv 2026-06-13: MP is strictly per-figure — there is no shared
+ * group bank. All MP lives in movementBank[msgId].perFig[figureIndex];
+ * the top-level entry holds only UI metadata. figureIndex defaults to 0
+ * (the sole figure of a single-figure DC).
+ *
  * @param {object} game - Game state
  * @param {string} msgId - DC message ID
  * @param {number} n - Movement points to add
+ * @param {object} [opts]
+ * @param {boolean} [opts.forceImmediate] - Force the immediate-spend tag
+ *   even while the figure is mid-activation. Used by special actions
+ *   (Urgency) whose MP must be spent during the action itself, not banked
+ *   into the rest of the activation.
+ * @param {number} [opts.figureIndex] - the figure the MP belongs to
+ *   (defaults to 0).
  */
-function addMovementPoints(game, msgId, n) {
+function addMovementPoints(game, msgId, n, opts) {
   game.movementBank = game.movementBank || {};
-  const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-  bank.total = (bank.total ?? 0) + n;
-  bank.remaining = (bank.remaining ?? 0) + n;
-  // Slice 8.11 (destruct 2026-05-06): MP gained during own activation banks;
-  // gained outside own activation must be spent immediately. Tag the bank
-  // entry as "out-of-activation" when the figure isn't currently activating
-  // so downstream consumers can enforce immediate-spend semantics. Detection:
-  // game.dcActionsData[msgId] exists iff this DC is mid-activation. NOTE: a
-  // figure can be defending mid-own-activation (e.g. interrupted by Overwatch
-  // or a triggered out-of-activation attack) and still gain MP via Lam etc.
-  // — that case correctly stays "during own activation."
-  if (!game.dcActionsData?.[msgId]) {
-    bank._outOfActivation = true;
-    if (!bank._mustSpendImmediately) bank._mustSpendImmediately = true;
+  const top = game.movementBank[msgId] || {};
+  top.perFig = top.perFig || {};
+  const figIdx = opts?.figureIndex ?? 0;
+  const fig = top.perFig[figIdx] || { total: 0, remaining: 0 };
+  fig.total = (fig.total ?? 0) + n;
+  fig.remaining = (fig.remaining ?? 0) + n;
+
+  // MP gained during the figure's own activation banks for the rest of
+  // that activation; MP gained OUTSIDE its activation, or as part of a
+  // special action (Urgency, forceImmediate), must be spent at once and
+  // never carried forward. The immediate tag drives expireImmediateMp /
+  // the "Done spending" button. game.dcActionsData[msgId] exists iff this
+  // DC is mid-activation. Per alexanbv 2026-06-12/13.
+  const outOfActivation = !game.dcActionsData?.[msgId];
+  if (outOfActivation) {
+    fig._outOfActivation = true;
+    fig._mustSpendImmediately = true;
+  } else if (opts?.forceImmediate) {
+    fig._mustSpendImmediately = true;
   }
-  game.movementBank[msgId] = bank;
+
+  top.perFig[figIdx] = fig;
+  game.movementBank[msgId] = top;
+}
+
+/**
+ * Parse the trailing figure index out of a figureKey
+ * ("Luke Skywalker-1-0" → 0). Returns null when absent/unparseable.
+ */
+function figureIndexFromKey(figureKey) {
+  const m = /-(\d+)$/.exec(figureKey || '');
+  return m ? parseInt(m[1], 10) : null;
 }
 
 /**
@@ -1882,7 +1910,16 @@ export function resolveAbility(abilityId, context) {
           game.freeAttackBonusPending = game.freeAttackBonusPending || {};
           game.freeAttackBonusPending[targetFigureKey] = true;
           if (entry.grantMpToTarget > 0) {
-            addMovementPoints(game, tgtMsgId, entry.grantMpToTarget);
+            // Per alexanbv 2026-06-12: out-of-activation MP must be
+            // spendable on MOVEMENT *and* MP-cost abilities (Wrist Cord,
+            // Super Commando rockets), so it lives in movementBank where
+            // both the "Spend Remaining MP" button and the MP-cost
+            // ability buttons read it. addMovementPoints tags it
+            // _mustSpendImmediately; the immediate-spend window is closed
+            // (and any leftover discarded) by expireImmediateMp.
+            // MP belongs to the specific target figure's per-figure bank
+            // (alexanbv 2026-06-13).
+            addMovementPoints(game, tgtMsgId, entry.grantMpToTarget, { figureIndex: figureIndexFromKey(targetFigureKey) ?? 0 });
           }
           // Include the TARGET's msgId in the refresh list so their DC
           // embed updates with the new MP + any newly-enabled MP-cost
@@ -1890,7 +1927,7 @@ export function resolveAbility(abilityId, context) {
           // when granted MP out-of-activation via Order Hit).
           return {
             applied: true,
-            logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
+            logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP${entry.grantMpToTarget > 0 ? ' (spend now — remainder lost when the interrupt resolves)' : ''}.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
             refreshDcEmbed: true,
             refreshDcEmbedMsgIds: [tgtMsgId],
             grantedAttackButton: { granteeMsgId: tgtMsgId, granteeFigureKey: targetFigureKey, granteeName: dcName, sourceLabel: entry.label || 'Order Hit' },
@@ -2173,12 +2210,12 @@ export function resolveAbility(abilityId, context) {
           hostMsgId: msgId,
         };
         game.movementBank = game.movementBank || {};
+        // Per alexanbv 2026-06-13: per-figure only — top-level is metadata.
         game.movementBank[_swJdMsgId] = {
-          total: 0,
-          remaining: 0,
           threadId: _threadId,
           messageId: null,
           displayName: 'Junk Droid',
+          perFig: { 0: { total: 0, remaining: 0 } },
         };
         game.activationStartPositions = game.activationStartPositions || {};
         game.activationStartPositions[_swNewFk] = String(chosenSpace).toLowerCase();
@@ -2571,11 +2608,10 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `**${entry.label}** — already used this activation by figure #${selectedFig + 1}.` };
       }
     }
-    const bank = game.movementBank?.[msgId];
-    const remaining = bank?.remaining ?? 0;
+    const remaining = figureMpRemaining(game, msgId, selectedFig);
     const mpCost = entry.spendMpForBlockToken;
     if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
-    bank.remaining -= mpCost;
+    consumeMovementPoints(game, msgId, mpCost, selectedFig);
     if (entry.oncePer === 'activation') {
       actionsData.shieldGauntletsUsed = actionsData.shieldGauntletsUsed || {};
       actionsData.shieldGauntletsUsed[selectedFig] = true;
@@ -3003,12 +3039,12 @@ export function resolveAbility(abilityId, context) {
       }
       // Phase 2: target chosen → check MP cost, roll die, apply damage
       if (targetFigureKey) {
-        // Check MP cost
+        // Check MP cost (per-figure; alexanbv 2026-06-13)
         if (mpCost > 0 && msgId) {
-          const bank = game.movementBank?.[msgId];
-          const remaining = bank?.remaining ?? 0;
+          const _hwrFigIdx = figureIndexFromKey(_hwrSelfFk) ?? game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+          const remaining = figureMpRemaining(game, msgId, _hwrFigIdx);
           if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
-          bank.remaining -= mpCost;
+          consumeMovementPoints(game, msgId, mpCost, _hwrFigIdx);
         }
         // Mark used after MP successfully spent.
         if (entry.oncePer === 'round' && _hwrSelfFk) {
@@ -3062,10 +3098,9 @@ export function resolveAbility(abilityId, context) {
       }
       // Phase 1: enumerate hostile figures within range (+ optional LOS)
       if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
-      // Check MP cost upfront
+      // Check MP cost upfront (per-figure; alexanbv 2026-06-13)
       if (mpCost > 0 && msgId) {
-        const bank = game.movementBank?.[msgId];
-        const remaining = bank?.remaining ?? 0;
+        const remaining = figureMpRemaining(game, msgId, game.dcActionsData?.[msgId]?.selectedFigure ?? 0);
         if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
       }
       const mapId = game.selectedMap?.id;
@@ -4038,14 +4073,15 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
-    // Every card hitting this dispatch (Urgency, On the Lam, Slippery
-    // Target) is either special-action timing (Urgency, rule 2) or
-    // out-of-activation reactive (On the Lam, Slippery Target, rule
-    // 1). Both rules forbid banking — MP is spent at once, remainder
-    // lost. Always route through the pendingMoveX picker. bypassCosts
-    // is FALSE: the card text grants "MP" not "spaces", so each step
-    // honors +1 difficult terrain / +1 hostile-pass-through adders
-    // (movement profile keywords still bypass via getMovementProfile).
+    // Per alexanbv 2026-06-12: every card hitting this dispatch (Urgency,
+    // On the Lam, Slippery Target) grants MP that must be spent at once —
+    // never banked — but it must be spendable on MOVEMENT *and* on MP-cost
+    // abilities (Wrist Cord, Super Commando rockets). So the MP goes into
+    // movementBank (where both the "Spend Remaining MP" movement button and
+    // the MP-cost ability buttons read it) with the immediate-spend tag
+    // forced on (Urgency is mid-activation but its MP still can't bank).
+    // The DC embed refresh surfaces the spend options + a "Done spending"
+    // button (handleDoneImmediateMp) that discards the remainder.
     const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
       .filter(k => k.startsWith(meta.dcName + '-'));
     const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
@@ -4057,20 +4093,11 @@ export function resolveAbility(abilityId, context) {
     if (context.cardName === 'On the Lam' && game.pendingCombat) {
       game.onTheLamActive = true;
     }
-    game.pendingMoveX = game.pendingMoveX || {};
-    game.pendingMoveX[msgId] = {
-      remaining: n,
-      source: entry.label || context.cardName || 'Move',
-      playerNum: meta.playerNum,
-      figureKey,
-      dcName: meta.dcName,
-      threadId: null,
-      bypassCosts: false,
-      msgId,
-      nextAction: null,
-    };
-    const msg = `**${context.cardName || entry.label || 'Move'}** — gains ${n} MP (spend at once, remainder lost).`;
-    return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId, activeMsgId: msgId };
+    // MP belongs to the activating figure's per-figure bank, immediate
+    // (special-action timing). Per alexanbv 2026-06-13.
+    addMovementPoints(game, msgId, n, { forceImmediate: true, figureIndex: selectedIdx });
+    const msg = `**${context.cardName || entry.label || 'Move'}** — gains ${n} MP (spend at once on movement or MP-cost abilities; remainder lost).`;
+    return { applied: true, logMessage: msg, refreshMovementBank: true, refreshDcEmbed: true, activeMsgId: msgId };
   }
 
   // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory, Worth Every Credit
@@ -5365,14 +5392,13 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    game.movementBank = game.movementBank || {};
-    const bank = game.movementBank[msgId] || { total: 0, remaining: 0 };
-    const remaining = bank.remaining ?? 0;
+    // Per-figure MP spend (alexanbv 2026-06-13).
+    const _focusFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const remaining = figureMpRemaining(game, msgId, _focusFigIdx);
     if (remaining < entry.mpCost) {
       return { applied: false, manualMessage: `Resolve manually: need ${entry.mpCost} MP to spend (have ${remaining}).` };
     }
-    bank.remaining = remaining - entry.mpCost;
-    game.movementBank[msgId] = bank;
+    consumeMovementPoints(game, msgId, entry.mpCost, _focusFigIdx);
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -5411,7 +5437,7 @@ export function resolveAbility(abilityId, context) {
     if (typeof entry.extraActionBonus === 'number' && entry.extraActionBonus > 0) {
       const actData = game.dcActionsData?.[msgId];
       if (actData) {
-        actData.remaining = (actData.remaining ?? 0) + entry.extraActionBonus;
+        grantActionToFigure(actData, actData.selectedFigure ?? 0, entry.extraActionBonus, 2 + entry.extraActionBonus);
         extraParts.push(`Gained ${entry.extraActionBonus} extra action${entry.extraActionBonus !== 1 ? 's' : ''}.`);
       }
     }
@@ -8613,8 +8639,8 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Grant 1 extra action
     const actionsData = game.dcActionsData?.[msgId];
-    if (actionsData && typeof actionsData.remaining === 'number') {
-      actionsData.remaining = Math.min(actionsData.total ?? 2, actionsData.remaining + 1);
+    if (actionsData) {
+      grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, 2);
     }
     // Per alexanbv 2026-05-13: per-figureKey.
     const _ttlFk = figureKeyForActivation(game, msgId);
@@ -9276,12 +9302,12 @@ export function resolveAbility(abilityId, context) {
             hostMsgId: _hostIds?.[_hostIdx] || null,
           };
           game.movementBank = game.movementBank || {};
+          // Per alexanbv 2026-06-13: per-figure only — top-level is metadata.
           game.movementBank[_dioMsgId] = {
-            total: 0,
-            remaining: 0,
             threadId: _threadId,
             messageId: null,
             displayName: 'Dio',
+            perFig: { 0: { total: 0, remaining: 0 } },
           };
           game.activationStartPositions = game.activationStartPositions || {};
           game.activationStartPositions[_dioFigureKey] = playingPos;

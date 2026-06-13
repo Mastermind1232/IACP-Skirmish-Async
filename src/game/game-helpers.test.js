@@ -1,18 +1,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { grantMovementBank, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones } from './game-helpers.js';
+import { grantMovementBank, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones, expireImmediateMp } from './game-helpers.js';
 
 describe('grantMovementBank', () => {
-  it('initializes bank and entry when absent', () => {
+  it('initializes bank and figure-0 sub-bank when absent', () => {
     const game = {};
     grantMovementBank(game, 'msg1', 3);
-    assert.deepStrictEqual(game.movementBank, { msg1: { total: 3, remaining: 3 } });
+    // Per alexanbv 2026-06-13: per-figure only — MP lives in perFig[0].
+    assert.deepStrictEqual(game.movementBank, { msg1: { perFig: { 0: { total: 3, remaining: 3 } } } });
   });
-  it('adds to existing entry', () => {
-    const game = { movementBank: { msg1: { total: 2, remaining: 1 } } };
+  it('adds to existing figure-0 sub-bank', () => {
+    const game = { movementBank: { msg1: { perFig: { 0: { total: 2, remaining: 1 } } } } };
     grantMovementBank(game, 'msg1', 2);
-    assert.strictEqual(game.movementBank.msg1.total, 4);
-    assert.strictEqual(game.movementBank.msg1.remaining, 3);
+    assert.strictEqual(game.movementBank.msg1.perFig[0].total, 4);
+    assert.strictEqual(game.movementBank.msg1.perFig[0].remaining, 3);
   });
   it('no-ops for null msgId', () => {
     const game = {};
@@ -23,6 +24,60 @@ describe('grantMovementBank', () => {
     const game = {};
     grantMovementBank(game, 'msg1', 0);
     assert.strictEqual(game.movementBank, undefined);
+  });
+});
+
+describe('expireImmediateMp', () => {
+  it('discards a flagged immediate-spend figure-0 sub-bank and returns the leftover', () => {
+    const game = { movementBank: { msg1: { perFig: { 0: { total: 7, remaining: 4, _mustSpendImmediately: true } } } } };
+    const lost = expireImmediateMp(game, 'msg1');
+    assert.strictEqual(lost, 4);
+    assert.strictEqual(game.movementBank, undefined);
+  });
+  it('leaves a normal (non-immediate) banked figure untouched', () => {
+    const game = { movementBank: { msg1: { perFig: { 0: { total: 3, remaining: 2 } } } } };
+    const lost = expireImmediateMp(game, 'msg1');
+    assert.strictEqual(lost, 0);
+    assert.deepStrictEqual(game.movementBank, { msg1: { perFig: { 0: { total: 3, remaining: 2 } } } });
+  });
+  it('no-ops when the entry is absent', () => {
+    const game = {};
+    assert.strictEqual(expireImmediateMp(game, 'missing'), 0);
+  });
+  it('preserves sibling DC bank entries when clearing one DC', () => {
+    const game = { movementBank: {
+      msg1: { perFig: { 0: { total: 2, remaining: 2, _mustSpendImmediately: true } } },
+      msg2: { perFig: { 0: { total: 5, remaining: 5 } } },
+    } };
+    expireImmediateMp(game, 'msg1');
+    assert.deepStrictEqual(game.movementBank, { msg2: { perFig: { 0: { total: 5, remaining: 5 } } } });
+  });
+  it('clears one figure\'s per-figure immediate sub-bank by index, leaving siblings', () => {
+    const game = { movementBank: { msg1: { total: 0, remaining: 0, perFig: {
+      0: { total: 4, remaining: 4 },
+      1: { total: 6, remaining: 3, _mustSpendImmediately: true },
+    } } } };
+    const lost = expireImmediateMp(game, 'msg1', 1);
+    assert.strictEqual(lost, 3);
+    assert.strictEqual(game.movementBank.msg1.perFig[1], undefined);
+    assert.deepStrictEqual(game.movementBank.msg1.perFig[0], { total: 4, remaining: 4 });
+  });
+  it("sweeps all flagged per-figure sub-banks when index is 'all'", () => {
+    const game = { movementBank: { msg1: { perFig: {
+      0: { total: 6, remaining: 2, _mustSpendImmediately: true },
+      1: { total: 6, remaining: 5, _mustSpendImmediately: true },
+    } } } };
+    const lost = expireImmediateMp(game, 'msg1', 'all');
+    assert.strictEqual(lost, 7);
+    assert.strictEqual(game.movementBank, undefined);
+  });
+  it('does not clear a non-immediate per-figure sub-bank', () => {
+    const game = { movementBank: { msg1: { total: 0, remaining: 0, perFig: {
+      0: { total: 4, remaining: 4 },
+    } } } };
+    const lost = expireImmediateMp(game, 'msg1', 0);
+    assert.strictEqual(lost, 0);
+    assert.deepStrictEqual(game.movementBank.msg1.perFig[0], { total: 4, remaining: 4 });
   });
 });
 

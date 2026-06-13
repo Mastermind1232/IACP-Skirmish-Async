@@ -369,12 +369,21 @@ export function translateDiffToEvents(handlerKey, diff, context, skipTypes = nul
     }
   }
 
-  // ── Movement points adjusted ──
+  // ── Movement points adjusted (per-figure; alexanbv 2026-06-13) ──
   if (set?.movementBank && before?.movementBank) {
     for (const [msgId, newBank] of Object.entries(after?.movementBank || {})) {
       const oldBank = before.movementBank?.[msgId];
-      if (oldBank && newBank?.remaining != null && oldBank.remaining != null && newBank.remaining !== oldBank.remaining) {
-        emit('MovementPointsAdjusted', { msgId, oldMp: oldBank.remaining, newMp: newBank.remaining });
+      if (!oldBank) continue;
+      const figIdxs = new Set([
+        ...Object.keys(newBank?.perFig || {}),
+        ...Object.keys(oldBank?.perFig || {}),
+      ]);
+      for (const figIdx of figIdxs) {
+        const newMp = newBank?.perFig?.[figIdx]?.remaining;
+        const oldMp = oldBank?.perFig?.[figIdx]?.remaining;
+        if (newMp != null && oldMp != null && newMp !== oldMp) {
+          emit('MovementPointsAdjusted', { msgId, figureIndex: Number(figIdx), oldMp, newMp });
+        }
       }
     }
   }

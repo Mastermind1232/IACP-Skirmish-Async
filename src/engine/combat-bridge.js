@@ -1688,7 +1688,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // Flurry of Blows inline disabled 2026-05-09 → fireFlurryOfBlows
     // (chain-attack staged, fires after defender step 8 closes).
     if (false && _lpa === 'flurry_of_blows' && hit && combat.attackerMsgId) { // eslint-disable-line no-constant-condition
-      const _fobKey = `flurryOfBlows_${combat.attackerMsgId}`;
+      const _fobKey = `flurryOfBlows_${combat.attackerFigureKey}`; // per-figure (alexanbv 2026-06-13)
       if (!game.roundFigureAbilityUsed?.[_fobKey]) {
         if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
         game.roundFigureAbilityUsed[_fobKey] = true;

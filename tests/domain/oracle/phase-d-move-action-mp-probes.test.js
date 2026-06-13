@@ -20,7 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..', '..');
 
 describe('PROBE-PD-MOVE-004: Move-action grants MP equal to Speed', () => {
-  it('004a: dc-play-area Move branch computes speed = getEffectiveSpeed and seeds movementBank.total with it', () => {
+  it('004a: dc-play-area Move branch computes speed = getEffectiveSpeed and seeds the per-figure bank total with it', () => {
     const src = readFileSync(join(ROOT, 'src/handlers/dc-play-area.js'), 'utf8');
     const getSpeedIdx = src.indexOf('const speed = getEffectiveSpeed(meta.dcName, figureKey, game, playerNum);');
     assert.ok(getSpeedIdx > 0,
@@ -28,14 +28,14 @@ describe('PROBE-PD-MOVE-004: Move-action grants MP equal to Speed', () => {
     const tail = src.slice(getSpeedIdx, getSpeedIdx + 2000);
     assert.ok(tail.includes('mpRemaining = currentMp + speed'),
       'Move-action handler must add speed to current MP — CRR-MOVE-004');
-    // Per alexanbv 2026-05-13: MP bank is per-figure. The first Move
-    // for a figure writes to perFig[figureIndex].total and mirrors to
-    // top-level via `_top.total = (_top.total ?? 0) + speed`. Confirm
-    // both the perFig write and the top-level mirror exist.
-    assert.ok(tail.includes('_top.perFig[figureIndex].total'),
-      'Move-action handler must seed perFig[figureIndex].total with speed — CRR-MOVE-004');
-    assert.ok(tail.includes('_top.total = (_top.total ?? 0) + speed'),
-      'Move-action handler must mirror speed to the top-level total for back-compat — CRR-MOVE-004');
+    // Per alexanbv 2026-06-13: MP is STRICTLY per-figure — there is no
+    // shared/top-level group bank. The Move grant writes the speed into
+    // the activating figure's perFig[figureIndex] sub-bank (both the
+    // running remaining and the accumulating total). Confirm both writes.
+    assert.ok(tail.includes('_top.perFig[figureIndex].remaining = mpRemaining'),
+      'Move-action handler must seed perFig[figureIndex].remaining with currentMp + speed — CRR-MOVE-004');
+    assert.ok(tail.includes('_top.perFig[figureIndex].total = (_top.perFig[figureIndex].total ?? 0) + speed'),
+      'Move-action handler must accumulate speed into perFig[figureIndex].total — CRR-MOVE-004');
   });
 
   it('004b: getEffectiveSpeed returns the DC stat-line speed when no modifiers apply', () => {

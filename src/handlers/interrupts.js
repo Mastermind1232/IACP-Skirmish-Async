@@ -1129,13 +1129,14 @@ export async function handleRogueSmuggler(interaction, ctx) {
   }
   // Mark [Rogue Smuggler] as used for the round (round-scoped flag,
   // wiped at start of next round). Replaces the legacy "exhaust card"
-  // gating.
-  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-  game.roundFigureAbilityUsed[`${msgId}_rogueSmugglerEor`] = true;
-  // Set free-attack pending on Han's figureKey so the next Attack click
-  // on his DC card consumes the free-attack flag (no action cost).
+  // gating. Per alexanbv 2026-06-13: keyed PER FIGURE (Han's figureKey),
+  // matching the end-of-round prompt gate in round.js.
   const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const figKey = `${meta.dcName}-${dgIdx}-0`;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[`${figKey}_rogueSmugglerEor`] = true;
+  // Set free-attack pending on Han's figureKey so the next Attack click
+  // on his DC card consumes the free-attack flag (no action cost).
   game.freeAttackBonusPending = game.freeAttackBonusPending || {};
   game.freeAttackBonusPending[figKey] = true;
   const ownerId = getPlayerId(game, meta.playerNum);

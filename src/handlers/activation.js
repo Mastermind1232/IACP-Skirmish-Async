@@ -552,10 +552,12 @@ export async function handleEndTurn(interaction, ctx) {
   {
     const _tgbwEff = getDcEffect(meta.dcName);
     if ((_tgbwEff?.specialAbilityIds || []).includes('trust_goes_both_ways_jyn')) {
-      const _tgbwRoundKey = `trustBothWays_${dcMsgId}`;
+      const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _tgbwActFig = game.dcActionsData?.[dcMsgId]?.selectedFigure ?? 0;
+      const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-${_tgbwActFig}`;
+      // Per alexanbv 2026-06-13: per FIGURE (key by the figure, not the group).
+      const _tgbwRoundKey = `trustBothWays_${_tgbwSelfFk}`;
       if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {
-        const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-        const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
         const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
         const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
           .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
@@ -1518,8 +1520,9 @@ export async function handleActPassive(interaction, ctx) {
       // Grant 1 Surge Token to both
       grantPowerTokens(game, selfFk, 'Surge', 1);
       grantPowerTokens(game, targetFk, 'Surge', 1);
-      // Mark once-per-round
-      const _tgbwRoundKey = `trustBothWays_${msgId}`;
+      // Mark once-per-round PER FIGURE (alexanbv 2026-06-13): key by the
+      // activating figure, matching the end-of-activation prompt gate.
+      const _tgbwRoundKey = `trustBothWays_${selfFk}`;
       game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
       game.roundFigureAbilityUsed[_tgbwRoundKey] = true;
       const selfName = meta.displayName || meta.dcName;

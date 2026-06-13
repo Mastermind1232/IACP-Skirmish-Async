@@ -563,7 +563,8 @@ describe('CC Coverage: context-dependent CCs', () => {
     game.dcActionsData = game.dcActionsData || {};
     game.dcActionsData[p1MsgIds[0]] = { remaining: 2, threadId: null };
     game.movementBank = game.movementBank || {};
-    game.movementBank[p1MsgIds[0]] = { total: 5, remaining: 5 };
+    // Per alexanbv 2026-06-13: MP is per-figure — seed the figure-0 sub-bank.
+    game.movementBank[p1MsgIds[0]] = { perFig: { 0: { total: 5, remaining: 5 } } };
 
     const effectData = getCcEffect('Shared Experience');
     const abilityId = effectData?.abilityId ?? 'Shared Experience';

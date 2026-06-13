@@ -47,7 +47,7 @@ describe('ORACLE-STUN-001: Remove Stun Costs 1 Action', () => {
 
     // Simulate mid-activation: set dcActionsData with 2 actions remaining
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [] };
 
     // Apply Stun
     game.figureConditions = game.figureConditions || {};
@@ -86,7 +86,7 @@ describe('ORACLE-STUN-001: Remove Stun Costs 1 Action', () => {
 
     // 1 action remaining
     assert.strictEqual(
-      game.dcActionsData[dc.msgId].remaining,
+      game.dcActionsData[dc.msgId].perFigureRemaining[0],
       1,
       'Should have 1 action remaining after spending 1 to remove Stun'
     );
@@ -103,7 +103,7 @@ describe('ORACLE-STUN-001: Remove Stun Costs 1 Action', () => {
 
     // Simulate: Stun was just removed, 1 action left
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {}, specialsUsed: [] };
 
     // NOT Stunned (Stun already removed)
     game.figureConditions = game.figureConditions || {};
@@ -138,7 +138,7 @@ describe('ORACLE-STUN-002: Stunned Figure Cannot Move or Attack', () => {
     const dc = getP1DcInfo(game, dcMessageMeta);
 
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [] };
 
     game.figureConditions = game.figureConditions || {};
     game.figureConditions[dc.figKey] = ['Stun'];

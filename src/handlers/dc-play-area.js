@@ -37,10 +37,11 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
-import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation } from '../game/activation-state.js';
+import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation, figureActionsRemaining, grantActionToFigure } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { figureMpRemaining, grantMovementBank, consumeMovementPoints } from '../game/game-helpers.js';
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
   if (!dcKws?.some(k => k === 'WOOKIEE')) return false;
@@ -269,6 +270,7 @@ export async function handleDcUnactivate(interaction, ctx) {
     renderDcEmbed,
     getDcPlayAreaComponents,
     updateActivationsMessage,
+    DC_ACTIONS_PER_ACTIVATION,
     saveGames,
     client,
   } = ctx;
@@ -288,15 +290,25 @@ export async function handleDcUnactivate(interaction, ctx) {
     return;
   }
   const actionsData = game.dcActionsData?.[msgId];
-  if (actionsData && actionsData.remaining < actionsData.total) {
-    await interaction.followUp({ content: 'Cannot un-activate — actions have already been performed.', ephemeral: true }).catch(discordCatch);
-    return;
+  // Per alexanbv 2026-06-13: actions are strictly per-figure. "Actions
+  // performed" = the active figure has spent any of its budget (remaining
+  // below the full DC_ACTIONS_PER_ACTIVATION).
+  {
+    const _uaActFig = actionsData?.selectedFigure ?? 0;
+    if (actionsData && figureActionsRemaining(actionsData, _uaActFig) < DC_ACTIONS_PER_ACTIVATION) {
+      await interaction.followUp({ content: 'Cannot un-activate — actions have already been performed.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
   }
   // Also block unactivate if MP was spent (e.g. Boba Fett's abilities cost MP, not actions)
-  const bank = game.movementBank?.[msgId];
-  if (bank && bank.remaining < bank.total) {
-    await interaction.followUp({ content: 'Cannot un-activate — movement points have been spent.', ephemeral: true }).catch(discordCatch);
-    return;
+  // MP bank is strictly per-figure: check the active figure's sub-bank.
+  {
+    const _uaFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _uaSub = game.movementBank?.[msgId]?.perFig?.[_uaFig];
+    if (_uaSub && figureMpRemaining(game, msgId, _uaFig) < (_uaSub.total ?? 0)) {
+      await interaction.followUp({ content: 'Cannot un-activate — movement points have been spent.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
   }
   const displayName = meta.displayName || meta.dcName;
   dcExhaustedState.set(msgId, false);
@@ -412,7 +424,7 @@ export async function handleDcRemoveStun(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
 
   const actionsData = game.dcActionsData?.[msgId];
-  const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+  const actionsRemaining = figureActionsRemaining(actionsData, actionsData?.selectedFigure ?? 0);
   if (actionsRemaining <= 0) {
     await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
     return;
@@ -439,6 +451,45 @@ export async function handleDcRemoveStun(interaction, ctx) {
   // both Stunned AND Bleeding and chose to discard Stun, they still
   // suffer the Bleed strain afterward.
   await triggerBleedAfterAction(game, ctx, figureKey, meta.playerNum);
+  saveGames(game.gameId);
+}
+
+/**
+ * Close an immediate-spend MP window — destruct/alexanbv 2026-06-12.
+ * customId format: dc_done_immediate_mp_{msgId}.
+ *
+ * Out-of-activation MP (Order Hit grant) and special-action MP (Urgency)
+ * must be spent at once on movement or MP-cost abilities (Wrist Cord,
+ * Super Commando rockets); leftover is lost. The player spends via the
+ * normal "Spend Remaining MP" button + the MP-cost ability buttons (both
+ * read movementBank), then clicks "Done spending" here to discard the
+ * remainder. expireImmediateMp only clears bank entries flagged
+ * _mustSpendImmediately, so a normal banked activation is never touched.
+ */
+export async function handleDcDoneImmediateMp(interaction, ctx) {
+  const { getGame, replyIfGameEnded, dcMessageMeta, updateDcActionsMessage, logGameAction, saveGames, client } = ctx;
+  // customId: dc_done_immediate_mp_{msgId}  OR  ..._{msgId}_f{figureIndex}
+  const _raw = parseCustomId(interaction.customId, 'dc_done_immediate_mp_');
+  const _figMatch = /^(.+)_f(\d+)$/.exec(_raw);
+  const msgId = _figMatch ? _figMatch[1] : _raw;
+  const figureIndex = _figMatch ? parseInt(_figMatch[2], 10) : undefined;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
+
+  const { expireImmediateMp } = await import('../game/game-helpers.js');
+  const discarded = expireImmediateMp(game, msgId, figureIndex);
+  const displayName = meta.displayName || meta.dcName;
+  if (discarded > 0) {
+    await logGameAction(game, client, `🦿 **${displayName}** — ${discarded} unspent MP discarded (must-spend-now).`, { phase: 'ROUND', icon: 'move' });
+  }
+  await updateDcActionsMessage(interaction, game, msgId, meta);
   saveGames(game.gameId);
 }
 
@@ -479,7 +530,7 @@ export async function handleDcRemoveBleed(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
 
   const actionsData = game.dcActionsData?.[msgId];
-  const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+  const actionsRemaining = figureActionsRemaining(actionsData, actionsData?.selectedFigure ?? 0);
   if (actionsRemaining <= 0) {
     await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
     return;
@@ -830,10 +881,12 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   // Special Action CCs cost 1 action; Double Action CCs cost both actions.
   if (timingLabel === 'Special Action') {
     const data = game.dcActionsData?.[msgId];
-    if (data && typeof data.remaining === 'number') data.remaining = Math.max(0, data.remaining - 1);
+    // Per alexanbv 2026-06-13: per-figure consume (1 action from active figure).
+    if (data) consumeActionForCurrentFigure(data, 1, game, msgId);
   } else if (timingLabel === 'Double Action') {
     const data = game.dcActionsData?.[msgId];
-    if (data && typeof data.remaining === 'number') data.remaining = 0;
+    // Double Action uses both of the active figure's actions.
+    if (data) consumeActionForCurrentFigure(data, DC_ACTIONS_PER_ACTIVATION, game, msgId);
   }
   await updateDcActionsMessage(game, msgId, interaction.client);
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}** (${timingLabel}).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
@@ -1529,27 +1582,18 @@ export async function handleDcFigPick(interaction, ctx) {
   game.activationLockKey = `${msgId}_f${figIdx}`;
   // Per-figure separate activation (alexanbv 2026-05-09 + 2026-05-13:
   // multifigure groups behave the same as host+companion; nothing
-  // carries between figures). Reset shared action bank for the new
-  // figure. specialsUsedByFig is per-figure so no wipe needed across
-  // figure-switch — figure B's specials list is empty until B uses one.
-  const _newRem = _ad.perFigureRemaining?.[figIdx] ?? 2;
-  _ad.remaining = _newRem;
-  // Per alexanbv 2026-05-13: MP bank is per-figure. On figure switch,
-  // sync the top-level mirror (remaining/total) to the NEW figure's
-  // perFig entry so the UI shows that figure's MP. Each figure's MP
-  // persists across switches.
-  if (game.movementBank?.[msgId]) {
-    const _swTop = game.movementBank[msgId];
-    const _swFig = _swTop.perFig?.[figIdx];
-    if (_swFig) {
-      _swTop.remaining = _swFig.remaining ?? 0;
-      _swTop.total = _swFig.total ?? 0;
-    } else {
-      // New figure has no bank yet — zero out the mirror.
-      _swTop.remaining = 0;
-      _swTop.total = 0;
-    }
-  }
+  // carries between figures). specialsUsedByFig is per-figure so no wipe
+  // needed across figure-switch — figure B's specials list is empty until
+  // B uses one.
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure. There is no
+  // top-level _ad.remaining mirror to sync on figure-switch anymore — each
+  // figure's budget lives in _ad.perFigureRemaining[figIdx] and is read via
+  // figureActionsRemaining.
+  // Per alexanbv 2026-06-13: MP bank is STRICTLY per-figure. There is no
+  // top-level remaining/total mirror to sync on figure-switch anymore —
+  // the UI reads each figure's MP directly from perFig[figIdx] (via
+  // figureMpRemaining). Each figure's MP persists across switches in its
+  // own sub-bank, so nothing needs to be copied here.
   // Wipe msgId-keyed per-activation flags for this msgId so they don't
   // leak from figure A's activation into figure B's. Excludes group-level
   // state (perFigureRemaining, figureLocked, figureSoaFired/figureEoaFired,
@@ -1638,13 +1682,12 @@ export async function handleDcEndFigure(interaction, ctx) {
     await interaction.followUp({ content: 'No active activation.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Forfeit this figure's remaining actions: zero its budget, decrement
-  // the group total by the same amount, lock the figure, clear selection.
-  const _forfeit = (actionsData.perFigureRemaining?.[figIdx] ?? 0);
-  if (_forfeit > 0) {
-    actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - _forfeit);
-    if (actionsData.perFigureRemaining) actionsData.perFigureRemaining[figIdx] = 0;
-  }
+  // Forfeit this figure's remaining actions: zero its per-figure budget,
+  // lock the figure, clear selection. Per alexanbv 2026-06-13 actions are
+  // strictly per-figure — there is no group total to decrement; zeroing
+  // the figure's own budget is the whole forfeit.
+  actionsData.perFigureRemaining = actionsData.perFigureRemaining || {};
+  actionsData.perFigureRemaining[figIdx] = 0;
   actionsData.figureLocked = actionsData.figureLocked || {};
   actionsData.figureLocked[figIdx] = true;
   actionsData.selectedFigure = null;
@@ -2011,7 +2054,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   }
   const ownerId = getPlayerId(game, meta.playerNum);
   const actionsData = game.dcActionsData?.[msgId];
-  const actionsRemaining = actionsData?.remaining ?? DC_ACTIONS_PER_ACTIVATION;
+  const actionsRemaining = figureActionsRemaining(actionsData, actionsData?.selectedFigure ?? 0);
   // Per alexanbv 2026-05-13: Pounce / Fell Swoop / Pummel / IR multi-
   // attack grants are figureKey-keyed (default per-figure scope unless
   // card text says "group"). Derive the current activating figure's
@@ -2085,13 +2128,11 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         return;
       }
       const stats = getDcStats(meta.dcName);
-      // Per alexanbv 2026-05-13: MP bank is per-figure. Read the
-      // currently-activating figure's bank (perFig[figureIndex]),
-      // falling back to the top-level entry for legacy single-figure
-      // banks that haven't been bumped to perFig yet.
+      // Per alexanbv 2026-06-13: MP is strictly per-figure. Read the
+      // activating figure's own per-figure sub-bank; the top-level entry
+      // holds only UI metadata (threadId/messageId/displayName).
       const topBank = game.movementBank?.[msgId];
-      const figBank = topBank?.perFig?.[figureIndex];
-      const currentMp = figBank?.remaining ?? (figureIndex === 0 && !topBank?.perFig ? (topBank?.remaining ?? 0) : 0);
+      const currentMp = topBank?.perFig?.[figureIndex]?.remaining ?? 0;
       let mpRemaining;
       const displayName = meta.displayName || meta.dcName;
       const figLabel = (stats.figures ?? 1) > 1 ? `${displayName} ${dgIndex}${FIGURE_LETTERS[figureIndex] || 'a'}` : displayName;
@@ -2120,11 +2161,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         if (_tgrMoveUpgrades.includes("The General's Ranks") && !game.dcActionsData?.[msgId]?.threadId) {
           mpRemaining += 2;
         }
-        // Init top-level entry (UI metadata) if absent.
+        // Init top-level entry (UI metadata only) if absent.
         if (!game.movementBank[msgId]) {
           game.movementBank[msgId] = {
-            total: 0,
-            remaining: 0,
             threadId: topBank?.threadId ?? null,
             messageId: topBank?.messageId ?? null,
             displayName: figLabel,
@@ -2132,15 +2171,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         } else {
           game.movementBank[msgId].displayName = game.movementBank[msgId].displayName || figLabel;
         }
-        // Write to the activating figure's per-figure bank.
+        // Write to the activating figure's per-figure bank — no top-level
+        // mirror (alexanbv 2026-06-13: no shared bank).
         const _top = game.movementBank[msgId];
         _top.perFig = _top.perFig || {};
         _top.perFig[figureIndex] = _top.perFig[figureIndex] || { total: 0, remaining: 0 };
         _top.perFig[figureIndex].remaining = mpRemaining;
         _top.perFig[figureIndex].total = (_top.perFig[figureIndex].total ?? 0) + speed;
-        // Mirror to top-level so legacy readers see the active figure's MP.
-        _top.remaining = mpRemaining;
-        _top.total = (_top.total ?? 0) + speed;
       }
       await ensureMovementBankMessage(game, msgId, client);
       const boardState = getBoardStateForMovement(game, figureKey);
@@ -2161,7 +2198,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         if (isExecOrderFreeMove) {
           clearPendingExecutiveOrder(game);
         } else if (actData) {
-          actData.remaining = Math.max(0, actData.remaining - 1);
+          consumeActionForCurrentFigure(actData, 1, game, msgId);
           await updateDcActionsMessage(game, msgId, client);
         }
         // Per alexanbv 2026-05-10: the Move action is RESOLVED once MP
@@ -2384,7 +2421,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       delete game.pendingEe3Carbine[msgId];
     }
     if (hasEe3Carbine && !game.pendingEe3Carbine?.[msgId]) {
-      const mpRemaining = game.movementBank?.[msgId]?.remaining ?? 0;
+      const mpRemaining = figureMpRemaining(game, msgId, figureIndex);
       if (mpRemaining >= 2) {
         const baseDice = stats.attack?.dice || ['red'];
         const nonRedDice = [...new Set(baseDice.filter((d) => d !== 'red'))];
@@ -2676,7 +2713,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         await thread.send(`**Smuggler's Run** — This figure is **not** in the opponent's deployment zone. Cannot deplete.`).catch(discordCatch);
         // Refund action + undo
         if (actionsData) {
-          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, _effectiveActionCost, DC_ACTIONS_PER_ACTIVATION);
           // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
           {
             const _refFigIdx = actionsData.selectedFigure ?? 0;
@@ -2724,7 +2761,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       if (game.vadersFocusUsedThisRound?.[msgId]) {
         await thread.send(`**Vader's Finest** — Focus already used this round for this group.`).catch(discordCatch);
         if (actionsData) {
-          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, _effectiveActionCost, DC_ACTIONS_PER_ACTIVATION);
           // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
           {
             const _refFigIdx = actionsData.selectedFigure ?? 0;
@@ -2758,7 +2795,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       if (printedDiceCount >= 2) {
         await thread.send(`**Vader's Finest** — This figure has ${printedDiceCount} dice in its printed attack pool (need < 2). Cannot Focus.`).catch(discordCatch);
         if (actionsData) {
-          actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + _effectiveActionCost);
+          grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, _effectiveActionCost, DC_ACTIONS_PER_ACTIVATION);
           // Per alexanbv 2026-05-13: specialsUsedByFig per-figure.
           {
             const _refFigIdx = actionsData.selectedFigure ?? 0;
@@ -3022,8 +3059,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     }
     if (action === 'Move 4 + Recover 3 Damage') {
       // Per destruct 2026-05-08: recover *damage* (heal HP), not strain.
-      if (!game.movementBank) game.movementBank = {};
-      game.movementBank[msgId] = (game.movementBank[msgId] || 0) + 4;
+      // Grant 4 MP to the activating figure's per-figure bank (never a
+      // top-level number — that clobbers the metadata entry).
+      grantMovementBank(game, msgId, 4, _wpSelFig);
       const _wpHs = ctx.dcHealthState?.get(msgId) || [];
       const _wpEntry = _wpHs[_wpSelFig];
       if (_wpEntry) {
@@ -3068,7 +3106,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     };
     // Refund the action since we haven't resolved yet — player commits when they pick
     if (actionsData) {
-      actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+      grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, DC_ACTIONS_PER_ACTIVATION);
       await updateDcActionsMessage(game, msgId, client);
     }
     // Refresh DC embed if strain was deducted during ability activation (e.g. Force Throw)
@@ -3146,7 +3184,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   // If the resolved ability grants a free action, restore the action cost we decremented above
   if (resolveResult.freeAction && actionsData) {
-    actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+    grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, DC_ACTIONS_PER_ACTIVATION);
     await updateDcActionsMessage(game, msgId, client);
   }
   // Power token type-choice prompt (player chooses Hit/Surge/Block/Evade immediately upon earning)
@@ -3199,7 +3237,7 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if ((effectEntry?.specialAbilityIds || []).includes('expertise') && !game.roundFigureAbilityUsed?.[expertiseKey]) {
       if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
       game.roundFigureAbilityUsed[expertiseKey] = true;
-      actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+      grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, DC_ACTIONS_PER_ACTIVATION);
       await updateDcActionsMessage(game, msgId, client);
       const thread = interaction.channel;
       await thread.send(`**Expertise** — ${displayName} gains 1 extra action this activation.`).catch(discordCatch);
@@ -3519,7 +3557,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: true });
   }
   if (resolveResult.freeAction && actionsData) {
-    actionsData.remaining = Math.min(actionsData.total ?? DC_ACTIONS_PER_ACTIVATION, actionsData.remaining + 1);
+    grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, DC_ACTIONS_PER_ACTIVATION);
     await updateDcActionsMessage(game, msgId, client, { suppressFinishedPrompt: true });
   }
   const doneRow = new ActionRowBuilder().addComponents(
@@ -3774,9 +3812,8 @@ export async function handleEe3DiePick(interaction, ctx) {
   game.pendingEe3Carbine = game.pendingEe3Carbine || {};
 
   if (color !== 'skip') {
-    // Deduct 2 MP and upgrade one die of the chosen color to red
-    const mp = game.movementBank?.[msgId];
-    if (mp) mp.remaining = Math.max(0, mp.remaining - 2);
+    // Deduct 2 MP (per-figure bank) and upgrade one die of the chosen color to red
+    consumeMovementPoints(game, msgId, 2, figureIndex);
     const stats = getDcStats(meta.dcName);
     const baseDice = [...(stats.attack?.dice || ['red'])];
     const idx = baseDice.indexOf(color);

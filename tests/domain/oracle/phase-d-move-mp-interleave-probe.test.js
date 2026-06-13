@@ -40,10 +40,17 @@ describe('PROBE-PD-MOVE-012: MP may be spent before or after another action (int
       'dc_spend_mp_ must be registered as a dcPlayArea button — CRR-MOVE-012');
   });
 
-  it('012b: source — SpendMp button is surfaced whenever movementBank.remaining > 0', () => {
+  it('012b: source — SpendMp button is surfaced whenever the per-figure bank remaining > 0', () => {
+    // Per alexanbv 2026-06-13: MP is STRICTLY per-figure. The effective
+    // MP read derives from the activating figure's own perFig sub-bank
+    // (_spendFigBank.remaining), preferring its immediate sub-bank when
+    // flagged _mustSpendImmediately. There is no top-level remaining.
     assert.match(COMP_SRC,
-      /const bankMp = game\?\.movementBank\?\.\[msgId\]\?\.remaining \?\? 0;/,
-      'components must read bank remaining — CRR-MOVE-012');
+      /_effBankMp = _figImmediate \? \(_figImmediate\.remaining \?\? 0\) : \(_spendFigBank\?\.remaining \?\? 0\);/,
+      'components must read the per-figure bank remaining (via effective per-figure read) — CRR-MOVE-012');
+    assert.match(COMP_SRC,
+      /const bankMp = _effBankMp;/,
+      'SpendMp button reads the effective bank MP — CRR-MOVE-012');
     assert.match(COMP_SRC,
       /if \(bankMp > 0 && !hasActiveMoveSession && rows\.length < 5\) \{/,
       'SpendMp button appears whenever bank has MP (no gate on prior action taken) — CRR-MOVE-012');
@@ -61,9 +68,9 @@ describe('PROBE-PD-MOVE-012: MP may be spent before or after another action (int
       'SpendMp path uses currentMp (bank.remaining) without adding speed — CRR-MOVE-012');
   });
 
-  it('012e: source — SpendMp does NOT decrement actionsData.remaining', () => {
+  it('012e: source — SpendMp does NOT consume a per-figure action', () => {
     assert.match(DCPA_SRC,
-      /if \(!isSpendMp\) \{[\s\S]{0,400}actData\.remaining = Math\.max\(0, actData\.remaining - 1\);/,
-      'action decrement must be gated behind !isSpendMp — CRR-MOVE-012');
+      /if \(!isSpendMp\) \{[\s\S]{0,400}consumeActionForCurrentFigure\(actData, 1, game, msgId\);/,
+      'per-figure action consumption must be gated behind !isSpendMp — CRR-MOVE-012');
   });
 });

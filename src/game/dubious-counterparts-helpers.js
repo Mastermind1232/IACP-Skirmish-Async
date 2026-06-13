@@ -11,6 +11,7 @@
  */
 
 import { getDcList } from './player-helpers.js';
+import { grantActionToFigure, figureActionsRemaining } from './activation-state.js';
 
 /**
  * Is Doctor Aphra in the given player's DC list AND has at least one
@@ -25,18 +26,18 @@ export function isAphraAlive(game, playerNum) {
 }
 
 /**
- * Apply the +1 action bump to an actionsData record. Mutates in place
- * and returns the new `remaining` value.
+ * Apply the +1 action bump to the active figure's per-figure budget.
+ * Mutates actionsData in place and returns the figure's new remaining.
  *
- * Pattern (from both call sites):
- *   remaining = min((total ?? fallback) + 1, remaining + 1)
- *
- * The +1-to-total cap means the bump can push remaining above the
- * usual per-activation cap by exactly 1.
+ * Actions are STRICTLY per-figure (alexanbv 2026-06-13): the bump goes
+ * to actionsData.perFigureRemaining[selectedFigure], not a group-level
+ * counter. The old behavior allowed remaining to reach (total + 1) — one
+ * over the base 2 — so the per-figure cap here is 3 to preserve that
+ * extra-action allowance.
  */
-export function applyDubiousCounterpartsActionBump(actionsData, totalFallback = 2) {
+export function applyDubiousCounterpartsActionBump(actionsData) {
   if (!actionsData) return null;
-  const total = actionsData.total ?? totalFallback;
-  actionsData.remaining = Math.min(total + 1, actionsData.remaining + 1);
-  return actionsData.remaining;
+  const figIdx = actionsData.selectedFigure ?? 0;
+  grantActionToFigure(actionsData, figIdx, 1, 3);
+  return figureActionsRemaining(actionsData, figIdx);
 }

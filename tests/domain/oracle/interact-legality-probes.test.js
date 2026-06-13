@@ -53,7 +53,7 @@ function buildInteractScenario(p1DcName) {
 
   // Mid-activation: 2 actions remaining (interact costs 1)
   game.dcActionsData = game.dcActionsData || {};
-  game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+  game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
 
   return { game, deps, dcMessageMeta, dc };
 }
@@ -142,7 +142,7 @@ describe('PROBE-INT-005: Alter Mind blocks interact for cost≤9 figure at termi
     game.figurePositions[2][p2FigKey] = 'e21';
 
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
 
     const actions = getAvailableActions(game, 1, deps);
     const interacts = actions.filter(a => a.type === 'interact');

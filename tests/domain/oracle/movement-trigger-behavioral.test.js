@@ -454,7 +454,7 @@ describe('B-MVTRIG-010: Core state correct after post-move triggers fire', () =>
         2: {},
       },
       movementBank: {
-        '3001': { total: 4, remaining: 4, threadId: null, messageId: null, displayName: 'Iden Versio' },
+        '3001': { threadId: null, messageId: null, displayName: 'Iden Versio', perFig: { 0: { total: 4, remaining: 4 } } },
       },
     });
 
@@ -471,8 +471,8 @@ describe('B-MVTRIG-010: Core state correct after post-move triggers fire', () =>
       'figurePositions correct');
     assert.strictEqual(game.moveInProgress['3001_0']?.mpRemaining, 3,
       'mpRemaining correct (4 - 1 = 3)');
-    assert.strictEqual(game.movementBank['3001'].remaining, 3,
-      'movementBank in sync');
+    assert.strictEqual(game.movementBank['3001'].perFig[0].remaining, 3,
+      'movementBank per-figure remaining in sync');
     assert.strictEqual(game.figureMoved?.['Iden Versio-1-0'], true,
       'figureMoved set');
 

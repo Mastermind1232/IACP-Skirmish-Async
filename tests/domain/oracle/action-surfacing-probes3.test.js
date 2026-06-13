@@ -37,7 +37,7 @@ describe('PROBE-AS-009: DC Special blocked when remaining actions insufficient',
 
     const dc = getDcInfo(game, dcMessageMeta, 1, 'Bossk');
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 1, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 1 }, figureLocked: {} };
 
     const actions = getAvailableActions(game, 1, deps);
     const specials = actions.filter(a => a.type === 'dc_special');
@@ -57,7 +57,7 @@ describe('PROBE-AS-009: DC Special blocked when remaining actions insufficient',
 
     const dc = getDcInfo(game, dcMessageMeta, 1, 'Bossk');
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 0, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 0 }, figureLocked: { 0: true } };
 
     const actions = getAvailableActions(game, 1, deps);
     const specials = actions.filter(a => a.type === 'dc_special');
@@ -79,7 +79,7 @@ describe('PROBE-AS-010: CC Special Action blocked when remaining = 0', () => {
 
     const dc = getDcInfo(game, dcMessageMeta, 1, 'Bossk');
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[dc.msgId] = { remaining: 0, total: 2, specialsUsed: [] };
+    game.dcActionsData[dc.msgId] = { perFigureRemaining: { 0: 0 }, figureLocked: { 0: true } };
 
     // Mock CC special dep to return a card — but remaining=0 should block it
     const depsWithCcSpecial = {

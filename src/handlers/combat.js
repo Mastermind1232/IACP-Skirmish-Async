@@ -15,6 +15,7 @@ import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { pushNestedCombat, resolvePendingCombat } from '../game/combat-stack.js';
 import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDcKeywords as getDcKeywordsGlobal, getLoadoutCards, getFormCards, getFigureSize, getDeploymentZones, getMissionCardsData } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
+import { figureMpRemaining, consumeMovementPoints } from '../game/game-helpers.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
@@ -3932,7 +3933,9 @@ export async function handleCombatRoll(interaction, ctx) {
           const _sisDcName = dcNameFromFigureKey(_sisFk);
           const _sisEff = getDcEff()[_sisDcName] || getDcEff()[_sisDcName?.replace(/\s*\[.*\]\s*$/, '')];
           if (!(_sisEff?.specialAbilityIds || []).includes('survival_is_strength_armorer')) continue;
-          if (game.roundFigureAbilityUsed?.[`${_sisFk}_survival_is_strength`]) continue;
+          // Per alexanbv 2026-06-13: Survival is Strength is once per ATTACK,
+          // not once per round — track on the per-attack combat object.
+          if (combat._survivalIsStrengthUsed?.[_sisFk]) continue;
           if (!_sisPos) continue;
           if (isWithinSpaces(_sisMapSp, String(_sisPos).toLowerCase(), String(_sisDefCoord).toLowerCase(), 3)) {
             combat.forcedRerollQueue.push({
@@ -4102,7 +4105,9 @@ export async function handleCombatRoll(interaction, ctx) {
     // NOT consume the round flag. Eligibility: attacker has Device
     // token AND a friendly DC has power_converter_saska AND not
     // already used this round.
-    if (!game.powerConverterUsedThisRound
+    // Per alexanbv 2026-06-13: once per round by ANY figure on this side
+    // (multiple figures may hold device tokens) — keyed per player.
+    if (!game.powerConverterUsedThisRound?.[attackerPlayerNum]
         && (game.deviceTokens?.[combat.attackerFigureKey] || 0) > 0) {
       const _pcDcList = getDcList(game, attackerPlayerNum) || [];
       let _pcFound = false;
@@ -5047,8 +5052,10 @@ export async function handleCombatReroll(interaction, ctx) {
         if (!combat.attackerRerolledIndices) combat.attackerRerolledIndices = [];
         if (!combat.attackerRerolledIndices.includes(idx)) combat.attackerRerolledIndices.push(idx);
         if (_spEntry.source === 'Survival is Strength' && _spEntry.armorerFigKey) {
-          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-          game.roundFigureAbilityUsed[`${_spEntry.armorerFigKey}_survival_is_strength`] = true;
+          // Once per ATTACK (alexanbv 2026-06-13): flag on the combat object,
+          // which is scoped to this single attack and discarded after.
+          combat._survivalIsStrengthUsed = combat._survivalIsStrengthUsed || {};
+          combat._survivalIsStrengthUsed[_spEntry.armorerFigKey] = true;
         }
         // Per alexanbv 2026-05-13: lazy exhaust/deplete fires here, on
         // actual reroll consumption. Skipping via Continue leaves the
@@ -7463,7 +7470,11 @@ async function _postOnDeclareDieSwapPrompts(thread, game, combat, ctx) {
 
   // EE-3 Carbine (Boba Fett): costs 2 MP. Only offer if bank >= 2.
   if (atkSIds.includes('ee3_carbine') && !combat._ee3OnDeclareDecided) {
-    const mp = game.movementBank?.[atkMsgId]?.remaining ?? 0;
+    const _ee3FigIdx = parseInt(String(combat.attackerFigureKey || '').split('-').pop(), 10);
+    const ee3FigIdx = Number.isInteger(_ee3FigIdx)
+      ? _ee3FigIdx
+      : (game.dcActionsData?.[atkMsgId]?.selectedFigure ?? 0);
+    const mp = figureMpRemaining(game, atkMsgId, ee3FigIdx);
     if (mp >= 2) {
       const btns = nonRedDice.map((color) =>
         new ButtonBuilder()
@@ -9430,7 +9441,11 @@ export async function handleOnDeclareDieSwap(interaction, ctx) {
   }
   // For EE-3 (kind='e'): re-check 2 MP available, deduct on apply.
   if (kind === 'e' && choice !== 'skip') {
-    const mp = game.movementBank?.[combat.attackerMsgId]?.remaining ?? 0;
+    const _ee3FigIdx = parseInt(String(combat.attackerFigureKey || '').split('-').pop(), 10);
+    const ee3FigIdx = Number.isInteger(_ee3FigIdx)
+      ? _ee3FigIdx
+      : (game.dcActionsData?.[combat.attackerMsgId]?.selectedFigure ?? 0);
+    const mp = figureMpRemaining(game, combat.attackerMsgId, ee3FigIdx);
     if (mp < 2) {
       await interaction.followUp({ content: `EE-3 Carbine needs 2 MP (you have ${mp}).`, ephemeral: true }).catch(discordCatch);
       return;
@@ -9466,8 +9481,11 @@ export async function handleOnDeclareDieSwap(interaction, ctx) {
   combat.attackInfo = { ...combat.attackInfo, dice };
   combat[decidedFlag] = true;
   if (kind === 'e') {
-    const bank = game.movementBank?.[combat.attackerMsgId];
-    if (bank) bank.remaining = Math.max(0, (bank.remaining || 0) - 2);
+    const _ee3FigIdx = parseInt(String(combat.attackerFigureKey || '').split('-').pop(), 10);
+    const ee3FigIdx = Number.isInteger(_ee3FigIdx)
+      ? _ee3FigIdx
+      : (game.dcActionsData?.[combat.attackerMsgId]?.selectedFigure ?? 0);
+    consumeMovementPoints(game, combat.attackerMsgId, 2, ee3FigIdx);
   }
   try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
   const label = kind === 'v' ? 'Vanguard' : 'EE-3 Carbine';

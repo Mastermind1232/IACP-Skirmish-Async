@@ -257,7 +257,7 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   // 1-green-die melee with +1 Hit, once per activation. Fire handler
   // does dice override + chain-attack staging.
   if (combat.loadoutPostAttack === 'flurry_of_blows' && combat._step7Hit && combat.attackerMsgId) {
-    const _fobKey = `flurryOfBlows_${combat.attackerMsgId}`;
+    const _fobKey = `flurryOfBlows_${combat.attackerFigureKey}`; // per-figure (alexanbv 2026-06-13)
     if (!game?.roundFigureAbilityUsed?.[_fobKey]) {
       enqueueAfterAttackEffect(combat, {
         side: 'attacker',
@@ -715,6 +715,23 @@ async function _advanceFromSide(thread, game, combat, side, ctx) {
   // Defender done — close combat. Caller passes the existing
   // _finishCombatResolution handle through ctx.afterAttackClose.
   clearAfterAttackEffects(combat);
+  // Immediate-spend MP backstop (alexanbv 2026-06-12): an OUT-OF-ACTIVATION
+  // interrupt attacker (Order Hit grant) may have been given MP that must
+  // be spent at once. If the player launched the free attack without first
+  // clicking "Done spending", discard any leftover now that the interrupt
+  // has fully resolved. Gated to out-of-activation only (!dcActionsData) so
+  // a normal in-activation attack — and mid-activation Urgency MP — is left
+  // for the player's own "Done" / activation-end cleanup. expireImmediateMp
+  // is itself a no-op unless the bank carries the _mustSpendImmediately tag.
+  const _atkMsgId = combat.attackerMsgId;
+  const _atkImmediate = Object.values(game.movementBank?.[_atkMsgId]?.perFig || {}).some(f => f._mustSpendImmediately);
+  if (_atkMsgId && !game.dcActionsData?.[_atkMsgId] && _atkImmediate) {
+    const { expireImmediateMp } = await import('../game/game-helpers.js');
+    const _lost = expireImmediateMp(game, _atkMsgId, 'all');
+    if (_lost > 0 && thread) {
+      await withDiscordRetry(() => thread.send({ content: `🦿 Out-of-activation MP expired — ${_lost} unspent point${_lost === 1 ? '' : 's'} discarded.` })).catch(discordCatch);
+    }
+  }
   // Per user 2026-05-09: post a "Combat complete" message in the combat
   // thread right before the close path runs, so both players see the
   // explicit end of the after-attack windows.

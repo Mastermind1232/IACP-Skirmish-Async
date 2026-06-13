@@ -518,7 +518,7 @@ describe('B-DC-006: handleDcAction guards', () => {
   it('rejects when no actions remaining', async () => {
     const { interaction, responses } = buildMockInteraction(`dc_special_0_${MSG_ID}`, PLAYER1_ID);
     const game = makeActionGame();
-    game.dcActionsData[MSG_ID].remaining = 0;
+    game.dcActionsData[MSG_ID].perFigureRemaining = { 0: 0 };
     const ctx = buildActionCtx({
       game,
       meta: { _msgId: MSG_ID, gameId: 'test1', playerNum: 1, dcName: 'Test DC', displayName: 'Test DC [DG 1]' },
@@ -555,7 +555,7 @@ describe('B-DC-006: handleDcAction guards', () => {
   it('rejects when action cost exceeds remaining actions', async () => {
     const { interaction, responses } = buildMockInteraction(`dc_special_0_${MSG_ID}`, PLAYER1_ID);
     const game = makeActionGame();
-    game.dcActionsData[MSG_ID].remaining = 1;
+    game.dcActionsData[MSG_ID].perFigureRemaining = { 0: 1 };
     // Special costs 2 actions
     const ctx = buildActionCtx({
       game,

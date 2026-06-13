@@ -246,7 +246,7 @@ export async function startActivationThreadForFastForward(game, playerNum, dcInd
   const thread = await msg.startThread({ name: threadName, autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek });
 
   game.movementBank = game.movementBank || {};
-  game.movementBank[msgId] = { total: 0, remaining: 0, threadId: thread.id, messageId: null, displayName };
+  game.movementBank[msgId] = { threadId: thread.id, messageId: null, displayName, perFig: {} };
   // Per destruct 2026-05-07: multi-figure groups get figures*2 actions
   // (each figure individually has 2 actions). See activation-setup.js B12.
   const _ffEff = getDcEffect(dcName);

@@ -125,36 +125,44 @@ test('resolveAbility Fleet Footed without activation returns manual', () => {
 });
 
 test('resolveAbility Fleet Footed with active activation applies +1 MP', () => {
+  // Per alexanbv 2026-06-13: MP is per-figure; the activating figure (0)
+  // owns its bank under perFig[0].
   const msgId = 'msg123';
   const game = {
     gameId: 'g1',
-    dcActionsData: { [msgId]: { remaining: 1 } },
-    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+    dcActionsData: { [msgId]: { remaining: 1, selectedFigure: 0 } },
+    movementBank: { [msgId]: { perFig: { 0: { total: 4, remaining: 2 } } } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g1', playerNum: 1, dcName: 'Test', displayName: 'Test [Group 1]' }]]);
   const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 1 movement point.');
-  assert.strictEqual(game.movementBank[msgId].remaining, 3);
-  assert.strictEqual(game.movementBank[msgId].total, 5);
+  assert.strictEqual(game.movementBank[msgId].perFig[0].remaining, 3);
+  assert.strictEqual(game.movementBank[msgId].perFig[0].total, 5);
 });
 
 test('resolveAbility Force Rush with active activation applies +2 MP', () => {
   const msgId = 'msg456';
   const game = {
     gameId: 'g2',
-    dcActionsData: { [msgId]: { remaining: 1 } },
-    movementBank: { [msgId]: { total: 4, remaining: 2 } },
+    dcActionsData: { [msgId]: { remaining: 1, selectedFigure: 0 } },
+    movementBank: { [msgId]: { perFig: { 0: { total: 4, remaining: 2 } } } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g2', playerNum: 2, dcName: 'Vader', displayName: 'Vader [Group 1]' }]]);
   const result = resolveAbility('Force Rush', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 2 movement points.');
-  assert.strictEqual(game.movementBank[msgId].remaining, 4);
-  assert.strictEqual(game.movementBank[msgId].total, 6);
+  assert.strictEqual(game.movementBank[msgId].perFig[0].remaining, 4);
+  assert.strictEqual(game.movementBank[msgId].perFig[0].total, 6);
 });
 
-test('resolveAbility Urgency (Speed+2) with active activation stamps pendingMoveX (no bank)', () => {
+test('resolveAbility Urgency (Speed+2) banks immediate-spend MP usable on movement AND MP-cost abilities', () => {
+  // Per alexanbv 2026-06-12: Urgency MP must be spendable on movement AND
+  // MP-cost abilities (Wrist Cord, Super Commando rockets). Those ability
+  // buttons read movementBank[msgId].remaining, so the MP lives in
+  // movementBank with the immediate-spend flag (Urgency is mid-activation
+  // but its MP still can't bank into later actions). NOT pendingMoveX,
+  // which is movement-only.
   const msgId = 'msg789';
   const figureKey = 'Luke Skywalker-1-0';
   const game = {
@@ -166,14 +174,41 @@ test('resolveAbility Urgency (Speed+2) with active activation stamps pendingMove
   const dcMessageMeta = new Map([[msgId, { gameId: 'g3', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.match(result.logMessage, /gains 7 MP \(spend at once, remainder lost\)/);
-  // No bank — pendingMoveX is the only place the budget lives.
-  assert.strictEqual(game.movementBank, undefined);
-  assert.ok(game.pendingMoveX, 'pendingMoveX should be stamped');
-  assert.strictEqual(game.pendingMoveX[msgId].remaining, 7);
-  assert.strictEqual(game.pendingMoveX[msgId].bypassCosts, false);
-  assert.strictEqual(game.pendingMoveX[msgId].figureKey, figureKey);
-  assert.strictEqual(result.pendingMoveXMsgId, msgId);
+  assert.match(result.logMessage, /gains 7 MP/);
+  // MP lives in the activating figure's per-figure sub-bank (feeds movement
+  // + MP-cost ability buttons), flagged must-spend-immediately so it cannot
+  // carry into later actions. Per alexanbv 2026-06-13.
+  assert.ok(game.movementBank?.[msgId]?.perFig?.[0], 'figure-0 sub-bank should be stamped');
+  assert.strictEqual(game.movementBank[msgId].perFig[0].remaining, 7);
+  assert.strictEqual(game.movementBank[msgId].perFig[0]._mustSpendImmediately, true);
+  // Not routed through the movement-only picker.
+  assert.strictEqual(game.pendingMoveX, undefined);
+  assert.strictEqual(result.refreshDcEmbed, true);
+});
+
+test('resolveAbility Urgency on a multi-figure group scopes MP to the selected figure (no carryover)', () => {
+  // Per alexanbv 2026-06-13: in a multi-figure deployment group, immediate
+  // MP must belong to the specific figure and must NOT carry over to a
+  // sibling. It is written to that figure's per-figure sub-bank, not the
+  // shared top-level entry.
+  const msgId = 'msgGrp';
+  const f0 = 'Stormtrooper-1-0';
+  const f1 = 'Stormtrooper-1-1';
+  const game = {
+    gameId: 'g4',
+    dcActionsData: { [msgId]: { remaining: 2, selectedFigure: 1 } },
+    figurePositions: { 1: { [f0]: 'a1', [f1]: 'a2' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 1]' }]]);
+  const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  // Scoped to figure 1's per-figure sub-bank, flagged immediate.
+  assert.ok(game.movementBank?.[msgId]?.perFig?.[1], 'figure 1 sub-bank should exist');
+  assert.strictEqual(game.movementBank[msgId].perFig[1]._mustSpendImmediately, true);
+  assert.ok(game.movementBank[msgId].perFig[1].remaining > 0);
+  // No carryover: shared top-level remaining stays 0, figure 0 has nothing.
+  assert.strictEqual(game.movementBank[msgId].remaining ?? 0, 0);
+  assert.strictEqual(game.movementBank[msgId].perFig[0], undefined);
 });
 
 test("resolveAbility Officer's Training with LEADER (during attack) draws 1", () => {
@@ -464,7 +499,7 @@ test('resolveAbility Heart of Freedom applies discard 1 HARMFUL, recover 2, gain
   assert.ok(result.logMessage?.includes('MP'));
   assert.deepStrictEqual(game.figureConditions['Luke Skywalker-1-0'], ['Focus']);
   assert.deepStrictEqual(healthState[0], [6, 6]);
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.strictEqual(game.movementBank[msgId]?.perFig?.[0]?.remaining, 2);
 });
 
 test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', () => {
@@ -481,7 +516,7 @@ test('resolveAbility Price of Glory applies discard 1 HARMFUL and gain 2 MP', ()
   assert.ok(result.logMessage?.includes('HARMFUL'));
   assert.ok(result.logMessage?.includes('MP'));
   assert.deepStrictEqual(game.figureConditions['Stormtroopers-1-0'] ?? [], []);
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.strictEqual(game.movementBank[msgId]?.perFig?.[0]?.remaining, 2);
 });
 
 test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP', () => {
@@ -498,7 +533,7 @@ test('resolveAbility Worth Every Credit applies discard 1 HARMFUL and gain 2 MP'
   assert.ok(result.logMessage?.includes('HARMFUL'));
   assert.ok(result.logMessage?.includes('MP'));
   assert.deepStrictEqual(game.figureConditions['Bossk-1-0'] ?? [], []);
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.strictEqual(game.movementBank[msgId]?.perFig?.[0]?.remaining, 2);
 });
 
 test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', () => {
@@ -521,7 +556,7 @@ test('resolveAbility Apex Predator applies Focus, Hide, 2 Power Tokens, 2 MP', (
   assert.strictEqual(result.requiresPowerTokenChoice, true);
   assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.figureKey, 'Nexu-1-0');
   assert.strictEqual(game.pendingPowerTokenGrant?.grants?.[0]?.count, 2);
-  assert.strictEqual(game.movementBank[msgId]?.remaining, 2);
+  assert.strictEqual(game.movementBank[msgId]?.perFig?.[0]?.remaining, 2);
 });
 
 test('resolveAbility Honoring the Fallen adds +1 Hit per defeated friendly figure (max 3)', () => {

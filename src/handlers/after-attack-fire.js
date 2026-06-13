@@ -324,11 +324,9 @@ async function fireStunBatons(thread, game, combat, effect, ctx) {
 async function fireStalkPrey(thread, game, combat, effect, ctx) {
   const { logGameAction, client, ensureMovementBankMessage } = ctx;
   if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
-  game.movementBank = game.movementBank || {};
-  const bank = game.movementBank[combat.attackerMsgId] || { total: 0, remaining: 0 };
-  bank.total = (bank.total ?? 0) + 2;
-  bank.remaining = (bank.remaining ?? 0) + 2;
-  game.movementBank[combat.attackerMsgId] = bank;
+  // Per-figure bank: +2 MP goes to the attacking figure's sub-bank only.
+  const _atkFigIdx = parseFigureKey(combat.attackerFigureKey).figureIndex ?? 0;
+  grantMovementBank(game, combat.attackerMsgId, 2, _atkFigIdx);
   grantPowerTokens(game, combat.attackerFigureKey, 'Damage', 1);
   delete combat.surgeStalkPrey;
   if (logGameAction && thread) {
@@ -705,7 +703,8 @@ async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
   if (!combat.attackerMsgId) return;
   combat.loadoutPostAttack = null;
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-  game.roundFigureAbilityUsed[`flurryOfBlows_${combat.attackerMsgId}`] = true;
+  // Per alexanbv 2026-06-13: Flurry of Blows is per FIGURE, not per group.
+  game.roundFigureAbilityUsed[`flurryOfBlows_${combat.attackerFigureKey}`] = true;
   _stageChainAttack(combat, {
     source: 'Flurry of Blows',
     msgId: combat.attackerMsgId,

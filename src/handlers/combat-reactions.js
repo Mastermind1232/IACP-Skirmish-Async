@@ -802,7 +802,10 @@ export async function handlePowerConverter(interaction, ctx) {
       combat.attackDiceResults = dice;
       const totals = recalcAttackTotals(dice);
       combat.attackRoll = { acc: totals.acc, dmg: totals.dmg, surge: totals.surge };
-      game.powerConverterUsedThisRound = true;
+      // Per alexanbv 2026-06-13: per-player once-per-round (any figure on
+      // that side), since multiple figures may hold device tokens.
+      game.powerConverterUsedThisRound = game.powerConverterUsedThisRound || {};
+      game.powerConverterUsedThisRound[combat.attackerPlayerNum] = true;
       // Per alexanbv 2026-05-13: mark the complex rerollAbilities
       // entry used so the "Use Power Converter (Saska)" bucket button
       // disappears on the next render. Round flag above also blocks

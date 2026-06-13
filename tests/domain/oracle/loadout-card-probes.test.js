@@ -474,9 +474,9 @@ describe('PROBE-LOADOUT-07: flurry_of_blows — free melee override queued on hi
     const _attFk = combat.attackerFigureKey;
     assert.ok(game.freeAttackBonusPending?.[_attFk],
       `flurry_of_blows must set freeAttackBonusPending[${_attFk}] so the follow-up attack is free.`);
-    // Once-per-activation lock.
-    assert.ok(game.roundFigureAbilityUsed?.[`flurryOfBlows_${attackerMsgId}`],
-      `flurry_of_blows must mark roundFigureAbilityUsed[flurryOfBlows_${attackerMsgId}] = true to block repeats.`);
+    // Once-per-activation lock, keyed PER FIGURE (alexanbv 2026-06-13).
+    assert.ok(game.roundFigureAbilityUsed?.[`flurryOfBlows_${_attFk}`],
+      `flurry_of_blows must mark roundFigureAbilityUsed[flurryOfBlows_${_attFk}] = true to block repeats.`);
   });
 
   it('second flurry in the same activation is blocked by roundFigureAbilityUsed', async () => {
@@ -503,8 +503,8 @@ describe('PROBE-LOADOUT-07: flurry_of_blows — free melee override queued on hi
       extra: { loadoutPostAttack: 'flurry_of_blows' },
     });
 
-    const attackerMsgId = combat.attackerMsgId;
-    game.roundFigureAbilityUsed = { [`flurryOfBlows_${attackerMsgId}`]: true };
+    // Per alexanbv 2026-06-13: flurry lock is keyed per figure.
+    game.roundFigureAbilityUsed = { [`flurryOfBlows_${combat.attackerFigureKey}`]: true };
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 

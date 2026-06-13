@@ -20,6 +20,7 @@ import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadou
 import { getConfig } from '../game/figure-config.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { anyFigureHasActions, figureActionsRemaining } from '../game/activation-state.js';
 /**
  * Get all available actions for a player in the current game state.
  * @param {object} game - The game state
@@ -593,7 +594,7 @@ function getActivationActions(game, playerNum, deps) {
   const noActivations = (game.p1ActivationsRemaining ?? 0) === 0 && (game.p2ActivationsRemaining ?? 0) === 0;
   // Check if any alive DC still has actions remaining (skip stale entries for defeated DCs)
   const noActionsRemaining = !Object.entries(game.dcActionsData || {}).some(([msgId, d]) => {
-    if (d.remaining <= 0) return false;
+    if (!anyFigureHasActions(d)) return false;
     // If we have health state, verify the DC isn't fully defeated
     if (deps.dcHealthState) {
       const hs = deps.dcHealthState.get(msgId);
@@ -621,7 +622,7 @@ function getActivationActions(game, playerNum, deps) {
     for (const [msgId, meta] of deps.dcMessageMeta) {
       if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
       const data = game.dcActionsData?.[msgId];
-      if (data && data.remaining > 0) {
+      if (data && anyFigureHasActions(data)) {
         // Skip if DC is fully defeated (stale dcActionsData)
         if (deps.dcHealthState) {
           const hs = deps.dcHealthState.get(msgId);
@@ -719,7 +720,7 @@ function getActivationActions(game, playerNum, deps) {
     for (const [msgId, meta] of deps.dcMessageMeta) {
       if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
       const data = game.dcActionsData?.[msgId];
-      if (!data || data.remaining <= 0) continue;
+      if (!data || !anyFigureHasActions(data)) continue;
 
       // Skip if all figures for this DC are defeated (no positions on board)
       const figs = game.figurePositions?.[playerNum] || {};
@@ -738,7 +739,7 @@ function getActivationActions(game, playerNum, deps) {
       const hasPosition = !!game.figurePositions?.[playerNum]?.[figureKey];
 
       // Wave 4: Stunned figure can spend 1 action to remove Stun (rules: STUNNED L2759-2761)
-      if (isStunned && data.remaining >= 1) {
+      if (isStunned && figureActionsRemaining(data, figureIndex) >= 1) {
         actions.push({
           type: 'remove_stun',
           customId: `dc_remove_stun_${msgId}_f${figureIndex}`,
@@ -858,7 +859,7 @@ function getActivationActions(game, playerNum, deps) {
         for (let si = 0; si < specials.length; si++) {
           const cost = specialCosts[si] ?? 1;
           if (specialsUsed.includes(si)) continue; // Already used this activation
-          if (data.remaining < cost) continue;      // Not enough actions
+          if (figureActionsRemaining(data, figureIndex) < cost) continue;      // Not enough actions
           if (isStunned) continue;                   // Stunned figures can't use specials
 
           actions.push({
@@ -871,7 +872,7 @@ function getActivationActions(game, playerNum, deps) {
       }
 
       // CC Special Action CCs (timing: specialAction) — costs 1 action
-      if (deps.getPlayableCcSpecialsForDc && data.remaining >= 1) {
+      if (deps.getPlayableCcSpecialsForDc && figureActionsRemaining(data, figureIndex) >= 1) {
         const ccSpecials = deps.getPlayableCcSpecialsForDc(game, playerNum, meta.dcName, meta.displayName);
         for (let ci = 0; ci < ccSpecials.length; ci++) {
           actions.push({
@@ -884,7 +885,7 @@ function getActivationActions(game, playerNum, deps) {
       }
 
       // CC Double Action CCs (timing: doubleActionSpecial) — costs 2 actions
-      if (deps.getPlayableCcDoubleActionsForDc && data.remaining >= 2) {
+      if (deps.getPlayableCcDoubleActionsForDc && figureActionsRemaining(data, figureIndex) >= 2) {
         const ccDoubles = deps.getPlayableCcDoubleActionsForDc(game, playerNum, meta.dcName, meta.displayName);
         for (let ci = 0; ci < ccDoubles.length; ci++) {
           actions.push({
@@ -911,7 +912,7 @@ function getActivationActions(game, playerNum, deps) {
     for (const [msgId, meta] of deps.dcMessageMeta) {
       if (meta.gameId !== gameId || meta.playerNum !== playerNum) continue;
       const data = game.dcActionsData?.[msgId];
-      if (data && data.remaining <= 0) {
+      if (data && !anyFigureHasActions(data)) {
         // DC has been activated but has no actions left — can end activation
         actions.push({
           type: ACTION_TYPES.DC_END_ACTIVATION,

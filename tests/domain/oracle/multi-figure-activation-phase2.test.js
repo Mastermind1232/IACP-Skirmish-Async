@@ -56,8 +56,7 @@ test('consumeActionForCurrentFigure: 2-action special locks immediately', () => 
   assert.equal(actionsData.perFigureRemaining[0], 0);
   assert.equal(actionsData.figureLocked[0], true);
   assert.equal(actionsData.selectedFigure, null);
-  // Group remaining decremented by 2; figure 1's budget intact
-  assert.equal(actionsData.remaining, 2);
+  // Figure 0's budget consumed; figure 1's budget intact
   assert.equal(actionsData.perFigureRemaining[1], 2);
 });
 

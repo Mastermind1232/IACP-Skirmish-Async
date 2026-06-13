@@ -221,7 +221,7 @@ describe('B-MVPICK-003: movementBank.remaining stays in sync with moveState', ()
     const game = makeGame({
       figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' }, 2: {} },
       movementBank: {
-        '3001': { total: 4, remaining: 4, threadId: null, messageId: null, displayName: 'Rebel Trooper' },
+        '3001': { threadId: null, messageId: null, displayName: 'Rebel Trooper', perFig: { 0: { total: 4, remaining: 4 } } },
       },
     });
     seedMoveState(game, '3001', 0, 'Rebel Trooper-1-0', 1, 'a1', 4, 'Rebel Trooper');
@@ -230,15 +230,15 @@ describe('B-MVPICK-003: movementBank.remaining stays in sync with moveState', ()
     await handleMovePick(
       mockInteraction('move_pick_3001_0_a2', 'player1'), ctx);
 
-    assert.strictEqual(game.movementBank['3001'].remaining, 3,
-      'movementBank.remaining synced to 3 (same as moveState.mpRemaining)');
+    assert.strictEqual(game.movementBank['3001'].perFig[0].remaining, 3,
+      'movementBank per-figure remaining synced to 3 (same as moveState.mpRemaining)');
   });
 
   it('003b: movementBank.remaining floors at 0 when MP exhausted', async () => {
     const game = makeGame({
       figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' }, 2: {} },
       movementBank: {
-        '3001': { total: 1, remaining: 1, threadId: null, messageId: null, displayName: 'Rebel Trooper' },
+        '3001': { threadId: null, messageId: null, displayName: 'Rebel Trooper', perFig: { 0: { total: 1, remaining: 1 } } },
       },
     });
     seedMoveState(game, '3001', 0, 'Rebel Trooper-1-0', 1, 'a1', 1, 'Rebel Trooper');
@@ -247,8 +247,8 @@ describe('B-MVPICK-003: movementBank.remaining stays in sync with moveState', ()
     await handleMovePick(
       mockInteraction('move_pick_3001_0_a2', 'player1'), ctx);
 
-    assert.strictEqual(game.movementBank['3001'].remaining, 0,
-      'movementBank.remaining = 0 (Math.max(0, newMp))');
+    assert.strictEqual(game.movementBank['3001'].perFig[0].remaining, 0,
+      'movementBank per-figure remaining = 0 (Math.max(0, newMp))');
   });
 });
 

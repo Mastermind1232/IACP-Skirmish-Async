@@ -38,7 +38,7 @@ describe('PROBE-PD-ATK-009: attack_target enumeration excludes friendly figures'
     // Put Bossk mid-activation so attack_target surfaces
     const msgId = findP1DcMsgId(game, dcMessageMeta, 'Bossk');
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
 
     const actions = getAvailableActions(game, 1, deps);
     const attackActions = actions.filter(a => a.type === 'attack_target');
@@ -70,7 +70,7 @@ describe('PROBE-PD-ATK-031: every attack_target names a concrete figure (no empt
 
     const msgId = findP1DcMsgId(game, dcMessageMeta, 'Bossk');
     game.dcActionsData = game.dcActionsData || {};
-    game.dcActionsData[msgId] = { remaining: 2, total: 2, specialsUsed: [] };
+    game.dcActionsData[msgId] = { perFigureRemaining: { 0: 2 }, figureLocked: {} };
 
     const actions = getAvailableActions(game, 1, deps);
     const attackActions = actions.filter(a => a.type === 'attack_target');

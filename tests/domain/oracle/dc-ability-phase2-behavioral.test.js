@@ -190,7 +190,7 @@ describe('B-DCATT-001: VF: Focus — legal activation', () => {
   it('001c: action deducted and specialsUsed updated', async () => {
     const game = makeGame({
       p1DcAttachments: { [MSG_ID]: ["Vader's Finest"] },
-      dcActionsData: { [MSG_ID]: { remaining: 2, total: 2, specialsUsed: [], selectedFigure: 0 } },
+      dcActionsData: { [MSG_ID]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0 } },
       figurePositions: { 1: { 'Test Trooper-1-0': 'a1' }, 2: {} },
     });
     const { ctx, calls } = buildAttachmentCtx(game, { attackDice: { dice: ['blue'] } });
@@ -198,7 +198,7 @@ describe('B-DCATT-001: VF: Focus — legal activation', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1,
+    assert.strictEqual(game.dcActionsData[MSG_ID].perFigureRemaining[0], 1,
       'remaining decremented 2→1');
     assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(1),
       'specialIdx 1 added to specialsUsed');
@@ -280,7 +280,7 @@ describe('B-DCATT-003: Autofire — legal activation', () => {
   it('003b: action deducted correctly (cost=1)', async () => {
     const game = makeGame({
       p1DcAttachments: { [MSG_ID]: ['Z-6 Trooper'] },
-      dcActionsData: { [MSG_ID]: { remaining: 2, total: 2, specialsUsed: [], selectedFigure: 0 } },
+      dcActionsData: { [MSG_ID]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0 } },
       figurePositions: { 1: { 'Test Trooper-1-0': 'a1' }, 2: {} },
     });
     const { ctx } = buildAttachmentCtx(game);
@@ -288,7 +288,7 @@ describe('B-DCATT-003: Autofire — legal activation', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1, 'remaining 2→1');
+    assert.strictEqual(game.dcActionsData[MSG_ID].perFigureRemaining[0], 1, 'remaining 2→1');
     assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(0));
   });
 });
@@ -327,7 +327,7 @@ describe('B-DCATT-004: Darksaber Strike — multi-pending setup', () => {
   it('004b: action deducted correctly', async () => {
     const game = makeGame({
       p1DcAttachments: { [MSG_ID]: ['The Darksaber'] },
-      dcActionsData: { [MSG_ID]: { remaining: 2, total: 2, specialsUsed: [], selectedFigure: 0 } },
+      dcActionsData: { [MSG_ID]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0 } },
       figurePositions: { 1: { 'Test Trooper-1-0': 'a1' }, 2: {} },
     });
     const { ctx } = buildAttachmentCtx(game);
@@ -335,7 +335,7 @@ describe('B-DCATT-004: Darksaber Strike — multi-pending setup', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1, 'remaining 2→1');
+    assert.strictEqual(game.dcActionsData[MSG_ID].perFigureRemaining[0], 1, 'remaining 2→1');
   });
 });
 
@@ -362,7 +362,7 @@ describe('B-DCATT-005: Fire Mission — double-action cost', () => {
   it('005b: cost=2 deducts both actions (remaining 2→0)', async () => {
     const game = makeGame({
       p1DcAttachments: { [MSG_ID]: ['Mortar Trooper'] },
-      dcActionsData: { [MSG_ID]: { remaining: 2, total: 2, specialsUsed: [], selectedFigure: 0 } },
+      dcActionsData: { [MSG_ID]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0 } },
       figurePositions: { 1: { 'Test Trooper-1-0': 'a1' }, 2: {} },
     });
     const { ctx } = buildAttachmentCtx(game);
@@ -370,7 +370,7 @@ describe('B-DCATT-005: Fire Mission — double-action cost', () => {
 
     await handleDcAction(interaction, ctx, 'dc_special_');
 
-    assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 0,
+    assert.strictEqual(game.dcActionsData[MSG_ID].perFigureRemaining[0], 0,
       'remaining 2→0 (cost=2 double-action)');
   });
 });
@@ -495,7 +495,7 @@ describe('B-DCREF-002: requiresChoice temporary refund (multi-phase ability)', (
 describe('B-DCREF-003: No refund for manual fallback (applied:false + manualMessage)', () => {
   it('003: action stays consumed when resolveAbility returns manual fallback', async () => {
     const game = makeGame({
-      dcActionsData: { [MSG_ID]: { remaining: 2, total: 2, specialsUsed: [], selectedFigure: 0 } },
+      dcActionsData: { [MSG_ID]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, specialsUsed: [], selectedFigure: 0 } },
       figurePositions: { 1: { 'Test Trooper-1-0': 'a1' }, 2: {} },
     });
     const meta = { _msgId: MSG_ID, gameId: GAME_ID, playerNum: 1, dcName: 'Test DC', displayName: 'Test DC [DG 1]' };
@@ -510,7 +510,7 @@ describe('B-DCREF-003: No refund for manual fallback (applied:false + manualMess
     await handleDcAction(interaction, ctx, 'dc_special_');
 
     // Action was deducted and NOT refunded — by design, the action is spent
-    assert.strictEqual(game.dcActionsData[MSG_ID].remaining, 1,
+    assert.strictEqual(game.dcActionsData[MSG_ID].perFigureRemaining[0], 1,
       'action consumed (remaining 2→1), no refund for manual fallback');
     assert.ok(game.dcActionsData[MSG_ID].specialsUsedByFig?.[0]?.includes(0),
       'specialsUsed still contains the index');

@@ -71,19 +71,33 @@ function headlessActivateDc(game, customId, dcExhaustedState, dcHealthState) {
   // 1. Mark DC exhausted
   dcExhaustedState.set(msgId, true);
 
-  // 2. Initialize movement bank (consume any pending MP bonus)
+  // 2. Initialize movement bank (consume any pending MP bonus).
+  // Per alexanbv 2026-06-13: MP is strictly per-figure. Mirror
+  // activation-setup B10 — top-level holds only UI metadata; every
+  // figure of the group gets its own perFig[i] sub-bank, each seeded
+  // with the pending MP bonus (per-figure semantics, no shared pool).
   game.movementBank = game.movementBank || {};
   const pendingMp = game.pendingMpBonus?.[msgId] ?? 0;
   if (pendingMp && game.pendingMpBonus) delete game.pendingMpBonus[msgId];
+  const _hbFigCount = Math.max(1, getDcEffects()?.[dcName]?.figures ?? 1);
+  const _hbPerFig = {};
+  for (let _i = 0; _i < _hbFigCount; _i++) {
+    _hbPerFig[_i] = { total: pendingMp, remaining: pendingMp };
+  }
   game.movementBank[msgId] = {
-    total: pendingMp, remaining: pendingMp,
-    threadId: null, messageId: null, displayName,
+    threadId: null, messageId: null, displayName, perFig: _hbPerFig,
   };
 
   // 3. Populate dcActionsData — gates move/attack action availability
   game.dcActionsData = game.dcActionsData || {};
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — no group-level
+  // remaining/total. Seed per-figure budgets (one per figure in the group) so
+  // headless runs gate correctly. Mirror activation-setup B12.
+  const _hbActionsPerFig = {};
+  for (let _i = 0; _i < _hbFigCount; _i++) _hbActionsPerFig[_i] = DC_ACTIONS_PER_ACTIVATION;
   game.dcActionsData[msgId] = {
-    remaining: DC_ACTIONS_PER_ACTIVATION, total: DC_ACTIONS_PER_ACTIVATION,
+    perFigureRemaining: _hbActionsPerFig,
+    figureLocked: {},
     messageId: null, threadId: null, specialsUsed: [],
   };
 

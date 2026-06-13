@@ -467,10 +467,13 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null
     const figIdx = actionsData.selectedFigure ?? 0;
     game.activationLockKey = `${msgId}_f${figIdx}`;
   }
-  actionsData.remaining = Math.max(0, (actionsData.remaining ?? 0) - cost);
+  // Per alexanbv 2026-06-13: actions are STRICTLY per-figure — there is no
+  // group-level action counter. Decrement only the activating figure's
+  // budget. (The old top-level `actionsData.remaining` group bank is gone.)
   const figIdx = actionsData.selectedFigure ?? 0;
-  if (actionsData.perFigureRemaining) {
-    const cur = actionsData.perFigureRemaining[figIdx] ?? 0;
+  actionsData.perFigureRemaining = actionsData.perFigureRemaining || {};
+  {
+    const cur = actionsData.perFigureRemaining[figIdx] ?? 2; // DC_ACTIONS_PER_ACTIVATION
     const next = Math.max(0, cur - cost);
     actionsData.perFigureRemaining[figIdx] = next;
     if (next === 0) {
@@ -490,6 +493,46 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null
       }
     }
   }
+}
+
+// ── Per-figure action-budget accessors (alexanbv 2026-06-13) ──────────────
+// Actions are strictly per-figure: each figure's remaining budget lives in
+// actionsData.perFigureRemaining[figIdx]. There is no group-level counter.
+
+/** Remaining actions for a specific figure (defaults to figure 0; full budget if untracked). */
+export function figureActionsRemaining(actionsData, figureIndex) {
+  if (!actionsData) return 0;
+  const idx = figureIndex ?? actionsData.selectedFigure ?? 0;
+  return actionsData.perFigureRemaining?.[idx] ?? 2; // DC_ACTIONS_PER_ACTIVATION
+}
+
+/** True if ANY figure of this DC still has actions left (group-done aggregate, computed per-figure). */
+export function anyFigureHasActions(actionsData) {
+  if (!actionsData) return false;
+  const per = actionsData.perFigureRemaining;
+  if (!per) return false;
+  return Object.values(per).some((v) => (v ?? 0) > 0);
+}
+
+/** Sum of remaining actions across all figures (for UI counters). */
+export function sumFigureActionsRemaining(actionsData) {
+  const per = actionsData?.perFigureRemaining;
+  if (!per) return 0;
+  return Object.values(per).reduce((a, v) => a + (v ?? 0), 0);
+}
+
+/**
+ * Grant N extra actions to a specific figure's budget (e.g. Grand Inquisitor,
+ * Emperor, Dubious Counterparts), capped at `cap` (default the figure's
+ * starting 2). Replaces the old top-level `actionsData.remaining += n`.
+ */
+export function grantActionToFigure(actionsData, figureIndex, n = 1, cap) {
+  if (!actionsData || n <= 0) return;
+  const idx = figureIndex ?? actionsData.selectedFigure ?? 0;
+  actionsData.perFigureRemaining = actionsData.perFigureRemaining || {};
+  const cur = actionsData.perFigureRemaining[idx] ?? 0;
+  const ceiling = cap ?? 2; // DC_ACTIONS_PER_ACTIVATION
+  actionsData.perFigureRemaining[idx] = Math.min(ceiling, cur + n);
 }
 
 /**
@@ -879,10 +922,13 @@ const ROUND_FALSE_FLAGS = [
   'noCommandDrawThisRound',
   'p1LaunchPanelFlippedThisRound',
   'p2LaunchPanelFlippedThisRound',
-  'powerConverterUsedThisRound',
 ];
 
 const ROUND_DELETE_FLAGS = [
+  // Per alexanbv 2026-06-13: now a per-player object {1?,2?}, not a boolean,
+  // so it must be DELETED (→ undefined) each round, not reset to false —
+  // the `!...?.[pn]` gate needs undefined to re-allow next round.
+  'powerConverterUsedThisRound',
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
   'onTheLamActive',

@@ -6,6 +6,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { isActivationActionInProgress } from '../game/activation-state.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { getPlayAreaId } from '../game/player-helpers.js';
+import { getMovementBankForFigure } from '../game/game-helpers.js';
 import { runWithLimit, DISCORD_REFRESH_CONCURRENCY } from '../utils/concurrency.js';
 
 /**
@@ -118,7 +119,11 @@ export async function editDistanceMessage(moveState, channel, content, component
 export async function updateMovementBankMessage(game, msgId, client, deps) {
   const bank = game.movementBank?.[msgId];
   if (!bank) return;
-  const { threadId, messageId, remaining, total, displayName } = bank;
+  const { threadId, messageId, displayName } = bank;
+  const _figIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+  const _figBank = getMovementBankForFigure(game, msgId, _figIdx);
+  const remaining = _figBank?.remaining ?? 0;
+  const total = _figBank?.total ?? 0;
   if (!threadId) return;
   try {
     if (remaining <= 0 && messageId) {
@@ -143,7 +148,9 @@ export async function ensureMovementBankMessage(game, msgId, client, deps) {
   if (!bank.threadId) return bank;
   try {
     const thread = await fetchGameChannel(client, bank.threadId);
-    const msg = await thread.send({ content: deps.getMovementBankText(bank.displayName, bank.remaining, bank.total) });
+    const _figIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _figBank = getMovementBankForFigure(game, msgId, _figIdx);
+    const msg = await thread.send({ content: deps.getMovementBankText(bank.displayName, _figBank?.remaining ?? 0, _figBank?.total ?? 0) });
     bank.messageId = msg.id;
   } catch (err) {
     console.error('Failed to create movement bank message:', err);

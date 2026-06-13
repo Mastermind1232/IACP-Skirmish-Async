@@ -60,10 +60,10 @@ describe('PROBE-PD-GRP-004: per-figure sequential resolution in a group (single-
       'available-actions.js must read selectedFigure as the single current figure — CRR-GRP-004');
   });
 
-  it('004c: source — available-actions gates on data.remaining (per-DC action counter decrements as each action completes)', () => {
+  it('004c: source — available-actions gates on anyFigureHasActions (per-figure action counter gates each figure independently)', () => {
     assert.match(AA_SRC,
-      /const data = game\.dcActionsData\?\.\[msgId\];\s*\n\s*if \(!data \|\| data\.remaining <= 0\) continue;/,
-      'available-actions.js must gate action-offering on data.remaining > 0 — CRR-ACT-003');
+      /const data = game\.dcActionsData\?\.\[msgId\];\s*\n\s*if \(!data \|\| !anyFigureHasActions\(data\)\) continue;/,
+      'available-actions.js must gate action-offering on anyFigureHasActions(data) — CRR-ACT-003');
   });
 
   it('004d: source — dc-play-area.js action handlers uniformly resolve against data.selectedFigure (no parallel per-figure action paths)', () => {

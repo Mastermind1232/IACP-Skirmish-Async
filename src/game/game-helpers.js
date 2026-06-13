@@ -27,87 +27,142 @@ export function markMapDirty(game) {
  * passed AND a per-figure entry exists, returns that figure's bank;
  * otherwise returns the top-level bank entry (single-figure path).
  *
- * Per alexanbv 2026-05-13: MP bank is per-figure. Each figure's MP
- * persists across figure-switches; figure 0's leftover MP is intact
- * when activating figure 1 and back.
+ * Per alexanbv 2026-06-13: MP is STRICTLY per-figure — there is no
+ * shared/top-level group bank. Each figure's MP lives in
+ * `movementBank[msgId].perFig[figureIndex]`; the top-level entry holds
+ * only UI metadata (threadId, messageId, displayName). figureIndex
+ * defaults to 0 (the sole figure of a single-figure DC).
  *
  * @param {object} game
  * @param {string} msgId - DC message ID
- * @param {number|null} [figureIndex] - figure index for per-figure bank
- * @returns {object|null} bank object { total, remaining } or null if no entry
+ * @param {number|null} [figureIndex] - figure index (defaults to 0)
+ * @returns {object|null} the figure's bank { total, remaining } or null
  */
 export function getMovementBankForFigure(game, msgId, figureIndex) {
   const top = game.movementBank?.[msgId];
   if (!top) return null;
-  if (figureIndex != null && top.perFig?.[figureIndex]) {
-    return top.perFig[figureIndex];
-  }
-  return top;
+  const idx = figureIndex ?? 0;
+  return top.perFig?.[idx] || null;
 }
 
 /**
- * Grant movement points to a figure's movement bank.
- * Initializes the bank and entry if needed.
- *
- * Per alexanbv 2026-05-13: MP bank is per-figure. When figureIndex
- * is provided, the grant goes to that figure's nested bank
- * (`movementBank[msgId].perFig[figureIndex]`). Each figure has its
- * own MP, not shared with siblings.
- *
- * Without figureIndex (legacy single-figure callers), MP goes to the
- * top-level entry. The top-level entry also carries UI metadata
- * (threadId, messageId, displayName).
+ * Get (creating if needed) a figure's per-figure MP sub-bank. The
+ * top-level movementBank[msgId] holds only UI metadata. Internal.
+ */
+function _ensureFigureBank(game, msgId, figureIndex) {
+  game.movementBank = game.movementBank || {};
+  const top = game.movementBank[msgId] || {};
+  top.perFig = top.perFig || {};
+  const idx = figureIndex ?? 0;
+  top.perFig[idx] = top.perFig[idx] || { total: 0, remaining: 0 };
+  game.movementBank[msgId] = top;
+  return top.perFig[idx];
+}
+
+/** Remaining MP for a specific figure (defaults to figure 0). */
+export function figureMpRemaining(game, msgId, figureIndex) {
+  return game.movementBank?.[msgId]?.perFig?.[figureIndex ?? 0]?.remaining ?? 0;
+}
+
+/**
+ * Set a figure's remaining MP outright (and optionally bump its total).
+ * Used by the Move-action settle path which recomputes remaining after
+ * each step. Per alexanbv 2026-06-13.
+ */
+export function setFigureMp(game, msgId, figureIndex, remaining, addTotal) {
+  const fig = _ensureFigureBank(game, msgId, figureIndex);
+  fig.remaining = Math.max(0, remaining);
+  if (addTotal) fig.total = (fig.total || 0) + addTotal;
+  return fig;
+}
+
+/**
+ * Grant movement points to a SPECIFIC figure's bank (figureIndex
+ * defaults to 0). There is no shared group bank — MP never spreads to
+ * sibling figures. Per alexanbv 2026-06-13.
  *
  * @param {object} game
  * @param {string} msgId - DC message ID
  * @param {number} amount - MP to grant
- * @param {number} [figureIndex] - figure index for per-figure bank
+ * @param {number} [figureIndex] - figure index (defaults to 0)
  */
 export function grantMovementBank(game, msgId, amount, figureIndex) {
   if (!msgId || !amount) return;
-  game.movementBank = game.movementBank || {};
-  game.movementBank[msgId] = game.movementBank[msgId] || { total: 0, remaining: 0 };
-  if (figureIndex != null) {
-    const top = game.movementBank[msgId];
-    top.perFig = top.perFig || {};
-    top.perFig[figureIndex] = top.perFig[figureIndex] || { total: 0, remaining: 0 };
-    top.perFig[figureIndex].total = (top.perFig[figureIndex].total || 0) + amount;
-    top.perFig[figureIndex].remaining = (top.perFig[figureIndex].remaining || 0) + amount;
-    return;
-  }
-  game.movementBank[msgId].total = (game.movementBank[msgId].total || 0) + amount;
-  game.movementBank[msgId].remaining = (game.movementBank[msgId].remaining || 0) + amount;
+  const fig = _ensureFigureBank(game, msgId, figureIndex);
+  fig.total = (fig.total || 0) + amount;
+  fig.remaining = (fig.remaining || 0) + amount;
 }
 
 /**
- * Spend MP from a figure's movement bank. Clamps at 0 (can't go
- * negative). No-op if msgId has no bank entry or amount is 0.
- *
- * Per alexanbv 2026-05-13: When figureIndex is provided AND a per-
- * figure entry exists, the spend comes out of that figure's nested
- * bank. Otherwise it spends from the top-level entry.
+ * Spend MP from a SPECIFIC figure's bank (figureIndex defaults to 0).
+ * Clamps at 0. No-op if the figure has no bank entry. Per alexanbv
+ * 2026-06-13.
  *
  * @param {object} game
  * @param {string} msgId - DC message ID
  * @param {number} amount - MP to consume (positive)
- * @param {number} [figureIndex] - figure index for per-figure bank
- * @returns {number} - MP actually consumed (clamped at the available remaining)
+ * @param {number} [figureIndex] - figure index (defaults to 0)
+ * @returns {number} - MP actually consumed (clamped at available remaining)
  */
 export function consumeMovementPoints(game, msgId, amount, figureIndex) {
   if (!msgId || !amount || amount <= 0) return 0;
-  const top = game.movementBank?.[msgId];
-  if (!top) return 0;
-  if (figureIndex != null && top.perFig?.[figureIndex]) {
-    const figBank = top.perFig[figureIndex];
-    const have = figBank.remaining || 0;
-    const spent = Math.min(have, amount);
-    figBank.remaining = have - spent;
-    return spent;
-  }
-  const have = top.remaining || 0;
+  const fig = game.movementBank?.[msgId]?.perFig?.[figureIndex ?? 0];
+  if (!fig) return 0;
+  const have = fig.remaining || 0;
   const spent = Math.min(have, amount);
-  top.remaining = have - spent;
+  fig.remaining = have - spent;
   return spent;
+}
+
+/**
+ * Discard a figure's per-figure MP flagged "must spend immediately".
+ *
+ * Per alexanbv 2026-06-12/13: MP gained outside a figure's own activation
+ * (Order Hit and similar grants) OR as part of a special action (Urgency)
+ * must be spent at once. While the window is open the MP lives in the
+ * figure's per-figure sub-bank (movementBank[msgId].perFig[figureIndex])
+ * so it can feed both the "Spend Remaining MP" movement button and the
+ * MP-cost ability buttons (Wrist Cord, Super Commando rockets). This
+ * helper closes the window: it drops the figure's sub-bank when it carries
+ * the _mustSpendImmediately flag, so leftover MP never carries forward and
+ * never spreads to a sibling figure.
+ *
+ * Pass figureIndex (defaults to 0) to clear that figure's immediate MP;
+ * pass figureIndex === 'all' to sweep every flagged figure of the DC
+ * (used by the after-attack backstop, which doesn't track the index).
+ *
+ * @param {object} game
+ * @param {string} msgId - DC message ID
+ * @param {number|'all'} [figureIndex] - figure to clear (defaults to 0)
+ * @returns {number} MP discarded (0 if nothing was flagged/cleared)
+ */
+export function expireImmediateMp(game, msgId, figureIndex) {
+  const entry = game.movementBank?.[msgId];
+  if (!entry?.perFig) return 0;
+
+  let lost = 0;
+  const clearFig = (idx) => {
+    const fig = entry.perFig[idx];
+    if (!fig || !fig._mustSpendImmediately) return;
+    lost += fig.remaining || 0;
+    delete entry.perFig[idx];
+  };
+
+  if (figureIndex === 'all') {
+    for (const idx of Object.keys(entry.perFig)) clearFig(idx);
+  } else {
+    clearFig(figureIndex ?? 0);
+  }
+
+  if (Object.keys(entry.perFig).length === 0) {
+    delete entry.perFig;
+    // Drop the whole entry if nothing but (now-gone) perFig remained.
+    if (!entry.threadId && !entry.messageId && !entry.displayName) {
+      delete game.movementBank[msgId];
+    }
+  }
+  if (game.movementBank && Object.keys(game.movementBank).length === 0) delete game.movementBank;
+  return lost;
 }
 
 /**

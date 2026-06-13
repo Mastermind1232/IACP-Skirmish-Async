@@ -3,6 +3,7 @@ import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 import { isDcCompanion } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { figureActionsRemaining } from '../game/activation-state.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -963,7 +964,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const actionsData = typeof actionsDataOrRemaining === 'object' && actionsDataOrRemaining != null ? actionsDataOrRemaining : { remaining: actionsDataOrRemaining };
-  const actionsRemaining = actionsData.remaining ?? 2;
+  const actionsRemaining = figureActionsRemaining(actionsData, actionsData.selectedFigure ?? 0);
   // Per alexanbv 2026-05-13: specialsUsed is per-figure. UI reads the
   // currently-selected figure's list for the "already used" disable state.
   const _suFigIdx = actionsData.selectedFigure ?? 0;
@@ -1126,20 +1127,48 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
 
+  // Effective MP for the currently-selected figure. Out-of-activation /
+  // special-action immediate MP for a multi-figure group lives in that
+  // figure's per-figure sub-bank (perFig[idx]) so a sibling figure can't
+  // see or spend it. When such a sub-bank is flagged immediate we read it;
+  // otherwise we fall back to the shared top-level entry (normal play,
+  // single-figure DCs). Per alexanbv 2026-06-13.
+  const _spendFigIdx = figures > 1 ? (selectedFigure ?? 0) : 0;
+  const _topBank = game?.movementBank?.[msgId];
+  const _spendFigBank = _topBank?.perFig?.[_spendFigIdx] || null;
+  const _figImmediate = _spendFigBank?._mustSpendImmediately ? _spendFigBank : null;
+  const _effBankMp = _figImmediate ? (_figImmediate.remaining ?? 0) : (_spendFigBank?.remaining ?? 0);
+  const _mustSpendNow = !!_figImmediate;
+
   // Spend remaining MP: available when movement bank has unspent points from a previous Move action
   // This is free — does not cost an action (IA rules: MP persist for the entire activation)
   {
-    const bankMp = game?.movementBank?.[msgId]?.remaining ?? 0;
-    const spendFigIdx = figures > 1 ? (selectedFigure ?? 0) : 0;
+    const bankMp = _effBankMp;
+    const spendFigIdx = _spendFigIdx;
     const moveKey = `${msgId}_${spendFigIdx}`;
     const hasActiveMoveSession = !!game?.moveInProgress?.[moveKey];
+    const mustSpendNow = _mustSpendNow;
     if (bankMp > 0 && !hasActiveMoveSession && rows.length < 5) {
-      rows.push(new ActionRowBuilder().addComponents(
+      const spendRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`dc_spend_mp_${msgId}_f${spendFigIdx}`)
           .setLabel(`Spend Remaining MP (${bankMp})`)
           .setStyle(ButtonStyle.Success)
-      ));
+      );
+      // Immediate-spend MP (Order Hit grant, Urgency special action) must
+      // not carry forward. Offer an explicit "Done" that discards the
+      // remainder and closes the window (handleDoneImmediateMp). The
+      // figure-scoped form encodes the index so the right sub-bank is
+      // expired. Per alexanbv 2026-06-12/13.
+      if (mustSpendNow) {
+        spendRow.addComponents(
+          new ButtonBuilder()
+            .setCustomId(_figImmediate ? `dc_done_immediate_mp_${msgId}_f${spendFigIdx}` : `dc_done_immediate_mp_${msgId}`)
+            .setLabel(`Done spending (discard ${bankMp})`)
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+      rows.push(spendRow);
     }
   }
   if (specials.length > 0 && rows.length < 5) {
@@ -1159,7 +1188,10 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       } else {
         label = `Special Action: ${name}`.slice(0, 80);
       }
-      const bankMp = game?.movementBank?.[msgId]?.remaining ?? 0;
+      // Use the selected figure's effective MP (per-figure immediate sub-
+      // bank when present, else top-level) so MP-cost abilities like Wrist
+      // Cord enable correctly off the figure's own granted MP.
+      const bankMp = _effBankMp;
       const mpDisabled = mpCost > 0 && bankMp < mpCost;
       // destruct 2026-05-07: Stun does NOT block Special Actions in
       // general — only Move + Attack. Stunned figures can still use
