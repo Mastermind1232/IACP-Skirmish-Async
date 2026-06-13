@@ -654,6 +654,7 @@ const ROUND_OBJECT_FLAGS = [
   // when the Hunt Dissent picker fires. Cleared on round boundary so
   // the trigger is available again next round.
   'huntDissentResolvedThisRound',
+  'adaptBlaiseResolvedThisRound',
   // Hunt Dissent active distribution state (when picker is open).
   'pendingHuntDissent',
   'roundAttackSurgeBonus',

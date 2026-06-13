@@ -169,6 +169,7 @@ import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterPr
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
+import { handleAdaptBlaisePick } from './blaise-adapt.js';
 import { handleDefeatPick } from './defeat-pick.js';
 import { handleFirePartingShot, handleSkipPartingShot } from './parting-shot.js';
 import { handleFireFinalStand, handleSkipFinalStand } from './final-stand.js';
@@ -609,6 +610,7 @@ register('dbh_post_attack_', handleDbhPostMove, 'interrupts');
 register('dbh_post_skip_', handleDbhPostMove, 'interrupts');
 register('findsman_med_', handleFindsmanMeditation, 'interrupts');
 register('hunt_dissent_pick_', handleHuntDissentPick, 'interrupts');
+register('adapt_blaise_pick_', handleAdaptBlaisePick, 'interrupts');
 register('on_diplomatic_', handleOnDiplomatic, 'interrupts');
 register('bel_reorder_1_', handleBelReorder, 'interrupts');
 register('bel_reorder_2_', handleBelReorder, 'interrupts');

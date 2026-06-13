@@ -933,6 +933,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   } catch (err) {
     console.error('[cc-hand] Hunt Dissent hook failed:', err?.message ?? err);
   }
+  // Adapt (Agent Blaise): on the opponent's first CC of the round, choose
+  // a friendly SPY/TROOPER to become Hidden. Per alexanbv 2026-06-13.
+  try {
+    const { fireAdaptBlaiseIfFirstCcOfRound } = await import('./blaise-adapt.js');
+    await fireAdaptBlaiseIfFirstCcOfRound(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+  } catch (err) {
+    console.error('[cc-hand] Adapt (Blaise) hook failed:', err?.message ?? err);
+  }
   saveGames(game.gameId);
 }
 
