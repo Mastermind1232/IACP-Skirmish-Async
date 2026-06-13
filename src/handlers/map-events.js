@@ -427,8 +427,19 @@ async function _resumeKryknaEor(game, gameId, ctx) {
   if (!game._kryknaResumeLogVars) return;
   const logVars = game._kryknaResumeLogVars;
   delete game._kryknaResumeLogVars;
-  // Mission EoR (Krykna) done → open the player EoR window after mission
-  // scoring, not the DC-EoR suffix directly (alexanbv 2026-06-13).
+  // Resume the shared mission-EoR resolver in case another async mission
+  // effect was queued after the Krykna push, THEN open the player EoR
+  // window — identical path to the fluctuation drain, so every async
+  // mission EoR effect funnels through the ONE resolver before step 4
+  // (alexanbv 2026-06-13: one re-entry, not per-effect bespoke resumes).
+  const { runRemainingMissionEorEffects } = await import('../game/mission-eor-effects.js');
+  const res = await runRemainingMissionEorEffects(game, ctx);
+  if (res.pending) {
+    if (ctx.saveGames) ctx.saveGames(game.gameId);
+    return;
+  }
+  // Mission EoR done → open the player EoR window after mission scoring,
+  // not the DC-EoR suffix directly (alexanbv 2026-06-13).
   const { _openEorWindowAfterMission } = await import('./round.js');
   await _openEorWindowAfterMission(game, gameId, null, ctx, logVars);
 }
