@@ -599,13 +599,56 @@ async function _driveModsGatePath(thread, game, combat, ctx) {
 }
 
 /**
+ * Factory for 2-stage "turn an attack die to a chosen face" abilities (Zeb /
+ * Lasat Honor Guard, Rapid Recalibration). Stage 1 picks which die; stage 2
+ * picks the new face (posted as a follow-up, returning { followUp: true } so the
+ * gate waits). Mirrors handleLasatFacePick's recompute of combat.attackRoll.
+ */
+function _makeDieTurnResolver({ name, eligible, phaseFlag, stageKey }) {
+  return {
+    prompt: ({ combat }) => {
+      const dice = combat.attackDiceResults || [];
+      const idxs = eligible(dice);
+      if (idxs.length === 0) return { content: `**${name}** — no eligible attack die to turn.`, buttons: [['skip', 'OK', 'secondary']] };
+      return { content: `**${name}** — choose an attack die to turn:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dice[i].dmg || 0}d/${dice[i].surge || 0}s/${dice[i].acc || 0}a)`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
+      if (choice === 'skip') { if (phaseFlag) combat[phaseFlag] = false; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
+      const sk = `_${stageKey}`;
+      if (combat[`${sk}Stage`] !== 'face') {
+        combat[`${sk}Die`] = parseInt(choice, 10); combat[`${sk}Stage`] = 'face';
+        const die = combat.attackDiceResults?.[combat[`${sk}Die`]];
+        const faces = ctx?.getDiceData?.().attack?.[die?.color] || [];
+        const btns = faces.map((f, fi) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${fi}_${id}`).setLabel(`${f.acc || 0}a/${f.dmg || 0}d/${f.surge || 0}s`.slice(0, 80)).setStyle(ButtonStyle.Primary));
+        await thread?.send({ content: `**${name}** — choose the new face for die #${combat[`${sk}Die`] + 1}:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
+        return { followUp: true };
+      }
+      const dieIdx = combat[`${sk}Die`]; const faceIdx = parseInt(choice, 10);
+      const die = combat.attackDiceResults?.[dieIdx];
+      const newFace = (ctx?.getDiceData?.().attack?.[die?.color] || [])[faceIdx];
+      if (die && newFace) {
+        combat.attackRoll = combat.attackRoll || { acc: 0, dmg: 0, surge: 0 };
+        combat.attackRoll.acc = Math.max(0, (combat.attackRoll.acc || 0) - (die.acc || 0)) + (newFace.acc || 0);
+        combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - (die.dmg || 0)) + (newFace.dmg || 0);
+        combat.attackRoll.surge = Math.max(0, (combat.attackRoll.surge || 0) - (die.surge || 0)) + (newFace.surge || 0);
+        combat.attackDiceResults[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
+        thread?.send(`**${name}** — die #${dieIdx + 1} → ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s.`).catch(discordCatch);
+      }
+      if (phaseFlag) combat[phaseFlag] = false; delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
+      return undefined;
+    },
+  };
+}
+
+/**
  * Data-driven combat-ability resolvers (alexanbv 2026-06-14). Each ability
  * "points into" the pipeline by registering how it resolves when the player
  * picks it — the gate handlers are GENERIC and never name a specific ability.
  *   prompt(args) → { content, buttons: [[choice,label,style?]], mentionUserId? }
  *                  or null to apply immediately (no sub-choice).
- *   apply(choice, args) → mutate combat for the chosen option.
- *   args = { game, combat, thread, ctx, side, gameId }
+ *   apply(choice, args) → mutate combat; may return { followUp: true } for a
+ *                  multi-stage ability that posted its next prompt.
+ *   args = { game, combat, thread, ctx, side, gameId, id }
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
 export const COMBAT_RESOLVERS = {
@@ -840,6 +883,18 @@ export const COMBAT_RESOLVERS = {
       combat.zilloPierceResolved = true;
     },
   },
+  // Zeb (Lasat Honor Guard): turn one single-symbol attack die to any side.
+  lasat_honor_guard: _makeDieTurnResolver({
+    name: 'Lasat Honor Guard (Zeb)',
+    eligible: (dice) => dice.map((d, i) => ({ d, i })).filter(({ d }) => ((d.dmg || 0) + (d.surge || 0)) === 1).map(({ i }) => i),
+    phaseFlag: 'lasatHonorGuardPhase', stageKey: 'lasat',
+  }),
+  // Rapid Recalibration: turn one attack die to any side (before defender rerolls).
+  rapid_recalibration: _makeDieTurnResolver({
+    name: 'Rapid Recalibration',
+    eligible: (dice) => dice.map((_d, i) => i),
+    phaseFlag: null, stageKey: 'rapidRecal',
+  }),
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
@@ -878,14 +933,14 @@ export async function handleModsPick(interaction, ctx) {
     if (r) {
       // Generic, data-driven: post the ability's sub-choice prompt, or apply
       // immediately if it has none. The handler never names the ability.
-      const p = r.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId }) : null;
+      const p = r.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId, id: pick }) : null;
       if (p?.buttons) {
         const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
           new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
         await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
         // wait for the sub-choice (handleModsSubChoice resolves + re-drives)
       } else {
-        if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId });
+        if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick });
         recordModsChoice(combat.modsGate, side, pick);
         await _driveModsGatePath(thread, game, combat, ctx);
       }
@@ -963,7 +1018,10 @@ export async function handleModsSubChoice(interaction, ctx) {
   // the chosen option, then record + re-drive. Never names a specific ability.
   const _resolver = COMBAT_RESOLVERS[id];
   if (_resolver) {
-    if (_resolver.apply) await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId });
+    const _res = _resolver.apply ? await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId, id }) : null;
+    // Multi-stage abilities (e.g. pick die → pick face) return { followUp: true }
+    // after posting their next prompt; don't record/advance until they finish.
+    if (_res?.followUp) { saveGames?.(game.gameId); return; }
     if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
     await _driveModsGatePath(thread, game, combat, ctx);
     saveGames?.(game.gameId);

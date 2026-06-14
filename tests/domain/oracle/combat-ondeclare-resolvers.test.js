@@ -86,3 +86,24 @@ describe('special-step resolver: Zillo Technique (pierce cancel)', () => {
     assert.equal(c2.defenderReducePierce, undefined); assert.equal(c2.zilloPierceResolved, true);
   });
 });
+
+describe('special-step resolvers: Zeb + Rapid Recalibration (2-stage die turn)', () => {
+  const t = { send: async () => ({}) };
+  const getDiceData = () => ({ attack: { blue: [{ acc: 1, dmg: 0, surge: 0 }, { acc: 0, dmg: 2, surge: 0 }] } });
+  it('Zeb: pick die (stage 1, followUp) → pick face (stage 2) turns the die', async () => {
+    const c = { attackDiceResults: [{ color: 'blue', dmg: 1, surge: 0, acc: 0 }], attackRoll: { acc: 0, dmg: 1, surge: 0 }, lasatHonorGuardPhase: true };
+    const r1 = await COMBAT_RESOLVERS.lasat_honor_guard.apply('0', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'lasat_honor_guard' });
+    assert.equal(r1.followUp, true); assert.equal(c._lasatStage, 'face'); assert.equal(c._lasatDie, 0);
+    await COMBAT_RESOLVERS.lasat_honor_guard.apply('1', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'lasat_honor_guard' });
+    assert.equal(c.attackDiceResults[0].dmg, 2); // turned to the 2-damage face
+    assert.equal(c.attackRoll.dmg, 2);
+    assert.equal(c._lasatStage, undefined); assert.equal(c.lasatHonorGuardPhase, false);
+  });
+  it('Rapid Recalibration: any attack die eligible; 2-stage turn', async () => {
+    const c = { attackDiceResults: [{ color: 'blue', dmg: 0, surge: 0, acc: 1 }], attackRoll: { acc: 1, dmg: 0, surge: 0 } };
+    const r1 = await COMBAT_RESOLVERS.rapid_recalibration.apply('0', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'rapid_recalibration' });
+    assert.equal(r1.followUp, true);
+    await COMBAT_RESOLVERS.rapid_recalibration.apply('1', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'rapid_recalibration' });
+    assert.equal(c.attackDiceResults[0].dmg, 2); assert.equal(c.attackRoll.dmg, 2); assert.equal(c.attackRoll.acc, 0);
+  });
+});
