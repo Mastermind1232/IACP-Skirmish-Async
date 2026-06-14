@@ -831,6 +831,15 @@ export const COMBAT_RESOLVERS = {
       combat._ee3OnDeclareDecided = true;
     },
   },
+  // ── special (sample) ─────────────────────────────────────────────────────
+  zillo_technique_pierce_cancel: {
+    prompt: () => ({ content: '**Zillo Technique** — exhaust to cancel 2 Pierce on this attack?', buttons: [['use', 'Exhaust → -2 Pierce'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'use') { combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2; thread?.send('**Zillo Technique** — cancels 2 Pierce.').catch(discordCatch); }
+      else thread?.send('**Zillo Technique** — Skipped.').catch(discordCatch);
+      combat.zilloPierceResolved = true;
+    },
+  },
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);

@@ -76,3 +76,13 @@ describe('on_declare resolvers: Vanguard + EE-3 (die→red swaps)', () => {
     assert.equal(c._ee3OnDeclareDecided, true);
   });
 });
+
+describe('special-step resolver: Zillo Technique (pierce cancel)', () => {
+  const t = { send: async () => ({}) };
+  it('use → reduces pierce by 2; skip → no change', async () => {
+    const c = {}; await COMBAT_RESOLVERS.zillo_technique_pierce_cancel.apply('use', { game: {}, combat: c, thread: t, ctx: {} });
+    assert.equal(c.defenderReducePierce, 2); assert.equal(c.zilloPierceResolved, true);
+    const c2 = {}; await COMBAT_RESOLVERS.zillo_technique_pierce_cancel.apply('skip', { game: {}, combat: c2, thread: t, ctx: {} });
+    assert.equal(c2.defenderReducePierce, undefined); assert.equal(c2.zilloPierceResolved, true);
+  });
+});
