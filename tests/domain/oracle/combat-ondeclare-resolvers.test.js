@@ -54,3 +54,25 @@ describe('on_declare resolver: Front Line', () => {
     assert.deepEqual(c.attackInfo.dice, ['blue', 'green']);
   });
 });
+
+import { figureMpRemaining } from '../../../src/game/game-helpers.js';
+
+describe('on_declare resolvers: Vanguard + EE-3 (die→red swaps)', () => {
+  const t = { send: async () => ({}) };
+  it('vanguard swaps the chosen non-red die to red; skip leaves it', async () => {
+    const c = { attackInfo: { dice: ['blue', 'green'] } };
+    await COMBAT_RESOLVERS.vanguard.apply('blue', { game: {}, combat: c, thread: t, ctx: {} });
+    assert.deepEqual(c.attackInfo.dice, ['red', 'green']); assert.equal(c._vanguardOnDeclareDecided, true);
+    const c2 = { attackInfo: { dice: ['blue'] } };
+    await COMBAT_RESOLVERS.vanguard.apply('skip', { game: {}, combat: c2, thread: t, ctx: {} });
+    assert.deepEqual(c2.attackInfo.dice, ['blue']); assert.equal(c2._vanguardOnDeclareDecided, true);
+  });
+  it('ee3 swaps a die to red AND spends 2 MP', async () => {
+    const game = { movementBank: { mid: { perFig: { 0: { remaining: 2 } } } } };
+    const c = { attackInfo: { dice: ['green'] }, attackerMsgId: 'mid', attackerFigureKey: 'Boba-1-0' };
+    await COMBAT_RESOLVERS.ee3_carbine.apply('green', { game, combat: c, thread: t, ctx: {} });
+    assert.deepEqual(c.attackInfo.dice, ['red']);
+    assert.equal(figureMpRemaining(game, 'mid', 0), 0, '2 MP spent');
+    assert.equal(c._ee3OnDeclareDecided, true);
+  });
+});

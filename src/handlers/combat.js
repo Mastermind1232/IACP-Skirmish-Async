@@ -794,6 +794,43 @@ export const COMBAT_RESOLVERS = {
       combat._frontLineSwapDecided = true;
     },
   },
+  vanguard: {
+    // Replace one chosen non-red attack die with Red (target within 3).
+    prompt: ({ combat }) => {
+      const nonRed = [...new Set((combat.attackInfo?.dice || []).filter((d) => d !== 'red'))];
+      if (nonRed.length === 0) return { content: '**Vanguard** — no non-red die to swap.', buttons: [['skip', 'OK', 'secondary']] };
+      return { content: '**Vanguard** — replace one attack die with Red:', buttons: [...nonRed.map((c) => [c, `${c[0].toUpperCase() + c.slice(1)} → Red`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: (choice, { combat, thread }) => {
+      if (choice !== 'skip' && combat.attackInfo?.dice) {
+        const dice = [...combat.attackInfo.dice]; const idx = dice.indexOf(choice);
+        if (idx >= 0) { dice[idx] = 'red'; combat.attackInfo = { ...combat.attackInfo, dice }; thread?.send(`**Vanguard** — ${choice} → Red.`).catch(discordCatch); }
+        else thread?.send('**Vanguard** — that die is gone.').catch(discordCatch);
+      } else thread?.send('**Vanguard** — Skipped.').catch(discordCatch);
+      combat._vanguardOnDeclareDecided = true;
+    },
+  },
+  ee3_carbine: {
+    // EE-3 Carbine (Boba Fett): replace one non-red die with Red; costs 2 MP.
+    prompt: ({ combat }) => {
+      const nonRed = [...new Set((combat.attackInfo?.dice || []).filter((d) => d !== 'red'))];
+      if (nonRed.length === 0) return { content: '**EE-3 Carbine** — no non-red die to swap.', buttons: [['skip', 'OK', 'secondary']] };
+      return { content: '**EE-3 Carbine** — replace one attack die with Red (costs 2 MP):', buttons: [...nonRed.map((c) => [c, `${c[0].toUpperCase() + c.slice(1)} → Red (-2 MP)`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: (choice, { game, combat, thread }) => {
+      if (choice !== 'skip' && combat.attackInfo?.dice) {
+        const dice = [...combat.attackInfo.dice]; const idx = dice.indexOf(choice);
+        if (idx >= 0) {
+          dice[idx] = 'red'; combat.attackInfo = { ...combat.attackInfo, dice };
+          const _fi = parseInt(String(combat.attackerFigureKey || '').split('-').pop(), 10);
+          const fi = Number.isInteger(_fi) ? _fi : (game.dcActionsData?.[combat.attackerMsgId]?.selectedFigure ?? 0);
+          consumeMovementPoints(game, combat.attackerMsgId, 2, fi);
+          thread?.send(`**EE-3 Carbine** — ${choice} → Red (-2 MP).`).catch(discordCatch);
+        } else thread?.send('**EE-3 Carbine** — that die is gone.').catch(discordCatch);
+      } else thread?.send('**EE-3 Carbine** — Skipped.').catch(discordCatch);
+      combat._ee3OnDeclareDecided = true;
+    },
+  },
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
