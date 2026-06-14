@@ -8,6 +8,7 @@ import {
   pendingInteractive,
   chooseAbility,
   passGate,
+  runGate,
 } from './combat-ability-gate.js';
 
 const A_PASS = { id: 'a-pass', name: '+1 Damage', side: 'attacker', kind: 'passive' };
@@ -83,6 +84,48 @@ describe('combat-ability-gate: empty sides auto-complete', () => {
     autoResolvePassives(g2, 'defender');
     passGate(g2, 'defender');
     assert.ok(isGateComplete(g2));
+  });
+});
+
+describe('combat-ability-gate: runGate drives the full canonical sequence', () => {
+  it('attacker passives → attacker interactive (player order) → defender passives → defender interactive', async () => {
+    const g = buildStepGate('mods', [
+      { id: 'a-pass', name: 'AP', side: 'attacker', kind: 'passive' },
+      { id: 'a-i1', name: 'AI1', side: 'attacker', kind: 'interactive' },
+      { id: 'a-i2', name: 'AI2', side: 'attacker', kind: 'interactive' },
+      { id: 'd-pass', name: 'DP', side: 'defender', kind: 'passive' },
+      { id: 'd-i1', name: 'DI1', side: 'defender', kind: 'interactive' },
+    ]);
+    const log = [];
+    // attacker resolves AI2 then AI1 (player-chosen order); defender resolves DI1.
+    const pickQueue = { attacker: ['a-i2', 'a-i1'], defender: ['d-i1'] };
+    await runGate(g, {
+      firePassive: (side, id) => log.push(`passive:${side}:${id}`),
+      resolveInteractive: (side, id) => log.push(`interactive:${side}:${id}`),
+      pickNext: (side) => pickQueue[side].shift() ?? null,
+    });
+    assert.deepEqual(log, [
+      'passive:attacker:a-pass',
+      'interactive:attacker:a-i2',
+      'interactive:attacker:a-i1',
+      'passive:defender:d-pass',
+      'interactive:defender:d-i1',
+    ]);
+    assert.ok(isGateComplete(g));
+  });
+
+  it('pickNext returning null passes the side immediately', async () => {
+    const g = buildStepGate('mods', [
+      { id: 'a-i1', name: 'AI1', side: 'attacker', kind: 'interactive' },
+      { id: 'd-i1', name: 'DI1', side: 'defender', kind: 'interactive' },
+    ]);
+    const log = [];
+    await runGate(g, {
+      resolveInteractive: (side, id) => log.push(`${side}:${id}`),
+      pickNext: () => null, // both sides decline everything
+    });
+    assert.deepEqual(log, []);
+    assert.ok(isGateComplete(g));
   });
 });
 

@@ -148,3 +148,40 @@ function _assertActive(gate, side, fn) {
     throw new Error(`${fn}: ${side} gate is not active (active=${active ?? 'none — gate complete'})`);
   }
 }
+
+/**
+ * Drive a gate to completion via callbacks — the canonical sequence in one
+ * place (attacker gate fully, then defender gate; passives auto-fire, then the
+ * player resolves interactive abilities in the order they pick, until pass).
+ *
+ * Used by headless self-play and tests to exercise the full window end-to-end.
+ * The live Discord path drives the same gate statefully across button events
+ * (build → autoResolvePassives → present pendingInteractive → chooseAbility /
+ * passGate) rather than via this single-async-loop driver.
+ *
+ * @param {object} gate
+ * @param {object} cb
+ * @param {(side:string, id:string)=>Promise<void>|void} cb.firePassive
+ * @param {(side:string, id:string)=>Promise<void>|void} cb.resolveInteractive
+ * @param {(side:string, pendingIds:string[])=>Promise<?string>|?string} cb.pickNext
+ *        returns the next interactive id to resolve, or null/undefined to pass
+ */
+export async function runGate(gate, { firePassive, resolveInteractive, pickNext } = {}) {
+  let guard = 0;
+  while (!isGateComplete(gate)) {
+    if (++guard > 10000) throw new Error('runGate: exceeded iteration guard (callback not converging)');
+    const side = activeSide(gate);
+    for (const id of autoResolvePassives(gate, side)) {
+      if (firePassive) await firePassive(side, id);
+    }
+    while (true) {
+      const pending = pendingInteractive(gate, side);
+      if (pending.length === 0) break;
+      const choice = pickNext ? await pickNext(side, pending) : null;
+      if (choice == null) break;
+      if (resolveInteractive) await resolveInteractive(side, choice);
+      chooseAbility(gate, side, choice);
+    }
+    passGate(gate, side);
+  }
+}
