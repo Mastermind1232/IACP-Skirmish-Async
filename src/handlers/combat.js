@@ -608,7 +608,7 @@ async function _driveModsGatePath(thread, game, combat, ctx) {
  *   args = { game, combat, thread, ctx, side, gameId }
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
-const COMBAT_RESOLVERS = {
+export const COMBAT_RESOLVERS = {
   spray_fire: {
     prompt: () => ({ content: '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?', buttons: [['apply', 'Apply (-3 Acc, +1 Surge)'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { combat, thread }) => {
@@ -774,9 +774,11 @@ const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'da
 export async function handleModsPick(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
   const rest = parseCustomId(interaction.customId, 'combat_mods_pick_');
-  const lastUnderscore = rest.lastIndexOf('_');
-  const gameId = rest.substring(0, lastUnderscore);
-  const pick = rest.substring(lastUnderscore + 1);
+  // gameId is the first token; the pick id may itself contain underscores
+  // (e.g. spray_fire), so split on the FIRST underscore, not the last.
+  const u1 = rest.indexOf('_');
+  const gameId = rest.substring(0, u1);
+  const pick = rest.substring(u1 + 1);
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
