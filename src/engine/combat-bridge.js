@@ -1329,9 +1329,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _gAtkEff = getDcEffect(_gAtkDcName);
           const _gIds = _gAtkEff?.specialAbilityIds || [];
           if (_gIds.includes('guerrilla_alliance_ranger_elite') || _gIds.includes('guerrilla_alliance_ranger_reg')) {
-            if (_applyCondition(game, combat.attackerFigureKey, 'Hide')) {
-              await logGameAction(game, client, `🌑 **Guerrilla** — **${_gAtkDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
-            }
+            // alexanbv 2026-06-14: defer the Hide to AFTER the unconditional
+            // "attacker loses Hidden after attacking" strip below (same pattern
+            // as deferredSurgeHide) — applying it here gets it immediately
+            // stripped, so Guerrilla never actually left the figure Hidden.
+            combat.deferredGuerrillaHide = true;
           }
         }
         // Apex Predator — now handled by WHEN_DEFEATED hook (damage-pipeline-hooks.js).
@@ -1511,6 +1513,13 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       _applyCondition(game, combat.attackerFigureKey, 'Hide');
       await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
       combat.deferredSurgeHide = false;
+    }
+    // Guerrilla (Alliance Ranger) "become Hidden after defeating the target"
+    // re-applied here, after the unconditional Hidden strip (alexanbv 2026-06-14).
+    if (combat.deferredGuerrillaHide) {
+      _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      await logGameAction(game, client, `\uD83C\uDF11 **Guerrilla** \u2014 **${combat.attackerDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
+      combat.deferredGuerrillaHide = false;
     }
   }
   if (combat.target?.figureKey) {

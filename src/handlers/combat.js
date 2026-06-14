@@ -2064,8 +2064,8 @@ export async function handleAttackTarget(interaction, ctx) {
           .setLabel(label.charAt(0).toUpperCase() + label.slice(1))
           .setStyle(ButtonStyle.Primary);
       });
-      game.pendingDbhDiePick = { msgId, attackerPlayerNum: combat.attackerPlayerNum, dice: _dbhDice };
-      const _dbhAtkOwnerId = game[`player${combat.attackerPlayerNum}Id`];
+      game.pendingDbhDiePick = { msgId, attackerPlayerNum: game.pendingCombat.attackerPlayerNum, dice: _dbhDice };
+      const _dbhAtkOwnerId = game[`player${game.pendingCombat.attackerPlayerNum}Id`];
       await thread.send({
         content: `<@${_dbhAtkOwnerId}> **Driven by Hatred** — choose 1 die to remove from your attack pool. (You cannot roll until you pick.)`,
         components: [new ActionRowBuilder().addComponents(_dbhBtns)],
@@ -2430,7 +2430,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Here we just log the post-target outcome + revert if the chosen
   // target ended up out-of-range (>3 spaces) so the card text's
   // "while attacking a figure within 3 spaces" precondition holds.
-  if (hasVanguardAbility(atkSpecialIds) && game.pendingVanguardSwap?.[combat.attackerMsgId] === 'swapped') {
+  if (hasVanguardAbility(atkSpecialIds) && game.pendingVanguardSwap?.[game.pendingCombat.attackerMsgId] === 'swapped') {
     if (vanguardInRange(distanceToTarget)) {
       await thread.send(`**Vanguard** — swap applied (target within ${distanceToTarget} spaces).`);
     } else {
@@ -2439,7 +2439,7 @@ export async function handleAttackTarget(interaction, ctx) {
       // (player accepted it) but card-text-strict the swap is invalid.
       await thread.send(`⚠️ **Vanguard** — target is ${distanceToTarget} spaces away (>3); the pre-target swap was committed but per card text only applies within 3 spaces.`);
     }
-    if (game.pendingVanguardSwap) game.pendingVanguardSwap[combat.attackerMsgId] = 'decided';
+    if (game.pendingVanguardSwap) game.pendingVanguardSwap[game.pendingCombat.attackerMsgId] = 'decided';
   }
 
   // ACP Scattergun (Trandoshan Hunter Elite) / Scattergun (Trandoshan Hunter Regular): +Hits when adjacent to target
