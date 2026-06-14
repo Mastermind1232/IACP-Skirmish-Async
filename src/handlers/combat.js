@@ -666,6 +666,18 @@ async function _postModsSubChoice(id, side, thread, game, combat) {
   const gid = game.gameId;
   const mk = (choice, label, style = ButtonStyle.Primary) =>
     new ButtonBuilder().setCustomId(`combat_modsub_${gid}_${choice}_${id}`).setLabel(label).setStyle(style);
+  // Negotiate is Hondo's (attacker) ability but the DEFENDER decides pay-or-accept,
+  // so it's posted to the defender with a mention (special-cased).
+  if (id === 'negotiate') {
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const defId = game[`player${defPN}Id`];
+    await thread.send(sanitizeMentions({
+      content: `<@${defId}> **Negotiate (Hondo)** — pay **2 VP** to avoid +2 Damage, or accept +2 Damage:`,
+      components: [new ActionRowBuilder().addComponents(mk('pay', 'Pay 2 VP'), mk('accept', 'Accept +2 Damage', ButtonStyle.Danger))],
+      allowedMentions: { users: [defId] },
+    })).catch(discordCatch);
+    return true;
+  }
   let content; let buttons;
   if (id === 'spray_fire') {
     content = '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?';
@@ -685,6 +697,9 @@ async function _postModsSubChoice(id, side, thread, game, combat) {
   } else if (id === 'heavy_repeater') {
     content = '**Heavy Repeater** — suffer 1 Strain for a bonus?';
     buttons = [mk('hit', '+1 Hit (1 Strain)'), mk('blast', 'Blast 2 (1 Strain)'), mk('acc', '+3 Acc (1 Strain)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'query') {
+    content = '🤖 **Query (HK-47)** — become Bleeding (avoid +1 Damage) or accept +1 Damage?';
+    buttons = [mk('bleed', 'Become Bleeding'), mk('accept', 'Accept +1 Damage', ButtonStyle.Danger)];
   } else {
     return false;
   }
@@ -765,6 +780,26 @@ export async function handleModsSubChoice(interaction, ctx) {
     if (strain) {
       await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: 'Heavy Repeater' });
     }
+  } else if (id === 'query') {
+    if (choice === 'bleed') {
+      if (combat.target?.figureKey) { const { applyCondition } = await import('../game/conditions.js'); applyCondition(game, combat.target.figureKey, 'Bleed'); }
+      await thread.send('🩸 **Query** — Defender became Bleeding (no damage bonus).').catch(discordCatch);
+    } else {
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      await thread.send('💢 **Query** — Defender accepted +1 Damage.').catch(discordCatch);
+    }
+    combat.queryResolved = true; delete combat.queryNeedsPrompt;
+  } else if (id === 'negotiate') {
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    if (choice === 'pay') {
+      deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2);
+      await thread.send('**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage.').catch(discordCatch);
+      if (checkWinConditions) await checkWinConditions(game, client);
+    } else {
+      combat.bonusHits = (combat.bonusHits || 0) + 2;
+      await thread.send('**Negotiate** — +2 Damage applied.').catch(discordCatch);
+    }
+    combat.negotiateResolved = true;
   }
 
   if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
