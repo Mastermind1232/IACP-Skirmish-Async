@@ -604,11 +604,100 @@ export async function handleModsPick(interaction, ctx) {
   if (!side) return;
   if (pick === 'done') {
     passModsSide(combat.modsGate, side);
+    await _driveModsGatePath(thread, game, combat, ctx);
   } else {
-    recordModsChoice(combat.modsGate, side, pick);
-    // TODO(slice C next): post pick's sub-choice prompt + apply its effect by
-    // reusing the ability's resolution (extracted from proceedAfterRerolls).
+    const posted = await _postModsSubChoice(pick, side, thread, game, combat);
+    if (!posted) {
+      // Ability not yet wired into the gate path — record + skip so the gate
+      // keeps moving. Coverage expands across the migration.
+      recordModsChoice(combat.modsGate, side, pick);
+      await _driveModsGatePath(thread, game, combat, ctx);
+    }
+    // else: wait for the sub-choice (handleModsSubChoice records + re-drives).
   }
+  saveGames?.(game.gameId);
+}
+
+/**
+ * Post a picked interactive mods ability's sub-choice prompt (gate path).
+ * Returns true if posted, false if the ability isn't wired into the gate path
+ * yet (caller then records+skips). Covered: spray_fire, defensible, agile —
+ * the abilities whose effect needs no figure-key lookup. Get Down / Call the
+ * Shots (need a friendly figure key) and Query / CBS / Heavy Repeater / Elusive
+ * / Negotiate are the next coverage step.
+ */
+async function _postModsSubChoice(id, side, thread, game, combat) {
+  const gid = game.gameId;
+  const mk = (choice, label, style = ButtonStyle.Primary) =>
+    new ButtonBuilder().setCustomId(`combat_modsub_${gid}_${choice}_${id}`).setLabel(label).setStyle(style);
+  let content; let buttons;
+  if (id === 'spray_fire') {
+    content = '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?';
+    buttons = [mk('apply', 'Apply (-3 Acc, +1 Surge)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'defensible') {
+    content = '**Defensible** — apply +1 Block or +1 Evade?';
+    buttons = [mk('block', '+1 Block'), mk('evade', '+1 Evade'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'agile') {
+    content = '**Agile** — convert 1 Block to 1 Evade?';
+    buttons = [mk('apply', 'Apply (Block→Evade)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else {
+    return false;
+  }
+  await thread.send({ content, components: [new ActionRowBuilder().addComponents(buttons)] }).catch(discordCatch);
+  return true;
+}
+
+/**
+ * Resolve a gate-path mods sub-choice (combat_modsub_<gameId>_<choice>_<id>):
+ * apply the effect, record the ability on the gate, re-drive. Self-contained —
+ * does not touch the legacy handleCombatPassive. (Gated off by useModsGate.)
+ */
+export async function handleModsSubChoice(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const rest = parseCustomId(interaction.customId, 'combat_modsub_');
+  const u1 = rest.indexOf('_');
+  const gameId = rest.substring(0, u1);
+  const r2 = rest.substring(u1 + 1);
+  const u2 = r2.indexOf('_');
+  const choice = r2.substring(0, u2);
+  const id = r2.substring(u2 + 1);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.modsGate) return;
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  const side = _modsActiveSide(combat.modsGate);
+  await interaction.deferUpdate().catch(discordCatch);
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  if (id === 'spray_fire') {
+    if (choice === 'apply') {
+      const bump = applySprayFire(combat);
+      combat.bonusAccuracy = bump.bonusAccuracy;
+      combat.surgeBonus = bump.surgeBonus;
+      await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.').catch(discordCatch);
+    } else {
+      await thread.send('**Spray Fire** — Skipped.').catch(discordCatch);
+    }
+    combat.sprayFireResolved = true;
+  } else if (id === 'defensible') {
+    if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; await thread.send('**Defensible** — Applied +1 Block.').catch(discordCatch); }
+    else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; await thread.send('**Defensible** — Applied +1 Evade.').catch(discordCatch); }
+    else { await thread.send('**Defensible** — Skipped.').catch(discordCatch); }
+    combat.defensibleResolved = true;
+  } else if (id === 'agile') {
+    if (choice === 'apply') {
+      const conv = applyAgileConversion({ block: combat.defenseRoll?.block, bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
+      if (conv.applied) { combat.bonusBlock = conv.bonusBlock; combat.bonusEvade = conv.bonusEvade; await thread.send('**Agile** — Converted 1 Block to 1 Evade.').catch(discordCatch); }
+      else { await thread.send('**Agile** — No Block available to convert.').catch(discordCatch); }
+    } else {
+      await thread.send('**Agile** — Skipped.').catch(discordCatch);
+    }
+    combat.agileJetTrooperApplied = true;
+  }
+
+  if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
   await _driveModsGatePath(thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
