@@ -759,6 +759,28 @@ export const COMBAT_RESOLVERS = {
       combat.crateBlockSinkResolved = true;
     },
   },
+  // ── on_declare ─────────────────────────────────────────────────────────────
+  merciless: {
+    prompt: ({ combat }) => combat.mercilessAvailable
+      ? { content: `⚡ **Merciless** — deal 1 Damage to **${combat.mercilessAvailable.targetLabel}** (has a HARMFUL condition)?`, buttons: [['use', 'Use Merciless'], ['skip', 'Skip', 'secondary']] }
+      : { content: '**Merciless** — no eligible target.', buttons: [['skip', 'OK', 'secondary']] },
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      const info = combat.mercilessAvailable;
+      if (choice === 'use' && info) {
+        const conds = game.figureConditions?.[info.targetFigureKey] || [];
+        if (['Bleed', 'Stun', 'Weaken'].some((c) => conds.includes(c))) {
+          const m = info.targetFigureKey.match(/-(\d+)-(\d+)$/); const fi = m ? parseInt(m[2], 10) : 0;
+          // Routes through the shared damage pipeline (alexanbv: use existing pipeline).
+          await _applyDamage(game, { dcHealthState: ctx?.dcHealthState, logGameAction: ctx?.logGameAction, client: ctx?.client }, {
+            figureKey: info.targetFigureKey, msgId: info.targetMsgId, figIndex: fi, amount: 1,
+            controllerPlayerNum: info.defenderPlayerNum, attackerPlayerNum: info.attackerPlayerNum, source: 'Merciless',
+          });
+          thread?.send(`⚡ **Merciless** — **${info.targetLabel}** suffers 1 Damage.`).catch(discordCatch);
+        } else thread?.send('**Merciless** — Defender no longer has a HARMFUL condition; no effect.').catch(discordCatch);
+      } else thread?.send('**Merciless** — Skipped.').catch(discordCatch);
+      combat.mercilessUsed = true; delete combat.mercilessAvailable;
+    },
+  },
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
