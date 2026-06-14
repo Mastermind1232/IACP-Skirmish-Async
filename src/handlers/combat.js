@@ -678,6 +678,27 @@ async function _postModsSubChoice(id, side, thread, game, combat) {
     })).catch(discordCatch);
     return true;
   }
+  if (id === 'elusive') {
+    const atkDice = combat.attackDiceResults || [];
+    const btns = atkDice.map((d, i) => mk(String(i), `#${i + 1} ${d.color}: ${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A`.slice(0, 80)));
+    btns.push(mk('skip', 'Skip', ButtonStyle.Secondary));
+    await thread.send({ content: '**Elusive** — choose an attack die to nullify (the worst defense die is also nullified):', components: chunkButtonsToRows(btns) }).catch(discordCatch);
+    return true;
+  }
+  if (id === 'crate_block_sink') {
+    const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+    const fk = combat.target?.figureKey;
+    const healthPer = rule?.healthPerCrate || 5;
+    const blocks = [...(game.lineOfFireCrateBlock?.[fk] || [])];
+    const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
+    while (blocks.length < carry) blocks.push(0);
+    const remHp = blocks.slice(0, carry).reduce((s, b) => s + Math.max(0, healthPer - (b || 0)), 0);
+    const max = Math.min(rule?.maxBlockPerAttack || 3, remHp);
+    const btns = [];
+    for (let n = 0; n <= max; n++) btns.push(mk(String(n), n === 0 ? 'Skip (0)' : `${n} dmg → +${n} Block`, n === 0 ? ButtonStyle.Secondary : ButtonStyle.Primary));
+    await thread.send({ content: '📦 **Line of Fire** — choose damage to your carried crate(s) for +Block:', components: chunkButtonsToRows(btns) }).catch(discordCatch);
+    return true;
+  }
   let content; let buttons;
   if (id === 'spray_fire') {
     content = '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?';
@@ -800,6 +821,49 @@ export async function handleModsSubChoice(interaction, ctx) {
       await thread.send('**Negotiate** — +2 Damage applied.').catch(discordCatch);
     }
     combat.negotiateResolved = true;
+  } else if (id === 'elusive') {
+    if (choice === 'skip') {
+      await thread.send('**Elusive** — Skipped.').catch(discordCatch);
+    } else {
+      const dieIdx = parseInt(choice, 10);
+      const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
+      if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
+        atkDice[dieIdx] = { ...atkDice[dieIdx], dmg: 0, surge: 0, acc: 0 };
+        combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
+        for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
+        if (defDice && defDice.length > 0) {
+          let worstIdx = 0; let worstVal = Infinity;
+          for (let di = 0; di < defDice.length; di++) { const v = (defDice[di].block || 0) + (defDice[di].evade || 0) + (defDice[di].dodge ? 100 : 0); if (v < worstVal) { worstVal = v; worstIdx = di; } }
+          defDice[worstIdx] = { ...defDice[worstIdx], block: 0, evade: 0, dodge: false };
+          combat.defenseRoll = { block: 0, evade: 0, dodge: false };
+          for (const d of defDice) { combat.defenseRoll.block += (d.block || 0); combat.defenseRoll.evade += (d.evade || 0); if (d.dodge) combat.defenseRoll.dodge = true; }
+        }
+        await thread.send(`**Elusive** — nullified attack die #${dieIdx + 1} and the worst defense die.`).catch(discordCatch);
+      }
+    }
+    combat.elusiveResolved = true;
+  } else if (id === 'crate_block_sink') {
+    const n = Math.max(0, parseInt(choice, 10) || 0);
+    const fk = combat.target?.figureKey;
+    if (n > 0 && fk) {
+      const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+      const healthPer = rule?.healthPerCrate || 5;
+      game.lineOfFireCrateBlock = game.lineOfFireCrateBlock || {};
+      const blocks = game.lineOfFireCrateBlock[fk] || [];
+      const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
+      while (blocks.length < carry) blocks.push(0);
+      let rem = n;
+      for (let i = 0; i < blocks.length && rem > 0; i++) { const avail = Math.max(0, healthPer - (blocks[i] || 0)); const take = Math.min(avail, rem); blocks[i] = (blocks[i] || 0) + take; rem -= take; }
+      const after = blocks.filter((b) => (b || 0) < healthPer);
+      game.lineOfFireCrateBlock[fk] = after;
+      if (after.length <= 0) { delete game.lineOfFireCrateBlock[fk]; if (game.figureContraband?.[fk]) delete game.figureContraband[fk]; }
+      else if (typeof game.figureContraband[fk] === 'number') { game.figureContraband[fk] = after.length; }
+      combat.bonusBlock = (combat.bonusBlock || 0) + n;
+      await thread.send(`📦 **Line of Fire — Crate Block** — ${n} damage to crate; +${n} Block.`).catch(discordCatch);
+    } else {
+      await thread.send('📦 **Line of Fire — Crate Block** — Skipped.').catch(discordCatch);
+    }
+    combat.crateBlockSinkResolved = true;
   }
 
   if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
