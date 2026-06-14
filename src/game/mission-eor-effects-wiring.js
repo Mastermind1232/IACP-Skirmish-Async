@@ -203,22 +203,27 @@ registerMissionEorEffect('openDoorPerTerminal', async (game, ctx, opts) => {
 
   const p1T = countTerminalsControlledByPlayer(game, 1, mapId);
   const p2T = countTerminalsControlledByPlayer(game, 2, mapId);
-  let posted = false;
+  game._devaronResumeLogVars = opts?.logVars || null;
+  // Doors first (blocking, init-then-non-init). Crates are posted only AFTER
+  // the last door drains (handleDevaronDoorOpen → postDevaronCratePushPrompts)
+  // so they aren't double-posted; the round then waits for each player's
+  // "Done pushing crates" before resuming (alexanbv 2026-06-13: this path used
+  // to dead-end after doors and soft-lock the round).
   if ((p1T > 0 || p2T > 0) && postDevaronDoorButtons) {
     game.pendingDoorSelections = [];
     if (p1T > 0) game.pendingDoorSelections.push({ playerNum: 1, doorsRemaining: p1T });
     if (p2T > 0) game.pendingDoorSelections.push({ playerNum: 2, doorsRemaining: p2T });
-    game._devaronResumeLogVars = opts?.logVars || null;
     const dDoors = getMapTokensData()['devaron-garrison']?.doors || [];
     const channel = await fetchGameChannel(ctx.client, game.generalId);
     if (channel) await postDevaronDoorButtons(game, dDoors, channel, game.gameId);
-    posted = true;
+    return { pending: true };
   }
+  // No doors → straight to the crate-push step.
   if (postDevaronCratePushPrompts) {
     const channel = await fetchGameChannel(ctx.client, game.generalId);
     if (channel) await postDevaronCratePushPrompts(game, channel, game.gameId);
   }
-  return { pending: posted };
+  return { pending: (game.pendingCratePush?.length || 0) > 0 };
 });
 
 /**

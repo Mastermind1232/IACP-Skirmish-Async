@@ -266,7 +266,11 @@ export async function postDevaronDoorButtons(game, allDoors, channel, gameId, de
 export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
   const mapData = deps.getMapTokensData()['devaron-garrison'];
   const allOrigCoords = Object.values(mapData?.missionB?.positions || {}).flat().filter(Boolean).map((c) => String(c).toLowerCase());
-  if (allOrigCoords.length === 0) return;
+  if (allOrigCoords.length === 0) { delete game.pendingCratePush; return; }
+  // Track which players still owe a "Done pushing crates" press so the EoR
+  // chain knows when crate rush is finished and can resume (alexanbv
+  // 2026-06-13: without this the round soft-locked here).
+  const promptedPlayers = [];
   for (const pn of [1, 2]) {
     const pid = deps.getPlayerId(game, pn);
     const controlled = allOrigCoords.filter((origCoord) => {
@@ -274,8 +278,10 @@ export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
       return deps.getSpaceController(game, 'devaron-garrison', cur) === pn;
     });
     if (controlled.length === 0) continue;
+    promptedPlayers.push(pn);
     const rows = [];
-    for (let i = 0; i < Math.min(controlled.length, 20); i += 5) {
+    // Cap crate rows at 4 so the "Done" row always fits (Discord max 5 rows).
+    for (let i = 0; i < Math.min(controlled.length, 20) && rows.length < 4; i += 5) {
       const chunk = controlled.slice(i, i + 5);
       rows.push(new ActionRowBuilder().addComponents(
         chunk.map((origCoord) => {
@@ -287,12 +293,20 @@ export async function postDevaronCratePushPrompts(game, channel, gameId, deps) {
         })
       ));
     }
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`devaron_crate_done_${gameId}_${pn}`)
+        .setLabel('Done pushing crates')
+        .setStyle(ButtonStyle.Success)
+    ));
     await channel.send(sanitizeMentions({
-      content: `<@${pid}> — **Crate Rush (EoR)**: Push each controlled crate up to 3 spaces. Select a crate:`,
+      content: `<@${pid}> — **Crate Rush (EoR)**: Push each controlled crate up to 3 spaces, then click **Done pushing crates**:`,
       components: rows,
       allowedMentions: { users: [pid] },
     })).catch(deps.discordCatch);
   }
+  if (promptedPlayers.length > 0) game.pendingCratePush = promptedPlayers;
+  else delete game.pendingCratePush;
 }
 
 /**

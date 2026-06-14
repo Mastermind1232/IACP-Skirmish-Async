@@ -185,7 +185,7 @@ import {
 import { handleFastLearnerPickNamed, handleFastLearnerPickMara } from './fast-learner-picker.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
 import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
-import { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
+import { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
 import {
   handleFavSave, handleFavRemove, handleFavRename,
   handleFavChoose, handleFavChooseSelect,
@@ -648,6 +648,7 @@ register('defeat_cc_mode_', handleDefeatCcModePick, 'interrupts');
 // --- Map events ---
 register('devaron_door_open_', handleDevaronDoorOpen, 'mapEvents');
 register('devaron_crate_push_', handleDevaronCratePush, 'mapEvents');
+register('devaron_crate_done_', handleDevaronCrateDone, 'mapEvents');
 register('krykna_push_', handleKryknaPush, 'mapEvents');
 register('krykna_place_pick_', handleKryknaPlacePick, 'mapEvents');
 register('krykna_place_skip_', handleKryknaPlaceSkip, 'mapEvents');
@@ -904,7 +905,7 @@ export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPi
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';
 export { applyStrain, handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz } from './strain-handler.js';
-export { handleDevaronDoorOpen, handleDevaronCratePush, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
+export { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
 export { buildFavoritesListPayload, handleFavNameModal, handleFavRenameModal, handleFavListRenameModal } from './favorites.js';
 export {
   handleBleedResolve,

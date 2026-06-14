@@ -47,7 +47,13 @@ export async function handleDevaronDoorOpen(interaction, ctx) {
     if (game.pendingDoorSelections.length > 0) {
       await postDevaronDoorButtons(game, allDoors, generalCh, gameId);
     } else {
+      // Last door done → crate-push step. If nobody controls a crate, resume
+      // the EoR chain immediately; otherwise wait for each player's "Done
+      // pushing crates" press (alexanbv 2026-06-13).
       await postDevaronCratePushPrompts(game, generalCh, gameId);
+      if (!(game.pendingCratePush?.length)) {
+        await _resumeDevaronEor(game, gameId, ctx);
+      }
     }
     saveGames(game.gameId);
     return;
@@ -440,6 +446,52 @@ async function _resumeKryknaEor(game, gameId, ctx) {
   }
   // Mission EoR done → open the player EoR window after mission scoring,
   // not the DC-EoR suffix directly (alexanbv 2026-06-13).
+  const { _openEorWindowAfterMission } = await import('./round.js');
+  await _openEorWindowAfterMission(game, gameId, null, ctx, logVars);
+}
+
+/**
+ * Devaron Garrison B "Crate Rush" — a player finishes pushing their crates.
+ * Each player who controls crates gets a "Done pushing crates" button; once
+ * every such player has pressed it the mission EoR (Crate Rush) is complete
+ * and we resume the EoR chain through the shared resolver (alexanbv
+ * 2026-06-13: previously there was no way to finish, soft-locking the round).
+ */
+export async function handleDevaronCrateDone(interaction, ctx) {
+  const { getGame, saveGames, client, logGameAction, canActAsPlayer } = ctx;
+  const rest = parseCustomId(interaction.customId, 'devaron_crate_done_');
+  const lastUnderscore = rest.lastIndexOf('_');
+  const gameId = rest.substring(0, lastUnderscore);
+  const pn = Number(rest.substring(lastUnderscore + 1));
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, pn, canActAsPlayer, 'Only this player can finish their crate push.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  game.pendingCratePush = (game.pendingCratePush || []).filter((p) => p !== pn);
+  const pid = getPlayerId(game, pn);
+  await logGameAction(game, client, `📦 <@${pid}> finished pushing crates (Crate Rush).`, { allowedMentions: { users: [pid] }, phase: 'ROUND', icon: 'round' });
+  if (game.pendingCratePush.length === 0) {
+    delete game.pendingCratePush;
+    await _resumeDevaronEor(game, gameId, ctx);
+  }
+  saveGames(game.gameId);
+}
+
+/**
+ * Resume the EoR chain after Devaron Crate Rush drains — identical shape to
+ * _resumeKryknaEor / continueAfterFluctuationSwap: run any remaining mission
+ * EoR effects through the one resolver, then open the player EoR window.
+ */
+async function _resumeDevaronEor(game, gameId, ctx) {
+  const logVars = game._devaronResumeLogVars || {};
+  delete game._devaronResumeLogVars;
+  const { runRemainingMissionEorEffects } = await import('../game/mission-eor-effects.js');
+  const res = await runRemainingMissionEorEffects(game, ctx);
+  if (res.pending) {
+    if (ctx.saveGames) ctx.saveGames(game.gameId);
+    return;
+  }
   const { _openEorWindowAfterMission } = await import('./round.js');
   await _openEorWindowAfterMission(game, gameId, null, ctx, logVars);
 }

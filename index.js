@@ -4423,18 +4423,22 @@ client.on('interactionCreate', async (interaction) => {
       const game2 = getGame(gameId2);
       if (!game2) { await interaction.reply({ content: 'Game not found.', ephemeral: true }).catch(discordCatch); return; }
       const targetRaw = interaction.fields.getTextInputValue('target_coord').trim().toLowerCase();
-      const curCoord2 = String(game2.cratePositions?.[origCoord2] || origCoord2).toLowerCase();
+      // Canonical crate store is game.objectPositions['crate-<origCoord>'] (the
+      // legacy game.cratePositions store is dead — nothing reads it, so writing
+      // there made pushes a no-op). alexanbv 2026-06-13.
+      const crateId2 = `crate-${origCoord2}`;
+      const curCoord2 = String(game2.objectPositions?.[crateId2] || origCoord2).toLowerCase();
       const dist = getRange(curCoord2, targetRaw);
       if (dist === 0) { await interaction.reply({ content: `Crate stays at ${curCoord2.toUpperCase()} — no change.`, ephemeral: true }).catch(discordCatch); return; }
-      if (dist > 3) { await interaction.reply({ content: `❌ ${targetRaw.toUpperCase()} is ${dist} spaces from ${curCoord2.toUpperCase()} (max 3). Try again.`, ephemeral: true }).catch(discordCatch); return; }
+      if (dist === null || dist > 3) { await interaction.reply({ content: `❌ ${targetRaw.toUpperCase()} is ${dist ?? '?'} spaces from ${curCoord2.toUpperCase()} (max 3). Try again.`, ephemeral: true }).catch(discordCatch); return; }
       await interaction.deferReply({ ephemeral: true }).catch(discordCatch);
-      game2.cratePositions = game2.cratePositions || {};
-      game2.cratePositions[origCoord2] = targetRaw;
+      game2.objectPositions = game2.objectPositions || {};
+      game2.objectPositions[crateId2] = targetRaw;
       const ctrl = getSpaceController(game2, 'devaron-garrison', curCoord2);
       const pid2 = ctrl ? (ctrl === 1 ? game2.player1Id : game2.player2Id) : interaction.user.id;
       await logGameAction(game2, client, `📦 <@${pid2}> pushed crate from **${curCoord2.toUpperCase()}** → **${targetRaw.toUpperCase()}** (${dist} space${dist !== 1 ? 's' : ''}).`, { allowedMentions: { users: [pid2] }, phase: 'ROUND', icon: 'round' });
       await interaction.editReply({ content: `Crate pushed: ${curCoord2.toUpperCase()} → ${targetRaw.toUpperCase()} ✓` }).catch(discordCatch);
-      saveGames(game.gameId);
+      saveGames(game2.gameId);
     } else if (modalKey === 'krykna_push_modal_') {
       // customId: krykna_push_modal_{gameId}_krykna-{N}
       const rest2 = interaction.customId.replace('krykna_push_modal_', '');
