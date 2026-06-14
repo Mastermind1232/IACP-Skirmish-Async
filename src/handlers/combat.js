@@ -7302,12 +7302,14 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     }
   }
 
-  // Dodge check (now AFTER rerolls and Defensive Stance conversion)
-  if (combat.defenseRoll.dodge) {
-    await thread.send('**DODGE!** The attack misses — all damage and effects negated.');
-    await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
-    return;
-  }
+  // Dodge is NO LONGER resolved-to-miss here. Per alexanbv 2026-06-14: the
+  // dodge check belongs in the SAME step as the accuracy check
+  // (computeCombatResult, step 6) — AFTER the surge-spend window — because some
+  // surges CANCEL a Dodge (Deadly Spin / Deadly set combat.surgeCancelDodge).
+  // Short-circuiting to a miss here skipped step 5, so those surges could never
+  // be spent. Flow now always proceeds to the surge phase; computeCombatResult
+  // turns any surviving Dodge into the miss (respecting surgeCancelDodge).
+  // (Auto dodge-conversions Defensive Stance / Soresu / Lucky already ran above.)
 
   // Power-token phase already ran pre-roll (see proceedToTokenPhase); fall through.
   await proceedAfterTokens(thread, game, combat, ctx);
