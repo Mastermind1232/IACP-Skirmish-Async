@@ -1,0 +1,72 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import './combat-abilities-mods.js'; // self-registers mods-window abilities
+import { abilitiesForWindow } from './combat-timing-registry.js';
+
+function deps(effMap) {
+  return {
+    getDcEffects: () => effMap,
+    getMapData: () => ({ adjacency: {} }),
+    isWithinSpaces: () => true,
+    getFigureSize: () => [1, 1],
+  };
+}
+function game(o = {}) {
+  return {
+    player1VP: { total: 0 }, player2VP: { total: 0 },
+    figurePositions: { 1: {}, 2: {} }, figureContraband: {}, figureOrientations: {},
+    roundFigureAbilityUsed: {}, selectedMap: { id: 'm' }, selectedMission: { rules: {} }, ...o,
+  };
+}
+function combat(o = {}) {
+  return {
+    attackerFigureKey: 'Atk-1-0', attackerDcName: 'Atk', attackerPlayerNum: 1, defenderPlayerNum: 2,
+    target: { figureKey: 'Def-1-0' }, defenseRoll: { block: 0, dodge: false }, attackType: 'Melee', ...o,
+  };
+}
+const at = (side, g, c, d) => abilitiesForWindow('mods', side, g, c, d);
+const find = (list, id) => list.find((a) => a.id === id);
+
+describe('mods-window abilities via the timing registry', () => {
+  it('attacker: Spray Fire interactive; nothing when DC has no abilities', () => {
+    assert.deepEqual(at('attacker', game(), combat(), deps({ Atk: { specialAbilityIds: [] }, Def: { specialAbilityIds: [] } })), []);
+    const out = at('attacker', game(), combat(), deps({ Atk: { specialAbilityIds: ['spray_fire_heavy_stormtrooper'] }, Def: {} }));
+    assert.equal(find(out, 'spray_fire').kind, 'interactive');
+  });
+
+  it('Negotiate kind flips on defender VP (passive <2, interactive ≥2)', () => {
+    const d = deps({ Atk: { specialAbilityIds: ['negotiate_hondo'] }, Def: {} });
+    assert.equal(find(at('attacker', game({ player2VP: { total: 1 } }), combat(), d), 'negotiate').kind, 'passive');
+    assert.equal(find(at('attacker', game({ player2VP: { total: 9 } }), combat(), d), 'negotiate').kind, 'interactive');
+  });
+
+  it('Pulse Cannon (passive) only with a spent power token', () => {
+    const d = deps({ Atk: { specialAbilityIds: ['pulse_cannon_iden'] }, Def: {} });
+    assert.equal(find(at('attacker', game(), combat(), d), 'pulse_cannon'), undefined);
+    assert.equal(find(at('attacker', game(), combat({ attackerSpentPowerToken: true }), d), 'pulse_cannon').kind, 'passive');
+  });
+
+  it('defender: Agile interactive only with a Block; Defensible interactive; resolved flags suppress', () => {
+    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['agile_jet_trooper_reg', 'defensible_sc2m'] } });
+    const none = at('defender', game(), combat(), d);
+    assert.equal(find(none, 'agile'), undefined); // no block
+    assert.equal(find(none, 'defensible').kind, 'interactive');
+    const withBlock = at('defender', game(), combat({ defenseRoll: { block: 2, dodge: false } }), d);
+    assert.equal(find(withBlock, 'agile').kind, 'interactive');
+    assert.equal(find(at('defender', game(), combat({ defensibleResolved: true }), d), 'defensible'), undefined);
+  });
+
+  it('defender Dodge passives appear only on a dodge', () => {
+    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['defensive_stance', 'lucky_r2d2'] } });
+    assert.equal(find(at('defender', game(), combat(), d), 'defensive_stance'), undefined);
+    const dodge = at('defender', game(), combat({ defenseRoll: { dodge: true } }), d);
+    assert.equal(find(dodge, 'defensive_stance').kind, 'passive');
+    assert.equal(find(dodge, 'lucky').kind, 'passive');
+  });
+
+  it('attacker query returns no defender abilities and vice-versa', () => {
+    const d = deps({ Atk: { specialAbilityIds: ['spray_fire_heavy_stormtrooper'] }, Def: { specialAbilityIds: ['defensible_sc2m'] } });
+    assert.equal(find(at('attacker', game(), combat(), d), 'defensible'), undefined);
+    assert.equal(find(at('defender', game(), combat(), d), 'spray_fire'), undefined);
+  });
+});
