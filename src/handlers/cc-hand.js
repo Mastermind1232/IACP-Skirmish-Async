@@ -222,6 +222,41 @@ export async function runCcPlayTriggers(game, playerNum, deps) {
   }
 }
 
+/**
+ * The single "a CC was played" subroutine (alexanbv 2026-06-14): run on EVERY
+ * CC play, in order — (1) fire on-CC-play triggers, then (2) open the opponent's
+ * counter-window: Negation when the card cost 0, and Comm Disruption when the
+ * card's cost ≤ the opponent's friendly SPY groups. The CC's own effect is
+ * resolved by the caller (immediately for cost>0; deferred until the Negation
+ * window closes for cost-0).
+ * @param {object} deps { handChannel, logMsg }
+ */
+export async function onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg } = {}) {
+  const { logGameAction, saveGames } = ctx;
+  // (1) on-CC-play triggers
+  await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+  // (2) counter-window — Negation (cost 0)
+  if (cost === 0 && ctx.getNegationResponseButtons) {
+    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel?.id });
+    const oppNum = opponentPlayerNum(playerNum);
+    const oppHandChannel = await fetchGameChannel(interaction.client, getHandChannelId(game, oppNum));
+    if (oppHandChannel) {
+      await oppHandChannel.send(sanitizeMentions({
+        content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
+        components: [ctx.getNegationResponseButtons(gameId)],
+        allowedMentions: { users: [getPlayerId(game, oppNum)] },
+      })).catch(discordCatch);
+    }
+    await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
+    const waitingMsg = handChannel ? await withDiscordRetry(() => handChannel.send({
+      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
+    })).catch(() => null) : null;
+    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
+  }
+  // (2) counter-window — Comm Disruption (cost ≤ opponent's friendly SPY groups; gated inside)
+  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+}
+
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
   const { getGame, validateDeckLegal, sendSquadConfirmation } = ctx;
@@ -908,28 +943,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   if (cost === 0 && ctx.getNegationResponseButtons) {
-    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel.id });
-    const oppNum = opponentPlayerNum(playerNum);
-    const oppHandId = getHandChannelId(game, oppNum);
-    const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
-    if (oppHandChannel) {
-      const oppId = getPlayerId(game, oppNum);
-      await oppHandChannel.send(sanitizeMentions({
-        content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
-        components: [ctx.getNegationResponseButtons(gameId)],
-        allowedMentions: { users: [oppId] },
-      })).catch(discordCatch);
-    }
-    await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
-    const waitingMsg = await withDiscordRetry(() => handChannel.send({
-      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
-    })).catch(() => null);
-    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
+    // Cost-0: effect is DEFERRED until the Negation window closes. Record undo,
+    // then run the unified CC-play subroutine (triggers + Negation/Comms).
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
-    // C14: Comm Disruption — prompt opponent if they have it in hand
-    await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-    // On-CC-play triggers also fire for cost-0 cards (previously skipped here).
-    await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+    await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg });
     saveGames(game.gameId);
     return;
   }
@@ -951,10 +968,9 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   if (ctx.pushUndo) {
     ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
   }
-  // C14: Comm Disruption — prompt opponent if they have it in hand
-  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-  // On-CC-play triggers (Hunt Dissent / Adapt) via the unified subroutine.
-  await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+  // Cost>0: effect already resolved above. Run the unified CC-play subroutine
+  // (triggers + counter-window; Negation is skipped since cost>0).
+  await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg });
   saveGames(game.gameId);
 }
 
