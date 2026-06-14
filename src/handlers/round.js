@@ -115,20 +115,23 @@ export async function handleEndEndOfRound(interaction, ctx) {
     const otherNum = 3 - initNum;
     const otherZone = getPlayerZoneLabel(game, otherId);
     await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+    // Step 5: resolve the NON-init player's DC end-of-round effects now, so
+    // they interleave with that player's CC plays in their own window turn
+    // (alexanbv 2026-06-13).
+    await _runDcEorForPlayer(game, gameId, interaction, ctx, otherNum);
     await updateHandChannelMessages(game, client);
     saveGames(game.gameId);
     return;
   }
   game.endOfRoundWhoseTurn = null;
 
-  // alexanbv 2026-06-13: both players have taken their EoR window turn (init
-  // then non-init), AFTER the status-phase prefix (draw/ready/mission) and
-  // mission scoring already ran. Now run the suffix — DC EoR effects + the
-  // round tail / initiative swap into the next round. (Previously this went
-  // through a post_end_of_round gate into the full status phase, which is now
-  // run up front at pre_end_of_round.)
+  // alexanbv 2026-06-13: both players have taken their EoR window turn (step 4
+  // init, step 5 non-init), AFTER the status-phase prefix (draw/ready/mission)
+  // and mission scoring. Each player's DC EoR effects already resolved during
+  // their own window turn (_runDcEorForPlayer). Now run the round tail only —
+  // initiative swap → status SOR gate → next round.
   if (interaction?.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await _runDcEorAndContinue(game, gameId, interaction, ctx, game._eorSuffixLogVars || {});
+  await _runEorTailAndContinue(game, gameId, interaction, ctx, game._eorSuffixLogVars || {});
   delete game._eorSuffixLogVars;
   saveGames(game.gameId);
 }
@@ -394,10 +397,12 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
  * that finishes the mission EoR rules — the linear status-phase flow AND
  * each async mission-effect resume (Krykna, Devaron, fluctuation, reveal) —
  * funnels here. It opens the player End-of-Round window (init player first),
- * which is steps 4-5 of the status phase, AFTER mission scoring (step 3).
- * The window's "End EoR window" pass (handleEndEndOfRound → post_end_of_round
- * gate) then runs the suffix (_runDcEorAndContinue: DC EoR effects + tail).
- * logVars are stashed for that suffix.
+ * which is steps 4-5 of the status phase, AFTER mission scoring (step 3), and
+ * resolves the INIT player's DC EoR effects (_runDcEorForPlayer) so they
+ * interleave with that player's CC plays. The non-init player's DC EoR runs
+ * when init closes their window (handleEndEndOfRound); the round tail
+ * (_runEorTailAndContinue) runs when the non-init player closes theirs.
+ * logVars are stashed (game._eorSuffixLogVars) for that tail.
  */
 export async function _openEorWindowAfterMission(game, gameId, interaction, ctx, logVars) {
   const { logGameAction, client, updateHandChannelMessages, getInitiativePlayerZoneLabel, saveGames } = ctx;
@@ -408,6 +413,11 @@ export async function _openEorWindowAfterMission(game, gameId, interaction, ctx,
   if (logGameAction) {
     await logGameAction(game, client, `**End of Round** — Mission rules resolved ✓. <@${game.initiativePlayerId}> (${_eorInitZone}Initiative) — play any end-of-round effects or CCs in any order, then click **End 'End of Round' window** in your Hand. Then <@${_eorOtherPlayerId}>.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [game.initiativePlayerId, _eorOtherPlayerId] } });
   }
+  // Step 4: resolve the INIT player's DC end-of-round effects now (auto
+  // effects fire, interactive prompts post into their window) so they
+  // interleave with the init player's CC plays (alexanbv 2026-06-13).
+  const _eorInitNum = game.initiativePlayerId === game.player1Id ? 1 : 2;
+  await _runDcEorForPlayer(game, gameId, interaction, ctx, _eorInitNum);
   if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   if (saveGames) saveGames(game.gameId);
 }
@@ -419,22 +429,28 @@ export async function _openEorWindowAfterMission(game, gameId, interaction, ctx,
  * always runs after mission EoR per CRR, even on rounds where the thug
  * picker intercepts the inline flow.
  */
-export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVars) {
+export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPlayerNum) {
   const {
     logGameAction, client, saveGames,
     dcMessageMeta, dcHealthState, isDepletedRemovedFromGame,
     isFigureInDeploymentZone, checkWinConditions,
-    postFluctuationSwapButtons,
   } = ctx;
-  const { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines } = logVars;
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
+  // alexanbv 2026-06-13: a player's DC EoR effects resolve during THEIR own
+  // window turn (step 4 = init player, step 5 = non-init), interleaved with
+  // their CC plays — NOT all-at-once after both players pass. _eorPlayers
+  // scopes every block below to the single active player. The round tail
+  // (initiative swap → next round) runs separately, after the non-init player
+  // closes their window (see handleEndEndOfRound).
+  const _eorPlayers = [_eorPlayerNum];
 
   // DC ability EoR effects (run after mission EoR per CRR)
   const dcEffects = getDcEffects();
   // Regenerate (Bossk): recover 2 HP and discard Bleed at end of round
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
+    if (meta.playerNum !== _eorPlayerNum) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;
     const eff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (!(eff?.specialAbilityIds || []).includes('regenerate_bossk')) continue;
@@ -458,6 +474,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // Hardy (Trandoshan Hunter Elite): discard all HARMFUL conditions at end of round
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta.gameId !== gameId) continue;
+    if (meta.playerNum !== _eorPlayerNum) continue;
     if (isDepletedRemovedFromGame(game, msgId)) continue;
     const _hardyEff = dcEffects[meta.dcName] || dcEffects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (!(_hardyEff?.passives || []).includes('Hardy')) continue;
@@ -477,7 +494,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // What's Yours is Mine (Hondo): at end of round, if in opponent's deployment zone, steal 2 VP
   {
     const _wymEff = getDcEffects() || {};
-    for (const pn of [1, 2]) {
+    for (const pn of _eorPlayers) {
       const dcList = getDcList(game, pn) || [];
       const msgIds = getDcMessageIds(game, pn) || [];
       for (let i = 0; i < dcList.length; i++) {
@@ -525,6 +542,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // Self-Destruct Probe: prompt each player who has a live Probe Droid DC
   const _sdpEffs = getDcEffects();
   for (const [_pNum, _getDcIds, _getDcListF] of [[1, () => game.p1DcMessageIds, () => game.p1DcList], [2, () => game.p2DcMessageIds, () => game.p2DcList]]) {
+    if (_pNum !== _eorPlayerNum) continue;
     const _sdpIds = _getDcIds() || [];
     const _sdpList = _getDcListF() || [];
     for (let _i = 0; _i < _sdpIds.length; _i++) {
@@ -549,7 +567,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // Apply end-of-round self damage (e.g. Blaze of Glory)
   const eorSelfDamage = game.endOfRoundSelfDamage;
   if (eorSelfDamage && typeof eorSelfDamage === 'object') {
-    for (const playerNum of [1, 2]) {
+    for (const playerNum of _eorPlayers) {
       const entry = eorSelfDamage[playerNum];
       if (!entry || typeof entry.damage !== 'number') continue;
       const msgId = entry.msgId;
@@ -598,6 +616,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // Second Chance: end-of-round — recover 2 Damage for any DC that still has Second Chance, then discard
   if (game.secondChanceDcMsgId && typeof game.secondChanceDcMsgId === 'object') {
     for (const [msgId, pn] of Object.entries(game.secondChanceDcMsgId)) {
+      if (Number(pn) !== _eorPlayerNum) continue;
       const meta = dcMessageMeta.get(msgId);
       if (!meta) continue;
       const healthState = dcHealthState.get(msgId);
@@ -622,6 +641,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   if (game.adrenalineBonuses && typeof game.adrenalineBonuses === 'object') {
     for (const [msgId, info] of Object.entries(game.adrenalineBonuses)) {
       const pn = info.playerNum;
+      if (Number(pn) !== _eorPlayerNum) continue;
       if (!dcMessageMeta.get(msgId)) continue;
       const healthState = dcHealthState.get(msgId);
       if (!healthState) continue;
@@ -680,7 +700,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
     game.adrenalineBonuses = {};
   }
   // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
-  for (const pn of [1, 2]) {
+  for (const pn of _eorPlayers) {
     const _swMsgIds = getDcMessageIds(game, pn) || [];
     const _swDcList = getDcList(game, pn) || [];
     const _swAtts = getDcAttachments(game, pn) || {};
@@ -706,7 +726,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // flag (`game.roundFigureAbilityUsed[\`${msgId}_rogueSmugglerEor\`]`),
   // not via the deprecated exhaust mechanic. Round-flag is wiped at
   // start of the next round by the standard round-reset sweep.
-  for (const pn of [1, 2]) {
+  for (const pn of _eorPlayers) {
     const _rsMsgIds = getDcMessageIds(game, pn) || [];
     const _rsDcList = getDcList(game, pn) || [];
     const _rsAtts = getDcAttachments(game, pn) || {};
@@ -732,7 +752,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
     }
   }
   // Driven by Hatred (Darth Vader): end of round, move up to 2 spaces, then may use Force Choke or perform an attack (-1 die)
-  for (const pn of [1, 2]) {
+  for (const pn of _eorPlayers) {
     const _dbhMsgIds = getDcMessageIds(game, pn) || [];
     const _dbhDcList = getDcList(game, pn) || [];
     const _dbhAtts = getDcAttachments(game, pn) || {};
@@ -760,7 +780,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   const _svMapSpaces = game.selectedMap?.id ? getMapData?.(game.selectedMap.id) : null;
   if (_svMapSpaces?.exterior) {
     const _svExterior = new Set((Array.isArray(_svMapSpaces.exterior) ? _svMapSpaces.exterior : []).map(s => String(s).toLowerCase()));
-    for (const pn of [1, 2]) {
+    for (const pn of _eorPlayers) {
       const _svMsgIds = getDcMessageIds(game, pn) || [];
       const _svDcList = getDcList(game, pn) || [];
       const _svAtts = getDcAttachments(game, pn) || {};
@@ -788,7 +808,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
   // [Black Market] SU: at end of round, if owner has a friendly SMUGGLER, reveal top CC and offer 3 choices
   {
     const _bmEffs = getDcEffects();
-    for (const pn of [1, 2]) {
+    for (const pn of _eorPlayers) {
       const _bmDcList = getDcList(game, pn) || [];
       const _bmMsgIds = getDcMessageIds(game, pn) || [];
       for (let i = 0; i < _bmDcList.length; i++) {
@@ -860,7 +880,7 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
     }
   }
   // [Doubt] SU: at end of round, choose hostile figure, discard 1 condition or Power Token
-  for (const pn of [1, 2]) {
+  for (const pn of _eorPlayers) {
     const _dbtDcList = getDcList(game, pn) || [];
     const _dbtMsgIds = getDcMessageIds(game, pn) || [];
     for (let i = 0; i < _dbtDcList.length; i++) {
@@ -899,15 +919,28 @@ export async function _runDcEorAndContinue(game, gameId, interaction, ctx, logVa
       });
     }
   }
-  // NPC Krykna push+damage phase (Chopper Base A): build push queue here; damage runs after all pushes (in modal handler)
+  // NOTE: Hardy + Regenerate already processed above. Fluctuation swap gate
+  // lives in the mission EoR phase (src/game/mission-eor-effects-wiring.js),
+  // which runs BEFORE this per-player DC EoR. The round tail (initiative swap
+  // → next round) is NOT run here — it fires once, after the non-init player
+  // closes their window (handleEndEndOfRound → _runEorTailAndContinue).
+  if (saveGames) saveGames(game.gameId);
+}
 
-  // NOTE: Hardy + Regenerate already processed above (lines 103-154). Duplicate block removed.
-
-  // Fluctuation swap gate moved to mission EoR phase (registered in
-  // src/game/mission-eor-effects-wiring.js) — runs BEFORE DC EoR per CRR.
-
-  await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx,
-    { p1Terminals, p1HasRHC, p2Terminals, p2HasRHC, p1DrawCount, p2DrawCount, hadCutLines });
+/**
+ * The end-of-round tail: initiative swap → status-phase log → mission SOR
+ * gate → next round. Runs ONCE, after BOTH players have closed their EoR
+ * window (step 5 complete). Pulls the captured status-phase logVars stashed
+ * by _openEorWindowAfterMission.
+ */
+export async function _runEorTailAndContinue(game, gameId, interaction, ctx, logVars) {
+  const v = logVars || {};
+  await _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, {
+    p1Terminals: v.p1Terminals, p1HasRHC: v.p1HasRHC,
+    p2Terminals: v.p2Terminals, p2HasRHC: v.p2HasRHC,
+    p1DrawCount: v.p1DrawCount, p2DrawCount: v.p2DrawCount,
+    hadCutLines: v.hadCutLines,
+  });
 }
 
 /**
@@ -1068,7 +1101,8 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
  * EoR effect (registered in src/game/mission-eor-effects-wiring.js) —
  * runs BEFORE DC EoR per CRR. Drain handler resumes via
  * runRemainingMissionEorEffects (any subsequent pending mission EoR
- * effects) followed by _runDcEorAndContinue (DC EoR + tail).
+ * effects) followed by _openEorWindowAfterMission (opens the player window
+ * and resolves the init player's DC EoR effects).
  */
 export async function continueAfterFluctuationSwap(game, gameId, interaction, ctx) {
   const logVars = game._fluctuationResumeLogVars || game._pendingStatusPhaseLog || {};

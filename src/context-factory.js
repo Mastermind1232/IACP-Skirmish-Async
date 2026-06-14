@@ -331,6 +331,11 @@ const CONTEXT_GROUPS = {
     'getSpaceController', 'postKryknaPlaceButtons',
     'postArmsDistributionPrompt', 'grantPowerTokens',
     'postPrototypeMovePrompt', 'getMapData', 'getMapRegistry', 'filterMapSpacesByBounds',
+    // DC EoR deps: the Krykna mission resume funnels through
+    // _openEorWindowAfterMission → _runDcEorForPlayer (alexanbv 2026-06-13),
+    // which needs these to resolve the init player's DC end-of-round effects.
+    'dcMessageMeta', 'dcHealthState', 'isDepletedRemovedFromGame',
+    'isFigureInDeploymentZone', 'checkWinConditions',
   ],
 
   postDeploy: [
