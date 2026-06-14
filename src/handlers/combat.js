@@ -617,6 +617,128 @@ const COMBAT_RESOLVERS = {
       combat.agileJetTrooperApplied = true;
     },
   },
+  call_the_shots: {
+    prompt: () => ({ content: '**Call the Shots** — apply +2 Accuracy, +1 Hit, or +1 Surge?', buttons: [['acc', '+2 Accuracy'], ['hit', '+1 Hit'], ['surge', '+1 Surge'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { game, combat, thread }) => {
+      const fk = _findModsFigKey('call_the_shots', game, combat);
+      if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; }
+      if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; thread?.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
+      else if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
+      else if (choice === 'surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
+      else thread?.send('**Call the Shots** — Skipped.').catch(discordCatch);
+      combat.callTheShotsResolved = true;
+    },
+  },
+  get_down: {
+    prompt: () => ({ content: '**Get Down** — apply +1 Block or +1 Evade?', buttons: [['block', '+1 Block'], ['evade', '+1 Evade'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { game, combat, thread }) => {
+      const fk = _findModsFigKey('get_down', game, combat);
+      if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_get_down`] = true; }
+      if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; thread?.send('**Get Down** — Applied +1 Block.').catch(discordCatch); }
+      else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; thread?.send('**Get Down** — Applied +1 Evade.').catch(discordCatch); }
+      else thread?.send('**Get Down** — Skipped.').catch(discordCatch);
+      combat.getDownResolved = true;
+    },
+  },
+  heavy_repeater: {
+    prompt: () => ({ content: '**Heavy Repeater** — suffer 1 Strain for a bonus?', buttons: [['hit', '+1 Hit (1 Strain)'], ['blast', 'Blast 2 (1 Strain)'], ['acc', '+3 Acc (1 Strain)'], ['skip', 'Skip', 'secondary']] }),
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      let strain = false;
+      if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; strain = true; thread?.send('**Heavy Repeater** — +1 Hit (1 Strain).').catch(discordCatch); }
+      else if (choice === 'blast') { combat.blastDamage = Math.max(combat.blastDamage || 0, 2); strain = true; thread?.send('**Heavy Repeater** — Blast 2 (1 Strain).').catch(discordCatch); }
+      else if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3; strain = true; thread?.send('**Heavy Repeater** — +3 Accuracy (1 Strain).').catch(discordCatch); }
+      else thread?.send('**Heavy Repeater** — Skipped.').catch(discordCatch);
+      combat.heavyRepeaterResolved = true;
+      if (strain) await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: 'Heavy Repeater' });
+    },
+  },
+  query: {
+    prompt: () => ({ content: '🤖 **Query (HK-47)** — become Bleeding (avoid +1 Damage) or accept +1 Damage?', buttons: [['bleed', 'Become Bleeding'], ['accept', 'Accept +1 Damage', 'danger']] }),
+    apply: async (choice, { game, combat, thread }) => {
+      if (choice === 'bleed') {
+        if (combat.target?.figureKey) { const { applyCondition } = await import('../game/conditions.js'); applyCondition(game, combat.target.figureKey, 'Bleed'); }
+        thread?.send('🩸 **Query** — Defender became Bleeding (no damage bonus).').catch(discordCatch);
+      } else { combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('💢 **Query** — Defender accepted +1 Damage.').catch(discordCatch); }
+      combat.queryResolved = true; delete combat.queryNeedsPrompt;
+    },
+  },
+  negotiate: {
+    // Hondo's attacker ability; the DEFENDER decides pay-or-accept (mention them).
+    prompt: ({ game, combat }) => {
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      return { content: `<@${game[`player${defPN}Id`]}> **Negotiate (Hondo)** — pay **2 VP** to avoid +2 Damage, or accept +2 Damage:`, buttons: [['pay', 'Pay 2 VP'], ['accept', 'Accept +2 Damage', 'danger']], mentionUserId: game[`player${defPN}Id`] };
+    },
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      if (choice === 'pay') { deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2); thread?.send('**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage.').catch(discordCatch); if (ctx?.checkWinConditions) await ctx.checkWinConditions(game, ctx.client ?? thread?.client); }
+      else { combat.bonusHits = (combat.bonusHits || 0) + 2; thread?.send('**Negotiate** — +2 Damage applied.').catch(discordCatch); }
+      combat.negotiateResolved = true;
+    },
+  },
+  elusive: {
+    prompt: ({ combat }) => {
+      const atkDice = combat.attackDiceResults || [];
+      const buttons = atkDice.map((d, i) => [String(i), `#${i + 1} ${d.color}: ${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A`.slice(0, 80)]);
+      buttons.push(['skip', 'Skip', 'secondary']);
+      return { content: '**Elusive** — choose an attack die to nullify (the worst defense die is also nullified):', buttons };
+    },
+    apply: (choice, { combat, thread }) => {
+      if (choice !== 'skip') {
+        const dieIdx = parseInt(choice, 10);
+        const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
+        if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
+          atkDice[dieIdx] = { ...atkDice[dieIdx], dmg: 0, surge: 0, acc: 0 };
+          combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
+          for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
+          if (defDice && defDice.length > 0) {
+            let wi = 0; let wv = Infinity;
+            for (let di = 0; di < defDice.length; di++) { const v = (defDice[di].block || 0) + (defDice[di].evade || 0) + (defDice[di].dodge ? 100 : 0); if (v < wv) { wv = v; wi = di; } }
+            defDice[wi] = { ...defDice[wi], block: 0, evade: 0, dodge: false };
+            combat.defenseRoll = { block: 0, evade: 0, dodge: false };
+            for (const d of defDice) { combat.defenseRoll.block += (d.block || 0); combat.defenseRoll.evade += (d.evade || 0); if (d.dodge) combat.defenseRoll.dodge = true; }
+          }
+          thread?.send(`**Elusive** — nullified attack die #${dieIdx + 1} and the worst defense die.`).catch(discordCatch);
+        }
+      } else thread?.send('**Elusive** — Skipped.').catch(discordCatch);
+      combat.elusiveResolved = true;
+    },
+  },
+  crate_block_sink: {
+    prompt: ({ game, combat }) => {
+      const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+      const fk = combat.target?.figureKey;
+      const healthPer = rule?.healthPerCrate || 5;
+      const blocks = [...(game.lineOfFireCrateBlock?.[fk] || [])];
+      const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
+      while (blocks.length < carry) blocks.push(0);
+      const remHp = blocks.slice(0, carry).reduce((s, b) => s + Math.max(0, healthPer - (b || 0)), 0);
+      const max = Math.min(rule?.maxBlockPerAttack || 3, remHp);
+      const buttons = [];
+      for (let n = 0; n <= max; n++) buttons.push([String(n), n === 0 ? 'Skip (0)' : `${n} dmg → +${n} Block`, n === 0 ? 'secondary' : undefined]);
+      return { content: '📦 **Line of Fire** — choose damage to your carried crate(s) for +Block:', buttons };
+    },
+    apply: (choice, { game, combat, thread }) => {
+      const n = Math.max(0, parseInt(choice, 10) || 0);
+      const fk = combat.target?.figureKey;
+      if (n > 0 && fk) {
+        const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
+        const healthPer = rule?.healthPerCrate || 5;
+        game.lineOfFireCrateBlock = game.lineOfFireCrateBlock || {};
+        const blocks = game.lineOfFireCrateBlock[fk] || [];
+        const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
+        while (blocks.length < carry) blocks.push(0);
+        let rem = n;
+        for (let i = 0; i < blocks.length && rem > 0; i++) { const avail = Math.max(0, healthPer - (blocks[i] || 0)); const take = Math.min(avail, rem); blocks[i] = (blocks[i] || 0) + take; rem -= take; }
+        const after = blocks.filter((b) => (b || 0) < healthPer);
+        game.lineOfFireCrateBlock[fk] = after;
+        if (after.length <= 0) { delete game.lineOfFireCrateBlock[fk]; if (game.figureContraband?.[fk]) delete game.figureContraband[fk]; }
+        else if (typeof game.figureContraband[fk] === 'number') { game.figureContraband[fk] = after.length; }
+        combat.bonusBlock = (combat.bonusBlock || 0) + n;
+        thread?.send(`📦 **Line of Fire — Crate Block** — ${n} damage to crate; +${n} Block.`).catch(discordCatch);
+      } else thread?.send('📦 **Line of Fire — Crate Block** — Skipped.').catch(discordCatch);
+      combat.crateBlockSinkResolved = true;
+    },
+  },
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
@@ -665,12 +787,10 @@ export async function handleModsPick(interaction, ctx) {
         await _driveModsGatePath(thread, game, combat, ctx);
       }
     } else {
-      // Legacy fallback for abilities not yet converted to a resolver.
-      const posted = await _postModsSubChoice(pick, side, thread, game, combat);
-      if (!posted) {
-        recordModsChoice(combat.modsGate, side, pick);
-        await _driveModsGatePath(thread, game, combat, ctx);
-      }
+      // Unknown id (no resolver registered) — record + skip so the gate never
+      // stalls. (Every combat ability should register a resolver.)
+      recordModsChoice(combat.modsGate, side, pick);
+      await _driveModsGatePath(thread, game, combat, ctx);
     }
   }
   saveGames?.(game.gameId);
@@ -713,80 +833,6 @@ function _findModsFigKey(id, game, combat) {
 }
 
 /**
- * Post a picked interactive mods ability's sub-choice prompt (gate path).
- * Returns true if posted, false if the ability isn't wired into the gate path
- * yet (caller then records+skips). Covered: spray_fire, defensible, agile —
- * the abilities whose effect needs no figure-key lookup. Get Down / Call the
- * Shots (need a friendly figure key) and Query / CBS / Heavy Repeater / Elusive
- * / Negotiate are the next coverage step.
- */
-async function _postModsSubChoice(id, side, thread, game, combat) {
-  const gid = game.gameId;
-  const mk = (choice, label, style = ButtonStyle.Primary) =>
-    new ButtonBuilder().setCustomId(`combat_modsub_${gid}_${choice}_${id}`).setLabel(label).setStyle(style);
-  // Negotiate is Hondo's (attacker) ability but the DEFENDER decides pay-or-accept,
-  // so it's posted to the defender with a mention (special-cased).
-  if (id === 'negotiate') {
-    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-    const defId = game[`player${defPN}Id`];
-    await thread.send(sanitizeMentions({
-      content: `<@${defId}> **Negotiate (Hondo)** — pay **2 VP** to avoid +2 Damage, or accept +2 Damage:`,
-      components: [new ActionRowBuilder().addComponents(mk('pay', 'Pay 2 VP'), mk('accept', 'Accept +2 Damage', ButtonStyle.Danger))],
-      allowedMentions: { users: [defId] },
-    })).catch(discordCatch);
-    return true;
-  }
-  if (id === 'elusive') {
-    const atkDice = combat.attackDiceResults || [];
-    const btns = atkDice.map((d, i) => mk(String(i), `#${i + 1} ${d.color}: ${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A`.slice(0, 80)));
-    btns.push(mk('skip', 'Skip', ButtonStyle.Secondary));
-    await thread.send({ content: '**Elusive** — choose an attack die to nullify (the worst defense die is also nullified):', components: chunkButtonsToRows(btns) }).catch(discordCatch);
-    return true;
-  }
-  if (id === 'crate_block_sink') {
-    const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
-    const fk = combat.target?.figureKey;
-    const healthPer = rule?.healthPerCrate || 5;
-    const blocks = [...(game.lineOfFireCrateBlock?.[fk] || [])];
-    const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
-    while (blocks.length < carry) blocks.push(0);
-    const remHp = blocks.slice(0, carry).reduce((s, b) => s + Math.max(0, healthPer - (b || 0)), 0);
-    const max = Math.min(rule?.maxBlockPerAttack || 3, remHp);
-    const btns = [];
-    for (let n = 0; n <= max; n++) btns.push(mk(String(n), n === 0 ? 'Skip (0)' : `${n} dmg → +${n} Block`, n === 0 ? ButtonStyle.Secondary : ButtonStyle.Primary));
-    await thread.send({ content: '📦 **Line of Fire** — choose damage to your carried crate(s) for +Block:', components: chunkButtonsToRows(btns) }).catch(discordCatch);
-    return true;
-  }
-  let content; let buttons;
-  if (id === 'spray_fire') {
-    content = '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?';
-    buttons = [mk('apply', 'Apply (-3 Acc, +1 Surge)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'defensible') {
-    content = '**Defensible** — apply +1 Block or +1 Evade?';
-    buttons = [mk('block', '+1 Block'), mk('evade', '+1 Evade'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'agile') {
-    content = '**Agile** — convert 1 Block to 1 Evade?';
-    buttons = [mk('apply', 'Apply (Block→Evade)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'call_the_shots') {
-    content = '**Call the Shots** — apply +2 Accuracy, +1 Hit, or +1 Surge?';
-    buttons = [mk('acc', '+2 Accuracy'), mk('hit', '+1 Hit'), mk('surge', '+1 Surge'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'get_down') {
-    content = '**Get Down** — apply +1 Block or +1 Evade?';
-    buttons = [mk('block', '+1 Block'), mk('evade', '+1 Evade'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'heavy_repeater') {
-    content = '**Heavy Repeater** — suffer 1 Strain for a bonus?';
-    buttons = [mk('hit', '+1 Hit (1 Strain)'), mk('blast', 'Blast 2 (1 Strain)'), mk('acc', '+3 Acc (1 Strain)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
-  } else if (id === 'query') {
-    content = '🤖 **Query (HK-47)** — become Bleeding (avoid +1 Damage) or accept +1 Damage?';
-    buttons = [mk('bleed', 'Become Bleeding'), mk('accept', 'Accept +1 Damage', ButtonStyle.Danger)];
-  } else {
-    return false;
-  }
-  await thread.send({ content, components: [new ActionRowBuilder().addComponents(buttons)] }).catch(discordCatch);
-  return true;
-}
-
-/**
  * Resolve a gate-path mods sub-choice (combat_modsub_<gameId>_<choice>_<id>):
  * apply the effect, record the ability on the gate, re-drive. Self-contained —
  * does not touch the legacy handleCombatPassive. (Gated off by useModsGate.)
@@ -821,119 +867,6 @@ export async function handleModsSubChoice(interaction, ctx) {
     return;
   }
 
-  if (id === 'spray_fire') {
-    if (choice === 'apply') {
-      const bump = applySprayFire(combat);
-      combat.bonusAccuracy = bump.bonusAccuracy;
-      combat.surgeBonus = bump.surgeBonus;
-      await thread.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.').catch(discordCatch);
-    } else {
-      await thread.send('**Spray Fire** — Skipped.').catch(discordCatch);
-    }
-    combat.sprayFireResolved = true;
-  } else if (id === 'defensible') {
-    if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; await thread.send('**Defensible** — Applied +1 Block.').catch(discordCatch); }
-    else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; await thread.send('**Defensible** — Applied +1 Evade.').catch(discordCatch); }
-    else { await thread.send('**Defensible** — Skipped.').catch(discordCatch); }
-    combat.defensibleResolved = true;
-  } else if (id === 'agile') {
-    if (choice === 'apply') {
-      const conv = applyAgileConversion({ block: combat.defenseRoll?.block, bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
-      if (conv.applied) { combat.bonusBlock = conv.bonusBlock; combat.bonusEvade = conv.bonusEvade; await thread.send('**Agile** — Converted 1 Block to 1 Evade.').catch(discordCatch); }
-      else { await thread.send('**Agile** — No Block available to convert.').catch(discordCatch); }
-    } else {
-      await thread.send('**Agile** — Skipped.').catch(discordCatch);
-    }
-    combat.agileJetTrooperApplied = true;
-  } else if (id === 'call_the_shots') {
-    const fk = _findModsFigKey('call_the_shots', game, combat);
-    if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; }
-    if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; await thread.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
-    else if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; await thread.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
-    else if (choice === 'surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; await thread.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
-    else { await thread.send('**Call the Shots** — Skipped.').catch(discordCatch); }
-    combat.callTheShotsResolved = true;
-  } else if (id === 'get_down') {
-    const fk = _findModsFigKey('get_down', game, combat);
-    if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_get_down`] = true; }
-    if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; await thread.send('**Get Down** — Applied +1 Block.').catch(discordCatch); }
-    else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; await thread.send('**Get Down** — Applied +1 Evade.').catch(discordCatch); }
-    else { await thread.send('**Get Down** — Skipped.').catch(discordCatch); }
-    combat.getDownResolved = true;
-  } else if (id === 'heavy_repeater') {
-    let strain = false;
-    if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; strain = true; await thread.send('**Heavy Repeater** — +1 Hit (1 Strain).').catch(discordCatch); }
-    else if (choice === 'blast') { combat.blastDamage = Math.max(combat.blastDamage || 0, 2); strain = true; await thread.send('**Heavy Repeater** — Blast 2 (1 Strain).').catch(discordCatch); }
-    else if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3; strain = true; await thread.send('**Heavy Repeater** — +3 Accuracy (1 Strain).').catch(discordCatch); }
-    else { await thread.send('**Heavy Repeater** — Skipped.').catch(discordCatch); }
-    combat.heavyRepeaterResolved = true;
-    if (strain) {
-      await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: 'Heavy Repeater' });
-    }
-  } else if (id === 'query') {
-    if (choice === 'bleed') {
-      if (combat.target?.figureKey) { const { applyCondition } = await import('../game/conditions.js'); applyCondition(game, combat.target.figureKey, 'Bleed'); }
-      await thread.send('🩸 **Query** — Defender became Bleeding (no damage bonus).').catch(discordCatch);
-    } else {
-      combat.bonusHits = (combat.bonusHits || 0) + 1;
-      await thread.send('💢 **Query** — Defender accepted +1 Damage.').catch(discordCatch);
-    }
-    combat.queryResolved = true; delete combat.queryNeedsPrompt;
-  } else if (id === 'negotiate') {
-    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-    if (choice === 'pay') {
-      deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2);
-      await thread.send('**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage.').catch(discordCatch);
-      if (checkWinConditions) await checkWinConditions(game, client);
-    } else {
-      combat.bonusHits = (combat.bonusHits || 0) + 2;
-      await thread.send('**Negotiate** — +2 Damage applied.').catch(discordCatch);
-    }
-    combat.negotiateResolved = true;
-  } else if (id === 'elusive') {
-    if (choice === 'skip') {
-      await thread.send('**Elusive** — Skipped.').catch(discordCatch);
-    } else {
-      const dieIdx = parseInt(choice, 10);
-      const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
-      if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
-        atkDice[dieIdx] = { ...atkDice[dieIdx], dmg: 0, surge: 0, acc: 0 };
-        combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
-        for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
-        if (defDice && defDice.length > 0) {
-          let worstIdx = 0; let worstVal = Infinity;
-          for (let di = 0; di < defDice.length; di++) { const v = (defDice[di].block || 0) + (defDice[di].evade || 0) + (defDice[di].dodge ? 100 : 0); if (v < worstVal) { worstVal = v; worstIdx = di; } }
-          defDice[worstIdx] = { ...defDice[worstIdx], block: 0, evade: 0, dodge: false };
-          combat.defenseRoll = { block: 0, evade: 0, dodge: false };
-          for (const d of defDice) { combat.defenseRoll.block += (d.block || 0); combat.defenseRoll.evade += (d.evade || 0); if (d.dodge) combat.defenseRoll.dodge = true; }
-        }
-        await thread.send(`**Elusive** — nullified attack die #${dieIdx + 1} and the worst defense die.`).catch(discordCatch);
-      }
-    }
-    combat.elusiveResolved = true;
-  } else if (id === 'crate_block_sink') {
-    const n = Math.max(0, parseInt(choice, 10) || 0);
-    const fk = combat.target?.figureKey;
-    if (n > 0 && fk) {
-      const rule = game?.selectedMission?.rules?.persistent?.crateBlockSink;
-      const healthPer = rule?.healthPerCrate || 5;
-      game.lineOfFireCrateBlock = game.lineOfFireCrateBlock || {};
-      const blocks = game.lineOfFireCrateBlock[fk] || [];
-      const carry = typeof game.figureContraband?.[fk] === 'number' ? game.figureContraband[fk] : (game.figureContraband?.[fk] ? 1 : 0);
-      while (blocks.length < carry) blocks.push(0);
-      let rem = n;
-      for (let i = 0; i < blocks.length && rem > 0; i++) { const avail = Math.max(0, healthPer - (blocks[i] || 0)); const take = Math.min(avail, rem); blocks[i] = (blocks[i] || 0) + take; rem -= take; }
-      const after = blocks.filter((b) => (b || 0) < healthPer);
-      game.lineOfFireCrateBlock[fk] = after;
-      if (after.length <= 0) { delete game.lineOfFireCrateBlock[fk]; if (game.figureContraband?.[fk]) delete game.figureContraband[fk]; }
-      else if (typeof game.figureContraband[fk] === 'number') { game.figureContraband[fk] = after.length; }
-      combat.bonusBlock = (combat.bonusBlock || 0) + n;
-      await thread.send(`📦 **Line of Fire — Crate Block** — ${n} damage to crate; +${n} Block.`).catch(discordCatch);
-    } else {
-      await thread.send('📦 **Line of Fire — Crate Block** — Skipped.').catch(discordCatch);
-    }
-    combat.crateBlockSinkResolved = true;
-  }
 
   if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
   await _driveModsGatePath(thread, game, combat, ctx);
