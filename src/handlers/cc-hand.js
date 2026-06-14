@@ -193,6 +193,35 @@ async function promptCommDisruption(game, gameId, playerNum, card, client, logGa
   }
 }
 
+/**
+ * Unified "a CC was played" trigger subroutine (alexanbv 2026-06-14): fires
+ * every on-CC-play ability for the player who just played, regardless of the
+ * card's cost. Previously these fired only on the cost>0 path, so a cost-0 CC
+ * never triggered Kallus Hunt Dissent / Blaise Adapt — this consolidates them
+ * into one call used by both paths. (The Negation/Comm-Disruption counter-
+ * window is the other half of the CC-play subroutine — see the cost-gated
+ * Negation block + promptCommDisruption.)
+ * @param {object} game
+ * @param {number} playerNum  the player who played the CC
+ * @param {object} deps  { client, logGameAction, dcMessageMeta, saveGames }
+ */
+export async function runCcPlayTriggers(game, playerNum, deps) {
+  // Hunt Dissent (Agent Kallus): opponent's first CC of round → 2-Hit-Token picker.
+  try {
+    const { fireHuntDissentIfFirstCcOfRound } = await import('./hunt-dissent.js');
+    await fireHuntDissentIfFirstCcOfRound(game, playerNum, deps);
+  } catch (err) {
+    console.error('[cc-hand] Hunt Dissent hook failed:', err?.message ?? err);
+  }
+  // Adapt (Agent Blaise): opponent's first CC of round → friendly SPY/TROOPER becomes Hidden.
+  try {
+    const { fireAdaptBlaiseIfFirstCcOfRound } = await import('./blaise-adapt.js');
+    await fireAdaptBlaiseIfFirstCcOfRound(game, playerNum, deps);
+  } catch (err) {
+    console.error('[cc-hand] Adapt (Blaise) hook failed:', err?.message ?? err);
+  }
+}
+
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
 export async function handleSquadModal(interaction, ctx) {
   const { getGame, validateDeckLegal, sendSquadConfirmation } = ctx;
@@ -899,6 +928,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
     // C14: Comm Disruption — prompt opponent if they have it in hand
     await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+    // On-CC-play triggers also fire for cost-0 cards (previously skipped here).
+    await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
     saveGames(game.gameId);
     return;
   }
@@ -922,25 +953,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // C14: Comm Disruption — prompt opponent if they have it in hand
   await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
-  // Hunt Dissent (Agent Kallus): if this is the OPPOSING player's
-  // first CC of the round and Kallus is on the board with the
-  // hunt_dissent_kallus passive, post Kallus's controller a 2-Hit-
-  // Token distribution picker over friendlies within 1 (or 3 with
-  // [Advanced Com Systems]).
-  try {
-    const { fireHuntDissentIfFirstCcOfRound } = await import('./hunt-dissent.js');
-    await fireHuntDissentIfFirstCcOfRound(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-  } catch (err) {
-    console.error('[cc-hand] Hunt Dissent hook failed:', err?.message ?? err);
-  }
-  // Adapt (Agent Blaise): on the opponent's first CC of the round, choose
-  // a friendly SPY/TROOPER to become Hidden. Per alexanbv 2026-06-13.
-  try {
-    const { fireAdaptBlaiseIfFirstCcOfRound } = await import('./blaise-adapt.js');
-    await fireAdaptBlaiseIfFirstCcOfRound(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-  } catch (err) {
-    console.error('[cc-hand] Adapt (Blaise) hook failed:', err?.message ?? err);
-  }
+  // On-CC-play triggers (Hunt Dissent / Adapt) via the unified subroutine.
+  await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
   saveGames(game.gameId);
 }
 
