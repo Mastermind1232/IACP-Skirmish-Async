@@ -619,6 +619,42 @@ export async function handleModsPick(interaction, ctx) {
 }
 
 /**
+ * Re-find the friendly figure key that grants a proximity mods ability (gate
+ * path) so its once-per-round flag can be marked. Mirrors the detection in
+ * combat-abilities-mods.js. Returns the figure key or null.
+ */
+function _findModsFigKey(id, game, combat) {
+  const effOf = (fk) => {
+    const all = getDcEffectsGlobal() || {};
+    const n = dcNameFromFigureKey(fk);
+    return all[n] || all[(n || '').replace(/\s*\[.*\]\s*$/, '')] || null;
+  };
+  const mapSp = getMapData(game.selectedMap?.id);
+  if (id === 'call_the_shots') {
+    const friendly = game.figurePositions?.[combat.attackerPlayerNum] || {};
+    const atkCoord = friendly[combat.attackerFigureKey];
+    if (!atkCoord || !mapSp) return null;
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (fk === combat.attackerFigureKey) continue;
+      if (!(effOf(fk)?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
+      if (game.roundFigureAbilityUsed?.[`${fk}_call_the_shots`]) continue;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) return fk;
+    }
+  } else if (id === 'get_down') {
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const friendly = game.figurePositions?.[defPN] || {};
+    const defCoord = friendly[combat.target?.figureKey];
+    if (!defCoord || !mapSp) return null;
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (!(effOf(fk)?.specialAbilityIds || []).includes('get_down_onar')) continue;
+      if (game.roundFigureAbilityUsed?.[`${fk}_get_down`]) continue;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2)) return fk;
+    }
+  }
+  return null;
+}
+
+/**
  * Post a picked interactive mods ability's sub-choice prompt (gate path).
  * Returns true if posted, false if the ability isn't wired into the gate path
  * yet (caller then records+skips). Covered: spray_fire, defensible, agile —
@@ -640,6 +676,15 @@ async function _postModsSubChoice(id, side, thread, game, combat) {
   } else if (id === 'agile') {
     content = '**Agile** — convert 1 Block to 1 Evade?';
     buttons = [mk('apply', 'Apply (Block→Evade)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'call_the_shots') {
+    content = '**Call the Shots** — apply +2 Accuracy, +1 Hit, or +1 Surge?';
+    buttons = [mk('acc', '+2 Accuracy'), mk('hit', '+1 Hit'), mk('surge', '+1 Surge'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'get_down') {
+    content = '**Get Down** — apply +1 Block or +1 Evade?';
+    buttons = [mk('block', '+1 Block'), mk('evade', '+1 Evade'), mk('skip', 'Skip', ButtonStyle.Secondary)];
+  } else if (id === 'heavy_repeater') {
+    content = '**Heavy Repeater** — suffer 1 Strain for a bonus?';
+    buttons = [mk('hit', '+1 Hit (1 Strain)'), mk('blast', 'Blast 2 (1 Strain)'), mk('acc', '+3 Acc (1 Strain)'), mk('skip', 'Skip', ButtonStyle.Secondary)];
   } else {
     return false;
   }
@@ -695,6 +740,31 @@ export async function handleModsSubChoice(interaction, ctx) {
       await thread.send('**Agile** — Skipped.').catch(discordCatch);
     }
     combat.agileJetTrooperApplied = true;
+  } else if (id === 'call_the_shots') {
+    const fk = _findModsFigKey('call_the_shots', game, combat);
+    if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; }
+    if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; await thread.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
+    else if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; await thread.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
+    else if (choice === 'surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; await thread.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
+    else { await thread.send('**Call the Shots** — Skipped.').catch(discordCatch); }
+    combat.callTheShotsResolved = true;
+  } else if (id === 'get_down') {
+    const fk = _findModsFigKey('get_down', game, combat);
+    if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_get_down`] = true; }
+    if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; await thread.send('**Get Down** — Applied +1 Block.').catch(discordCatch); }
+    else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; await thread.send('**Get Down** — Applied +1 Evade.').catch(discordCatch); }
+    else { await thread.send('**Get Down** — Skipped.').catch(discordCatch); }
+    combat.getDownResolved = true;
+  } else if (id === 'heavy_repeater') {
+    let strain = false;
+    if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; strain = true; await thread.send('**Heavy Repeater** — +1 Hit (1 Strain).').catch(discordCatch); }
+    else if (choice === 'blast') { combat.blastDamage = Math.max(combat.blastDamage || 0, 2); strain = true; await thread.send('**Heavy Repeater** — Blast 2 (1 Strain).').catch(discordCatch); }
+    else if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3; strain = true; await thread.send('**Heavy Repeater** — +3 Accuracy (1 Strain).').catch(discordCatch); }
+    else { await thread.send('**Heavy Repeater** — Skipped.').catch(discordCatch); }
+    combat.heavyRepeaterResolved = true;
+    if (strain) {
+      await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: 'Heavy Repeater' });
+    }
   }
 
   if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
