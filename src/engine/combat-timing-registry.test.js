@@ -18,12 +18,18 @@ describe('combat-timing-registry: canonical windows', () => {
 });
 
 describe('combat-timing-registry: registration validation', () => {
-  it('rejects bad window / side / kind / missing applies', () => {
+  it('rejects bad window / side / kind / empty windows / non-function applies', () => {
     assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: ['nope'], side: 'attacker', kind: 'passive', applies: () => true }));
     assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: ['mods'], side: 'nope', kind: 'passive', applies: () => true }));
     assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: ['mods'], side: 'attacker', kind: 'bogus', applies: () => true }));
-    assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: ['mods'], side: 'attacker', kind: 'passive' }));
+    assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: ['mods'], side: 'attacker', kind: 'passive', applies: 'notfn' }));
     assert.throws(() => registerCombatAbility({ id: 'a', name: 'A', windows: [], side: 'attacker', kind: 'passive', applies: () => true }));
+  });
+
+  it('allows a timing-only entry (applies omitted) and excludes it from abilitiesForWindow', () => {
+    registerCombatAbility({ id: 'timing-only', name: 'TO', windows: ['mods'], side: 'attacker', kind: 'passive' });
+    // registered (timing indicator present) but not executable
+    assert.equal(abilitiesForWindow('mods', 'attacker', {}, {}).find((a) => a.id === 'timing-only'), undefined);
   });
 });
 

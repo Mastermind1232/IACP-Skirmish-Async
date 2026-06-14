@@ -9,6 +9,7 @@
 // registry is populated wherever this builder is used.
 
 import './combat-abilities-mods.js';
+import './combat-ability-timing-catalog.js'; // complete timing indicators for every combat ability
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 
