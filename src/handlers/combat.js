@@ -896,7 +896,7 @@ export async function handleModsSubChoice(interaction, ctx) {
 }
 
 /** Apply a passive mods ability automatically (no player decision). */
-async function _fireModsPassive(side, id, thread, game, combat, ctx) {
+export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   if (id === 'pulse_cannon') {
     combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
     combat.bonusHits = (combat.bonusHits || 0) + 1;

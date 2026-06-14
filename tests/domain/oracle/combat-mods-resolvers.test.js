@@ -138,3 +138,44 @@ describe('mods gate handlers: full flag-on flow (pick → sub-choice → apply �
     assert.deepEqual(combat.modsGate.attacker.resolved, ['unknown_ability']); // recorded + skipped
   });
 });
+
+import { _fireModsPassive } from '../../../src/handlers/combat.js';
+
+describe('mods passives: auto-fire effects', () => {
+  it('pulse_cannon → +4 Acc, +1 Hit', async () => {
+    const c = {}; await _fireModsPassive('attacker', 'pulse_cannon', thread, {}, c, {});
+    assert.equal(c.bonusAccuracy, 4); assert.equal(c.bonusHits, 1); assert.equal(c.pulseCannonResolved, true);
+  });
+  it('negotiate (auto, defender <2 VP) → +2 Damage', async () => {
+    const c = {}; await _fireModsPassive('attacker', 'negotiate', thread, {}, c, {});
+    assert.equal(c.bonusHits, 2); assert.equal(c.negotiateResolved, true);
+  });
+  it('defensive_stance + soresu convert a Dodge to +2 Block / +1 Evade', async () => {
+    const c1 = { defenseRoll: { block: 0, evade: 0, dodge: true } }; await _fireModsPassive('defender', 'defensive_stance', thread, {}, c1, {});
+    assert.equal(c1.defenseRoll.dodge, false); assert.equal(c1.defenseRoll.block, 2); assert.equal(c1.defenseRoll.evade, 1);
+    const c2 = { defenseRoll: { block: 1, dodge: true }, soresuFormFigKey: 'K-1-0' }; await _fireModsPassive('defender', 'soresu', thread, {}, c2, {});
+    assert.equal(c2.defenseRoll.dodge, false); assert.equal(c2.defenseRoll.block, 3); assert.equal(c2.soresuFormFigKey, null);
+  });
+  it('lucky logs without throwing', async () => {
+    await assert.doesNotReject(() => _fireModsPassive('defender', 'lucky', thread, {}, {}, {}));
+  });
+});
+
+describe('mods resolver: crate_block_sink', () => {
+  it('sinks N damage into a carried crate for +N Block', async () => {
+    const game = {
+      selectedMission: { rules: { persistent: { crateBlockSink: { healthPerCrate: 5, maxBlockPerAttack: 3 } } } },
+      figureContraband: { 'D-1-0': 1 }, lineOfFireCrateBlock: {},
+    };
+    const c = { target: { figureKey: 'D-1-0' } };
+    await COMBAT_RESOLVERS.crate_block_sink.apply('2', baseArgs(c, game));
+    assert.equal(c.bonusBlock, 2);
+    assert.equal((game.lineOfFireCrateBlock['D-1-0'] || [])[0], 2); // 2 dmg tracked on the crate
+    assert.equal(c.crateBlockSinkResolved, true);
+  });
+  it('0 damage skips (no block)', async () => {
+    const c = { target: { figureKey: 'D-1-0' } };
+    await COMBAT_RESOLVERS.crate_block_sink.apply('0', baseArgs(c, { figureContraband: {}, selectedMission: { rules: {} } }));
+    assert.equal(c.bonusBlock, undefined); assert.equal(c.crateBlockSinkResolved, true);
+  });
+});
