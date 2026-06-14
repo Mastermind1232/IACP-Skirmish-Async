@@ -37,3 +37,20 @@ describe('on_declare resolver: Merciless', () => {
     assert.equal(combat.mercilessAvailable, undefined);
   });
 });
+
+describe('on_declare resolver: Front Line', () => {
+  const thread2 = { send: async () => ({}) };
+  it('swap → +2 Accuracy and one blue die becomes red', async () => {
+    const c = { attackInfo: { dice: ['blue', 'red', 'green'] } };
+    await COMBAT_RESOLVERS.front_line.apply('swap', { game: {}, combat: c, thread: thread2, ctx: {} });
+    assert.equal(c.bonusAccuracy, 2);
+    assert.deepEqual(c.attackInfo.dice, ['red', 'red', 'green']);
+    assert.equal(c._frontLineSwapDecided, true);
+  });
+  it('noswap → +2 Accuracy only, dice unchanged', async () => {
+    const c = { attackInfo: { dice: ['blue', 'green'] } };
+    await COMBAT_RESOLVERS.front_line.apply('noswap', { game: {}, combat: c, thread: thread2, ctx: {} });
+    assert.equal(c.bonusAccuracy, 2);
+    assert.deepEqual(c.attackInfo.dice, ['blue', 'green']);
+  });
+});

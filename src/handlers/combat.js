@@ -781,6 +781,19 @@ export const COMBAT_RESOLVERS = {
       combat.mercilessUsed = true; delete combat.mercilessAvailable;
     },
   },
+  front_line: {
+    // +2 Accuracy (in range) and an optional blue→red attack-die pool swap.
+    prompt: () => ({ content: '**Front Line** — +2 Accuracy. Also swap a blue attack die to red?', buttons: [['swap', '+2 Acc & swap blue→red'], ['noswap', '+2 Acc only', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
+      if (choice === 'swap' && combat.attackInfo?.dice) {
+        const swap = applyFrontLineDieSwap(combat.attackInfo.dice); // shared helper (parity)
+        if (swap.applied) { combat.attackInfo = { ...combat.attackInfo, dice: swap.dice }; thread?.send('**Front Line** — +2 Accuracy; 1 blue die → red.').catch(discordCatch); }
+        else thread?.send('**Front Line** — +2 Accuracy (no blue die to swap).').catch(discordCatch);
+      } else thread?.send('**Front Line** — +2 Accuracy (swap skipped).').catch(discordCatch);
+      combat._frontLineSwapDecided = true;
+    },
+  },
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
