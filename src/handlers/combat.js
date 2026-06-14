@@ -229,6 +229,11 @@ import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, 
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
+// Slice C: timing-window gate machine (flag-gated migration, default off).
+import { buildModsGate } from '../engine/combat-mods-gate.js';
+import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
+import { getCombatAbility } from '../engine/combat-timing-registry.js';
+import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
  * Now uses the combat gate system so both players must confirm.
@@ -533,12 +538,125 @@ async function _enterStep4(thread, game, combat, ctx) {
       }
     }
   }
+  // Slice C (alexanbv 2026-06-14): gate-driven mods step, behind a migration
+  // flag (default off). When enabled, the mods window is driven by the timing
+  // registry → ability gate (passives auto-fire, interactive resolved in
+  // player-chosen order, attacker gate then defender gate) instead of the
+  // fixed-order proceedAfterRerolls + sendModsYn path. Off by default until the
+  // remaining mods abilities (Illicit Arms / Guidance Systems / Zillo from
+  // sendModsYn) are registered and self-play handles the choose buttons.
+  if (combat.useModsGate) {
+    combat.modsGate = buildModsGate(game, combat, {
+      getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize,
+    });
+    await _driveModsGatePath(thread, game, combat, ctx);
+    return;
+  }
   if (game.selfPlay) {
     combat.currentStep = 'step5';
     await proceedAfterRerolls(thread, game, combat, ctx);
   } else {
     await sendModsYn(thread, game, combat, 'attacker');
   }
+}
+
+/**
+ * Slice C gate-driven mods path. Self-contained (does not reuse
+ * handleCombatPassive) so the legacy flag-off flow is untouched. Drives
+ * combat.modsGate: auto-fires passives, posts the player-ordered choose window
+ * for interactive abilities, and on completion proceeds to the surge phase.
+ */
+async function _driveModsGatePath(thread, game, combat, ctx) {
+  await driveModsGate(combat.modsGate, {
+    firePassive: (side, id) => _fireModsPassive(side, id, thread, game, combat, ctx),
+    postChooseWindow: (side, pending) => _postModsChooseWindow(side, pending, thread, game, combat),
+    onComplete: async () => {
+      delete combat.modsGate;
+      await proceedAfterTokens(thread, game, combat, ctx);
+    },
+  });
+  ctx.saveGames?.(game.gameId);
+}
+
+/**
+ * Handle a click in the gate-driven mods choose window
+ * (combat_mods_pick_<gameId>_<id|done>). On 'done' the active side passes; on
+ * an ability id it records the choice and advances. The per-ability sub-choice
+ * prompt + effect (block-vs-evade etc.) is the next migration sub-step —
+ * reusing each ability's existing resolution once it's extracted from
+ * proceedAfterRerolls. (Gated off by useModsGate; not yet live.)
+ */
+export async function handleModsPick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const rest = parseCustomId(interaction.customId, 'combat_mods_pick_');
+  const lastUnderscore = rest.lastIndexOf('_');
+  const gameId = rest.substring(0, lastUnderscore);
+  const pick = rest.substring(lastUnderscore + 1);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId || !combat.modsGate) return;
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  await interaction.deferUpdate().catch(discordCatch);
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const side = _modsActiveSide(combat.modsGate);
+  if (!side) return;
+  if (pick === 'done') {
+    passModsSide(combat.modsGate, side);
+  } else {
+    recordModsChoice(combat.modsGate, side, pick);
+    // TODO(slice C next): post pick's sub-choice prompt + apply its effect by
+    // reusing the ability's resolution (extracted from proceedAfterRerolls).
+  }
+  await _driveModsGatePath(thread, game, combat, ctx);
+  saveGames?.(game.gameId);
+}
+
+/** Apply a passive mods ability automatically (no player decision). */
+async function _fireModsPassive(side, id, thread, game, combat, ctx) {
+  if (id === 'pulse_cannon') {
+    combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    combat.pulseCannonResolved = true;
+    await thread.send('**Pulse Cannon** — Power Token spent: **+4 Accuracy, +1 Hit**.').catch(discordCatch);
+  } else if (id === 'negotiate') {
+    combat.bonusHits = (combat.bonusHits || 0) + 2;
+    combat.negotiateResolved = true;
+    await thread.send('**Negotiate** — Defender has fewer than 2 VP; **+2 Damage** auto-applied.').catch(discordCatch);
+  } else if (id === 'defensive_stance') {
+    const dr = combat.defenseRoll || {};
+    combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
+    await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+  } else if (id === 'lucky') {
+    await thread.send('🍀 **Lucky** — R2-D2 rolled a Dodge (recover 2 damage handled at resolution).').catch(discordCatch);
+  } else if (id === 'soresu') {
+    const dr = combat.defenseRoll || {};
+    combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
+    await thread.send('**Soresu Form** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+    combat.soresuFormFigKey = null;
+  }
+}
+
+/** Post the player-ordered choose window for a side's pending interactive mods abilities. */
+async function _postModsChooseWindow(side, pending, thread, game, combat) {
+  const sidePlayerNum = side === 'attacker'
+    ? combat.attackerPlayerNum
+    : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+  const sideId = game[`player${sidePlayerNum}Id`];
+  const btns = pending.map((id) => {
+    const reg = getCombatAbility(id);
+    return new ButtonBuilder()
+      .setCustomId(`combat_mods_pick_${game.gameId}_${id}`)
+      .setLabel((reg?.name || id).slice(0, 80))
+      .setStyle(ButtonStyle.Primary);
+  });
+  btns.push(new ButtonBuilder().setCustomId(`combat_mods_pick_${game.gameId}_done`).setLabel('Done (no more)').setStyle(ButtonStyle.Secondary));
+  await thread.send(sanitizeMentions({
+    content: `<@${sideId}> **Modifiers** (${side}) — resolve your abilities in any order, then **Done**:`,
+    components: chunkButtonsToRows(btns),
+    allowedMentions: { users: [sideId] },
+  })).catch(discordCatch);
 }
 
 /**
