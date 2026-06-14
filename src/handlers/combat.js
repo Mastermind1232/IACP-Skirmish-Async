@@ -566,16 +566,36 @@ async function _enterStep4(thread, game, combat, ctx) {
  * combat.modsGate: auto-fires passives, posts the player-ordered choose window
  * for interactive abilities, and on completion proceeds to the surge phase.
  */
-async function _driveModsGatePath(thread, game, combat, ctx) {
-  await driveModsGate(combat.modsGate, {
-    firePassive: (side, id) => _fireModsPassive(side, id, thread, game, combat, ctx),
-    postChooseWindow: (side, pending) => _postModsChooseWindow(side, pending, thread, game, combat),
-    onComplete: async () => {
-      delete combat.modsGate;
-      await proceedAfterTokens(thread, game, combat, ctx);
-    },
+// Per-step gate config — one generic pipeline serves every window. Each step
+// declares its gate field, button-id prefix, optional passive-firer, and what
+// to do when the gate completes. Adding a step = one config entry.
+const _GATE_WINDOWS = {
+  mods: {
+    field: 'modsGate', pickPrefix: 'combat_mods_pick_', title: 'Modifiers',
+    firePassive: (side, id, thread, game, combat, ctx) => _fireModsPassive(side, id, thread, game, combat, ctx),
+    onComplete: async (thread, game, combat, ctx) => { delete combat.modsGate; await proceedAfterTokens(thread, game, combat, ctx); },
+  },
+  on_declare: {
+    field: 'onDeclareGate', pickPrefix: 'combat_ondeclare_pick_', title: 'On-Declare',
+    firePassive: null, // on-declare passives auto-fire inline; gate carries only interactive abilities
+    onComplete: async (thread, game, combat, ctx) => { delete combat.onDeclareGate; if (ctx._onDeclareGateDone) await ctx._onDeclareGateDone(thread, game, combat); },
+  },
+};
+
+/** Drive a step's gate (generic). window ∈ keys of _GATE_WINDOWS. */
+async function _driveGatePath(window, thread, game, combat, ctx) {
+  const cfg = _GATE_WINDOWS[window];
+  await driveModsGate(combat[cfg.field], {
+    firePassive: cfg.firePassive ? (side, id) => cfg.firePassive(side, id, thread, game, combat, ctx) : undefined,
+    postChooseWindow: (side, pending) => _postGateChooseWindow(window, side, pending, thread, game, combat),
+    onComplete: () => cfg.onComplete(thread, game, combat, ctx),
   });
   ctx.saveGames?.(game.gameId);
+}
+
+/** Mods-step convenience wrapper (existing call sites unchanged). */
+async function _driveModsGatePath(thread, game, combat, ctx) {
+  return _driveGatePath('mods', thread, game, combat, ctx);
 }
 
 /**
@@ -899,7 +919,9 @@ async function _fireModsPassive(side, id, thread, game, combat, ctx) {
 }
 
 /** Post the player-ordered choose window for a side's pending interactive mods abilities. */
-async function _postModsChooseWindow(side, pending, thread, game, combat) {
+/** Post a step's player-ordered choose window (generic). */
+async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
+  const cfg = _GATE_WINDOWS[window];
   const sidePlayerNum = side === 'attacker'
     ? combat.attackerPlayerNum
     : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
@@ -907,16 +929,21 @@ async function _postModsChooseWindow(side, pending, thread, game, combat) {
   const btns = pending.map((id) => {
     const reg = getCombatAbility(id);
     return new ButtonBuilder()
-      .setCustomId(`combat_mods_pick_${game.gameId}_${id}`)
+      .setCustomId(`${cfg.pickPrefix}${game.gameId}_${id}`)
       .setLabel((reg?.name || id).slice(0, 80))
       .setStyle(ButtonStyle.Primary);
   });
-  btns.push(new ButtonBuilder().setCustomId(`combat_mods_pick_${game.gameId}_done`).setLabel('Done (no more)').setStyle(ButtonStyle.Secondary));
+  btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_done`).setLabel('Done (no more)').setStyle(ButtonStyle.Secondary));
   await thread.send(sanitizeMentions({
-    content: `<@${sideId}> **Modifiers** (${side}) — resolve your abilities in any order, then **Done**:`,
+    content: `<@${sideId}> **${cfg.title}** (${side}) — resolve your abilities in any order, then **Done**:`,
     components: chunkButtonsToRows(btns),
     allowedMentions: { users: [sideId] },
   })).catch(discordCatch);
+}
+
+/** Mods-step convenience wrapper. */
+async function _postModsChooseWindow(side, pending, thread, game, combat) {
+  return _postGateChooseWindow('mods', side, pending, thread, game, combat);
 }
 
 /**

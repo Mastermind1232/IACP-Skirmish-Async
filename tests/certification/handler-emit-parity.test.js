@@ -98,8 +98,8 @@ function getEmittedPrefixes() {
   // `return \`prefix_`, `\`prefix_${...}\`` general template literals starting
   // with snake_case followed by underscore + interpolation.
   const reBacktick = /`([a-z][a-z0-9_]+_)\$\{/g;
-  const reSetCustom = /(?:setCustomId\(|customId:\s*|cellPrefix:\s*|prefix:\s*)`([a-z][a-z0-9_]+_?)`?/g;
-  const reSingle = /(?:setCustomId\(|customId:\s*|cellPrefix:\s*|prefix:\s*)'([a-z][a-z0-9_]+_)'/g;
+  const reSetCustom = /(?:setCustomId\(|customId:\s*|cellPrefix:\s*|pickPrefix:\s*|prefix:\s*)`([a-z][a-z0-9_]+_?)`?/g;
+  const reSingle = /(?:setCustomId\(|customId:\s*|cellPrefix:\s*|pickPrefix:\s*|prefix:\s*)'([a-z][a-z0-9_]+_)'/g;
   for (const file of files) {
     const src = readFileSync(file, 'utf8');
     let m;
