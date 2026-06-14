@@ -579,12 +579,55 @@ async function _driveModsGatePath(thread, game, combat, ctx) {
 }
 
 /**
+ * Data-driven combat-ability resolvers (alexanbv 2026-06-14). Each ability
+ * "points into" the pipeline by registering how it resolves when the player
+ * picks it — the gate handlers are GENERIC and never name a specific ability.
+ *   prompt(args) → { content, buttons: [[choice,label,style?]], mentionUserId? }
+ *                  or null to apply immediately (no sub-choice).
+ *   apply(choice, args) → mutate combat for the chosen option.
+ *   args = { game, combat, thread, ctx, side, gameId }
+ * Abilities not yet in this map fall back to the legacy inline handling.
+ */
+const COMBAT_RESOLVERS = {
+  spray_fire: {
+    prompt: () => ({ content: '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?', buttons: [['apply', 'Apply (-3 Acc, +1 Surge)'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'apply') { const b = applySprayFire(combat); combat.bonusAccuracy = b.bonusAccuracy; combat.surgeBonus = b.surgeBonus; thread?.send('**Spray Fire** — -3 Accuracy, +1 Surge applied.').catch(discordCatch); }
+      else thread?.send('**Spray Fire** — Skipped.').catch(discordCatch);
+      combat.sprayFireResolved = true;
+    },
+  },
+  defensible: {
+    prompt: () => ({ content: '**Defensible** — apply +1 Block or +1 Evade?', buttons: [['block', '+1 Block'], ['evade', '+1 Evade'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; thread?.send('**Defensible** — Applied +1 Block.').catch(discordCatch); }
+      else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; thread?.send('**Defensible** — Applied +1 Evade.').catch(discordCatch); }
+      else thread?.send('**Defensible** — Skipped.').catch(discordCatch);
+      combat.defensibleResolved = true;
+    },
+  },
+  agile: {
+    prompt: () => ({ content: '**Agile** — convert 1 Block to 1 Evade?', buttons: [['apply', 'Apply (Block→Evade)'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'apply') {
+        const conv = applyAgileConversion({ block: combat.defenseRoll?.block, bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
+        if (conv.applied) { combat.bonusBlock = conv.bonusBlock; combat.bonusEvade = conv.bonusEvade; thread?.send('**Agile** — Converted 1 Block to 1 Evade.').catch(discordCatch); }
+        else thread?.send('**Agile** — No Block available to convert.').catch(discordCatch);
+      } else thread?.send('**Agile** — Skipped.').catch(discordCatch);
+      combat.agileJetTrooperApplied = true;
+    },
+  },
+};
+
+const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
+
+/**
  * Handle a click in the gate-driven mods choose window
- * (combat_mods_pick_<gameId>_<id|done>). On 'done' the active side passes; on
- * an ability id it records the choice and advances. The per-ability sub-choice
- * prompt + effect (block-vs-evade etc.) is the next migration sub-step —
- * reusing each ability's existing resolution once it's extracted from
- * proceedAfterRerolls. (Gated off by useModsGate; not yet live.)
+ * (combat_mods_pick_<gameId>_<id|done>). GENERIC: on 'done' the active side
+ * passes; on an ability id it looks up that ability's resolver and posts its
+ * sub-choice prompt (or applies immediately), never naming a specific ability.
+ * Abilities not yet in COMBAT_RESOLVERS fall back to the legacy path.
+ * (Gated off by useModsGate; not yet live.)
  */
 export async function handleModsPick(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
@@ -606,14 +649,29 @@ export async function handleModsPick(interaction, ctx) {
     passModsSide(combat.modsGate, side);
     await _driveModsGatePath(thread, game, combat, ctx);
   } else {
-    const posted = await _postModsSubChoice(pick, side, thread, game, combat);
-    if (!posted) {
-      // Ability not yet wired into the gate path — record + skip so the gate
-      // keeps moving. Coverage expands across the migration.
-      recordModsChoice(combat.modsGate, side, pick);
-      await _driveModsGatePath(thread, game, combat, ctx);
+    const r = COMBAT_RESOLVERS[pick];
+    if (r) {
+      // Generic, data-driven: post the ability's sub-choice prompt, or apply
+      // immediately if it has none. The handler never names the ability.
+      const p = r.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId }) : null;
+      if (p?.buttons) {
+        const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
+          new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
+        await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+        // wait for the sub-choice (handleModsSubChoice resolves + re-drives)
+      } else {
+        if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId });
+        recordModsChoice(combat.modsGate, side, pick);
+        await _driveModsGatePath(thread, game, combat, ctx);
+      }
+    } else {
+      // Legacy fallback for abilities not yet converted to a resolver.
+      const posted = await _postModsSubChoice(pick, side, thread, game, combat);
+      if (!posted) {
+        recordModsChoice(combat.modsGate, side, pick);
+        await _driveModsGatePath(thread, game, combat, ctx);
+      }
     }
-    // else: wait for the sub-choice (handleModsSubChoice records + re-drives).
   }
   saveGames?.(game.gameId);
 }
@@ -751,6 +809,17 @@ export async function handleModsSubChoice(interaction, ctx) {
   const side = _modsActiveSide(combat.modsGate);
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  // Generic, data-driven resolution: look up the ability's resolver and apply
+  // the chosen option, then record + re-drive. Never names a specific ability.
+  const _resolver = COMBAT_RESOLVERS[id];
+  if (_resolver) {
+    if (_resolver.apply) await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId });
+    if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
+    await _driveModsGatePath(thread, game, combat, ctx);
+    saveGames?.(game.gameId);
+    return;
+  }
 
   if (id === 'spray_fire') {
     if (choice === 'apply') {
