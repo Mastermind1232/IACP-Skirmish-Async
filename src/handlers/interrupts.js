@@ -13,6 +13,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
+import { resumeSequenceAfterInterrupt } from './combat.js';
 import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -1598,6 +1599,11 @@ export async function handleExtraProtection(interaction, ctx) {
     attackerPlayerNum: _epPending.attackerPlayerNum, ownerId: _epPending.ownerId,
     targetMsgId: _epPending.targetMsgId, targetFigIndex: _epPending.targetFigIndex,
   }, client);
+  // Interrupts route through the sequence (alexanbv 2026-06-15): the resume above
+  // stashed combat._afterResolveArgs instead of finishing when the attack is
+  // walking the gate sequence — advance into the after_resolve gate. No-op for
+  // legacy attacks.
+  await resumeSequenceAfterInterrupt(_epGame, _epCombat, ctx);
   saveGames(_epGame.gameId);
   return;
 }

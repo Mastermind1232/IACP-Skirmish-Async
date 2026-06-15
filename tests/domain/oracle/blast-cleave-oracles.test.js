@@ -17,6 +17,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTestGame } from '../../fixtures/game-builder.js';
 import { computeCleaveEligibleTargets } from '../../../src/engine/combat-bridge.js';
+import { resumeSequenceAfterInterrupt } from '../../../src/handlers/combat.js';
 
 // 2026-05-09 cleave migration: cleave is queued for the step-8 attacker
 // post-resolve window (one entry per source). The headless drain fires
@@ -632,5 +633,33 @@ describe('ORACLE-SEP: damage / after_resolve separation (_seqActive)', () => {
       defenderPlayerNum: a.defenderPlayerNum,
     }, B.deps.client);
     assert.strictEqual(B.bystander.hp(), aBystanderAfter, 'separation: after_resolve gate fires Blast to the SAME net result as legacy');
+  });
+
+  it('interrupt-resume routes through the sequence: resume advances into the after_resolve gate (nothing applies out of sequence)', async () => {
+    // Legacy baseline for the Blast net result.
+    const A = setup();
+    const aBystanderBefore = A.bystander.hp();
+    await A.deps.resolveCombatAfterRolls(A.game, A.combat, A.deps.client);
+    const aBystanderAfter = A.bystander.hp();
+    assert.strictEqual(aBystanderAfter, aBystanderBefore - 2, 'legacy: bystander took 2 Blast');
+
+    // Sequence paused at the damage step, exactly as a Figurehead / Extra
+    // Protection interrupt would leave it: _seqActive + _seqStep='damage'. The
+    // damage core defers the after-attack window (stashes _afterResolveArgs);
+    // Blast must NOT have fired — nothing applies out of sequence.
+    const B = setup();
+    const bBystanderBefore = B.bystander.hp();
+    B.combat._seqActive = true;
+    B.combat._seqStep = 'damage';
+    await B.deps.resolveCombatAfterRolls(B.game, B.combat, B.deps.client);
+    assert.ok(B.combat._afterResolveArgs, 'args stashed at the damage deferral point');
+    assert.strictEqual(B.bystander.hp(), bBystanderBefore, 'Blast deferred — not applied out of sequence');
+
+    // The interrupt resume helper (called by handleFigureheadDecision /
+    // handleExtraProtection after their applyDamageAndFinishCombat re-entry)
+    // advances the sequence into the after_resolve gate, which fires Blast.
+    // Combat finishes IN sequence, same net result as legacy.
+    await resumeSequenceAfterInterrupt(B.game, B.combat, B.deps);
+    assert.strictEqual(B.bystander.hp(), aBystanderAfter, 'resume → after_resolve gate fired Blast (in sequence), same net result');
   });
 });

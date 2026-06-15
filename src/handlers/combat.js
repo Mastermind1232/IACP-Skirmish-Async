@@ -726,6 +726,25 @@ export async function runAttackSequence(thread, game, combat, ctx) {
   await _startSequence(combat, _seqHandlers(thread, game, combat, ctx));
 }
 
+/**
+ * Resume the gate sequence after an interrupt's damage re-entry (alexanbv
+ * 2026-06-15 "for all interrupts ... it should go through the sequence; nothing
+ * should apply out of sequence"). When an attack walks the sequence
+ * (_seqActive) and an interrupt (Figurehead / Extra Protection) paused the
+ * damage step, the resume handler re-calls applyDamageAndFinishCombat — which
+ * now reaches the deferral point and stashes combat._afterResolveArgs instead of
+ * finishing combat. This advances the sequence into the after_resolve gate so
+ * the attack continues and finishes IN sequence. No-op for legacy
+ * (non-_seqActive) attacks, or if the damage core hasn't reached the deferral
+ * point yet (e.g. a second nested interrupt is still pending). Fetches the
+ * combat thread itself when callers (in other handler modules) don't have one.
+ */
+export async function resumeSequenceAfterInterrupt(game, combat, ctx, thread) {
+  if (!combat?._seqActive || !combat._afterResolveArgs) return;
+  const thr = thread || await ctx.client?.channels?.fetch(combat.combatThreadId);
+  await _advanceSequence(combat, _seqHandlers(thr, game, combat, ctx));
+}
+
 /** Mods-step convenience wrapper (existing call sites unchanged). */
 async function _driveModsGatePath(thread, game, combat, ctx) {
   return _driveGatePath('mods', thread, game, combat, ctx);
@@ -9761,6 +9780,11 @@ export async function handleFigureheadDecision(interaction, ctx) {
     await thread.send('**Figurehead** skipped.');
     await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
   }
+  // Interrupts route through the sequence (alexanbv 2026-06-15): if this attack
+  // is walking the gate sequence, the resume above stashed combat._afterResolveArgs
+  // instead of finishing — advance into the after_resolve gate so the attack
+  // continues IN sequence. No-op for legacy (non-_seqActive) attacks.
+  await resumeSequenceAfterInterrupt(game, combat, ctx, thread);
   if (isUse && fhMsgId && ctx.updateAttachmentMessageForDc) {
     await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(discordCatch);
   }
