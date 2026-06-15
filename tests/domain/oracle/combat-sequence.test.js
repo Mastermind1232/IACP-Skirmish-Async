@@ -11,9 +11,15 @@ describe('combat-sequence', () => {
   it('defines the full ordered attack sequence', () => {
     assert.deepEqual(ATTACK_STEPS, [
       'on_declare', 'roll', 'rerolls', 'special', 'mods',
-      'spend_surges', 'damage', 'after_resolve',
+      'spend_surges', 'zillo', 'damage', 'after_resolve',
     ]);
     assert.equal(firstStep(), 'on_declare');
+    // special (Zeb/Rapid Recal) is after ALL rerolls + before mods;
+    // zillo (exhaust) is after spend_surges + before damage.
+    assert.ok(ATTACK_STEPS.indexOf('special') > ATTACK_STEPS.indexOf('rerolls'));
+    assert.ok(ATTACK_STEPS.indexOf('special') < ATTACK_STEPS.indexOf('mods'));
+    assert.ok(ATTACK_STEPS.indexOf('zillo') > ATTACK_STEPS.indexOf('spend_surges'));
+    assert.ok(ATTACK_STEPS.indexOf('zillo') < ATTACK_STEPS.indexOf('damage'));
   });
 
   it('nextStep walks the sequence and ends with null', () => {
@@ -26,7 +32,7 @@ describe('combat-sequence', () => {
   });
 
   it('classifies gate steps vs mechanic steps', () => {
-    for (const g of ['on_declare', 'rerolls', 'special', 'mods', 'after_resolve']) {
+    for (const g of ['on_declare', 'rerolls', 'special', 'mods', 'zillo', 'after_resolve']) {
       assert.equal(isGateStep(g), true, `${g} is a gate step`);
       assert.ok(GATE_STEPS.has(g));
     }

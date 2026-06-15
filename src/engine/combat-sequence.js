@@ -13,16 +13,17 @@ export const ATTACK_STEPS = Object.freeze([
   'on_declare',    // gate: attacker on-declare effects, then defender's
   'roll',          // mechanic: roll the attack/defense pools (Focus adds a die)
   'rerolls',       // gate: attacker rerolls, then defender rerolls
-  'special',       // gate: special die-turns (Zeb / Lasat Honor Guard, Rapid Recalibration)
+  'special',       // gate: die-turns AFTER ALL rerolls (Zeb / Lasat Honor Guard, Rapid Recalibration)
   'mods',          // gate: attacker result modifiers, then defender's
   'spend_surges',  // mechanic: attacker spends surges (optional)
-  'damage',        // mechanic: range/accuracy check, apply damage, defeat interrupts
+  'zillo',         // gate: Zillo Technique exhaust (pierce cancel) — AFTER spend_surges
+  'damage',        // mechanic: dodge + range/accuracy check, then the damage pipeline
   'after_resolve', // gate: attacker after-attack effects (Blast/Cleave/CCs), then defender's (Return Fire)
 ]);
 
-/** Steps that open an ability gate (the rest are mechanics). */
+/** Steps that open an ability gate / special-ability prompt (the rest are mechanics). */
 export const GATE_STEPS = Object.freeze(new Set([
-  'on_declare', 'rerolls', 'special', 'mods', 'after_resolve',
+  'on_declare', 'rerolls', 'special', 'mods', 'zillo', 'after_resolve',
 ]));
 
 /** Is this step a gate window (vs a mechanic step)? */
