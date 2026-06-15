@@ -657,37 +657,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           resultText += ` — Crate @ ${curCoord}: ${newHp}/5 HP remaining.`;
         }
       }
-      // Wave 3: Blast from crate-target attack — apply to adjacent figures/objects
-      const _crateBlastAmt = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
-      if (_crateBlastAmt > 0 && hit && damage > 0 && game.selectedMap?.id) {
-        const _crateBlastCoord = String(game.objectPositions?.[objectId] || origCoord).toLowerCase();
-        const _crateBlastAdj = getFiguresAdjacentToCoord(game, _crateBlastCoord, game.selectedMap.id, null);
-        for (const { figureKey: _cbFk, playerNum: _cbPn } of _crateBlastAdj) {
-          const _cbMsgId = findDcMessageIdForFigure(game.gameId, _cbPn, _cbFk);
-          if (!_cbMsgId) continue;
-          const { figureIndex: _cbFigIdx } = parseFigureKey(_cbFk);
-          const { newHp: _cbNewHp, wasDefeated: _cbDied } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-            figureKey: _cbFk, msgId: _cbMsgId, figIndex: _cbFigIdx,
-            amount: _crateBlastAmt, controllerPlayerNum: _cbPn,
-            attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-            source: 'Crate Blast', combat,
-          });
-          const _cbName = dcNameFromFigureKey(_cbFk);
-          await logGameAction(game, client, `\u{1F4A5} **Blast ${_crateBlastAmt}** \u2014 **${_cbName}** suffers ${_crateBlastAmt} damage.`, { phase: 'ROUND', icon: 'attack' });
-          if (_cbDied) {
-            const { idx: _cbIdx } = lookupFigureDcIndex(game, _cbPn, _cbFk);
-            const _cbDcName = dcNameFromFigureKey(_cbFk);
-            await processFigureDefeat(game, {
-              defeatedPlayerNum: _cbPn, figureKey: _cbFk,
-              attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-              msgId: _cbMsgId, dcIdx: _cbIdx, dcName: _cbDcName, displayName: _cbName, source: 'Blast',
-            }, { ...deps, client });
-          }
-        }
-      }
-      await thread.send({ content: resultText || '(No effect)', components: [] });
-      resolvePendingCombat(game);
-      saveGames(game.gameId);
+      // Unified Blast pipeline (alexanbv 2026-06-15 "exactly one pipeline for
+      // blast no matter the target"): the attacker's surge-Blast is NOT applied
+      // inline here. Set the blast target-context and funnel into the SAME
+      // after-attack window the figure path uses (single fireBlast for every
+      // target). The crate's splashOnDefeat (2 within 1) handled above is the
+      // mission-specific ON-DEFEATED effect and stays in the object-damage step.
+      const _crateCoord = String(game.objectPositions?.[objectId] || origCoord).toLowerCase();
+      combat._blastTargetCoord = _crateCoord;
+      combat._blastTargetSize = '1x1';
+      combat._step7Hit = hit;
+      combat._step7Damage = damage;
+      combat._step8Conditions = []; // objects don't receive conditions (CRR p.13)
+      await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds: new Set(), ownerId, defenderPlayerNum }, client, deps);
       return;
     }
     // Thug / Krykna
@@ -2202,8 +2184,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // sees combat._afterResolveArgs and advances to the after_resolve gate, which
   // calls the bound runAfterResolveWindow. Legacy path (_seqActive unset) is
   // byte-for-byte unchanged.
+  await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
+}
+
+/**
+ * Run the after_resolve window now, OR — when the attack is walking the gate
+ * sequence (_seqActive) — defer it to the after_resolve gate by stashing the
+ * crossing locals (the Set as an array so it survives a serialize). Shared by
+ * the figure-target tail and the NPC/crate target paths so EVERY target funnels
+ * into the same single after-attack pipeline (alexanbv 2026-06-15 "exactly one
+ * pipeline for blast no matter the target").
+ */
+async function _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
   if (combat._seqActive) {
-    combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...embedRefreshMsgIds], ownerId, defenderPlayerNum };
+    combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
     return;
   }
   await runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
