@@ -557,6 +557,54 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
       `Blast should damage adjacent crate. objectHealth: ${game.objectHealth['crate-d1']?.[0]} (expected 3)`
     );
   });
+
+  it('010c: target crate does NOT take its own Blast (CRR "other than the target")', async () => {
+    // Attacker at c1, TARGET crate at d1 (adjacent), nothing else nearby. Main
+    // attack 3 dmg − 0 block = 3 → crate 5→2 (survives). The attacker's surge-Blast
+    // 2 must NOT splash back onto the target crate (unified blast pipeline excludes
+    // the target). Pre-fix the target crate took 3+2=5 → defeated.
+    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Bossk' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }])
+      .inRound(1)
+      .build();
+    const attackerFigKey = Object.keys(game.figurePositions[1])[0];
+    game.figurePositions[1] = { [attackerFigKey]: 'c1' };
+    game.figurePositions[2] = {}; // no P2 figures adjacent — isolate the target crate
+    game.cratePositions = { d1: 'd1' };
+    game.objectHealth = { 'crate-d1': [5, 5] };
+    game.objectPositions = { 'crate-d1': 'd1' };
+    game.objectMeta = {
+      'crate-d1': {
+        name: 'Crate @ D1', targetable: true, defenseBlock: 0, defenseEvade: 0,
+        splashOnDefeat: { amount: 2, radius: 1, target: 'all' }, vpOnDefeat: null, moves: true,
+      },
+    };
+    let attackerMsgId, attackerMeta;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.gameId === game.gameId && meta.playerNum === 1) { attackerMsgId = msgId; attackerMeta = meta; break; }
+    }
+    const combat = {
+      gameId: game.gameId, attackerPlayerNum: 1, defenderPlayerNum: 2,
+      attackerMsgId, attackerDcName: attackerMeta.dcName, defenderDcName: 'Crate',
+      attackerDisplayName: attackerMeta.displayName || attackerMeta.dcName,
+      attackerFigureIndex: 0, attackerFigureKey: attackerFigKey, attackerConds: [], defenderConds: [],
+      target: { figureKey: 'npc_crate_d1', label: 'Crate @ D1', isNpc: true, npcType: 'crate', crateOrigCoord: 'd1' },
+      targetStats: { defense: [], cost: 0, figures: 1 },
+      attackInfo: { dice: ['blue', 'green'], type: 'melee' }, isRanged: false, distanceToTarget: 1,
+      combatThreadId: 'oracle-combat-thread', combatDeclareMsgId: 'oracle-declare-msg', combatPreMsgId: 'oracle-pre-msg',
+      attackRoll: { acc: 5, dmg: 3, surge: 1 }, defenseRoll: { block: 0, evade: 0, dodge: false },
+      surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+      surgeBlast: 2, bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
+      p1Ready: true, p2Ready: true, attackTargetMsgId: 'oracle-target-msg',
+    };
+    await deps.resolveCombatAfterRolls(game, combat, deps.client);
+    assert.strictEqual(
+      game.objectHealth['crate-d1']?.[0],
+      2,
+      `Target crate must take ONLY the main attack (3 dmg → 5-3=2), not its own Blast. objectHealth=${game.objectHealth['crate-d1']?.[0]}`,
+    );
+  });
 });
 
 // ── ORACLE-SEP: damage step / after_resolve gate separation ───────────────────

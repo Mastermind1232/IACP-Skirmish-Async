@@ -156,6 +156,10 @@ async function fireBlast(thread, game, combat, effect, ctx) {
       for (let i = 0; i < arr.length; i++) {
         const npc = arr[i];
         if (!npc || npc.defeated) continue;
+        // CRR: Blast hits figures/objects OTHER THAN THE TARGET. Skip the target
+        // NPC itself when this attack targeted it (unified blast pipeline —
+        // alexanbv 2026-06-15).
+        if (combat.target?.isNpc && combat.target?.npcType === npcType && combat.target?.npcIndex === i) continue;
         if (countGameSpaces(game, _blastNormCoord, String(npc.coord).toLowerCase()) > 1) continue;
         await applyDamageToNpc(game, { logGameAction, client, awardObjectiveVp: _vpBlast }, {
           npcType, npcIndex: i, amount, attackerPlayerNum, source: `Blast ${amount}`,
@@ -182,7 +186,13 @@ async function fireBlast(thread, game, combat, effect, ctx) {
         }),
         awardObjectiveVp: (await import('../game/vp-helpers.js')).awardObjectiveVp,
       };
+      // CRR: Blast hits objects OTHER THAN THE TARGET. Skip the target object
+      // (e.g. a crate this attack targeted) — unified blast pipeline.
+      const _blastTargetObjId = combat.target?.npcType === 'crate' && combat.target?.crateOrigCoord
+        ? `crate-${combat.target.crateOrigCoord}`
+        : null;
       for (const objId of objectIds) {
+        if (_blastTargetObjId && objId === _blastTargetObjId) continue;
         await applyDamageToObject(game, _blastObjCtx, {
           objectId: objId, amount, attackerPlayerNum, source: `Blast ${amount}`,
         });
