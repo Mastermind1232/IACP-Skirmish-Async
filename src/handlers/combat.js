@@ -3878,12 +3878,23 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
-  // Per alexanbv 2026-05-12: sequential per-player Y/N gate for
-  // on-declare effects, matching the step-4 sendModsYn UX. Attacker
-  // sees ONE prompt; Yes → token window + Continue, No → defender's
-  // Y/N. Replaces the prior parallel "Ready button + token window"
-  // pair which posted two prompts to each player simultaneously.
-  await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
+  // Combat-sequence rebuild (alexanbv 2026-06-15 "wire the attack sequence into
+  // attack declaration"): when sequence mode is on, launch the gate sequence
+  // from declaration (on_declare → roll → rerolls → special → mods → spend_surges
+  // → zillo → damage → after_resolve) instead of the legacy sendOnDeclareYn
+  // ad-hoc chain. Gated on game.combatSequenceMode — OFF by default so legacy
+  // remains the live path until the sequence fully replaces it; the Baze→Migs
+  // trace and flag-on tests exercise the sequence path.
+  if (game.combatSequenceMode) {
+    await runAttackSequence(thread, game, game.pendingCombat, ctx);
+  } else {
+    // Per alexanbv 2026-05-12: sequential per-player Y/N gate for
+    // on-declare effects, matching the step-4 sendModsYn UX. Attacker
+    // sees ONE prompt; Yes → token window + Continue, No → defender's
+    // Y/N. Replaces the prior parallel "Ready button + token window"
+    // pair which posted two prompts to each player simultaneously.
+    await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
+  }
   saveGames(game.gameId);
 }
 
