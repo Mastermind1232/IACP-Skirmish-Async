@@ -665,8 +665,10 @@ function _seqHandlers(thread, game, combat, ctx) {
         await postRollDiceButton(thread, game, c, ctx);
         return;
       }
-      // TODO (next): wire spend_surges / damage. Until ported, advance through so
-      // the sequence walks end-to-end.
+      // TODO (next): spend_surges = proceedAfterTokens with its Done/no-surge
+      // paths advancing the sequence; damage = range/acc check → damage pipeline
+      // → advance (needs the resolve-flow split: damage vs after_resolve gate).
+      // Both stubbed (advance through) until wired so the walk never stalls.
       await _advanceSequence(c, handlers);
     },
     onComplete: async (_c) => { /* attack fully resolved — finalize handled by damage step once ported */ },
