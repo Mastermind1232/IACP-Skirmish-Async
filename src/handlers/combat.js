@@ -659,8 +659,14 @@ function _seqHandlers(thread, game, combat, ctx) {
       await _driveGatePath(step, thread, game, c, ctx);
     },
     runMechanic: async (step, c) => {
-      // TODO (next): wire roll / spend_surges / damage. For now advance through
-      // so the sequence walks end-to-end (mechanic steps are no-ops until ported).
+      if (step === 'roll') {
+        // Post the Roll Combat Dice button; handleCombatRoll rolls (Focus die is
+        // already in the pool from declaration) and advances the sequence.
+        await postRollDiceButton(thread, game, c, ctx);
+        return;
+      }
+      // TODO (next): wire spend_surges / damage. Until ported, advance through so
+      // the sequence walks end-to-end.
       await _advanceSequence(c, handlers);
     },
     onComplete: async (_c) => { /* attack fully resolved — finalize handled by damage step once ported */ },
@@ -4798,8 +4804,13 @@ export async function handleCombatRoll(interaction, ctx) {
     // G12: Track which die indices have been rerolled (each die max once)
     combat.attackerRerolledIndices = [];
     combat.defenderRerolledIndices = [];
-    // Combat gate: both players review dice results before reroll window
-    await sendCombatGate(thread, game, combat, 'post_roll', ctx);
+    if (combat._seqActive) {
+      // Rebuild path: roll is complete → advance the sequence to the rerolls window.
+      await _advanceSequence(combat, _seqHandlers(thread, game, combat, ctx));
+    } else {
+      // Combat gate: both players review dice results before reroll window
+      await sendCombatGate(thread, game, combat, 'post_roll', ctx);
+    }
     saveGames(game.gameId);
     return;
   }
