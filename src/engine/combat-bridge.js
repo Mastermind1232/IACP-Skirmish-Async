@@ -2193,12 +2193,30 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   } // end legacy disabled cleave block
-  // destruct 2026-05-08: post-resolve unified window.
-  // After all step-7 damage applies and any per-DC inline applies have
-  // run (those are still inline pending follow-up commits to migrate),
-  // enqueue the step-8 keyword effects + post the attacker window.
-  // Each click fires one effect; Done finishes; defender window opens
-  // next; defender Done runs the legacy combat-close path below.
+  // destruct 2026-05-08: post-resolve unified window. Extracted to
+  // runAfterResolveWindow (alexanbv 2026-06-15 damage/after_resolve split) — the
+  // body the rebuild's `after_resolve` gate step owns. Called here at the same
+  // point so the legacy resolve path is byte-for-byte unchanged.
+  await runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
+}
+
+/**
+ * Run the attacker's after-attack (after_resolve) window: enqueue the step-8
+ * keyword effects (Blast / Cleave / Recover / CCs) + per-DC attacker effects,
+ * then post the attacker post-resolve window. Done → defender window → the
+ * legacy close path (checkPostCombatSurges, e.g. Return Fire → else
+ * finishCombatResolution).
+ *
+ * Extracted verbatim from the tail of applyDamageAndFinishCombat as the seam for
+ * the gate rebuild's damage-vs-after_resolve split (alexanbv 2026-06-15). The
+ * legacy resolve calls it at the same point (no behavior change); the sequence
+ * driver's `after_resolve` gate step will call it instead of bundling it into
+ * the damage step. Crossing locals (resultText, embedRefreshMsgIds, ownerId,
+ * defenderPlayerNum) are passed explicitly since they originate earlier in the
+ * damage core.
+ */
+export async function runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
+  const { checkPostCombatSurges: _checkPostCombatSurges, finishCombatResolution: _finishCombatResolution } = deps;
   _enqueueAttackerStep8Effects(combat);
   // Per-DC atk-side effects (Slippery's atk-side cousin Leg Hydraulics
   // and the rest as they migrate). Reads combat.attackerDcName +
