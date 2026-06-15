@@ -599,8 +599,9 @@ describe('ORACLE-SEP: damage / after_resolve separation (_seqActive)', () => {
     const aBystanderBefore = A.bystander.hp();
     await A.deps.resolveCombatAfterRolls(A.game, A.combat, A.deps.client);
     const aTargetAfter = A.target.hp();
+    const aBystanderAfter = A.bystander.hp();
     assert.strictEqual(aTargetAfter, aTargetBefore - 2, 'legacy: target took 2 damage');
-    assert.strictEqual(A.bystander.hp(), aBystanderBefore - 2, 'legacy: bystander took 2 Blast (bundled)');
+    assert.strictEqual(aBystanderAfter, aBystanderBefore - 2, 'legacy: bystander took 2 Blast (bundled)');
     assert.ok(!A.combat._afterResolveArgs, 'legacy: after_resolve NOT deferred (ran inline)');
 
     // Run B — separation path (_seqActive): identical damage core, Blast deferred.
@@ -610,11 +611,26 @@ describe('ORACLE-SEP: damage / after_resolve separation (_seqActive)', () => {
     await B.deps.resolveCombatAfterRolls(B.game, B.combat, B.deps.client);
     // Damage core: main-target damage matches the legacy run exactly.
     assert.strictEqual(B.target.hp(), aTargetAfter, 'separation: main-target damage identical to legacy');
-    // After-attack window deferred: Blast has NOT fired in the damage step.
+    // The DAMAGE STEP MUST NOT FINISH COMBAT (alexanbv): the after-attack window
+    // is deferred — Blast has NOT fired in the damage step.
     assert.strictEqual(B.bystander.hp(), bBystanderBefore, 'separation: Blast deferred — bystander untouched after the damage step');
     // Crossing locals stashed for the after_resolve gate, serializable (Set→array).
     assert.ok(B.combat._afterResolveArgs, 'separation: after_resolve args stashed for the gate');
     assert.ok(Array.isArray(B.combat._afterResolveArgs.embedRefreshMsgIds), 'separation: embedRefreshMsgIds serialized to an array (survives game save)');
     assert.strictEqual(B.combat._afterResolveArgs.defenderPlayerNum, 2, 'separation: stashed defenderPlayerNum is correct');
+
+    // Now run the after_resolve GATE (what the sequence driver does after the
+    // damage step): the bound window auto-drains under the fake client, firing
+    // the attacker's after-attack effects (Blast) — identical net result to the
+    // legacy bundled run. This proves the gate, not just the deferral.
+    const thr = await B.deps.client.channels.fetch(B.combat.combatThreadId);
+    const a = B.combat._afterResolveArgs;
+    await B.deps.runAfterResolveWindow(thr, B.game, B.combat, {
+      resultText: a.resultText,
+      embedRefreshMsgIds: new Set(a.embedRefreshMsgIds),
+      ownerId: a.ownerId,
+      defenderPlayerNum: a.defenderPlayerNum,
+    }, B.deps.client);
+    assert.strictEqual(B.bystander.hp(), aBystanderAfter, 'separation: after_resolve gate fires Blast to the SAME net result as legacy');
   });
 });
