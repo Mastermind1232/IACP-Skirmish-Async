@@ -1,11 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  parseInnatePassives,
-  applyInnateAttackerPassives,
-  applyInnateDefenderPassives,
-} from './innate-passive-helpers.js';
+import { parseInnatePassives } from './innate-passive-helpers.js';
 
 const ZERO = { damage: 0, surge: 0, block: 0, evade: 0, accuracy: 0, pierce: 0, blast: 0, cleave: 0 };
 
@@ -88,35 +84,3 @@ test('parseInnatePassives: known DC values', () => {
   assert.deepEqual(atdp, { ...ZERO, block: 1, accuracy: 3 });
 });
 
-test('applyInnateAttackerPassives: mutates bonusHits / bonusSurge / bonusAccuracy / bonusPierce / bonusBlast', () => {
-  const combat = {};
-  applyInnateAttackerPassives(combat, { passives: ['+1 Hit', '+1 Surge', '+2 Accuracy', 'Pierce 1', '+1 Blast'] });
-  assert.equal(combat.bonusHits, 1);
-  assert.equal(combat.bonusSurge, 1);
-  assert.equal(combat.bonusAccuracy, 2);
-  assert.equal(combat.bonusPierce, 1);
-  assert.equal(combat.bonusBlast, 1);
-});
-
-test('applyInnateAttackerPassives: stacks with existing bonus', () => {
-  const combat = { bonusHits: 2, bonusSurge: 1 };
-  applyInnateAttackerPassives(combat, { passives: ['+1 Hit'] });
-  assert.equal(combat.bonusHits, 3);
-  assert.equal(combat.bonusSurge, 1, 'unchanged when no surge passive');
-});
-
-test('applyInnateDefenderPassives: mutates combat.bonusBlock and bonusEvade', () => {
-  const combat = {};
-  applyInnateDefenderPassives(combat, { passives: ['Block 1', '+1 Evade'] });
-  assert.equal(combat.bonusBlock, 1);
-  assert.equal(combat.bonusEvade, 1);
-});
-
-test('null-safety: missing dcEffect or combat is no-op', () => {
-  // Should not throw
-  applyInnateAttackerPassives(null, { passives: ['+1 Hit'] });
-  applyInnateAttackerPassives({}, null);
-  applyInnateAttackerPassives({}, undefined);
-  applyInnateDefenderPassives(null, { passives: ['Block 1'] });
-  applyInnateDefenderPassives({}, null);
-});

@@ -81,30 +81,12 @@ export function parseInnatePassives(passives) {
   return total;
 }
 
-/**
- * Apply the attacker's innate +Damage / +Surge passives to combat.
- * Mutates `combat.bonusHits` and `combat.bonusSurge`.
- */
-export function applyInnateAttackerPassives(combat, dcEffect) {
-  if (!combat || !dcEffect) return;
-  const { damage, surge, accuracy, pierce, blast, cleave } = parseInnatePassives(dcEffect.passives);
-  if (damage > 0) combat.bonusHits = (combat.bonusHits || 0) + damage;
-  if (surge > 0) combat.bonusSurge = (combat.bonusSurge || 0) + surge;
-  if (accuracy > 0) combat.bonusAccuracy = (combat.bonusAccuracy || 0) + accuracy;
-  if (pierce > 0) combat.bonusPierce = (combat.bonusPierce || 0) + pierce;
-  if (blast > 0) combat.bonusBlast = (combat.bonusBlast || 0) + blast;
-  if (cleave > 0) combat.bonusCleave = (combat.bonusCleave || 0) + cleave;
-}
-
-/**
- * Apply the defender's innate +Block / +Evade passives to combat.
- * Mutates `combat.bonusBlock` and `combat.bonusEvade`. Both fields are
- * dropped by Overwhelming Impact's `ignoreDefenseResultsNotOnDice` gate
- * in computeCombatResult — that's the correct CRR semantic.
- */
-export function applyInnateDefenderPassives(combat, dcEffect) {
-  if (!combat || !dcEffect) return;
-  const { block, evade } = parseInnatePassives(dcEffect.passives);
-  if (block > 0) combat.bonusBlock = (combat.bonusBlock || 0) + block;
-  if (evade > 0) combat.bonusEvade = (combat.bonusEvade || 0) + evade;
-}
+// NOTE (alexanbv 2026-06-15 "remove bad code / scattered pathways"): the former
+// applyInnateAttackerPassives / applyInnateDefenderPassives helpers were removed.
+// They were dead (referenced only by their own test) and a subtly-divergent
+// duplicate of the live innate stat-mod parser in handlers/combat.js (which
+// applies +Hit/+Damage/+Accuracy/Pierce/+Surge/Blast/Cleave/Bleed/Professional
+// for the attacker and Block/Evade for the defender at the modifiers step). The
+// per-window migration consolidates that parser onto the registry; until then
+// the combat handler remains the single live path. parseInnatePassives stays —
+// it is the shared stat-mod extractor used by that path.
