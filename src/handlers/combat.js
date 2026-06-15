@@ -658,6 +658,23 @@ function _gateDeps(ctx) {
 function _seqHandlers(thread, game, combat, ctx) {
   const handlers = {
     driveGate: async (step, c) => {
+      // after_resolve is not a choose-ability gate — it runs the proven
+      // post-resolve window (runAfterResolveWindow): post the attacker step-8
+      // Blast/Cleave/Return Fire effects, then close via checkPostCombatSurges →
+      // finishCombatResolution (which ends combat — this is the terminal step, so
+      // no further advance). The damage step stashed the crossing locals on
+      // c._afterResolveArgs (the Set was serialized to an array — rehydrate it).
+      if (step === 'after_resolve') {
+        const a = c._afterResolveArgs || {};
+        delete c._afterResolveArgs;
+        await ctx.runAfterResolveWindow(thread, game, c, {
+          resultText: a.resultText,
+          embedRefreshMsgIds: new Set(a.embedRefreshMsgIds || []),
+          ownerId: a.ownerId,
+          defenderPlayerNum: a.defenderPlayerNum,
+        }, ctx.client);
+        return;
+      }
       const cfg = _GATE_WINDOWS[step];
       const deps = _gateDeps(ctx);
       c[cfg.field] = step === 'on_declare'
@@ -680,9 +697,23 @@ function _seqHandlers(thread, game, combat, ctx) {
         await proceedAfterTokens(thread, game, c, ctx);
         return;
       }
-      // TODO (next): damage = range/acc + dodge check → damage pipeline (damage,
-      // defeat interrupts, nested attacks) → advance. Needs the resolve-flow split
-      // (damage vs after_resolve gate). Stubbed (advance) so the walk never stalls.
+      if (step === 'damage') {
+        // Damage core: defense-mod accrual → computeCombatResult (dodge +
+        // range/acc) → Figurehead interrupt → apply main-target damage + defeat
+        // interrupts, all via the existing resolve path. With c._seqActive set,
+        // applyDamageAndFinishCombat DEFERS the after_resolve window and stashes
+        // c._afterResolveArgs (alexanbv 2026-06-15 "proceed with the separation").
+        // Advance to the after_resolve gate ONLY when the core reached that
+        // deferral point. If it paused for an interrupt (Figurehead / Extra
+        // Protection) or finished early (NPC/crate target → no after_resolve
+        // window), _afterResolveArgs is unset and we don't advance here — the
+        // resume / early-finish path owns continuation. [Interrupt + NPC resume
+        // wiring is a follow-up slice; the normal path is validated end-to-end.]
+        await ctx.resolveCombatAfterRolls(game, c, ctx.client);
+        if (c._afterResolveArgs) await _advanceSequence(c, handlers);
+        return;
+      }
+      // Fallback: unknown mechanic step — advance so the walk never stalls.
       await _advanceSequence(c, handlers);
     },
     onComplete: async (_c) => { /* attack fully resolved — finalize handled by damage step once ported */ },

@@ -177,6 +177,7 @@ import {
   applyDamageAndFinishCombat as _applyDamageAndFinishCombatPure,
   checkPostCombatSurges as _checkPostCombatSurgesPure,
   finishCombatResolution as _finishCombatResolutionPure,
+  runAfterResolveWindow as _runAfterResolveWindowPure,
   computeCleaveEligibleTargets,
 } from './src/engine/combat-bridge.js';
 import {
@@ -1500,6 +1501,45 @@ async function resolveCombatAfterRolls(game, combat, client) {
 /** Apply damage, conditions, defeat logic, and finish combat resolution. Called from resolveCombatAfterRolls and handleFigureheadDecision. */
 async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client) {
   return _applyDamageAndFinishCombatPure(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client, {
+    logGameAction, saveGames, dcHealthState, dcMessageMeta,
+    dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
+    reduceHp, healHp, removeFigurePosition,
+    calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
+    getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
+    getPlayerId, getMapData, getEffectiveMapSpaces,
+    isWithinN, hasLineOfSight, getRange,
+    hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
+    getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
+    getEffectiveFigureSize, getFootprintCells, getFigureSize,
+    findDcMessageIdForFigure, lookupFigureDcIndex, getFigureLabel,
+    getCcHand, getCcEffectsData, getCcEffect,
+    ccHandKey, ccDiscardKey, ccDeckKey, ccAttachmentsKey,
+    _applyCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS,
+    isDcUnique, getActivatedDcIndices,
+    isDbConfigured, achievementsChannelId, checkAndGrantAchievements, checkAndPostAchievements, postAchievementNotification,
+    checkNefariousGains, checkWinConditions, checkHuntDissent, checkThisIsTheWay,
+    checkFriendlyDefeatedPassiveRedraws,
+    decrementActivationIfGroupDefeated, updateAttachmentMessageForDc,
+    grantMovementBank, grantPowerTokens, getDiceData,
+    ButtonBuilder, ButtonStyle, ActionRowBuilder,
+    getCelebrationButtons, getCleaveTargetButtons,
+    applyNpcDamageToFigure,
+    checkPostCombatSurges,
+    finishCombatResolution,
+    normalizeCoord,
+    sendBleedingPrompt,
+  });
+}
+
+/**
+ * After-attack (after_resolve) window — the post-resolve effects (Blast/Cleave/
+ * Return Fire) the gate-sequence rebuild's `after_resolve` step owns, run via
+ * the bound bridge after the damage step defers it. Mirrors the deps bag of
+ * applyDamageAndFinishCombat because runAfterResolveWindow forwards `deps` to the
+ * post-resolve window poster + per-DC effect enqueue (keep the two bags in sync).
+ */
+async function runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client) {
+  return _runAfterResolveWindowPure(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, {
     logGameAction, saveGames, dcHealthState, dcMessageMeta,
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
     reduceHp, healHp, removeFigurePosition,
@@ -3513,7 +3553,7 @@ function buildAllDeps() {
     clearMoveGridMessages, getLegalInteractOptions, sendBleedingPrompt,
     getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
     checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
-    checkPostCombatSurges, resolveCombatAfterRolls, hasActionsRemainingInGame,
+    checkPostCombatSurges, resolveCombatAfterRolls, runAfterResolveWindow, hasActionsRemainingInGame,
     getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage, repostRoundActivationMessage,
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,

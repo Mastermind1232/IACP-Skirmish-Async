@@ -112,6 +112,7 @@ import {
   applyDamageAndFinishCombat as _realApplyDamageAndFinishCombat,
   finishCombatResolution as _realFinishCombatResolution,
   checkPostCombatSurges as _realCheckPostCombatSurges,
+  runAfterResolveWindow as _realRunAfterResolveWindow,
   computeCleaveEligibleTargets,
 } from '../engine/combat-bridge.js';
 
@@ -451,6 +452,23 @@ export function buildHeadlessDeps(options = {}) {
     await _realResolveCombatAfterRolls(game, combat, clientArg || client, combatDeps);
   };
 
+  // runAfterResolveWindow: the after_resolve gate body (gate-sequence rebuild).
+  // Same deps wiring as applyDamageAndFinishCombat since it forwards `deps` to the
+  // post-resolve window poster + per-DC effect enqueue.
+  const runAfterResolveWindow = async (thread, game, combat, args, clientArg) => {
+    const combatDeps = _buildCombatDeps();
+    combatDeps.checkNefariousGains = checkNefariousGains;
+    combatDeps.checkWinConditions = checkWinConditions;
+    combatDeps.checkHuntDissent = checkHuntDissent;
+    combatDeps.checkThisIsTheWay = checkThisIsTheWay;
+    combatDeps.checkFriendlyDefeatedPassiveRedraws = checkFriendlyDefeatedPassiveRedraws;
+    combatDeps.decrementActivationIfGroupDefeated = decrementActivationIfGroupDefeated;
+    combatDeps.applyNpcDamageToFigure = applyNpcDamageToFigure;
+    combatDeps.checkPostCombatSurges = checkPostCombatSurges;
+    combatDeps.finishCombatResolution = finishCombatResolution;
+    await _realRunAfterResolveWindow(thread, game, combat, args, clientArg || client, combatDeps);
+  };
+
   // finishCombatResolution
   const finishCombatResolution = async (game, combat, resultText, embedRefreshMsgIds, clientArg) => {
     const combatDeps = _buildCombatDeps();
@@ -614,6 +632,7 @@ export function buildHeadlessDeps(options = {}) {
     // Game operations (real implementations wired with headless deps)
     processFigureDefeat,
     checkWinConditions, resolveCombatAfterRolls, applyDamageAndFinishCombat,
+    runAfterResolveWindow,
     finishCombatResolution, checkPostCombatSurges,
     computeCleaveEligibleTargets,
     isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),

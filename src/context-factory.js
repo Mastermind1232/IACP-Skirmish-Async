@@ -10,7 +10,7 @@ const COMBAT_DEPS = [
   'updateDcActionsMessage', 'updateActivationsMessage',
   'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
   'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
-  'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls',
+  'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls', 'runAfterResolveWindow',
   'saveGames', 'client', 'rollAttackDice', 'rollDefenseDice',
   'rollSingleAttackDie', 'rollSingleDefenseDie', 'recalcAttackTotals',
   'recalcDefenseTotals', 'getInnateRerolls', 'getAttackerSurgeAbilities',

@@ -142,6 +142,7 @@ const PARITY_CASES = [
   ['applyDamageAndFinishCombat','_applyDamageAndFinishCombatPure',4],
   ['checkPostCombatSurges',    '_checkPostCombatSurgesPure',      7],
   ['finishCombatResolution',   '_finishCombatResolutionPure',     5],
+  ['runAfterResolveWindow',    '_runAfterResolveWindowPure',      5],
 ];
 
 describe('Combat-bridge deps parity (production wrappers in index.js)', () => {

@@ -2193,10 +2193,19 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   } // end legacy disabled cleave block
-  // destruct 2026-05-08: post-resolve unified window. Extracted to
-  // runAfterResolveWindow (alexanbv 2026-06-15 damage/after_resolve split) — the
-  // body the rebuild's `after_resolve` gate step owns. Called here at the same
-  // point so the legacy resolve path is byte-for-byte unchanged.
+  // destruct 2026-05-08: post-resolve unified window, extracted to
+  // runAfterResolveWindow (the body the rebuild's `after_resolve` gate owns).
+  // alexanbv 2026-06-15 "proceed with the separation": when the attack walks the
+  // gate sequence, the DAMAGE step runs only the core (everything above); the
+  // separate after_resolve GATE step runs the window. Stash the crossing locals
+  // (the Set as an array so they survive a serialize) and return; the damage step
+  // sees combat._afterResolveArgs and advances to the after_resolve gate, which
+  // calls the bound runAfterResolveWindow. Legacy path (_seqActive unset) is
+  // byte-for-byte unchanged.
+  if (combat._seqActive) {
+    combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...embedRefreshMsgIds], ownerId, defenderPlayerNum };
+    return;
+  }
   await runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
 }
 

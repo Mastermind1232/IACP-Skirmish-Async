@@ -557,3 +557,64 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
     );
   });
 });
+
+// ── ORACLE-SEP: damage step / after_resolve gate separation ───────────────────
+// alexanbv 2026-06-15 "proceed with the separation". The gate-sequence rebuild
+// splits the bundled resolve into a DAMAGE step (dodge + range/acc → damage
+// pipeline + defeat interrupts) and a separate after_resolve GATE step (Blast /
+// Cleave / Return Fire). With combat._seqActive set, applyDamageAndFinishCombat
+// applies the main-target damage but DEFERS the after-attack window, stashing
+// the crossing locals on combat._afterResolveArgs. This test drives the REAL
+// resolve both ways and asserts the damage core is identical and the after-attack
+// effect (Blast) is cleanly deferred — i.e. the separation changes nothing about
+// the numbers, only WHEN the after-attack window runs.
+describe('ORACLE-SEP: damage / after_resolve separation (_seqActive)', () => {
+  function setup() {
+    const built = createTestGame()
+      .withPlayer1Army([{ dcName: 'Bossk' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }, { dcName: 'Gideon Argus' }])
+      .inRound(1)
+      .build();
+    const { game, dcMessageMeta, dcHealthState } = built;
+    const attackerFigKey = Object.keys(game.figurePositions[1])[0];
+    game.figurePositions[1] = { [attackerFigKey]: 'b1' };
+    const target = getP2DcInfo(game, dcMessageMeta, dcHealthState, 0);
+    const bystander = getP2DcInfo(game, dcMessageMeta, dcHealthState, 1);
+    game.figurePositions[2] = { [target.figKey]: 'c1', [bystander.figKey]: 'd1' };
+    // Target survives (full HP, takes 2) so both target damage and Blast are
+    // observable. 3 dmg − 1 block = 2 to target; surgeBlast 2 to the adjacent
+    // bystander (d1 is adjacent to c1, not to attacker b1).
+    const combat = buildCombat(game, dcMessageMeta, {
+      attackRoll: { acc: 5, dmg: 3, surge: 1 },
+      defenseRoll: { block: 1, evade: 0, dodge: false },
+      extra: { surgeBlast: 2 },
+    });
+    return { ...built, target, bystander, combat };
+  }
+
+  it('legacy applies main-target damage + Blast bundled; _seqActive applies identical damage and DEFERS Blast', async () => {
+    // Run A — legacy bundled path (no _seqActive).
+    const A = setup();
+    const aTargetBefore = A.target.hp();
+    const aBystanderBefore = A.bystander.hp();
+    await A.deps.resolveCombatAfterRolls(A.game, A.combat, A.deps.client);
+    const aTargetAfter = A.target.hp();
+    assert.strictEqual(aTargetAfter, aTargetBefore - 2, 'legacy: target took 2 damage');
+    assert.strictEqual(A.bystander.hp(), aBystanderBefore - 2, 'legacy: bystander took 2 Blast (bundled)');
+    assert.ok(!A.combat._afterResolveArgs, 'legacy: after_resolve NOT deferred (ran inline)');
+
+    // Run B — separation path (_seqActive): identical damage core, Blast deferred.
+    const B = setup();
+    const bBystanderBefore = B.bystander.hp();
+    B.combat._seqActive = true;
+    await B.deps.resolveCombatAfterRolls(B.game, B.combat, B.deps.client);
+    // Damage core: main-target damage matches the legacy run exactly.
+    assert.strictEqual(B.target.hp(), aTargetAfter, 'separation: main-target damage identical to legacy');
+    // After-attack window deferred: Blast has NOT fired in the damage step.
+    assert.strictEqual(B.bystander.hp(), bBystanderBefore, 'separation: Blast deferred — bystander untouched after the damage step');
+    // Crossing locals stashed for the after_resolve gate, serializable (Set→array).
+    assert.ok(B.combat._afterResolveArgs, 'separation: after_resolve args stashed for the gate');
+    assert.ok(Array.isArray(B.combat._afterResolveArgs.embedRefreshMsgIds), 'separation: embedRefreshMsgIds serialized to an array (survives game save)');
+    assert.strictEqual(B.combat._afterResolveArgs.defenderPlayerNum, 2, 'separation: stashed defenderPlayerNum is correct');
+  });
+});
