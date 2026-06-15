@@ -318,6 +318,13 @@ register('ct_reroll_', handleCrossTrainingReroll, 'combat');
 register('pre_reroll_', handlePreReroll, 'combat');
 register('combat_passive_', handleCombatPassive, 'combat');
 register('combat_mods_pick_', handleModsPick, 'combat');
+// Generic gate pick handler also serves the other attack windows (alexanbv
+// 2026-06-15 "build the WHOLE sequence with all the gates"). handleModsPick
+// recovers the window from the per-window prefix.
+register('combat_ondeclare_pick_', handleModsPick, 'combat');
+register('combat_rerolls_pick_', handleModsPick, 'combat');
+register('combat_afterresolve_pick_', handleModsPick, 'combat');
+register('combat_special_pick_', handleModsPick, 'combat');
 register('combat_modsub_', handleModsSubChoice, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('od_dieswap_', handleOnDeclareDieSwap, 'combat');

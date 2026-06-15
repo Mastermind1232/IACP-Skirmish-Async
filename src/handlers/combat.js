@@ -580,7 +580,37 @@ const _GATE_WINDOWS = {
     firePassive: null, // on-declare passives auto-fire inline; gate carries only interactive abilities
     onComplete: async (thread, game, combat, ctx) => { delete combat.onDeclareGate; if (ctx._onDeclareGateDone) await ctx._onDeclareGateDone(thread, game, combat); },
   },
+  // Remaining attack windows (alexanbv 2026-06-15 "build the WHOLE sequence with
+  // all the gates"). Wired into the config so the generic pick/subchoice/driver
+  // layer serves them; their onComplete is set by the sequence driver when the
+  // attack walks the windows in order. All behind the gate flag (off in prod).
+  rerolls: {
+    field: 'rerollsGate', pickPrefix: 'combat_rerolls_pick_', title: 'Rerolls',
+    firePassive: null,
+    onComplete: async (thread, game, combat, ctx) => { delete combat.rerollsGate; if (ctx._rerollsGateDone) await ctx._rerollsGateDone(thread, game, combat); },
+  },
+  after_resolve: {
+    field: 'afterResolveGate', pickPrefix: 'combat_afterresolve_pick_', title: 'After Resolve',
+    firePassive: null,
+    onComplete: async (thread, game, combat, ctx) => { delete combat.afterResolveGate; if (ctx._afterResolveGateDone) await ctx._afterResolveGateDone(thread, game, combat); },
+  },
+  special: {
+    field: 'specialGate', pickPrefix: 'combat_special_pick_', title: 'Special',
+    firePassive: null,
+    onComplete: async (thread, game, combat, ctx) => { delete combat.specialGate; if (ctx._specialGateDone) await ctx._specialGateDone(thread, game, combat); },
+  },
 };
+
+/** The window whose gate is currently live on `combat` (sequential — at most one). */
+function _activeGateWindow(combat) {
+  for (const [w, cfg] of Object.entries(_GATE_WINDOWS)) if (combat?.[cfg.field]) return w;
+  return null;
+}
+/** Map a pick/choose customId back to its window via the per-window prefix. */
+function _windowForPickCustomId(customId) {
+  for (const [w, cfg] of Object.entries(_GATE_WINDOWS)) if (customId.startsWith(cfg.pickPrefix)) return w;
+  return null;
+}
 
 /** Drive a step's gate (generic). window ∈ keys of _GATE_WINDOWS. */
 async function _driveGatePath(window, thread, game, combat, ctx) {
@@ -909,7 +939,13 @@ const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'da
  */
 export async function handleModsPick(interaction, ctx) {
   const { getGame, replyIfGameEnded, saveGames } = ctx;
-  const rest = parseCustomId(interaction.customId, 'combat_mods_pick_');
+  // GENERIC across windows (alexanbv 2026-06-15): the window is recovered from
+  // the per-window pick prefix (combat_<window>_pick_), so one handler drives
+  // mods / on_declare / rerolls / after_resolve / special identically.
+  const window = _windowForPickCustomId(interaction.customId);
+  if (!window) return;
+  const cfg = _GATE_WINDOWS[window];
+  const rest = parseCustomId(interaction.customId, cfg.pickPrefix);
   // gameId is the first token; the pick id may itself contain underscores
   // (e.g. spray_fire), so split on the FIRST underscore, not the last.
   const u1 = rest.indexOf('_');
@@ -919,36 +955,37 @@ export async function handleModsPick(interaction, ctx) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId || !combat.modsGate) return;
+  if (!combat || combat.gameId !== gameId || !combat[cfg.field]) return;
+  const gate = combat[cfg.field];
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
-  const side = _modsActiveSide(combat.modsGate);
+  const side = _modsActiveSide(gate);
   if (!side) return;
   if (pick === 'done') {
-    passModsSide(combat.modsGate, side);
-    await _driveModsGatePath(thread, game, combat, ctx);
+    passModsSide(gate, side);
+    await _driveGatePath(window, thread, game, combat, ctx);
   } else {
     const r = COMBAT_RESOLVERS[pick];
     if (r) {
       // Generic, data-driven: post the ability's sub-choice prompt, or apply
       // immediately if it has none. The handler never names the ability.
-      const p = r.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId, id: pick }) : null;
+      const p = r.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId, id: pick, window }) : null;
       if (p?.buttons) {
         const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
           new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
         await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
         // wait for the sub-choice (handleModsSubChoice resolves + re-drives)
       } else {
-        if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick });
-        recordModsChoice(combat.modsGate, side, pick);
-        await _driveModsGatePath(thread, game, combat, ctx);
+        if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
+        recordModsChoice(gate, side, pick);
+        await _driveGatePath(window, thread, game, combat, ctx);
       }
     } else {
       // Unknown id (no resolver registered) — record + skip so the gate never
       // stalls. (Every combat ability should register a resolver.)
-      recordModsChoice(combat.modsGate, side, pick);
-      await _driveModsGatePath(thread, game, combat, ctx);
+      recordModsChoice(gate, side, pick);
+      await _driveGatePath(window, thread, game, combat, ctx);
     }
   }
   saveGames?.(game.gameId);
@@ -1008,9 +1045,13 @@ export async function handleModsSubChoice(interaction, ctx) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId || !combat.modsGate) return;
+  if (!combat || combat.gameId !== gameId) return;
+  // GENERIC across windows: the sub-choice belongs to whichever gate is live.
+  const window = _activeGateWindow(combat);
+  if (!window) return;
+  const gate = combat[_GATE_WINDOWS[window].field];
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  const side = _modsActiveSide(combat.modsGate);
+  const side = _modsActiveSide(gate);
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
 
@@ -1018,19 +1059,19 @@ export async function handleModsSubChoice(interaction, ctx) {
   // the chosen option, then record + re-drive. Never names a specific ability.
   const _resolver = COMBAT_RESOLVERS[id];
   if (_resolver) {
-    const _res = _resolver.apply ? await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId, id }) : null;
+    const _res = _resolver.apply ? await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId, id, window }) : null;
     // Multi-stage abilities (e.g. pick die → pick face) return { followUp: true }
     // after posting their next prompt; don't record/advance until they finish.
     if (_res?.followUp) { saveGames?.(game.gameId); return; }
-    if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
-    await _driveModsGatePath(thread, game, combat, ctx);
+    if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
+    await _driveGatePath(window, thread, game, combat, ctx);
     saveGames?.(game.gameId);
     return;
   }
 
 
-  if (side) { try { recordModsChoice(combat.modsGate, side, id); } catch { /* not pending */ } }
-  await _driveModsGatePath(thread, game, combat, ctx);
+  if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
+  await _driveGatePath(window, thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
 
