@@ -11,6 +11,7 @@
 
 import './combat-ability-timing-catalog.js';
 import './combat-abilities-ondeclare.js';
+import './combat-abilities-from-csv.js'; // register ALL combat abilities into their gates from the CSV (timing-only until wired)
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 

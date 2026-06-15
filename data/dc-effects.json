@@ -13,9 +13,7 @@
       "speed": 5,
       "passives": [
         "Efficient Travel",
-        "Mounted",
-        "Thrusters",
-        "Forward Mounted Blasters"
+        "Thrusters"
       ],
       "figures": 2,
       "attack": {
@@ -35,7 +33,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Mounted",
+        "Forward Mounted Blasters"
+      ]
     },
     "[A New Hope]": {
       "abilityText": "Include this card in your army only if each group in your army has one of the following names or sub-names:\n- \"Hero of the Rebellion\"\n- \"C-3PO'\n- \"Chewbacca\"\n- \"Han Solo\"\n- \"Leia Organa\"\n- \"Obi-Wan Kenobi\"\n- \"R2-D2\"\n\n--------------------------\nDeplete this card to have a friendly figure play a Command card with a restriction matching the name of another Deployment card in your army.",
@@ -192,10 +194,7 @@
       "health": 8,
       "speed": 4,
       "passives": [
-        "Priority Target",
-        "Bleed",
-        "+2 Accuracy",
-        "Pierce 1"
+        "Priority Target"
       ],
       "figures": 1,
       "attack": {
@@ -213,7 +212,12 @@
       ],
       "attachment": true,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Bleed",
+        "+2 Accuracy",
+        "Pierce 1"
+      ]
     },
     "[Focused on the Kill]": {
       "abilityText": "IG-88 (ASSASSIN DROID) ONLY\n\nPassive bonus: +5 Health\n\nAt the start of your activation, gain 2 movement points. Before you declare an attack, you become Focused. \n\nYou lose \"Surge: Recover 3 Damage.\" \n\nYou gain: \"Surge: Pierce 1.\"",
@@ -318,10 +322,6 @@
       "cost": 4,
       "health": 7,
       "speed": 3,
-      "passives": [
-        "+2 Accuracy",
-        "Guidance Systems"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -338,7 +338,11 @@
         "damage 2"
       ],
       "attachment": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Guidance Systems",
+        "+2 Accuracy"
+      ]
     },
     "[Motivation]": {
       "abilityText": "UNIQUE FIGURE ONLY\n\nExhaust this card during your activation and choose a friendly figure with a lower figure cost than you with a line of sight to you. That figure may discard a HARMFUL condition or recover 1 Damage. Then, that figure gains 1 movement point.",
@@ -582,9 +586,6 @@
       "cost": 5,
       "health": 8,
       "speed": 4,
-      "passives": [
-        "Blast 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -602,7 +603,10 @@
       ],
       "attachment": true,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Blast 1"
+      ]
     },
     "[Zillo Technique]": {
       "abilityText": "Exhaust this card while a friendly figure is defending to reduce the Pierce value of the attack results by 2, to a minimum of 0.\n\nWhile a friendly figure is defending, you may discard 1 Command card to apply +1 Block to the defense results. Limit once per attack.",
@@ -657,9 +661,6 @@
       "cost": 7,
       "health": 9,
       "speed": 5,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -685,6 +686,9 @@
       "specialAbilityIds": [
         "shared_intuition",
         "programming_override_4lom"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "88-Z": {
@@ -821,10 +825,6 @@
       "subCost": 4,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "Pierce 1",
-        "+1 Accuracy"
-      ],
       "figures": 3,
       "attack": {
         "dice": [
@@ -843,7 +843,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Pierce 1",
+        "+1 Accuracy"
+      ]
     },
     "Alliance Ranger (Regular)": {
       "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you reroll 1 attack die.",
@@ -859,9 +863,6 @@
       "subCost": 3,
       "health": 5,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 3,
       "attack": {
         "dice": [
@@ -879,7 +880,10 @@
         "accuracy 2"
       ],
       "attachment": false,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "+1 Accuracy"
+      ]
     },
     "Alliance Smuggler (Elite)": {
       "abilityText": "Special Action (Improved Smuggler's Instincts): Perform an interact, then move up to 3 spaces.\n\nSlippery: While defending, apply -2 Accuracy to the attack results. After an attack targeting you resolves, gain 2 movement points.",
@@ -962,8 +966,7 @@
       "health": 16,
       "speed": 3,
       "passives": [
-        "Block 1",
-        "+3 Accuracy"
+        "Massive"
       ],
       "figures": 1,
       "attack": {
@@ -978,7 +981,6 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1",
         "pierce 2"
       ],
       "attachment": false,
@@ -986,6 +988,10 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "charge_generators"
+      ],
+      "abilities": [
+        "Block 1",
+        "+3 Accuracy"
       ]
     },
     "AT-RT": {
@@ -998,10 +1004,6 @@
       "cost": 8,
       "health": 13,
       "speed": 5,
-      "passives": [
-        "Block 1",
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1024,6 +1026,10 @@
       "specialAbilityIds": [
         "mortar_launcher",
         "vanguard"
+      ],
+      "abilities": [
+        "Block 1",
+        "+2 Accuracy"
       ]
     },
     "AT-ST": {
@@ -1037,7 +1043,7 @@
       "health": 15,
       "speed": 4,
       "passives": [
-        "+3 Accuracy"
+        "Massive"
       ],
       "figures": 1,
       "attack": {
@@ -1062,7 +1068,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "+3 Accuracy"
+      ]
     },
     "Bantha Rider": {
       "abilityText": "Wild Beast: When you would perform an attack, you may perform a Special Action instead.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
@@ -1081,7 +1090,7 @@
         1
       ],
       "passives": [
-        "Wild Beast"
+        "Massive"
       ],
       "figures": 1,
       "attack": {
@@ -1100,7 +1109,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Wild Beast"
+      ]
     },
     "Baze Malbus": {
       "abilityText": "Into the Fray: At the start of your activation, gain 1 Surge Token for each hostile figure with line of sight to you. Then, gain 1 movement point.\n\nAssault: You can perform multiple attacks each activation.\n\nHold the Line: At the end of your activation, gain 1 Block Token for each hostile figure with line of sight to you.",
@@ -1112,11 +1124,6 @@
       "cost": 6,
       "health": 11,
       "speed": 3,
-      "passives": [
-        "+2 Accuracy",
-        "Into the Fray",
-        "Hold the Line"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1136,7 +1143,12 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Into the Fray",
+        "Hold the Line",
+        "+2 Accuracy"
+      ]
     },
     "BD-1": {
       "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
@@ -1171,9 +1183,6 @@
       "cost": 3,
       "health": 5,
       "speed": 3,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1200,6 +1209,9 @@
       ],
       "specials": [
         "Bartered Information"
+      ],
+      "abilities": [
+        "+1 Accuracy"
       ]
     },
     "Biv Bodhrik": {
@@ -1212,10 +1224,6 @@
       "cost": 7,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "Block 1",
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1242,6 +1250,10 @@
       ],
       "specials": [
         "Multi-Fire"
+      ],
+      "abilities": [
+        "Block 1",
+        "+2 Accuracy"
       ]
     },
     "Bo-Katan Kryze": {
@@ -1255,8 +1267,7 @@
       "health": 12,
       "speed": 5,
       "passives": [
-        "Mobile",
-        "+1 Accuracy"
+        "Mobile"
       ],
       "figures": 1,
       "attack": {
@@ -1283,6 +1294,9 @@
         "defensive_fire_bokatan",
         "dual_wield_pistols_bokatan",
         "last_wielder_darksaber_bokatan"
+      ],
+      "abilities": [
+        "+1 Accuracy"
       ]
     },
     "Boba Fett": {
@@ -1296,10 +1310,6 @@
       "cost": 13,
       "health": 14,
       "speed": 6,
-      "passives": [
-        "Block 1",
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1324,15 +1334,16 @@
         "wrist_cord",
         "wrist_flamethrower",
         "ee3_carbine"
+      ],
+      "abilities": [
+        "Block 1",
+        "+1 Evade"
       ]
     },
     "Bodhi Rook": {
       "abilityText": "Smooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a Power Token while attacking, apply +2 Accuracy to the attack results.",
       "keywords": [
         "TECHNICIAN"
-      ],
-      "passives": [
-        "Smooth Landing"
       ],
       "subname": "THE PILOT",
       "cost": 2,
@@ -1350,10 +1361,9 @@
         "white"
       ],
       "surgeAbilities": [
-        "accuracy 1",
         "accuracy 2",
-        "Block 1",
-        "damage 1, pierce 1"
+        "damage 1",
+        "damage token"
       ],
       "attachment": false,
       "elite": true,
@@ -1361,6 +1371,10 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "air_support_bodhi"
+      ],
+      "abilities": [
+        "Smooth Landing",
+        "+1 Accuracy"
       ]
     },
     "Bossk": {
@@ -1373,11 +1387,6 @@
       "cost": 7,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy",
-        "Block 1",
-        "Regenerate"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1391,7 +1400,6 @@
         "white"
       ],
       "surgeAbilities": [
-        "damage 2",
         "pierce 2"
       ],
       "attachment": false,
@@ -1401,6 +1409,12 @@
       "specialAbilityIds": [
         "indiscriminate_fire",
         "regenerate_bossk"
+      ],
+      "abilities": [
+        "Regenerate",
+        "+2 Accuracy",
+        "Block 1",
+        "+2 Damage"
       ]
     },
     "BT-1": {
@@ -1517,7 +1531,7 @@
       "health": 9,
       "speed": 4,
       "passives": [
-        "+2 Accuracy"
+        "Mobile"
       ],
       "figures": 1,
       "attack": {
@@ -1540,6 +1554,9 @@
       "specialAbilityIds": [
         "flawless_execution",
         "i_make_the_rules_cad_bane"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "_Cal_Kestis_audit_note": "alexanbv 2026-05-10: Cal Kestis has TWO cleave 2 surge abilities (intentional, matches canonical card). Do not flag as duplicate in future audits — the surge list correctly contains 'cleave 2' twice.",
@@ -1587,10 +1604,6 @@
       ],
       "health": 3,
       "speed": 5,
-      "passives": [
-        "+2 Accuracy",
-        "+1 Evade"
-      ],
       "attack": {
         "dice": [
           "yellow"
@@ -1601,6 +1614,10 @@
       "companion": true,
       "surgeAbilities": [
         "agitate"
+      ],
+      "abilities": [
+        "+2 Accuracy",
+        "+1 Evade"
       ]
     },
     "Captain Terro": {
@@ -1635,7 +1652,7 @@
         "flamethrower_terro"
       ],
       "passives": [
-        "Professional"
+        "Efficient Travel"
       ],
       "specials": [
         "Mounted"
@@ -1643,7 +1660,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Professional",
+        "Mounted"
+      ]
     },
     "Cara Dune": {
       "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSmash: Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
@@ -1657,9 +1678,6 @@
       "cost": 9,
       "health": 14,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1684,6 +1702,9 @@
         "smash",
         "shock_and_awe",
         "hunker_down"
+      ],
+      "abilities": [
+        "+1 Accuracy"
       ]
     },
     "Cassian Andor": {
@@ -1711,7 +1732,7 @@
       "surgeAbilities": [
         "damage 2",
         "accuracy 2",
-        "hit token 2"
+        "damage token 2"
       ],
       "attachment": false,
       "elite": true,
@@ -1871,9 +1892,7 @@
       "cost": 6,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "Cover Fire"
-      ],
+      "passives": [],
       "figures": 1,
       "attack": {
         "dice": [
@@ -1897,7 +1916,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Cover Fire"
+      ]
     },
     "Dark Trooper Mk III": {
       "abilityText": "Advanced Targeting Computer: When you declare an attack, you become Focused. During this attack, you may reroll 1 attack die. If the rerolled die has fewer Damage symbols than before it was rerolled, apply +1 Damage to the attack results.\n\nDurasteel Fist: Once during your activation, you may choose 1 adjacent figure or object and roll 1 green die. It suffers Damage equal to the Damage results. Then, if you rolled a Surge and the target was a SMALL figure, you may push that figure up to 1 space.\n\nSpecial Action (Lift Off): Move up to 4 spaces. During this movement, you gain Mobile.",
@@ -1987,9 +2009,7 @@
         "SPY",
         "FORCE USER"
       ],
-      "passives": [
-        "Stealthy"
-      ],
+      "passives": [],
       "subname": "CODENAME: \"HAWKBAT\"",
       "cost": 6,
       "health": 10,
@@ -2013,7 +2033,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Stealthy"
+      ]
     },
     "Death Trooper (Elite)": {
       "abilityText": "Squad Captain: Once during your activation, an adjacent friendly TROOPER or LEADER may gain 1 Power Token.\n\nField Tactics: After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses \"Field Tactics\" this round.",
@@ -2028,9 +2051,6 @@
       "cost": 4,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "+4 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2043,12 +2063,15 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1",
+        "damage 2",
         "accuracy 2, pierce 1"
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "+4 Accuracy"
+      ]
     },
     "Death Trooper (Regular)": {
       "abilityText": "Security Detail: After deployment, a friendly LEADER gains 1 Block Token.\n\nField Tactics: After your activation, you may immediately activate a friendly TROOPER or LEADER group with cost 6 or less. That group loses \"Field Tactics\" this round.",
@@ -2059,10 +2082,6 @@
       "cost": 3,
       "health": 5,
       "speed": 4,
-      "passives": [
-        "+3 Accuracy",
-        "Security Detail"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2082,6 +2101,10 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "field_tactics_death_trooper_reg"
+      ],
+      "abilities": [
+        "Security Detail",
+        "+3 Accuracy"
       ]
     },
     "Del Meeko": {
@@ -2095,9 +2118,7 @@
       "cost": 5,
       "health": 8,
       "speed": 4,
-      "passives": [
-        "Open-Minded"
-      ],
+      "passives": [],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2112,7 +2133,8 @@
       ],
       "surgeAbilities": [
         "damage 2",
-        "accuracy 2"
+        "accuracy 2",
+        "gifted_mechanic"
       ],
       "attachment": false,
       "elite": true,
@@ -2121,6 +2143,9 @@
       "specialAbilityIds": [
         "gifted_mechanic",
         "expertise"
+      ],
+      "abilities": [
+        "Open-Minded"
       ]
     },
     "Dengar": {
@@ -2132,9 +2157,6 @@
       "cost": 7,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "Block 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2155,7 +2177,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Block 1"
+      ]
     },
     "Dewback Rider": {
       "abilityText": "Special Action (Shock Lance): Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Weakened.\n\nMounted: At the start of your activation, you gain 3 movement points.",
@@ -2167,8 +2192,7 @@
       "health": 9,
       "speed": 4,
       "passives": [
-        "Efficient Travel",
-        "Professional"
+        "Efficient Travel"
       ],
       "figures": 1,
       "attack": {
@@ -2197,7 +2221,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Professional"
+      ]
     },
     "Diala Passil": {
       "abilityText": "Battle Meditation: Before you declare an attack, become Focused.\n\nDefensive Stance: While defending, you may reroll 1 defense die. If you do, convert each Dodge result to 2 Block and 1 Evade.\n\nForce Throw: Once during your activation, you may suffer 1 Strain to choose another small figure within 3 spaces. Push that figure up to 2 spaces.",
@@ -2276,10 +2303,6 @@
       "cost": 5,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "+1 Surge",
-        "Advanced Weapons Research"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2294,7 +2317,7 @@
       "surgeAbilities": [
         "damage 2, accuracy 1",
         "pierce 1",
-        "damage 1, accuracy 2"
+        "damage 2, accuracy 1"
       ],
       "attachment": false,
       "elite": true,
@@ -2302,6 +2325,10 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "unhinged_director_krennic"
+      ],
+      "abilities": [
+        "Advanced Weapons Research",
+        "+1 Surge"
       ]
     },
     "Doctor Aphra": {
@@ -2361,7 +2388,7 @@
       ],
       "surgeAbilities": [
         "focus",
-        "block 1",
+        "damage 1",
         "accuracy 3"
       ],
       "specialAbilityIds": [
@@ -2383,9 +2410,6 @@
       "cost": 9,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+1 damage, +1 Accuracy, +1 Block"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2407,6 +2431,9 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "demolish"
+      ],
+      "abilities": [
+        "+1 damage, +1 Accuracy, +1 Block"
       ]
     },
     "E-Web Engineer (Elite)": {
@@ -2418,10 +2445,6 @@
       "cost": 5,
       "health": 8,
       "speed": 3,
-      "passives": [
-        "+2 Accuracy, +1 Block",
-        "Forward Emplacement"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2444,7 +2467,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Forward Emplacement",
+        "+2 Accuracy, +1 Block"
+      ]
     },
     "E-Web Engineer (Regular)": {
       "abilityText": "Tripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks each activation.",
@@ -2452,9 +2479,6 @@
       "cost": 6,
       "health": 5,
       "speed": 2,
-      "passives": [
-        "+3 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2475,7 +2499,10 @@
         "tripod_eweb"
       ],
       "attachment": false,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "+3 Accuracy"
+      ]
     },
     "Echo Base Trooper (Elite)": {
       "abilityText": "Front Line: While attacking, if the target is within 3 spaces of you, you may replace 1 blue die in your attack pool with 1 red die. +2 Accuracy.\n\nCortosis Weave: While you are defending, you may reduce the Pierce value of the attack results by 2, to a minimum of 0.",
@@ -2555,9 +2582,6 @@
       "cost": 8,
       "health": 13,
       "speed": 3,
-      "passives": [
-        "Pierce 3"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2583,6 +2607,9 @@
       "specialAbilityIds": [
         "force_lightning",
         "emperor_interrupt"
+      ],
+      "abilities": [
+        "Pierce 3"
       ]
     },
     "Ewok Warrior (Elite)": {
@@ -2598,10 +2625,6 @@
       "subCost": 2,
       "health": 3,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy",
-        "Ambush"
-      ],
       "figures": 3,
       "attack": {
         "dice": [
@@ -2619,7 +2642,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Ambush",
+        "+2 Accuracy"
+      ]
     },
     "Ezra Bridger": {
       "abilityText": "Brash: At the start of each round, move up to 4 spaces.\n\nMuch to Learn: While attacking, if there is another friendly unique figure within 3 spaces, you may reroll 1 attack die. If that figure is a FORCE USER, you may turn that attack die to any side instead.",
@@ -2630,9 +2657,6 @@
       "specialAbilityIds": [
         "much_to_learn",
         "brash_ezra"
-      ],
-      "passives": [
-        "Block 1"
       ],
       "subname": "SPECTRE-6",
       "cost": 7,
@@ -2658,7 +2682,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "Block 1"
+      ]
     },
     "Fenn Signis": {
       "abilityText": "Havoc Shot: After you resolve an attack, if it did not miss, you may suffer 1 Strain to choose up to 2 figures within 2 spaces of the target space in your line of sight. Those figures suffer 1 Damage.\n\nTactical Movement: At the start of your activation, you may choose a friendly figure within 3 spaces. That figure gains 2 movement points.",
@@ -2670,12 +2697,6 @@
       "cost": 7,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy",
-        "Pierce 1",
-        "Havoc Shot",
-        "Tactical Movement"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2698,6 +2719,12 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "havoc_shot"
+      ],
+      "abilities": [
+        "Havoc Shot",
+        "Tactical Movement",
+        "+1 Accuracy",
+        "Pierce 1"
       ]
     },
     "Fennec Shand": {
@@ -2712,10 +2739,6 @@
       "cost": 5,
       "health": 8,
       "speed": 5,
-      "passives": [
-        "Block 1",
-        "Bounty"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2735,7 +2758,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Bounty",
+        "Block 1"
+      ]
     },
     "Fifth Brother": {
       "abilityText": "Vigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nRelentless Pursuit: When you declare an attack, the target suffers 1 Strain.\n\nSpecial Action (Sith Acolyte): Search your Command deck for a card with the FORCE USER or BRAWLER trait that costs 2 or less, reveal it, and put it into your hand. Then, shuffle your Command deck.",
@@ -2748,9 +2775,6 @@
       "cost": 8,
       "health": 14,
       "speed": 4,
-      "passives": [
-        "Cleave 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -2777,6 +2801,9 @@
       ],
       "specials": [
         "Sith Acolyte"
+      ],
+      "abilities": [
+        "Cleave 1"
       ]
     },
     "Gaarkhan": {
@@ -2791,9 +2818,7 @@
       "health": 13,
       "speed": 4,
       "passives": [
-        "Block 1",
-        "Reach",
-        "Bleed"
+        "Reach"
       ],
       "figures": 1,
       "attack": {
@@ -2818,6 +2843,10 @@
       "specialAbilityIds": [
         "brutal_cleave",
         "charge"
+      ],
+      "abilities": [
+        "Bleed",
+        "Block 1"
       ]
     },
     "Gamorrean Guard (Elite)": {
@@ -2834,8 +2863,7 @@
       "health": 8,
       "speed": 4,
       "passives": [
-        "Reach",
-        "Professional"
+        "Reach"
       ],
       "figures": 2,
       "attack": {
@@ -2853,7 +2881,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Professional"
+      ]
     },
     "Gar Saxon": {
       "abilityText": "Airborne Commander: Friendly Mobile figures within 4 spaces can use your surge abilities.\n\nPersonal Combat Shield: Whenever you spend a Block while defending, apply +1 Evade to the defense results.\n\nSpecial Action (Gar Saxon's Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain and discards 1 Power Token.",
@@ -2867,8 +2898,7 @@
       "health": 9,
       "speed": 4,
       "passives": [
-        "Mobile",
-        "+1 damage"
+        "Mobile"
       ],
       "figures": 1,
       "attack": {
@@ -2898,7 +2928,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+1 damage"
+      ]
     },
     "General Sorin": {
       "abilityText": "Special Action (Bombardment): Choose an adjacent friendly figure. That figure may interrupt to perform an attack. The attack gains Blast 1.\n\nAdvanced Firepower: Adjacent friendly DROIDS and VEHICLES can use your surge abilities.",
@@ -2950,7 +2983,6 @@
       "health": 15,
       "speed": 4,
       "passives": [
-        "+2 Accuracy",
         "Massive"
       ],
       "figures": 1,
@@ -2967,8 +2999,10 @@
         "black"
       ],
       "surgeAbilities": [
-        "blast 3 (2 surges)",
         "pierce 2"
+      ],
+      "doubleSurgeAbilities": [
+        "blast 3"
       ],
       "attachment": false,
       "elite": true,
@@ -2977,6 +3011,9 @@
       "specialAbilityIds": [
         "epic_arsenal",
         "generals_orders_weiss"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Gideon Argus": {
@@ -3028,10 +3065,6 @@
       "cost": 4,
       "health": 7,
       "speed": 5,
-      "passives": [
-        "+1 damage",
-        "+1 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3051,7 +3084,11 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+1 damage",
+        "+1 Accuracy"
+      ]
     },
     "Han Solo": {
       "abilityText": "Return Fire: After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
@@ -3099,9 +3136,6 @@
       "subCost": 4,
       "health": 8,
       "speed": 4,
-      "passives": [
-        "+3 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -3123,7 +3157,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "+3 Accuracy"
+      ]
     },
     "Heavy Stormtrooper (Regular)": {
       "abilityText": "Composite Plating: While defending, if the attacker is 4 or more spaces away, apply +1 Block to the defense results.",
@@ -3138,9 +3175,6 @@
       "subCost": 3,
       "health": 6,
       "speed": 3,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -3157,7 +3191,10 @@
         "blast 1"
       ],
       "attachment": false,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "+2 Accuracy"
+      ]
     },
     "Hera Syndulla": {
       "abilityText": "Call the Shots: While another friendly figure within 3 spaces is attacking, you may apply +2 Accuracy, +1 Damage, or +1 Surge to the attack results. Limit once per round.\n\nSmooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.",
@@ -3165,9 +3202,7 @@
         "LEADER",
         "SMUGGLER"
       ],
-      "passives": [
-        "Smooth Landing"
-      ],
+      "passives": [],
       "subname": "SPECTRE-2",
       "cost": 4,
       "health": 7,
@@ -3196,6 +3231,9 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "call_the_shots_hera"
+      ],
+      "abilities": [
+        "Smooth Landing"
       ]
     },
     "Hired Gun (Elite)": {
@@ -3211,10 +3249,6 @@
       "subCost": 3,
       "health": 4,
       "speed": 5,
-      "passives": [
-        "+2 Accuracy",
-        "Self-Preservation"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -3232,7 +3266,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Self-Preservation",
+        "+2 Accuracy"
+      ]
     },
     "Hired Gun (Regular)": {
       "abilityText": "Parting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.\n\nDisposable: While defending, apply -1 Evade to your defense results.",
@@ -3277,8 +3315,7 @@
       "health": 7,
       "speed": 4,
       "passives": [
-        "Priority Target",
-        "Merciless"
+        "Priority Target"
       ],
       "figures": 2,
       "attack": {
@@ -3304,6 +3341,9 @@
       "specialAbilityIds": [
         "targeting_computer_hk_elite",
         "versatile_weaponry_hk_elite"
+      ],
+      "abilities": [
+        "Merciless"
       ]
     },
     "HK-47": {
@@ -3424,9 +3464,6 @@
       "cost": 9,
       "health": 12,
       "speed": 5,
-      "passives": [
-        "Block 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3452,6 +3489,9 @@
         "rapid_fire_ig11",
         "targeting_computer_ig11",
         "self_destruct_protocol"
+      ],
+      "abilities": [
+        "Block 1"
       ]
     },
     "IG-88": {
@@ -3464,9 +3504,6 @@
       "cost": 12,
       "health": 10,
       "speed": 5,
-      "passives": [
-        "Relentless"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3490,6 +3527,10 @@
       "specialAbilityIds": [
         "arsenal",
         "relentless_ig88"
+      ],
+      "abilities": [
+        "Relentless",
+        "+2 Accuracy"
       ]
     },
     "Imperial Officer (Elite)": {
@@ -3590,15 +3631,16 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
-      "passives": [
-        "In The Shadows"
-      ],
+      "passives": [],
       "specialAbilityIds": [
         "coordinated_raid_elite",
         "comms_jammer_isb"
       ],
       "specials": [
         "Coordinated Raid"
+      ],
+      "abilities": [
+        "In The Shadows"
       ]
     },
     "ISB Infiltrator (Regular)": {
@@ -3642,9 +3684,6 @@
       ],
       "health": 4,
       "speed": 3,
-      "passives": [
-        "Pierce 1"
-      ],
       "attack": {
         "dice": [
           "blue"
@@ -3656,7 +3695,10 @@
       ],
       "attachment": false,
       "companion": true,
-      "unique": true
+      "unique": true,
+      "abilities": [
+        "Pierce 1"
+      ]
     },
     "Jabba the Hutt": {
       "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Damage.\n\nSpecial Action (Incentivize): An elite figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
@@ -3707,10 +3749,6 @@
       "cost": 5,
       "health": 7,
       "speed": 5,
-      "passives": [
-        "+1 damage",
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3736,6 +3774,10 @@
       ],
       "specials": [
         "Leaping Slash"
+      ],
+      "abilities": [
+        "+1 damage",
+        "+1 Evade"
       ]
     },
     "Jawa Scavenger (Elite)": {
@@ -3747,9 +3789,6 @@
       "cost": 3,
       "health": 5,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3773,7 +3812,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+2 Accuracy"
+      ]
     },
     "Jawa Scavenger (Regular)": {
       "abilityText": "Surge (Harass): After the attack resolves, if it did not miss, the defender suffers 1 Strain.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.",
@@ -3783,9 +3825,6 @@
       "cost": 2,
       "health": 3,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3806,7 +3845,10 @@
         "take_cover_jawa_reg"
       ],
       "attachment": false,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+2 Accuracy"
+      ]
     },
     "Jet Trooper (Elite)": {
       "abilityText": "Agile: While defending, you may convert 1 Block to 1 Evade\n\nFly-By: When you declare an attack, if the target space is within 2 spaces, add 1 blue die to your attack pool. After the attack resolves, gain 2 movement points.",
@@ -3834,13 +3876,16 @@
         "damage 2"
       ],
       "passives": [
-        "Fly-By"
+        "Mobile"
       ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "agile_jet_trooper_elite"
+      ],
+      "abilities": [
+        "Fly-By"
       ]
     },
     "Jet Trooper (Regular)": {
@@ -3855,8 +3900,7 @@
       "health": 3,
       "speed": 4,
       "passives": [
-        "Mobile",
-        "Jets"
+        "Mobile"
       ],
       "figures": 2,
       "attack": {
@@ -3871,12 +3915,15 @@
       ],
       "surgeAbilities": [
         "damage 1",
-        "accuracy 2"
+        "accuracy 3"
       ],
       "attachment": false,
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "agile_jet_trooper_reg"
+      ],
+      "abilities": [
+        "Jets"
       ]
     },
     "Junk Droid": {
@@ -3886,9 +3933,6 @@
       ],
       "health": 1,
       "speed": 4,
-      "passives": [
-        "+1 damage"
-      ],
       "attack": {
         "dice": [
           "green"
@@ -3896,7 +3940,10 @@
         "type": "melee"
       },
       "attachment": false,
-      "companion": true
+      "companion": true,
+      "abilities": [
+        "+1 damage"
+      ]
     },
     "Jyn Erso": {
       "abilityText": "Trust Goes Both Ways: At the start or end of your activation, choose an adjacent friendly figure. If you do, you and that figure Recover 1 Damage and gain 1 Surge Token. Limit once per round.\n\nSpecial Action (Tonfa Strike): Move up to 2 spaces, then you may perform a Melee attack using 1 red and 1 green die. Then you may perform an attack.",
@@ -3908,9 +3955,6 @@
       "cost": 7,
       "health": 13,
       "speed": 4,
-      "passives": [
-        "Pierce 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3936,6 +3980,9 @@
       ],
       "specials": [
         "Tonfa Strike"
+      ],
+      "abilities": [
+        "Pierce 1"
       ]
     },
     "Jyn Odan": {
@@ -3947,10 +3994,6 @@
       "cost": 5,
       "health": 8,
       "speed": 5,
-      "passives": [
-        "+1 Accuracy",
-        "+1 damage"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -3974,6 +4017,10 @@
         "hair_trigger",
         "sidewinder",
         "cunning_jyn"
+      ],
+      "abilities": [
+        "+1 Accuracy",
+        "+1 damage"
       ]
     },
     "K-2S0": {
@@ -3987,9 +4034,6 @@
       "cost": 5,
       "health": 9,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4017,6 +4061,9 @@
       ],
       "specials": [
         "Continually Unexpected"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Kanan Jarrus": {
@@ -4102,10 +4149,6 @@
       "cost": 7,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "Professional",
-        "+3 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4130,6 +4173,10 @@
         "squad_cohesion_kotun",
         "dead_precise_kotun",
         "arms_distribution_kotun"
+      ],
+      "abilities": [
+        "Professional",
+        "+3 Accuracy"
       ]
     },
     "Krrsantan": {
@@ -4143,10 +4190,6 @@
       "cost": 8,
       "health": 15,
       "speed": 4,
-      "passives": [
-        "Bleed",
-        "Pierce 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4170,6 +4213,10 @@
       "specialAbilityIds": [
         "electrified_knuckledusters",
         "full_of_rage"
+      ],
+      "abilities": [
+        "Bleed",
+        "Pierce 1"
       ]
     },
     "Kuiil": {
@@ -4199,7 +4246,7 @@
       ],
       "surgeAbilities": [
         "accuracy 2",
-        "cancel 2",
+        "damage 2",
         "stun"
       ],
       "specialAbilityIds": [
@@ -4294,9 +4341,6 @@
       "cost": 8,
       "health": 11,
       "speed": 5,
-      "passives": [
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4322,6 +4366,9 @@
       "specialAbilityIds": [
         "battlefield_leadership",
         "military_efficiency"
+      ],
+      "abilities": [
+        "+1 Evade"
       ]
     },
     "Loku Kanoloa": {
@@ -4355,6 +4402,9 @@
       "specialAbilityIds": [
         "set_your_sights_loku",
         "mon_cala_sf_loku"
+      ],
+      "abilities": [
+        "+4 Accuracy"
       ]
     },
     "Loth-cat (Elite)": {
@@ -4366,10 +4416,6 @@
       "subCost": 3,
       "health": 5,
       "speed": 5,
-      "passives": [
-        "Pierce 1",
-        "Curious"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -4394,7 +4440,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Curious",
+        "Pierce 1"
+      ]
     },
     "Loth-cat (Regular)": {
       "abilityText": "Special Action (Pounce): Place your figure in an empty space within 3 spaces. Then, you may perform an attack. \n\nSpecial Action (Rat Catcher): You or an adjacent CREATURE gains 1 Block Token.\n\nCurious: After you interact, suffer 1 Strain.",
@@ -4405,10 +4455,6 @@
       "subCost": 2,
       "health": 3,
       "speed": 4,
-      "passives": [
-        "Pierce 1",
-        "Curious"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -4432,7 +4478,11 @@
         "Rat Catcher"
       ],
       "attachment": false,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Curious",
+        "Pierce 1"
+      ]
     },
     "Luke Skywalker": {
       "abilityText": "Special Action (Saber Strike): Perform a melee attack using 1 red and 1 yellow die. This attack gains Pierce 3.\n\nInspiring: While another friendly figure within 3 spaces is attacking, it may reroll 1 die.",
@@ -4443,9 +4493,6 @@
       "cost": 7,
       "health": 10,
       "speed": 5,
-      "passives": [
-        "Block 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4473,6 +4520,9 @@
       "specialAbilityIds": [
         "saber_strike",
         "inspiring"
+      ],
+      "abilities": [
+        "Block 1"
       ]
     },
     "Luke Skywalker (Jedi Knight)": {
@@ -4486,10 +4536,6 @@
       "cost": 10,
       "health": 16,
       "speed": 4,
-      "passives": [
-        "+1 damage",
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4513,6 +4559,10 @@
       "specialAbilityIds": [
         "heroic",
         "deflect"
+      ],
+      "abilities": [
+        "+1 damage",
+        "+1 Evade"
       ]
     },
     "Mak Eshka'rey": {
@@ -4526,8 +4576,7 @@
       "health": 4,
       "speed": 4,
       "passives": [
-        "Priority Target",
-        "+1 Accuracy"
+        "Priority Target"
       ],
       "figures": 1,
       "attack": {
@@ -4549,7 +4598,10 @@
       ],
       "attachment": false,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "+1 Accuracy"
+      ]
     },
     "Mara Jade": {
       "abilityText": "Adaptive Skills: Your affiliation matches your army's affiliation. You gain 1 of the following traits based on your army's affiliation: \n- IMPERIAL: HUNTER \n- SCUM: SMUGGLER\n- REBEL: GUARDIAN\n\nFast Learner: Once per round, you may play a Command card whose restriction matches the name of another Deployment card in your army, except \"Arcing Shot\".\n\nProfessional: While attacking, you may reroll 1 attack die.",
@@ -4577,9 +4629,7 @@
         "damage 2",
         "pierce 3"
       ],
-      "passives": [
-        "Professional"
-      ],
+      "passives": [],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -4587,6 +4637,9 @@
       "specialAbilityIds": [
         "adaptive_skills_mara_jade",
         "fast_learner_mara_jade"
+      ],
+      "abilities": [
+        "Professional"
       ]
     },
     "Maul": {
@@ -4599,9 +4652,6 @@
       "cost": 6,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+1 damage"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4624,6 +4674,9 @@
       "specialAbilityIds": [
         "dual_bladed_fury",
         "sustained_by_rage"
+      ],
+      "abilities": [
+        "+1 damage"
       ]
     },
     "MHD-19": {
@@ -4668,10 +4721,6 @@
       "cost": 7,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy",
-        "Locked and Loaded"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4699,6 +4748,10 @@
       ],
       "specials": [
         "Locked and Loaded"
+      ],
+      "abilities": [
+        "Locked and Loaded",
+        "+1 Accuracy"
       ]
     },
     "Moff Gideon": {
@@ -4709,9 +4762,6 @@
       "cost": 6,
       "health": 10,
       "speed": 4,
-      "passives": [
-        "Block 1"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4738,6 +4788,9 @@
       ],
       "specials": [
         "You Have Something I Want"
+      ],
+      "abilities": [
+        "Block 1"
       ]
     },
     "Murne Rin": {
@@ -4750,9 +4803,6 @@
       "cost": 4,
       "health": 9,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4781,6 +4831,9 @@
         "false_orders",
         "field_report",
         "figurehead"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Nexu (Elite)": {
@@ -4793,9 +4846,7 @@
       "health": 8,
       "speed": 6,
       "passives": [
-        "Mobile",
-        "Bleed",
-        "Cleave 2"
+        "Mobile"
       ],
       "figures": 1,
       "attack": {
@@ -4820,6 +4871,10 @@
       "specialAbilityIds": [
         "dc_pounce",
         "cunning_nexu_elite"
+      ],
+      "abilities": [
+        "Bleed",
+        "Cleave 2"
       ]
     },
     "Nexu (Regular)": {
@@ -4832,7 +4887,6 @@
       "health": 6,
       "speed": 6,
       "passives": [
-        "Bleed",
         "Mobile"
       ],
       "figures": 1,
@@ -4858,6 +4912,9 @@
       "specialAbilityIds": [
         "dc_pounce",
         "cunning_nexu_reg"
+      ],
+      "abilities": [
+        "Bleed"
       ]
     },
     "Obi-Wan Kenobi": {
@@ -4875,9 +4932,6 @@
       "cost": 7,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -4897,7 +4951,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "+1 Evade"
+      ]
     },
     "Onar Koma": {
       "abilityText": "Special Action (Rush): Move up to 4 spaces, then you may push an adjacent, SMALL figure up to 1 space. If you do, you and that figure suffer 1 Damage.\n\nGet Down: While a small figure within 2 spaces is defending, you may apply +1 Block or +1 Evade to the defense results. Limit once per round.\n\nImmune: You cannot gain HARMFUL conditions.",
@@ -4921,7 +4978,7 @@
         "black"
       ],
       "surgeAbilities": [
-        "accuracy 2, damage 2",
+        "damage 2, accuracy -2",
         "damage 1, accuracy -1"
       ],
       "attachment": false,
@@ -5105,10 +5162,6 @@
       "cost": 3,
       "health": 6,
       "speed": 3,
-      "passives": [
-        "+2 Accuracy",
-        "+1 Surge"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5132,6 +5185,10 @@
         "scomp_link",
         "lucky_r2d2",
         "service_r2d2"
+      ],
+      "abilities": [
+        "+2 Accuracy",
+        "+1 Surge"
       ]
     },
     "Rancor": {
@@ -5147,8 +5204,7 @@
       "speed": 4,
       "passives": [
         "Massive",
-        "Reach",
-        "Block 1"
+        "Reach"
       ],
       "figures": 1,
       "attack": {
@@ -5176,6 +5232,9 @@
       ],
       "specials": [
         "Crippling Blow"
+      ],
+      "abilities": [
+        "Block 1"
       ]
     },
     "Rebel Pathfinder (Elite)": {
@@ -5187,9 +5246,6 @@
       "subCost": 3,
       "health": 6,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -5211,6 +5267,9 @@
         "light_it_up_rebel_pathfinder",
         "distracting_fire_rebel_pathfinder",
         "infiltration_rebel_pathfinder"
+      ],
+      "abilities": [
+        "+1 Accuracy"
       ]
     },
     "Rebel Saboteur (Elite)": {
@@ -5223,9 +5282,6 @@
       "subCost": 3,
       "health": 7,
       "speed": 5,
-      "passives": [
-        "+4 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -5247,7 +5303,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "+4 Accuracy"
+      ]
     },
     "Rebel Saboteur (Regular)": {
       "abilityText": "Overload: You can trigger the same Surge ability up to twice per attack.",
@@ -5259,9 +5318,6 @@
       "subCost": 3,
       "health": 4,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -5282,7 +5338,10 @@
         "overload_saboteur"
       ],
       "attachment": false,
-      "affiliation": "Rebel"
+      "affiliation": "Rebel",
+      "abilities": [
+        "+2 Accuracy"
+      ]
     },
     "Rebel Trooper (Elite)": {
       "abilityText": "Double Action Special (Get into Position): Move up to 4 spaces and become Focused.\n\nAim: If you have not exited your space during this activation, apply +1 Damage and +2 Accuracy to your attack results.\n\nGet Ready: At the start of your activation, another figure in your group interrupts to move 1 space.",
@@ -5373,15 +5432,16 @@
         "damage 1",
         "damage 2"
       ],
-      "passives": [
+      "passives": [],
+      "attachment": false,
+      "elite": true,
+      "affiliation": "Imperial",
+      "abilities": [
         "Weaken",
         "Stun Batons",
         "Shield",
         "Professional"
-      ],
-      "attachment": false,
-      "elite": true,
-      "affiliation": "Imperial"
+      ]
     },
     "Riot Trooper (Regular)": {
       "abilityText": "Stun Batons: After you resolve an attack, if the target suffered any Damage results, it also suffers 1 Strain.\n\nShield: At the end of your activation, if you have no Block tokens, gain 1 Block token.",
@@ -5409,12 +5469,13 @@
         "damage 1",
         "damage 1"
       ],
-      "passives": [
+      "passives": [],
+      "attachment": false,
+      "affiliation": "Imperial",
+      "abilities": [
         "Stun Batons",
         "Shield"
-      ],
-      "attachment": false,
-      "affiliation": "Imperial"
+      ]
     },
     "Royal Guard (Elite)": {
       "abilityText": "Sentinel: While a friendly non-GUARDIAN figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Sentinel\" or \"Protector\" ability used per attack.\n\nForward Vengeance: When an adjacent, friendly, non-GUARDIAN, non-companion figure is defeated, you become Focused and may move 1 space.\n\nProfessional: While attacking, you may reroll one attack die.",
@@ -5431,9 +5492,7 @@
       "health": 10,
       "speed": 5,
       "passives": [
-        "Reach",
-        "Pierce 1",
-        "Professional"
+        "Reach"
       ],
       "figures": 2,
       "attack": {
@@ -5452,7 +5511,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Professional",
+        "Pierce 1"
+      ]
     },
     "Royal Guard (Regular)": {
       "abilityText": "Sentinel: While a friendly non-GUARDIAN figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Sentinel\" or \"Protector\" ability used per attack.\n\nVengeance: When an adjacent, friendly, non-GUARDIAN figure is defeated, you become Focused.",
@@ -5598,9 +5661,6 @@
       "cost": 4,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5625,6 +5685,9 @@
         "shady_contacts_saska",
         "power_converter_saska",
         "unstable_devices_saska"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Saw Gerrerra": {
@@ -5636,11 +5699,6 @@
       "cost": 4,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy",
-        "Brutal Tactics",
-        "+1 Surge"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5654,8 +5712,7 @@
       ],
       "surgeAbilities": [
         "damage 2",
-        "hide",
-        "accuracy 2"
+        "hide"
       ],
       "attachment": false,
       "elite": true,
@@ -5663,6 +5720,11 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "wanton_destruction_saw"
+      ],
+      "abilities": [
+        "Brutal Tactics",
+        "+2 Accuracy",
+        "+1 Surge"
       ]
     },
     "SC2-M Repulsor Tank": {
@@ -5681,7 +5743,6 @@
         2
       ],
       "passives": [
-        "+2 Accuracy",
         "Massive"
       ],
       "figures": 1,
@@ -5706,6 +5767,9 @@
       "specialAbilityIds": [
         "focus_fire_tank",
         "defensible_sc2m"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Scout Trooper (Elite)": {
@@ -5723,10 +5787,6 @@
       "subCost": 4,
       "health": 7,
       "speed": 4,
-      "passives": [
-        "Professional",
-        "+3 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -5745,7 +5805,11 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial"
+      "affiliation": "Imperial",
+      "abilities": [
+        "Professional",
+        "+3 Accuracy"
+      ]
     },
     "Second Sister": {
       "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nSpecial Action (Saber Orbit): Choose up to 3 adjacent hostile figures. For each of those figures, perform a Melee attack using 1 red die targeting that figure.\n\nSurge (Mastery): Choose and re-draw a FORCE USER Command card of cost 1 or less in your discard pile. Limit once per round.",
@@ -5758,9 +5822,6 @@
       "cost": 5,
       "health": 10,
       "speed": 4,
-      "passives": [
-        "+1 Surge"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5788,6 +5849,9 @@
       "specials": [
         "Force Leap",
         "Saber Orbit"
+      ],
+      "abilities": [
+        "+1 Surge"
       ]
     },
     "Sentry Droid (Elite)": {
@@ -5888,8 +5952,7 @@
       "health": 7,
       "speed": 5,
       "passives": [
-        "Efficient Travel",
-        "+2 Accuracy"
+        "Efficient Travel"
       ],
       "figures": 2,
       "attack": {
@@ -5911,6 +5974,9 @@
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "squad_training_shoretrooper_elite"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Shyla Varad": {
@@ -5922,9 +5988,6 @@
       "cost": 7,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -5950,6 +6013,9 @@
       ],
       "specials": [
         "Mandalorian Whip"
+      ],
+      "abilities": [
+        "+1 Evade"
       ]
     },
     "Snowtrooper (Elite)": {
@@ -6051,14 +6117,15 @@
         "accuracy 3",
         "damage 2"
       ],
-      "passives": [
-        "Last Stand"
-      ],
+      "passives": [],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
       "specialAbilityIds": [
         "squad_training_stormtrooper_elite"
+      ],
+      "abilities": [
+        "Last Stand"
       ]
     },
     "Stormtrooper (Regular)": {
@@ -6111,10 +6178,7 @@
       "health": 7,
       "speed": 4,
       "passives": [
-        "Mobile",
-        "Professional",
-        "+2 Accuracy",
-        "Pierce 1"
+        "Mobile"
       ],
       "figures": 2,
       "attack": {
@@ -6133,7 +6197,12 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Professional",
+        "+2 Accuracy",
+        "Pierce 1"
+      ]
     },
     "Tauntaun Rider": {
       "abilityText": "Mounted: At the start of your activation, gain 3 movement points.\n\nSpecial Action (Headbutt): Move up to 2 spaces, then choose an adjacent hostile figure and roll 1 red die. The chosen figure suffers Damage equal to the Damage results.\n\nUseful Hide: When this figure is defeated, distribute up to 2 Evade Tokens among friendly figures.",
@@ -6145,9 +6214,7 @@
       "health": 10,
       "speed": 4,
       "passives": [
-        "Pierce 1",
-        "Efficient Travel",
-        "Mounted"
+        "Efficient Travel"
       ],
       "figures": 1,
       "attack": {
@@ -6173,6 +6240,10 @@
       ],
       "specials": [
         "Headbutt"
+      ],
+      "abilities": [
+        "Mounted",
+        "Pierce 1"
       ]
     },
     "Taron Malicos": {
@@ -6185,9 +6256,6 @@
       "cost": 6,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "+1 Surge"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -6214,6 +6282,9 @@
       ],
       "specials": [
         "Boulder Barrage"
+      ],
+      "abilities": [
+        "+1 Surge"
       ]
     },
     "The Armorer": {
@@ -6226,8 +6297,7 @@
       "health": 10,
       "speed": 4,
       "passives": [
-        "Mobile",
-        "Beskar Armor"
+        "Mobile"
       ],
       "specialAbilityIds": [
         "survival_is_strength_armorer",
@@ -6253,7 +6323,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Beskar Armor"
+      ]
     },
     "The Child": {
       "abilityText": "Special Action (Force Heal): An adjacent friendly figure recovers 1 Damage and discards a HARMFUL condition.\n\nForce Exhaustion: When an attack is declared targeting you or a friendly figure with \"Clan of Two\", you may become Incapacitated. If you do, the attacker removes 1 attack die from the attack pool and becomes Weakened.",
@@ -6324,9 +6397,7 @@
       "cost": 8,
       "health": 12,
       "speed": 4,
-      "passives": [
-        "Beskar Armor"
-      ],
+      "passives": [],
       "figures": 1,
       "attack": {
         "dice": [
@@ -6355,7 +6426,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Beskar Armor"
+      ]
     },
     "Thrawn": {
       "abilityText": "Long-Laid Plans: At the start of your activation, distribute among friendly figures different Power tokens equal to the current round number.\n\nStrategize: At the start of your activation, look at the top Command card of each player's deck. You may discard one of those cards.",
@@ -6366,9 +6440,6 @@
       "cost": 6,
       "health": 9,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -6382,7 +6453,6 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 1, bleed",
         "pierce 1"
       ],
       "doubleSurgeAbilities": [
@@ -6395,6 +6465,9 @@
       "specialAbilityIds": [
         "long_laid_plans_thrawn",
         "strategize_thrawn"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Trandoshan Hunter (Elite)": {
@@ -6430,7 +6503,8 @@
         "relentless_trandoshan_elite",
         "acp_scattergun"
       ],
-      "passives": [
+      "passives": [],
+      "abilities": [
         "Hardy"
       ]
     },
@@ -6493,9 +6567,7 @@
         "recover X",
         "damage 1, stun"
       ],
-      "passives": [
-        "Leg Hydraulics"
-      ],
+      "passives": [],
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel",
@@ -6503,6 +6575,9 @@
         "fyrnock_style_tress",
         "krayt_dragon_fury_tress",
         "leg_hydraulics_tress"
+      ],
+      "abilities": [
+        "Leg Hydraulics"
       ]
     },
     "Tusken Raider (Elite)": {
@@ -6515,9 +6590,6 @@
       "health": 7,
       "speed": 4,
       "figures": 2,
-      "passives": [
-        "+1 Damage"
-      ],
       "attack": {
         "dice": [
           "red",
@@ -6530,10 +6602,7 @@
       ],
       "surgeAbilities": [
         "pierce 1",
-        "accuracy 1"
-      ],
-      "doubleSurgeAbilities": [
-        "damage 1"
+        "weaken"
       ],
       "specialAbilityIds": [
         "tusken_cycler_elite"
@@ -6543,7 +6612,10 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+1 Damage"
+      ]
     },
     "Tusken Raider (Regular)": {
       "abilityText": "Special Action (Tusken Cycler): Perform a Ranged attack using 1 blue and 1 red die. You cannot use abilities during this attack.",
@@ -6658,9 +6730,6 @@
       "cost": 7,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "+1 Evade"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -6688,6 +6757,9 @@
       ],
       "specials": [
         "Close Quarters"
+      ],
+      "abilities": [
+        "+1 Evade"
       ]
     },
     "Vinto Hreeda": {
@@ -6735,7 +6807,6 @@
       "health": 12,
       "speed": 3,
       "passives": [
-        "+2 damage",
         "Reach"
       ],
       "figures": 1,
@@ -6750,13 +6821,15 @@
         "black"
       ],
       "surgeAbilities": [
-        "damage 2",
         "cleave 3",
         "weaken, stun"
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+2 damage"
+      ]
     },
     "Wampa (Regular)": {
       "abilityText": "Efficient Travel: You ignore additional movement point costs for difficult terrain and hostile figures.\n\nHunger: At the start of your activation, if there are no hostile figures within 3 spaces, gain 2 movement points.\n\nNon-Sentient: You cannot interact.",
@@ -6767,9 +6840,6 @@
       "cost": 5,
       "health": 9,
       "speed": 3,
-      "passives": [
-        "+1 damage"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -6786,7 +6856,10 @@
         "cleave 2"
       ],
       "attachment": false,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "+1 damage"
+      ]
     },
     "Weequay Pirate (Elite)": {
       "abilityText": "Special Action (Prowl): You become Hidden.\n\nRaider: While attacking, you may choose 1 die. The player that rolled that die must reroll that die.",
@@ -6798,9 +6871,6 @@
       "subCost": 4,
       "health": 6,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -6826,6 +6896,9 @@
       ],
       "specials": [
         "Prowl"
+      ],
+      "abilities": [
+        "+2 Accuracy"
       ]
     },
     "Weequay Pirate (Regular)": {
@@ -6838,9 +6911,6 @@
       "subCost": 3,
       "health": 4,
       "speed": 4,
-      "passives": [
-        "+1 Accuracy"
-      ],
       "figures": 2,
       "attack": {
         "dice": [
@@ -6860,6 +6930,9 @@
       "affiliation": "Scum",
       "specialAbilityIds": [
         "raider_weequay_reg"
+      ],
+      "abilities": [
+        "+1 Accuracy"
       ]
     },
     "Wing Guard (Elite)": {
@@ -6955,12 +7028,13 @@
       "attachment": false,
       "elite": true,
       "affiliation": "Rebel",
-      "passives": [
-        "Fury"
-      ],
+      "passives": [],
       "specials": [],
       "specialAbilityIds": [
         "fury_wookiee_elite"
+      ],
+      "abilities": [
+        "Fury"
       ]
     },
     "Wookiee Warrior (Regular)": {
@@ -6973,9 +7047,7 @@
       "subCost": 4,
       "health": 11,
       "speed": 4,
-      "passives": [
-        "Fury"
-      ],
+      "passives": [],
       "figures": 2,
       "attack": {
         "dice": [
@@ -6996,6 +7068,9 @@
       "affiliation": "Rebel",
       "specialAbilityIds": [
         "fury_wookiee_reg"
+      ],
+      "abilities": [
+        "Fury"
       ]
     },
     "Yoda": {
@@ -7032,9 +7107,6 @@
       "cost": 8,
       "health": 15,
       "speed": 4,
-      "passives": [
-        "+3 Accuracy"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -7057,6 +7129,9 @@
       "specialAbilityIds": [
         "bo_rifle_staff_strike",
         "lasat_honor_guard"
+      ],
+      "abilities": [
+        "+3 Accuracy"
       ]
     },
     "Zuckuss": {
@@ -7068,10 +7143,6 @@
       "cost": 6,
       "health": 10,
       "speed": 4,
-      "passives": [
-        "+2 Accuracy",
-        "Mystic Hunter"
-      ],
       "figures": 1,
       "attack": {
         "dice": [
@@ -7095,6 +7166,10 @@
       "affiliation": "Scum",
       "specialAbilityIds": [
         "shared_calculations_zuckuss"
+      ],
+      "abilities": [
+        "Mystic Hunter",
+        "+2 Accuracy"
       ]
     },
     "Paz Vizsla": {

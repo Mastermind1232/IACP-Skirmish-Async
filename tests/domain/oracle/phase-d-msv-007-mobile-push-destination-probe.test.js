@@ -16,15 +16,17 @@
  *   2. `getMovementProfile` — derives `isMobile = keywords.has('mobile')`
  *      and sets `ignoreBlocking: isMassive || isMobile`, piping the Mobile
  *      keyword into the shared movement-profile flag.
- *   3. `pushFigureToNearestValid` — the BFS used by the massive-push
- *      displacement engine constructs the profile via
+ *   3. `getNearestDisplacementOptions` — the ring search used by the
+ *      massive-push displacement engine constructs the profile via
  *      `getMovementProfile(dcName, figureKey, game)` and gates blocking-cell
- *      rejection behind `!profile.ignoreBlocking`, so a Mobile pushed figure
+ *      rejection behind `profile.ignoreBlocking`, so a Mobile pushed figure
  *      can land on a cell that a non-Mobile figure could not.
  *
- * No code change is required — the three sites already compose correctly.
- * This probe pins the chain so any future refactor that decouples the
- * keyword→profile→push path fails the oracle loudly.
+ * Per alexanbv 2026-06-15 the engine never auto-places: a displaced figure is
+ * always offered the nearest ring of legal spaces (within 1, else within 2, …)
+ * to choose from. The Mobile invariant moved out of the old auto-BFS fallback
+ * and into `getNearestDisplacementOptions`. This probe pins the chain so any
+ * future refactor that decouples the keyword→profile→push path fails loudly.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,11 +72,20 @@ describe('PROBE-PD-MSV-007: Mobile affects push destinations when Massive ends m
       'blocking-cell rejection must be gated by !profile.ignoreBlocking — CRR-MSV-007');
   });
 
-  it('007d: source — resolveNextDisplacements falls back to pushFigureToNearestValid BFS when no adjacent valid spaces exist', () => {
-    // Without this fallback, Mobile figures with all-blocking neighbors would
-    // never exercise the ignoreBlocking branch. Pin the fallback site.
+  it('007d: source — resolveNextDisplacements offers the nearest legal ring via getNearestDisplacementOptions (no auto-place), and that ring search honors ignoreBlocking', () => {
+    // Per alexanbv 2026-06-15: the engine never auto-places. A displaced figure
+    // with no adjacent space is offered ALL spaces at the next ring (within 2,
+    // etc.) to choose from. The Mobile invariant lives in the ring search,
+    // which gates blocking behind profile.ignoreBlocking.
     assert.match(MV_SRC,
-      /if \(validSpaces\.length === 0\) \{[\s\S]*?pushFigureToNearestValid\(game, entry\.playerNum, entry\.figureKey, forbiddenSet\);/,
-      'massive-push engine must fall back to pushFigureToNearestValid when adjacency yields no valid space — CRR-MSV-007');
+      /const options = getNearestDisplacementOptions\(game, entry\.figureKey, entry\.playerNum, forbiddenSet\);/,
+      'displacement engine must compute the nearest legal ring via getNearestDisplacementOptions — CRR-MSV-007');
+    const fnMatch = MV_SRC.match(
+      /export function getNearestDisplacementOptions\(game, figureKey, playerNum, forbiddenSet\) \{[\s\S]*?\n\}/,
+    );
+    assert.ok(fnMatch, 'getNearestDisplacementOptions must be locatable');
+    assert.match(fnMatch[0],
+      /profile\.ignoreBlocking \|\| !board\.blockingSet\.has\(cell\)/,
+      'ring search must let Mobile/Massive figures land on blocking cells (ignoreBlocking) — CRR-MSV-007');
   });
 });

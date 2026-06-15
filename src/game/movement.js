@@ -1115,29 +1115,6 @@ export function resolveNextDisplacements(game, pending) {
     }
 
     const entry = queue[pending.currentIndex];
-    // Recalculate valid spaces with current board state
-    const validSpaces = getValidDisplacementSpaces(game, entry.figureKey, entry.playerNum, forbiddenSet);
-
-    if (validSpaces.length === 0) {
-      // BFS fallback — no adjacent spaces
-      const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-      pushFigureToNearestValid(game, entry.playerNum, entry.figureKey, forbiddenSet);
-      const newPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-      autoResolved.push({ entry, prevPos, newPos, bfs: true });
-      pending.currentIndex++;
-      continue;
-    }
-
-    if (validSpaces.length === 1) {
-      // Single option — auto-place
-      const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-      pushFigure(game, entry.playerNum, entry.figureKey, validSpaces[0]);
-      autoResolved.push({ entry, prevPos, newPos: validSpaces[0], bfs: false });
-      pending.currentIndex++;
-      continue;
-    }
-
-    // 2+ valid spaces — caller must choose.
     // Friendly phase: massive controller picks. Enemy phase: enemy player picks.
     // In 2-player Skirmish all entries in the enemy queue share the same
     // playerNum, so using the current entry's playerNum is safe.
@@ -1145,10 +1122,13 @@ export function resolveNextDisplacements(game, pending) {
       ? pending.movingPlayerNum
       : entry.playerNum;
 
+    // Order first: whenever 2+ figures remain in this phase, the controller
+    // chooses which to place next — per alexanbv 2026-06-15, never auto-place
+    // and always let the player pick order (recomputed after each placement, so
+    // a boxed-in figure pushed first can change what's available for the rest).
     const unresolvedCount = queue.length - pending.currentIndex;
     const orderLocked = pending._figurePickLockedIdx === pending.currentIndex;
     if (unresolvedCount >= 2 && !orderLocked) {
-      // Ask the controller which figure to displace next before picking a space.
       const pickable = queue.slice(pending.currentIndex);
       return {
         autoResolved,
@@ -1158,10 +1138,26 @@ export function resolveNextDisplacements(game, pending) {
       };
     }
 
+    // Nearest legal ring: all spaces within 1; if none, all within 2, etc.
+    // (per alexanbv 2026-06-15). Recomputed against current board state.
+    const options = getNearestDisplacementOptions(game, entry.figureKey, entry.playerNum, forbiddenSet);
+
+    if (options.spaces.length === 0) {
+      // No legal space reachable anywhere on the board — leave the figure in
+      // place and advance. Effectively impossible in normal play; recorded as a
+      // stuck auto-resolve so the engine still drains the queue.
+      const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
+      autoResolved.push({ entry, prevPos, newPos: prevPos, bfs: true, stuck: true });
+      pending.currentIndex++;
+      pending._figurePickLockedIdx = -1;
+      continue;
+    }
+
+    // Always prompt — even a single legal space is presented as a choice.
     return {
       autoResolved,
       needsFigurePick: null,
-      needsChoice: { entry, validSpaces, controllerPlayerNum },
+      needsChoice: { entry, validSpaces: options.spaces, distance: options.distance, controllerPlayerNum },
       done: false,
     };
   }
@@ -1301,6 +1297,80 @@ export function getValidDisplacementSpaces(game, figureKey, playerNum, forbidden
       && !forbiddenSet.has(cell)
     );
   });
+}
+
+/**
+ * Nearest legal RING of displacement destinations for a figure shoved aside by
+ * a MASSIVE figure. Returns ALL legal placements at the smallest push distance
+ * — within 1 if any exist, else within 2, else within 3, ... — so the
+ * controller chooses among them (the engine never auto-places). Per alexanbv
+ * 2026-06-15: "if 0 spaces adjacent it is legal to push 2 spaces; among all
+ * spaces that far away the player chooses." Distance respects movement-blocking
+ * edges; the outward search may pass THROUGH occupied spaces to count further
+ * rings (a figure can be pushed past another to the nearest empty space beyond).
+ *
+ * @returns {{distance:number, spaces:string[]}} {0, []} when no legal space is
+ *   reachable anywhere on the board.
+ */
+export function getNearestDisplacementOptions(game, figureKey, playerNum, forbiddenSet) {
+  // Ring 1 reuses the adjacency-based check (preserves prior distance-1 behavior).
+  const adjacent = getValidDisplacementSpaces(game, figureKey, playerNum, forbiddenSet);
+  if (adjacent.length > 0) {
+    return { distance: 1, spaces: [...new Set(adjacent.map((s) => String(s).toLowerCase()))] };
+  }
+  // No adjacent space — BFS outward for the next non-empty ring (distance >= 2).
+  const coord = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!coord) return { distance: 0, spaces: [] };
+  const dcName = dcNameFromFigureKey(figureKey);
+  const board = getBoardStateForMovement(game, figureKey);
+  if (!board) return { distance: 0, spaces: [] };
+  const profile = getMovementProfile(dcName, figureKey, game);
+  // Companions may end on friendly-occupied spaces (mirrors normal movement).
+  const isCompanion = isDcCompanion(dcName);
+  const occupiedSet = new Set();
+  for (const p of [1, 2]) {
+    if (isCompanion && p === playerNum) continue;
+    for (const [k, c] of Object.entries(game.figurePositions?.[p] || {})) {
+      if (!c || (p === playerNum && k === figureKey)) continue;
+      const kSize = game.figureOrientations?.[k] || getFigureSize(dcNameFromFigureKey(k));
+      for (const cell of getNormalizedFootprint(c, kSize)) occupiedSet.add(cell);
+    }
+  }
+  const isValidPlacement = (topLeft) => getNormalizedFootprint(topLeft, profile.size).every((cell) =>
+    board.spacesSet.has(cell)
+    && !forbiddenSet.has(cell)
+    && !occupiedSet.has(cell)
+    && (profile.ignoreBlocking || !board.blockingSet.has(cell)));
+  const moveVectors = profile.isLarge
+    ? [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }]
+    : [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+       { dx: 1, dy: 1 }, { dx: -1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 }];
+  const startTopLeft = normalizeCoord(coord);
+  let frontier = [startTopLeft];
+  const visited = new Set([movementStateKey(startTopLeft, profile.size)]);
+  let distance = 0;
+  const MAX_RING = 30; // safety cap (boards are far smaller)
+  while (frontier.length > 0 && distance < MAX_RING) {
+    const next = [];
+    for (const topLeft of frontier) {
+      for (const vec of moveVectors) {
+        const nb = shiftCoord(topLeft, vec.dx, vec.dy);
+        if (!board.spacesSet.has(nb)) continue;
+        if (board.movementBlockingSet && board.movementBlockingSet.has(edgeKey(topLeft, nb))) continue;
+        const sk = movementStateKey(nb, profile.size);
+        if (visited.has(sk)) continue;
+        visited.add(sk);
+        next.push(nb);
+      }
+    }
+    distance++;
+    const valid = next.filter(isValidPlacement);
+    if (valid.length > 0) {
+      return { distance, spaces: [...new Set(valid.map((s) => String(s).toLowerCase()))] };
+    }
+    frontier = next;
+  }
+  return { distance: 0, spaces: [] };
 }
 
 /**

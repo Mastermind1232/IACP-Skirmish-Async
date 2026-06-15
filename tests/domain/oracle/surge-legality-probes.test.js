@@ -20,13 +20,14 @@ import { createTestGame } from '../../fixtures/game-builder.js';
 // ── PROBE-SURGE-001: getAttackerSurgeAbilities returns correct DC surge chart ─
 
 describe('PROBE-SURGE-001: getAttackerSurgeAbilities returns correct DC surge chart', () => {
-  it('001: Bossk → ["damage 2", "pierce 2"]', () => {
-    // Bossk has surgeAbilities: ["damage 2", "pierce 2"], no doubles, no bonus
+  it('001: Bossk → ["pierce 2"]', () => {
+    // Bossk surge chart is ["pierce 2"]; "+2 Damage" is an innate passive, not a
+    // surge (alexanbv 2026-06-15 card-image correction). No doubles, no bonus.
     const combat = { attackerDcName: 'Bossk' };
     const abilities = getAttackerSurgeAbilities(combat);
 
-    assert.deepStrictEqual(abilities, ['damage 2', 'pierce 2'],
-      `Bossk surge chart should be ["damage 2", "pierce 2"]. Got: ${JSON.stringify(abilities)}`);
+    assert.deepStrictEqual(abilities, ['pierce 2'],
+      `Bossk surge chart should be ["pierce 2"]. Got: ${JSON.stringify(abilities)}`);
   });
 });
 

@@ -62,6 +62,19 @@ function loadAll() {
   try {
     const effData = JSON.parse(readFileSync(join(rootDir, 'data', 'dc-effects.json'), 'utf8'));
     dcEffects = effData.cards || {};
+    // Refactor (alexanbv 2026-06-15): the data file splits always-on rule
+    // keywords (`passives`: Massive, Mobile, Reach, Priority Target, Efficient
+    // Travel, Thrusters, stat mods) from named windowed abilities (`abilities`:
+    // Fly-By, Merciless, Hold the Line, Mounted, Regenerate, …). Engine sites
+    // still read named ability flags off `passives`; merge `abilities` into the
+    // runtime `passives` view so nothing breaks during the per-window migration.
+    // parseInnatePassives only matches stat patterns, so it ignores named
+    // entries. The clean split remains in the file + the `abilities` field.
+    for (const card of Object.values(dcEffects)) {
+      if (card && Array.isArray(card.abilities) && card.abilities.length) {
+        card.passives = [...(card.passives || []), ...card.abilities];
+      }
+    }
   } catch {}
   try {
     const dData = JSON.parse(readFileSync(join(rootDir, 'data', 'dice.json'), 'utf8'));
@@ -218,6 +231,23 @@ export function isExteriorSpace(mapSpaces, coord) {
 
 export function getDcEffects() {
   return dcEffects;
+}
+
+/**
+ * Merged ability-flag view for a DC effect entry: always-on rule keywords +
+ * stat passives (the `passives` field) UNION the named, windowed abilities (the
+ * `abilities` field). Per alexanbv 2026-06-15 the data splits these — `passives`
+ * holds only always-on rules (Massive, Mobile, Reach, Priority Target, stat
+ * mods), while named timing abilities (Fly-By, Merciless, Hold the Line,
+ * Mounted, Regenerate, …) live in `abilities`. Engine sites that test for a
+ * named ability by string should read THIS (so they find it regardless of which
+ * bucket it's in); parseInnatePassives keeps reading raw `passives` (stat mods
+ * only). @returns {string[]}
+ */
+export function dcAbilityFlags(eff) {
+  if (!eff) return [];
+  const p = eff.passives || [];
+  return eff.abilities && eff.abilities.length ? [...p, ...eff.abilities] : p;
 }
 /** Returns a map of dcName → keywords[], derived from dc-effects.json (single source of truth).
  *  Movement/combat-relevant passive traits (Mobile, Massive, Efficient Travel, Reach) are
