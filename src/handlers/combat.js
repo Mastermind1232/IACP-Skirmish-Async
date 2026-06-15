@@ -256,6 +256,15 @@ import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js'
  * to 'zillo-window' regardless of whether the prompt fires.
  */
 export async function sendReadyToResolveRolls(thread, gameId, game, ctx) {
+  // Rebuild path: this is the surge-spend → resolve boundary every legacy
+  // surge path funnels through. When the attack is on the sequence driver and
+  // we're in spend_surges, advance to the damage step instead of posting the
+  // legacy resolve button. (One guard covers all the call sites.)
+  const _seqCombat = game?.pendingCombat;
+  if (_seqCombat?._seqActive && _seqCombat._seqStep === 'spend_surges') {
+    await _advanceSequence(_seqCombat, _seqHandlers(thread, game, _seqCombat, ctx));
+    return;
+  }
   // Slice 6.10: explicit step transition into the Zillo special window.
   if (game?.pendingCombat && game.pendingCombat.currentStep === 'step5') {
     game.pendingCombat.currentStep = 'zillo-window';
@@ -665,10 +674,15 @@ function _seqHandlers(thread, game, combat, ctx) {
         await postRollDiceButton(thread, game, c, ctx);
         return;
       }
-      // TODO (next): spend_surges = proceedAfterTokens with its Done/no-surge
-      // paths advancing the sequence; damage = range/acc check → damage pipeline
-      // → advance (needs the resolve-flow split: damage vs after_resolve gate).
-      // Both stubbed (advance through) until wired so the walk never stalls.
+      if (step === 'spend_surges') {
+        // Compute surge total + post the surge UI; the surge→resolve boundary
+        // (sendReadyToResolveRolls) advances the sequence to damage when active.
+        await proceedAfterTokens(thread, game, c, ctx);
+        return;
+      }
+      // TODO (next): damage = range/acc + dodge check → damage pipeline (damage,
+      // defeat interrupts, nested attacks) → advance. Needs the resolve-flow split
+      // (damage vs after_resolve gate). Stubbed (advance) so the walk never stalls.
       await _advanceSequence(c, handlers);
     },
     onComplete: async (_c) => { /* attack fully resolved — finalize handled by damage step once ported */ },
