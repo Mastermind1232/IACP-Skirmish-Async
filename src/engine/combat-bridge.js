@@ -675,6 +675,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // Thug / Krykna
     const npcArray = combat.target.npcType === 'thug' ? game.npcThugs : game.npcKrykna;
     const npc = npcArray?.[combat.target.npcIndex];
+    let _npcStep8Conditions = [];
     if (npc && !npc.defeated) {
       if (damage > 0 && hit) {
         npc.hp = Math.max(0, npc.hp - damage);
@@ -699,18 +700,29 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // game.figureConditions keyed by the NPC figureKey
         // (npc_thug_N / npc_krykna_N).
         if (!npc.defeated) {
-          const _npcConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
-          for (const _nc of _npcConds) {
-            const _isHarmful = HARMFUL_CONDITIONS.includes(_nc);
-            const _recipientKey = _isHarmful ? combat.target.figureKey : combat.attackerFigureKey;
-            if (_recipientKey) _applyCondition(game, _recipientKey, _nc);
-          }
+          // Conditions (thug/krykna are FIGURES — CRR p.13) now route through the
+          // unified after-attack window via _step8Conditions, NOT inline, so they
+          // resolve in-sequence with the same harmful→target / beneficial→attacker
+          // routing fireCondition applies (alexanbv 2026-06-15 "nothing out of sequence").
+          _npcStep8Conditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])]
+            .map((_nc) => ({ condition: _nc, recipient: HARMFUL_CONDITIONS.includes(_nc) ? 'target' : 'attacker' }));
         }
       }
     }
-    await thread.send({ content: resultText || '(No effect)', components: [] });
-    resolvePendingCombat(game);
-    saveGames(game.gameId);
+    // Unified after-attack pipeline (alexanbv 2026-06-15 "exactly one pipeline
+    // for blast no matter the target; nothing should apply out of sequence"): set
+    // the blast target-context + queued conditions and funnel into the SAME
+    // after-attack window every other target uses (single fireBlast; conditions
+    // via fireCondition). No inline apply, no early resolvePendingCombat — combat
+    // finishes through the window / after_resolve gate.
+    if (npc) {
+      combat._blastTargetCoord = String(npc.coord).toLowerCase();
+      combat._blastTargetSize = '1x1';
+    }
+    combat._step7Hit = hit;
+    combat._step7Damage = damage;
+    combat._step8Conditions = _npcStep8Conditions;
+    await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds: new Set(), ownerId, defenderPlayerNum }, client, deps);
     return;
   }
 

@@ -605,6 +605,45 @@ describe('ORACLE-HANDLER-010: NPC Target Blast / Object Blast', () => {
       `Target crate must take ONLY the main attack (3 dmg → 5-3=2), not its own Blast. objectHealth=${game.objectHealth['crate-d1']?.[0]}`,
     );
   });
+
+  it('010d: targeting a Thug fires Blast through the unified pipeline (adjacent figure hit; thug not self-splashed)', async () => {
+    // Thugs previously got NO Blast (NPC path returned before the figure-path
+    // window). Unified pipeline: targeting a thug sets the blast coord and fires
+    // the single fireBlast — an adjacent figure takes Blast, and the target thug
+    // is excluded from its own Blast.
+    const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
+      .withPlayer1Army([{ dcName: 'Bossk' }])
+      .withPlayer2Army([{ dcName: 'Greedo' }])
+      .inRound(1)
+      .build();
+    const attackerFigKey = Object.keys(game.figurePositions[1])[0];
+    game.figurePositions[1] = { [attackerFigKey]: 'b1' };
+    const bystander = getP2DcInfo(game, dcMessageMeta, dcHealthState, 0);
+    game.figurePositions[2] = { [bystander.figKey]: 'd1' }; // adjacent to thug at c1
+    game.npcThugs = [{ hp: 6, maxHp: 6, coord: 'c1', defeated: false }];
+    const bystanderHpBefore = bystander.hp();
+    let attackerMsgId, attackerMeta;
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta.gameId === game.gameId && meta.playerNum === 1) { attackerMsgId = msgId; attackerMeta = meta; break; }
+    }
+    const combat = {
+      gameId: game.gameId, attackerPlayerNum: 1, defenderPlayerNum: 2,
+      attackerMsgId, attackerDcName: attackerMeta.dcName, defenderDcName: 'Thug',
+      attackerDisplayName: attackerMeta.displayName || attackerMeta.dcName,
+      attackerFigureIndex: 0, attackerFigureKey: attackerFigKey, attackerConds: [], defenderConds: [],
+      target: { figureKey: 'npc_thug_0', label: 'Thug 1', isNpc: true, npcType: 'thug', npcIndex: 0 },
+      targetStats: { defense: [], cost: 0, figures: 1 },
+      attackInfo: { dice: ['blue', 'green'], type: 'melee' }, isRanged: false, distanceToTarget: 1,
+      combatThreadId: 'oracle-combat-thread', combatDeclareMsgId: 'oracle-declare-msg', combatPreMsgId: 'oracle-pre-msg',
+      attackRoll: { acc: 5, dmg: 3, surge: 1 }, defenseRoll: { block: 0, evade: 0, dodge: false },
+      surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+      surgeBlast: 2, bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
+      p1Ready: true, p2Ready: true, attackTargetMsgId: 'oracle-target-msg',
+    };
+    await deps.resolveCombatAfterRolls(game, combat, deps.client);
+    assert.strictEqual(bystander.hp(), bystanderHpBefore - 2, 'adjacent figure takes 2 Blast from the unified pipeline');
+    assert.strictEqual(game.npcThugs[0].hp, 3, `target thug takes ONLY main damage (6-3=3), not its own Blast (hp=${game.npcThugs[0].hp})`);
+  });
 });
 
 // ── ORACLE-SEP: damage step / after_resolve gate separation ───────────────────
