@@ -230,8 +230,10 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 // Slice C: timing-window gate machine (flag-gated migration, default off).
-import { buildModsGate } from '../engine/combat-mods-gate.js';
+import { buildModsGate, buildWindowGate } from '../engine/combat-mods-gate.js';
+import { buildOnDeclareGate } from '../engine/combat-ondeclare-gate.js';
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
+import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -618,9 +620,57 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
   await driveModsGate(combat[cfg.field], {
     firePassive: cfg.firePassive ? (side, id) => cfg.firePassive(side, id, thread, game, combat, ctx) : undefined,
     postChooseWindow: (side, pending) => _postGateChooseWindow(window, side, pending, thread, game, combat),
-    onComplete: () => cfg.onComplete(thread, game, combat, ctx),
+    onComplete: async () => {
+      // When the full attack runs on the sequence driver, a window's completion
+      // advances to the next step; otherwise fall back to the window's legacy
+      // onComplete (existing flag-on-per-window behavior). Pick handlers re-enter
+      // here on each player choice, so this branch must be consistent.
+      if (combat._seqActive) {
+        delete combat[cfg.field];
+        await _advanceSequence(combat, _seqHandlers(thread, game, combat, ctx));
+      } else {
+        await cfg.onComplete(thread, game, combat, ctx);
+      }
+    },
   });
   ctx.saveGames?.(game.gameId);
+}
+
+// ── Full-attack sequence driver wiring (alexanbv 2026-06-15 rebuild) ──────────
+// Shared gate-builder deps + per-window passive-firer.
+function _gateDeps(ctx) {
+  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize };
+}
+/**
+ * Build the sequence-driver handlers for an in-flight attack. Reconstructed on
+ * each event (button click) from thread/game/combat/ctx — never stored on the
+ * (serialized) combat object.
+ */
+function _seqHandlers(thread, game, combat, ctx) {
+  const handlers = {
+    driveGate: async (step, c) => {
+      const cfg = _GATE_WINDOWS[step];
+      const deps = _gateDeps(ctx);
+      c[cfg.field] = step === 'on_declare'
+        ? buildOnDeclareGate(game, c, deps)
+        : buildWindowGate(step, game, c, deps);
+      // _driveGatePath drives it (reading cfg.firePassive); its onComplete
+      // advances the sequence because c._seqActive is set.
+      await _driveGatePath(step, thread, game, c, ctx);
+    },
+    runMechanic: async (step, c) => {
+      // TODO (next): wire roll / spend_surges / damage. For now advance through
+      // so the sequence walks end-to-end (mechanic steps are no-ops until ported).
+      await _advanceSequence(c, handlers);
+    },
+    onComplete: async (_c) => { /* attack fully resolved — finalize handled by damage step once ported */ },
+  };
+  return handlers;
+}
+/** Entry point: run a full attack through the gate sequence (rebuild path). */
+export async function runAttackSequence(thread, game, combat, ctx) {
+  combat._seqActive = true;
+  await _startSequence(combat, _seqHandlers(thread, game, combat, ctx));
 }
 
 /** Mods-step convenience wrapper (existing call sites unchanged). */
