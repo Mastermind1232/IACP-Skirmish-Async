@@ -20,6 +20,7 @@ export const TIMING_WINDOWS = Object.freeze([
   'rerolls',
   'mods',
   'special',
+  'zillo',
   'after_resolve',
 ]);
 

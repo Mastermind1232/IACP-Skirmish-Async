@@ -13,7 +13,7 @@ beforeEach(() => clearCombatAbilityRegistry());
 
 describe('combat-timing-registry: canonical windows', () => {
   it('windows are the sequential set destruct specified', () => {
-    assert.deepEqual(TIMING_WINDOWS, ['on_declare', 'rerolls', 'mods', 'special', 'after_resolve']);
+    assert.deepEqual(TIMING_WINDOWS, ['on_declare', 'rerolls', 'mods', 'special', 'zillo', 'after_resolve']);
   });
 });
 

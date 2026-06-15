@@ -25,6 +25,7 @@ function e(id, name, side, kind, windows, detect, special) {
 const ON = ['on_declare'];
 const RR = ['rerolls'];
 const SP = ['special'];
+const ZL = ['zillo'];
 const AR = ['after_resolve'];
 
 // ── ON_DECLARE (CRR step 1+2) ────────────────────────────────────────────────
@@ -174,7 +175,7 @@ e('demoralizing_monologue', 'Demoralizing Monologue (CC)', 'attacker', 'interact
 // ── SPECIAL sub-windows ──────────────────────────────────────────────────────
 e('rapid_recalibration', 'Rapid Recalibration (CC)', 'attacker', 'interactive', SP, 'between attacker/defender rerolls; set 1 atk die', 'rapid_recal');
 e('lasat_honor_guard', 'Lasat Honor Guard (Zeb Orrelios)', 'attacker', 'interactive', SP, 'between rerolls and mods; turn 1 single-symbol die', 'zeb');
-e('zillo_technique_pierce_cancel', 'Zillo Technique (exhaust → cancel 2 Pierce)', 'defender', 'interactive', SP, 'between surge and damage; finalized Pierce>0', 'zillo_exhaust');
+e('zillo_technique_pierce_cancel', 'Zillo Technique (exhaust → cancel 2 Pierce)', 'defender', 'interactive', ZL, 'zillo step: between spend_surges and damage; finalized Pierce>0', 'zillo_exhaust');
 
 // ── MODS (missing from combat-abilities-mods.js — timing-only until wired) ────
 e('guidance_systems', 'Guidance Systems', 'attacker', 'interactive', ['mods'], 'sendModsYn prompt; -1 Hit/+2 Acc per use');

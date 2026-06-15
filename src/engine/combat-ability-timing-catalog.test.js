@@ -9,7 +9,7 @@ const idsFor = (w) => timingIndicatorsForWindow(w).map((a) => a.id);
 const has = (w, id) => idsFor(w).includes(id);
 
 describe('combat timing catalog: every window has a complete set of timing indicators', () => {
-  it('all five windows are populated', () => {
+  it('all timing windows are populated', () => {
     for (const w of TIMING_WINDOWS) {
       assert.ok(timingIndicatorsForWindow(w).length > 0, `window '${w}' has no abilities`);
     }
@@ -34,12 +34,15 @@ describe('combat timing catalog: every window has a complete set of timing indic
     }
   });
 
-  it('special covers the three named sub-windows (RR / Zeb / Zillo exhaust)', () => {
+  it('special covers the die-turn sub-windows (RR / Zeb)', () => {
     const sp = timingIndicatorsForWindow('special');
     const subs = new Set(sp.map((a) => a.special));
     assert.ok(subs.has('rapid_recal'), 'missing rapid_recal');
     assert.ok(subs.has('zeb'), 'missing zeb');
-    assert.ok(subs.has('zillo_exhaust'), 'missing zillo_exhaust');
+  });
+
+  it('zillo window covers the Zillo Technique pierce-cancel (its own step after spend_surges)', () => {
+    assert.ok(has('zillo', 'zillo_technique_pierce_cancel'), 'zillo window missing zillo_technique_pierce_cancel');
   });
 
   it('after_resolve covers Cleave/Blast/conditions + chain attacks + defeat triggers', () => {

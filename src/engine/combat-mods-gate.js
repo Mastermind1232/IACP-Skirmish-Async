@@ -11,6 +11,10 @@
 import './combat-abilities-mods.js';
 import './combat-ability-timing-catalog.js'; // complete timing indicators for every combat ability
 import './combat-abilities-from-csv.js'; // register ALL combat abilities into their gates from the CSV (timing-only until wired)
+// Executable resolvers LAST so they overwrite any timing-only catalog/CSV entry
+// for the same id (registerCombatAbility is last-write-wins per id).
+import './combat-abilities-special.js'; // executable special-window die-turns (Zeb)
+import './combat-abilities-zillo.js'; // executable zillo-window pierce-cancel
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 

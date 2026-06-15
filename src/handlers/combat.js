@@ -610,6 +610,15 @@ const _GATE_WINDOWS = {
     firePassive: null,
     onComplete: async (thread, game, combat, ctx) => { delete combat.specialGate; if (ctx._specialGateDone) await ctx._specialGateDone(thread, game, combat); },
   },
+  // Zillo Technique exhaust window (pierce-cancel) — its own gate step AFTER
+  // spend_surges (alexanbv 2026-06-15 "rewire all of the missing resolvers").
+  // Previously absent from _GATE_WINDOWS, which would crash the sequence's zillo
+  // step; the resolver (zillo_technique_pierce_cancel) already exists.
+  zillo: {
+    field: 'zilloGate', pickPrefix: 'combat_zillo_pick_', title: 'Zillo Technique',
+    firePassive: null,
+    onComplete: async (thread, game, combat, ctx) => { delete combat.zilloGate; if (ctx._zilloGateDone) await ctx._zilloGateDone(thread, game, combat); },
+  },
 };
 
 /** The window whose gate is currently live on `combat` (sequential — at most one). */
