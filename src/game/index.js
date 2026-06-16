@@ -65,6 +65,7 @@ export {
   recalcAttackTotals,
   recalcDefenseTotals,
   getInnateRerolls,
+  getInnateRerollAbilities,
   SURGE_LABELS,
   getAttackerSurgeAbilities,
   parseSurgeEffect,

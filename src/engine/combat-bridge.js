@@ -31,7 +31,7 @@ import { exhaustAttachment } from '../game/card-state-helpers.js';
  * opponent doesn't know that. Thus, each stage needs to ask anything for
  * this stage, for each player, in order."
  */
-async function _sendPrivateReactionPrompt(client, game, playerNum, count, contextLabel) {
+export async function _sendPrivateReactionPrompt(client, game, playerNum, count, contextLabel) {
   if (!count || count <= 0) return;
   const handId = getHandChannelId(game, playerNum);
   if (!handId) return;
@@ -779,6 +779,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // with Blast/Cleave/strain/NPC damage paths.
       const _mdResult = await _applyDamage(game, {
         dcHealthState, logGameAction, client, deps, thread,
+        sendPrivateReactionPrompt: _sendPrivateReactionPrompt,
       }, {
         figureKey: combat.target.figureKey,
         msgId: targetMsgId,
@@ -902,7 +903,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           // Strain = 1 direct HP damage. destruct 2026-05-08: route
           // through centralized damage pipeline (when-damaged hooks
           // fire here too).
-          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
             figureKey: combat.target.figureKey,
             msgId: targetMsgId,
             figIndex: targetFigIndex,
@@ -1030,7 +1031,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const _fdDiceCount = combat.attackDiceResults?.length || 0;
             if (_fdDiceCount > 0 && combat.attackerMsgId) {
               const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
-              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
                 figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _fdAtkFigIdx,
                 amount: _fdDiceCount, controllerPlayerNum: attackerPlayerNum, source: 'Force Deflection', combat,
               });
@@ -1076,7 +1077,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             if (!hasFigureLineOfSight(_dfPathFp, _dfAtkFp, _dfMapSp, null)) continue;
             // Deal 1 Damage to the attacker
             const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
-            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
               figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _dfAtkFigIdx,
               amount: 1, controllerPlayerNum: attackerPlayerNum, source: 'Distracting Fire', combat,
             });
@@ -1334,35 +1335,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
         await checkWinConditions(game, client);
-        // Celebration auto-prompt — now handled by WHEN_DEFEATED hook
-        // (damage-pipeline-hooks.js). Hook fires from any defeat source.
-        // Auto-prompt for defeat-triggered reaction cards
-        try {
-          const ccCards = getCcEffectsData?.()?.cards || {};
-          const _defeatTimings = new Set([
-            'whenHostileFigureDefeatedNotYourActivation',
-            'whenHostileFigureWithin3SpacesDefeated',
-            'afterUniqueHostileDefeated',
-          ]);
-          const _ownDefeatTimings = new Set([
-            'whenOneOfYourFiguresDefeated',
-          ]);
-          // Notify attacker about hostile-defeat reactions in hand
-          const atkHand = getCcHand(game, attackerPlayerNum) || [];
-          const atkDefeatCards = [...new Set(atkHand)].filter(c => ccCards[c]?.timing && _defeatTimings.has(ccCards[c].timing));
-          if (atkDefeatCards.length) {
-            await _sendPrivateReactionPrompt(client, game, attackerPlayerNum, atkDefeatCards.length, 'hostile defeated');
-          }
-          // Notify defender about own-figure-defeat reactions in hand
-          const defId = getPlayerId(game, defenderPlayerNum);
-          const defHand = getCcHand(game, defenderPlayerNum) || [];
-          const defDefeatCards = [...new Set(defHand)].filter(c => ccCards[c]?.timing && _ownDefeatTimings.has(ccCards[c].timing));
-          if (defDefeatCards.length) {
-            await _sendPrivateReactionPrompt(client, game, defenderPlayerNum, defDefeatCards.length, 'your figure was defeated');
-          }
-        } catch (_defeatPromptErr) {
-          console.error('Defeat reaction prompt error:', _defeatPromptErr?.message ?? _defeatPromptErr);
-        }
+        // Defeat-triggered reaction CCs (whenHostileFigureDefeated*,
+        // whenOneOfYourFiguresDefeated, afterUniqueHostileDefeated) are now
+        // offered by the damage pipeline's WHEN_DEFEATED CC-play window
+        // (damage-pipeline.js _notifyCcPlayWindow / CC_TIMINGS_WHEN_DEFEATED),
+        // fired at the moment of defeat. No inline prompt here.
       }
     }
     if (combat.superchargeStrainAfterAttackCount > 0 && combat.attackerMsgId != null) {
@@ -1488,7 +1465,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (_drEntry) {
         const [_drCur] = _drEntry;
         if (_drCur === 1) {
-          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
             figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
             amount: 1, controllerPlayerNum: defenderPlayerNum,
             attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1565,7 +1542,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             const { dgIndex: _epDgIdx, figureIndex: _epFigIdx } = parseFigureKey(fk);
             const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
             if (_epMsgId) {
-              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
                 figureKey: fk, msgId: _epMsgId, figIndex: _epFigIdx,
                 amount: 1, controllerPlayerNum: pNum,
                 attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1585,7 +1562,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     if (false && _lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) { // eslint-disable-line no-constant-condition
       const _qsModified = combat.defenderRerolledOrModified;
       if (_qsModified) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
           figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
           amount: 1, controllerPlayerNum: defenderPlayerNum,
           attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1636,7 +1613,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
             for (const [_abMsgId, _abMeta] of dcMessageMeta) {
               if (_abMeta.gameId !== game.gameId || _abMeta.playerNum !== defenderPlayerNum || _abMeta.dcName !== _abDcName) continue;
               const _abFigIdx = parseFigureKey(_abFk2).figureIndex;
-              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
                 figureKey: _abFk2, msgId: _abMsgId, figIndex: _abFigIdx,
                 amount: _abHits, controllerPlayerNum: defenderPlayerNum,
                 attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
@@ -1848,7 +1825,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _sdaPrevHs = dcHealthState.get(_sdaMsgId);
       if (_sdaPrevHs?.[_sdaFigIdx]) {
         const _sdaMaxHp = _sdaPrevHs[_sdaFigIdx][1] ?? _sdaPrevHs[_sdaFigIdx][0] ?? 99;
-        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
           figureKey: _sdaFigKey, msgId: _sdaMsgId, figIndex: _sdaFigIdx,
           amount: _sdaMaxHp, controllerPlayerNum: attackerPlayerNum,
           source: 'Self-Defeat', combat,
@@ -1965,7 +1942,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const attMsgId = combat.attackerMsgId;
     const attFigIdx = combat.attackerFigureIndex ?? 0;
     if (attMsgId) {
-      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
         figureKey: combat.attackerFigureKey, msgId: attMsgId, figIndex: attFigIdx,
         amount: deflectDmg, controllerPlayerNum: attackerPlayerNum,
         source: 'Deflection', combat,
@@ -2837,7 +2814,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         const _dflTgtMsgId = findDcMessageIdForFigure(game.gameId, _dflTgt.playerNum, _dflTgt.figureKey);
         if (_dflTgtMsgId) {
           const { figureIndex: _dflFigIdx } = parseFigureKey(_dflTgt.figureKey);
-          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
             figureKey: _dflTgt.figureKey, msgId: _dflTgtMsgId, figIndex: _dflFigIdx,
             amount: 1, controllerPlayerNum: _dflTgt.playerNum,
             source: 'Deflect (Luke)', combat,

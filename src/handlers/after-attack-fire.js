@@ -32,6 +32,7 @@ import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { playCC } from '../game/cc-timing.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { onCcPlayed } from './cc-hand.js';
+import { _sendPrivateReactionPrompt } from '../engine/combat-bridge.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
@@ -95,7 +96,7 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     combat.target?.figureKey,
     combat._blastTargetSize,
   );
-  const dCtx = { dcHealthState, logGameAction, client, deps, thread };
+  const dCtx = { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt };
   for (const { figureKey, playerNum } of adjacent) {
     if (playerNum === attackerPlayerNum && ftFireproofFriendly) continue;
     const msgId = findDcMessageIdForFigure?.(game.gameId, playerNum, figureKey);

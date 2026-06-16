@@ -210,7 +210,7 @@ import {
   hasConclusionAbility,
   applyEvadeDebuff,
 } from '../game/evade-debuff-helpers.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey, getInnateRerollAbilities } from '../game/index.js';
 import { getPlayerDisplayName } from '../discord/user-helpers.js';
 import { renderAttackDiceImage, renderDefenseDiceImage } from '../discord/dice-renderer.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
