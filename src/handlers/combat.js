@@ -1509,6 +1509,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.bonusHits = (combat.bonusHits || 0) + 1;
     combat.pulseCannonResolved = true;
     await thread.send('**Pulse Cannon** — Power Token spent: **+4 Accuracy, +1 Hit**.').catch(discordCatch);
+  } else if (id === 'fury_kashyyyk_pierce') {
+    combat.bonusPierce = (combat.bonusPierce || 0) + 1;
+    await thread.send('**Fury of Kashyyyk** — +1 Pierce (elite WOOKIEE, target within 2, friendly WOOKIEE within 2 of the defender).').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;

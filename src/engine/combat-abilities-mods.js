@@ -14,7 +14,7 @@ import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
 import { hasAgileAbility } from '../game/agile-jet-trooper-helpers.js';
-import { opponentPlayerNum } from '../game/player-helpers.js';
+import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
 const D = (deps, name, fallback) => (deps && deps[name]) || fallback;
@@ -168,5 +168,38 @@ registerCombatAbility({
   applies: (game, combat, side, deps) => {
     if (!combat.defenseRoll?.dodge || !combat.target?.figureKey) return false;
     return ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))).includes('lucky_r2d2');
+  },
+});
+
+// Fury of Kashyyyk — Pierce 1 (conditional attacker modifier, IACP card part 3;
+// alexanbv 2026-06-16 "implement fury to spec with both restrictions"). Auto-
+// applies Pierce 1 when: the attacker's team has the [Fury of Kashyyyk] upgrade,
+// the attacker is an ELITE WOOKIEE, the target is within 2 of the attacker, AND
+// another friendly WOOKIEE is within 2 of the defender. (The Focus-on-damage part
+// is the separate WHEN_DAMAGED hook.) Effect applied in _fireModsPassive.
+registerCombatAbility({
+  id: 'fury_kashyyyk_pierce', name: 'Fury of Kashyyyk (Pierce 1)', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (!combat.attackerFigureKey || !combat.target?.figureKey) return false;
+    const atkPn = combat.attackerPlayerNum;
+    const team = (D(deps, 'getDcList', getDcList))(game, atkPn) || [];
+    if (!team.some((dc) => (dc?.dcName || dc) === '[Fury of Kashyyyk]')) return false;
+    const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
+    const atkKws = (eff(deps, atkName)?.keywords || []).map((k) => String(k).toUpperCase());
+    if (!atkKws.includes('WOOKIEE') || !/\(elite\)/i.test(String(atkName))) return false;
+    if ((combat.distanceToTarget ?? 99) > 2) return false; // target within 2 of attacker
+    const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
+    const defPn = defenderPN(combat);
+    const targetPos = game.figurePositions?.[defPn]?.[combat.target.figureKey];
+    if (!mapSp || !targetPos) return false;
+    const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const friendly = game.figurePositions?.[atkPn] || {};
+    for (const [fk, pos] of Object.entries(friendly)) {
+      if (fk === combat.attackerFigureKey) continue;
+      const kws = (eff(deps, dcNameFromFigureKey(fk))?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!kws.includes('WOOKIEE')) continue;
+      if (within(mapSp, String(pos).toLowerCase(), String(targetPos).toLowerCase(), 2)) return true;
+    }
+    return false;
   },
 });
