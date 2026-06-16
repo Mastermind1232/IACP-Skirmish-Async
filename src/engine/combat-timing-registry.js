@@ -68,6 +68,9 @@ export function registerCombatAbility(entry) {
     timingOnly: !applies,
     special: entry.special || null,
     detect: entry.detect || null,
+    // Data-driven params (e.g. reroll {pool, count, colorSwap} from the CSV) the
+    // shared generic resolver reads instead of a hand-coded per-ability function.
+    params: entry.params || null,
   });
 }
 

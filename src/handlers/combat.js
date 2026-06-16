@@ -1102,13 +1102,24 @@ export const COMBAT_RESOLVERS = {
     eligible: (dice) => dice.map((_d, i) => i),
     phaseFlag: null, stageKey: 'rapidRecal',
   }),
-  // ── Rerolls window (alexanbv 2026-06-15): every reroll ability is a THIN
-  // resolver over the generic rerollDie (binary lock inside). One die per
-  // resolution (count=1 — Guardian Stance multi is a follow-up). ─────────────
-  innate_attack_reroll: _makeRerollResolver({ name: 'Reroll Attack Die', pool: 'attack', stageKey: 'innateAtkRr' }),
-  innate_defense_reroll: _makeRerollResolver({ name: 'Reroll Defense Die', pool: 'defense', stageKey: 'innateDefRr' }),
-  saska_color_reroll: _makeRerollResolver({ name: 'Saska Teft (reroll + change color)', pool: 'attack', colorSwap: true, stageKey: 'saska' }),
 };
+
+/**
+ * Resolve a gate ability id to its resolver: a hand-wired COMBAT_RESOLVERS entry,
+ * or — for DATA-DRIVEN abilities carrying registry params (every reroll ability
+ * registered from docs/combat-spec.csv) — a generic resolver built from those
+ * params. New reroll abilities need NO hand-coded function: gate + this dispatch
+ * + the generic rerollDie serve them all (alexanbv "should not be doing these
+ * with ad hoc functions").
+ */
+function _resolverFor(pick) {
+  if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
+  const reg = getCombatAbility(pick);
+  if (reg?.params?.kind === 'reroll') {
+    return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+  }
+  return null;
+}
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);
 
@@ -1149,7 +1160,7 @@ export async function handleModsPick(interaction, ctx) {
     passModsSide(gate, side);
     await _driveGatePath(window, thread, game, combat, ctx);
   } else {
-    const r = COMBAT_RESOLVERS[pick];
+    const r = _resolverFor(pick);
     if (r) {
       // Generic, data-driven: post the ability's sub-choice prompt, or apply
       // immediately if it has none. The handler never names the ability.
@@ -1240,7 +1251,7 @@ export async function handleModsSubChoice(interaction, ctx) {
 
   // Generic, data-driven resolution: look up the ability's resolver and apply
   // the chosen option, then record + re-drive. Never names a specific ability.
-  const _resolver = COMBAT_RESOLVERS[id];
+  const _resolver = _resolverFor(id);
   if (_resolver) {
     const _res = _resolver.apply ? await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId, id, window }) : null;
     // Multi-stage abilities (e.g. pick die → pick face) return { followUp: true }
