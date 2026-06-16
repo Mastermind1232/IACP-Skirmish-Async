@@ -42,6 +42,8 @@ export function registerTokenAbilities() {
         if (eligibleTokenTypes(game, combat, side).length > 0) return true;
         // Squad Cohesion donor-only case: the figure holds no spendable token of
         // its own, but a friendly within 3 (via Ko-Tun) has one (alexanbv 2026-06-16).
+        // Squad Cohesion (Ko-Tun) is ATTACKER-only — the defender has no donor path.
+        if (side !== 'attacker') return false;
         const allowed = ALLOWED[side];
         const sc = deps?.getSquadCohesionTokens?.(game, combat, side);
         return !!sc?.cohesionTokens?.some((t) => allowed.includes(t.type));

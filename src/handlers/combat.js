@@ -1267,7 +1267,9 @@ function _makeTokenResolver({ side }) {
     for (const type of (game.figurePowerTokens?.[fk] || [])) {
       if (allowed.includes(type)) out.push({ figureKey: fk, type, label: `${type} Token` });
     }
-    const sc = getSquadCohesionTokens(game, combat, side);
+    // Squad Cohesion (Ko-Tun) is ATTACKER-only — the defender can't spend nearby
+    // friendlies' tokens (alexanbv 2026-06-16).
+    const sc = side === 'attacker' ? getSquadCohesionTokens(game, combat, side) : null;
     if (sc?.cohesionTokens?.length) {
       for (const t of sc.cohesionTokens) {
         if (allowed.includes(t.type)) out.push({ figureKey: t.figureKey, type: t.type, label: `${t.type} (${t.ownerName})` });
