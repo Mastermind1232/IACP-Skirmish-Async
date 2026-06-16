@@ -801,15 +801,17 @@ export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
 }
 
 /**
- * True if a played Command Card is removed to the GAME BOX instead of the
- * owner's discard pile (alexanbv 2026-06-16: "send the played CC to the player's
- * discard, with the exception of abilities/cards that say gamebox like Aphra,
- * YWNDM"). Detected from the card effect text ("game box"); a caller may also
- * force it via opts.removeTo (e.g. an Aphra-excavated card removed after use).
+ * True if the PLAYED CARD ITSELF is removed to the GAME BOX instead of the owner's
+ * discard pile (alexanbv 2026-06-16: "send the played CC to the player's discard,
+ * with the exception of abilities/cards that say gamebox like Aphra, YWNDM").
+ * Must match a SELF-reference ("return THIS card to the game box" — YWNDM), NOT a
+ * card whose game-box text targets something else: Fool Me Once sends the
+ * OPPONENT'S DISCARD PILE to the game box but FMO itself goes to discard. A caller
+ * may also force game-box disposal via opts.removeTo (e.g. Aphra-excavated cards).
  */
 export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
   const eff = getEffect(cardName);
-  return /game\s*box/i.test(String(eff?.effect || ''));
+  return /\bthis card\b[^.]*\bgame\s*box\b/i.test(String(eff?.effect || ''));
 }
 
 /**

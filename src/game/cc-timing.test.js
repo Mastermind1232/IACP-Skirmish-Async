@@ -365,9 +365,12 @@ describe('canPlayCC — the four play checks', () => {
 });
 
 describe('ccRemovesToGameBox', () => {
-  it('true for cards whose effect says game box (YWNDM), false otherwise', () => {
-    assert.equal(ccRemovesToGameBox('You Will Not Deny Me'), true);
+  it('true only when THIS card self-removes to the game box', () => {
+    assert.equal(ccRemovesToGameBox('You Will Not Deny Me'), true); // "return this card to the game box"
     assert.equal(ccRemovesToGameBox('Wild Attack'), false);
+    // Fool Me Once sends the OPPONENT'S discard to the game box but FMO itself
+    // goes to discard — must NOT be flagged as a self-gamebox card.
+    assert.equal(ccRemovesToGameBox('Fool Me Once'), false);
   });
 });
 
