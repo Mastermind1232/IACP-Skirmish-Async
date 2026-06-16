@@ -7587,115 +7587,12 @@ export async function handleCombatPassive(interaction, ctx) {
  * Replaces the parallel Ready-button gate + auto-posted token window
  * that posted both prompts simultaneously to each player.
  */
-export async function sendOnDeclareYn(thread, game, combat, role) {
-  const gameId = game.gameId;
-  const isAtk = role === 'attacker';
-  const playerNum = isAtk
-    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
-    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
-  const ownerId = playerNum === 1 ? game.player1Id : game.player2Id;
-  combat.currentStep = isAtk ? 'step1+2-attacker' : 'step1+2-defender';
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat_on_declare_yn_${gameId}_${isAtk ? 'atk' : 'def'}_yes`)
-      .setLabel('Yes — applying on-declare effects')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`combat_on_declare_yn_${gameId}_${isAtk ? 'atk' : 'def'}_no`)
-      .setLabel('No — skip')
-      .setStyle(ButtonStyle.Secondary),
-  );
-  const label = isAtk ? 'Attacker' : 'Defender';
-  await thread.send({
-    content: `<@${ownerId}> — **${label}: Apply on-declare CCs / abilities / power tokens?** (CRR steps 1+2) Play any from your hand channel + spend tokens, then click below.`,
-    components: [row],
-    allowedMentions: { users: [ownerId] },
-  }).catch(discordCatch);
-}
-
-/**
- * Handle the sequential "Apply on-declare effects? Y/N" buttons. Yes
- * opens the on-declare token window and posts a Continue button.
- * No / Continue advances to the next role (defender → next), or to
- * the dice roll once the defender confirms.
- */
-export async function handleCombatOnDeclareYn(interaction, ctx) {
-  const { getGame, replyIfGameEnded, saveGames, client } = ctx;
-  const m = interaction.customId.match(/^combat_on_declare_yn_([^_]+)_(atk|def)_(yes|no|continue)$/);
-  if (!m) return;
-  const [, gameId, side, choice] = m;
-  const game = await requireGame(interaction, getGame, gameId, { silent: true });
-  if (!game) return;
-  if (await replyIfGameEnded(game, interaction)) return;
-  const combat = game.pendingCombat;
-  if (!combat || combat.gameId !== gameId) return;
-
-  const isAtk = side === 'atk';
-  const expectedPn = isAtk
-    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
-    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
-  const expectedId = expectedPn === 1 ? game.player1Id : game.player2Id;
-  if (interaction.user.id !== expectedId) {
-    await interaction.followUp({
-      content: `Only the ${isAtk ? 'attacker' : 'defender'} can click that button.`,
-      ephemeral: true,
-    }).catch(discordCatch);
-    return;
-  }
-
-  try {
-    const clickedId = interaction.customId;
-    const newRows = (interaction.message?.components || []).map((row) => {
-      const newRow = new ActionRowBuilder();
-      for (const c of row.components) {
-        const btn = ButtonBuilder.from(c);
-        btn.setDisabled(true);
-        if (c.customId === clickedId) {
-          btn.setStyle(choice === 'no' ? ButtonStyle.Secondary : ButtonStyle.Success);
-        }
-        newRow.addComponents(btn);
-      }
-      return newRow;
-    });
-    if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
-  } catch (_e) { /* non-fatal */ }
-
-  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  if (!thread) return;
-
-  if (choice === 'yes') {
-    // Open the on-declare token spend window (own tokens + squad cohesion
-    // proxies) so the player can spend in this moment. Then post a
-    // "Continue" follow-up button so they confirm done.
-    await sendOnDeclareTokenWindow(thread, game, combat, isAtk ? 'attacker' : 'defender', ctx);
-    const continueRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`combat_on_declare_yn_${gameId}_${side}_continue`)
-        .setLabel('Done with on-declare — continue')
-        .setStyle(ButtonStyle.Primary),
-    );
-    await thread.send({
-      content: `<@${expectedId}> — Spend tokens above and play any CCs / abilities from your hand channel. Click **Continue** when done.`,
-      components: [continueRow],
-      allowedMentions: { users: [expectedId] },
-    }).catch(discordCatch);
-    saveGames(game.gameId);
-    return;
-  }
-  // 'no' or 'continue' — advance to next role / dice roll.
-  if (isAtk) {
-    await sendOnDeclareYn(thread, game, combat, 'defender');
-  } else {
-    // Defender finished — advance to roll (mirrors
-    // dispatchCombatGateAdvance('on_declare') behavior).
-    combat.onDeclareTokenContext = false;
-    combat.tokenPhase = null;
-    combat.currentStep = 'roll';
-    await postRollDiceButton(thread, game, combat, ctx);
-  }
-  saveGames(game.gameId);
-}
+// RETIRED in the gate cutover (alexanbv 2026-06-16): sendOnDeclareYn +
+// handleCombatOnDeclareYn (the legacy sequential on-declare Y/N chain) are gone.
+// Every attack now walks the gate sequence — the on_declare gate window
+// (buildOnDeclareGate / handleModsPick) offers on-declare CCs / abilities /
+// power tokens before the roll step. The on-declare token spend is
+// sendOnDeclareTokenWindow (kept — shared by the gate + recover.js).
 
 /**
  * Sequential per-player "Apply modifiers? Y/N" prompt (CRR step 4).

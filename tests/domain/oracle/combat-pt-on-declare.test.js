@@ -56,21 +56,14 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'on_declare (power-token spend window) must precede roll in ATTACK_STEPS');
   });
 
-  it('sendOnDeclareYn body opens the token window only inside the Yes branch of handleCombatOnDeclareYn', () => {
-    // The token window is no longer auto-posted alongside the gate.
-    // It opens only when the player clicks Yes, alongside the
-    // "Done with on-declare — continue" follow-up.
-    const handlerMatch = H_CB_SRC.match(/export async function handleCombatOnDeclareYn\(interaction, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(handlerMatch, 'handleCombatOnDeclareYn body must be locatable');
-    const body = handlerMatch[0];
-    assert.match(body, /sendOnDeclareTokenWindow\(thread, game, combat, isAtk \? 'attacker' : 'defender', ctx\)/,
-      "Yes branch must open the on-declare token window for the clicker's role");
-    assert.match(body, /combat_on_declare_yn_\$\{gameId\}_\$\{side\}_continue/,
-      'Yes branch must post a Continue follow-up button');
-    assert.match(body, /sendOnDeclareYn\(thread, game, combat, 'defender'\)/,
-      "Attacker's No/Continue must advance to defender Y/N");
-    assert.match(body, /postRollDiceButton\(thread, game, combat, ctx\)/,
-      "Defender's No/Continue must advance to dice roll");
+  it('legacy on-declare Y/N chain (sendOnDeclareYn / handleCombatOnDeclareYn) is removed', () => {
+    // Gate cutover (alexanbv 2026-06-16): the sequential on-declare Y/N chain is
+    // retired — the gate's on_declare window handles on-declare effects + the
+    // power-token spend before the roll step.
+    assert.doesNotMatch(H_CB_SRC, /export async function sendOnDeclareYn\(/,
+      'sendOnDeclareYn must be deleted (gate on_declare window replaces it)');
+    assert.doesNotMatch(H_CB_SRC, /export async function handleCombatOnDeclareYn\(/,
+      'handleCombatOnDeclareYn must be deleted');
   });
 
   it('proceedToTokenPhase has been removed', () => {
