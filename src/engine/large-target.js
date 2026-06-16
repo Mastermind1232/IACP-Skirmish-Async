@@ -11,8 +11,9 @@
 
 import { getFootprintCells } from '../game/coords.js';
 import { getEffectiveFigureSize } from '../game/board-helpers.js';
-import { getFigureSize, getFigureSizes } from '../data-loader.js';
+import { getFigureSize, getFigureSizes, getMapData } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { hasLineOfSightByCoord } from '../game/spatial.js';
 
 /** Parse a "WxH" size (or [w,h]) into [w,h]. */
 function _wh(size) {
@@ -44,4 +45,21 @@ export function getTargetSquares(game, playerNum, figureKey) {
   if (!pos) return [];
   const size = targetFootprintSize(game, figureKey);
   return getFootprintCells(pos, `${size[0]}x${size[1]}`).map((c) => String(c).toLowerCase());
+}
+
+/**
+ * The squares of a large target the attacker may DECLARE — its footprint cells
+ * filtered to those the attacker has line of sight to (alexanbv 2026-06-16: the
+ * declaration "affects LOS"; you can't declare a square you can't see). Falls back
+ * to the full footprint if LOS can't be resolved (or none are visible) so the
+ * attacker is never left without a square. Used by BOTH the declaration picker and
+ * the re-invoke handler so the button index maps to the same square.
+ */
+export function getDeclarableSquares(game, attackerPlayerNum, attackerFigureKey, defPlayerNum, targetFigureKey) {
+  const squares = getTargetSquares(game, defPlayerNum, targetFigureKey);
+  const atkCoord = game?.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+  const mapSp = getMapData(game?.selectedMap?.id);
+  if (!atkCoord || !mapSp || squares.length <= 1) return squares;
+  const visible = squares.filter((sq) => hasLineOfSightByCoord(game, String(atkCoord).toLowerCase(), sq, mapSp, getFigureSize));
+  return visible.length ? visible : squares;
 }

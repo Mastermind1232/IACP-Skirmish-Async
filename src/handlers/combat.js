@@ -226,7 +226,7 @@ import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } f
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
-import { isLargeTarget, getTargetSquares } from '../engine/large-target.js';
+import { isLargeTarget, getTargetSquares, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { onCcPlayed } from './cc-hand.js';
@@ -2279,7 +2279,10 @@ export async function handleTargetSquarePick(interaction, ctx) {
   const targets = game.attackTargets?.[`${msgId}_${parseInt(figIdxStr, 10)}`];
   const target = targets?.[parseInt(tgtIdxStr, 10)];
   if (!target) { await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch(discordCatch); return; }
-  const sqs = getTargetSquares(game, opponentPlayerNum(meta.playerNum), target.figureKey);
+  // Same LOS-filtered list as the picker so the button index maps to the same square.
+  const _atkDg = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  const _atkFk = `${meta.dcName}-${_atkDg}-${parseInt(figIdxStr, 10)}`;
+  const sqs = getDeclarableSquares(game, meta.playerNum, _atkFk, opponentPlayerNum(meta.playerNum), target.figureKey);
   const sq = sqs[parseInt(sqIdxStr, 10)];
   if (sq) target._declaredSquare = sq;
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -2359,7 +2362,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // handleTargetSquarePick re-invokes this handler with target._declaredSquare set.
   if (!target._declaredSquare && isLargeTarget(game, target.figureKey)) {
     const _tsqDefPn = opponentPlayerNum(attackerPlayerNum);
-    const _tsqs = getTargetSquares(game, _tsqDefPn, target.figureKey);
+    // Only offer squares the attacker has LOS to (the declaration affects LOS).
+    const _tsqs = getDeclarableSquares(game, attackerPlayerNum, _attackerFkEarly, _tsqDefPn, target.figureKey);
     if (_tsqs.length > 1) {
       const _tsqBtns = _tsqs.map((sq, i) => new ButtonBuilder()
         .setCustomId(`attack_tgtsq_${msgId}_${figureIndex}_${targetIndex}_${i}`)
