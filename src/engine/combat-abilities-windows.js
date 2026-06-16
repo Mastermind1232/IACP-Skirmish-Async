@@ -45,8 +45,11 @@ function ccAppliesFor(card, side, row) {
   const playableBy = (getCcEffect(card)?.playableBy || '').trim();
   const guard = conditionalGuard(row?.conditional, card);
   return (game, combat) => {
+    // False Orders / Lure: the CONTROLLER (not the figure's owner) plays the
+    // attacker-side on-declare/mods CCs (falseOrdersControllerPlayerNum), so the
+    // gate offers from the controller's hand. No-op for normal attacks.
     const pn = side === 'attacker'
-      ? combat?.attackerPlayerNum
+      ? (combat?.falseOrdersControllerPlayerNum ?? combat?.attackerPlayerNum)
       : (combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null));
     if (pn == null) return false;
     if (!(getCcHand(game, pn) || []).includes(card)) return false;

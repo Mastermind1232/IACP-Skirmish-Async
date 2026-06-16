@@ -1424,8 +1424,9 @@ export async function handleModsPick(interaction, ctx) {
     // TODO(next): comms-jammer cancel + opponent negate/Comm-Disruption prompt
     // before execute, reusing cc-hand.js promptCommDisruption/Negation.
     const _ccReg = getCombatAbility(pick);
+    // False Orders / Lure: the controller plays the attacker-side CC.
     const ccPn = side === 'attacker'
-      ? combat.attackerPlayerNum
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
     // Pre-play combat snapshot so a Comm-Disruption cancel can revert a combat-
@@ -1589,8 +1590,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
 /** Post a step's player-ordered choose window (generic). */
 async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
   const cfg = _GATE_WINDOWS[window];
+  // False Orders / Lure: the controller acts on the attacker side.
   const sidePlayerNum = side === 'attacker'
-    ? combat.attackerPlayerNum
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
     : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
   const sideId = game[`player${sidePlayerNum}Id`];
   const btns = pending.map((id) => {
