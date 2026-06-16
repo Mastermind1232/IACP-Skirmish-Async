@@ -226,7 +226,7 @@ import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } f
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
-import { isLargeTarget, getTargetSquares, getDeclarableSquares } from '../engine/large-target.js';
+import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { onCcPlayed } from './cc-hand.js';
