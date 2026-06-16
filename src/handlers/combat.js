@@ -226,6 +226,7 @@ import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } f
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn } from '../engine/defense-die-turn.js';
+import { isLargeTarget, getTargetSquares } from '../engine/large-target.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -2161,6 +2162,32 @@ export async function handleUnderDuress(interaction, ctx) {
  * @param {import('discord.js').ButtonInteraction} interaction
  * @param {object} ctx - getGame, replyIfGameEnded, dcMessageMeta, getDcStats, getDcEffects, updateDcActionsMessage, ACTION_ICONS, ThreadAutoArchiveDuration, resolveCombatAfterRolls, saveGames, client, dcHealthState, findDcMessageIdForFigure, logGameAction, isGroupDefeated, checkWinConditions, updateActivationsMessage
  */
+/**
+ * Large-target square declaration pick (alexanbv 2026-06-16): the attacker chose
+ * which square of a large target to attack. Record target._declaredSquare and
+ * re-invoke handleAttackTarget (proxy overrides the customId) so the attack
+ * proceeds with the declared square. customId: attack_tgtsq_<msgId>_<figIdx>_<tgtIdx>_<sqIdx>.
+ */
+export async function handleTargetSquarePick(interaction, ctx) {
+  const m = interaction.customId.match(/^attack_tgtsq_(.+)_(\d+)_(\d+)_(\d+)$/);
+  if (!m) return;
+  const [, msgId, figIdxStr, tgtIdxStr, sqIdxStr] = m;
+  const meta = ctx.dcMessageMeta.get(msgId);
+  if (!meta) { await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch); return; }
+  const game = await requireGame(interaction, ctx.getGame, meta.gameId);
+  if (!game) return;
+  const targets = game.attackTargets?.[`${msgId}_${parseInt(figIdxStr, 10)}`];
+  const target = targets?.[parseInt(tgtIdxStr, 10)];
+  if (!target) { await interaction.followUp({ content: 'Target no longer valid.', ephemeral: true }).catch(discordCatch); return; }
+  const sqs = getTargetSquares(game, opponentPlayerNum(meta.playerNum), target.figureKey);
+  const sq = sqs[parseInt(sqIdxStr, 10)];
+  if (sq) target._declaredSquare = sq;
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const proxy = Object.create(interaction);
+  proxy.customId = `attack_target_${msgId}_${figIdxStr}_${tgtIdxStr}`;
+  await handleAttackTarget(proxy, ctx);
+}
+
 export async function handleAttackTarget(interaction, ctx) {
   const {
     getGame,
@@ -2225,6 +2252,25 @@ export async function handleAttackTarget(interaction, ctx) {
   if (target.hasLOS === false && !target.requiresMarksman) {
     await interaction.followUp({ content: '🚫 No line of sight to that target. You cannot attack through blocking terrain or solid walls.', ephemeral: true }).catch(discordCatch);
     return;
+  }
+  // Large-target square declaration (alexanbv 2026-06-16): targeting a large
+  // figure requires declaring WHICH square is attacked — it affects LOS and
+  // blast/target-square abilities (not range). Post a square-picker and pause;
+  // handleTargetSquarePick re-invokes this handler with target._declaredSquare set.
+  if (!target._declaredSquare && isLargeTarget(game, target.figureKey)) {
+    const _tsqDefPn = opponentPlayerNum(attackerPlayerNum);
+    const _tsqs = getTargetSquares(game, _tsqDefPn, target.figureKey);
+    if (_tsqs.length > 1) {
+      const _tsqBtns = _tsqs.map((sq, i) => new ButtonBuilder()
+        .setCustomId(`attack_tgtsq_${msgId}_${figureIndex}_${targetIndex}_${i}`)
+        .setLabel(String(sq).toUpperCase()).setStyle(ButtonStyle.Primary));
+      await interaction.followUp(sanitizeMentions({
+        content: `**${target.dcName || 'Target'}** is a large figure — declare which square you are attacking:`,
+        components: chunkButtonsToRows(_tsqBtns),
+      })).catch(discordCatch);
+      return;
+    }
+    if (_tsqs.length === 1) target._declaredSquare = _tsqs[0];
   }
   // Marksman auto-play: target was rendered as [Marksman] (no normal LOS,
   // but figures-don't-block LOS exists). Move the card from hand to discard
@@ -2673,6 +2719,10 @@ export async function handleAttackTarget(interaction, ctx) {
     attackerConds,
     defenderConds,
     target: { ...target },
+    // Declared square for a large target (alexanbv 2026-06-16) — the square the
+    // attack is aimed at; feeds blast/target-square abilities. 1x1 targets use
+    // their own coord.
+    targetSquare: target._declaredSquare || game.figurePositions?.[opponentPlayerNum(attackerPlayerNum)]?.[target.figureKey] || null,
     targetStats: {
       defense: target.isNpc
         ? (targetStats.defense || null)

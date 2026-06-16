@@ -1403,8 +1403,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     // the target is still on the board (snapshot earlier in this fn). The
     // Flame Trooper friendly-skip rule needs the attacker's upgrades too.
     const _ftAtkUpgradesBlast = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
-    combat._blastTargetCoord = _targetCoordBeforeDefeat;
-    combat._blastTargetSize = _targetSizeBeforeDefeat;
+    // alexanbv 2026-06-16: blast emanates from the DECLARED target square for a
+    // large target (a single square), not the whole footprint — "blast affects the
+    // target square". 1x1 targets are unchanged (their square IS their coord).
+    combat._blastTargetCoord = combat.targetSquare || _targetCoordBeforeDefeat;
+    combat._blastTargetSize = combat.targetSquare ? '1x1' : _targetSizeBeforeDefeat;
     combat._blastFireproofFriendly = _ftAtkUpgradesBlast.includes('Flame Trooper');
     let effectiveBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
     // Blast splash fully migrated to step-8 fireBlast handler (2026-05-09)
