@@ -13,6 +13,7 @@
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getMapData, getDcEffects } from '../data-loader.js';
 import { isWithinSpaces } from '../game/spatial.js';
+import { loadAbilitySpec } from './combat-ability-db.js';
 
 /** Normalize a DC name for comparison (strip the [variant] suffix, lowercase). */
 const norm = (s) => String(s || '').replace(/\s*\[.*\]\s*$/, '').trim().toLowerCase();
@@ -160,6 +161,18 @@ function othersPredicate(affectsOthers, ownerCard) {
  * others-only / both, instead of N×M combined functions (alexanbv 2026-06-16).
  * Reusable at EVERY timing instance, not just combat.
  */
+/**
+ * Build the usability condition for a card's ability at a spec timing, looked up
+ * from the CSV — so a previously hand-wired ability can use the SAME generic
+ * conditionForRow detection (alexanbv "all abilities should use this generic
+ * logic"). Falls back to always-true when no matching row exists.
+ */
+export function conditionForCard(card, timing) {
+  const rows = loadAbilitySpec().get(String(card || '').toLowerCase()) || [];
+  const row = rows.find((r) => r.timing === timing);
+  return row ? conditionForRow(row) : () => true;
+}
+
 export function conditionForRow(row) {
   const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';
   const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card }) : null;
