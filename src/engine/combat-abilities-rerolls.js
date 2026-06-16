@@ -52,7 +52,10 @@ export function registerRerollAbilities() {
       const rowCond = isDC ? conditionForRow(r) : null;
       const cardLc = card.toLowerCase();
       registerCombatAbility({
-        id, name: card, windows: ['rerolls'], side, kind: 'interactive', params,
+        // Label with the ABILITY name (Targeting Computer / Foresight), not the
+        // figure/card name (alexanbv 2026-06-16 re-audit) — for DC reroll abilities
+        // r.card is the figure name.
+        id, name: r.ability || card, windows: ['rerolls'], side, kind: 'interactive', params,
         applies: (game, combat) => {
           const pn = side === 'attacker'
             ? combat.attackerPlayerNum
