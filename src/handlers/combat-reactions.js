@@ -25,7 +25,7 @@ import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
-import { sendPowerTokenOverflowUI, sendModsYn } from './combat.js';
+import { sendPowerTokenOverflowUI, sendModsYn, resumeGateAfterRollInterrupt } from './combat.js';
 import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { getDcMessageIds as _getDcMessageIdsFiwm } from '../game/player-helpers.js';
 
@@ -181,7 +181,14 @@ export async function handleThereIsNoTry(interaction, ctx) {
     combat.tintResolved = true;
     if (thread) await thread.send('**There Is No Try** — Skipped.').catch(discordCatch);
   }
-  // After TINT resolves (face set or skipped): enter reroll window
+  // After TINT resolves (face set or skipped): enter reroll window.
+  // Gate cutover (alexanbv 2026-06-16): on a gate attack the roll step paused
+  // for TINT — resume by advancing the sequence into the rerolls window (the
+  // gate reads the reroll queue itself), instead of the legacy reroll UI.
+  if (thread && combat && combat._seqActive) {
+    await resumeGateAfterRollInterrupt(thread, game, combat, ctx);
+    saveGames(game.gameId); return;
+  }
   if (thread && combat) {
     // alexanbv 2026-05-13: count queue entries + legacy count fields
     // for back-compat with tests/paths that still set them directly.

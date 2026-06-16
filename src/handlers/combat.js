@@ -776,6 +776,22 @@ export async function resumeSequenceAfterInterrupt(game, combat, ctx, thread) {
 }
 
 /**
+ * Resume a gate attack that paused the ROLL step for a roll-time interrupt
+ * (There Is No Try sets a defense die face before the reroll window). The
+ * interrupt handler calls this after resolving — it advances the sequence the
+ * same way handleCombatRoll's _seqActive branch does (roll complete → rerolls
+ * window). No-op for legacy (non-_seqActive) attacks.
+ */
+export async function resumeGateAfterRollInterrupt(thread, game, combat, ctx) {
+  // Only resume when the sequence is genuinely paused at the roll step (TINT
+  // posts its picker there). Guarding on _seqStep avoids mis-advancing if the
+  // handler is ever reached in another state.
+  if (!combat?._seqActive || combat._seqStep !== 'roll') return false;
+  await _advanceSequence(combat, _seqHandlers(thread, game, combat, ctx));
+  return true;
+}
+
+/**
  * Factory for reroll abilities — the thin resolver every reroll ability shares
  * (alexanbv 2026-06-15 "each ability should call a reroll function with certain
  * inputs: which die can be selected, whether the color can be swapped, …").
