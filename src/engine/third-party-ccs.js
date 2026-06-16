@@ -123,5 +123,38 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
     }
     return { applied: true, log };
   }
+  if (specKey === 'Bodyguard' || specKey === 'Get Behind Me!') {
+    // TARGET SWITCH: the playing figure becomes the new target. alexanbv 2026-06-16:
+    // switching the target CANCELS any effects already applied "to the defender" or
+    // "to the defense pool" — Merciless damage doesn't carry to the new target (it
+    // already landed on the old target and stays there); Element of Surprise's
+    // die-removal is dropped (the new target's defense pool is its own, full).
+    // Attacker-side effects (Tools for the Job's red attack die, bonus hits) PERSIST.
+    const all = getDcEffects?.() || {};
+    const newDcName = dcNameFromFigureKey(figureKey);
+    const newEff = all[newDcName]
+      || all[String(newDcName || '').replace(/\s*\(.*\)\s*$/, '').trim()]
+      || all[`${newDcName} (Elite)`] || all[`${newDcName} (Regular)`];
+    combat.target = { ...(combat.target || {}), figureKey, dcName: newDcName };
+    combat.defenderDcName = newDcName;
+    if (combat.targetStats) {
+      combat.targetStats.defense = Array.isArray(newEff?.defense)
+        ? newEff.defense
+        : (newEff?.defense ? [newEff.defense] : ['white']);
+      combat.targetStats.cost = newEff?.cost ?? combat.targetStats.cost;
+      combat.targetStats.subCost = newEff?.subCost;
+    }
+    // Cancel defender-side / defense-pool modifications applied to the old target.
+    combat.bonusBlock = undefined;
+    combat.bonusEvade = undefined;
+    combat.defensePoolRemoveMax = 0;
+    combat.defensePoolRemoveAll = false;
+    combat.defenseRoll = null; // not yet rolled at on_declare; recomputed for the new pool
+    log.push(`target switched to ${newDcName}; defender-side effects cancelled (attacker-side kept)`);
+    // TODO(next): recompute distanceToTarget / isRanged / LOS for the new target's
+    // board position (affects ranged accuracy). Adjacent-friendly switches are
+    // usually same-distance, so this is a refinement, not a correctness blocker here.
+    return { applied: true, log };
+  }
   return { applied: false, log: [`${specKey} effect not yet wired`] };
 }

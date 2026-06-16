@@ -24,6 +24,32 @@ describe('applyThirdPartyCcEffect — Concentrated Fire', () => {
   });
 });
 
+describe('applyThirdPartyCcEffect — Bodyguard / Get Behind Me target switch', () => {
+  const dep = { getDcEffects: () => ({ 'Royal Guard (Elite)': { defense: ['black', 'black'], cost: 10 } }) };
+  for (const card of ['Bodyguard', 'Get Behind Me!']) {
+    it(`${card}: new target = playing figure, defense recomputed, defender-side effects cancelled, attacker-side kept`, () => {
+      const combat = {
+        attackInfo: { dice: ['red', 'red'] },   // attacker pool (incl. Tools' die) — must persist
+        bonusHits: 1,                             // attacker-side — must persist
+        target: { figureKey: 'Stormtrooper-2-0', dcName: 'Stormtrooper' },
+        defenderDcName: 'Stormtrooper',
+        targetStats: { defense: ['white'], cost: 5 },
+        bonusBlock: 2,                            // defender-side — must be cancelled
+        defensePoolRemoveMax: 1,                  // Element of Surprise — must be cancelled
+      };
+      const r = applyThirdPartyCcEffect(card, {}, combat, 'Royal Guard (Elite)-2-1', dep);
+      assert.equal(r.applied, true);
+      assert.equal(combat.target.figureKey, 'Royal Guard (Elite)-2-1');
+      assert.equal(combat.defenderDcName, 'Royal Guard (Elite)');
+      assert.deepEqual(combat.targetStats.defense, ['black', 'black']); // new target's pool
+      assert.equal(combat.bonusBlock, undefined);       // cancelled
+      assert.equal(combat.defensePoolRemoveMax, 0);     // cancelled
+      assert.deepEqual(combat.attackInfo.dice, ['red', 'red']); // attacker-side kept
+      assert.equal(combat.bonusHits, 1);                // attacker-side kept
+    });
+  }
+});
+
 // Mock adjacency map: b2<->b3 adjacent, p15 far away.
 const mapDeps = { getMapData: () => ({ adjacency: { b2: ['b3'], b3: ['b2', 'b4'], b4: ['b3'] } }) };
 
