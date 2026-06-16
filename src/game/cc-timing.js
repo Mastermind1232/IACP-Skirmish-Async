@@ -893,7 +893,15 @@ export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
   // effect itself, e.g. third-party CCs that act on a chosen non-attacker figure).
   let result = null;
   if (!skipExecute && typeof ctx.resolveAbility === 'function') {
-    result = await ctx.resolveAbility(abilityId, { game, playerNum, cardName, figureKey, combat: game.combat || game.pendingCombat });
+    // Forward the dc meta the resolver needs (else it early-returns "resolve
+    // manually"). The caller applies result via applyAbilityResult. (DC-exhaustion
+    // state is intentionally NOT forwarded here — CCs are not gated on it, per the
+    // CRR-EXH-006 oracle; an exhaust-dependent CC would supply it from its caller.)
+    result = await ctx.resolveAbility(abilityId, {
+      game, playerNum, cardName, figureKey,
+      combat: game.combat || game.pendingCombat,
+      dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState,
+    });
   }
 
   // 5. remove from hand + dispose

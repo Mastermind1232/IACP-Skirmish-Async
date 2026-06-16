@@ -227,6 +227,7 @@ import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js'
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn } from '../engine/defense-die-turn.js';
 import { isLargeTarget, getTargetSquares } from '../engine/large-target.js';
+import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1324,6 +1325,7 @@ export async function handleModsPick(interaction, ctx) {
     const ccRes = await playCC(game, ccPn, ccFig, _ccReg.params.card, { ctx });
     if (!ccRes.ok && thread) await thread.send(`⚠️ Can't play ${_ccReg.params.card}: ${ccRes.reason}`).catch(discordCatch);
     else if (ccRes.cancelled && thread) await thread.send(`**${_ccReg.params.card}** was cancelled (${ccRes.cancelled}).`).catch(discordCatch);
+    else if (ccRes.result) await applyAbilityResult(ccRes.result, { game, playerNum: ccPn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: interaction.client, ctx });
     recordModsChoice(gate, side, pick);
     _markGateAbilityUsed(game, combat, pick);
     await _driveGatePath(window, thread, game, combat, ctx);

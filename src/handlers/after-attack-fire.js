@@ -30,6 +30,7 @@ import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from
 import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { playCC } from '../game/cc-timing.js';
+import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
@@ -1686,6 +1687,9 @@ async function fireGateAbility(thread, game, combat, effect, ctx) {
       if (!res.ok) await thread.send(`⚠️ Can't play ${reg.params.card}: ${res.reason}`).catch(discordCatch);
       else if (res.cancelled) await thread.send(`**${reg.params.card}** was cancelled (${res.cancelled}).`).catch(discordCatch);
       else await thread.send(`**${reg.params.card}** played.`).catch(discordCatch);
+    }
+    if (res.ok && !res.cancelled && res.result) {
+      await applyAbilityResult(res.result, { game, playerNum: pn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: ctx.client, ctx });
     }
     return;
   }

@@ -31,6 +31,11 @@ const COMBAT_DEPS = [
   'sendBleedingPrompt', 'processFigureDefeat',
   'getMapData', 'getEffectiveMapSpaces', 'isWithinN', 'getFigureLabel',
   'computeCleaveEligibleTargets', 'getCleaveTargetButtons',
+  // CC play from the combat gate (playCC) needs the ability resolver, else gate
+  // CCs discard with no effect (alexanbv 2026-06-16 re-audit). dcMessageMeta/
+  // dcHealthState are already in this group; applyAbilityResult is imported
+  // directly by the caller (not a bag dep).
+  'resolveAbility', 'getCcEffect',
 ];
 
 const CONTEXT_GROUPS = {
@@ -137,6 +142,10 @@ const CONTEXT_GROUPS = {
     // After-attack-resolve fire handlers (slice 2b)
     'dcHealthState', 'logGameAction', 'replyIfGameEnded',
     'dcMessageMeta', 'checkWinConditions',
+    // gate_ability → playCC needs the ability resolver so after-attack CCs
+    // (Escalating Hostility, …) actually apply (re-audit fix); applyAbilityResult
+    // is imported directly by the fire handler.
+    'resolveAbility',
   ],
 
   activation: [
