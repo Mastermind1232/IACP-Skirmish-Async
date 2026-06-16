@@ -979,6 +979,12 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   const initNum = getInitiativePlayerNum(game);
   await logGameAction(game, client, `**Status Phase** — 1. Ready cards ✓ 2. ${drawDesc} 3. End of round effects (scoring) ✓ 4. Initiative passes to ${initZone}P${initNum} <@${game.initiativePlayerId}>. Round **${game.currentRound}**.`, { phase: 'ROUND', icon: 'round' });
 
+  // Reset per-round ability-usage flags as the FIRST thing in SOR, BEFORE mission
+  // rules (alexanbv 2026-06-16: "each once/round ability should have a used flag …
+  // reset as the first thing in the SOR phase before mission rules"). The generic
+  // limit guard (combat-conditions.js limitGuard) reads game.roundAbilityUsed.
+  game.roundAbilityUsed = {};
+
   // Mission SOR async effects: dispatch via the mission-eor-effects
   // registry (which now handles both EoR and SOR). Halts early on any
   // pending picker; drain handlers resume via runRemainingMissionSorEffects
