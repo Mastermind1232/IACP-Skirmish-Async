@@ -111,6 +111,32 @@ export function conditionalGuard(conditional, card) {
 }
 
 /**
+ * Usage-LIMIT guard from the CSV `limit` column (alexanbv 2026-06-16: "also check
+ * the column that marks if it is an exhaust, once per activation, once per round
+ * ... AFTER the check of self and others. An ability could have both a range
+ * restriction AND a once per round restriction"). Checks the not-yet-used state;
+ * the resolver marks usage with the same key when the ability fires.
+ *  - "… per attack"      → combat._abilityUsedThisAttack[key]
+ *  - "… per round" / "this round" → game.roundAbilityUsed[fig:key]
+ *  - "… per activation"  → game.activationAbilityUsed[fig:key]
+ * Durations ("until end of round") are not usage limits → no restriction.
+ */
+export function limitGuard(limit, abilityKey) {
+  const s = String(limit || '').toLowerCase();
+  if (!s || s === 'none') return () => true;
+  if (s.includes('per attack')) {
+    return (game, combat) => !(combat?._abilityUsedThisAttack?.[abilityKey]);
+  }
+  if (s.includes('per round') || s.includes('this round')) {
+    return (game, combat) => !(game?.roundAbilityUsed?.[`${combat?.attackerFigureKey}:${abilityKey}`]);
+  }
+  if (s.includes('per activation') || s.includes('your activation')) {
+    return (game, combat) => !(game?.activationAbilityUsed?.[`${combat?.attackerFigureKey}:${abilityKey}`]);
+  }
+  return () => true; // "until end of round" etc. are durations, not usage limits
+}
+
+/**
  * Sub-method for the "others" axis: a predicate for whether the ATTACKER is in an
  * ability's affects_others set, derived (owner-centric) from the CSV
  * affects_others prose. Returns null when the others-set can't grant the attacker
@@ -139,11 +165,15 @@ export function conditionForRow(row) {
   const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card }) : null;
   const othersPred = othersPredicate(row?.affects_others, row?.card);
   const guard = conditionalGuard(row?.conditional, row?.card);
+  const limit = limitGuard(row?.limit, `${row?.card}:${row?.ability}`);
   return (game, combat) => {
-    // self first, then others — usable iff the attacker is in the affected set …
+    // self FIRST, then others — usable iff the attacker is in the affected set …
     const usable = (selfPred && selfPred(game, combat)) || (othersPred && othersPred(game, combat));
     if (!usable) return false;
-    // … AND the conditional-column guard holds.
-    return guard(game, combat);
+    // … then (AFTER self/others) the conditional-column guard AND the usage-LIMIT
+    // guard (exhaust / once per round / activation / attack). An ability can carry
+    // both a range restriction and a once-per-round restriction.
+    if (!guard(game, combat)) return false;
+    return limit(game, combat);
   };
 }
