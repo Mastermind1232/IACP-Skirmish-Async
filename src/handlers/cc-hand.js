@@ -231,7 +231,7 @@ export async function runCcPlayTriggers(game, playerNum, deps) {
  * window closes for cost-0).
  * @param {object} deps { handChannel, logMsg }
  */
-export async function onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg } = {}) {
+export async function onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg, combatSnapshot = null } = {}) {
   const { logGameAction, saveGames } = ctx;
   // (1) on-CC-play triggers
   await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
@@ -253,8 +253,10 @@ export async function onCcPlayed(game, gameId, playerNum, card, cost, interactio
     })).catch(() => null) : null;
     if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
   }
-  // (2) counter-window — Comm Disruption (cost ≤ opponent's friendly SPY groups; gated inside)
-  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames);
+  // (2) counter-window — Comm Disruption (cost ≤ opponent's friendly SPY groups;
+  // gated inside). combatSnapshot lets a CD-cancel revert combat-modifying CCs
+  // (Wild Attack's dice, etc.) played from the combat gate (alexanbv 2026-06-16).
+  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, combatSnapshot);
 }
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */

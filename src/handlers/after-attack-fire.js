@@ -31,6 +31,7 @@ import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { playCC } from '../game/cc-timing.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { onCcPlayed } from './cc-hand.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
@@ -1672,14 +1673,18 @@ async function fireGateAbility(thread, game, combat, effect, ctx) {
       ? combat.attackerPlayerNum
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const fig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+    const _ccSnap = combat ? JSON.parse(JSON.stringify(combat)) : null;
     const res = await playCC(game, pn, fig, reg.params.card, { ctx });
     if (thread) {
       if (!res.ok) await thread.send(`⚠️ Can't play ${reg.params.card}: ${res.reason}`).catch(discordCatch);
       else if (res.cancelled) await thread.send(`**${reg.params.card}** was cancelled (${res.cancelled}).`).catch(discordCatch);
       else await thread.send(`**${reg.params.card}** played.`).catch(discordCatch);
     }
-    if (res.ok && !res.cancelled && res.result) {
-      await applyAbilityResult(res.result, { game, playerNum: pn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: ctx.client, ctx });
+    if (res.ok && !res.cancelled) {
+      if (res.result) await applyAbilityResult(res.result, { game, playerNum: pn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: ctx.client, ctx });
+      // Opponent counter-window (Negation cost 0 / Comm Disruption cost ≤ SPY groups).
+      const _ccCost = ctx.getCcEffect?.(reg.params.card)?.cost ?? 0;
+      await onCcPlayed(game, game.gameId, pn, reg.params.card, _ccCost, { client: ctx.client }, ctx, { combatSnapshot: _ccSnap });
     }
     return;
   }
