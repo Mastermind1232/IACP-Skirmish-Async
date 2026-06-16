@@ -166,6 +166,27 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
+  // MP / token / choice grants — migrated from the inline auto-apply block in
+  // combat-bridge.js so they are player-ordered buttons in the after_resolve
+  // window, not auto-applied out of sequence (alexanbv 2026-06-16: "any ability
+  // that requires movement, player choice, etc. should be fixed").
+  const _atkPassives = _atkEff?.passives || [];
+  // Fly-By (Jet Trooper Elite): gain 2 MP if the target was within 2 spaces.
+  if (_atkPassives.includes('Fly-By') && combat.distanceToTarget != null && combat.distanceToTarget <= 2 && combat.attackerMsgId) {
+    enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'fly_by', label: 'Fly-By: gain 2 MP' });
+  }
+  // Jets (Jet Trooper Regular): gain 1 MP if the target was within 2 spaces.
+  if (_atkPassives.includes('Jets') && combat.distanceToTarget != null && combat.distanceToTarget <= 2 && combat.attackerMsgId) {
+    enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'jets', label: 'Jets: gain 1 MP' });
+  }
+  // Locked and Loaded (Migs Mayfeld): gain 2 Power Tokens (player picks type; overflow prompts).
+  if (_atkPassives.includes('Locked and Loaded') && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'locked_and_loaded', label: 'Locked and Loaded: gain 2 Power Tokens' });
+  }
+  // Open-Minded (Del Meeko): gain 1 MP OR 1 Power Token (player choice).
+  if (_atkPassives.includes('Open-Minded') && combat.attackerMsgId && combat.attackerFigureKey) {
+    enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'open_minded', label: 'Open-Minded: 1 MP or 1 Power Token' });
+  }
   // Vader's Finest (Attack+Move special action): "after the attack
   // resolves, move up to 1 space" — Move-X picker, bypassCosts true.
   // Triggered by the per-msgId vadersFinestPostAttackMove flag set

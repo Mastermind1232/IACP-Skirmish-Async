@@ -309,6 +309,58 @@ async function fireLegHydraulics(thread, game, combat, effect, ctx) {
   });
 }
 
+/** Fly-By (Jet Trooper Elite) — gain 2 MP. Migrated from inline (alexanbv 2026-06-16). */
+async function fireFlyBy(thread, game, combat, effect, ctx) {
+  if (combat.attackerMsgId == null) return;
+  const { logGameAction, client } = ctx;
+  grantMovementBank(game, combat.attackerMsgId, 2);
+  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Fly-By** — **${combat.attackerDcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+}
+
+/** Jets (Jet Trooper Regular) — gain 1 MP. Migrated from inline (alexanbv 2026-06-16). */
+async function fireJets(thread, game, combat, effect, ctx) {
+  if (combat.attackerMsgId == null) return;
+  const { logGameAction, client } = ctx;
+  grantMovementBank(game, combat.attackerMsgId, 1);
+  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Jets** — **${combat.attackerDcName}** gains 1 MP.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+}
+
+/** Locked and Loaded (Migs Mayfeld) — gain 2 Power Tokens; player picks type, overflow
+ *  prompts for a discard. Migrated from inline; posts the same power-token choice the
+ *  existing handlePowerTokenChoice handler consumes (alexanbv 2026-06-16). */
+async function fireLockedAndLoaded(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  const fk = combat.attackerFigureKey;
+  if (!fk || !thread || !ButtonBuilder || !ActionRowBuilder) return;
+  game.figurePowerTokens = game.figurePowerTokens || {};
+  game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
+  const current = game.figurePowerTokens[fk].length;
+  game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: combat.attackerDcName, count: 2 }], channelId: combat.combatThreadId, playerNum: combat.attackerPlayerNum };
+  const btns = ['Damage', 'Surge', 'Block', 'Evade'].map((t) =>
+    new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary));
+  await thread.send({
+    content: `\u{1F52B} **Locked and Loaded** — **${combat.attackerDcName}** gains 2 Power Tokens (${current} → ${current + 2}, max 3 — overflow will prompt for discard). Choose token type:`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch(discordCatch);
+}
+
+/** Open-Minded (Del Meeko) — gain 1 MP OR 1 Power Token (choice). Migrated from inline;
+ *  posts the same buttons the existing handleCombatPassive handler consumes. */
+async function fireOpenMinded(thread, game, combat, effect, ctx) {
+  const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = ctx;
+  const msgId = combat.attackerMsgId;
+  const fk = combat.attackerFigureKey;
+  if (msgId == null || !fk || !thread || !ButtonBuilder || !ActionRowBuilder) return;
+  const btns = [
+    new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_openminded_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${msgId}_openminded_token`).setLabel('Gain 1 Power Token').setStyle(ButtonStyle.Secondary),
+  ];
+  await thread.send({
+    content: `\u{1F9E0} **Open-Minded** — **${combat.attackerDcName}**: Choose one:`,
+    components: [new ActionRowBuilder().addComponents(btns)],
+  }).catch(discordCatch);
+}
+
 /**
  * Stun Batons (Riot Trooper E/R) — attacker after-resolve: target
  * suffers 1 Strain on damage. Routes through the strain pipeline
@@ -1654,6 +1706,18 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'leg_hydraulics':
       await fireLegHydraulics(thread, game, combat, effect, ctx);
+      return;
+    case 'fly_by':
+      await fireFlyBy(thread, game, combat, effect, ctx);
+      return;
+    case 'jets':
+      await fireJets(thread, game, combat, effect, ctx);
+      return;
+    case 'locked_and_loaded':
+      await fireLockedAndLoaded(thread, game, combat, effect, ctx);
+      return;
+    case 'open_minded':
+      await fireOpenMinded(thread, game, combat, effect, ctx);
       return;
     case 'stalk_prey':
       await fireStalkPrey(thread, game, combat, effect, ctx);

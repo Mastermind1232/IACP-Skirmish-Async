@@ -959,71 +959,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Jets-having DC data-driven, so this hardcoded duplicate was
       // both wrong (granted unearned MP to Sabine) and redundant.
 
-      // Fly-By (Jet Trooper Elite): after attack, gain 2 MP if target was within 2 spaces
-      {
-        const _fbAtkEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_fbAtkEff?.passives || []).includes('Fly-By') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
-          const _fbMsgId = combat.attackerMsgId;
-          if (_fbMsgId) {
-            grantMovementBank(game, _fbMsgId, 2);
-            await logGameAction(game, client, `\u{1F680} **Fly-By** — **${combat.attackerDcName}** gains 2 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
-      // Jets (Jet Trooper Regular): after attack, gain 1 MP if target within 2 spaces
-      {
-        const _jtAtkEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_jtAtkEff?.passives || []).includes('Jets') && combat.distanceToTarget != null && combat.distanceToTarget <= 2) {
-          const _jtMsgId = combat.attackerMsgId;
-          if (_jtMsgId) {
-            grantMovementBank(game, _jtMsgId, 1);
-            await logGameAction(game, client, `\u{1F680} **Jets** — **${combat.attackerDcName}** gains 1 MP (target within 2 spaces).`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
+      // Fly-By / Jets (Jet Trooper E/R) — MIGRATED 2026-06-16 to player-ordered
+      // after_resolve buttons (enqueueAttackerPerDcEffects → fireFlyBy/fireJets),
+      // per alexanbv "any ability that requires movement/choice should be fixed"
+      // (nothing auto out of sequence).
       // Leg Hydraulics (Tress Hacnua): handled via specialAbilityIds check below (not passives) to avoid double-granting
-      // Locked and Loaded (Migs Mayfeld): after attack, gain 2 Power Tokens. Cap is 3.
-      // Always grants the full 2 — if Migs is at 2 tokens, the standard
-      // pendingPowerTokenOverflow path prompts the player to discard 1 by type.
-      {
-        const _llAtkEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_llAtkEff?.passives || []).includes('Locked and Loaded')) {
-          const _llFk = combat.attackerFigureKey;
-          if (_llFk) {
-            game.figurePowerTokens = game.figurePowerTokens || {};
-            game.figurePowerTokens[_llFk] = game.figurePowerTokens[_llFk] || [];
-            const _llCurrent = game.figurePowerTokens[_llFk].length;
-            // Always grant 2 — overflow handled downstream via pendingPowerTokenOverflow.
-            // Capping at "fill to 3" lost the player's choice over which existing token type to keep.
-            game.pendingPowerTokenGrant = { grants: [{ figureKey: _llFk, figName: combat.attackerDcName, count: 2 }], channelId: combat.combatThreadId, playerNum: attackerPlayerNum };
-            const _llBtns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
-              new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
-            );
-            await thread.send({
-              content: `\u{1F52B} **Locked and Loaded** — **${combat.attackerDcName}** gains 2 Power Tokens (${_llCurrent} \u2192 ${_llCurrent + 2}, max 3 — overflow will prompt for discard). Choose token type:`,
-              components: [new ActionRowBuilder().addComponents(_llBtns)],
-            }).catch(discordCatch);
-          }
-        }
-      }
-      // Open-Minded (Del Meeko): after attack, gain 1 MP or 1 Power Token (choice)
-      {
-        const _omAtkEff = getDcEffects()?.[combat.attackerDcName];
-        if ((_omAtkEff?.passives || []).includes('Open-Minded')) {
-          const _omMsgId = combat.attackerMsgId;
-          const _omFk = combat.attackerFigureKey;
-          if (_omMsgId && _omFk) {
-            const _omBtns = [
-              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${_omMsgId}_openminded_mp`).setLabel('Gain 1 MP').setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${_omMsgId}_openminded_token`).setLabel('Gain 1 Power Token').setStyle(ButtonStyle.Secondary),
-            ];
-            await thread.send({
-              content: `\u{1F9E0} **Open-Minded** — **${combat.attackerDcName}**: Choose one:`,
-              components: [new ActionRowBuilder().addComponents(_omBtns)],
-            }).catch(discordCatch);
-          }
-        }
-      }
+      // Locked and Loaded (Migs Mayfeld) + Open-Minded (Del Meeko) — MIGRATED
+      // 2026-06-16 to player-ordered after_resolve buttons
+      // (enqueueAttackerPerDcEffects -> fireLockedAndLoaded / fireOpenMinded), so
+      // the token-type / MP-vs-token choices happen in sequence, not auto out of
+      // order (alexanbv "nothing auto").
       // Nimble (Asajj Ventress) — REMOVED 2026-05-06 (Asajj removed from game
       // per destruct's 2026-05-05 ruling). Session 8.1-8.3 of combat-rebuild.
       if (false) { // eslint-disable-line no-constant-condition
