@@ -228,6 +228,7 @@ import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardNam
 import { applyDefenseDieTurn } from '../engine/defense-die-turn.js';
 import { isLargeTarget, getTargetSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
+import { eligibleTokenTypes, tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1249,9 +1250,69 @@ function _makeYodaResolver({ specKey, side }) {
   };
 }
 
+/**
+ * Power-token spend as an on_declare gate option (alexanbv 2026-06-16: "tokens are
+ * just another button among the on-declare options; no separate token window").
+ * A multi-spend loop: pick a token type → spend it (apply the bonus) → offered
+ * again (or Done). Done / no-more returns control to the gate menu.
+ */
+function _makeTokenResolver({ side }) {
+  const TYPE = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
+  const _btns = (game, combat, gameId, id) => {
+    const types = eligibleTokenTypes(game, combat, side);
+    const b = types.map((t) => [t.toLowerCase(), `Spend ${t} Token`]);
+    if (b.length) b.push(['done', 'Done spending tokens', 'secondary']);
+    return b;
+  };
+  const _spend = (game, combat, choice) => {
+    const type = TYPE[choice];
+    const fk = tokenSpenderFigureKey(combat, side);
+    if (!type || !fk) return null;
+    const held = game.figurePowerTokens?.[fk] || [];
+    const idx = held.indexOf(type);
+    if (idx < 0) return null;
+    held.splice(idx, 1);
+    let msg = '';
+    if (type === 'Damage') { combat.bonusHits = (combat.bonusHits || 0) + 1; msg = '+1 Damage'; }
+    else if (type === 'Surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; msg = '+1 Surge'; }
+    else if (type === 'Block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; msg = '+1 Block'; }
+    else if (type === 'Evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg = '+1 Evade'; }
+    // Personal Combat Shield (Gar Saxon): a Block token spent while defending → +1 Evade.
+    if (type === 'Block' && side === 'defender') {
+      const ids = (getDcEffectsGlobal()[dcNameFromFigureKey(fk)]?.specialAbilityIds) || [];
+      if (ids.includes('personal_combat_shield')) { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg += ', +1 Evade (Personal Combat Shield)'; }
+    }
+    return { type, msg };
+  };
+  return {
+    prompt: ({ game, combat }) => {
+      const b = _btns(game, combat);
+      if (!b.length) return null;
+      return { content: 'Spend a power token:', buttons: b };
+    },
+    apply: async (choice, { game, combat, thread, gameId, id }) => {
+      if (choice === 'done') return undefined; // finished → record + re-drive (back to gate)
+      const r = _spend(game, combat, choice);
+      if (r && thread) await thread.send(`**Power Token** — spent a ${r.type} token: ${r.msg}.`).catch(discordCatch);
+      // Offer another spend (or Done) while eligible tokens remain.
+      const more = _btns(game, combat, gameId, id);
+      if (more.length > 1 && thread) { // >1 because the trailing entry is always Done
+        const rows = chunkButtonsToRows(more.map(([c, l, s]) =>
+          new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${id}`).setLabel(l).setStyle(_modsStyle(s))));
+        await thread.send({ content: 'Spend another power token?', components: rows }).catch(discordCatch);
+        return { followUp: true };
+      }
+      return undefined; // no more tokens → record + re-drive
+    },
+  };
+}
+
 function _resolverFor(pick) {
   if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
   const reg = getCombatAbility(pick);
+  if (reg?.params?.kind === 'token') {
+    return _makeTokenResolver({ side: reg.params.side });
+  }
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
   }

@@ -18,6 +18,7 @@ import './combat-abilities-zillo.js'; // executable zillo-window pierce-cancel
 import './combat-abilities-rerolls.js'; // executable rerolls-window (generic innate rerolls)
 import './combat-abilities-windows.js'; // condition-driven on_declare/mods/after_resolve (offer all legal abilities)
 import './combat-abilities-third-party.js'; // third-party-figure CCs (offered army-wide, figure-picker on play)
+import './combat-abilities-tokens.js'; // power-token spend as an on_declare option (no separate token window)
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 
