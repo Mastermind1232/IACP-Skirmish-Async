@@ -30,7 +30,7 @@ const defenderPN = (combat) => combat.defenderPlayerNum ?? (combat.attackerPlaye
 registerCombatAbility({
   id: 'pulse_cannon', name: 'Pulse Cannon', windows: ['mods'], side: 'attacker', kind: 'passive',
   applies: (game, combat, side, deps) => {
-    if (!combat.attackerFigureKey || combat.pulseCannonResolved || !combat.attackerSpentPowerToken) return false;
+    if (!combat.attackerFigureKey || !combat.attackerSpentPowerToken) return false;
     return ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('pulse_cannon_iden');
   },
 });
@@ -38,7 +38,7 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'spray_fire', name: 'Spray Fire', windows: ['mods'], side: 'attacker', kind: 'interactive',
   applies: (game, combat, side, deps) => {
-    if (!combat.attackerFigureKey || combat.sprayFireResolved) return false;
+    if (!combat.attackerFigureKey) return false;
     return hasSprayFireAbility(ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))));
   },
 });
@@ -52,7 +52,7 @@ registerCombatAbility({
     return vp < 2 ? 'passive' : 'interactive';
   },
   applies: (game, combat, side, deps) => {
-    if (!combat.attackerFigureKey || combat.negotiateResolved) return false;
+    if (!combat.attackerFigureKey) return false;
     return ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('negotiate_hondo');
   },
 });
@@ -60,7 +60,7 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'call_the_shots', name: 'Call the Shots', windows: ['mods'], side: 'attacker', kind: 'interactive',
   applies: (game, combat, side, deps) => {
-    if (combat.callTheShotsResolved || !combat.attackerFigureKey) return false;
+    if (!combat.attackerFigureKey) return false;
     const friendly = game.figurePositions?.[combat.attackerPlayerNum] || {};
     const atkCoord = friendly[combat.attackerFigureKey];
     const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
@@ -79,7 +79,7 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'heavy_repeater', name: 'Heavy Repeater', windows: ['mods'], side: 'attacker', kind: 'interactive',
   applies: (game, combat, side, deps) => {
-    if (combat.heavyRepeaterResolved || !combat.attackerFigureKey) return false;
+    if (!combat.attackerFigureKey) return false;
     const e = eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey));
     if (!ids(e).includes('heavy_repeater_paz')) return false;
     return e?.attack?.type === 'range' || combat.attackType === 'Ranged';
@@ -91,7 +91,7 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'agile', name: 'Agile', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat, side, deps) => {
-    if (combat.agileJetTrooperApplied || !combat.target?.figureKey) return false;
+    if (!combat.target?.figureKey) return false;
     if (!hasAgileAbility(ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))))) return false;
     return ((combat.defenseRoll?.block || 0) + (combat.bonusBlock || 0)) > 0;
   },
@@ -99,14 +99,14 @@ registerCombatAbility({
 
 registerCombatAbility({
   id: 'query', name: 'Query', windows: ['mods'], side: 'defender', kind: 'interactive',
-  applies: (game, combat) => !!combat.queryNeedsPrompt && !combat.queryResolved,
+  applies: (game, combat) => !!combat.queryNeedsPrompt,
 });
 
 registerCombatAbility({
   id: 'crate_block_sink', name: 'Line of Fire (crate block)', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat, side, deps) => {
     const fk = combat.target?.figureKey;
-    if (combat.crateBlockSinkResolved || !fk) return false;
+    if (!fk) return false;
     if (!game?.selectedMission?.rules?.persistent?.crateBlockSink || !game.figureContraband?.[fk]) return false;
     const rawSize = D(deps, 'getFigureSize', _getFigureSize)?.(dcNameFromFigureKey(fk));
     const size = game.figureOrientations?.[fk] || rawSize;
@@ -117,7 +117,7 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'defensible', name: 'Defensible', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat, side, deps) => {
-    if (combat.defensibleResolved || !combat.target?.figureKey) return false;
+    if (!combat.target?.figureKey) return false;
     return ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))).includes('defensible_sc2m');
   },
 });
@@ -126,7 +126,7 @@ registerCombatAbility({
   id: 'get_down', name: 'Get Down', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat, side, deps) => {
     const fk = combat.target?.figureKey;
-    if (combat.getDownResolved || !fk || !combat.attackerPlayerNum) return false;
+    if (!fk || !combat.attackerPlayerNum) return false;
     const defEff = eff(deps, dcNameFromFigureKey(fk));
     const kws = (defEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (kws.includes('LARGE') || kws.includes('MASSIVE')) return false;
@@ -146,7 +146,7 @@ registerCombatAbility({
 
 registerCombatAbility({
   id: 'elusive', name: 'Elusive', windows: ['mods'], side: 'defender', kind: 'interactive',
-  applies: (game, combat) => !!combat.elusiveActive && !combat.elusiveResolved && (combat.attackDiceResults?.length || 0) > 0,
+  applies: (game, combat) => !!combat.elusiveActive && (combat.attackDiceResults?.length || 0) > 0,
 });
 
 // Dodge auto-conversions (no decision) → passive.

@@ -46,14 +46,17 @@ describe('mods-window abilities via the timing registry', () => {
     assert.equal(find(at('attacker', game(), combat({ attackerSpentPowerToken: true }), d), 'pulse_cannon').kind, 'passive');
   });
 
-  it('defender: Agile interactive only with a Block; Defensible interactive; resolved flags suppress', () => {
+  it('defender: Agile interactive only with a Block; Defensible interactive (idempotency is the gate, not detection)', () => {
     const d = deps({ Atk: {}, Def: { specialAbilityIds: ['agile_jet_trooper_reg', 'defensible_sc2m'] } });
     const none = at('defender', game(), combat(), d);
     assert.equal(find(none, 'agile'), undefined); // no block
     assert.equal(find(none, 'defensible').kind, 'interactive');
     const withBlock = at('defender', game(), combat({ defenseRoll: { block: 2, dodge: false } }), d);
     assert.equal(find(withBlock, 'agile').kind, 'interactive');
-    assert.equal(find(at('defender', game(), combat({ defensibleResolved: true }), d), 'defensible'), undefined);
+    // alexanbv 2026-06-16: a "used" ability is suppressed by the gate's generic
+    // resolved-tracking, NOT by a per-ability flag in detection — so detection
+    // still offers it regardless of any per-ability resolved flag.
+    assert.equal(find(at('defender', game(), combat({ defensibleResolved: true }), d), 'defensible').kind, 'interactive');
   });
 
   it('defender Dodge passives appear only on a dodge', () => {
