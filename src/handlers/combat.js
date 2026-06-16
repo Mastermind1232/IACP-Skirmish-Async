@@ -237,6 +237,19 @@ import { startSequence as _startSequence, advanceSequence as _advanceSequence } 
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
 import { auraGrantedSurges as _auraGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
+import { markAbilityUsed as _markAbilityUsed } from '../engine/combat-conditions.js';
+
+/**
+ * Mark a gate ability used for its limit scope after it resolves (alexanbv
+ * 2026-06-16: "once a button corresponding to a once/round ability is clicked,
+ * after that resolution is complete, the ability should be added to the used
+ * list"). Generic — reads the registry params (card/ability/limit); no-op for
+ * abilities without a limit.
+ */
+function _markGateAbilityUsed(game, combat, pick) {
+  const p = getCombatAbility(pick)?.params;
+  if (p?.card && p?.ability) _markAbilityUsed(game, combat, p);
+}
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
@@ -1174,12 +1187,14 @@ export async function handleModsPick(interaction, ctx) {
       } else {
         if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
         recordModsChoice(gate, side, pick);
+        _markGateAbilityUsed(game, combat, pick); // once/round-etc. → owner used-list
         await _driveGatePath(window, thread, game, combat, ctx);
       }
     } else {
       // Unknown id (no resolver registered) — record + skip so the gate never
       // stalls. (Every combat ability should register a resolver.)
       recordModsChoice(gate, side, pick);
+      _markGateAbilityUsed(game, combat, pick);
       await _driveGatePath(window, thread, game, combat, ctx);
     }
   }
@@ -1259,6 +1274,7 @@ export async function handleModsSubChoice(interaction, ctx) {
     // after posting their next prompt; don't record/advance until they finish.
     if (_res?.followUp) { saveGames?.(game.gameId); return; }
     if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
+    _markGateAbilityUsed(game, combat, id); // once/round-etc. → owner used-list (after the multi-stage resolve completes)
     await _driveGatePath(window, thread, game, combat, ctx);
     saveGames?.(game.gameId);
     return;
@@ -1266,6 +1282,7 @@ export async function handleModsSubChoice(interaction, ctx) {
 
 
   if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
+  _markGateAbilityUsed(game, combat, id);
   await _driveGatePath(window, thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }

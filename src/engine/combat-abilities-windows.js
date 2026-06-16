@@ -48,7 +48,8 @@ export function registerCsvWindowAbilities() {
       registerCombatAbility({
         id, name: r.card, windows: [gate], side, kind: 'interactive',
         // No effect resolver yet → a diagnostic no-op button (offered by condition).
-        params: { kind: 'unwired', card: r.card, ability: r.ability },
+        // limit carried so the pipeline can mark it used (once per round/etc.).
+        params: { kind: 'unwired', card: r.card, ability: r.ability, limit: r.limit },
         applies: conditionForRow(r),
       });
     }

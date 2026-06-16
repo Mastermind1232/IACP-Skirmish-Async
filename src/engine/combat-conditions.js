@@ -188,16 +188,39 @@ export function conditionalGuard(conditional, card) {
 export function limitGuard(limit, abilityKey) {
   const s = String(limit || '').toLowerCase();
   if (!s || s === 'none') return () => true;
+  // Keyed by the OWNER (the ability's card+ability identity), per alexanbv
+  // 2026-06-16 — the pipeline marks game.roundAbilityUsed[abilityKey] after the
+  // ability resolves; the same key is checked here.
   if (s.includes('per attack')) {
     return (game, combat) => !(combat?._abilityUsedThisAttack?.[abilityKey]);
   }
   if (s.includes('per round') || s.includes('this round')) {
-    return (game, combat) => !(game?.roundAbilityUsed?.[`${combat?.attackerFigureKey}:${abilityKey}`]);
+    return (game) => !(game?.roundAbilityUsed?.[abilityKey]);
   }
   if (s.includes('per activation') || s.includes('your activation')) {
-    return (game, combat) => !(game?.activationAbilityUsed?.[`${combat?.attackerFigureKey}:${abilityKey}`]);
+    return (game) => !(game?.activationAbilityUsed?.[abilityKey]);
   }
   return () => true; // "until end of round" etc. are durations, not usage limits
+}
+
+/** The owner-keyed usage key for an ability ({card}:{ability}). */
+export function abilityLimitKey(card, ability) {
+  return `${card}:${ability}`;
+}
+
+/**
+ * Mark an ability used for its limit scope (called by the pipeline AFTER the
+ * ability's button resolves), keyed by owner. alexanbv 2026-06-16: "once a button
+ * corresponding to a once/round ability is clicked, after that resolution is
+ * complete, the ability should be added to the used list."
+ */
+export function markAbilityUsed(game, combat, { card, ability, limit }) {
+  const s = String(limit || '').toLowerCase();
+  if (!s || s === 'none') return;
+  const key = abilityLimitKey(card, ability);
+  if (s.includes('per attack')) { combat._abilityUsedThisAttack = combat._abilityUsedThisAttack || {}; combat._abilityUsedThisAttack[key] = true; }
+  else if (s.includes('per round') || s.includes('this round')) { game.roundAbilityUsed = game.roundAbilityUsed || {}; game.roundAbilityUsed[key] = true; }
+  else if (s.includes('per activation') || s.includes('your activation')) { game.activationAbilityUsed = game.activationAbilityUsed || {}; game.activationAbilityUsed[key] = true; }
 }
 
 /**

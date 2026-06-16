@@ -1,6 +1,24 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCondition, attackerDcName, conditionForRow } from './combat-conditions.js';
+import { makeCondition, attackerDcName, conditionForRow, limitGuard, abilityLimitKey, markAbilityUsed } from './combat-conditions.js';
+
+describe('once/round usage marking (owner-keyed, pipeline-driven)', () => {
+  it('markAbilityUsed suppresses a once/round ability until the SOR reset clears it', () => {
+    const game = {}; const combat = {};
+    const limit = limitGuard('once per round', abilityLimitKey('Onar Koma', 'Get Down'));
+    assert.ok(limit(game, combat), 'not used → available');
+    markAbilityUsed(game, combat, { card: 'Onar Koma', ability: 'Get Down', limit: 'once per round' });
+    assert.ok(!limit(game, combat), 'used this round → suppressed');
+    game.roundAbilityUsed = {}; // SOR reset
+    assert.ok(limit(game, combat), 'after SOR reset → available again');
+  });
+
+  it('keyed by owner (card+ability), not the attacker figure', () => {
+    const game = {};
+    markAbilityUsed(game, {}, { card: 'Onar Koma', ability: 'Get Down', limit: 'once per round' });
+    assert.equal(game.roundAbilityUsed[abilityLimitKey('Onar Koma', 'Get Down')], true);
+  });
+});
 
 describe('conditionForRow: self-then-others derivation', () => {
   it('affects_self=TRUE, affects_others=None → attacker_is_self', () => {
