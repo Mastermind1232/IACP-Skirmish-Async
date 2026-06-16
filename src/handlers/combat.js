@@ -1165,6 +1165,20 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
       const { applyCondition } = await import('../game/conditions.js');
       const res = applyThirdPartyCcEffect(specKey, game, combat, fk, { applyCondition });
       if (thread) await thread.send(`**${card}** played by ${_label(fk)}${res.log?.length ? ` — ${res.log.join(', ')}` : ''}.`).catch(discordCatch);
+      // Target-switch (Bodyguard / GBM): the NEW target gets a fresh defender
+      // on_declare window. Rebuild the gate so eligibility (traits / square / auras)
+      // is rechecked for the new target, mark the attacker side done (it already
+      // completed on_declare), and re-drive — then signal followUp so the caller
+      // doesn't record/advance against the old gate.
+      if (res?.reopenDefenderOnDeclare) {
+        combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));
+        if (combat.onDeclareGate?.attacker) {
+          combat.onDeclareGate.attacker.passivesFired = true;
+          combat.onDeclareGate.attacker.passed = true;
+        }
+        await _driveGatePath('on_declare', thread, game, combat, ctx);
+        return { followUp: true };
+      }
     },
   };
 }

@@ -46,6 +46,7 @@ describe('applyThirdPartyCcEffect — Bodyguard / Get Behind Me target switch', 
       assert.equal(combat.defensePoolRemoveMax, 0);     // cancelled
       assert.deepEqual(combat.attackInfo.dice, ['red', 'red']); // attacker-side kept
       assert.equal(combat.bonusHits, 1);                // attacker-side kept
+      assert.equal(r.reopenDefenderOnDeclare, true);    // new target gets a fresh defender window
     });
   }
 });

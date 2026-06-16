@@ -145,16 +145,22 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
       combat.targetStats.subCost = newEff?.subCost;
     }
     // Cancel defender-side / defense-pool modifications applied to the old target.
+    // At on_declare, bonus blocks/evades come only from defensive TOKENS the old
+    // target spent (modifier-step bonuses don't exist yet) — those disappear on the
+    // switch (alexanbv 2026-06-16). Element of Surprise's die-removal is dropped.
     combat.bonusBlock = undefined;
     combat.bonusEvade = undefined;
     combat.defensePoolRemoveMax = 0;
     combat.defensePoolRemoveAll = false;
     combat.defenseRoll = null; // not yet rolled at on_declare; recomputed for the new pool
     log.push(`target switched to ${newDcName}; defender-side effects cancelled (attacker-side kept)`);
+    // The new target gets a FRESH defender on_declare window — its eligibility for
+    // defensive cards/abilities is rechecked (different traits → e.g. Knowledge and
+    // Defense for a Force User; different square → different auras like Onar's). The
+    // resolver re-opens it by rebuilding the on_declare gate against the new target.
     // TODO(next): recompute distanceToTarget / isRanged / LOS for the new target's
-    // board position (affects ranged accuracy). Adjacent-friendly switches are
-    // usually same-distance, so this is a refinement, not a correctness blocker here.
-    return { applied: true, log };
+    // board position (affects ranged accuracy).
+    return { applied: true, log, reopenDefenderOnDeclare: true };
   }
   return { applied: false, log: [`${specKey} effect not yet wired`] };
 }
