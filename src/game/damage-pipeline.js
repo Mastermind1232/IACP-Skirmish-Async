@@ -276,9 +276,9 @@ export function damageResolutionPlayerOrder(game, opts = {}) {
  * registration order breaks ties (stable). Probes are independent owner-presence
  * checks, so evaluating them all up front is safe.
  */
-function _firingHooksInOrder(hooks, game, opts, order) {
+function _firingHooksInOrder(hooks, game, opts, order, syncOnly = false) {
   return hooks
-    .filter((h) => h.probe && h.apply && h.probe(game, opts))
+    .filter((h) => h.probe && h.apply && (!syncOnly || h.sync) && h.probe(game, opts))
     .map((h, i) => {
       const pn = h.ownerPlayer ? h.ownerPlayer(game, opts) : opts.controllerPlayerNum;
       const k = order.indexOf(pn);
@@ -444,12 +444,12 @@ export function applyDamageSync(game, ctx, opts) {
     void _emitDamageMessage(game, ctx, { ...opts, _prevHp: result.prevHp, _newHp: result.newHp }, _appliedSync);
   }
 
-  // WHEN_DAMAGED hooks fire post-reduceHp (side effects only).
-  for (const hook of WHEN_DAMAGED_HOOKS) {
-    if (!hook.sync || !hook.probe || !hook.apply) continue;
-    if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp })) continue;
+  // WHEN_DAMAGED hooks fire post-reduceHp (side effects only) — owner-player ordered.
+  const _orderSync = damageResolutionPlayerOrder(game, opts);
+  const whenDamagedOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp };
+  for (const hook of _firingHooksInOrder(WHEN_DAMAGED_HOOKS, game, whenDamagedOpts, _orderSync, true)) {
     try {
-      hook.apply(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp }, ctx);
+      hook.apply(game, whenDamagedOpts, ctx);
     } catch (err) {
       console.error(`[damage-pipeline] sync WHEN_DAMAGED hook ${hook.id} threw:`, err?.message ?? err);
     }
@@ -458,9 +458,7 @@ export function applyDamageSync(game, ctx, opts) {
   let preventDefeat = false;
   if (result.wasDefeated && !opts._skipBeforeDefeatedHooks) {
     const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
-    for (const hook of BEFORE_DEFEATED_HOOKS) {
-      if (!hook.sync || !hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, beforeOpts)) continue;
+    for (const hook of _firingHooksInOrder(BEFORE_DEFEATED_HOOKS, game, beforeOpts, _orderSync, true)) {
       const out = hook.apply(game, beforeOpts, ctx);
       if (out?.preventDefeat) preventDefeat = true;
     }
@@ -468,9 +466,7 @@ export function applyDamageSync(game, ctx, opts) {
 
   if (result.wasDefeated && !preventDefeat) {
     const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
-    for (const hook of WHEN_DEFEATED_HOOKS) {
-      if (!hook.sync || !hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, defeatedOpts)) continue;
+    for (const hook of _firingHooksInOrder(WHEN_DEFEATED_HOOKS, game, defeatedOpts, _orderSync, true)) {
       try {
         hook.apply(game, defeatedOpts, ctx);
       } catch (err) {
@@ -622,10 +618,11 @@ export async function applyDirectDefeat(game, ctx, opts) {
     order: damageResolutionPlayerOrder(game, opts),
   });
   let preventDefeat = false;
-  for (const hook of BEFORE_DEFEATED_HOOKS) {
-    if (!hook.probe || !hook.apply) continue;
-    if (hook.requiresDamage) continue;
-    if (!hook.probe(game, defeatedOpts)) continue;
+  // Owner-player ordered; requiresDamage hooks (Parting Shot / Last Resort /
+  // Self-Destruct) are skipped on the direct-defeat path (no damage was suffered).
+  const _ddOrder = damageResolutionPlayerOrder(game, opts);
+  const _ddBefore = BEFORE_DEFEATED_HOOKS.filter((h) => !h.requiresDamage);
+  for (const hook of _firingHooksInOrder(_ddBefore, game, defeatedOpts, _ddOrder)) {
     try {
       const out = await hook.apply(game, defeatedOpts, ctx);
       if (out?.preventDefeat) preventDefeat = true;
@@ -642,10 +639,8 @@ export async function applyDirectDefeat(game, ctx, opts) {
       preventDefeat: true,
     };
   }
-  // WHEN_DEFEATED hooks. Mirrors applyDamage's WHEN_DEFEATED block.
-  for (const hook of WHEN_DEFEATED_HOOKS) {
-    if (!hook.probe || !hook.apply) continue;
-    if (!hook.probe(game, defeatedOpts)) continue;
+  // WHEN_DEFEATED hooks. Mirrors applyDamage's WHEN_DEFEATED block (owner-ordered).
+  for (const hook of _firingHooksInOrder(WHEN_DEFEATED_HOOKS, game, defeatedOpts, _ddOrder)) {
     try {
       await hook.apply(game, defeatedOpts, ctx);
     } catch (err) {
