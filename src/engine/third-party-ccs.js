@@ -1,0 +1,95 @@
+// Third-party-figure Command Cards (alexanbv 2026-06-16): CCs played by a friendly
+// figure that is NOT the attacker or defender of the current attack. Unlike normal
+// CCs (handled by playCC against the attacker/defender figure), these need an
+// ARMY-WIDE legality check — is there an eligible friendly figure of the right
+// trait, in the required spatial relationship to the combat? — and a figure-picker
+// on play (which figure plays it → who gets Stunned / takes the redirected hit).
+//
+// They slot into the combat pipeline (on_declare / rerolls) or the damage pipeline
+// at the indicated timing, offered in any order with the other abilities there.
+// Onar/Baze/MHD reaction cards already live in the damage/defeat pipeline; this
+// module covers the combat-window third-party CCs + Opportunistic.
+
+import { dcNameFromFigureKey } from '../game/index.js';
+import { opponentPlayerNum } from '../game/player-helpers.js';
+import { figureMatchesCcRestriction } from '../game/cc-timing.js';
+import { isWithinN } from './utils.js';
+import { getMapData as _getMapData } from '../data-loader.js';
+
+/**
+ * Descriptor per third-party CC:
+ *  - side: whose team plays it ('attacker' | 'defender').
+ *  - playableBy: the trait/faction the playing figure must have (matched via
+ *    figureMatchesCcRestriction, so "GUARDIAN or FORCE USER" etc. work).
+ *  - from: the combat reference figure the spatial check measures from
+ *    ('attacker' = the attacking figure, 'target' = the defending figure).
+ *  - n: max spaces from the reference (1 = adjacent); null = no range limit.
+ *  - los: requires line of sight from the playing figure to the reference.
+ *  - window: the pipeline timing instance it is offered at.
+ *  - excludeActive: never offer the attacker/defender themselves as the player.
+ */
+export const THIRD_PARTY_CC_SPECS = {
+  'Concentrated Fire':     { side: 'attacker', playableBy: 'TROOPER',            from: 'target',  los: true, window: 'on_declare', excludeActive: true },
+  'Guardian Stance':       { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'rerolls',    excludeActive: true },
+  'Bodyguard':             { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'on_declare', excludeActive: true },
+  'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true },
+  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: null,  window: 'rerolls',    excludeActive: false },
+  // Yoda (There Is No Try) can be played while attacking OR defending — two specs.
+  'There Is No Try (attacker)': { side: 'attacker', playableBy: 'Yoda', from: 'attacker', n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
+  'There Is No Try (defender)': { side: 'defender', playableBy: 'Yoda', from: 'target',   n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
+  // Opportunistic reacts to a hostile suffering damage — damage-pipeline timing.
+  'Opportunistic':         { side: 'attacker', playableBy: 'Any Figure',         from: 'target',  n: null,   window: 'damage_pipeline', excludeActive: false },
+};
+
+/** Is this card a third-party-figure CC (handled by this module, not plain playCC)? */
+export function isThirdPartyCc(cardName) {
+  return Object.prototype.hasOwnProperty.call(THIRD_PARTY_CC_SPECS, cardName);
+}
+
+/** Board position of a figure on either team, or null. */
+function _posOf(game, figureKey) {
+  if (!figureKey) return null;
+  for (const pn of [1, 2]) {
+    const p = game?.figurePositions?.[pn]?.[figureKey];
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
+ * The friendly figures that could LEGALLY play a third-party CC for the current
+ * attack: on the spec's side, matching its playableBy, in range / LOS of the
+ * reference figure, excluding the attacker/defender themselves when specified.
+ * LOS is checked via deps.hasLineOfSight(game, fromKey, toKey) when provided
+ * (permissive if absent — the exact LOS is re-checked at play). Returns figureKeys.
+ */
+export function eligibleThirdPartyCcFigures(game, specKey, combat, deps = {}) {
+  const spec = THIRD_PARTY_CC_SPECS[specKey];
+  if (!spec || !combat) return [];
+  const pn = spec.side === 'attacker'
+    ? combat.attackerPlayerNum
+    : (combat.defenderPlayerNum ?? (combat.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null));
+  if (pn == null) return [];
+  const team = game?.figurePositions?.[pn] || {};
+  const refKey = spec.from === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+  const refPos = _posOf(game, refKey);
+  const out = [];
+  for (const [fk, pos] of Object.entries(team)) {
+    if (spec.excludeActive && (fk === combat.attackerFigureKey || fk === combat.target?.figureKey)) continue;
+    const dcName = dcNameFromFigureKey(fk);
+    if (!figureMatchesCcRestriction(game, dcName, dcName, spec.playableBy)) continue;
+    if (spec.n != null) {
+      if (!refPos || !isWithinN(pos, refPos, spec.n, game?.selectedMap?.id, deps.getMapData || _getMapData)) continue;
+    }
+    if (spec.los && typeof deps.hasLineOfSight === 'function') {
+      if (!deps.hasLineOfSight(game, fk, refKey)) continue;
+    }
+    out.push(fk);
+  }
+  return out;
+}
+
+/** The actual CC name to play (specKey may be a side-qualified alias, e.g. Yoda). */
+export function thirdPartyCardName(specKey) {
+  return THIRD_PARTY_CC_SPECS[specKey]?.cardName || specKey;
+}
