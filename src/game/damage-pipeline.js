@@ -266,6 +266,28 @@ export function damageResolutionPlayerOrder(game, opts = {}) {
   return [1, 2];
 }
 
+/**
+ * Probe-passing hooks, ordered by the OWNER player (alexanbv 2026-06-16: Onar/Baze
+ * etc. must fire in the correct player timing, not registration order). A hook may
+ * expose `ownerPlayer(game, opts)`; absent that, the owner defaults to the
+ * suffering figure's team (`controllerPlayerNum`) — correct for the vast majority
+ * of damage/defeat reactions ("a friendly protects me" / "I prevent my own
+ * defeat"). Sorted by `order` (attacker-first in an attack, else initiative-first);
+ * registration order breaks ties (stable). Probes are independent owner-presence
+ * checks, so evaluating them all up front is safe.
+ */
+function _firingHooksInOrder(hooks, game, opts, order) {
+  return hooks
+    .filter((h) => h.probe && h.apply && h.probe(game, opts))
+    .map((h, i) => {
+      const pn = h.ownerPlayer ? h.ownerPlayer(game, opts) : opts.controllerPlayerNum;
+      const k = order.indexOf(pn);
+      return { h, i, k: k < 0 ? order.length : k };
+    })
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map((x) => x.h);
+}
+
 export async function applyDamage(game, ctx, opts) {
   await _ensureHooksLoaded();
   if (!opts || !opts.figureKey || !opts.msgId) {
@@ -317,13 +339,13 @@ export async function applyDamage(game, ctx, opts) {
     await _emitDamageMessage(game, ctx, { ...opts, _prevHp: result.prevHp, _newHp: result.newHp }, _applied);
   }
 
-  // 2. WHEN_DAMAGED hooks (post-reduce). Side effects only — amount
-  //    has already applied.
-  for (const hook of WHEN_DAMAGED_HOOKS) {
-    if (!hook.probe || !hook.apply) continue;
-    if (!hook.probe(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp })) continue;
+  // 2. WHEN_DAMAGED hooks (post-reduce). Side effects only — amount has already
+  //    applied. Fired in owner-player order (attacker-first / init-first).
+  const _order = damageResolutionPlayerOrder(game, opts);
+  const whenDamagedOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp };
+  for (const hook of _firingHooksInOrder(WHEN_DAMAGED_HOOKS, game, whenDamagedOpts, _order)) {
     try {
-      await hook.apply(game, { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp }, ctx);
+      await hook.apply(game, whenDamagedOpts, ctx);
     } catch (err) {
       console.error(`[damage-pipeline] WHEN_DAMAGED hook ${hook.id} threw:`, err?.message ?? err);
     }
@@ -331,26 +353,22 @@ export async function applyDamage(game, ctx, opts) {
 
   let preventDefeat = false;
   if (result.wasDefeated && !opts._skipBeforeDefeatedHooks) {
-    // 3a. BEFORE_DEFEATED — CC-play window + sync hooks.
+    // 3a. BEFORE_DEFEATED — CC-play window + sync hooks (owner-player ordered).
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
       contextLabel: `figure's HP reached 0 (${opts.source || 'Damage'})`,
-      order: damageResolutionPlayerOrder(game, opts),
+      order: _order,
     });
     const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
-    for (const hook of BEFORE_DEFEATED_HOOKS) {
-      if (!hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, beforeOpts)) continue;
+    for (const hook of _firingHooksInOrder(BEFORE_DEFEATED_HOOKS, game, beforeOpts, _order)) {
       const out = await hook.apply(game, beforeOpts, ctx);
       if (out?.preventDefeat) preventDefeat = true;
     }
   }
 
   if (result.wasDefeated && !preventDefeat) {
-    // 3b. WHEN_DEFEATED hooks + CC-play window.
+    // 3b. WHEN_DEFEATED hooks + CC-play window (owner-player ordered).
     const defeatedOpts = { ...opts, amount, prevHp: result.prevHp, defeatedPos };
-    for (const hook of WHEN_DEFEATED_HOOKS) {
-      if (!hook.probe || !hook.apply) continue;
-      if (!hook.probe(game, defeatedOpts)) continue;
+    for (const hook of _firingHooksInOrder(WHEN_DEFEATED_HOOKS, game, defeatedOpts, _order)) {
       try {
         await hook.apply(game, defeatedOpts, ctx);
       } catch (err) {
