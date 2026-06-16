@@ -14,7 +14,7 @@ import { loadAbilitySpec, getPlayerCardNames } from './combat-ability-db.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
-import { conditionForRow } from './combat-conditions.js';
+import { conditionForRow, makeCondition } from './combat-conditions.js';
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -38,10 +38,20 @@ export function registerRerollAbilities() {
       // registered as a die-turn in combat-abilities-special.js. Skip it here so
       // the reroll resolver doesn't shadow the die-turn one (alexanbv 2026-06-16).
       if (card === 'Rapid Recalibration') continue;
-      const id = `reroll:${slug(card)}:${side}`;
-      if (seen.has(id)) continue; // dedup multi-part rows for the same card+side
+      // "Force the defender to reroll a defense die" (Versatile Weaponry) — the
+      // ATTACKER's ability, but it rerolls a DEFENSE die and is usable while the
+      // owner is attacking (alexanbv 2026-06-16 re-audit). Pool = defense.
+      const forcesDefenderReroll = /force the defender to reroll/i.test(r.effect || '');
+      let id = `reroll:${slug(card)}:${side}`;
+      if (seen.has(id)) {
+        // A second reroll ability on the same card+side (e.g. HK's Versatile
+        // Weaponry alongside Targeting Computer) — disambiguate by ability so it
+        // isn't dropped. First ability keeps the base id (test-stable).
+        id = `reroll:${slug(card)}:${slug(r.ability)}:${side}`;
+      }
+      if (seen.has(id)) continue; // truly duplicate row
       seen.add(id);
-      const pool = side === 'attacker' ? 'attack' : 'defense';
+      const pool = forcesDefenderReroll ? 'defense' : (side === 'attacker' ? 'attack' : 'defense');
       const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || '') };
       // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
       // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
@@ -49,7 +59,13 @@ export function registerRerollAbilities() {
       // stay on interim card-presence until their conditions (attachment target,
       // token, exhaust) are encoded.
       const isDC = r.card_type === 'DC';
-      const rowCond = isDC ? conditionForRow(r) : null;
+      // Versatile Weaponry's affects_others="the defender" describes the EFFECT
+      // target, not who uses it — the owner (the attacking figure) uses it. So its
+      // usability is attacker_is_self, not conditionForRow (which would read it as
+      // a defender-grant and return false → never offered).
+      const rowCond = forcesDefenderReroll
+        ? makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' })
+        : (isDC ? conditionForRow(r) : null);
       const cardLc = card.toLowerCase();
       registerCombatAbility({
         // Label with the ABILITY name (Targeting Computer / Foresight), not the
