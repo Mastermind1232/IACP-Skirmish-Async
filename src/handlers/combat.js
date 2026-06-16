@@ -1335,10 +1335,14 @@ function _makeHeightenedReflexesResolver({ card }) {
     },
     apply: async (choice, { game, combat, thread, ctx }) => {
       if (choice === 'skip') { if (thread) await thread.send(`**${card}** — skipped (card not played).`).catch(discordCatch); return undefined; }
+      const _snap = combat ? JSON.parse(JSON.stringify(combat)) : null;
       await playCC(game, combat.attackerPlayerNum, combat.attackerFigureKey, card, { ctx, skipExecute: true });
       const dieIdx = parseInt(choice, 10);
       const roll = applyDefenseDieRemoval(combat, dieIdx);
       if (thread) await thread.send(`**${card}** — removed defense die #${dieIdx + 1}'s results. Defense now ${roll?.block || 0}b/${roll?.evade || 0}e${roll?.dodge ? '/dodge' : ''}.`).catch(discordCatch);
+      // Opponent counter-window (Negation/Comm-Disruption), same as plain CCs.
+      const _cost = ctx.getCcEffect?.(card)?.cost ?? 0;
+      await onCcPlayed(game, game.gameId, combat.attackerPlayerNum, card, _cost, { client: ctx.client }, ctx, { combatSnapshot: _snap });
       return undefined;
     },
   };
