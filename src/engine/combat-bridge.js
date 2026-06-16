@@ -1489,39 +1489,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // granted via surge: focus / surge: hide AFTER the discard, per destruct
   // 2026-05-07 ("hidden is discarded, and then reacquired"). Same logic
   // applies to Focus.
-  if (combat.attackerFigureKey) {
-    const _hadFocus = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Focus');
-    filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
-    if (_hadFocus) await logGameAction(game, client, `\u{1F3AF} **Focus** consumed on **${combat.attackerDcName}** \u2014 used in this attack.`, { phase: 'ROUND', icon: 'attack' });
-    const _atkHidden = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Hide');
-    filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
-    if (_atkHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.attackerDcName}** \u2014 resolved an attack.`, { phase: 'ROUND', icon: 'attack' });
-    // Re-apply deferred surge conditions AFTER the discard (so the figure
-    // ends the attack with the surge-granted condition rather than having
-    // it stripped by the unconditional discard).
-    if (combat.deferredSurgeFocus) {
-      _applyCondition(game, combat.attackerFigureKey, 'Focus');
-      await logGameAction(game, client, `\u{1F3AF} **Focus** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
-      combat.deferredSurgeFocus = false;
-    }
-    if (combat.deferredSurgeHide) {
-      _applyCondition(game, combat.attackerFigureKey, 'Hide');
-      await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
-      combat.deferredSurgeHide = false;
-    }
-    // Guerrilla (Alliance Ranger) "become Hidden after defeating the target"
-    // re-applied here, after the unconditional Hidden strip (alexanbv 2026-06-14).
-    if (combat.deferredGuerrillaHide) {
-      _applyCondition(game, combat.attackerFigureKey, 'Hide');
-      await logGameAction(game, client, `\uD83C\uDF11 **Guerrilla** \u2014 **${combat.attackerDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
-      combat.deferredGuerrillaHide = false;
-    }
-  }
-  if (combat.target?.figureKey) {
-    const _defHidden = (game.figureConditions?.[combat.target.figureKey] || []).includes('Hide');
-    filterCondition(game, combat.target.figureKey, 'Hide');    // Defender loses Hidden after being attacked
-    if (_defHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.target.label}** \u2014 was targeted by an attack.`, { phase: 'ROUND', icon: 'attack' });
-  }
   // Burst Fire / Crippling Blow / Disruptor Rifle / Electro-pulse /
   // Quick Strike all migrated 2026-05-09 to step-8 fire handlers
   // (after-attack-fire.js). Legacy inline blocks disabled below.
@@ -2232,7 +2199,44 @@ async function _runOrDeferAfterResolve(thread, game, combat, { resultText, embed
  * damage core.
  */
 export async function runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
-  const { checkPostCombatSurges: _checkPostCombatSurges, finishCombatResolution: _finishCombatResolution } = deps;
+  const { checkPostCombatSurges: _checkPostCombatSurges, finishCombatResolution: _finishCombatResolution, filterCondition, _applyCondition, logGameAction } = deps;
+  // Focus/Hide discard is the FIRST thing in after_resolve (alexanbv 2026-06-16):
+  // pre-existing Focus/Hide are consumed by attacking; surge-gained ones persist
+  // (re-applied after the discard). Now runs for EVERY target type incl. NPC/crate,
+  // which previously returned before the damage-core discard.
+  if (combat.attackerFigureKey) {
+    const _hadFocus = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Focus');
+    filterCondition(game, combat.attackerFigureKey, 'Focus');  // Focus consumed after attacking
+    if (_hadFocus) await logGameAction(game, client, `\u{1F3AF} **Focus** consumed on **${combat.attackerDcName}** \u2014 used in this attack.`, { phase: 'ROUND', icon: 'attack' });
+    const _atkHidden = (game.figureConditions?.[combat.attackerFigureKey] || []).includes('Hide');
+    filterCondition(game, combat.attackerFigureKey, 'Hide');   // Attacker loses Hidden after resolving an attack
+    if (_atkHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.attackerDcName}** \u2014 resolved an attack.`, { phase: 'ROUND', icon: 'attack' });
+    // Re-apply deferred surge conditions AFTER the discard (so the figure
+    // ends the attack with the surge-granted condition rather than having
+    // it stripped by the unconditional discard).
+    if (combat.deferredSurgeFocus) {
+      _applyCondition(game, combat.attackerFigureKey, 'Focus');
+      await logGameAction(game, client, `\u{1F3AF} **Focus** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      combat.deferredSurgeFocus = false;
+    }
+    if (combat.deferredSurgeHide) {
+      _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      combat.deferredSurgeHide = false;
+    }
+    // Guerrilla (Alliance Ranger) "become Hidden after defeating the target"
+    // re-applied here, after the unconditional Hidden strip (alexanbv 2026-06-14).
+    if (combat.deferredGuerrillaHide) {
+      _applyCondition(game, combat.attackerFigureKey, 'Hide');
+      await logGameAction(game, client, `\uD83C\uDF11 **Guerrilla** \u2014 **${combat.attackerDcName}** becomes **Hidden** (defeated the target).`, { phase: 'ROUND', icon: 'card' });
+      combat.deferredGuerrillaHide = false;
+    }
+  }
+  if (combat.target?.figureKey) {
+    const _defHidden = (game.figureConditions?.[combat.target.figureKey] || []).includes('Hide');
+    filterCondition(game, combat.target.figureKey, 'Hide');    // Defender loses Hidden after being attacked
+    if (_defHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.target.label}** \u2014 was targeted by an attack.`, { phase: 'ROUND', icon: 'attack' });
+  }
   // after_resolve builds from TWO components (alexanbv 2026-06-16): (1) the
   // condition gate — every after_resolve ability whose condition is met; then
   // (2) the keyword effects accumulated from mods + surges (Blast/Cleave/Recover/
