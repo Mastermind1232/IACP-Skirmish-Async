@@ -19,6 +19,12 @@ describe('conditionForRow: self-then-others derivation', () => {
     assert.ok(cond({}, { attackerDcName: 'Targeting Computer' }), 'attacker in the owner group → usable');
     assert.ok(!cond({}, { attackerDcName: 'Other' }));
   });
+
+  it('ANDs the conditional-column guard (spend-token gate)', () => {
+    const cond = conditionForRow({ card: 'Cara Dune', affects_self: 'TRUE', affects_others: 'None', conditional: 'after you spend a power token' });
+    assert.ok(!cond({}, { attackerDcName: 'Cara Dune' }), 'self holds but no token spent → not usable');
+    assert.ok(cond({}, { attackerDcName: 'Cara Dune', attackerSpentPowerToken: true }), 'token spent → usable');
+  });
 });
 
 describe('combat-conditions: the condition-predicate layer', () => {

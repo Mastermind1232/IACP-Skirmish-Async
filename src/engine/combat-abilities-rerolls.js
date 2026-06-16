@@ -21,7 +21,6 @@ function deriveCount(effect) {
   const m = String(effect || '').toLowerCase().match(/reroll\s+(?:up to\s+)?(\d+)/);
   return m ? (parseInt(m[1], 10) || 1) : 1;
 }
-const hasGuard = (r) => r.conditional && r.conditional !== 'None' && String(r.conditional).trim() !== '';
 
 let _registered = false;
 /** Register every UNCONDITIONAL reroll-window CSV row. Idempotent. */
@@ -34,7 +33,6 @@ export function registerRerollAbilities() {
       if (r.timing !== 'attack:rerolls') continue;
       const side = (r.attack_side === 'attacker' || r.attack_side === 'defender') ? r.attack_side : null;
       if (!side) continue;
-      if (hasGuard(r)) continue; // Phase 1: unconditional only
       const card = r.card;
       const id = `reroll:${slug(card)}:${side}`;
       if (seen.has(id)) continue; // dedup multi-part rows for the same card+side

@@ -11,7 +11,7 @@
 // so conditions are evaluated relative to the attacker, not the card holder.
 
 import { dcNameFromFigureKey } from '../game/index.js';
-import { getMapData } from '../data-loader.js';
+import { getMapData, getDcEffects } from '../data-loader.js';
 import { isWithinSpaces } from '../game/spatial.js';
 
 /** Normalize a DC name for comparison (strip the [variant] suffix, lowercase). */
@@ -70,9 +70,44 @@ export function makeCondition(spec) {
       const card = norm(spec.card);
       return (game, combat) => attackerDcName(combat) === card;
     }
+    // Adjacent = within 1 of an owner figure (special-case of the range aura).
+    case 'adjacent_to_source':
+      return makeCondition({ type: 'within_n_of_source', card: spec.card, n: 1 });
+    // The attacking figure has a given keyword (e.g. "friendly TROOPER" abilities).
+    case 'attacker_has_keyword': {
+      const kw = String(spec.keyword || '').toUpperCase();
+      return (game, combat) => {
+        const e = (getDcEffects() || {})[combat?.attackerDcName] || (getDcEffects() || {})[norm(combat?.attackerDcName)];
+        return (e?.keywords || []).map((k) => String(k).toUpperCase()).includes(kw);
+      };
+    }
+    // A token was spent on this attack (any), or a specific type.
+    case 'spent_any_token':
+      return (game, combat) => !!(combat?.attackerSpentPowerToken || combat?.attackerSpentToken || combat?.spentTokenThisAttack);
     default:
       return () => true;
   }
+}
+
+/**
+ * Guard predicate from the CSV `conditional` column (ANDed with the affects-based
+ * usability). Data-derived per type; unknown prose → no extra restriction (the
+ * affects-based check already scoped usage). One sub-method per recognised guard.
+ */
+export function conditionalGuard(conditional, card) {
+  const s = String(conditional || '').toLowerCase();
+  if (!s || s === 'none') return () => true;
+  if (/spend (a|any|1).*token|after you spend|spent a.*token|power token/.test(s)) return makeCondition({ type: 'spent_any_token' });
+  // target space is N or more / fewer spaces away (ranged sniper conditions).
+  const dm = s.match(/target space is (\d+) or more/);
+  if (dm) {
+    const n = parseInt(dm[1], 10) || 0;
+    return (game, combat) => (combat?.distanceToTarget ?? 0) >= n;
+  }
+  if (/did not (perform|make) an attack this activation/.test(s)) {
+    return (game, combat) => !(game?.attackPerformedThisActivation?.[combat?.attackerFigureKey]);
+  }
+  return () => true; // unmodeled prose → no extra restriction yet (TODO: graduate)
 }
 
 /**
@@ -86,6 +121,7 @@ function othersPredicate(affectsOthers, ownerCard) {
   if (!s || s === 'none') return null;
   const m = s.match(/within\s+(\d+)/);
   if (m) return makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(m[1], 10) || 3 });
+  if (s.includes('adjacent')) return makeCondition({ type: 'adjacent_to_source', card: ownerCard });
   if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard });
   return null; // enemy-/unmodeled-targeting others → no attacker-usability grant
 }
@@ -102,9 +138,12 @@ export function conditionForRow(row) {
   const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';
   const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card }) : null;
   const othersPred = othersPredicate(row?.affects_others, row?.card);
+  const guard = conditionalGuard(row?.conditional, row?.card);
   return (game, combat) => {
-    if (selfPred && selfPred(game, combat)) return true; // self first
-    if (othersPred && othersPred(game, combat)) return true; // then others
-    return false;
+    // self first, then others — usable iff the attacker is in the affected set …
+    const usable = (selfPred && selfPred(game, combat)) || (othersPred && othersPred(game, combat));
+    if (!usable) return false;
+    // … AND the conditional-column guard holds.
+    return guard(game, combat);
   };
 }
