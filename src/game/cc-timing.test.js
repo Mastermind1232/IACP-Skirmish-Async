@@ -374,10 +374,10 @@ describe('ccRemovesToGameBox', () => {
   });
 });
 
-describe('playCC — validate, execute, dispose', () => {
-  it('executes the card ability and discards to the player discard', () => {
+describe('playCC — validate, comms-jammer, opponent-cancel, execute, dispose', () => {
+  it('executes the card ability and discards to the player discard', async () => {
     const g = _ccGame(); let calledId = null;
-    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+    const r = await playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
       ctx: { resolveAbility: (id) => { calledId = id; return { applied: true }; } },
     });
     assert.equal(r.ok, true);
@@ -386,9 +386,9 @@ describe('playCC — validate, execute, dispose', () => {
     assert.ok(!g.player1CcHand.includes('Wild Attack'), 'removed from hand');
     assert.ok(g.player1CcDiscard.includes('Wild Attack'), 'sent to discard');
   });
-  it('removeTo:gamebox sends the card to game.gameBox instead of discard', () => {
+  it('removeTo:gamebox sends the card to game.gameBox instead of discard', async () => {
     const g = _ccGame();
-    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+    const r = await playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
       removeTo: 'gamebox', ctx: { resolveAbility: () => ({}) },
     });
     assert.equal(r.ok, true);
@@ -396,10 +396,35 @@ describe('playCC — validate, execute, dispose', () => {
     assert.ok((g.gameBox || []).includes('Wild Attack'), 'sent to game box');
     assert.ok(!(g.player1CcDiscard || []).includes('Wild Attack'), 'not in discard');
   });
-  it('a failed validation returns the reason and does NOT discard', () => {
+  it('a failed validation returns the reason and does NOT discard', async () => {
     const g = _ccGame();
-    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Marksman', { ctx: { resolveAbility: () => ({}) } });
+    const r = await playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Marksman', { ctx: { resolveAbility: () => ({}) } });
     assert.equal(r.ok, false);
     assert.ok(!(g.player1CcDiscard || []).includes('Marksman'));
+  });
+  it('Comms Jammer cancels the effect but the card is still played (discarded), jammer consumed', async () => {
+    const g = _ccGame(); g.commsJammerActivePlayerNum = 2; // jamming player 1
+    let executed = false;
+    const r = await playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+      ctx: { resolveAbility: () => { executed = true; return {}; } },
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.cancelled, 'comms_jammer');
+    assert.equal(executed, false, 'effect NOT executed');
+    assert.ok(g.player1CcDiscard.includes('Wild Attack'), 'card still discarded');
+    assert.equal(g.commsJammerActivePlayerNum, null, 'jammer consumed');
+  });
+  it('opponent cancel (negate/Comm Disruption) skips execution; card still discarded', async () => {
+    const g = _ccGame(); let executed = false;
+    const r = await playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+      ctx: {
+        resolveAbility: () => { executed = true; return {}; },
+        promptOpponentCancel: async () => ({ cancelled: true, reason: 'comm_disruption' }),
+      },
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.cancelled, 'comm_disruption');
+    assert.equal(executed, false);
+    assert.ok(g.player1CcDiscard.includes('Wild Attack'));
   });
 });

@@ -1201,8 +1201,9 @@ export async function handleModsPick(interaction, ctx) {
       ? combat.attackerPlayerNum
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const ccRes = playCC(game, ccPn, ccFig, _ccReg.params.card, { ctx });
+    const ccRes = await playCC(game, ccPn, ccFig, _ccReg.params.card, { ctx });
     if (!ccRes.ok && thread) await thread.send(`⚠️ Can't play ${_ccReg.params.card}: ${ccRes.reason}`).catch(discordCatch);
+    else if (ccRes.cancelled && thread) await thread.send(`**${_ccReg.params.card}** was cancelled (${ccRes.cancelled}).`).catch(discordCatch);
     recordModsChoice(gate, side, pick);
     _markGateAbilityUsed(game, combat, pick);
     await _driveGatePath(window, thread, game, combat, ctx);

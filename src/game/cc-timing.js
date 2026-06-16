@@ -83,13 +83,17 @@ const SPECIAL_ACTION_TIMING = new Set([
  * @param {object} [getEffect] - Optional getCcEffect (default from data-loader)
  * @returns {boolean}
  */
-export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect) {
+export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect, opts = {}) {
   // Shadow Ops: opponent cannot play Command cards this round
   if (game?.shadowOpsBlockedPlayer === playerNum) return false;
   // Critical Hit (Mak): target cannot play Command cards this round
   if (game?.criticalHitBlockedPlayer === playerNum) return false;
-  // Comms Jammer (ISB Infiltrator Elite): opponent cannot play CCs during this activation
-  if (game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return false;
+  // Comms Jammer (ISB Infiltrator Elite): an automatic cancel of the NEXT CC the
+  // opponent plays (alexanbv 2026-06-16). The playCC pipeline handles it as a
+  // play-time cancel (the card IS played, then cancelled), so it passes
+  // ignoreCommsJammer to avoid pre-blocking the button. Legacy callers keep the
+  // pre-block behavior (default).
+  if (!opts.ignoreCommsJammer && game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return false;
   const effect = getEffect(cardName);
   if (!effect || !effect.timing) return false;
   const timing = String(effect.timing).toLowerCase().trim();
@@ -781,7 +785,7 @@ function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
  * Execution (running the card's effect + discard) is a separate step.
  */
 export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
-  const { allowNotInHand = false, getEffect = getCcEffect } = opts;
+  const { allowNotInHand = false, getEffect = getCcEffect, ignoreCommsJammer = false } = opts;
   const effect = getEffect(cardName);
   if (!effect) return { ok: false, reason: `Unknown command card "${cardName}".` };
   // 1. in hand (or an exception ability is supplying it)
@@ -793,11 +797,36 @@ export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
   if (!figureMatchesCcRestriction(game, dcName, dcName, (effect.playableBy || '').trim())) {
     return { ok: false, reason: `${dcName || 'that figure'} can't play ${cardName} (playable by: ${effect.playableBy}).` };
   }
-  // 3 + 4. player not blocked from CCs AND timing matches the current instance
-  if (!isCcPlayableNow(game, playerNum, cardName, getEffect)) {
+  // 3 + 4. player not blocked from CCs AND timing matches the current instance.
+  // Comms Jammer is handled by playCC as a play-time cancel (not a pre-block), so
+  // it can be ignored here when called from the playCC pipeline.
+  if (!isCcPlayableNow(game, playerNum, cardName, getEffect, { ignoreCommsJammer })) {
     return { ok: false, reason: `${cardName} can't be played right now (timing or a play-restriction).` };
   }
   return { ok: true };
+}
+
+/** Dispose a played CC: player discard by default, game box for self-gamebox
+ *  cards / forced removeTo, 'none' to leave it (card relocated itself). Returns
+ *  the destination. */
+function _disposeCC(game, playerNum, cardName, removeTo, getEffect) {
+  const dest = removeTo || (ccRemovesToGameBox(cardName, getEffect) ? 'gamebox' : 'discard');
+  if (dest === 'gamebox') {
+    game.gameBox = game.gameBox || [];
+    game.gameBox.push(cardName);
+  } else if (dest === 'discard') {
+    const dk = ccDiscardKey(playerNum);
+    game[dk] = game[dk] || [];
+    game[dk].push(cardName);
+  }
+  return dest;
+}
+
+/** Remove the card from the player's hand (no-op if not present / not from hand). */
+function _removeFromHand(game, playerNum, cardName) {
+  const hand = game[ccHandKey(playerNum)] || [];
+  const i = hand.indexOf(cardName);
+  if (i >= 0) hand.splice(i, 1);
 }
 
 /**
@@ -815,45 +844,59 @@ export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
 }
 
 /**
- * Full playCC pipeline (alexanbv 2026-06-16). Validates via canPlayCC, executes
- * the card's ability (through the caller-injected ctx.resolveAbility, to avoid an
- * import cycle with abilities.js), then disposes the card: to the player's DISCARD
- * by default, or to the GAME BOX for cards that say so (YWNDM, Fool Me Once,
- * Aphra-excavated → pass opts.removeTo:'gamebox'). opts.removeTo:'none' leaves the
- * card where it is (for cards that relocate themselves, e.g. placed on a DC).
- * Returns { ok:false, reason } on a failed check, else { ok:true, result, disposedTo }.
+ * Full playCC pipeline (alexanbv 2026-06-16), in order:
+ *  1. validate (canPlayCC: in-hand / figure / not-blocked / timing);
+ *  2. Comms Jammer — an automatic cancel of the next CC the opponent plays: if
+ *     active against this player, the card IS played (removed from hand) but its
+ *     effect is cancelled and the jammer consumed;
+ *  3. opponent cancel window — negate (if cost 0) or Comm Disruption (if cost ≤
+ *     the opponent's friendly SPY count); awaited via the injected
+ *     ctx.promptOpponentCancel({ game, playerNum, cardName, cost }) → truthy
+ *     { cancelled } skips execution;
+ *  4. execute the card's ability via ctx.resolveAbility (injected to avoid an
+ *     import cycle with abilities.js);
+ *  5. dispose — player DISCARD by default, GAME BOX for self-gamebox cards
+ *     (YWNDM) or opts.removeTo:'gamebox' (Aphra-excavated); 'none' leaves it.
+ * Async because of the opponent prompt. Returns { ok:false, reason } on a failed
+ * check, or { ok:true, result, disposedTo, cancelled? }.
  */
-export function playCC(game, playerNum, figureKey, cardName, opts = {}) {
+export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
   const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo } = opts;
-  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect });
+  // 1. validate — comms jammer handled here as a play-time cancel, not a pre-block
+  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, ignoreCommsJammer: true });
   if (!check.ok) return check;
 
-  // Execute the card's ability. resolveAbility may return { requiresChoice, ... }
-  // which the Discord-facing caller surfaces; the card is still considered played.
   const effect = getEffect(cardName);
   const abilityId = effect?.abilityId ?? cardName;
+  const cost = typeof effect?.cost === 'number' ? effect.cost : 0;
+
+  // 2. Comms Jammer: the card is played but its effect auto-cancelled; consume it.
+  if (game.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) {
+    game.commsJammerActivePlayerNum = null;
+    if (!allowNotInHand) _removeFromHand(game, playerNum, cardName);
+    const dest = _disposeCC(game, playerNum, cardName, removeTo, getEffect);
+    return { ok: true, cancelled: 'comms_jammer', disposedTo: dest };
+  }
+
+  // 3. opponent cancel window (negate if cost 0, else Comm Disruption if cost ≤
+  // opponent SPY count). Injected so this module stays free of the Discord layer.
+  if (typeof ctx.promptOpponentCancel === 'function') {
+    const cancel = await ctx.promptOpponentCancel({ game, playerNum, figureKey, cardName, cost });
+    if (cancel?.cancelled) {
+      if (!allowNotInHand) _removeFromHand(game, playerNum, cardName);
+      const dest = _disposeCC(game, playerNum, cardName, removeTo, getEffect);
+      return { ok: true, cancelled: cancel.reason || 'opponent', disposedTo: dest };
+    }
+  }
+
+  // 4. execute the card's ability
   let result = null;
   if (typeof ctx.resolveAbility === 'function') {
-    result = ctx.resolveAbility(abilityId, { game, playerNum, cardName, figureKey, combat: game.combat || game.pendingCombat });
+    result = await ctx.resolveAbility(abilityId, { game, playerNum, cardName, figureKey, combat: game.combat || game.pendingCombat });
   }
 
-  // Remove the card from hand (if it came from hand).
-  if (!allowNotInHand) {
-    const hand = game[ccHandKey(playerNum)] || [];
-    const i = hand.indexOf(cardName);
-    if (i >= 0) hand.splice(i, 1);
-  }
-
-  // Dispose: discard by default; game box for gamebox cards / forced removeTo.
-  const dest = removeTo || (ccRemovesToGameBox(cardName, getEffect) ? 'gamebox' : 'discard');
-  if (dest === 'gamebox') {
-    game.gameBox = game.gameBox || [];
-    game.gameBox.push(cardName);
-  } else if (dest === 'discard') {
-    const dk = ccDiscardKey(playerNum);
-    game[dk] = game[dk] || [];
-    game[dk].push(cardName);
-  } // 'none' → the card relocated itself (e.g. placed on a Deployment card)
-
+  // 5. remove from hand + dispose
+  if (!allowNotInHand) _removeFromHand(game, playerNum, cardName);
+  const dest = _disposeCC(game, playerNum, cardName, removeTo, getEffect);
   return { ok: true, result, disposedTo: dest };
 }
