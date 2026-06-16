@@ -225,6 +225,7 @@ import {
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
+import { applyDefenseDieTurn } from '../engine/defense-die-turn.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -863,6 +864,44 @@ function _makeDieTurnResolver({ name, eligible, phaseFlag, stageKey }) {
 }
 
 /**
+ * Defense-pool die-turn resolver (alexanbv 2026-06-16) — mirrors _makeDieTurnResolver
+ * but turns a DEFENSE die (block/evade/dodge). `dodgeConversion` (Yoda / There Is No
+ * Try, defender side) makes a Dodge on the turned die count as 2 Blocks + 1 Evade.
+ * 2-stage: pick die → pick face; recompute via applyDefenseDieTurn.
+ */
+function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion = false }) {
+  return {
+    prompt: ({ combat }) => {
+      const dice = combat.defenseDiceResults || [];
+      const idxs = (eligible ? eligible(dice) : dice.map((_d, i) => i));
+      if (idxs.length === 0) return { content: `**${name}** — no eligible defense die to turn.`, buttons: [['skip', 'OK', 'secondary']] };
+      return { content: `**${name}** — choose a defense die to turn:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dice[i].block || 0}b/${dice[i].evade || 0}e${dice[i].dodge ? '/dodge' : ''})`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
+      if (choice === 'skip') { thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
+      const sk = `_${stageKey}`;
+      if (combat[`${sk}Stage`] !== 'face') {
+        combat[`${sk}Die`] = parseInt(choice, 10); combat[`${sk}Stage`] = 'face';
+        const die = combat.defenseDiceResults?.[combat[`${sk}Die`]];
+        const faces = ctx?.getDiceData?.().defense?.[die?.color] || [];
+        const btns = faces.map((f, fi) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${fi}_${id}`).setLabel(`${f.block || 0}b/${f.evade || 0}e${f.dodge ? '/dodge' : ''}`.slice(0, 80)).setStyle(ButtonStyle.Primary));
+        await thread?.send({ content: `**${name}** — choose the new face for die #${combat[`${sk}Die`] + 1}:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
+        return { followUp: true };
+      }
+      const dieIdx = combat[`${sk}Die`]; const faceIdx = parseInt(choice, 10);
+      const die = combat.defenseDiceResults?.[dieIdx];
+      const newFace = (ctx?.getDiceData?.().defense?.[die?.color] || [])[faceIdx];
+      if (die && newFace) {
+        const roll = applyDefenseDieTurn(combat, dieIdx, newFace, dodgeConversion);
+        thread?.send(`**${name}** — die #${dieIdx + 1} → ${newFace.block || 0}b/${newFace.evade || 0}e${newFace.dodge ? (dodgeConversion ? ' (Dodge → 2 Blocks + 1 Evade)' : '/dodge') : ''}. Defense now ${roll?.block || 0}b/${roll?.evade || 0}e${roll?.dodge ? '/dodge' : ''}.`).catch(discordCatch);
+      }
+      delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
+      return undefined;
+    },
+  };
+}
+
+/**
  * Data-driven combat-ability resolvers (alexanbv 2026-06-14). Each ability
  * "points into" the pipeline by registering how it resolves when the player
  * picks it — the gate handlers are GENERIC and never name a specific ability.
@@ -1183,11 +1222,39 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
   };
 }
 
+/**
+ * There Is No Try (Yoda) — a third-party die-turn (alexanbv 2026-06-16). Yoda is
+ * unique, so there's no figure-picker: discard the card (played by the Yoda
+ * figure) then go straight to the die-turn. Attacker version turns an attack die;
+ * defender version turns a defense die and converts a Dodge on it to 2 Blocks + 1
+ * Evade.
+ */
+function _makeYodaResolver({ specKey, side }) {
+  const turn = side === 'defender'
+    ? _makeDefenseDieTurnResolver({ name: 'There Is No Try', stageKey: 'yoda_def', dodgeConversion: true })
+    : _makeDieTurnResolver({ name: 'There Is No Try', eligible: (dice) => dice.map((_d, i) => i), stageKey: 'yoda_atk' });
+  return {
+    prompt: async ({ game, combat, ctx }) => {
+      const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
+      const fk = figs[0];
+      if (fk) {
+        const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+        await playCC(game, pn, fk, 'There Is No Try', { ctx, skipExecute: true });
+      }
+      return turn.prompt({ game, combat, ctx });
+    },
+    apply: turn.apply,
+  };
+}
+
 function _resolverFor(pick) {
   if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
   const reg = getCombatAbility(pick);
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+  }
+  if (reg?.params?.kind === 'third_party_cc' && String(reg.params.specKey).startsWith('There Is No Try')) {
+    return _makeYodaResolver({ specKey: reg.params.specKey, side: reg.side });
   }
   if (reg?.params?.kind === 'third_party_cc') {
     return _makeThirdPartyCcResolver({ specKey: reg.params.specKey, card: reg.params.card || thirdPartyCardName(reg.params.specKey) });
