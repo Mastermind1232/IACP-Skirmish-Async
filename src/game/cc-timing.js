@@ -2,7 +2,7 @@
  * CC timing (F5): when can a Command Card be played from hand?
  * Uses game state to derive play context and cc-effects timing field.
  */
-import { getCcEffect, getDcKeywords, getDcEffects } from '../data-loader.js';
+import { getCcEffect, getDcKeywords, getDcEffects, getFigureSize, isDcUnique } from '../data-loader.js';
 import { getDcBaseName } from './dc-helpers.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -298,6 +298,69 @@ export function getPlayableCcFromHand(game, playerNum, hand) {
 /** Known affiliation values (lowercase) in dc-effects.json. */
 const AFFILIATIONS = new Set(['imperial', 'rebel', 'scum', 'mercenary']);
 
+/** Parse a figure size into [w,h]. Accepts "WxH" strings or [w,h] arrays. */
+function _sizeWH(size) {
+  if (Array.isArray(size)) return [Number(size[0]) || 1, Number(size[1]) || 1];
+  const m = String(size || '1x1').match(/(\d+)\s*x\s*(\d+)/i);
+  return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : [1, 1];
+}
+/**
+ * A figure is LARGE iff its footprint is bigger than 1x1 (any dimension > 1);
+ * SMALL iff exactly 1x1 (alexanbv 2026-06-16: "Large just means >1x1, not
+ * massive. Small means exactly 1x1"). MASSIVE is a SEPARATE keyword and is NOT
+ * implied by — nor implies — large.
+ */
+export function ccFigureIsLarge(dcName) {
+  const [w, h] = _sizeWH(getFigureSize(getDcBaseName(dcName)));
+  return w > 1 || h > 1;
+}
+
+/**
+ * Does a SPECIFIC figure satisfy a CC's playableBy restriction? This is the
+ * per-figure gate check (alexanbv 2026-06-16): "build a function that checks the
+ * attacker's unique name, attack type, traits, faction [, size, unique, massive];
+ * any CC that passes ANY ONE of those checks AND is in hand gets a button."
+ *
+ * Handles every restriction dimension as an alternative ("X or Y"):
+ *  - unique name / faction / trait keyword → delegated to ccPlayableByMatches
+ *  - size: "small" (=1x1), "large" (=>1x1), "large creature" (>1x1 + CREATURE)
+ *  - "unique" / "any unique figure" → the figure's DC is unique
+ *  - "non-massive X" → figure lacks the MASSIVE keyword AND matches X
+ * Attack-type restrictions live in the card EFFECT (a resolve-time conditional),
+ * not in playableBy, so they are not gated here. Returns boolean.
+ */
+export function figureMatchesCcRestriction(game, dcName, displayName, playableBy, opts = {}) {
+  const { hasDarksaber = false, extraKeywords = null } = opts;
+  const pb = String(playableBy || '').trim();
+  if (!pb || pb.toLowerCase() === 'any figure') return true;
+  const base = getDcBaseName(dcName);
+  const kwMap = getDcKeywords(game);
+  // Variant-tolerant: dc-effects keys carry a (Elite)/(Regular) suffix, but the
+  // gate may pass either the suffixed or the base name — try both forms.
+  const baseKw = kwMap[dcName] || kwMap[base] || kwMap[`${base} (Elite)`] || kwMap[`${base} (Regular)`] || [];
+  const kw = [...baseKw, ...(extraKeywords || [])].map((k) => String(k).toLowerCase());
+  const isMassive = kw.includes('massive');
+  const alts = pb.split(/\s+or\s+/i)
+    .map((a) => a.trim().replace(/^"|"$/g, '').toLowerCase())
+    .map((a) => a.replace(/^any\s+/, '').replace(/\s+figure$/, '').trim());
+  for (const a of alts) {
+    if (a === 'small') { if (!ccFigureIsLarge(dcName)) return true; continue; }
+    if (a === 'large') { if (ccFigureIsLarge(dcName)) return true; continue; }
+    if (a === 'large creature') { if (ccFigureIsLarge(dcName) && kw.includes('creature')) return true; continue; }
+    if (a === 'unique') { if (isDcUnique(base)) return true; continue; }
+    if (a.startsWith('non-massive ')) {
+      const rest = a.slice('non-massive '.length).trim();
+      // Pass the variant-tolerant keywords so the delegate finds the trait even
+      // when the gate hands us a base name (no (Elite)/(Regular) suffix).
+      if (!isMassive && ccPlayableByMatches(rest, dcName, displayName, hasDarksaber, kw, game)) return true;
+      continue;
+    }
+    // name / faction / trait keyword (ccPlayableByMatches handles its own casing)
+    if (ccPlayableByMatches(a, dcName, displayName, hasDarksaber, kw, game)) return true;
+  }
+  return false;
+}
+
 /**
  * Check if a single playableBy alternative matches a DC's traits.
  * @param {string} alt - Lowercase alternative (e.g., "imperial force user", "brawler", "luke skywalker")
@@ -312,13 +375,14 @@ function alternativeMatchesDc(alt, dcBaseLower, dispLower, affiliationLower, kwL
   if (dcBaseLower.includes(alt) || alt.includes(dcBaseLower) || dispLower.includes(alt) || alt.includes(dispLower))
     return true;
 
-  // Synonym expansions: "large creature" means MASSIVE + CREATURE
-  const COMPOUND_SYNONYMS = {
-    'large creature': ['massive', 'creature'],
-  };
-  if (COMPOUND_SYNONYMS[alt]) {
-    return COMPOUND_SYNONYMS[alt].every(kw => kwLower.includes(kw));
-  }
+  // Size restrictions (alexanbv 2026-06-16): "large" = footprint >1x1 (NOT
+  // massive — massive is its own keyword); "small" = exactly 1x1; "large
+  // creature" = a >1x1 figure with the CREATURE keyword (e.g. Dewback 1x2,
+  // Nexu 2x2 — none of which are massive). Size comes from the figure's
+  // footprint, not a keyword.
+  if (alt === 'large creature') return ccFigureIsLarge(dcBaseLower) && kwLower.includes('creature');
+  if (alt === 'large figure' || alt === 'large') return ccFigureIsLarge(dcBaseLower);
+  if (alt === 'small figure' || alt === 'small') return !ccFigureIsLarge(dcBaseLower);
 
   // State-qualifier stripping: "readied vehicle" → check "vehicle" keyword
   // (the "readied" part is a game-state check handled separately)

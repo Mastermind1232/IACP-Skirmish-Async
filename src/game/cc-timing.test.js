@@ -3,7 +3,49 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand, isCcPlayLegalByRestriction } from './cc-timing.js';
+import { getCcPlayContext, isCcPlayableNow, getPlayableCcFromHand, isCcPlayLegalByRestriction, ccFigureIsLarge, figureMatchesCcRestriction } from './cc-timing.js';
+
+// --- size semantics + per-figure CC restriction (alexanbv 2026-06-16) ---
+
+describe('ccFigureIsLarge — large = footprint >1x1, NOT massive', () => {
+  it('1x1 figures are not large', () => {
+    assert.equal(ccFigureIsLarge('Darth Vader'), false); // 1x1
+    assert.equal(ccFigureIsLarge('Stormtrooper'), false);
+  });
+  it('>1x1 figures are large (incl. non-massive ones like Dewback)', () => {
+    assert.equal(ccFigureIsLarge('Dewback Rider'), true);  // 1x2, not massive
+    assert.equal(ccFigureIsLarge('Nexu (Elite)'), true);   // 2x2, not massive
+    assert.equal(ccFigureIsLarge('AT-ST'), true);          // 2x3
+  });
+});
+
+describe('figureMatchesCcRestriction — per-figure playableBy gate', () => {
+  const g = {};
+  it('"Any Small Figure" → only 1x1 figures', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'Darth Vader', 'Darth Vader', 'Any Small Figure'), true);
+    assert.equal(figureMatchesCcRestriction(g, 'Nexu (Elite)', 'Nexu', 'Any Small Figure'), false);
+  });
+  it('"LARGE CREATURE" → >1x1 AND creature keyword (Dewback/Nexu qualify, not Vader)', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'Nexu (Elite)', 'Nexu', 'LARGE CREATURE'), true);
+    assert.equal(figureMatchesCcRestriction(g, 'Dewback Rider', 'Dewback Rider', 'LARGE CREATURE'), true);
+    assert.equal(figureMatchesCcRestriction(g, 'Darth Vader', 'Darth Vader', 'LARGE CREATURE'), false);
+  });
+  it('"Any Unique Figure" → only unique DCs', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'Darth Vader', 'Darth Vader', 'Any Unique Figure'), true);
+    assert.equal(figureMatchesCcRestriction(g, 'Stormtrooper', 'Stormtrooper', 'Any Unique Figure'), false);
+  });
+  it('trait/faction/name dimensions match (variant-suffix tolerant)', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'HK Assassin Droid (Elite)', 'HK', 'HUNTER'), true);
+    assert.equal(figureMatchesCcRestriction(g, 'HK Assassin Droid', 'HK', 'HUNTER'), true); // base name
+    assert.equal(figureMatchesCcRestriction(g, 'Stormtrooper', 'Stormtrooper', 'HUNTER'), false);
+  });
+  it('"Non-Massive GUARDIAN or VEHICLE" → VEHICLE passes; the non-massive guardian branch excludes massive', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'AT-ST', 'AT-ST', 'Non-Massive GUARDIAN or VEHICLE'), true); // VEHICLE
+  });
+  it('"Any Figure" is always playable', () => {
+    assert.equal(figureMatchesCcRestriction(g, 'Stormtrooper', 'Stormtrooper', 'Any Figure'), true);
+  });
+});
 
 // --- getCcPlayContext ---
 
