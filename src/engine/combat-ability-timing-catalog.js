@@ -171,10 +171,14 @@ e('cross_training_reroll', 'Cross Training (reroll, attachment)', 'defender', 'i
 e('targeting_network', 'Targeting Network (CC)', 'attacker', 'interactive', RR, 'reroll 1 atk die');
 e('there_is_no_try', 'There Is No Try (CC)', 'either', 'interactive', RR, 'REBEL FORCE USER → set die face');
 e('demoralizing_monologue', 'Demoralizing Monologue (CC)', 'attacker', 'interactive', RR, 'forces def die');
+// Rapid Recalibration fires as the LAST thing in the ATTACKER reroll stage —
+// before the defender rerolls (alexanbv 2026-06-16: "Rapid recal happens as the
+// last thing in the attacker reroll stage. It is different than zeb, which
+// happens after ALL rerolls"). So it lives in the rerolls window, not special.
+e('rapid_recalibration', 'Rapid Recalibration (CC)', 'attacker', 'interactive', RR, 'last thing in attacker reroll stage; set 1 atk die', 'rapid_recal');
 
-// ── SPECIAL sub-windows ──────────────────────────────────────────────────────
-e('rapid_recalibration', 'Rapid Recalibration (CC)', 'attacker', 'interactive', SP, 'between attacker/defender rerolls; set 1 atk die', 'rapid_recal');
-e('lasat_honor_guard', 'Lasat Honor Guard (Zeb Orrelios)', 'attacker', 'interactive', SP, 'between rerolls and mods; turn 1 single-symbol die', 'zeb');
+// ── SPECIAL sub-windows (die-turns AFTER ALL rerolls — Zeb only) ──────────────
+e('lasat_honor_guard', 'Lasat Honor Guard (Zeb Orrelios)', 'attacker', 'interactive', SP, 'after ALL rerolls, before mods; turn 1 single-symbol die', 'zeb');
 e('zillo_technique_pierce_cancel', 'Zillo Technique (exhaust → cancel 2 Pierce)', 'defender', 'interactive', ZL, 'zillo step: between spend_surges and damage; finalized Pierce>0', 'zillo_exhaust');
 
 // ── MODS (missing from combat-abilities-mods.js — timing-only until wired) ────

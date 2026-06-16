@@ -33,11 +33,15 @@ registerCombatAbility({
   },
 });
 
-// Rapid Recalibration (CC): turn one attack die to any side — SAME special window
-// as Zeb (after ALL rerolls, before mods; alexanbv 2026-06-16). Offered while the
-// attacker's player holds the card and dice have been rolled.
+// Rapid Recalibration (CC): turn one attack die to any side — fires as the LAST
+// thing in the ATTACKER reroll stage, BEFORE the defender rerolls (alexanbv
+// 2026-06-16: "Rapid recal happens as the last thing in the attacker reroll
+// stage. It is different than zeb, which happens after ALL rerolls"). So it lives
+// in the 'rerolls' window (attacker side), NOT 'special'. Offered while the
+// attacker's player holds the card and dice have been rolled. Like Zeb, its
+// die-turn bypasses the reroll lock (specialTurn) — it sets a face, not a reroll.
 registerCombatAbility({
-  id: 'rapid_recalibration', name: 'Rapid Recalibration', windows: ['special'], side: 'attacker', kind: 'interactive',
+  id: 'rapid_recalibration', name: 'Rapid Recalibration', windows: ['rerolls'], side: 'attacker', kind: 'interactive',
   applies: (game, combat) => {
     if (!(combat.attackDiceResults?.length > 0) || !combat.attackerPlayerNum) return false;
     return getPlayerCardNames(game, combat.attackerPlayerNum).some((n) => String(n).toLowerCase() === '[rapid recalibration]');

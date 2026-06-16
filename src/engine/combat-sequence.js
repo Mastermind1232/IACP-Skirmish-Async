@@ -12,8 +12,8 @@
 export const ATTACK_STEPS = Object.freeze([
   'on_declare',    // gate: attacker on-declare effects, then defender's
   'roll',          // mechanic: roll the attack/defense pools (Focus adds a die)
-  'rerolls',       // gate: attacker rerolls, then defender rerolls
-  'special',       // gate: die-turns AFTER ALL rerolls (Zeb / Lasat Honor Guard, Rapid Recalibration)
+  'rerolls',       // gate: attacker rerolls (Rapid Recalibration fires last here), then defender rerolls
+  'special',       // gate: die-turns AFTER ALL rerolls (Zeb / Lasat Honor Guard)
   'mods',          // gate: attacker result modifiers, then defender's
   'spend_surges',  // mechanic: attacker spends surges (optional)
   'zillo',         // gate: Zillo Technique exhaust (pierce cancel) — AFTER spend_surges

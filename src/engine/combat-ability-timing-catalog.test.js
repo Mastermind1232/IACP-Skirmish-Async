@@ -34,11 +34,19 @@ describe('combat timing catalog: every window has a complete set of timing indic
     }
   });
 
-  it('special covers the die-turn sub-windows (RR / Zeb)', () => {
+  it('special covers the after-ALL-rerolls die-turn (Zeb only)', () => {
     const sp = timingIndicatorsForWindow('special');
     const subs = new Set(sp.map((a) => a.special));
-    assert.ok(subs.has('rapid_recal'), 'missing rapid_recal');
     assert.ok(subs.has('zeb'), 'missing zeb');
+    // Rapid Recalibration is NOT here — it fires at the end of the attacker
+    // reroll stage, not after ALL rerolls (alexanbv 2026-06-16 correction).
+    assert.ok(!subs.has('rapid_recal'), 'rapid_recal must not be in special');
+  });
+
+  it('rerolls covers Rapid Recalibration (last thing in the attacker reroll stage)', () => {
+    const rr = timingIndicatorsForWindow('rerolls');
+    const subs = new Set(rr.map((a) => a.special));
+    assert.ok(subs.has('rapid_recal'), 'rerolls missing rapid_recal sub-window');
   });
 
   it('zillo window covers the Zillo Technique pierce-cancel (its own step after spend_surges)', () => {
