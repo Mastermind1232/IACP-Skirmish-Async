@@ -223,7 +223,7 @@ import {
   removeFigurePosition, getHandChannelId,
 } from '../game/player-helpers.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
+import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1187,6 +1187,24 @@ export async function handleModsPick(interaction, ctx) {
   if (!side) return;
   if (pick === 'done') {
     passModsSide(gate, side);
+    await _driveGatePath(window, thread, game, combat, ctx);
+  } else if (getCombatAbility(pick)?.params?.kind === 'cc') {
+    // Command-Card button in the combat sequence (alexanbv 2026-06-16: "this is the
+    // method that should be called whenever a button corresponding to a CC is
+    // clicked in the combat sequence"). The figure is already populated — it's the
+    // active side's combat figure. playCC validates (in-hand / figure / not-blocked
+    // / timing), executes the effect, and disposes (discard or game box).
+    // TODO(next): comms-jammer cancel + opponent negate/Comm-Disruption prompt
+    // before execute, reusing cc-hand.js promptCommDisruption/Negation.
+    const _ccReg = getCombatAbility(pick);
+    const ccPn = side === 'attacker'
+      ? combat.attackerPlayerNum
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+    const ccRes = playCC(game, ccPn, ccFig, _ccReg.params.card, { ctx });
+    if (!ccRes.ok && thread) await thread.send(`⚠️ Can't play ${_ccReg.params.card}: ${ccRes.reason}`).catch(discordCatch);
+    recordModsChoice(gate, side, pick);
+    _markGateAbilityUsed(game, combat, pick);
     await _driveGatePath(window, thread, game, combat, ctx);
   } else {
     const r = _resolverFor(pick);
