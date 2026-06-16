@@ -170,8 +170,27 @@ async function _notifyCcPlayWindow(game, ctx, timings, opts) {
   // outside an attack the initiative player goes first. opts.order is precomputed
   // by the caller from damageResolutionPlayerOrder; fall back to [1, 2].
   const order = Array.isArray(opts?.order) && opts.order.length === 2 ? opts.order : [1, 2];
+  // Perspective split (alexanbv 2026-06-16): "hostile suffered damage" timings
+  // (Opportunistic) belong to the OPPONENT of the suffering figure; the self /
+  // friendly timings belong to the sufferer's controller. Without this, the window
+  // wrongly offered Opportunistic to the sufferer's own controller (and the self
+  // timings to the opponent). Gated only when the sufferer's controller is known.
+  const HOSTILE_TIMINGS = new Set([
+    'afterHostileFigureSuffersDamage',            // Opportunistic
+    'whenHostileFigureDefeatedNotYourActivation',
+    'whenHostileFigureWithin3SpacesDefeated',
+    'afterUniqueHostileDefeated',
+  ]);
+  const controllerPn = opts?.controllerPlayerNum;
   for (const pn of order) {
-    const cards = getPlayableReactionCardsForTiming(game, pn, timings);
+    let pnTimings = timings;
+    if (controllerPn === 1 || controllerPn === 2) {
+      pnTimings = (pn === controllerPn)
+        ? timings.filter((t) => !HOSTILE_TIMINGS.has(t)) // sufferer's controller: self/friendly reactions
+        : timings.filter((t) => HOSTILE_TIMINGS.has(t));  // opponent: hostile-suffered reactions (Opportunistic)
+    }
+    if (!pnTimings.length) continue;
+    const cards = getPlayableReactionCardsForTiming(game, pn, pnTimings);
     if (!cards.length) continue;
     try {
       await sendPrivateReactionPrompt(ctx.client, game, pn, cards.length, opts.contextLabel);
@@ -357,6 +376,7 @@ export async function applyDamage(game, ctx, opts) {
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
       contextLabel: `figure's HP reached 0 (${opts.source || 'Damage'})`,
       order: _order,
+      controllerPlayerNum: opts.controllerPlayerNum,
     });
     const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
     for (const hook of _firingHooksInOrder(BEFORE_DEFEATED_HOOKS, game, beforeOpts, _order)) {
@@ -378,12 +398,14 @@ export async function applyDamage(game, ctx, opts) {
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
       contextLabel: `figure defeated (${opts.source || 'Damage'})`,
       order: damageResolutionPlayerOrder(game, opts),
+      controllerPlayerNum: opts.controllerPlayerNum,
     });
   } else if (!result.wasDefeated) {
     // Survived damage — emit when-suffers-damage CC window.
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DAMAGED, {
       contextLabel: `figure suffered damage (${opts.source || 'Damage'})`,
       order: damageResolutionPlayerOrder(game, opts),
+      controllerPlayerNum: opts.controllerPlayerNum,
     });
   }
 
@@ -616,6 +638,7 @@ export async function applyDirectDefeat(game, ctx, opts) {
   await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
     contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
     order: damageResolutionPlayerOrder(game, opts),
+    controllerPlayerNum: opts.controllerPlayerNum,
   });
   let preventDefeat = false;
   // Owner-player ordered; requiresDamage hooks (Parting Shot / Last Resort /
@@ -650,6 +673,7 @@ export async function applyDirectDefeat(game, ctx, opts) {
   await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
     contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
     order: damageResolutionPlayerOrder(game, opts),
+    controllerPlayerNum: opts.controllerPlayerNum,
   });
   // processFigureDefeat (VP, removeFromBoard, attachment cleanup,
   // activation decrement, passive redraws, defeat log, win conditions).
