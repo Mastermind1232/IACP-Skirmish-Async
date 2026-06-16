@@ -39,15 +39,21 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'dispatchCombatGateAdvance must not call the deleted proceedToTokenPhase');
   });
 
-  it('attack-declare site posts sendOnDeclareYn (sequential per-player Y/N gate)', () => {
-    // Per alexanbv 2026-05-12: on-declare effects use the same Y/N
-    // shape as step-4 sendModsYn — single prompt per player, attacker
-    // first, sequential. Replaces the prior parallel "Ready button +
-    // auto-posted token window" pair which gave each player two
-    // simultaneous prompts.
+  it('attack-declare site walks the gate sequence; on_declare precedes roll (tokens pre-roll)', () => {
+    // Gate cutover (alexanbv 2026-06-16): the declare site runs the gate
+    // sequence. The CRR pre-roll-token guarantee now comes from ATTACK_STEPS
+    // ordering — the on_declare gate (which offers power-token spends) precedes
+    // the roll mechanic, so tokens are still committed before dice are seen.
     assert.match(H_CB_SRC,
-      /await sendOnDeclareYn\(thread, game, game\.pendingCombat, 'attacker'\);/,
-      'attack-declare must post sendOnDeclareYn for the attacker (sequential Y/N gate)');
+      /await runAttackSequence\(thread, game, game\.pendingCombat, ctx\);/,
+      'attack-declare must launch the gate sequence (runAttackSequence)');
+    const seqSrc = readFileSync(resolve(ROOT, 'src/engine/combat-sequence.js'), 'utf8');
+    const stepsMatch = seqSrc.match(/export const ATTACK_STEPS = Object\.freeze\(\[([\s\S]*?)\]\)/);
+    assert.ok(stepsMatch, 'ATTACK_STEPS must be locatable');
+    const order = [...stepsMatch[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    assert.ok(order.indexOf('on_declare') >= 0 && order.indexOf('roll') >= 0
+      && order.indexOf('on_declare') < order.indexOf('roll'),
+      'on_declare (power-token spend window) must precede roll in ATTACK_STEPS');
   });
 
   it('sendOnDeclareYn body opens the token window only inside the Yes branch of handleCombatOnDeclareYn', () => {

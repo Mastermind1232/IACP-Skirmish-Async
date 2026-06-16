@@ -67,7 +67,9 @@ export async function driveGateAttackToEnd(game, combat, deps, thread, { maxPass
       // sendReadyToResolveRolls auto-advances the sequence on "Done".
       if (combat._seqActive && combat._seqStep === 'spend_surges') {
         passes++;
-        const atkId = game[`player${combat.attackerPlayerNum}Id`] || '';
+        // Effective attacker = the False Orders controller, else the attacker.
+        const atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
+        const atkId = game[`player${atkPn}Id`] || '';
         await handleCombatSurge(fakeInteraction(`combat_surge_${game.gameId}_done`, client, atkId), deps);
         // If still parked at spend_surges, it failed to advance — stop (real stall).
         if (combat._seqStep === 'spend_surges') break;

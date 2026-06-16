@@ -8637,8 +8637,11 @@ async function _postOnDeclareDieSwapPrompts(thread, game, combat, ctx) {
  */
 async function autoRollDice(thread, game, combat, ctx) {
   const atkPN = combat.attackerPlayerNum;
-  const defPN = opponentPlayerNum(atkPN);
-  const atkOwnerId = getPlayerId(game, atkPN);
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(atkPN);
+  // False Orders / Lure: the CONTROLLER rolls the attack — handleCombatRoll's
+  // attack-roll permission uses falseOrdersControllerPlayerNum, so the synthesized
+  // atk press must carry the controller's id. No-op for normal attacks.
+  const atkOwnerId = getPlayerId(game, combat.falseOrdersControllerPlayerNum ?? atkPN);
   const defOwnerId = getPlayerId(game, defPN);
   const gameId = game.gameId;
 
@@ -10835,10 +10838,11 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-  // Per alexanbv 2026-05-12: sequential per-player Y/N (matches
-  // sendModsYn step-4 format). Yes → token window + Continue, No →
-  // next role / dice roll. Same flow for False Orders / Lure.
-  await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
+  // GATE CUTOVER (alexanbv 2026-06-16): False Orders / Lure attacks walk the
+  // gate sequence like every other attack. The gate is False-Orders-aware
+  // (on-declare/mods CC offers + the attack roll route through
+  // falseOrdersControllerPlayerNum).
+  await runAttackSequence(thread, game, game.pendingCombat, ctx);
   saveGames(game.gameId);
 }
 

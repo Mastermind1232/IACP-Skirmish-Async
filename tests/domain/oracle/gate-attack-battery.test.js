@@ -95,3 +95,59 @@ describe('GATE-BATTERY: real matchups walk the gate to after_resolve', () => {
     });
   }
 });
+
+// False Orders / Lure of the Dark Side: P1 (controller) forces a P2 figure
+// (controlled) to attack a P1 figure. falseOrdersControllerPlayerNum drives the
+// attacker-side hand + attack roll; noFriendliesActive suppresses friendly gates.
+describe('GATE-BATTERY: False Orders / Lure walks the gate', () => {
+  it('controller-driven Lure attack reaches after_resolve', async () => {
+    const built = createTestGame()
+      .withMap('mos-eisley-outskirts')
+      .withPlayer1Army([{ dcName: 'Rebel Trooper' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const { game, deps, dcMessageMeta } = built;
+    game.combatSequenceMode = true;
+    game.selfPlay = true;
+
+    const controlled = firstFigKey(game, 2); // P2 figure, controlled by P1
+    const defFk = firstFigKey(game, 1); // attacked P1 figure
+    game.figurePositions[2] = { [controlled]: 'b1' };
+    game.figurePositions[1] = { [defFk]: 'c1' };
+    const C = metaFor(dcMessageMeta, game.gameId, 2);
+    const D = metaFor(dcMessageMeta, game.gameId, 1);
+    const thread = createFakeChannel('lure-thread');
+
+    const combat = {
+      gameId: game.gameId,
+      combatThreadId: 'lure-thread',
+      attackerPlayerNum: 2,
+      defenderPlayerNum: 1,
+      falseOrdersControllerPlayerNum: 1,
+      isLure: true,
+      noFriendliesActive: true,
+      lurePostAttackStrain: 0,
+      attackerMsgId: C.msgId,
+      attackerDcName: C.meta.dcName,
+      attackerDisplayName: C.meta.dcName,
+      attackerFigureIndex: 0,
+      attackerFigureKey: controlled,
+      attackerConds: [],
+      defenderConds: [],
+      target: { msgId: D.msgId, figureKey: defFk, label: D.meta.dcName },
+      targetSquare: 'c1',
+      targetStats: { defense: ['white'], cost: 5, figures: 1 },
+      attackInfo: { dice: ['blue', 'green'], type: 'melee' },
+      isRanged: false,
+      distanceToTarget: 1,
+      bonusSurgeAbilities: [],
+      bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
+      surgeConditions: [], bonusConditions: [],
+      surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+    };
+    const r = await driveGateAttackToEnd(game, combat, deps, thread);
+    assert.equal(r.threw, null, `Lure threw: ${r.threw && (r.threw.stack || r.threw.message)}`);
+    assert.equal(r.finalStep, 'after_resolve', `Lure ended at "${r.finalStep}"`);
+  });
+});
