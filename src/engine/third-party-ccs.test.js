@@ -73,3 +73,29 @@ describe('every spec has a known window', () => {
     }
   });
 });
+
+// Registration into the combat-gate windows (offered army-wide when eligible).
+import './combat-mods-gate.js';
+import { abilitiesForWindow, getCombatAbility } from './combat-timing-registry.js';
+
+describe('third-party CC gate registration', () => {
+  it('registers combat-window specs with kind:third_party_cc', () => {
+    const cf = getCombatAbility('tpcc:concentrated_fire:on_declare:attacker');
+    assert.equal(cf?.params?.kind, 'third_party_cc');
+    const gs = getCombatAbility('tpcc:guardian_stance:rerolls:defender');
+    assert.equal(gs?.params?.kind, 'third_party_cc');
+    // Opportunistic is damage_pipeline → NOT a combat-gate ability
+    assert.ok(!getCombatAbility('tpcc:opportunistic:damage_pipeline:attacker'));
+  });
+
+  it('Concentrated Fire is offered at on_declare/attacker only when in hand AND a trooper is eligible', () => {
+    const figs = { 1: { 'Stormtrooper-1-0': 'a1', 'Stormtrooper-1-1': 'c3' }, 2: { 'Darth Vader-2-0': 'b2' } };
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Darth Vader-2-0' } };
+    const offered = (g) => abilitiesForWindow('on_declare', 'attacker', g, combat, {}).map((a) => a.name);
+    assert.ok(offered({ player1CcHand: ['Concentrated Fire'], figurePositions: figs }).includes('Concentrated Fire'));
+    // only the attacker is a trooper → excludeActive leaves nobody eligible
+    assert.ok(!offered({ player1CcHand: ['Concentrated Fire'], figurePositions: { 1: { 'Stormtrooper-1-0': 'a1' }, 2: { 'Darth Vader-2-0': 'b2' } } }).includes('Concentrated Fire'));
+    // not in hand
+    assert.ok(!offered({ player1CcHand: [], figurePositions: figs }).includes('Concentrated Fire'));
+  });
+});
