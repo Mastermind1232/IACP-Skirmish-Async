@@ -1126,11 +1126,26 @@ export const COMBAT_RESOLVERS = {
  * + the generic rerollDie serve them all (alexanbv "should not be doing these
  * with ad hoc functions").
  */
+// Ability-name → COMBAT_RESOLVERS key, for the few whose resolver key isn't the
+// slug of the ability name. (Most are: 'Call the Shots' → call_the_shots.)
+const _RESOLVER_ALIAS = { 'line of fire': 'crate_block_sink', 'line of fire (crate block)': 'crate_block_sink', 'soresu form': 'soresu' };
+function _resolverForAbilityName(ability) {
+  const lc = String(ability || '').toLowerCase().trim();
+  const key = _RESOLVER_ALIAS[lc] || lc.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return COMBAT_RESOLVERS[key] || null;
+}
 function _resolverFor(pick) {
   if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
   const reg = getCombatAbility(pick);
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+  }
+  // Data-driven ability (csv:<card>:<window>:<side>): reference its specialized
+  // effect resolver by ability name (Destruct's "resolver per ability, referenced
+  // in the pipeline"). No resolver yet → null → diagnostic no-op button.
+  if (reg?.params?.ability) {
+    const r = _resolverForAbilityName(reg.params.ability);
+    if (r) return r;
   }
   return null;
 }
