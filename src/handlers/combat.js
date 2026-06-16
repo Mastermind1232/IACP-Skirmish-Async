@@ -235,6 +235,7 @@ import { buildOnDeclareGate } from '../engine/combat-ondeclare-gate.js';
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
+import { auraGrantedSurges as _auraGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -2543,6 +2544,12 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
     game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
   }
+  // Surge-granting auras (Gar Saxon, General Sorin, …): a friendly owner figure
+  // within range grants its surge abilities to qualifying friendlies — so an
+  // attacker standing in the aura sees those surges in the spend_surges step.
+  // Owner-centric / footprint-aware eligibility via the condition engine; granted
+  // surges are data-driven (the owner's surgeAbilities). alexanbv 2026-06-16.
+  game.pendingCombat.bonusSurgeAbilities.push(..._auraGrantedSurges(game, game.pendingCombat));
   // CC Passive Redraw (per CRR card text 2026-05-09): K&D / Targeting
   // Network grant the relevant figure (FORCE USER / DROID) a NEW
   // surge ability "Re-draw this card" while the card is in discard.
