@@ -13,7 +13,46 @@
 
 import { loadAbilitySpec } from './combat-ability-db.js';
 import { registerCombatAbility, getCombatAbility, allCombatAbilities } from './combat-timing-registry.js';
-import { conditionForRow } from './combat-conditions.js';
+import { conditionForRow, conditionalGuard } from './combat-conditions.js';
+import { getCcEffect } from '../data-loader.js';
+import { getCcHand, opponentPlayerNum } from '../game/player-helpers.js';
+import { figureMatchesCcRestriction } from '../game/cc-timing.js';
+import { dcNameFromFigureKey } from '../game/index.js';
+
+// Command Cards played by a figure OTHER than the attacker/defender (reactions by
+// a friendly third party) — alexanbv 2026-06-16 said to leave these as exceptions
+// for now; they need army-wide / other-figure detection, not the attacker/defender
+// figure check. Skipped here so they aren't offered (wrongly) via this path.
+const CC_THIRD_PARTY_EXCEPTIONS = new Set([
+  'Concentrated Fire', 'Guardian Stance', 'Bodyguard', 'Get Behind Me!',
+  'Extra Protection', 'Final Stand', 'Miracle Worker', 'There Is No Try',
+  'Battlefield Awareness', 'Unlimited Power',
+].map((s) => s.toLowerCase()));
+
+/**
+ * Build the `applies` predicate for a Command Card at an attacker/defender gate
+ * window (alexanbv 2026-06-16): offer the button iff the card is IN HAND for that
+ * side's player AND the attacking (resp. defending) figure satisfies the card's
+ * playableBy restriction (unique name / faction / trait / size / unique). The
+ * card's own resolve-time conditional (LoS, distance, …) is left to play time;
+ * the modeled conditional-column guards are ANDed in.
+ */
+function ccAppliesFor(card, side, row) {
+  const playableBy = (getCcEffect(card)?.playableBy || '').trim();
+  const guard = conditionalGuard(row?.conditional, card);
+  return (game, combat) => {
+    const pn = side === 'attacker'
+      ? combat?.attackerPlayerNum
+      : (combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null));
+    if (pn == null) return false;
+    if (!(getCcHand(game, pn) || []).includes(card)) return false;
+    const dcName = side === 'attacker'
+      ? (combat?.attackerDcName || dcNameFromFigureKey(combat?.attackerFigureKey || ''))
+      : (combat?.defenderDcName || dcNameFromFigureKey(combat?.target?.figureKey || ''));
+    if (!figureMatchesCcRestriction(game, dcName, dcName, playableBy)) return false;
+    return guard(game, combat);
+  };
+}
 
 const SPEC_TO_GATE = {
   'attack:on_declare': 'on_declare',
@@ -43,14 +82,29 @@ export function registerCsvWindowAbilities() {
       // Skip if a hand-wired executable already covers this ability name in this window.
       if (covered.has(`${String(r.ability).toLowerCase()}|${gate}`)) continue;
       const id = `csv:${slug(r.card)}:${gate}:${side}`;
-      if (seen.has(id) || getCombatAbility(id)) continue;
+      // Skip if already handled this pass, or if an EXECUTABLE entry already
+      // owns this id. A timing-only catalog entry (no applies) is overwritten —
+      // this loop imports last specifically to graduate those to executable
+      // condition-driven buttons. (CC ids collide with the timing-only ones
+      // because card===ability for a Command Card.)
+      const existing = getCombatAbility(id);
+      if (seen.has(id) || (existing && !existing.timingOnly)) continue;
       seen.add(id);
+      const isCc = r.card_type === 'CC';
+      // Third-party-figure CCs (Guardian Stance, Concentrated Fire, …) are
+      // exceptions handled elsewhere — don't offer them via the attacker/defender
+      // figure check.
+      if (isCc && CC_THIRD_PARTY_EXCEPTIONS.has(String(r.card).toLowerCase())) continue;
       registerCombatAbility({
         id, name: r.card, windows: [gate], side, kind: 'interactive',
-        // No effect resolver yet → a diagnostic no-op button (offered by condition).
-        // limit carried so the pipeline can mark it used (once per round/etc.).
-        params: { kind: 'unwired', card: r.card, ability: r.ability, limit: r.limit },
-        applies: conditionForRow(r),
+        // CC rows: detection by in-hand + the figure's playableBy restriction, and
+        // params.kind 'cc' so the gate dispatches the click to the play-CC pipeline.
+        // Non-CC rows: figure-ability conditionForRow detection. Either way an
+        // unwired effect is a diagnostic no-op button (offered by condition).
+        params: isCc
+          ? { kind: 'cc', card: r.card, ability: r.ability, playableBy: (getCcEffect(r.card)?.playableBy || '').trim(), limit: r.limit }
+          : { kind: 'unwired', card: r.card, ability: r.ability, limit: r.limit },
+        applies: isCc ? ccAppliesFor(r.card, side, r) : conditionForRow(r),
       });
     }
   }
