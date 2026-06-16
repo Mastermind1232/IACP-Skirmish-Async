@@ -677,7 +677,7 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
 // ── Full-attack sequence driver wiring (alexanbv 2026-06-15 rebuild) ──────────
 // Shared gate-builder deps + per-window passive-firer.
 function _gateDeps(ctx) {
-  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize };
+  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize, getSquadCohesionTokens };
 }
 /**
  * Build the sequence-driver handlers for an in-flight attack. Reconstructed on
