@@ -28,6 +28,8 @@ import { isWithinN } from '../engine/utils.js';
 import { getFigureLabel } from '../engine/game-readers.js';
 import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from '../game/spatial.js';
 import { sanitizeMentions } from '../discord/channel-helpers.js';
+import { getCombatAbility } from '../engine/combat-timing-registry.js';
+import { playCC } from '../game/cc-timing.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
   setPendingIndiscriminateFire, setPendingConcussiveBolt,
@@ -1611,8 +1613,39 @@ async function fireReturnFire(thread, game, combat, effect, ctx) {
  * Effect dispatcher. Adds an entry here as each effect type's fire
  * handler lands.
  */
+/**
+ * Fire a condition-met after_resolve gate ability when its button is clicked
+ * (alexanbv 2026-06-16). Previously `gate_ability` fell through to the default
+ * no-op, so every CC/figure-ability button in the post-resolve window silently
+ * dropped its click. Now: a Command Card routes through the playCC pipeline
+ * (validate → comms-jammer → opponent-cancel → execute → dispose); a figure
+ * ability with no executable resolver yet stays a diagnostic no-op (logged).
+ */
+async function fireGateAbility(thread, game, combat, effect, ctx) {
+  const reg = getCombatAbility(effect?.payload?.abilityId);
+  const side = effect?.side === 'defender' ? 'defender' : 'attacker';
+  if (reg?.params?.kind === 'cc') {
+    const pn = side === 'attacker'
+      ? combat.attackerPlayerNum
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const fig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+    const res = await playCC(game, pn, fig, reg.params.card, { ctx });
+    if (thread) {
+      if (!res.ok) await thread.send(`⚠️ Can't play ${reg.params.card}: ${res.reason}`).catch(discordCatch);
+      else if (res.cancelled) await thread.send(`**${reg.params.card}** was cancelled (${res.cancelled}).`).catch(discordCatch);
+      else await thread.send(`**${reg.params.card}** played.`).catch(discordCatch);
+    }
+    return;
+  }
+  // Figure ability with no executable resolver yet → diagnostic no-op.
+  console.warn(`[after-attack-fire] gate_ability "${reg?.name || effect?.payload?.abilityId}" has no executable resolver; skipping`);
+}
+
 export async function fireEffect(thread, game, combat, effect, ctx) {
   switch (effect.type) {
+    case 'gate_ability':
+      await fireGateAbility(thread, game, combat, effect, ctx);
+      return;
     case 'recover':
       await fireRecover(thread, game, combat, effect, ctx);
       return;
