@@ -20,6 +20,16 @@ describe('conditionForRow: self-then-others derivation', () => {
     assert.ok(!cond({}, { attackerDcName: 'Other' }));
   });
 
+  it('a defender-side aura centers on a FRIENDLY-to-the-defender owner (not the attacker, not enemy owners)', () => {
+    // Get Down (Onar, defender-side): defender benefits iff a friendly Onar (on
+    // the defender's team) is within 2. No map → can't resolve range → not usable.
+    const cond = conditionForRow({ card: 'Onar Koma', attack_side: 'defender', affects_self: 'FALSE', affects_others: 'a small figure within 2 spaces' });
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'Stormtrooper-2-0' } };
+    // Onar only on the ATTACKER's team (player 1) → not friendly to the defender → not usable.
+    const enemyOnar = { selectedMap: { id: 'no-such-map' }, figurePositions: { 1: { 'Onar Koma-1-0': 'a1' }, 2: { 'Stormtrooper-2-0': 'a1' } } };
+    assert.equal(cond(enemyOnar, combat), false);
+  });
+
   it('ANDs the conditional-column guard (spend-token gate)', () => {
     const cond = conditionForRow({ card: 'Cara Dune', affects_self: 'TRUE', affects_others: 'None', conditional: 'after you spend a power token' });
     assert.ok(!cond({}, { attackerDcName: 'Cara Dune' }), 'self holds but no token spent → not usable');

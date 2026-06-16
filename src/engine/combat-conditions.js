@@ -11,9 +11,21 @@
 // so conditions are evaluated relative to the attacker, not the card holder.
 
 import { dcNameFromFigureKey } from '../game/index.js';
-import { getMapData, getDcEffects } from '../data-loader.js';
+import { getMapData, getDcEffects, getFigureSize } from '../data-loader.js';
 import { isWithinSpaces } from '../game/spatial.js';
+import { opponentPlayerNum } from '../game/player-helpers.js';
+import { getFootprintCells } from '../game/coords.js';
+import { getEffectiveFigureSize } from '../game/board-helpers.js';
 import { loadAbilitySpec } from './combat-ability-db.js';
+
+/** All board cells a figure occupies (footprint), lowercased. */
+function figureCells(game, pn, figureKey) {
+  const pos = game?.figurePositions?.[pn]?.[figureKey];
+  if (!pos) return [];
+  const dcName = dcNameFromFigureKey(figureKey);
+  const size = getEffectiveFigureSize(game, figureKey, dcName) || getFigureSize(dcName);
+  return getFootprintCells(pos, size).map((c) => String(c).toLowerCase());
+}
 
 /** Normalize a DC name for comparison (strip the [variant] suffix, lowercase). */
 const norm = (s) => String(s || '').replace(/\s*\[.*\]\s*$/, '').trim().toLowerCase();
@@ -21,6 +33,24 @@ const norm = (s) => String(s || '').replace(/\s*\[.*\]\s*$/, '').trim().toLowerC
 /** The attacking figure's DC name for this combat. */
 export function attackerDcName(combat) {
   return norm(combat?.attackerDcName || dcNameFromFigureKey(combat?.attackerFigureKey || ''));
+}
+
+/**
+ * The figure an ability AFFECTS / who can use it — the ATTACKER for attacker-side
+ * abilities, the DEFENDER (target) for defender-side. Auras/self are evaluated
+ * relative to THIS figure (alexanbv 2026-06-16: Get Down is defender-side, so its
+ * "within 2" centers on the defender, not the attacker).
+ */
+function affectedFigure(game, combat, side) {
+  if (side === 'defender') {
+    const pn = combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null);
+    return { pn, figureKey: combat?.target?.figureKey };
+  }
+  return { pn: combat?.attackerPlayerNum, figureKey: combat?.attackerFigureKey };
+}
+function affectedDcName(game, combat, side) {
+  if (side === 'defender') return norm(combat?.defenderDcName || dcNameFromFigureKey(combat?.target?.figureKey || ''));
+  return attackerDcName(combat);
 }
 
 /**
@@ -39,41 +69,52 @@ export function makeCondition(spec) {
     case 'always':
       return () => true;
     case 'attacker_is_self': {
+      // The AFFECTED figure (attacker for attacker-side, defender for
+      // defender-side) is a figure of the ability's card.
       const card = norm(spec.card);
-      return (game, combat) => attackerDcName(combat) === card;
+      const side = spec.side || 'attacker';
+      return (game, combat) => affectedDcName(game, combat, side) === card;
     }
     case 'spent_power_token':
       return (game, combat) => !!combat?.attackerSpentPowerToken;
-    // Aura: the ability emanates from the OWNER figure (the card's figure on the
-    // board), NOT the attacker. The attacker benefits iff it is within N spaces of
-    // an owner figure. (alexanbv 2026-06-16 "auras are relative to the figure that
-    // owns the ability".)
+    // Aura: emanates from the OWNER figure (the card's figure on the board), NOT
+    // the attacker/defender (alexanbv 2026-06-16). Usable iff ANY SQUARE of the
+    // affected figure (attacker for attacker-side abilities, defender for
+    // defender-side) is within N of ANY SQUARE of an owner figure — i.e. the
+    // affected figure is inside the owner's aura.
     case 'within_n_of_source': {
       const card = norm(spec.card);
       const n = spec.n ?? 3;
+      const side = spec.side || 'attacker';
       return (game, combat) => {
-        const pn = combat?.attackerPlayerNum;
-        const atkPos = game?.figurePositions?.[pn]?.[combat?.attackerFigureKey];
+        const aff = affectedFigure(game, combat, side);
         const mapId = game?.selectedMap?.id;
-        if (!atkPos || !mapId) return false;
+        if (!aff.figureKey || aff.pn == null || !mapId) return false;
         const mapSp = getMapData(mapId);
         if (!mapSp) return false;
-        const friendly = game.figurePositions?.[pn] || {};
-        for (const [fk, pos] of Object.entries(friendly)) {
-          if (norm(dcNameFromFigureKey(fk)) !== card) continue; // an owner figure of this ability's card
-          if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), n)) return true;
+        const affCells = figureCells(game, aff.pn, aff.figureKey);
+        if (!affCells.length) return false;
+        // Owner figures of the card on the affected figure's team (beneficial
+        // auras are friendly — owner and affected share a team).
+        const team = game.figurePositions?.[aff.pn] || {};
+        for (const fk of Object.keys(team)) {
+          if (norm(dcNameFromFigureKey(fk)) !== card) continue;
+          for (const oc of figureCells(game, aff.pn, fk)) {
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n)) return true;
+          }
         }
         return false;
       };
     }
-    // Group: the attacker is a figure of the owner's group (same deployment card).
+    // Group: the affected figure is a figure of the owner's group (same card).
     case 'in_group_of_source': {
       const card = norm(spec.card);
-      return (game, combat) => attackerDcName(combat) === card;
+      const side = spec.side || 'attacker';
+      return (game, combat) => affectedDcName(game, combat, side) === card;
     }
     // Adjacent = within 1 of an owner figure (special-case of the range aura).
     case 'adjacent_to_source':
-      return makeCondition({ type: 'within_n_of_source', card: spec.card, n: 1 });
+      return makeCondition({ type: 'within_n_of_source', card: spec.card, n: 1, side: spec.side });
     // The attacking figure has a given keyword (e.g. "friendly TROOPER" abilities).
     case 'attacker_has_keyword': {
       const kw = String(spec.keyword || '').toUpperCase();
@@ -143,14 +184,14 @@ export function limitGuard(limit, abilityKey) {
  * affects_others prose. Returns null when the others-set can't grant the attacker
  * usage (e.g. it targets enemies). One small sub-method per condition type.
  */
-function othersPredicate(affectsOthers, ownerCard) {
+function othersPredicate(affectsOthers, ownerCard, side) {
   const s = String(affectsOthers || '').toLowerCase();
   if (!s || s === 'none') return null;
   const m = s.match(/within\s+(\d+)/);
-  if (m) return makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(m[1], 10) || 3 });
-  if (s.includes('adjacent')) return makeCondition({ type: 'adjacent_to_source', card: ownerCard });
-  if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard });
-  return null; // enemy-/unmodeled-targeting others → no attacker-usability grant
+  if (m) return makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(m[1], 10) || 3, side });
+  if (s.includes('adjacent')) return makeCondition({ type: 'adjacent_to_source', card: ownerCard, side });
+  if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard, side });
+  return null; // enemy-/unmodeled-targeting others → no usability grant
 }
 
 /**
@@ -174,9 +215,10 @@ export function conditionForCard(card, timing) {
 }
 
 export function conditionForRow(row) {
+  const side = (row?.attack_side === 'defender') ? 'defender' : 'attacker';
   const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';
-  const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card }) : null;
-  const othersPred = othersPredicate(row?.affects_others, row?.card);
+  const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card, side }) : null;
+  const othersPred = othersPredicate(row?.affects_others, row?.card, side);
   const guard = conditionalGuard(row?.conditional, row?.card);
   const limit = limitGuard(row?.limit, `${row?.card}:${row?.ability}`);
   return (game, combat) => {
