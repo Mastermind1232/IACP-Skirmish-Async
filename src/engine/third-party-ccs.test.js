@@ -113,6 +113,29 @@ describe('Get Behind Me! — GUARDIAN or FORCE USER within 3 of the defender', (
   });
 });
 
+describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
+  it('Guardian Stance grants the defender a forced reroll (pool any)', () => {
+    const combat = { defenderPlayerNum: 2, attackerPlayerNum: 1 };
+    const r = applyThirdPartyCcEffect('Guardian Stance', {}, combat, 'Royal Guard (Elite)-2-1');
+    assert.equal(r.applied, true);
+    assert.deepEqual(combat.forcedRerollQueue, [{ controlPlayer: 2, pool: 'any', remaining: 1, source: 'Guardian Stance' }]);
+  });
+  it('Battlefield Awareness grants the attacker a reroll', () => {
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
+    const r = applyThirdPartyCcEffect('Battlefield Awareness', {}, combat, 'General Sorin-1-1');
+    assert.equal(r.applied, true);
+    assert.equal(combat.forcedRerollQueue[0].source, 'Battlefield Awareness');
+    assert.equal(combat.forcedRerollQueue[0].controlPlayer, 1);
+  });
+});
+
+describe('descriptor corrections', () => {
+  it('Opportunistic is SCUM, Battlefield Awareness is within 3', () => {
+    assert.equal(THIRD_PARTY_CC_SPECS['Opportunistic'].playableBy, 'SCUM');
+    assert.equal(THIRD_PARTY_CC_SPECS['Battlefield Awareness'].n, 3);
+  });
+});
+
 describe('every spec has a known window', () => {
   it('windows are on_declare / rerolls / damage_pipeline', () => {
     for (const [k, s] of Object.entries(THIRD_PARTY_CC_SPECS)) {

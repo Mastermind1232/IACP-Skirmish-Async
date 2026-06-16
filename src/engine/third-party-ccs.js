@@ -33,12 +33,12 @@ export const THIRD_PARTY_CC_SPECS = {
   'Guardian Stance':       { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'rerolls',    excludeActive: true },
   'Bodyguard':             { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'on_declare', excludeActive: true },
   'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true },
-  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: null,  window: 'rerolls',    excludeActive: false },
+  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: 3,     window: 'rerolls',    excludeActive: false },
   // Yoda (There Is No Try) can be played while attacking OR defending — two specs.
   'There Is No Try (attacker)': { side: 'attacker', playableBy: 'Yoda', from: 'attacker', n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
   'There Is No Try (defender)': { side: 'defender', playableBy: 'Yoda', from: 'target',   n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
-  // Opportunistic reacts to a hostile suffering damage — damage-pipeline timing.
-  'Opportunistic':         { side: 'attacker', playableBy: 'Any Figure',         from: 'target',  n: null,   window: 'damage_pipeline', excludeActive: false },
+  // Opportunistic (SCUM) reacts to a hostile suffering damage — damage-pipeline timing.
+  'Opportunistic':         { side: 'attacker', playableBy: 'SCUM',               from: 'target',  n: null,   window: 'damage_pipeline', excludeActive: false },
 };
 
 /** Is this card a third-party-figure CC (handled by this module, not plain playCC)? */
@@ -162,5 +162,29 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
     // board position (affects ranged accuracy).
     return { applied: true, log, reopenDefenderOnDeclare: true };
   }
+  if (specKey === 'Guardian Stance') {
+    // The chosen guardian lets the DEFENDER reroll attack or defense dice. Push
+    // forced-reroll grants (pool 'any') the rerolls step consumes — mirrors the
+    // legacy Guardian Stance ccEffect (abilities.js). "1 or more" → grant 1 here;
+    // the rerolls step lets the player choose which die.
+    const pn = combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null);
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({ controlPlayer: pn, pool: 'any', remaining: 1, source: 'Guardian Stance' });
+    log.push('defender may reroll 1 attack or defense die');
+    return { applied: true, log };
+  }
+  if (specKey.startsWith('Battlefield Awareness')) {
+    // LEADER: reroll 1 die rolled by a friendly within 3. Grant the attacker
+    // (the rolling side) one reroll of any die.
+    combat.forcedRerollQueue = combat.forcedRerollQueue || [];
+    combat.forcedRerollQueue.push({ controlPlayer: combat?.attackerPlayerNum, pool: 'any', remaining: 1, source: 'Battlefield Awareness' });
+    log.push('reroll 1 die rolled by a friendly within 3');
+    return { applied: true, log };
+  }
+  // There Is No Try (Yoda) — turn 1 die to any side + convert Dodge→2 Blocks+1
+  // Evade on that die. Needs the die-turn picker (a face-set, not a reroll) plus
+  // the special dodge conversion; wired next via the die-turn machinery.
+  // Opportunistic (SCUM) — gain 3 MP for the playing figure; a damage-pipeline
+  // reaction (not a combat-gate die effect), wired with the MP grant next.
   return { applied: false, log: [`${specKey} effect not yet wired`] };
 }
