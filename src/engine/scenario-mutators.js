@@ -11,7 +11,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { setActivatedDcIndices, recomputeActivationCounts } from '../game/player-helpers.js';
 import { fetchGameChannel, snowflakeUsers, sanitizeMentions } from '../discord/channel-helpers.js';
-import { sendOnDeclareYn } from '../handlers/combat.js';
+import { runAttackSequence } from '../handlers/combat.js';
 
 // ── Error class ──────────────────────────────────────────────────────────────
 
@@ -259,8 +259,9 @@ async function mutateToCombat(game, client, deps, userId) {
     content: `**Pre-combat window** — <@${game.player1Id}> (attacker: **${attackerDcName}**) vs <@${game.player2Id}> (defender: **${defenderDcName}**)\nResolve any Command Cards / power tokens via the prompts below, then click **Ready**.`,
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   });
-  // Per alexanbv 2026-05-12: sequential Y/N matches step-4 sendModsYn UX.
-  await sendOnDeclareYn(generalChannel, game, game.pendingCombat, 'attacker');
+  // Gate cutover (alexanbv 2026-06-16): the dev mid_combat scenario launches the
+  // gate sequence like every live attack (was the legacy sendOnDeclareYn chain).
+  await runAttackSequence(generalChannel, game, game.pendingCombat, deps);
 
   await updatePlayAreaDcButtons(game, client);
   saveGames(game.gameId);
