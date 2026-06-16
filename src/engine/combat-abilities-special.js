@@ -12,6 +12,7 @@
 
 import { getDcEffects as _getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { getPlayerCardNames } from './combat-ability-db.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
 const D = (deps, name, fallback) => (deps && deps[name]) || fallback;
@@ -29,5 +30,16 @@ registerCombatAbility({
     if (combat.lasatHonorGuardUsed || !(combat.attackDiceResults?.length > 0) || !combat.attackerFigureKey) return false;
     if (!ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('lasat_honor_guard')) return false;
     return combat.attackDiceResults.some((d) => ((d.dmg || 0) + (d.surge || 0)) === 1);
+  },
+});
+
+// Rapid Recalibration (CC): turn one attack die to any side — SAME special window
+// as Zeb (after ALL rerolls, before mods; alexanbv 2026-06-16). Offered while the
+// attacker's player holds the card and dice have been rolled.
+registerCombatAbility({
+  id: 'rapid_recalibration', name: 'Rapid Recalibration', windows: ['special'], side: 'attacker', kind: 'interactive',
+  applies: (game, combat) => {
+    if (!(combat.attackDiceResults?.length > 0) || !combat.attackerPlayerNum) return false;
+    return getPlayerCardNames(game, combat.attackerPlayerNum).some((n) => String(n).toLowerCase() === '[rapid recalibration]');
   },
 });

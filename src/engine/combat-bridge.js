@@ -52,6 +52,7 @@ import { getLoadoutCards as _getLoadoutCardsImpl } from '../data-loader.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import {
   enqueueAttackerStep8Effects as _enqueueAttackerStep8Effects,
+  enqueueAfterResolveGateAbilities as _enqueueAfterResolveGateAbilities,
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -2232,6 +2233,11 @@ async function _runOrDeferAfterResolve(thread, game, combat, { resultText, embed
  */
 export async function runAfterResolveWindow(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
   const { checkPostCombatSurges: _checkPostCombatSurges, finishCombatResolution: _finishCombatResolution } = deps;
+  // after_resolve builds from TWO components (alexanbv 2026-06-16): (1) the
+  // condition gate — every after_resolve ability whose condition is met; then
+  // (2) the keyword effects accumulated from mods + surges (Blast/Cleave/Recover/
+  // conditions). Both land in the same post-resolve menu, resolved in player order.
+  _enqueueAfterResolveGateAbilities(combat, game, deps);
   _enqueueAttackerStep8Effects(combat);
   // Per-DC atk-side effects (Slippery's atk-side cousin Leg Hydraulics
   // and the rest as they migrate). Reads combat.attackerDcName +

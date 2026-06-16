@@ -36,6 +36,26 @@ import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame } from '../utils/guards.js';
 import { fireEffect } from './after-attack-fire.js';
+import { abilitiesForWindow } from '../engine/combat-timing-registry.js';
+
+/**
+ * Component 1 of the after_resolve menu (alexanbv 2026-06-16: "after resolves
+ * needs to build from two components: first, reading the condition gate"):
+ * enqueue every after_resolve ability whose condition is met (abilitiesForWindow
+ * runs conditionForRow) as a button, attacker then defender, so they appear in
+ * the same post-resolve menu as the accumulated keyword effects (component 2).
+ * Unwired effects → fireEffect's default no-op (a diagnostic button).
+ */
+export function enqueueAfterResolveGateAbilities(combat, game, deps = {}) {
+  if (!combat) return;
+  for (const side of ['attacker', 'defender']) {
+    for (const a of abilitiesForWindow('after_resolve', side, game, combat, deps)) {
+      enqueueAfterAttackEffect(combat, {
+        side, type: 'gate_ability', label: a.name, payload: { abilityId: a.id },
+      });
+    }
+  }
+}
 
 /**
  * Enqueue all step-8 effects pending for the attacker side based on
