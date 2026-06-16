@@ -861,7 +861,7 @@ export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
  * check, or { ok:true, result, disposedTo, cancelled? }.
  */
 export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
-  const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo } = opts;
+  const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo, skipExecute = false } = opts;
   // 1. validate — comms jammer handled here as a play-time cancel, not a pre-block
   const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, ignoreCommsJammer: true });
   if (!check.ok) return check;
@@ -889,9 +889,10 @@ export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
     }
   }
 
-  // 4. execute the card's ability
+  // 4. execute the card's ability (skipExecute → caller applies a bespoke combat
+  // effect itself, e.g. third-party CCs that act on a chosen non-attacker figure).
   let result = null;
-  if (typeof ctx.resolveAbility === 'function') {
+  if (!skipExecute && typeof ctx.resolveAbility === 'function') {
     result = await ctx.resolveAbility(abilityId, { game, playerNum, cardName, figureKey, combat: game.combat || game.pendingCombat });
   }
 

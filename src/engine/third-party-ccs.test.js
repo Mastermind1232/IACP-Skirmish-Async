@@ -2,7 +2,27 @@
 // the attacker/defender) that can legally play a reaction CC for the current attack.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { eligibleThirdPartyCcFigures, isThirdPartyCc, thirdPartyCardName, THIRD_PARTY_CC_SPECS } from './third-party-ccs.js';
+import { eligibleThirdPartyCcFigures, isThirdPartyCc, thirdPartyCardName, THIRD_PARTY_CC_SPECS, applyThirdPartyCcEffect } from './third-party-ccs.js';
+
+describe('applyThirdPartyCcEffect — Concentrated Fire', () => {
+  const deps = (stun) => ({
+    applyCondition: (g, fk, c) => stun.push([fk, c]),
+    getDcEffects: () => ({ Stormtrooper: { attack: { type: 'range' } }, 'Royal Guard (Elite)': { attack: { type: 'melee' } } }),
+  });
+  it('Ranged playing figure → +1 red die to the pool AND Stun', () => {
+    const stun = []; const combat = { attackInfo: { dice: ['green', 'green'] } };
+    const r = applyThirdPartyCcEffect('Concentrated Fire', {}, combat, 'Stormtrooper-1-1', deps(stun));
+    assert.equal(r.applied, true);
+    assert.deepEqual(combat.attackInfo.dice, ['green', 'green', 'red']);
+    assert.deepEqual(stun, [['Stormtrooper-1-1', 'Stun']]);
+  });
+  it('non-Ranged playing figure → Stun only, no die added', () => {
+    const stun = []; const combat = { attackInfo: { dice: ['blue'] } };
+    applyThirdPartyCcEffect('Concentrated Fire', {}, combat, 'Royal Guard (Elite)-1-2', deps(stun));
+    assert.deepEqual(combat.attackInfo.dice, ['blue']);
+    assert.deepEqual(stun, [['Royal Guard (Elite)-1-2', 'Stun']]);
+  });
+});
 
 // Mock adjacency map: b2<->b3 adjacent, p15 far away.
 const mapDeps = { getMapData: () => ({ adjacency: { b2: ['b3'], b3: ['b2', 'b4'], b4: ['b3'] } }) };

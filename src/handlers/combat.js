@@ -224,6 +224,7 @@ import {
 } from '../game/player-helpers.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
+import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1134,11 +1135,48 @@ function _resolverForAbilityName(ability) {
   const key = _RESOLVER_ALIAS[lc] || lc.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return COMBAT_RESOLVERS[key] || null;
 }
+/**
+ * Resolver for a third-party-figure CC (alexanbv 2026-06-16): the figure that
+ * plays it isn't the attacker/defender, so the player first picks WHICH eligible
+ * friendly figure plays it (stage 1 prompt → buttons indexed into the eligible
+ * list), then playCC validates+disposes for that figure and the card's bespoke
+ * combat effect is applied (stage 2 apply).
+ */
+function _makeThirdPartyCcResolver({ specKey, card }) {
+  const _label = (fk) => {
+    const base = dcNameFromFigureKey(fk);
+    const tail = String(fk).split('-').slice(-2).join('-');
+    return `${base} (${tail})`.slice(0, 80);
+  };
+  return {
+    prompt: ({ game, combat, ctx }) => {
+      const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
+      if (!figs.length) return null;
+      return { content: `**${card}** — choose which figure plays it:`, buttons: figs.map((fk, i) => [String(i), _label(fk)]) };
+    },
+    apply: async (choice, { game, combat, thread, ctx, side }) => {
+      const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
+      const fk = figs[parseInt(choice, 10)] ?? figs[0];
+      if (!fk) return;
+      const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+      // Validate + dispose via playCC, but apply the combat effect ourselves
+      // (it acts on the chosen figure, which resolveAbility doesn't know about).
+      await playCC(game, pn, fk, card, { ctx, skipExecute: true });
+      const { applyCondition } = await import('../game/conditions.js');
+      const res = applyThirdPartyCcEffect(specKey, game, combat, fk, { applyCondition });
+      if (thread) await thread.send(`**${card}** played by ${_label(fk)}${res.log?.length ? ` — ${res.log.join(', ')}` : ''}.`).catch(discordCatch);
+    },
+  };
+}
+
 function _resolverFor(pick) {
   if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
   const reg = getCombatAbility(pick);
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+  }
+  if (reg?.params?.kind === 'third_party_cc') {
+    return _makeThirdPartyCcResolver({ specKey: reg.params.specKey, card: reg.params.card || thirdPartyCardName(reg.params.specKey) });
   }
   // Data-driven ability (csv:<card>:<window>:<side>): reference its specialized
   // effect resolver by ability name (Destruct's "resolver per ability, referenced

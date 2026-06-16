@@ -14,7 +14,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { figureMatchesCcRestriction } from '../game/cc-timing.js';
 import { isWithinN } from './utils.js';
-import { getMapData as _getMapData } from '../data-loader.js';
+import { getMapData as _getMapData, getDcEffects as _getDcEffects } from '../data-loader.js';
 
 /**
  * Descriptor per third-party CC:
@@ -92,4 +92,36 @@ export function eligibleThirdPartyCcFigures(game, specKey, combat, deps = {}) {
 /** The actual CC name to play (specKey may be a side-qualified alias, e.g. Yoda). */
 export function thirdPartyCardName(specKey) {
   return THIRD_PARTY_CC_SPECS[specKey]?.cardName || specKey;
+}
+
+/**
+ * Apply a third-party CC's bespoke combat effect for the figure that played it
+ * (alexanbv 2026-06-16). Each card acts on the CHOSEN figure / the combat, not the
+ * attacker/defender. `deps.applyCondition(game, figureKey, cond)` is injected to
+ * avoid a cycle with game/conditions.js. Returns { applied, log }.
+ *   - Concentrated Fire: if the playing figure has the Ranged attack type, add 1
+ *     red die to the attack pool; the playing figure becomes Stunned.
+ * Target-switch / reroll cards (Bodyguard, Get Behind Me, Guardian Stance, …) are
+ * stubbed with a diagnostic log until each is wired.
+ */
+export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps = {}) {
+  const getDcEffects = deps.getDcEffects || _getDcEffects;
+  const applyCondition = deps.applyCondition;
+  const log = [];
+  if (specKey === 'Concentrated Fire') {
+    const dcName = dcNameFromFigureKey(figureKey);
+    const all = getDcEffects?.() || {};
+    const eff = all[dcName] || all[String(dcName || '').replace(/\s*\(.*\)\s*$/, '').trim()];
+    const isRanged = String(eff?.attack?.type || '').toLowerCase() === 'range';
+    if (isRanged && Array.isArray(combat?.attackInfo?.dice)) {
+      combat.attackInfo.dice.push('red');
+      log.push('+1 red die (Ranged)');
+    }
+    if (typeof applyCondition === 'function' && figureKey) {
+      applyCondition(game, figureKey, 'Stun');
+      log.push('playing figure Stunned');
+    }
+    return { applied: true, log };
+  }
+  return { applied: false, log: [`${specKey} effect not yet wired`] };
 }
