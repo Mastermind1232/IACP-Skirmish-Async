@@ -52,6 +52,14 @@ function affectedDcName(game, combat, side) {
   if (side === 'defender') return norm(combat?.defenderDcName || dcNameFromFigureKey(combat?.target?.figureKey || ''));
   return attackerDcName(combat);
 }
+/** Keywords (UPPERCASE) of the affected figure (attacker or defender per side). */
+function affectedKeywords(game, combat, side) {
+  const fk = affectedFigure(game, combat, side).figureKey;
+  const raw = side === 'defender' ? (combat?.defenderDcName || dcNameFromFigureKey(fk || '')) : (combat?.attackerDcName || dcNameFromFigureKey(fk || ''));
+  const all = getDcEffects() || {};
+  const e = all[raw] || all[norm(raw)];
+  return (e?.keywords || []).map((k) => String(k).toUpperCase());
+}
 
 /**
  * Build a condition predicate `(game, combat) => boolean` from a spec
@@ -126,6 +134,20 @@ export function makeCondition(spec) {
     // A token was spent on this attack (any), or a specific type.
     case 'spent_any_token':
       return (game, combat) => !!(combat?.attackerSpentPowerToken || combat?.attackerSpentToken || combat?.spentTokenThisAttack);
+    // The AFFECTED figure has a given keyword ("friendly TROOPER within N", etc.).
+    case 'affected_has_keyword': {
+      const kw = String(spec.keyword || '').toUpperCase();
+      const side = spec.side || 'attacker';
+      return (game, combat) => affectedKeywords(game, combat, side).includes(kw);
+    }
+    // The AFFECTED figure is SMALL — i.e. not LARGE/MASSIVE ("a small figure within N").
+    case 'affected_is_small': {
+      const side = spec.side || 'attacker';
+      return (game, combat) => {
+        const kws = affectedKeywords(game, combat, side);
+        return !kws.includes('LARGE') && !kws.includes('MASSIVE');
+      };
+    }
     default:
       return () => true;
   }
@@ -184,12 +206,28 @@ export function limitGuard(limit, abilityKey) {
  * affects_others prose. Returns null when the others-set can't grant the attacker
  * usage (e.g. it targets enemies). One small sub-method per condition type.
  */
+/** Keyword/size constraint on the AFFECTED figure from affects_others prose, or null. */
+function affectedFilter(s, side) {
+  if (/\bsmall\b/.test(s)) return makeCondition({ type: 'affected_is_small', side });
+  for (const kw of ['trooper', 'droid', 'vehicle', 'mobile', 'wookiee', 'hunter', 'leader', 'spy', 'brawler', 'guardian', 'creature', 'smuggler']) {
+    if (new RegExp(`\\b${kw}\\b`).test(s)) return makeCondition({ type: 'affected_has_keyword', keyword: kw.toUpperCase(), side });
+  }
+  return null;
+}
+
 function othersPredicate(affectsOthers, ownerCard, side) {
   const s = String(affectsOthers || '').toLowerCase();
   if (!s || s === 'none') return null;
-  const m = s.match(/within\s+(\d+)/);
-  if (m) return makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(m[1], 10) || 3, side });
-  if (s.includes('adjacent')) return makeCondition({ type: 'adjacent_to_source', card: ownerCard, side });
+  const wm = s.match(/within\s+(\d+)/);
+  const range = wm
+    ? makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(wm[1], 10) || 3, side })
+    : (s.includes('adjacent') ? makeCondition({ type: 'adjacent_to_source', card: ownerCard, side }) : null);
+  if (range) {
+    // AND the affected-figure keyword/size filter ("a small figure within 2",
+    // "friendly TROOPER within N") so the aura only grants to matching figures.
+    const filter = affectedFilter(s, side);
+    return filter ? (game, combat) => range(game, combat) && filter(game, combat) : range;
+  }
   if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard, side });
   return null; // enemy-/unmodeled-targeting others → no usability grant
 }
