@@ -34,6 +34,10 @@ export function registerRerollAbilities() {
       const side = (r.attack_side === 'attacker' || r.attack_side === 'defender') ? r.attack_side : null;
       if (!side) continue;
       const card = r.card;
+      // Rapid Recalibration is a die-SWITCH (set a face), not a reroll — it's
+      // registered as a die-turn in combat-abilities-special.js. Skip it here so
+      // the reroll resolver doesn't shadow the die-turn one (alexanbv 2026-06-16).
+      if (card === 'Rapid Recalibration') continue;
       const id = `reroll:${slug(card)}:${side}`;
       if (seen.has(id)) continue; // dedup multi-part rows for the same card+side
       seen.add(id);

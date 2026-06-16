@@ -13,6 +13,7 @@
 import { getDcEffects as _getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getPlayerCardNames } from './combat-ability-db.js';
+import { getCcHand } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
 const D = (deps, name, fallback) => (deps && deps[name]) || fallback;
@@ -44,6 +45,8 @@ registerCombatAbility({
   id: 'rapid_recalibration', name: 'Rapid Recalibration', windows: ['rerolls'], side: 'attacker', kind: 'interactive',
   applies: (game, combat) => {
     if (!(combat.attackDiceResults?.length > 0) || !combat.attackerPlayerNum) return false;
-    return getPlayerCardNames(game, combat.attackerPlayerNum).some((n) => String(n).toLowerCase() === '[rapid recalibration]');
+    // Played from the attacker's HAND (the card is 'Rapid Recalibration', not the
+    // bracketed deck name the old check looked for) (alexanbv 2026-06-16 re-audit).
+    return (getCcHand(game, combat.attackerPlayerNum) || []).some((n) => String(n).toLowerCase() === 'rapid recalibration');
   },
 });
