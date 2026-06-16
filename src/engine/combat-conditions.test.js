@@ -1,6 +1,25 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCondition, attackerDcName } from './combat-conditions.js';
+import { makeCondition, attackerDcName, conditionForRow } from './combat-conditions.js';
+
+describe('conditionForRow: self-then-others derivation', () => {
+  it('affects_self=TRUE, affects_others=None → attacker_is_self', () => {
+    const cond = conditionForRow({ card: 'Cara Dune', affects_self: 'TRUE', affects_others: 'None' });
+    assert.ok(cond({}, { attackerDcName: 'Cara Dune' }), 'owner attacking → usable');
+    assert.ok(!cond({}, { attackerDcName: 'Greedo' }), 'different attacker → not usable');
+  });
+
+  it('affects_self=FALSE, affects_others=None → not usable (no self, no others grant)', () => {
+    const cond = conditionForRow({ card: 'X', affects_self: 'FALSE', affects_others: 'None' });
+    assert.ok(!cond({}, { attackerDcName: 'X' }));
+  });
+
+  it('affects_others="figures in this group" → in_group_of_source (attacker in the owner group)', () => {
+    const cond = conditionForRow({ card: 'Targeting Computer', affects_self: 'FALSE', affects_others: 'figures in this group' });
+    assert.ok(cond({}, { attackerDcName: 'Targeting Computer' }), 'attacker in the owner group → usable');
+    assert.ok(!cond({}, { attackerDcName: 'Other' }));
+  });
+});
 
 describe('combat-conditions: the condition-predicate layer', () => {
   it('attacker_is_self matches the attacking figure DC, variant-insensitive', () => {

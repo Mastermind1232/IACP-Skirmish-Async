@@ -14,7 +14,7 @@ import { loadAbilitySpec, getPlayerCardNames } from './combat-ability-db.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
-import { makeCondition } from './combat-conditions.js';
+import { conditionForRow } from './combat-conditions.js';
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -41,12 +41,13 @@ export function registerRerollAbilities() {
       seen.add(id);
       const pool = side === 'attacker' ? 'attack' : 'defense';
       const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || '') };
-      // CONDITION (alexanbv 2026-06-16 "even generic rr have a condition — the
-      // figure with that ability has to be the one attacking"). DC ability →
-      // attacker_is_self (the figure rerolls its OWN attack); CC/attachment/upgrade
-      // → card-presence (interim, until aura/token/exhaust conditions graduate).
+      // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
+      // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
+      // derived from affects_self / affects_others. CC/attachment/upgrade rerolls
+      // stay on interim card-presence until their conditions (attachment target,
+      // token, exhaust) are encoded.
       const isDC = r.card_type === 'DC';
-      const selfCond = isDC ? makeCondition({ type: 'attacker_is_self', card }) : null;
+      const rowCond = isDC ? conditionForRow(r) : null;
       const cardLc = card.toLowerCase();
       registerCombatAbility({
         id, name: card, windows: ['rerolls'], side, kind: 'interactive', params,
@@ -55,10 +56,10 @@ export function registerRerollAbilities() {
             ? combat.attackerPlayerNum
             : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
           if (!pn) return false;
-          if (isDC) {
-            // The ability's figure must be the one attacking — NOT merely "the
-            // player holds the card" (a different figure can't use it).
-            if (!selfCond(game, combat)) return false;
+          if (rowCond) {
+            // The ability's figure (or owner-aura) must include the attacker —
+            // NOT merely "the player holds the card."
+            if (!rowCond(game, combat)) return false;
           } else if (!getPlayerCardNames(game, pn).some((n) => String(n).toLowerCase() === cardLc)) {
             return false;
           }

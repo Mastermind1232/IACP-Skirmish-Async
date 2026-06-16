@@ -11,6 +11,8 @@
 // so conditions are evaluated relative to the attacker, not the card holder.
 
 import { dcNameFromFigureKey } from '../game/index.js';
+import { getMapData } from '../data-loader.js';
+import { isWithinSpaces } from '../game/spatial.js';
 
 /** Normalize a DC name for comparison (strip the [variant] suffix, lowercase). */
 const norm = (s) => String(s || '').replace(/\s*\[.*\]\s*$/, '').trim().toLowerCase();
@@ -41,7 +43,68 @@ export function makeCondition(spec) {
     }
     case 'spent_power_token':
       return (game, combat) => !!combat?.attackerSpentPowerToken;
+    // Aura: the ability emanates from the OWNER figure (the card's figure on the
+    // board), NOT the attacker. The attacker benefits iff it is within N spaces of
+    // an owner figure. (alexanbv 2026-06-16 "auras are relative to the figure that
+    // owns the ability".)
+    case 'within_n_of_source': {
+      const card = norm(spec.card);
+      const n = spec.n ?? 3;
+      return (game, combat) => {
+        const pn = combat?.attackerPlayerNum;
+        const atkPos = game?.figurePositions?.[pn]?.[combat?.attackerFigureKey];
+        const mapId = game?.selectedMap?.id;
+        if (!atkPos || !mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const friendly = game.figurePositions?.[pn] || {};
+        for (const [fk, pos] of Object.entries(friendly)) {
+          if (norm(dcNameFromFigureKey(fk)) !== card) continue; // an owner figure of this ability's card
+          if (isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), n)) return true;
+        }
+        return false;
+      };
+    }
+    // Group: the attacker is a figure of the owner's group (same deployment card).
+    case 'in_group_of_source': {
+      const card = norm(spec.card);
+      return (game, combat) => attackerDcName(combat) === card;
+    }
     default:
       return () => true;
   }
+}
+
+/**
+ * Sub-method for the "others" axis: a predicate for whether the ATTACKER is in an
+ * ability's affects_others set, derived (owner-centric) from the CSV
+ * affects_others prose. Returns null when the others-set can't grant the attacker
+ * usage (e.g. it targets enemies). One small sub-method per condition type.
+ */
+function othersPredicate(affectsOthers, ownerCard) {
+  const s = String(affectsOthers || '').toLowerCase();
+  if (!s || s === 'none') return null;
+  const m = s.match(/within\s+(\d+)/);
+  if (m) return makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(m[1], 10) || 3 });
+  if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard });
+  return null; // enemy-/unmodeled-targeting others → no attacker-usability grant
+}
+
+/**
+ * Build an ability's usability condition from a CSV row in the recommended order:
+ * check "self" FIRST (affects_self → the attacker is the owner) THEN "others"
+ * (affects_others → the attacker is in the owner-centric affected set). Usable iff
+ * either holds — so one self-method + a few others-sub-methods covers self-only /
+ * others-only / both, instead of N×M combined functions (alexanbv 2026-06-16).
+ * Reusable at EVERY timing instance, not just combat.
+ */
+export function conditionForRow(row) {
+  const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';
+  const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card }) : null;
+  const othersPred = othersPredicate(row?.affects_others, row?.card);
+  return (game, combat) => {
+    if (selfPred && selfPred(game, combat)) return true; // self first
+    if (othersPred && othersPred(game, combat)) return true; // then others
+    return false;
+  };
 }
