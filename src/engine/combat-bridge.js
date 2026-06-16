@@ -932,20 +932,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
         }
       }
-      // Fury of Kashyyyk (army-wide): when a friendly WOOKIEE suffers 3+ damage, become Focused
-      if (damage >= 3 && newCur > 0) {
-        const _fokDefDcList = getDcList(game, defenderPlayerNum) || [];
-        const _fokHasFury = _fokDefDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
-        if (_fokHasFury) {
-          const _fokTargetName = dcNameFromFigureKey(combat.target.figureKey);
-          const _fokTargetKws = (getDcKeywords(game)[_fokTargetName] || []).map(k => String(k).toUpperCase());
-          if (_fokTargetKws.includes('WOOKIEE')) {
-            if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
-              await logGameAction(game, client, `**Fury of Kashyyyk** — **${_fokTargetName}** became **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
-            }
-          }
-        }
-      }
+      // Fury of Kashyyyk Focus-on-damage — REMOVED 2026-06-16 (alexanbv: "Focus
+      // upon damage is a when-damaged effect"). It is the WHEN_DAMAGED hook
+      // 'fury_of_kashyyyk' (damage-pipeline-hooks.js), which already fired during
+      // the main applyDamage call; this inline copy was a redundant duplicate.
       } // end !_epReentry guard for post-damage effects
       // Guerrilla — handled below in the post-defeat block (line ~1270) via
       // specialAbilityIds. Earlier abilityText fuzzy-match removed 2026-05-06

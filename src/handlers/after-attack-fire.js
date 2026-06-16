@@ -109,20 +109,10 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     const { dcList: bDcList, idx: bIdx } = lookupFigureDcIndex(game, playerNum, figureKey, {
       dcMessageMeta, getDcMessageIds, getDcList,
     });
-    // Fury of Kashyyyk (army-wide passive on a CC): friendly WOOKIEE
-    // suffering 3+ damage becomes Focused.
-    if (amount >= 3 && newHp > 0) {
-      const fokDcList = getDcList(game, playerNum) || [];
-      if (fokDcList.some((dc) => dc.dcName === '[Fury of Kashyyyk]')) {
-        const fokName = dcNameFromFigureKey(figureKey);
-        const fokKws = (getDcKeywords(game)[fokName] || []).map((k) => String(k).toUpperCase());
-        if (fokKws.includes('WOOKIEE') && applyCondition(game, figureKey, 'Focus')) {
-          if (logGameAction) {
-            await logGameAction(game, client, `**Fury of Kashyyyk** — **${fokName}** became **Focused** (suffered ${amount} Blast Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-          }
-        }
-      }
-    }
+    // Fury of Kashyyyk Focus-on-damage — REMOVED 2026-06-16 (it's a when-damaged
+    // effect handled by the 'fury_of_kashyyyk' WHEN_DAMAGED hook, which fires for
+    // these blast victims via the applyDamage call above — controllerPlayerNum is
+    // passed). This inline copy was a redundant duplicate.
     if (wasDefeated) {
       const blastLabel = bDcList[bIdx]?.displayName || figureKey;
       const blastDcName = bDcList[bIdx]?.dcName;
