@@ -3,8 +3,8 @@
  * Uses game state to derive play context and cc-effects timing field.
  */
 import { getCcEffect, getDcKeywords, getDcEffects, getFigureSize, isDcUnique } from '../data-loader.js';
-import { getDcBaseName } from './dc-helpers.js';
-import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, opponentPlayerNum } from './player-helpers.js';
+import { getDcBaseName, dcNameFromFigureKey } from './dc-helpers.js';
+import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, ccDiscardKey, ccHandKey, opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 import { getUniqueFigureCcEntry } from './unique-figure-ccs.js';
@@ -763,4 +763,95 @@ function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
     }
   }
   return [trait];
+}
+
+/**
+ * Validation half of the playCC pipeline (alexanbv 2026-06-16): can THIS figure
+ * play THIS card at the current timing instance? Triggerable from a combat-gate
+ * button or a player-area "play CC" button (after the player picks a figure).
+ * Returns { ok: true } or { ok: false, reason }. The four checks:
+ *  1. the card is IN HAND — unless opts.allowNotInHand (Aphra excavation, Ezra,
+ *     Data Theft, and other "play a CC not in hand" abilities set this);
+ *  2. the figure playing it is a VALID figure for the card (playableBy — unique
+ *     name / faction / trait / size / unique), via figureMatchesCcRestriction;
+ *  3. the player/figure is NOT restricted from playing CCs (Mak's Critical Hit,
+ *     Shadow Ops, Comms Jammer) — handled inside isCcPlayableNow;
+ *  4. the card's TIMING matches the current instance (isCcPlayableNow against the
+ *     live game context); CCs that aren't timing-restricted still pass there.
+ * Execution (running the card's effect + discard) is a separate step.
+ */
+export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
+  const { allowNotInHand = false, getEffect = getCcEffect } = opts;
+  const effect = getEffect(cardName);
+  if (!effect) return { ok: false, reason: `Unknown command card "${cardName}".` };
+  // 1. in hand (or an exception ability is supplying it)
+  if (!allowNotInHand && !(getCcHand(game, playerNum) || []).includes(cardName)) {
+    return { ok: false, reason: `${cardName} is not in your hand.` };
+  }
+  // 2. the chosen figure satisfies the card's playableBy restriction
+  const dcName = dcNameFromFigureKey(figureKey || '');
+  if (!figureMatchesCcRestriction(game, dcName, dcName, (effect.playableBy || '').trim())) {
+    return { ok: false, reason: `${dcName || 'that figure'} can't play ${cardName} (playable by: ${effect.playableBy}).` };
+  }
+  // 3 + 4. player not blocked from CCs AND timing matches the current instance
+  if (!isCcPlayableNow(game, playerNum, cardName, getEffect)) {
+    return { ok: false, reason: `${cardName} can't be played right now (timing or a play-restriction).` };
+  }
+  return { ok: true };
+}
+
+/**
+ * True if a played Command Card is removed to the GAME BOX instead of the
+ * owner's discard pile (alexanbv 2026-06-16: "send the played CC to the player's
+ * discard, with the exception of abilities/cards that say gamebox like Aphra,
+ * YWNDM"). Detected from the card effect text ("game box"); a caller may also
+ * force it via opts.removeTo (e.g. an Aphra-excavated card removed after use).
+ */
+export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
+  const eff = getEffect(cardName);
+  return /game\s*box/i.test(String(eff?.effect || ''));
+}
+
+/**
+ * Full playCC pipeline (alexanbv 2026-06-16). Validates via canPlayCC, executes
+ * the card's ability (through the caller-injected ctx.resolveAbility, to avoid an
+ * import cycle with abilities.js), then disposes the card: to the player's DISCARD
+ * by default, or to the GAME BOX for cards that say so (YWNDM, Fool Me Once,
+ * Aphra-excavated → pass opts.removeTo:'gamebox'). opts.removeTo:'none' leaves the
+ * card where it is (for cards that relocate themselves, e.g. placed on a DC).
+ * Returns { ok:false, reason } on a failed check, else { ok:true, result, disposedTo }.
+ */
+export function playCC(game, playerNum, figureKey, cardName, opts = {}) {
+  const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo } = opts;
+  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect });
+  if (!check.ok) return check;
+
+  // Execute the card's ability. resolveAbility may return { requiresChoice, ... }
+  // which the Discord-facing caller surfaces; the card is still considered played.
+  const effect = getEffect(cardName);
+  const abilityId = effect?.abilityId ?? cardName;
+  let result = null;
+  if (typeof ctx.resolveAbility === 'function') {
+    result = ctx.resolveAbility(abilityId, { game, playerNum, cardName, figureKey, combat: game.combat || game.pendingCombat });
+  }
+
+  // Remove the card from hand (if it came from hand).
+  if (!allowNotInHand) {
+    const hand = game[ccHandKey(playerNum)] || [];
+    const i = hand.indexOf(cardName);
+    if (i >= 0) hand.splice(i, 1);
+  }
+
+  // Dispose: discard by default; game box for gamebox cards / forced removeTo.
+  const dest = removeTo || (ccRemovesToGameBox(cardName, getEffect) ? 'gamebox' : 'discard');
+  if (dest === 'gamebox') {
+    game.gameBox = game.gameBox || [];
+    game.gameBox.push(cardName);
+  } else if (dest === 'discard') {
+    const dk = ccDiscardKey(playerNum);
+    game[dk] = game[dk] || [];
+    game[dk].push(cardName);
+  } // 'none' → the card relocated itself (e.g. placed on a Deployment card)
+
+  return { ok: true, result, disposedTo: dest };
 }

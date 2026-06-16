@@ -325,3 +325,78 @@ describe('isCcPlayLegalByRestriction', () => {
     assert.strictEqual(r.legal, true);
   });
 });
+
+// --- canPlayCC / playCC pipeline (alexanbv 2026-06-16) ---
+import { canPlayCC, playCC, ccRemovesToGameBox } from './cc-timing.js';
+
+const _ccGame = () => ({
+  pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
+  currentRound: 1,
+  player1CcHand: ['Wild Attack', 'Tools for the Job'],
+  player2CcHand: ['Stealth Tactics'],
+  figurePositions: {
+    1: { 'HK Assassin Droid (Elite)-1-0': 'a1', 'Stormtrooper-1-1': 'a2' },
+    2: { 'Darth Vader-2-0': 'b1' },
+  },
+});
+
+describe('canPlayCC — the four play checks', () => {
+  it('ok when in hand + valid figure + not restricted + timing matches', () => {
+    assert.deepEqual(canPlayCC(_ccGame(), 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack'), { ok: true });
+  });
+  it('fails when the card is not in hand', () => {
+    const r = canPlayCC(_ccGame(), 1, 'HK Assassin Droid (Elite)-1-0', 'Marksman');
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /not in your hand/);
+  });
+  it('fails when the figure does not satisfy playableBy (Stormtrooper is not a HUNTER/SMUGGLER)', () => {
+    const r = canPlayCC(_ccGame(), 1, 'Stormtrooper-1-1', 'Tools for the Job');
+    assert.equal(r.ok, false);
+    assert.match(r.reason, /can't play/);
+  });
+  it('fails when the player is blocked from CCs (Mak Critical Hit)', () => {
+    const g = _ccGame(); g.criticalHitBlockedPlayer = 1;
+    assert.equal(canPlayCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack').ok, false);
+  });
+  it('allowNotInHand bypasses the in-hand check (Aphra/Ezra/Data Theft)', () => {
+    const g = _ccGame(); g.player1CcHand = [];
+    assert.equal(canPlayCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', { allowNotInHand: true }).ok, true);
+  });
+});
+
+describe('ccRemovesToGameBox', () => {
+  it('true for cards whose effect says game box (YWNDM), false otherwise', () => {
+    assert.equal(ccRemovesToGameBox('You Will Not Deny Me'), true);
+    assert.equal(ccRemovesToGameBox('Wild Attack'), false);
+  });
+});
+
+describe('playCC — validate, execute, dispose', () => {
+  it('executes the card ability and discards to the player discard', () => {
+    const g = _ccGame(); let calledId = null;
+    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+      ctx: { resolveAbility: (id) => { calledId = id; return { applied: true }; } },
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.disposedTo, 'discard');
+    assert.equal(calledId, 'Wild Attack');
+    assert.ok(!g.player1CcHand.includes('Wild Attack'), 'removed from hand');
+    assert.ok(g.player1CcDiscard.includes('Wild Attack'), 'sent to discard');
+  });
+  it('removeTo:gamebox sends the card to game.gameBox instead of discard', () => {
+    const g = _ccGame();
+    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Wild Attack', {
+      removeTo: 'gamebox', ctx: { resolveAbility: () => ({}) },
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.disposedTo, 'gamebox');
+    assert.ok((g.gameBox || []).includes('Wild Attack'), 'sent to game box');
+    assert.ok(!(g.player1CcDiscard || []).includes('Wild Attack'), 'not in discard');
+  });
+  it('a failed validation returns the reason and does NOT discard', () => {
+    const g = _ccGame();
+    const r = playCC(g, 1, 'HK Assassin Droid (Elite)-1-0', 'Marksman', { ctx: { resolveAbility: () => ({}) } });
+    assert.equal(r.ok, false);
+    assert.ok(!(g.player1CcDiscard || []).includes('Marksman'));
+  });
+});
