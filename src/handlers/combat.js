@@ -1142,9 +1142,22 @@ export const COMBAT_RESOLVERS = {
   // ── special (sample) ─────────────────────────────────────────────────────
   zillo_technique_pierce_cancel: {
     prompt: () => ({ content: '**Zillo Technique** — exhaust to cancel 2 Pierce on this attack?', buttons: [['use', 'Exhaust → -2 Pierce'], ['skip', 'Skip', 'secondary']] }),
-    apply: (choice, { combat, thread }) => {
-      if (choice === 'use') { combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2; thread?.send('**Zillo Technique** — cancels 2 Pierce.').catch(discordCatch); }
-      else thread?.send('**Zillo Technique** — Skipped.').catch(discordCatch);
+    apply: (choice, { game, combat, thread }) => {
+      if (choice === 'use') {
+        // EXHAUST the card (alexanbv 2026-06-16 re-audit: the gate path was
+        // cancelling 2 Pierce for free every attack). Re-find the defender's
+        // [Zillo Technique] msgId (mirrors the detection in combat-abilities-zillo.js).
+        const defPN = combat.defenderPlayerNum;
+        const dcList = getDcList(game, defPN) || [];
+        const dcMsgIds = getDcMessageIds(game, defPN) || [];
+        let ztMsgId = null;
+        for (let i = 0; i < dcList.length; i++) {
+          if (dcList[i]?.dcName === '[Zillo Technique]') { ztMsgId = dcMsgIds[i] || null; break; }
+        }
+        if (ztMsgId) exhaustAttachment(game, ztMsgId, 'Zillo Technique');
+        combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2;
+        thread?.send('**Zillo Technique** — Exhausted: cancels 2 Pierce.').catch(discordCatch);
+      } else thread?.send('**Zillo Technique** — Skipped.').catch(discordCatch);
       combat.zilloPierceResolved = true;
     },
   },
@@ -3278,7 +3291,9 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
   // Per destruct 2026-05-07: skip during Lure / False Orders attacks ("no figures friendly").
-  if (!game.pendingCombat?.noFriendliesActive) {
+  // GATE MODE: skip — the gate mods passive 'fury_kashyyyk_pierce' applies it instead,
+  // else it would double-apply (+2 Pierce) (alexanbv 2026-06-16 re-audit).
+  if (!game.combatSequenceMode && !game.pendingCombat?.noFriendliesActive) {
     const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
     if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
       const _fokKwMap = getDcKeywordsGlobal(game);
