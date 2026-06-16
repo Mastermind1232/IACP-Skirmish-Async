@@ -3293,35 +3293,10 @@ export async function handleAttackTarget(interaction, ctx) {
     // it. Defender never spends Hit/Surge tokens during an attack.
   }
 
-  // Fury of Kashyyyk: elite WOOKIEE attacking within 2 + another friendly WOOKIEE within 2 of defender → Pierce 1
-  // Per destruct 2026-05-07: skip during Lure / False Orders attacks ("no figures friendly").
-  // GATE MODE: skip — the gate mods passive 'fury_kashyyyk_pierce' applies it instead,
-  // else it would double-apply (+2 Pierce) (alexanbv 2026-06-16 re-audit).
-  if (!game.combatSequenceMode && !game.pendingCombat?.noFriendliesActive) {
-    const _fokAtkDcList = getDcList(game, attackerPlayerNum) || [];
-    if (_fokAtkDcList.some(dc => dc.dcName === '[Fury of Kashyyyk]')) {
-      const _fokKwMap = getDcKeywordsGlobal(game);
-      const _fokAtkKws = (_fokKwMap[meta.dcName] || []).map(k => String(k).toUpperCase());
-      const _fokAtkEff = getDcEffectsGlobal()[meta.dcName];
-      const _fokIsElite = meta.dcName?.includes('(Elite)') || _fokAtkEff?.elite === true;
-      if (_fokAtkKws.includes('WOOKIEE') && _fokIsElite && distanceToTarget <= 2 && !target.isNpc) {
-        const defPos = game.figurePositions?.[game.pendingCombat.defenderPlayerNum]?.[target.figureKey];
-        if (defPos) {
-          const friendlyPositions = game.figurePositions?.[attackerPlayerNum] || {};
-          const hasFriendlyWookiee = Object.entries(friendlyPositions).some(([fk, pos]) => {
-            if (!pos || fk === attackerFigureKey) return false;
-            const fkDcName = dcNameFromFigureKey(fk);
-            const fkKws = (_fokKwMap[fkDcName] || []).map(k => String(k).toUpperCase());
-            return fkKws.includes('WOOKIEE') && countSpaces(_csRawMs, pos, defPos, _csClosedDoorEdges) <= 2;
-          });
-          if (hasFriendlyWookiee) {
-            game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
-            await thread.send('**Fury of Kashyyyk** — Another friendly WOOKIEE within 2 spaces of defender: Pierce 1 applied.').catch(discordCatch);
-          }
-        }
-      }
-    }
-  }
+  // Fury of Kashyyyk (elite WOOKIEE → Pierce 1) is applied by the gate mods
+  // passive 'fury_kashyyyk_pierce' (combat-abilities-mods.js). The legacy inline
+  // here was removed in the gate cutover (alexanbv 2026-06-16 "replace the old
+  // code with the new gate machine").
 
   // Payback (Dengar CC reaction): if attacker has a pending Payback
   // surge bonus, apply it now. Per alexanbv 2026-05-13: per-figureKey.
@@ -4302,23 +4277,11 @@ export async function handleAttackTarget(interaction, ctx) {
     console.error('Reaction prompt error:', err?.message ?? err);
   }
 
-  // Combat-sequence rebuild (alexanbv 2026-06-15 "wire the attack sequence into
-  // attack declaration"): when sequence mode is on, launch the gate sequence
-  // from declaration (on_declare → roll → rerolls → special → mods → spend_surges
-  // → zillo → damage → after_resolve) instead of the legacy sendOnDeclareYn
-  // ad-hoc chain. Gated on game.combatSequenceMode — OFF by default so legacy
-  // remains the live path until the sequence fully replaces it; the Baze→Migs
-  // trace and flag-on tests exercise the sequence path.
-  if (game.combatSequenceMode) {
-    await runAttackSequence(thread, game, game.pendingCombat, ctx);
-  } else {
-    // Per alexanbv 2026-05-12: sequential per-player Y/N gate for
-    // on-declare effects, matching the step-4 sendModsYn UX. Attacker
-    // sees ONE prompt; Yes → token window + Continue, No → defender's
-    // Y/N. Replaces the prior parallel "Ready button + token window"
-    // pair which posted two prompts to each player simultaneously.
-    await sendOnDeclareYn(thread, game, game.pendingCombat, 'attacker');
-  }
+  // GATE CUTOVER (alexanbv 2026-06-16 "replace the old code with the new gate
+  // machine"): every declared attack walks the gate sequence (on_declare → roll
+  // → rerolls → special → mods → spend_surges → zillo → damage → after_resolve).
+  // The legacy sendOnDeclareYn ad-hoc chain is retired.
+  await runAttackSequence(thread, game, game.pendingCombat, ctx);
   saveGames(game.gameId);
 }
 

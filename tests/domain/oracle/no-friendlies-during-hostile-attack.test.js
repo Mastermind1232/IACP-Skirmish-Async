@@ -57,10 +57,13 @@ test('Bodyguard / Get Behind Me refuses when noFriendliesActive', () => {
 // ── Fury of Kashyyyk Pierce ──────────────────────────────────────────────
 
 test('Fury of Kashyyyk Pierce skipped when noFriendliesActive', () => {
-  const src = readSrc('src/handlers/combat.js');
-  // The Fury Pierce block opens with the noFriendliesActive guard.
-  assert.match(src, /Fury of Kashyyyk[^\n]*Pierce[\s\S]{0,300}!game\.pendingCombat\?\.noFriendliesActive/,
-    'Fury Pierce trigger gated by noFriendliesActive');
+  // Gate cutover (2026-06-16): the legacy inline in combat.js was retired; Fury
+  // Pierce is now the gate mods passive 'fury_kashyyyk_pierce'. Its `applies`
+  // must still bail when noFriendliesActive (Lure/FO), since no figure is
+  // friendly to the controlled attacker.
+  const src = readSrc('src/engine/combat-abilities-mods.js');
+  assert.match(src, /fury_kashyyyk_pierce[\s\S]{0,800}combat\.noFriendliesActive/,
+    'Fury Pierce gate passive gated by noFriendliesActive');
 });
 
 // ── This is the Way (Armorer) ─────────────────────────────────────────────

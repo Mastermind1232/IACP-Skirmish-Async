@@ -181,6 +181,10 @@ registerCombatAbility({
   id: 'fury_kashyyyk_pierce', name: 'Fury of Kashyyyk (Pierce 1)', windows: ['mods'], side: 'attacker', kind: 'passive',
   applies: (game, combat, side, deps) => {
     if (!combat.attackerFigureKey || !combat.target?.figureKey) return false;
+    // Lure of the Dark Side / False Orders: no figures are friendly to the
+    // controlled attacker, so the "another friendly WOOKIEE" trigger can't fire
+    // (alexanbv 2026-05-07). Mirrors the retired inline's noFriendliesActive guard.
+    if (combat.noFriendliesActive) return false;
     const atkPn = combat.attackerPlayerNum;
     const team = (D(deps, 'getDcList', getDcList))(game, atkPn) || [];
     if (!team.some((dc) => (dc?.dcName || dc) === '[Fury of Kashyyyk]')) return false;
