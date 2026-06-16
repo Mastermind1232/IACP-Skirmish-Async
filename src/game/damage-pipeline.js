@@ -39,7 +39,7 @@
 
 import { reduceHp } from './damage-helpers.js';
 import { getPlayableReactionCardsForTiming } from './cc-timing.js';
-import { opponentPlayerNum } from './player-helpers.js';
+import { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 import { markMapDirty } from './game-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 
@@ -237,6 +237,28 @@ export async function _ensureHooksLoaded() {
   } catch (err) {
     console.error('[damage-pipeline] failed to load hooks:', err?.message ?? err);
   }
+}
+
+/**
+ * The order in which the two players resolve their reaction abilities ("when
+ * damaged" / "would be defeated" / "when defeated") for a suffering figure
+ * (alexanbv 2026-06-16):
+ *   - INSIDE an attack (opts.fromAttack or opts.combat): the ATTACKER resolves
+ *     first, then the defender — so attacker damage-suffer abilities (e.g. the
+ *     attacker's side playing Opportunistic on the defender's loss) go first.
+ *   - NOT inside an attack (direct damage — Headbutt, Slam, a CC, …): the player
+ *     with INITIATIVE resolves first, then the other player.
+ * Returns [firstPlayerNum, secondPlayerNum].
+ */
+export function damageResolutionPlayerOrder(game, opts = {}) {
+  const fromAttack = !!(opts.fromAttack || opts.combat);
+  if (fromAttack) {
+    const atk = opts.combat?.attackerPlayerNum ?? opts.attackerPlayerNum;
+    if (atk === 1 || atk === 2) return [atk, opponentPlayerNum(atk)];
+  }
+  const init = getInitiativePlayerNum(game);
+  if (init === 1 || init === 2) return [init, opponentPlayerNum(init)];
+  return [1, 2];
 }
 
 export async function applyDamage(game, ctx, opts) {
