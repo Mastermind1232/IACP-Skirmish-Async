@@ -234,6 +234,7 @@ import { buildModsGate, buildWindowGate } from '../engine/combat-mods-gate.js';
 import { buildOnDeclareGate } from '../engine/combat-ondeclare-gate.js';
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
+import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -754,6 +755,51 @@ export async function resumeSequenceAfterInterrupt(game, combat, ctx, thread) {
   await _advanceSequence(combat, _seqHandlers(thr, game, combat, ctx));
 }
 
+/**
+ * Factory for reroll abilities — the thin resolver every reroll ability shares
+ * (alexanbv 2026-06-15 "each ability should call a reroll function with certain
+ * inputs: which die can be selected, whether the color can be swapped, …").
+ * Posts a die-picker over the currently-selectable dice (selectableDieIndices =
+ * the ability's eligibility predicate ∩ the binary reroll lock) and calls the
+ * generic rerollDie on the pick. colorSwap (Saska) adds a follow-up color pick.
+ * The lock (no die rerolled twice; Zeb/RR exempt) lives inside rerollDie, not
+ * here. Mirrors _makeDieTurnResolver's 2-stage prompt/apply + sub-choice flow.
+ */
+function _makeRerollResolver({ name, pool, eligible, colorSwap = false, stageKey = 'rr' }) {
+  const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
+  const dieLabel = (d) => pool === 'attack'
+    ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
+    : `${d?.block || 0}b/${d?.evade || 0}e${d?.dodge ? '/dodge' : ''}`;
+  return {
+    prompt: ({ combat }) => {
+      const idxs = _selectableDieIndices(combat, { pool, eligible });
+      if (idxs.length === 0) return { content: `**${name}** — no eligible ${pool} die to reroll.`, buttons: [['skip', 'OK', 'secondary']] };
+      const dice = combat[diceField] || [];
+      return { content: `**${name}** — choose a ${pool} die to reroll:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dieLabel(dice[i])})`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
+      const sk = `_${stageKey}`;
+      if (choice === 'skip') { delete combat[`${sk}Stage`]; delete combat[`${sk}Die`]; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
+      // colorSwap: stage 1 picks the die, stage 2 picks the new color.
+      if (colorSwap && combat[`${sk}Stage`] !== 'color') {
+        combat[`${sk}Die`] = parseInt(choice, 10); combat[`${sk}Stage`] = 'color';
+        const die = combat[diceField]?.[combat[`${sk}Die`]];
+        const colors = pool === 'attack' ? ['blue', 'green', 'red', 'yellow'] : ['white', 'black'];
+        const btns = [...colors.map((c) => [c, c, 'primary']), [die?.color || 'keep', `Keep ${die?.color || 'color'}`, 'secondary']];
+        await thread?.send(sanitizeMentions({ content: `**${name}** — choose the new color for die #${combat[`${sk}Die`] + 1}:`, components: chunkButtonsToRows(btns.map(([c, l, s]) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${id}`).setLabel(l).setStyle(_modsStyle(s)))) })).catch(discordCatch);
+        return { followUp: true };
+      }
+      const idx = colorSwap ? combat[`${sk}Die`] : parseInt(choice, 10);
+      const newColor = colorSwap && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
+      const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
+      if (res.ok) thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
+      else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
+      return undefined;
+    },
+  };
+}
+
 /** Mods-step convenience wrapper (existing call sites unchanged). */
 async function _driveModsGatePath(thread, game, combat, ctx) {
   return _driveGatePath('mods', thread, game, combat, ctx);
@@ -1056,6 +1102,12 @@ export const COMBAT_RESOLVERS = {
     eligible: (dice) => dice.map((_d, i) => i),
     phaseFlag: null, stageKey: 'rapidRecal',
   }),
+  // ── Rerolls window (alexanbv 2026-06-15): every reroll ability is a THIN
+  // resolver over the generic rerollDie (binary lock inside). One die per
+  // resolution (count=1 — Guardian Stance multi is a follow-up). ─────────────
+  innate_attack_reroll: _makeRerollResolver({ name: 'Reroll Attack Die', pool: 'attack', stageKey: 'innateAtkRr' }),
+  innate_defense_reroll: _makeRerollResolver({ name: 'Reroll Defense Die', pool: 'defense', stageKey: 'innateDefRr' }),
+  saska_color_reroll: _makeRerollResolver({ name: 'Saska Teft (reroll + change color)', pool: 'attack', colorSwap: true, stageKey: 'saska' }),
 };
 
 const _modsStyle = (s) => (s === 'secondary' ? ButtonStyle.Secondary : s === 'danger' ? ButtonStyle.Danger : ButtonStyle.Primary);

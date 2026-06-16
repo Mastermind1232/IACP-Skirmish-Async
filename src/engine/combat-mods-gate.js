@@ -15,6 +15,7 @@ import './combat-abilities-from-csv.js'; // register ALL combat abilities into t
 // for the same id (registerCombatAbility is last-write-wins per id).
 import './combat-abilities-special.js'; // executable special-window die-turns (Zeb)
 import './combat-abilities-zillo.js'; // executable zillo-window pierce-cancel
+import './combat-abilities-rerolls.js'; // executable rerolls-window (generic innate rerolls)
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 
