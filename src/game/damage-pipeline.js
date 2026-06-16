@@ -165,7 +165,12 @@ async function _notifyCcPlayWindow(game, ctx, timings, opts) {
   if (!ctx?.client || !timings?.length) return;
   const sendPrivateReactionPrompt = ctx.sendPrivateReactionPrompt;
   if (typeof sendPrivateReactionPrompt !== 'function') return;
-  for (const pn of [1, 2]) {
+  // Prompt players in the correct resolution order (alexanbv 2026-06-16): in an
+  // attack the attacker resolves their reaction window first, then the defender;
+  // outside an attack the initiative player goes first. opts.order is precomputed
+  // by the caller from damageResolutionPlayerOrder; fall back to [1, 2].
+  const order = Array.isArray(opts?.order) && opts.order.length === 2 ? opts.order : [1, 2];
+  for (const pn of order) {
     const cards = getPlayableReactionCardsForTiming(game, pn, timings);
     if (!cards.length) continue;
     try {
@@ -329,6 +334,7 @@ export async function applyDamage(game, ctx, opts) {
     // 3a. BEFORE_DEFEATED — CC-play window + sync hooks.
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
       contextLabel: `figure's HP reached 0 (${opts.source || 'Damage'})`,
+      order: damageResolutionPlayerOrder(game, opts),
     });
     const beforeOpts = { ...opts, amount, prevHp: result.prevHp, newHp: result.newHp, defeatedPos };
     for (const hook of BEFORE_DEFEATED_HOOKS) {
@@ -353,11 +359,13 @@ export async function applyDamage(game, ctx, opts) {
     }
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
       contextLabel: `figure defeated (${opts.source || 'Damage'})`,
+      order: damageResolutionPlayerOrder(game, opts),
     });
   } else if (!result.wasDefeated) {
     // Survived damage — emit when-suffers-damage CC window.
     await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DAMAGED, {
       contextLabel: `figure suffered damage (${opts.source || 'Damage'})`,
+      order: damageResolutionPlayerOrder(game, opts),
     });
   }
 
@@ -593,6 +601,7 @@ export async function applyDirectDefeat(game, ctx, opts) {
   // CC-play timing window for "before defeated" also fires.
   await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_BEFORE_DEFEATED, {
     contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
+    order: damageResolutionPlayerOrder(game, opts),
   });
   let preventDefeat = false;
   for (const hook of BEFORE_DEFEATED_HOOKS) {
@@ -627,6 +636,7 @@ export async function applyDirectDefeat(game, ctx, opts) {
   }
   await _notifyCcPlayWindow(game, ctx, CC_TIMINGS_WHEN_DEFEATED, {
     contextLabel: `figure directly defeated (${opts.source || 'ability'})`,
+    order: damageResolutionPlayerOrder(game, opts),
   });
   // processFigureDefeat (VP, removeFromBoard, attachment cleanup,
   // activation decrement, passive redraws, defeat log, win conditions).
