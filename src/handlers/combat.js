@@ -225,7 +225,7 @@ import {
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
 import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
-import { applyDefenseDieTurn } from '../engine/defense-die-turn.js';
+import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
 import { isLargeTarget, getTargetSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
@@ -1306,11 +1306,38 @@ function _makeTokenResolver({ side }) {
   };
 }
 
+/**
+ * Heightened Reflexes (CC): "choose 1 defense die and remove its results."
+ * Discard the card (played by the attacking HUNTER) then pick a defense die to
+ * zero (alexanbv 2026-06-16 re-audit). Interactive — routed via cc_interactive.
+ */
+function _makeHeightenedReflexesResolver({ card }) {
+  return {
+    prompt: ({ combat }) => {
+      const dice = combat.defenseDiceResults || [];
+      if (!dice.length) return { content: `**${card}** — no defense dice to remove.`, buttons: [['skip', 'OK', 'secondary']] };
+      return { content: `**${card}** — choose a defense die to remove its results:`, buttons: [...dice.map((d, i) => [String(i), `Die #${i + 1} (${d.block || 0}b/${d.evade || 0}e${d.dodge ? '/dodge' : ''})`]), ['skip', 'Skip', 'secondary']] };
+    },
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      if (choice === 'skip') { if (thread) await thread.send(`**${card}** — skipped (card not played).`).catch(discordCatch); return undefined; }
+      await playCC(game, combat.attackerPlayerNum, combat.attackerFigureKey, card, { ctx, skipExecute: true });
+      const dieIdx = parseInt(choice, 10);
+      const roll = applyDefenseDieRemoval(combat, dieIdx);
+      if (thread) await thread.send(`**${card}** — removed defense die #${dieIdx + 1}'s results. Defense now ${roll?.block || 0}b/${roll?.evade || 0}e${roll?.dodge ? '/dodge' : ''}.`).catch(discordCatch);
+      return undefined;
+    },
+  };
+}
+
 function _resolverFor(pick) {
   if (COMBAT_RESOLVERS[pick]) return COMBAT_RESOLVERS[pick];
   const reg = getCombatAbility(pick);
   if (reg?.params?.kind === 'token') {
     return _makeTokenResolver({ side: reg.params.side });
+  }
+  if (reg?.params?.kind === 'cc_interactive') {
+    if (reg.params.card === 'Heightened Reflexes') return _makeHeightenedReflexesResolver({ card: reg.params.card });
+    return null;
   }
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });

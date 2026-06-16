@@ -41,3 +41,24 @@ export function applyDefenseDieTurn(combat, dieIdx, newFace, dodgeConversion = f
   combat.defenseRoll = { block, evade, dodge };
   return combat.defenseRoll;
 }
+
+/**
+ * Remove a defense die's RESULTS (Heightened Reflexes: "choose 1 defense die and
+ * remove its results from the defense results"). Zeroes the chosen die's
+ * block/evade/dodge and recomputes combat.defenseRoll from all defense dice.
+ * Mutates combat in place; returns the new defenseRoll.
+ */
+export function applyDefenseDieRemoval(combat, dieIdx) {
+  const dice = combat?.defenseDiceResults;
+  if (!Array.isArray(dice) || !dice[dieIdx]) return combat?.defenseRoll;
+  dice[dieIdx] = { ...dice[dieIdx], block: 0, evade: 0, dodge: false, _removed: true };
+  let block = 0;
+  let evade = 0;
+  let dodge = false;
+  for (const d of dice) {
+    if (d?._dodgeToBlocksEvade && d.dodge) { block += 2; evade += 1; }
+    else { block += d?.block || 0; evade += d?.evade || 0; if (d?.dodge) dodge = true; }
+  }
+  combat.defenseRoll = { block, evade, dodge };
+  return combat.defenseRoll;
+}

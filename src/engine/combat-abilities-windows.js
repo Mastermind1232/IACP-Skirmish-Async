@@ -23,6 +23,10 @@ import { dcNameFromFigureKey } from '../game/index.js';
 // a friendly third party) — alexanbv 2026-06-16 said to leave these as exceptions
 // for now; they need army-wide / other-figure detection, not the attacker/defender
 // figure check. Skipped here so they aren't offered (wrongly) via this path.
+// CCs with a bespoke INTERACTIVE combat effect (a sub-pick), routed to a
+// dedicated resolver via params.kind 'cc_interactive' (not the plain playCC path).
+const INTERACTIVE_CC = new Set(['Heightened Reflexes']);
+
 const CC_THIRD_PARTY_EXCEPTIONS = new Set([
   'Concentrated Fire', 'Guardian Stance', 'Bodyguard', 'Get Behind Me!',
   'Extra Protection', 'Final Stand', 'Miracle Worker', 'There Is No Try',
@@ -102,7 +106,11 @@ export function registerCsvWindowAbilities() {
         // Non-CC rows: figure-ability conditionForRow detection. Either way an
         // unwired effect is a diagnostic no-op button (offered by condition).
         params: isCc
-          ? { kind: 'cc', card: r.card, ability: r.ability, playableBy: (getCcEffect(r.card)?.playableBy || '').trim(), limit: r.limit }
+          // A few CCs have a bespoke INTERACTIVE combat effect (e.g. Heightened
+          // Reflexes' "choose a defense die and remove its results") — kind
+          // 'cc_interactive' routes them to a dedicated resolver instead of the
+          // plain play-CC pipeline (alexanbv 2026-06-16 re-audit).
+          ? { kind: INTERACTIVE_CC.has(r.card) ? 'cc_interactive' : 'cc', card: r.card, ability: r.ability, playableBy: (getCcEffect(r.card)?.playableBy || '').trim(), limit: r.limit }
           : { kind: 'unwired', card: r.card, ability: r.ability, limit: r.limit },
         applies: isCc ? ccAppliesFor(r.card, side, r) : conditionForRow(r),
       });

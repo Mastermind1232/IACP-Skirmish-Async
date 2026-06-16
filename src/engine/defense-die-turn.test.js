@@ -26,3 +26,12 @@ describe('applyDefenseDieTurn', () => {
     assert.equal(c.defenseRoll.block, 2);    // from die0 conversion
   });
 });
+
+import { applyDefenseDieRemoval } from './defense-die-turn.js';
+describe('applyDefenseDieRemoval (Heightened Reflexes)', () => {
+  it('zeroes the chosen die and recomputes the defense roll', () => {
+    const c = { defenseDiceResults: [{ block: 2, evade: 0, dodge: false }, { block: 0, evade: 1, dodge: true }] };
+    applyDefenseDieRemoval(c, 1); // remove the evade+dodge die
+    assert.deepEqual(c.defenseRoll, { block: 2, evade: 0, dodge: false });
+  });
+});
