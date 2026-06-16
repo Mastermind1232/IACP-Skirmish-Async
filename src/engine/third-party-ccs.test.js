@@ -127,6 +127,13 @@ describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
     assert.equal(combat.forcedRerollQueue[0].source, 'Battlefield Awareness');
     assert.equal(combat.forcedRerollQueue[0].controlPlayer, 1);
   });
+  it('Opportunistic grants 3 MP to the playing figure (via injected deps)', () => {
+    let granted = null;
+    const deps = { gameId: 'g1', findDcMessageIdForFigure: (gid, pn, fk) => `msg-${fk}`, grantMovementBank: (g, m, n) => { granted = [m, n]; } };
+    const r = applyThirdPartyCcEffect('Opportunistic', { gameId: 'g1' }, { attackerPlayerNum: 1 }, 'Boba Fett-1-2', deps);
+    assert.equal(r.applied, true);
+    assert.deepEqual(granted, ['msg-Boba Fett-1-2', 3]);
+  });
 });
 
 describe('descriptor corrections', () => {

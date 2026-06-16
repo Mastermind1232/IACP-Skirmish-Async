@@ -181,10 +181,21 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
     log.push('reroll 1 die rolled by a friendly within 3');
     return { applied: true, log };
   }
+  if (specKey === 'Opportunistic') {
+    // SCUM: gain 3 MP for the playing figure (a damage-pipeline reaction). MP is
+    // banked on the figure's deploy-card msgId; deps inject the lookup + grant so
+    // this module stays free of the handler layer.
+    const pn = combat?.attackerPlayerNum; // SCUM is on the attacking team
+    const msgId = deps.findDcMessageIdForFigure?.(deps.gameId || game?.gameId, pn, figureKey);
+    if (msgId != null && typeof deps.grantMovementBank === 'function') {
+      deps.grantMovementBank(game, msgId, 3);
+      log.push('gained 3 MP');
+      return { applied: true, log };
+    }
+    return { applied: false, log: ['Opportunistic: MP grant deps missing'] };
+  }
   // There Is No Try (Yoda) — turn 1 die to any side + convert Dodge→2 Blocks+1
   // Evade on that die. Needs the die-turn picker (a face-set, not a reroll) plus
   // the special dodge conversion; wired next via the die-turn machinery.
-  // Opportunistic (SCUM) — gain 3 MP for the playing figure; a damage-pipeline
-  // reaction (not a combat-gate die effect), wired with the MP grant next.
   return { applied: false, log: [`${specKey} effect not yet wired`] };
 }
