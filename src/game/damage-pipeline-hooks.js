@@ -936,6 +936,9 @@ BEFORE_DEFEATED_HOOKS.push({
 WHEN_DEFEATED_HOOKS.push({
   id: 'bounty',
   sync: true,
+  // Defeater-owned (Fennec is the opponent of the defeated figure) → orders in the
+  // attacker/defeater slot, not the sufferer's (alexanbv 2026-06-16).
+  ownerPlayer: (game, opts) => opts.attackerPlayerNum ?? (opts.controllerPlayerNum ? opponentPlayerNum(opts.controllerPlayerNum) : undefined),
   probe: (game, opts) => {
     if (!opts.figureKey) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
@@ -1268,6 +1271,8 @@ WHEN_DEFEATED_HOOKS.push({
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'brutal_tactics',
+  // Defeater-owned (Saw's team is the opponent of the defeated figure) → attacker slot.
+  ownerPlayer: (game, opts) => opts.attackerPlayerNum ?? (opts.controllerPlayerNum ? opponentPlayerNum(opts.controllerPlayerNum) : undefined),
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     if (!opts.defeatedPos) return false;
