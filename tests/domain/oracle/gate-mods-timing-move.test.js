@@ -72,6 +72,7 @@ async function attackInto(defenderDc, opts = {}) {
     bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
     surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
   };
+  if (opts.spentToken) combat.attackerSpentPowerToken = true;
   const r = await driveGateAttackToEnd(game, combat, deps, createFakeChannel('mt-thread'));
   assert.equal(r.threw, null, `${defenderDc} threw: ${r.threw && (r.threw.stack || r.threw.message)}`);
   return combat;
@@ -128,6 +129,16 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
   it('Conclusion (HK-47 attacker): sets conclusionDodgeCancel via the mods window', async () => {
     const combat = await attackInto('Rebel Trooper', { attackerDc: 'HK-47' });
     assert.equal(combat.conclusionDodgeCancel, true, 'Conclusion must set the Dodge-cancel flag');
+  });
+
+  it('Dead Precise −1 Dodge (Ko-Tun): mods rider fires when a Power Token was spent', async () => {
+    const spent = await attackInto('Stormtrooper', { attackerDc: 'Ko-Tun Feralo', spentToken: true });
+    assert.equal(spent.bonusDodge, -1, 'Dead Precise −1 Dodge must apply once when a token was spent');
+  });
+
+  it('Dead Precise −1 Dodge: no rider when no Power Token was spent', async () => {
+    const noToken = await attackInto('Stormtrooper', { attackerDc: 'Ko-Tun Feralo' });
+    assert.equal(noToken.bonusDodge || 0, 0, 'Dead Precise −1 Dodge must NOT apply without a spent token');
   });
 
   it('Cunning (Nexu defender): hasCunning flag set via the mods window', async () => {

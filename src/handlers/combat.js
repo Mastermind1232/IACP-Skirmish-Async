@@ -1612,6 +1612,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'conclusion') {
     combat.conclusionDodgeCancel = true;
     await thread.send('**Conclusion** — −1 Dodge: any Dodge rolled by defender is cancelled.').catch(discordCatch);
+  } else if (id === 'dead_precise_dodge') {
+    combat.bonusDodge = (combat.bonusDodge || 0) - 1;
+    await thread.send('**Dead Precise** (Ko-Tun within 3, Power Token spent) — −1 Dodge to the attack results.').catch(discordCatch);
   } else if (id === 'cunning') {
     const r = applyCunningFlag(combat);
     combat.hasCunning = r.hasCunning;
@@ -3970,50 +3973,10 @@ export async function handleAttackTarget(interaction, ctx) {
   // Aim (Rebel Trooper) — MOVED to the mods window (combat-abilities-mods.js
   // 'aim' passive) per alexanbv 2026-06-16 "Aim is a mod".
 
-  // Dead Precise (Ko-Tun Feralo) — per destruct 2026-05-08:
-  // "When a figure within 3 spaces of Ko-Tun is attacking, if it spent
-  //  a Power Token, it may reroll 1 attack die and apply −1 Dodge to
-  //  the attack results. Also applies to Ko-Tun herself and stacks
-  //  with Professional."
-  //
-  // Aura: triggers when attacker is within 3 of ANY friendly Ko-Tun
-  // (including Ko-Tun herself, since distance 0 is within 3) AND has
-  // spent a Power Token this attack. Effects:
-  //   +1 attacker reroll (stacks with Professional, Targeting Computer,
-  //    Heir to the Jedi, etc.)
-  //   −1 Dodge to attack results (cancels 1 of the defender's Dodges
-  //    via the numeric bonusDodge model wired earlier this session).
-  if (game.pendingCombat.attackerSpentPowerToken && !game.pendingCombat.deadPreciseApplied) {
-    const _dpAtkPos = game.pendingCombat.attackerFigureKey
-      ? (game.figurePositions?.[attackerPlayerNum]?.[game.pendingCombat.attackerFigureKey])
-      : null;
-    const _dpMapId = game.selectedMap?.id;
-    const _dpMs = _dpMapId ? getMapData?.(_dpMapId) : null;
-    if (_dpAtkPos && _dpMs) {
-      let _dpFound = false;
-      for (const [_dpFk, _dpPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
-        if (!_dpPos) continue;
-        if (dcNameFromFigureKey(_dpFk) !== 'Ko-Tun Feralo') continue;
-        if (!isWithinSpaces(_dpMs, String(_dpPos).toLowerCase(), String(_dpAtkPos).toLowerCase(), 3)) continue;
-        _dpFound = true;
-        break;
-      }
-      if (_dpFound) {
-        // alexanbv 2026-05-13: register as named forced-queue entry —
-        // surfaces as a "Use Dead Precise (Ko-Tun)" bucket button.
-        game.pendingCombat.forcedRerollQueue = game.pendingCombat.forcedRerollQueue || [];
-        game.pendingCombat.forcedRerollQueue.push({
-          controlPlayer: attackerPlayerNum,
-          pool: 'attack',
-          remaining: 1,
-          source: 'Dead Precise (Ko-Tun)',
-        });
-        game.pendingCombat.bonusDodge = (game.pendingCombat.bonusDodge || 0) - 1;
-        game.pendingCombat.deadPreciseApplied = true;
-        await thread.send('**Dead Precise** (Ko-Tun within 3) — attacker spent a Power Token: +1 attack-die reroll, −1 Dodge to attack results.');
-      }
-    }
-  }
+  // Dead Precise (Ko-Tun Feralo) — MOVED to the gate (alexanbv 2026-06-16):
+  // the REROLL is offered in the rerolls window (CSV Dead Precise row, token-
+  // gated aura) and the −1 Dodge RIDER is the mods-window 'dead_precise_dodge'
+  // passive (same conditions, independent of whether the reroll is used).
 
   // Spray Fire (Heavy Stormtrooper Elite): "you may apply -3 Accuracy
   // and +1 Surge to the attack results." Player choice — surfaced at

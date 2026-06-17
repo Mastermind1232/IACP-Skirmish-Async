@@ -25,6 +25,7 @@ import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
 import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
+import { makeCondition } from './combat-conditions.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -245,6 +246,17 @@ registerCombatAbility({
     const dcName = defenderDcNameOf(combat);
     return !!dcName && hasCortosisWeaveAbility(ids(eff(deps, dcName)));
   },
+});
+
+// Dead Precise (Ko-Tun Feralo) — the −1 Dodge RIDER, separated from the reroll
+// per alexanbv 2026-06-16 ("Ko-Tun's −dodge is independent of whether the reroll
+// was used — separate it as a mod ability with the same conditions"). Fires when
+// a friendly Ko-Tun is within 3 of the attacker AND the attacker spent a Power
+// Token. The reroll itself stays in the rerolls window (CSV Dead Precise row).
+const _deadPreciseKoTunAura = makeCondition({ type: 'within_n_of_source', card: 'Ko-Tun Feralo', n: 3, side: 'attacker' });
+registerCombatAbility({
+  id: 'dead_precise_dodge', name: 'Dead Precise (−1 Dodge)', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat) => !!combat.attackerSpentPowerToken && _deadPreciseKoTunAura(game, combat),
 });
 
 // Conclusion (HK-47) — cancel any Dodge the defender rolls (attacker-side flag).
