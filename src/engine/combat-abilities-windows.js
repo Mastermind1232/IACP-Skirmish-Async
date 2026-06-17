@@ -102,6 +102,14 @@ export function registerCsvWindowAbilities() {
       if (seen.has(id) || (existing && !existing.timingOnly)) continue;
       seen.add(id);
       const isCc = r.card_type === 'CC';
+      // resolution=automatic NON-CC rows are auto-applied passives, not player
+      // choices — never offer them as interactive buttons. The CSV loop used to
+      // register them as `unwired` no-op buttons, which (combined with the eager
+      // declaration handlers that actually apply the effect) was the phantom-button
+      // half of the double-handling. Skip them here; they stay eager-handled until
+      // migrated to real gate passives. alexanbv 2026-06-17. (CCs are excluded —
+      // playing a CC is always a choice even if its effect auto-resolves.)
+      if (!isCc && r.resolution === 'automatic') continue;
       // Third-party-figure CCs (Guardian Stance, Concentrated Fire, …) are
       // exceptions handled elsewhere — don't offer them via the attacker/defender
       // figure check.
