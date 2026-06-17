@@ -70,16 +70,13 @@ e('advanced_targeting_computer', 'Advanced Targeting Computer (Dark Trooper Mk I
 e('flawless_execution', 'Flawless Execution (Cad Bane)', 'attacker', 'interactive', ON, 'auto-Focus or die+token pickers');
 e('shock_and_awe', 'Shock and Awe (Cara Dune)', 'attacker', 'passive', ON, 'not used → yellow→red swap');
 e('vanguard', 'Vanguard (AT-RT)', 'attacker', 'interactive', ON, 'pre-target swap + die-swap picker');
-e('scattergun', 'Scattergun (Trandoshan Hunter)', 'attacker', 'passive', ON, 'adjacent → +Hits');
 e('shared_intuition', 'Shared Intuition (4-LOM)', 'attacker', 'passive', ON, 'friendly HUNTER ≤3 w/ LOS → +1 Hit');
 e('sharpshooter', 'Sharpshooter (Fennec Shand)', 'attacker', 'passive', ON, 'dist≥5 → auto-Focus');
-e('find_weakness', 'Find Weakness (Scout Trooper Elite)', 'attacker', 'passive', ON, '→ -1 Evade to def');
 e('exploit_weakness', 'Exploit Weakness (Scout Trooper Elite)', 'attacker', 'passive', ON, 'def harmful cond → +1 Surge');
 e('query_declare', 'Query (HK-47, declare flag)', 'attacker', 'interactive', ON, 'sets queryNeedsPrompt (resolves mods)');
 e('front_line', 'Front Line (Echo Base Trooper)', 'attacker', 'interactive', ON, 'dist≤3 → +2 Acc + die swap');
 e('sniper', 'Sniper / Elite Sniper (Alliance Ranger)', 'attacker', 'passive', ON, 'dist≥5 → +forced rerolls');
 e('much_to_learn', 'Much to Learn (Ezra)', 'attacker', 'interactive', ON, 'friendly unique ≤3 → reroll/turn');
-e('forest_fighters', 'Forest Fighters (Ewok Warrior Elite)', 'attacker', 'passive', ON, 'Melee + Hidden → +1 Hit');
 e('keep_the_peace_elite', 'Keep the Peace Elite (Wing Guard Elite)', 'attacker', 'passive', ON, 'adjacent → attacker suffers Strain');
 e('keep_the_peace_reg', 'Keep the Peace Regular (Wing Guard)', 'attacker', 'interactive', ON, 'adjacent → strain-for-strain reminder');
 e('bespin_security', 'Bespin Security (Wing Guard Elite)', 'attacker', 'passive', ON, 'adjacent source + LEADER → +1 reroll');
@@ -105,7 +102,6 @@ e('wookiee_avenger_defend', 'Wookiee Avenger (defend)', 'defender', 'passive', O
 e('cross_training_declare', 'Cross Training (attachment, declare)', 'defender', 'interactive', ON, 'def upgrade → reroll available');
 e('rogue_smuggler_defend', 'Rogue Smuggler (lose Distracting)', 'defender', 'passive', ON, 'def upgrade → cancel Distracting');
 e('fireproof_defender', 'Fireproof (Flame Trooper, def)', 'defender', 'passive', ON, 'defenderFireproof');
-e('cunning', 'Cunning (Han/Jyn/Nexu)', 'defender', 'passive', ON, '+1 Block per Evade flag');
 e('hunker_down', 'Hunker Down (Cara Dune)', 'defender', 'passive', ON, 'terrain adjacent → +1 Evade');
 e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', ON, 'diplomaticMissionEvade → +1 Evade');
 e('spectre_cell_def', 'Spectre Cell (defender)', 'defender', 'passive', ON, 'DC list has [Spectre Cell] → +1 Block');

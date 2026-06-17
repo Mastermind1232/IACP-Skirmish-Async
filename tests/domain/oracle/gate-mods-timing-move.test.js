@@ -41,6 +41,10 @@ async function attackInto(defenderDc, opts = {}) {
   const defSq = opts.defSq || 'c1';
   game.figurePositions[1] = { [a]: atkSq };
   game.figurePositions[2] = { [d]: defSq };
+  if (opts.attackerConditions) {
+    game.figureConditions = game.figureConditions || {};
+    game.figureConditions[a] = opts.attackerConditions;
+  }
   const A = metaFor(dcMessageMeta, game.gameId, 1);
   const D = metaFor(dcMessageMeta, game.gameId, 2);
   const combat = {
@@ -112,5 +116,32 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
   it('Conclusion (HK-47 attacker): sets conclusionDodgeCancel via the mods window', async () => {
     const combat = await attackInto('Rebel Trooper', { attackerDc: 'HK-47' });
     assert.equal(combat.conclusionDodgeCancel, true, 'Conclusion must set the Dodge-cancel flag');
+  });
+
+  it('Cunning (Nexu defender): hasCunning flag set via the mods window', async () => {
+    const combat = await attackInto('Nexu (Elite)');
+    assert.equal(combat.hasCunning, true, 'Cunning must set the hasCunning flag once');
+  });
+
+  it('Find Weakness (Scout Trooper Elite attacker): -1 Evade via the mods window', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'Scout Trooper (Elite)' });
+    assert.equal(combat.bonusEvade, -1, 'Find Weakness must apply -1 Evade exactly once');
+  });
+
+  it('Scattergun (Trandoshan Hunter): +1 Hit when adjacent, once', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'Trandoshan Hunter (Regular)', type: 'melee', dist: 1 });
+    assert.equal(combat.bonusHits, 1, 'Scattergun must apply +1 Hit once when adjacent');
+  });
+
+  it('Forest Fighters (Ewok Warrior Elite): +1 Hit on a melee attack while Hidden, once', async () => {
+    const combat = await attackInto('Rebel Trooper', {
+      attackerDc: 'Ewok Warrior (Elite)', type: 'melee', dist: 1, attackerConditions: ['Hide'],
+    });
+    assert.equal(combat.bonusHits, 1, 'Forest Fighters must apply +1 Hit once (melee + Hidden)');
+  });
+
+  it('Forest Fighters: no Hit when not Hidden', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'Ewok Warrior (Elite)', type: 'melee', dist: 1 });
+    assert.equal(combat.bonusHits || 0, 0, 'Forest Fighters must NOT apply when not Hidden');
   });
 });

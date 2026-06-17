@@ -1612,6 +1612,29 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'conclusion') {
     combat.conclusionDodgeCancel = true;
     await thread.send('**Conclusion** — −1 Dodge: any Dodge rolled by defender is cancelled.').catch(discordCatch);
+  } else if (id === 'cunning') {
+    const r = applyCunningFlag(combat);
+    combat.hasCunning = r.hasCunning;
+  } else if (id === 'find_weakness') {
+    const r = applyFindWeaknessEvade(combat);
+    combat.bonusEvade = r.bonusEvade;
+    await thread.send('**Find Weakness** — −1 Evade applied to defense results.').catch(discordCatch);
+  } else if (id === 'scattergun') {
+    const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const sids = (getDcEffectsGlobal()[atkName] || getDcEffectsGlobal()[(atkName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
+    if (hasAcpScattergun(sids)) {
+      const r = applyScattergunHits(combat, ACP_SCATTERGUN_HIT_DELTA);
+      combat.bonusHits = r.bonusHits;
+      await thread.send('**ACP Scattergun** — adjacent to target: +2 Hits.').catch(discordCatch);
+    } else {
+      const r = applyScattergunHits(combat, SCATTERGUN_HIT_DELTA);
+      combat.bonusHits = r.bonusHits;
+      await thread.send('**Scattergun** — adjacent to target: +1 Hit.').catch(discordCatch);
+    }
+  } else if (id === 'forest_fighters') {
+    const r = applyForestFightersHit(combat);
+    combat.bonusHits = r.bonusHits;
+    await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3450,10 +3473,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Cunning (Han Solo, Jyn Odan, Nexu): while defending, +1 Block per Evade result
-  if (hasCunningAbility(defSpecialIds)) {
-    const r = applyCunningFlag(game.pendingCombat);
-    game.pendingCombat.hasCunning = r.hasCunning;
-  }
+  // Cunning — MOVED to the mods window (combat-abilities-mods.js 'cunning' passive).
 
   // Distracting (Han Solo, C-3PO) MOVED to step-4 defender via sendModsYn —
   // per alexanbv 2026-05-13: the adjacency check should happen at step 4,
@@ -3596,18 +3616,8 @@ export async function handleAttackTarget(interaction, ctx) {
     if (game.pendingVanguardSwap) game.pendingVanguardSwap[game.pendingCombat.attackerMsgId] = 'decided';
   }
 
-  // ACP Scattergun (Trandoshan Hunter Elite) / Scattergun (Trandoshan Hunter Regular): +Hits when adjacent to target
-  if (scattergunInRange(distanceToTarget)) {
-    if (hasAcpScattergun(atkSpecialIds)) {
-      const r = applyScattergunHits(game.pendingCombat, ACP_SCATTERGUN_HIT_DELTA);
-      game.pendingCombat.bonusHits = r.bonusHits;
-      await thread.send('**ACP Scattergun** — adjacent to target: +2 Hits.');
-    } else if (hasScattergun(atkSpecialIds)) {
-      const r = applyScattergunHits(game.pendingCombat, SCATTERGUN_HIT_DELTA);
-      game.pendingCombat.bonusHits = r.bonusHits;
-      await thread.send('**Scattergun** — adjacent to target: +1 Hit.');
-    }
-  }
+  // Scattergun / ACP Scattergun — MOVED to the mods window
+  // (combat-abilities-mods.js 'scattergun' passive).
 
   // Shared Intuition (4-LOM): +1 Hit while attacking if another
   // friendly HUNTER within 3 has LOS to target. Per dc-effects.json
@@ -3649,11 +3659,7 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Find Weakness (Scout Trooper Elite): -1 Evade to defense results (accuracy handled via passives)
-  if (hasFindWeaknessAbility(atkSpecialIds)) {
-    const r = applyFindWeaknessEvade(game.pendingCombat);
-    game.pendingCombat.bonusEvade = r.bonusEvade;
-    await thread.send('**Find Weakness** — −1 Evade applied to defense results.');
-  }
+  // Find Weakness — MOVED to the mods window (combat-abilities-mods.js 'find_weakness' passive).
 
   // Exploit Weakness (Scout Trooper Elite): +1 Surge if defender has a harmful condition
   if (hasExploitWeaknessAbility(atkSpecialIds)) {
@@ -3772,15 +3778,8 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Forest Fighters (Ewok Warrior Elite): +1 Hit during melee attack if Hidden
-  if (hasForestFightersAbility(atkSpecialIds)) {
-    const atkConds = game.figureConditions?.[attackerFigureKey] || [];
-    if (forestFightersQualifies({ isRanged, attackerConditions: atkConds })) {
-      const r = applyForestFightersHit(game.pendingCombat);
-      game.pendingCombat.bonusHits = r.bonusHits;
-      await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).');
-    }
-  }
+  // Forest Fighters (Ewok Warrior Elite) — MOVED to the mods window
+  // (combat-abilities-mods.js 'forest_fighters' passive).
 
   // Sentinel / Protector: scan defender's friendlies for adjacent-to-target, +1 Block. Limit 1 per attack.
   // Per destruct 2026-05-07: "No figures are considered friendly during" Lure / False Orders attacks.

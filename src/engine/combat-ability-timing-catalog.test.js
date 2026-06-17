@@ -23,7 +23,11 @@ describe('combat timing catalog: every window has a complete set of timing indic
   });
 
   it('on_declare covers the headline declaration abilities', () => {
-    for (const id of ['focus_condition', 'aim', 'merciless', 'cunning', 'on_the_lam', 'brace_for_impact', 'get_behind_me']) {
+    // NOTE: result-modifier abilities mis-catalogued under on_declare (cunning,
+    // find_weakness, scattergun, forest_fighters, take_cover, etc.) are being
+    // graduated to executable mods-window passives (combat-abilities-mods.js)
+    // and removed from this catalog — see gate-mods-timing-move.test.js.
+    for (const id of ['focus_condition', 'merciless', 'on_the_lam', 'brace_for_impact', 'get_behind_me']) {
       assert.ok(has('on_declare', id), `on_declare missing ${id}`);
     }
   });

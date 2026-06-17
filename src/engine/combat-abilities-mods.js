@@ -20,6 +20,10 @@ import { hasGamorreanHonorGuardAbility, gamorreanHonorGuardApplies } from '../ga
 import { hasCompositePlatingAbility, compositePlatingApplies } from '../game/composite-plating-helpers.js';
 import { hasDisposableAbility, hasConclusionAbility } from '../game/evade-debuff-helpers.js';
 import { hasCortosisWeaveAbility } from '../game/cortosis-weave-helpers.js';
+import { hasCunningAbility } from '../game/cunning-helpers.js';
+import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
+import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
+import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -248,6 +252,46 @@ registerCombatAbility({
   applies: (game, combat, side, deps) => {
     const dcName = attackerDcNameOf(combat);
     return !!dcName && hasConclusionAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Cunning (defender) — sets the hasCunning flag (read at resolution).
+registerCombatAbility({
+  id: 'cunning', name: 'Cunning', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasCunningAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Find Weakness (Scout Trooper Elite) — -1 Evade to the defender's results.
+registerCombatAbility({
+  id: 'find_weakness', name: 'Find Weakness', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    return !!dcName && hasFindWeaknessAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Scattergun / ACP Scattergun (Trandoshan Hunter) — +Hits when adjacent.
+registerCombatAbility({
+  id: 'scattergun', name: 'Scattergun', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    if (!dcName || !scattergunInRange(combat.distanceToTarget)) return false;
+    const sids = ids(eff(deps, dcName));
+    return hasAcpScattergun(sids) || hasScattergun(sids);
+  },
+});
+
+// Forest Fighters (Ewok Warrior Elite) — +1 Hit on a Melee attack while Hidden.
+registerCombatAbility({
+  id: 'forest_fighters', name: 'Forest Fighters', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    if (!dcName || !hasForestFightersAbility(ids(eff(deps, dcName)))) return false;
+    const atkConds = game.figureConditions?.[combat.attackerFigureKey] || [];
+    return forestFightersQualifies({ isRanged: combat.isRanged, attackerConditions: atkConds });
   },
 });
 
