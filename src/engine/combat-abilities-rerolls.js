@@ -57,17 +57,31 @@ export function registerRerollAbilities() {
       }
       if (seen.has(id)) continue; // truly duplicate row
       seen.add(id);
-      const pool = forcesDefenderReroll ? 'defense' : (side === 'attacker' ? 'attack' : 'defense');
-      // card/ability/limit ride along so the gate's _markGateAbilityUsed marks
-      // the owner's used-list after a LIMITED reroll resolves (alexanbv
-      // 2026-06-16: "when a once-per-round/activation/attack ability is used, mark
-      // that limitation after it resolves"). The 5 limited reroll rows — Purge
-      // Commander/Coordinated Hunt (per attack), Saska Teft/Power Converter (per
-      // round), Wing Guard/Bespin Security (per attack), Lando/Shrewd Scoundrel
-      // (per activation, handled in its bespoke resolver) — are now guarded +
-      // marked; the 73 unlimited rows pass through (markAbilityUsed no-ops on None).
-      const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || ''), card: r.card, ability: r.ability, limit: r.limit };
-      const limGuard = limitGuard(r.limit, abilityLimitKey(r.card, r.ability));
+      // "the player that rolled it must reroll" idiom (Precision, Raider,
+      // Fyrnock Style) — a FORCE-reroll where the owner chooses any die (or a
+      // specified pool) and whoever rolled it rerolls it. "choose 1 die" with no
+      // pool word → 'any' (offer both pools); "choose 1 attack die" → 'attack'
+      // regardless of side (attack dice belong to the attacker). alexanbv 2026-06-17.
+      const playerThatRolled = /player that rolled it must reroll|player that rolled it/i.test(r.effect || '');
+      let pool;
+      if (forcesDefenderReroll) pool = 'defense';
+      else if (playerThatRolled) {
+        pool = /choose\s+(?:1|one)\s+attack die/i.test(r.effect || '') ? 'attack'
+          : /choose\s+(?:1|one)\s+defense die/i.test(r.effect || '') ? 'defense'
+            : 'any';
+      } else pool = (side === 'attacker' ? 'attack' : 'defense');
+      // Default limit is ONCE PER ATTACK (alexanbv 2026-06-17: "everything is by
+      // default limit once/attack unless otherwise specified" — there is no
+      // unlimited reroll). Only an explicit WIDER scope overrides it: "once per
+      // round" (Saska's Power Converter — a shared device-token limit; the global
+      // card:ability round key blocks every device-token figure once any uses it)
+      // and "once per activation" (Lando's Shrewd Scoundrel, in its bespoke
+      // resolver). Per-attack-named rows (Wing Guard, Purge Commander) just match
+      // the default. card/ability/limit ride along so the gate's
+      // _markGateAbilityUsed marks the owner used-list after the reroll resolves.
+      const effLimit = (r.limit && String(r.limit).toLowerCase() !== 'none') ? r.limit : 'once per attack';
+      const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || ''), card: r.card, ability: r.ability, limit: effLimit };
+      const limGuard = limitGuard(effLimit, abilityLimitKey(r.card, r.ability));
       // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
       // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
       // derived from affects_self / affects_others. CC/attachment/upgrade rerolls
@@ -99,9 +113,13 @@ export function registerRerollAbilities() {
           } else if (!getPlayerCardNames(game, pn).some((n) => String(n).toLowerCase() === cardLc)) {
             return false;
           }
-          // Don't offer a limited reroll that's already been used in its scope
-          // (per attack/round/activation). Unlimited rows have a pass-through guard.
+          // Don't offer a reroll already used in its scope (default once per
+          // attack; wider for Saska/Lando).
           if (!limGuard(game, combat)) return false;
+          if (pool === 'any') {
+            return selectableDieIndices(combat, { pool: 'attack' }).length
+              + selectableDieIndices(combat, { pool: 'defense' }).length > 0;
+          }
           return selectableDieIndices(combat, { pool }).length > 0;
         },
       });

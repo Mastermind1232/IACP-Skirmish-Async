@@ -264,6 +264,14 @@ export async function finalizeActivation({
     });
   }
 
+  // B1b. Reset the per-activation combat ability used-list. "once per activation"
+  // reroll/combat limits (e.g. Lando's Shrewd Scoundrel) are keyed in
+  // game.activationAbilityUsed; nothing else clears it, so a new group activation
+  // is the refresh boundary. This also makes Shrewd re-available when Lando
+  // attacks in another figure's activation (e.g. Leia-granted) — that's a new
+  // activation. alexanbv 2026-06-17.
+  game.activationAbilityUsed = {};
+
   // B2. Clear confirmation message (off-turn path only)
   if (confirmationMessage) {
     await confirmationMessage.edit({ components: [] }).catch(discordCatch);

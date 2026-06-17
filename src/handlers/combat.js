@@ -938,6 +938,42 @@ function _makeResourcefulResolver(side) {
 }
 
 function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, stageKey = 'rr' }) {
+  // pool 'any' — "choose 1 die; the player that rolled it must reroll it"
+  // (Precision, Raider). The owner may pick EITHER pool's die (typically to
+  // force the opponent to reroll a good die), so offer attack + defense dice as
+  // a<i>/d<i> buttons. No color swap on these (Gambit is Lando-only).
+  // alexanbv 2026-06-17 — the data-driven gate previously mis-pooled these to
+  // the owner's own attack dice only.
+  if (pool === 'any') {
+    const lbl = (p, d) => p === 'attack'
+      ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
+      : `${d?.block || 0}b/${d?.evade || 0}e${d?.dodge ? '/dodge' : ''}`;
+    return {
+      prompt: ({ combat }) => {
+        const atk = _selectableDieIndices(combat, { pool: 'attack' });
+        const def = _selectableDieIndices(combat, { pool: 'defense' });
+        if (atk.length + def.length === 0) return { content: `**${name}** — no eligible die to reroll.`, buttons: [['skip', 'OK', 'secondary']] };
+        const ad = combat.attackDiceResults || [], dd = combat.defenseDiceResults || [];
+        return {
+          content: `**${name}** — choose any die; the player that rolled it rerolls it:`,
+          buttons: [
+            ...atk.map((i) => [`a${i}`, `Attack #${i + 1} (${lbl('attack', ad[i])})`]),
+            ...def.map((i) => [`d${i}`, `Defense #${i + 1} (${lbl('defense', dd[i])})`]),
+            ['skip', 'Skip', 'secondary'],
+          ],
+        };
+      },
+      apply: async (choice, { combat, thread, ctx }) => {
+        if (choice === 'skip') { thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
+        const p = choice[0] === 'd' ? 'defense' : 'attack';
+        const idx = parseInt(choice.slice(1), 10);
+        const res = _rerollDie(combat, ctx, { pool: p, index: idx });
+        if (res.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+        else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+        return undefined;
+      },
+    };
+  }
   const wantsColorSwap = (combat) => colorSwap || _figureHasGambit(combat, side);
   const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
   const dieLabel = (d) => pool === 'attack'
