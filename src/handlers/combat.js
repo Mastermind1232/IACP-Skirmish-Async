@@ -217,7 +217,7 @@ import { renderAttackDiceImage, renderDefenseDiceImage } from '../discord/dice-r
 import { processFigureDefeat } from '../engine/defeat-handler.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
-  getCcHand, getCcDeck, getActivatedDcIndices,
+  getCcHand, getCcDeck, getCcDiscard, getActivatedDcIndices,
   recomputeActivationCounts,
   ccDiscardKey, ccHandKey, ccDeckKey, ccAttachmentsKey, vpKey,
   opponentPlayerNum, getInitiativePlayerNum,
@@ -264,6 +264,54 @@ function _markGateAbilityUsed(game, combat, pick) {
     const mid = combatSelfAttachmentMsgId(combat, reg.side);
     if (mid) exhaustAttachment(game, mid, p.exhaustOnUse);
   }
+}
+
+/**
+ * Tough Luck (CC) — the single generic post-reroll reaction (alexanbv 2026-06-17:
+ * "one or two functions, not multiple in each ability"). After ANY reroll, the
+ * RELEVANT player by the die's POOL — attack die → the DEFENDER, defense die →
+ * the ATTACKER, regardless of who did the rerolling — may play Tough Luck to
+ * remove that die's result. If that player holds Tough Luck, post the window and
+ * stash combat._pendingToughLuck so the gate pauses until they respond
+ * (handleToughLuckGate resumes the rerolls window). Returns true iff a window
+ * was posted. Called centrally by the gate after a reroll resolves.
+ */
+export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
+  if (!combat || idx == null) return false;
+  const relevantPN = pool === 'attack'
+    ? (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum))
+    : combat.attackerPlayerNum;
+  if (!relevantPN) return false;
+  if (!(getCcHand(game, relevantPN) || []).includes('Tough Luck')) return false;
+  combat._pendingToughLuck = { pool, idx, playerNum: relevantPN };
+  setPendingToughLuck(game, { side: pool === 'attack' ? 'atk' : 'def', idx });
+  game.toughLuckPlayerNum = relevantPN;
+  const ownerId = game[`player${relevantPN}Id`] ?? '';
+  const die = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults)?.[idx];
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tlgate_remove_${combat.gameId}_${pool}_${idx}`).setLabel(`Remove the rerolled ${die?.color || ''} die`.trim()).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`tlgate_skip_${combat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  );
+  await thread?.send(sanitizeMentions({
+    content: `**Tough Luck** — <@${ownerId}> may remove the rerolled ${pool} die's result.`,
+    components: [row], allowedMentions: { users: [ownerId] },
+  })).catch(discordCatch);
+  return true;
+}
+
+/**
+ * After a reroll resolver completes, offer Tough Luck on the die just rerolled
+ * (combat._lastRerolledDie, set by rerollDie); if a window is posted the gate
+ * PAUSES (handleToughLuckGate re-drives). Otherwise drive the window normally.
+ * The single place the reroll → Tough Luck reaction is triggered.
+ */
+async function _driveGateOrOfferToughLuck(window, thread, game, combat, ctx) {
+  if (window === 'rerolls' && combat?._lastRerolledDie) {
+    const { pool, index } = combat._lastRerolledDie;
+    delete combat._lastRerolledDie;
+    if (await _offerToughLuck(game, combat, ctx, thread, pool, index)) return;
+  }
+  await _driveGatePath(window, thread, game, combat, ctx);
 }
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -1856,10 +1904,11 @@ export async function handleModsPick(interaction, ctx) {
         await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
         // wait for the sub-choice (handleModsSubChoice resolves + re-drives)
       } else {
+        delete combat._lastRerolledDie;
         if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
         recordModsChoice(gate, side, pick);
         _markGateAbilityUsed(game, combat, pick); // once/round-etc. → owner used-list
-        await _driveGatePath(window, thread, game, combat, ctx);
+        await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
       }
     } else {
       // Unknown id (no resolver registered) — record + skip so the gate never
@@ -1940,13 +1989,14 @@ export async function handleModsSubChoice(interaction, ctx) {
   // the chosen option, then record + re-drive. Never names a specific ability.
   const _resolver = _resolverFor(id);
   if (_resolver) {
+    delete combat._lastRerolledDie;
     const _res = _resolver.apply ? await _resolver.apply(choice, { game, combat, thread, ctx, side, gameId, id, window }) : null;
     // Multi-stage abilities (e.g. pick die → pick face) return { followUp: true }
     // after posting their next prompt; don't record/advance until they finish.
     if (_res?.followUp) { saveGames?.(game.gameId); return; }
     if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
     _markGateAbilityUsed(game, combat, id); // once/round-etc. → owner used-list (after the multi-stage resolve completes)
-    await _driveGatePath(window, thread, game, combat, ctx);
+    await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
     saveGames?.(game.gameId);
     return;
   }
@@ -1955,6 +2005,53 @@ export async function handleModsSubChoice(interaction, ctx) {
   if (side) { try { recordModsChoice(gate, side, id); } catch { /* not pending */ } }
   _markGateAbilityUsed(game, combat, id);
   await _driveGatePath(window, thread, game, combat, ctx);
+  saveGames?.(game.gameId);
+}
+
+/**
+ * Tough Luck gate response (alexanbv 2026-06-17). The relevant player (offered by
+ * _offerToughLuck) either removes the rerolled die's RESULT (zeroes its icons +
+ * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
+ * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
+ */
+export async function handleToughLuckGate(interaction, ctx) {
+  const { getGame, saveGames, replyIfGameEnded } = ctx;
+  const isRemove = interaction.customId.startsWith('tlgate_remove_');
+  const parts = splitCustomId(interaction.customId, isRemove ? 'tlgate_remove_' : 'tlgate_skip_');
+  const gameId = parts[0];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded?.(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const tl = combat?._pendingToughLuck;
+  if (!tl) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, tl.playerNum, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (isRemove) {
+    const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+    const die = dice?.[tl.idx];
+    if (die) {
+      // Tough Luck is played → discard it from the responder's hand.
+      const hand = getCcHand(game, tl.playerNum) || [];
+      const hi = hand.indexOf('Tough Luck');
+      if (hi >= 0) { hand.splice(hi, 1); (getCcDiscard(game, tl.playerNum) || []).push('Tough Luck'); }
+      // Remove that die's RESULT (zero its icons), then recalc the pool totals.
+      if (tl.pool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
+      else { die.block = 0; die.evade = 0; die.dodge = false; }
+      const recalc = tl.pool === 'attack' ? ctx.recalcAttackTotals : ctx.recalcDefenseTotals;
+      if (typeof recalc === 'function') combat[tl.pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
+      await thread?.send(`**Tough Luck** — removed the rerolled ${die.color} ${tl.pool} die's result.`).catch(discordCatch);
+    }
+  } else {
+    await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
+  }
+  delete combat._pendingToughLuck;
+  game.pendingToughLuck = null;
+  game.toughLuckPlayerNum = null;
+  // Resume the rerolls window (more rerolls may be available, or it advances).
+  await _driveGatePath('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
 

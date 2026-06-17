@@ -65,5 +65,8 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
   if (!specialTurn) markDieRerolled(combat, id);
   const totals = recalc(dice);
   combat[totalsField] = totals;
+  // Record the most recent reroll so the gate can offer Tough Luck on it
+  // (attack die → defender may react; defense die → attacker). alexanbv 2026-06-17.
+  combat._lastRerolledDie = { pool, index };
   return { ok: true, newDie, totals };
 }
