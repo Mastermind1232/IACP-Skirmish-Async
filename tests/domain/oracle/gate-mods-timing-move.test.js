@@ -28,7 +28,7 @@ function metaFor(dcMessageMeta, gameId, pn) {
 async function attackInto(defenderDc, opts = {}) {
   const built = createTestGame()
     .withMap('mos-eisley-outskirts')
-    .withPlayer1Army([{ dcName: 'Stormtrooper' }])
+    .withPlayer1Army([{ dcName: opts.attackerDc || 'Stormtrooper' }])
     .withPlayer2Army([{ dcName: defenderDc }])
     .inRound(1)
     .build();
@@ -97,5 +97,20 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
   it('Composite Plating: no Block when attacker adjacent', async () => {
     const combat = await attackInto('Heavy Stormtrooper (Regular)', { type: 'melee', dist: 1 });
     assert.equal(combat.bonusBlock || 0, 0, 'Composite Plating must NOT apply when attacker is close');
+  });
+
+  it('Disposable (Hired Gun): -1 Evade applied once via the mods window', async () => {
+    const combat = await attackInto('Hired Gun (Regular)');
+    assert.equal(combat.bonusEvade, -1, 'Disposable must apply -1 Evade exactly once');
+  });
+
+  it('Cortosis Weave (Echo Base Trooper Elite): -2 Pierce applied once', async () => {
+    const combat = await attackInto('Echo Base Trooper (Elite)');
+    assert.equal(combat.bonusPierce, -2, 'Cortosis Weave must reduce Pierce by 2 exactly once');
+  });
+
+  it('Conclusion (HK-47 attacker): sets conclusionDodgeCancel via the mods window', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'HK-47' });
+    assert.equal(combat.conclusionDodgeCancel, true, 'Conclusion must set the Dodge-cancel flag');
   });
 });

@@ -75,7 +75,6 @@ e('shared_intuition', 'Shared Intuition (4-LOM)', 'attacker', 'passive', ON, 'fr
 e('sharpshooter', 'Sharpshooter (Fennec Shand)', 'attacker', 'passive', ON, 'dist≥5 → auto-Focus');
 e('find_weakness', 'Find Weakness (Scout Trooper Elite)', 'attacker', 'passive', ON, '→ -1 Evade to def');
 e('exploit_weakness', 'Exploit Weakness (Scout Trooper Elite)', 'attacker', 'passive', ON, 'def harmful cond → +1 Surge');
-e('conclusion', 'Conclusion (HK-47)', 'attacker', 'passive', ON, 'cancel def Dodge');
 e('query_declare', 'Query (HK-47, declare flag)', 'attacker', 'interactive', ON, 'sets queryNeedsPrompt (resolves mods)');
 e('front_line', 'Front Line (Echo Base Trooper)', 'attacker', 'interactive', ON, 'dist≤3 → +2 Acc + die swap');
 e('sniper', 'Sniper / Elite Sniper (Alliance Ranger)', 'attacker', 'passive', ON, 'dist≥5 → +forced rerolls');
@@ -109,8 +108,6 @@ e('fireproof_defender', 'Fireproof (Flame Trooper, def)', 'defender', 'passive',
 e('cunning', 'Cunning (Han/Jyn/Nexu)', 'defender', 'passive', ON, '+1 Block per Evade flag');
 e('hunker_down', 'Hunker Down (Cara Dune)', 'defender', 'passive', ON, 'terrain adjacent → +1 Evade');
 e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', ON, 'diplomaticMissionEvade → +1 Evade');
-e('disposable', 'Disposable (Hired Gun Regular)', 'defender', 'passive', ON, '-1 Evade');
-e('cortosis_weave', 'Cortosis Weave (Echo Base Trooper Elite)', 'defender', 'passive', ON, '-2 Pierce');
 e('spectre_cell_def', 'Spectre Cell (defender)', 'defender', 'passive', ON, 'DC list has [Spectre Cell] → +1 Block');
 e('slippery_declare', 'Slippery (Alliance Smuggler, declare)', 'defender', 'passive', ON, '-2 Accuracy');
 e('sentinel', 'Sentinel', 'defender', 'passive', ON, 'friendly adjacent w/ sentinel → +1 Block');

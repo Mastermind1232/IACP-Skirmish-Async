@@ -1601,6 +1601,17 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const { bonusBlock } = applyCompositePlatingBonus(combat);
     combat.bonusBlock = bonusBlock;
     await thread.send('**Composite Plating** — +1 Block (attacker 4+ spaces away).').catch(discordCatch);
+  } else if (id === 'disposable') {
+    const bump = applyEvadeDebuff(combat);
+    combat.bonusEvade = bump.bonusEvade;
+    await thread.send("**Disposable** — −1 Evade applied to defender's defense results.").catch(discordCatch);
+  } else if (id === 'cortosis_weave') {
+    const r = applyCortosisWeave(combat);
+    combat.bonusPierce = r.bonusPierce;
+    await thread.send('**Cortosis Weave** — Pierce reduced by 2 (min 0).').catch(discordCatch);
+  } else if (id === 'conclusion') {
+    combat.conclusionDodgeCancel = true;
+    await thread.send('**Conclusion** — −1 Dodge: any Dodge rolled by defender is cancelled.').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3657,10 +3668,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Conclusion (HK-47): −1 Dodge to defense results while attacking.
   // Per destruct 2026-05-08: applies to Dodge, not Evade. computeCombatResult
   // reads conclusionDodgeCancel and clears defRoll.dodge.
-  if (hasConclusionAbility(atkSpecialIds)) {
-    game.pendingCombat.conclusionDodgeCancel = true;
-    await thread.send('**Conclusion** — −1 Dodge: any Dodge rolled by defender is cancelled.');
-  }
+  // Conclusion (HK-47) — MOVED to the mods window (combat-abilities-mods.js
+  // 'conclusion' attacker passive) per alexanbv 2026-06-16.
 
   // Query (HK-47): defender prompt deferred to proceedAfterRerolls
   // (modifier step) — same pattern as Negotiate. Per destruct 2026-05-08
@@ -3670,12 +3679,8 @@ export async function handleAttackTarget(interaction, ctx) {
     game.pendingCombat.queryNeedsPrompt = true;
   }
 
-  // Disposable (Hired Gun Regular): -1 Evade to own defense results
-  if (hasDisposableAbility(defSpecialIds)) {
-    const bump = applyEvadeDebuff(game.pendingCombat);
-    game.pendingCombat.bonusEvade = bump.bonusEvade;
-    await thread.send('**Disposable** — −1 Evade applied to defender\'s defense results.');
-  }
+  // Disposable (Hired Gun Regular) — MOVED to the mods window
+  // (combat-abilities-mods.js 'disposable' passive) per alexanbv 2026-06-16.
 
   // Front Line (Echo Base Trooper): within 3 spaces, +2 Accuracy ALWAYS,
   // blue→red swap is OPTIONAL (per alexanbv 2026-05-11). +2 Accuracy
@@ -3696,12 +3701,8 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Cortosis Weave (Echo Base Trooper Elite): reduce Pierce by 2
-  if (hasCortosisWeaveAbility(defSpecialIds)) {
-    const r = applyCortosisWeave(game.pendingCombat);
-    game.pendingCombat.bonusPierce = r.bonusPierce;
-    await thread.send('**Cortosis Weave** — Pierce reduced by 2 (min 0).');
-  }
+  // Cortosis Weave (Echo Base Trooper Elite) — MOVED to the mods window
+  // (combat-abilities-mods.js 'cortosis_weave' passive) per alexanbv 2026-06-16.
 
   // Spectre Cell: passive +1 Block for all friendly figures while defending
   if (!target.isNpc && (getDcList(game, game.pendingCombat.defenderPlayerNum) || []).some(dc => (dc.dcName || dc) === '[Spectre Cell]')) {

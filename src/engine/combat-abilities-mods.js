@@ -18,6 +18,8 @@ import { hasSlipperyAbility } from '../game/slippery-smuggler-helpers.js';
 import { hasTakeCoverAbility } from '../game/take-cover-jawa-helpers.js';
 import { hasGamorreanHonorGuardAbility, gamorreanHonorGuardApplies } from '../game/gamorrean-honor-guard-helpers.js';
 import { hasCompositePlatingAbility, compositePlatingApplies } from '../game/composite-plating-helpers.js';
+import { hasDisposableAbility, hasConclusionAbility } from '../game/evade-debuff-helpers.js';
+import { hasCortosisWeaveAbility } from '../game/cortosis-weave-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -181,6 +183,8 @@ registerCombatAbility({
 // the figureKey base name misses the "(Regular)"/"(Elite)" dc-effects entry).
 const defenderDcNameOf = (combat) => combat.defenderDcName
   || (combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null);
+const attackerDcNameOf = (combat) => combat.attackerDcName
+  || (combat.attackerFigureKey ? dcNameFromFigureKey(combat.attackerFigureKey) : null);
 
 // Slippery (Alliance Smuggler) — while defending, -2 Accuracy to the attack.
 registerCombatAbility({
@@ -217,6 +221,33 @@ registerCombatAbility({
     const dcName = defenderDcNameOf(combat);
     return !!dcName && hasCompositePlatingAbility(ids(eff(deps, dcName)))
       && compositePlatingApplies(combat.distanceToTarget);
+  },
+});
+
+// Disposable (Hired Gun Regular) — -1 Evade to own defense results.
+registerCombatAbility({
+  id: 'disposable', name: 'Disposable', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasDisposableAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Cortosis Weave (Echo Base Trooper Elite) — reduce attack Pierce by 2.
+registerCombatAbility({
+  id: 'cortosis_weave', name: 'Cortosis Weave', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasCortosisWeaveAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Conclusion (HK-47) — cancel any Dodge the defender rolls (attacker-side flag).
+registerCombatAbility({
+  id: 'conclusion', name: 'Conclusion', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    return !!dcName && hasConclusionAbility(ids(eff(deps, dcName)));
   },
 });
 
