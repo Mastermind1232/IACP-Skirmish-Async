@@ -1584,6 +1584,10 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'fury_kashyyyk_pierce') {
     combat.bonusPierce = (combat.bonusPierce || 0) + 1;
     await thread.send('**Fury of Kashyyyk** — +1 Pierce (elite WOOKIEE, target within 2, friendly WOOKIEE within 2 of the defender).').catch(discordCatch);
+  } else if (id === 'slippery') {
+    const bump = applySlipperyBonus({ bonusAccuracy: combat.bonusAccuracy });
+    combat.bonusAccuracy = bump.bonusAccuracy;
+    await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3966,12 +3970,9 @@ export async function handleAttackTarget(interaction, ctx) {
     return;
   }
 
-  // Slippery (Alliance Smuggler E/R): while defending, apply -2 Accuracy
-  if (hasSlipperyAbility(defSpecialIds)) {
-    const bump = applySlipperyBonus({ bonusAccuracy: game.pendingCombat.bonusAccuracy });
-    game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
-    await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.');
-  }
+  // Slippery (Alliance Smuggler E/R): while defending, apply -2 Accuracy.
+  // MOVED to the mods window (combat-abilities-mods.js 'slippery' passive +
+  // _fireModsPassive) per alexanbv 2026-06-16 — declaration is the wrong timing.
 
   // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade
   if (hasTakeCoverAbility(defSpecialIds)) {

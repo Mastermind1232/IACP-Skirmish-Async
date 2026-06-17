@@ -14,6 +14,7 @@ import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
 import { hasAgileAbility } from '../game/agile-jet-trooper-helpers.js';
+import { hasSlipperyAbility } from '../game/slippery-smuggler-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -168,6 +169,22 @@ registerCombatAbility({
   applies: (game, combat, side, deps) => {
     if (!combat.defenseRoll?.dodge || !combat.target?.figureKey) return false;
     return ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))).includes('lucky_r2d2');
+  },
+});
+
+// Slippery (Alliance Smuggler) — while defending, -2 Accuracy to the attack.
+// Moved from declaration (handleAttackTarget) into the mods window per alexanbv
+// 2026-06-16 "they must be implemented at the right timing".
+registerCombatAbility({
+  id: 'slippery', name: 'Slippery', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    // Prefer the variant-qualified name on combat (e.g. "Alliance Smuggler
+    // (Regular)") — the figureKey only carries the base name, which misses the
+    // variant-keyed dc-effects entry.
+    const dcName = combat.defenderDcName
+      || (combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null);
+    if (!dcName) return false;
+    return hasSlipperyAbility(ids(eff(deps, dcName)));
   },
 });
 
