@@ -113,7 +113,14 @@ export function recalcDefenseTotals(dice) {
   // +1 Dodge), not binary. Aggregate per-die dodge booleans into a
   // numeric total so additions/subtractions stack correctly.
   let block = 0, evade = 0, dodge = 0;
-  for (const d of dice) { block += d.block ?? 0; evade += d.evade ?? 0; if (d.dodge) dodge += 1; }
+  for (const d of dice) {
+    block += d.block ?? 0;
+    evade += d.evade ?? 0;
+    // Dodge is a COUNT. A die normally carries a boolean dodge (counts 1), but a
+    // die whose results were DOUBLED (Shrewd Scoundrel) carries a numeric dodge
+    // (e.g. 2) — count it as its value (alexanbv 2026-06-16).
+    if (d.dodge) dodge += (typeof d.dodge === 'number' ? d.dodge : 1);
+  }
   return { block, evade, dodge };
 }
 
