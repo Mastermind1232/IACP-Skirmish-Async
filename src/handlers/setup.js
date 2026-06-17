@@ -324,6 +324,19 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
       const suFigKey = `${dcName}-${dgIndex}-${baseFigCount}`;
       game.figureNicknames = game.figureNicknames || {};
       game.figureNicknames[suFigKey] = card;
+      // The SU figure is a full extra figure with its OWN health box (its own HP
+      // from the SU card, not the base group's). Add a 3rd box so it can take
+      // damage / be defeated independently. alexanbv 2026-06-17. Guarded on the
+      // base length so re-entry can't double-add.
+      const suHealth = getDcStats(card)?.health ?? null;
+      if (suHealth != null) {
+        const hs = dcHealthState?.get(dcMsgId);
+        if (Array.isArray(hs) && hs.length === baseFigCount) {
+          hs.push([suHealth, suHealth]);
+          dcHealthState.set(dcMsgId, hs);
+          dcList[dcIdx].healthState = [...hs];
+        }
+      }
     }
   }
 

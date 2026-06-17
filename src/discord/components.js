@@ -757,11 +757,16 @@ export function getDeployFigureLabels(dcList, helpers = {}) {
     const displayName = totals[dcName] > 1 ? `${dcName} [Group ${dgIndex}]` : dcName;
     const baseName = displayName.replace(/\s*\[(?:DG|Group) \d+\]$/, '');
     const figures = getDcStats(dcName).figures ?? 1;
-    if (figures <= 1) {
+    // A Squad Upgrade adds ONE figure to the group, nicknamed at index = base
+    // figure count (setup.js). Include it so it gets a deploy button + position.
+    // alexanbv 2026-06-17. (getNickname is only ever set for SU figures.)
+    const suNick = getNickname(dcName, dgIndex, figures);
+    const effFigures = figures + (suNick ? 1 : 0);
+    if (effFigures <= 1) {
       labels.push(`Deploy ${displayName}`);
       metadata.push({ dcName, dgIndex, figureIndex: 0 });
     } else {
-      for (let f = 0; f < figures; f++) {
+      for (let f = 0; f < effFigures; f++) {
         const nick = getNickname(dcName, dgIndex, f);
         const nickSuffix = nick ? ` (${nick})` : '';
         const rawLabel = `Deploy ${baseName} ${dgIndex}${FIGURE_LETTERS[f]}${nickSuffix}`;

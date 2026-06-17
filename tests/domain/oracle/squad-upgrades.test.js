@@ -6,6 +6,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { isSquadUpgradeCard, squadUpgradeOnGroup, effectiveFigureCount, SQUAD_UPGRADE_FIGURE_CARDS } from '../../../src/game/squad-upgrades.js';
+import { getDeployFigureLabels } from '../../../src/discord/components.js';
 
 describe('Squad Upgrade membership', () => {
   it('Z-6, Mortar, Flame Trooper are squad upgrades; Riot Trooper is not', () => {
@@ -29,5 +30,26 @@ describe('Squad Upgrade membership', () => {
     assert.equal(effectiveFigureCount(2, ['Combat Suit']), 2);
     assert.equal(effectiveFigureCount(2, []), 2);
     assert.equal(effectiveFigureCount(1, ['Z-6 Trooper']), 2);
+  });
+});
+
+describe('Squad Upgrade deploy placement (slice 2)', () => {
+  const helpers = (getNickname) => ({
+    resolveDcName: (d) => d.dcName || d,
+    isFigurelessDc: () => false,
+    getDcStats: (n) => ({ 'Heavy Stormtrooper': { figures: 2 } }[n] || { figures: 1 }),
+    getNickname,
+  });
+  it('a base-2 group with an SU figure deploys 3 figures (the 3rd nicknamed)', () => {
+    // SU figure is nicknamed at index = base figure count (2).
+    const getNick = (dc, dg, f) => (dc === 'Heavy Stormtrooper' && f === 2 ? 'Flame Trooper' : null);
+    const r = getDeployFigureLabels([{ dcName: 'Heavy Stormtrooper' }], helpers(getNick));
+    assert.equal(r.metadata.length, 3, 'three deploy buttons');
+    assert.deepEqual(r.metadata.map((m) => m.figureIndex), [0, 1, 2]);
+    assert.match(r.labels[2], /Flame Trooper/, 'the 3rd figure shows the SU nickname');
+  });
+  it('a base-2 group with no SU deploys only 2 figures', () => {
+    const r = getDeployFigureLabels([{ dcName: 'Heavy Stormtrooper' }], helpers(() => null));
+    assert.equal(r.metadata.length, 2);
   });
 });
