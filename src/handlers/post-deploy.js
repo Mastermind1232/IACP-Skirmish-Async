@@ -146,8 +146,8 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
       abilities.push({ abilityId: 'arms_distribution_deploy', label: 'Arms Distribution (Deploy)', dcName, figureKey: fk, playerNum, interactive: true, type: 'token_pick' });
     }
     // Loku Set Your Sights: at start of mission, place a Recon token on
-    // a unique hostile figure. Once-per-game (game.reconToken persists
-    // until cleared); de-dupe by player so the picker only fires once.
+    // a unique hostile figure. Once-per-game (game.reconTokens[playerNum]
+    // persists); de-dupe by player so the picker only fires once.
     if (sIds.includes('set_your_sights_loku') && !game[`setYourSightsFired_p${playerNum}`]) {
       abilities.push({ abilityId: 'set_your_sights', label: 'Set Your Sights', dcName, figureKey: fk, playerNum, interactive: true, type: 'figure_pick' });
     }
@@ -1871,7 +1871,10 @@ export async function handleSetYourSightsPick(interaction, ctx) {
   const active = game.postDeployQueue?.activeAbility;
   if (!active || active.abilityId !== 'set_your_sights') return;
 
-  game.reconToken = { figureKey, playerNum };
+  // Player-sensitive: each player's Loku keeps its own Recon token, so mirror
+  // matches (both players running Loku) don't overwrite each other. alexanbv 2026-06-17.
+  game.reconTokens = game.reconTokens || {};
+  game.reconTokens[playerNum] = { figureKey };
   game[`setYourSightsFired_p${playerNum}`] = true;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await logGameAction(game, client, `🎯 **Set Your Sights** — Recon token placed on **${dcNameFromFigureKey(figureKey)}**.`, { phase: 'ROUND', icon: 'deployed' });

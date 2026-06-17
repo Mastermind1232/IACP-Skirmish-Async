@@ -267,6 +267,22 @@ function _markGateAbilityUsed(game, combat, pick) {
 }
 
 /**
+ * Is a figure with the given specialAbilityId currently ALIVE (on the board) for
+ * a player? Aura/token abilities (Set Your Sights, etc.) end when their source
+ * figure is defeated. alexanbv 2026-06-17.
+ */
+function _figureWithAbilityAlive(game, playerNum, abilityId) {
+  const figs = game?.figurePositions?.[playerNum] || {};
+  const eff = getDcEffectsGlobal() || {};
+  for (const fk of Object.keys(figs)) {
+    const n = dcNameFromFigureKey(fk);
+    const e = eff[n] || eff[(n || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((e?.specialAbilityIds || []).includes(abilityId)) return true;
+  }
+  return false;
+}
+
+/**
  * Tough Luck (CC) — the single generic post-reroll reaction (alexanbv 2026-06-17:
  * "one or two functions, not multiple in each ability"). After ANY reroll, the
  * RELEVANT player by the die's POOL — attack die → the DEFENDER, defense die →
@@ -4607,17 +4623,23 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Loku Recon Token: Set Your Sights — Pierce 1 when attacking figure with recon token
-  if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
+  // Loku Recon Token — player-sensitive (game.reconTokens[playerNum], so a mirror
+  // match keeps each player's token separate) and only active while a Loku with
+  // the ability is ALIVE on that player's team. alexanbv 2026-06-17: "abilities
+  // like this should be player-sensitive and only work while the figure is alive."
+  const _myRecon = game.reconTokens?.[attackerPlayerNum];
+  const _reconOnTarget = _myRecon?.figureKey === target.figureKey;
+  // Set Your Sights — Pierce 1 when ANY friendly figure attacks the tokened figure
+  // (gated on Loku still being alive — the aura ends if its source is defeated).
+  if (_reconOnTarget && _figureWithAbilityAlive(game, attackerPlayerNum, 'set_your_sights_loku')) {
     game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
     await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 1.');
   }
-  // Loku Recon Token: Mon Cala SF — Loku becomes Focused when attacking recon-tokened figure
-  if (game.reconToken?.figureKey === target.figureKey && game.reconToken?.playerNum === attackerPlayerNum) {
-    if (hasMonCalaSfLokuAbility(atkSpecialIds)) {
-      applyCondition(game, attackerFigureKey, MON_CALA_SF_LOKU_CONDITION);
-      await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
-    }
+  // Mon Cala SF — Loku becomes Focused when LOKU attacks the tokened figure
+  // (inherently requires the attacker to be a live Loku).
+  if (_reconOnTarget && hasMonCalaSfLokuAbility(atkSpecialIds)) {
+    applyCondition(game, attackerFigureKey, MON_CALA_SF_LOKU_CONDITION);
+    await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
   }
 
   // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated (ending the attack)
