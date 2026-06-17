@@ -1151,7 +1151,7 @@
     "Deadly Precision": {
       "type": "ccEffect",
       "label": "Start of activation: this round -1 Dodge to defense when you attack",
-      "attackAccuracyBonus": 1,
+      "setsDeadlyPrecision": true,
       "wiredStatus": "wired"
     },
     "deadly_spin": {

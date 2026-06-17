@@ -58,7 +58,7 @@ const BATCH = [
   ['Dark Energy',             ['darkEnergyEffect']],
   ['De Wanna Wanga',          ['shuffleOneFromDiscardIntoDeck']],
   ['Deadeye',                 ['attackAccuracyBonus']],
-  ['Deadly Precision',        ['attackAccuracyBonus']],
+  ['Deadly Precision',        ['setsDeadlyPrecision']],
   ['Demoralizing Monologue',  ['demoralizingMonologueEffect']],
   ['Devotion',                ['devotionEffect']],
 ];

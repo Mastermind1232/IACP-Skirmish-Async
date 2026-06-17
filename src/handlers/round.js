@@ -984,6 +984,8 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   // reset as the first thing in the SOR phase before mission rules"). The generic
   // limit guard (combat-conditions.js limitGuard) reads game.roundAbilityUsed.
   game.roundAbilityUsed = {};
+  // Deadly Precision (CC) is a "this round" effect — clear it each new round.
+  game.deadlyPrecisionActive = {};
 
   // Mission SOR async effects: dispatch via the mission-eor-effects
   // registry (which now handles both EoR and SOR). Halts early on any

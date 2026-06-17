@@ -12165,6 +12165,20 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: setsDeadlyPrecision (Deadly Precision — this round, your attacks
+  // apply -1 Dodge to the defense results). Per-player round flag; a gate mods
+  // passive applies the -1 Dodge on each of your attacks. alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && entry.setsDeadlyPrecision) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    game.deadlyPrecisionActive = game.deadlyPrecisionActive || {};
+    game.deadlyPrecisionActive[playerNum] = true;
+    return {
+      applied: true,
+      logMessage: '**Deadly Precision** — this round, your attacks apply −1 Dodge to the defense results.',
+    };
+  }
+
   // ccEffect: setsWindfall (Windfall — gain VP equal to cost when CCs are discarded from hand)
   if (entry.type === 'ccEffect' && entry.setsWindfall) {
     const { game, playerNum } = context;

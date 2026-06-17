@@ -2154,6 +2154,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'dead_precise_dodge') {
     combat.bonusDodge = (combat.bonusDodge || 0) - 1;
     await thread.send('**Dead Precise** (Ko-Tun within 3, Power Token spent) — −1 Dodge to the attack results.').catch(discordCatch);
+  } else if (id === 'deadly_precision') {
+    combat.bonusDodge = (combat.bonusDodge || 0) - 1;
+    await thread.send('**Deadly Precision** — −1 Dodge to the defense results (this round).').catch(discordCatch);
   } else if (id === 'cunning') {
     const r = applyCunningFlag(combat);
     combat.hasCunning = r.hasCunning;

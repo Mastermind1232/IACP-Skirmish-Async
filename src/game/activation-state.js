@@ -813,6 +813,7 @@ const ROUND_NULL_FLAGS = [
   'holdGroundPlayerNum',
   'windfallActive',
   'wreakVengeanceActive',
+  'deadlyPrecisionActive',
   'toughLuckPlayerNum',
   'thereIsNoTryPlayerNum',
   'youWillNotDenyMeActive',

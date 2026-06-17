@@ -259,6 +259,14 @@ registerCombatAbility({
   applies: (game, combat) => !!combat.attackerSpentPowerToken && _deadPreciseKoTunAura(game, combat),
 });
 
+// Deadly Precision (CC) — this round, the playing player's attacks apply -1
+// Dodge. Round-scoped per-player flag set by the CC; cleared at round start.
+// alexanbv 2026-06-17.
+registerCombatAbility({
+  id: 'deadly_precision', name: 'Deadly Precision (−1 Dodge)', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat) => !!game?.deadlyPrecisionActive?.[combat?.attackerPlayerNum],
+});
+
 // Conclusion (HK-47) — cancel any Dodge the defender rolls (attacker-side flag).
 registerCombatAbility({
   id: 'conclusion', name: 'Conclusion', windows: ['mods'], side: 'attacker', kind: 'passive',
