@@ -16,6 +16,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { getDeploymentZones, getCcEffect, hasMissionFlag } from '../data-loader.js';
 import { setPendingMissionSorReveal, clearPendingMissionSorReveal, setPendingChannelTheForceStrain, clearPendingChannelTheForceStrain } from '../game/interrupts.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
+import { findSmugglingCompartmentMsgId, smugglingCompartmentPeek, applySmugglingCompartmentReorder } from '../game/smuggling-compartment.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -879,6 +880,42 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       }
     }
   }
+  // [Smuggling Compartment] SU Part 2: before the Status Phase, look at the top
+  // and bottom cards of your Command deck and optionally move 1 to the top or
+  // bottom. Private (hand channel) — deck contents are secret. No exhaust gate
+  // (only Part 1's reaction exhausts the card). alexanbv 2026-06-17.
+  for (const pn of _eorPlayers) {
+    const _scMid = findSmugglingCompartmentMsgId(
+      getDcList(game, pn), getDcMessageIds(game, pn), (mid) => isDepletedRemovedFromGame(game, mid),
+    );
+    if (!_scMid) continue;
+    const _scDeckKey = pn === 1 ? 'player1CcDeck' : 'player2CcDeck';
+    const _scPeek = smugglingCompartmentPeek(game[_scDeckKey] || []);
+    if (!_scPeek) continue; // empty deck — nothing to look at
+    const _scHandChId = getHandChannelId(game, pn);
+    if (!_scHandChId) continue;
+    try {
+      const _scCh = await fetchGameChannel(client, _scHandChId);
+      if (_scPeek.single) {
+        await _scCh.send({ content: `**[Smuggling Compartment]** — Your Command deck has a single card (top = bottom): **${_scPeek.top}**. Nothing to reorder.` });
+        continue;
+      }
+      game.pendingSmugglingCompartmentPeek = game.pendingSmugglingCompartmentPeek || {};
+      game.pendingSmugglingCompartmentPeek[pn] = { top: _scPeek.top, bottom: _scPeek.bottom };
+      const _scRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`sc_reorder_${gameId}_${pn}_topToBottom`).setLabel(truncateLabel(`Top → bottom: ${_scPeek.top}`)).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`sc_reorder_${gameId}_${pn}_bottomToTop`).setLabel(truncateLabel(`Bottom → top: ${_scPeek.bottom}`)).setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`sc_reorder_${gameId}_${pn}_skip`).setLabel('Leave as-is').setStyle(ButtonStyle.Secondary),
+      );
+      await _scCh.send({
+        content: `**[Smuggling Compartment]** — Top of deck: **${_scPeek.top}** · Bottom of deck: **${_scPeek.bottom}**. You may move 1 of them to the top or bottom of your Command deck:`,
+        components: [_scRow],
+      });
+    } catch (err) {
+      console.error('Smuggling Compartment peek error:', err);
+    }
+  }
+
   // [Doubt] SU: at end of round, choose hostile figure, discard 1 condition or Power Token
   for (const pn of _eorPlayers) {
     const _dbtDcList = getDcList(game, pn) || [];
@@ -2090,6 +2127,35 @@ export async function handleCtfPick(interaction, ctx) {
     }
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  saveGames(game.gameId);
+}
+
+/**
+ * [Smuggling Compartment] Part 2: owner chooses whether to move the top or
+ * bottom card of their Command deck (or leave it). Deck contents are secret, so
+ * the log names only the action, not the moved card.
+ */
+export async function handleSmugglingCompartmentReorder(interaction, ctx) {
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_reorder_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const action = parts[2];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const deckKey = ccDeckKey(playerNum);
+  game[deckKey] = applySmugglingCompartmentReorder(game[deckKey] || [], action);
+  if (game.pendingSmugglingCompartmentPeek) delete game.pendingSmugglingCompartmentPeek[playerNum];
+  const verb = action === 'topToBottom'
+    ? 'sent the top card to the bottom'
+    : action === 'bottomToTop'
+      ? 'brought the bottom card to the top'
+      : 'left the deck unchanged';
+  await interaction.message.edit({
+    content: `**[Smuggling Compartment]** — ${action === 'skip' ? 'Left deck as-is.' : 'Deck reordered.'}`,
+    components: [],
+  }).catch(discordCatch);
+  await logGameAction(game, client, `**[Smuggling Compartment]** — P${playerNum} ${verb}.`, { phase: 'ROUND', icon: 'card' });
   saveGames(game.gameId);
 }
 
