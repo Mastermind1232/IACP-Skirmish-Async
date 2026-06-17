@@ -64,4 +64,15 @@ describe('SC before a hand-affecting CC — handleScCcConfirm', () => {
     assert.deepEqual(game.player2CcHand, ['A', 'B', 'C']);
     assert.equal(calls.resolveAbility.length, 0);
   });
+
+  it('stands up the choice prompt when the deferred effect is interactive (Intel Leak)', async () => {
+    const { game, interaction, ctx } = harness(['A']);
+    game.pendingScCc = { abilityId: 'Intelligence Leak', card: 'Intelligence Leak', playedBy: 1, msgId: null, fromDc: false };
+    game.p1HandId = 'hand1';
+    ctx.resolveAbility = () => ({ requiresChoice: true, choiceOptions: ['Card X', 'Card Y'] });
+    await handleScCcConfirm(interaction, ctx);
+    assert.ok(game.pendingCcChoice, 'choice prompt is set up for the looker');
+    assert.equal(game.pendingCcChoice.abilityId, 'Intelligence Leak');
+    assert.equal(game.pendingCcChoice.playerNum, 1);
+  });
 });

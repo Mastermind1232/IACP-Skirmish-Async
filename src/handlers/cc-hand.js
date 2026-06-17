@@ -40,11 +40,13 @@ import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { findSmugglingCompartmentMsgId, setAsideFromHand, SMUGGLING_COMPARTMENT_NAME } from '../game/smuggling-compartment.js';
 import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAside } from './sc-hand-protection.js';
 
-// Hand-affecting CCs whose effect must let the target exhaust [Smuggling
-// Compartment] AFTER the Negate/Comms window resolves, before the effect.
-// alexanbv 2026-06-17. Cost-0 (deferred past Negation) is wired here; the
-// cost>0 cards need their effect deferred past Comm Disruption (follow-up).
-const SC_HAND_CCS = new Set(['Stall for Time']);
+// Hand-affecting CCs whose effect must let the target (the opponent) exhaust
+// [Smuggling Compartment] AFTER the Negate/Comms window resolves, before the
+// effect. alexanbv 2026-06-17. Stall for Time (cost 0) defers past Negation in
+// handleNegationLetResolve; Collect Intel / Intelligence Leak (cost>0) defer
+// past Comm Disruption via the SC_HAND_CCS branch in handleCcPlaySelect.
+// (Strategic Shift picks its target mid-effect, so it isn't covered here.)
+const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak']);
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
@@ -286,9 +288,43 @@ async function _resumeScCcEffect(game, ctx, client) {
   if (resolveAbility) {
     const result = resolveAbility(pend.abilityId, { game, playerNum: pend.playedBy, cardName: pend.card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId: pend.msgId });
     await applyAbilityResult(result, { game, playerNum: pend.playedBy, msgId: pend.fromDc ? pend.msgId : undefined, client, ctx });
+    // Interactive effects (e.g. Intelligence Leak's looker pick) return
+    // requiresChoice — stand up the choice prompt for the player who played it.
+    if (result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
+      setPendingCcChoice(game, {
+        abilityId: pend.abilityId, gameId: game.gameId, playerNum: pend.playedBy, card: pend.card,
+        choiceOptions: result.choiceOptions,
+        ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
+      });
+      const chId = getHandChannelId(game, pend.playedBy);
+      const ch = chId ? await fetchGameChannel(client, chId) : null;
+      if (ch) {
+        const btns = result.choiceOptions.map((opt) => new ButtonBuilder().setCustomId(`cc_choice_${game.gameId}_${opt}`).setLabel(String(opt).slice(0, 80)).setStyle(ButtonStyle.Secondary));
+        await ch.send({ content: `**Choose one** (for **${pend.card}**):`, components: chunkButtonsToRows(btns).slice(0, 5) }).catch(discordCatch);
+      }
+    }
   }
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   ctx.saveGames(game.gameId);
+}
+
+/**
+ * Offer [Smuggling Compartment] to the deferred CC's target, then resolve the
+ * deferred effect if SC isn't available / declined. Called from the no-CD-window
+ * path and from handleCommDisruptionSkip (after the CD window closes).
+ */
+async function _offerScThenResolveDeferredCc(game, ctx, client) {
+  const pend = game.pendingScCc;
+  if (!pend) return;
+  const target = opponentPlayerNum(pend.playedBy);
+  if (scReactionAvailable(game, target)) {
+    const offered = await offerScSetAside(game, target, client, {
+      idPrefix: 'sc_cc',
+      promptText: `Your opponent played **${pend.card}**, which affects your Command hand. **[Smuggling Compartment]** — you may exhaust it to set aside cards first (returned at the start of your next activation or the next phase).`,
+    });
+    if (offered) { ctx.saveGames(game.gameId); return; } // deferred to sc_cc handlers
+  }
+  await _resumeScCcEffect(game, ctx, client); // no SC → resolve the effect now
 }
 
 /** Owner opted in — show the hand multi-select. */
@@ -787,6 +823,27 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
   // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
   if (cost !== 0 && ctx.resolveAbility) {
+    // [Smuggling Compartment] — for hand-affecting CCs, defer the effect past the
+    // Comm-Disruption window so the target can set aside cards first
+    // (play → counter-window → SC → effect). alexanbv 2026-06-17.
+    if (SC_HAND_CCS.has(card)) {
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = game[discardKey] || [];
+      game[discardKey].push(card);
+      const _scHandChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
+      await interaction.message.delete().catch(discordCatch);
+      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
+      const _scLogMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      game.pendingScCc = { abilityId, card, playedBy: playerNum, msgId: null, fromDc: false };
+      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _scLogMsg?.id });
+      // Triggers + Comm-Disruption window (Negation is cost-0 only).
+      await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel: _scHandChannel, logMsg: _scLogMsg });
+      if (game.pendingCommDisruptionPrompt) { saveGames(game.gameId); return; } // SC is offered after the CD window closes
+      await _offerScThenResolveDeferredCc(game, ctx, interaction.client);
+      saveGames(game.gameId);
+      return;
+    }
     // Slice #77 (destruct 2026-05-06): snapshot pendingCombat BEFORE
     // resolveAbility mutates combat-flag state. If opponent CDs the play,
     // handleCommDisruptionPlay restores from this snapshot — undoing
@@ -1137,6 +1194,9 @@ export async function handleCommDisruptionPlay(interaction, ctx) {
   if (game.pendingNegation && game.pendingNegation.card === playedCard) {
     clearPendingNegation(game);
   }
+  // [Smuggling Compartment] — if a hand-affecting CC had deferred its effect past
+  // this CD window, the cancel means it never resolves; drop the pending effect.
+  if (game.pendingScCc && game.pendingScCc.card === playedCard) delete game.pendingScCc;
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}** (locked at ${cdSpyCount} SPY)! Discard that card and cancel ALL its effects (including any "when discarded" triggers).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
@@ -1153,6 +1213,12 @@ export async function handleCommDisruptionSkip(interaction, ctx) {
   if (!game) return;
   clearPendingCommDisruptionPrompt(game);
   await interaction.message.edit({ components: [] }).catch(discordCatch);
+  // [Smuggling Compartment] — a hand-affecting CC deferred its effect past this
+  // CD window; now that CD was skipped, offer SC then resolve the effect.
+  if (game.pendingScCc) {
+    await _offerScThenResolveDeferredCc(game, ctx, interaction.client);
+    return;
+  }
   saveGames(game.gameId);
 }
 
