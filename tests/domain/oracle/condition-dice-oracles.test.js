@@ -88,13 +88,16 @@ describe('ORACLE-CONDDICE-001: Migrated sites use applyConditionWithDie', () => 
       'combat.js must import applyConditionWithDie');
   });
 
-  it('Mystic Hunter uses applyConditionWithDie', () => {
+  it('Mystic Hunter uses applyConditionWithDie (now in the on_declare passive)', () => {
+    // Gate cutover (alexanbv 2026-06-16): moved to the on_declare gate passive.
     const src = readSrc('src/handlers/combat.js');
-    const idx = src.indexOf("includes('Mystic Hunter')");
-    assert.ok(idx > 0, 'Mystic Hunter site found');
-    const block = src.slice(idx, idx + 200);
-    assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
-      'Mystic Hunter must use applyConditionWithDie');
+    const idx = src.indexOf('export async function _fireOnDeclarePassive');
+    assert.ok(idx > 0, '_fireOnDeclarePassive found');
+    const block = src.slice(idx, idx + 1200);
+    assert.ok(/mystic_hunter:\s*\{\s*cond:\s*'Focus',\s*die:\s*'green'/.test(block),
+      'Mystic Hunter auto-Focus entry (Focus + green die) must be present');
+    assert.ok(block.includes('applyConditionWithDie(game, combat.attackerFigureKey'),
+      'auto-Focus must use applyConditionWithDie on the attacker figure');
   });
 
   it('Focused on the Kill uses applyConditionWithDie', () => {
@@ -150,26 +153,22 @@ describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () =>
       'Battle Meditation must apply Focus + a green die');
   });
 
-  it('Full of Rage (late) uses applyConditionWithDie', () => {
-    // Full of Rage was extracted to src/game/full-of-rage-helpers.js
-    // during the medium-risk probe grind. Both the early (pre-
-    // pendingCombat) and late (post-pendingCombat) sites now
-    // delegate via hasFullOfRageAbility + fullOfRageDamageTriggered,
-    // and Focus + green-die are named constants. The
-    // applyConditionWithDie contract is still enforced at the late
-    // site.
+  it('Full of Rage uses applyConditionWithDie (now in the on_declare passive)', () => {
+    // Gate cutover (alexanbv 2026-06-16): both the early + late declaration
+    // sites were removed; Full of Rage is now an on_declare gate passive
+    // (combat-abilities-ondeclare.js detection w/ the 3+-damage condition +
+    // _fireOnDeclarePassive effect).
     const src = readSrc('src/handlers/combat.js');
-    const pcIdx = src.indexOf('game.pendingCombat = {');
-    const region = src.slice(pcIdx);
-    const forIdx = region.indexOf('hasFullOfRageAbility(atkSpecialIds)');
-    assert.ok(forIdx > 0, 'Full of Rage late site found (post-extraction)');
-    const block = region.slice(forIdx, forIdx + 400);
-    assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
-      'Full of Rage (late) must use applyConditionWithDie');
-    assert.ok(block.includes('FULL_OF_RAGE_CONDITION'),
-      'Full of Rage (late) must pass FULL_OF_RAGE_CONDITION constant');
-    assert.ok(block.includes('FULL_OF_RAGE_BONUS_DIE'),
-      'Full of Rage (late) must pass FULL_OF_RAGE_BONUS_DIE constant');
+    const idx = src.indexOf('export async function _fireOnDeclarePassive');
+    assert.ok(idx > 0, '_fireOnDeclarePassive found');
+    const block = src.slice(idx, idx + 1200);
+    assert.ok(/full_of_rage:\s*\{\s*cond:\s*'Focus',\s*die:\s*'green'/.test(block),
+      'Full of Rage auto-Focus entry (Focus + green die) must be present');
+    assert.ok(block.includes('applyConditionWithDie(game, combat.attackerFigureKey'),
+      'auto-Focus must use applyConditionWithDie on the attacker figure');
+    const odSrc = readSrc('src/engine/combat-abilities-ondeclare.js');
+    assert.ok(odSrc.includes('fullOfRageDamageTriggered'),
+      'Full of Rage detection must keep the 3+-damage-suffered condition');
   });
 
   it('Advanced Targeting Computer uses applyConditionWithDie', () => {

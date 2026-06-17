@@ -20,6 +20,7 @@ import { getDcEffects as _getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { sharpshooterInRange } from '../game/sharpshooter-helpers.js';
+import { hasFullOfRageAbility, fullOfRageDamageTriggered } from '../game/full-of-rage-helpers.js';
 
 function atkEff(combat, deps) {
   const all = (deps?.getDcEffects || _getDcEffects)() || {};
@@ -68,6 +69,24 @@ registerCombatAbility({
   applies: (game, combat, side, deps) => !!combat.attackerFigureKey
     && hasAny(atkEff(combat, deps), 'sharpshooter')
     && sharpshooterInRange(combat.distanceToTarget),
+});
+
+// Mystic Hunter (Zuckuss) — auto-Focus on every attack declaration.
+atkPassive('mystic_hunter', 'Mystic Hunter', ['mystic hunter']);
+
+// Full of Rage (Krrsantan) — auto-Focus if the attacker has suffered 3+ damage.
+registerCombatAbility({
+  id: 'full_of_rage', name: 'Full of Rage', windows: ['on_declare'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (!combat.attackerFigureKey) return false;
+    const eff = atkEff(combat, deps);
+    if (!hasFullOfRageAbility(eff?.specialAbilityIds || [])) return false;
+    // suffered = maxHp - currentHp for the attacking figure (dcHealthState).
+    const hs = deps?.dcHealthState?.get?.(combat.attackerMsgId) || [];
+    const pair = hs[combat.attackerFigureIndex ?? 0];
+    const suffered = pair ? Math.max(0, (pair[1] ?? pair[0] ?? 0) - (pair[0] ?? 0)) : 0;
+    return fullOfRageDamageTriggered(suffered);
+  },
 });
 
 // ── Attacker interactive on-declare DC abilities ─────────────────────────────

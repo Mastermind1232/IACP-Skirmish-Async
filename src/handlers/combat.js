@@ -678,7 +678,7 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
 // ── Full-attack sequence driver wiring (alexanbv 2026-06-15 rebuild) ──────────
 // Shared gate-builder deps + per-window passive-firer.
 function _gateDeps(ctx) {
-  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize, getSquadCohesionTokens };
+  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize, getSquadCohesionTokens, dcHealthState: ctx.dcHealthState };
 }
 /**
  * Build the sequence-driver handlers for an in-flight attack. Reconstructed on
@@ -2799,23 +2799,10 @@ export async function handleAttackTarget(interaction, ctx) {
   if (attackerConds.includes('Focus')) {
     attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'green'] };
   }
-  // Mystic Hunter (Zuckuss): when you declare an attack, become Focused
   const _atkEff = getDcEffects()?.[meta.dcName];
-  let _mysticHunterFired = false;
-  if ((_atkEff?.passives || []).includes('Mystic Hunter')) {
-    ({ attackInfo, applied: _mysticHunterFired } = applyConditionWithDie(game, attackerFigureKey, 'Focus', attackInfo, 'green'));
-  }
-  // Full of Rage (Krrsantan): auto-Focus before attacking if 3+ damage suffered
-  let _fullOfRageFired = false;
-  let _fullOfRageDmg = 0;
-  if (hasFullOfRageAbility(_atkEff?.specialAbilityIds || []) && !attackerConds.includes('Focus')) {
-    const _forHpArr = dcHealthState?.get(msgId) || [];
-    const _forFigHp = _forHpArr[figureIndex];
-    _fullOfRageDmg = _forFigHp ? Math.max(0, (_forFigHp[1] ?? _forFigHp[0] ?? 0) - (_forFigHp[0] ?? 0)) : 0;
-    if (fullOfRageDamageTriggered(_fullOfRageDmg)) {
-      ({ attackInfo, applied: _fullOfRageFired } = applyConditionWithDie(game, attackerFigureKey, FULL_OF_RAGE_CONDITION, attackInfo, FULL_OF_RAGE_BONUS_DIE));
-    }
-  }
+  // Mystic Hunter (Zuckuss) + Full of Rage (Krrsantan) — MOVED to the on_declare
+  // window (combat-abilities-ondeclare.js passives → _fireOnDeclarePassive) per
+  // alexanbv 2026-06-16.
   // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
   let _flyByFired = false;
   if ((_atkEff?.passives || []).includes('Fly-By') && target.dist != null && target.dist <= 2) {
@@ -2899,8 +2886,6 @@ export async function handleAttackTarget(interaction, ctx) {
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
-  if (_mysticHunterFired) await thread.send(`🔮 **Mystic Hunter** — **${meta.dcName}** becomes **Focused** (+1 green die).`).catch(discordCatch);
-  if (_fullOfRageFired) await thread.send(`**Full of Rage** — Krrsantan becomes **Focused** before attacking (${_fullOfRageDmg} damage suffered, +1 green die).`).catch(discordCatch);
   if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
@@ -3476,14 +3461,9 @@ export async function handleAttackTarget(interaction, ctx) {
   // ondeclare.js 'battle_meditation' passive → _fireOnDeclarePassive) per
   // alexanbv 2026-06-16.
 
-  // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
-  if (hasFullOfRageAbility(atkSpecialIds) && fullOfRageDamageTriggered(atkDamageSuffered)) {
-    const _forResult = applyConditionWithDie(game, attackerFigureKey, FULL_OF_RAGE_CONDITION, game.pendingCombat.attackInfo, FULL_OF_RAGE_BONUS_DIE);
-    if (_forResult.applied) {
-      game.pendingCombat.attackInfo = _forResult.attackInfo;
-      await thread.send(`**Full of Rage** — Krrsantan is **Focused** before attacking (${atkDamageSuffered} damage suffered, +1 green die).`);
-    }
-  }
+  // Full of Rage (Krrsantan) — MOVED to the on_declare window
+  // (combat-abilities-ondeclare.js 'full_of_rage' passive → _fireOnDeclarePassive)
+  // per alexanbv 2026-06-16. (Both the early + late declaration sites removed.)
 
   // Fury (Wookiee Warriors): +1 Surge if 5+ damage
   if (hasFuryAbility(atkSpecialIds) && furyDamageTriggered(atkDamageSuffered)) {

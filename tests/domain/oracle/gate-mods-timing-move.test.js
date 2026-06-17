@@ -32,7 +32,7 @@ async function attackInto(defenderDc, opts = {}) {
     .withPlayer2Army([{ dcName: defenderDc }])
     .inRound(1)
     .build();
-  const { game, deps, dcMessageMeta } = built;
+  const { game, deps, dcMessageMeta, dcHealthState } = built;
   game.combatSequenceMode = true;
   game.selfPlay = true;
   const a = firstFigKey(game, 1);
@@ -53,6 +53,12 @@ async function attackInto(defenderDc, opts = {}) {
   if (opts.defenderDcAdd) (game.p2DcList = game.p2DcList || []).push({ dcName: opts.defenderDcAdd });
   const A = metaFor(dcMessageMeta, game.gameId, 1);
   const D = metaFor(dcMessageMeta, game.gameId, 2);
+  if (opts.attackerSuffered) {
+    const hs = dcHealthState.get(A.msgId) || [[10, 10]];
+    const [cur, max] = hs[0] || [10, 10];
+    hs[0] = [Math.max(0, (max ?? cur) - opts.attackerSuffered), max ?? cur];
+    dcHealthState.set(A.msgId, hs);
+  }
   const combat = {
     gameId: game.gameId, combatThreadId: 'mt-thread',
     attackerPlayerNum: 1, defenderPlayerNum: 2,
@@ -191,5 +197,19 @@ describe('GATE on_declare timing move: auto-Focus fires before the roll, once', 
   it('Sharpshooter: no extra die when target is close', async () => {
     const combat = await attackInto('Stormtrooper', { attackerDc: 'Fennec Shand', type: 'melee', dist: 1 });
     assert.equal(combat.attackInfo.dice.length, 2, 'Sharpshooter must NOT fire at short range');
+  });
+
+  it('Mystic Hunter (Zuckuss): +1 green die at on_declare (always)', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Zuckuss' });
+    assert.equal(combat.attackInfo.dice.length, 3, 'Mystic Hunter must add one die on declare');
+    assert.equal(combat.attackInfo.dice.filter((d) => d === 'green').length, 2, 'the added die must be green');
+  });
+
+  it('Full of Rage (Krrsantan): +1 green die only when 3+ damage suffered', async () => {
+    const damaged = await attackInto('Stormtrooper', { attackerDc: 'Krrsantan', attackerSuffered: 3 });
+    assert.equal(damaged.attackInfo.dice.length, 3, 'Full of Rage must fire with 3+ damage suffered');
+
+    const healthy = await attackInto('Stormtrooper', { attackerDc: 'Krrsantan' });
+    assert.equal(healthy.attackInfo.dice.length, 2, 'Full of Rage must NOT fire at full health');
   });
 });
