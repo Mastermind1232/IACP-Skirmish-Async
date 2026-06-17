@@ -47,11 +47,33 @@ describe('Wider-scope reroll limits', () => {
   it('Saska Teft / Power Converter is once per round (global key blocks all that round)', () => {
     const ab = getCombatAbility('reroll:saska_teft:attacker');
     assert.equal(ab.params.limit, 'once per round');
-    const game = holds(1, 'Saska Teft'), combat = atkCombat('Saska Teft');
+    // The token-bearer Saska attacks; another device-token figure can't reuse it
+    // the same round (shared round key).
+    const game = { ...holds(1, 'Saska Teft'), deviceTokens: { 'Saska Teft': 1, 'Cara Dune': 1 } };
+    game.figurePositions[1]['Cara Dune'] = 'b1';
+    const combat = atkCombat('Saska Teft');
     assert.equal(ab.applies(game, combat), true);
     markAbilityUsed(game, combat, ab.params);
-    // a brand-new attack the same round is still suppressed (round-scoped, shared)
-    assert.equal(ab.applies(game, atkCombat('Saska Teft')), false, 'suppressed for the rest of the round');
+    // a brand-new attack the same round by a DIFFERENT token-bearer is suppressed
+    const combat2 = atkCombat('Cara Dune');
+    assert.equal(ab.applies(game, combat2), false, 'shared round limit blocks all bearers that round');
+  });
+});
+
+describe('Saska Power Converter is gated on a Device token (any friendly bearer)', () => {
+  it('only a token-bearing attacker may use it', () => {
+    const ab = getCombatAbility('reroll:saska_teft:attacker');
+    const game = {
+      figurePositions: { 1: { 'Saska Teft': 'a1', 'Cara Dune': 'b1' } },
+      p1Cards: ['Saska Teft', 'Cara Dune'],
+    };
+    const combat = {
+      attackerPlayerNum: 1, attackerFigureKey: 'Cara Dune', attackerDcName: 'Cara Dune',
+      attackDiceResults: [{ color: 'blue', acc: 1, dmg: 1, surge: 0 }], _rerolledDieIds: new Set(),
+    };
+    assert.equal(ab.applies({ ...game, deviceTokens: {} }, combat), false, 'no token → not offered');
+    assert.equal(ab.applies({ ...game, deviceTokens: { 'Cara Dune': 1 } }, combat), true, 'token bearer → offered');
+    assert.equal(ab.params.colorSwap, true, 'Power Converter can replace the die with any color');
   });
 });
 

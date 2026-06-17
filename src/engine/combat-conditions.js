@@ -131,6 +131,11 @@ export function makeCondition(spec) {
         return (e?.keywords || []).map((k) => String(k).toUpperCase()).includes(kw);
       };
     }
+    // The attacking figure carries a Device token (Saska's Power Converter is
+    // usable by ANY friendly token-bearer, not just Saska). Tokens live in
+    // game.deviceTokens[figureKey] and persist even if Saska is defeated.
+    case 'attacker_has_device_token':
+      return (game, combat) => (game?.deviceTokens?.[combat?.attackerFigureKey] || 0) > 0;
     // A token was spent on this attack (any), or a specific type.
     case 'spent_any_token':
       return (game, combat) => !!(combat?.attackerSpentPowerToken || combat?.attackerSpentToken || combat?.spentTokenThisAttack);
@@ -171,6 +176,7 @@ export function conditionalGuard(conditional, card) {
   if (/did not (perform|make) an attack this activation/.test(s)) {
     return (game, combat) => !(game?.attackPerformedThisActivation?.[combat?.attackerFigureKey]);
   }
+  if (/device token/.test(s)) return makeCondition({ type: 'attacker_has_device_token' });
   return () => true; // unmodeled prose → no extra restriction yet (TODO: graduate)
 }
 

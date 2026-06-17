@@ -92,9 +92,16 @@ export function registerRerollAbilities() {
       // target, not who uses it — the owner (the attacking figure) uses it. So its
       // usability is attacker_is_self, not conditionForRow (which would read it as
       // a defender-grant and return false → never offered).
+      // Device-token grants (Saska's Power Converter) are usable by ANY friendly
+      // figure carrying a Device token, not just the source figure — so the
+      // attacker-has-token condition REPLACES the figure-identity condition that
+      // conditionForRow would otherwise derive. alexanbv 2026-06-17.
+      const deviceTokenGated = /device token/i.test(r.conditional || '');
       const rowCond = forcesDefenderReroll
         ? makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' })
-        : (isDC ? conditionForRow(r) : null);
+        : deviceTokenGated
+          ? makeCondition({ type: 'attacker_has_device_token' })
+          : (isDC ? conditionForRow(r) : null);
       const cardLc = card.toLowerCase();
       registerCombatAbility({
         // Label with the ABILITY name (Targeting Computer / Foresight), not the
