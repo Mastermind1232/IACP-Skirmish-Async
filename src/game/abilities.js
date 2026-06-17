@@ -12,6 +12,7 @@ import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures } from './board-helpers.js';
+import { applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
@@ -6690,6 +6691,33 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `Remove up to ${entry.defensePoolRemoveMax} dice from the defense pool.`,
+    };
+  }
+
+  // ccEffect: removeDefenseDieResults (Heightened Reflexes) — after the defense
+  // dice are rolled, choose 1 defense die and remove its results. Interactive
+  // via requiresChoice; resolves through the unified counter-window like any CC.
+  // alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && typeof entry.removeDefenseDieResults === 'number' && entry.removeDefenseDieResults > 0) {
+    const { game, choiceIndex, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: not in an attack.' };
+    const dice = cbt.defenseDiceResults || [];
+    if (dice.length === 0) return { applied: true, logMessage: '**Heightened Reflexes** — no defense dice to remove.' };
+    if (choiceIndex == null) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: dice.map((d, i) => `Die #${i + 1} (${d.block || 0}b/${d.evade || 0}e${d.dodge ? '/dodge' : ''})`),
+      };
+    }
+    const idx = parseInt(choiceIndex, 10);
+    if (!dice[idx]) return { applied: false, manualMessage: 'Invalid die choice for Heightened Reflexes.' };
+    const roll = applyDefenseDieRemoval(cbt, idx);
+    return {
+      applied: true,
+      refreshDcEmbed: true,
+      logMessage: `**Heightened Reflexes** — removed defense die #${idx + 1}'s results. Defense now ${roll?.block || 0}b/${roll?.evade || 0}e${roll?.dodge ? '/dodge' : ''}.`,
     };
   }
 

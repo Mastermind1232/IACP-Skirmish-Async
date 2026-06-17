@@ -2426,8 +2426,8 @@
     },
     "Heightened Reflexes": {
       "type": "ccEffect",
-      "label": "While attacking a figure: remove 1 defense die from defense results",
-      "defensePoolRemoveMax": 1,
+      "label": "While attacking a figure: choose 1 defense die and remove its results",
+      "removeDefenseDieResults": 1,
       "wiredStatus": "wired"
     },
     "heroic": {

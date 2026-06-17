@@ -42,7 +42,7 @@ const BATCH = [
   ['Hard to Hit',             ['applyDefenseBonusEvade']],
   ['Harsh Environment',       ['informational', 'setsHarshEnvironment']],
   ['Heavy Ordnance',          ['attackBonusHits']],
-  ['Heightened Reflexes',     ['defensePoolRemoveMax']],
+  ['Heightened Reflexes',     ['removeDefenseDieResults']],
   ['Hidden Trap',             ['hiddenTrapEffect']],
   ['Hide in Plain Sight',     ['applyHide']],
   ['Hit and Run',             ['mpAfterAttack']],
