@@ -619,7 +619,13 @@ const _GATE_WINDOWS = {
   rerolls: {
     field: 'rerollsGate', pickPrefix: 'combat_rerolls_pick_', title: 'Rerolls',
     firePassive: null,
-    onComplete: async (thread, game, combat, ctx) => { delete combat.rerollsGate; if (ctx._rerollsGateDone) await ctx._rerollsGateDone(thread, game, combat); },
+    onComplete: async (thread, game, combat, ctx) => {
+      // End of attack step 3: resolve Shrewd Scoundrel's deferred double now,
+      // after all rerolls (incl. Cheat to Win) have happened (IACP FAQ).
+      await _resolveShrewdScoundrel(combat, ctx, thread);
+      delete combat.rerollsGate;
+      if (ctx._rerollsGateDone) await ctx._rerollsGateDone(thread, game, combat);
+    },
   },
   after_resolve: {
     field: 'afterResolveGate', pickPrefix: 'combat_afterresolve_pick_', title: 'After Resolve',
@@ -810,6 +816,116 @@ function _figureHasGambit(combat, side) {
   const eff = getDcEffectsGlobal()[dc] || getDcEffectsGlobal()[(dc || '').replace(/\s*\[.*\]\s*$/, '')];
   return (eff?.specialAbilityIds || []).includes('gambit_lando');
 }
+
+/** Double ALL symbols on a die (Shrewd Scoundrel / IACP FAQ): attack →
+ * acc+dmg+surge ×2; defense → block+evade ×2 and dodge ×2 (a boolean dodge
+ * becomes a numeric 2, which recalcDefenseTotals counts as 2). */
+export function _doubleDieResults(die, pool) {
+  if (!die) return;
+  if (pool === 'attack') {
+    die.acc = (die.acc || 0) * 2; die.dmg = (die.dmg || 0) * 2; die.surge = (die.surge || 0) * 2;
+  } else {
+    die.block = (die.block || 0) * 2; die.evade = (die.evade || 0) * 2;
+    const dc = die.dodge === true ? 1 : (Number(die.dodge) || 0);
+    if (dc > 0) die.dodge = dc * 2;
+  }
+}
+
+/** Shrewd Scoundrel (Lando) — DEFERRED to the END of the rerolls step (IACP FAQ
+ * via alexanbv): if the Resourceful-rerolled die's CURRENT Damage (attack) /
+ * Block (defense) count matches the guess, double ALL of that die's symbols.
+ * Deferring lets Cheat to Win + any further rerolls resolve first. */
+export async function _resolveShrewdScoundrel(combat, ctx, thread) {
+  const ss = combat?.shrewdScoundrel;
+  if (!ss) return;
+  delete combat.shrewdScoundrel;
+  const { pool, index, guess } = ss;
+  if (typeof guess !== 'number') return;
+  const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
+  const die = combat[diceField]?.[index];
+  if (!die) return;
+  const checkVal = pool === 'attack' ? (die.dmg || 0) : (die.block || 0);
+  const sym = pool === 'attack' ? 'Damage' : 'Block';
+  if (checkVal === guess) {
+    _doubleDieResults(die, pool);
+    const recalc = pool === 'attack' ? ctx?.recalcAttackTotals : ctx?.recalcDefenseTotals;
+    if (recalc) combat[pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(combat[diceField]);
+    await thread?.send(`**Shrewd Scoundrel** — guessed ${guess} ${sym}, matched: that die's results are DOUBLED.`).catch(discordCatch);
+  } else {
+    await thread?.send(`**Shrewd Scoundrel** — guessed ${guess} ${sym}, die shows ${checkVal} (no match).`).catch(discordCatch);
+  }
+}
+
+/** Resourceful (Lando) — staged reroll resolver (alexanbv 2026-06-16):
+ * pick a die (attack OR defense) → Gambit color-swap (if Lando has Gambit) →
+ * Shrewd Scoundrel guess (if Lando has it) → reroll. The Shrewd double is
+ * DEFERRED to the end of the rerolls step (_resolveShrewdScoundrel). */
+function _makeResourcefulResolver(side) {
+  const sk = '_rrResourceful';
+  const eff = (combat) => {
+    const dc = side === 'defender' ? combat.defenderDcName : combat.attackerDcName;
+    return getDcEffectsGlobal()[dc] || getDcEffectsGlobal()[(dc || '').replace(/\s*\[.*\]\s*$/, '')];
+  };
+  const hasShrewd = (combat) => (eff(combat)?.specialAbilityIds || []).includes('shrewd_scoundrel_lando');
+  const dieField = (pool) => (pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults');
+  const postSub = (thread, gameId, id, content, btns) => thread?.send(sanitizeMentions({
+    content,
+    components: chunkButtonsToRows(btns.map(([c, l, s]) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${id}`).setLabel(l).setStyle(_modsStyle(s)))),
+  })).catch(discordCatch);
+  const guessBtns = [['g0', 'Guess 0'], ['g1', 'Guess 1'], ['g2', 'Guess 2'], ['gskip', 'No guess', 'secondary']];
+  return {
+    prompt: ({ combat }) => {
+      const atk = _selectableDieIndices(combat, { pool: 'attack' });
+      const def = _selectableDieIndices(combat, { pool: 'defense' });
+      return {
+        content: '**Resourceful** (Lando) — choose a die to reroll:',
+        buttons: [
+          ...atk.map((i) => [`a${i}`, `Reroll attack die #${i + 1}`]),
+          ...def.map((i) => [`d${i}`, `Reroll defense die #${i + 1}`]),
+          ['skip', 'Skip', 'secondary'],
+        ],
+      };
+    },
+    apply: async (choice, { combat, ctx, thread, gameId, id }) => {
+      const st = combat[sk] || {};
+      const doReroll = async () => {
+        // Store the Shrewd guess for the DEFERRED double (end of rerolls step).
+        if (typeof st.guess === 'number') combat.shrewdScoundrel = { pool: st.pool, index: st.index, guess: st.guess };
+        const res = _rerollDie(combat, ctx, { pool: st.pool, index: st.index, newColor: st.newColor });
+        if (res.ok) await thread?.send(`**Resourceful** — rerolled ${st.pool} die #${st.index + 1}.`).catch(discordCatch);
+        else await thread?.send(`**Resourceful** — die #${st.index + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+        delete combat[sk];
+      };
+      const askGuess = async () => { st.stage = 'guess'; await postSub(thread, gameId, id, '**Shrewd Scoundrel** — guess the number of Damage/Block on the die after rerolls (0-2):', guessBtns); return { followUp: true }; };
+      if (!st.stage) {
+        if (choice === 'skip') { delete combat[sk]; await thread?.send('**Resourceful** — Skipped.').catch(discordCatch); return undefined; }
+        st.pool = choice[0] === 'd' ? 'defense' : 'attack';
+        st.index = parseInt(choice.slice(1), 10);
+        combat[sk] = st;
+        if (_figureHasGambit(combat, side)) {
+          st.stage = 'gambit';
+          const die = combat[dieField(st.pool)]?.[st.index];
+          const colors = st.pool === 'attack' ? ['blue', 'green', 'red', 'yellow'] : ['white', 'black'];
+          await postSub(thread, gameId, id, `**Gambit** — replace die #${st.index + 1} with another of the same type, or keep:`, [...colors.map((c) => [c, c, 'primary']), ['keep', `Keep ${die?.color || 'color'}`, 'secondary']]);
+          return { followUp: true };
+        }
+        if (hasShrewd(combat)) return askGuess();
+        await doReroll(); return undefined;
+      }
+      if (st.stage === 'gambit') {
+        st.newColor = choice === 'keep' ? undefined : choice;
+        if (hasShrewd(combat)) return askGuess();
+        await doReroll(); return undefined;
+      }
+      if (st.stage === 'guess') {
+        st.guess = choice === 'gskip' ? null : parseInt(choice.slice(1), 10);
+        await doReroll(); return undefined;
+      }
+      return undefined;
+    },
+  };
+}
+
 function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, stageKey = 'rr' }) {
   const wantsColorSwap = (combat) => colorSwap || _figureHasGambit(combat, side);
   const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
@@ -944,6 +1060,10 @@ function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
 export const COMBAT_RESOLVERS = {
+  // Resourceful (Lando Calrissian) — staged resolver folding in Gambit
+  // (color-swap) + Shrewd Scoundrel (deferred double). alexanbv 2026-06-16.
+  'reroll:lando_calrissian:attacker': _makeResourcefulResolver('attacker'),
+  'reroll:lando_calrissian:defender': _makeResourcefulResolver('defender'),
   // Twin Sabers (Ahsoka Tano) — bespoke reroll resolver (alexanbv 2026-06-16:
   // "rerolls ALL attack dice or ALL defense dice, except dice already
   // rerolled"). The attacker chooses to reroll all of their own attack pool, OR
@@ -7885,28 +8005,10 @@ export async function handleCombatModsYn(interaction, ctx) {
 export async function proceedAfterRerolls(thread, game, combat, ctx) {
   const saveGames = ctx.saveGames;
 
-  // Shrewd Scoundrel (Lando): check hit guess after all rerolls
-  if (typeof combat.shrewdScoundrelGuess === 'number') {
-    const hitCount = combat.attackRoll?.dmg ?? 0;
-    const guess = combat.shrewdScoundrelGuess;
-    if (hitCount === guess) {
-      const ssPlayerNum = combat.attackerPlayerNum; // Lando must be attacker or defender
-      // Find which player is Lando
-      const getDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-      const atkSIds = (getDcEff[combat.attackerDcName] || getDcEff[(combat.attackerDcName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
-      const defDcN = dcNameFromFigureKey(combat.target?.figureKey || '');
-      const defSIds = (getDcEff[defDcN] || getDcEff[(defDcN || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
-      const landoPN = atkSIds.includes('shrewd_scoundrel_lando') ? combat.attackerPlayerNum : (defSIds.includes('shrewd_scoundrel_lando') ? opponentPlayerNum(combat.attackerPlayerNum) : null);
-      if (landoPN) {
-        awardObjectiveVp(game, landoPN, 2);
-        await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. **Correct! +2 VP!**`);
-        if (checkWinConditions) await checkWinConditions(game, client);
-      }
-    } else {
-      await thread.send(`**Shrewd Scoundrel** — Guessed ${guess} Hits, rolled ${hitCount} Hits. Incorrect.`);
-    }
-    delete combat.shrewdScoundrelGuess;
-  }
+  // Shrewd Scoundrel (Lando) — REMOVED the old VP-award version (alexanbv
+  // 2026-06-16: that was the wrong card; the IACP version DOUBLES the rerolled
+  // die's results). Now handled by the gate Resourceful resolver +
+  // _resolveShrewdScoundrel (deferred double at the end of the rerolls step).
 
   // ── CRR step 4: ATTACKER modifiers (fire BEFORE defender modifiers per CRR p.10
   //    + Destruct: "modifiers stage. Attacker modifiers first, then defender.") ──

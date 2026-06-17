@@ -4,7 +4,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { COMBAT_RESOLVERS } from '../../../src/handlers/combat.js';
+import { COMBAT_RESOLVERS, _doubleDieResults, _resolveShrewdScoundrel } from '../../../src/handlers/combat.js';
 import { buildHeadlessDeps } from '../../../src/headless/headless-deps.js';
 
 function deps() {
@@ -52,5 +52,62 @@ describe('Twin Sabers (Ahsoka): reroll ALL dice of one pool, except already-rero
     const c = combat();
     await res.apply('skip', { combat: c, ctx: deps(), thread });
     assert.deepEqual([...c._rerolledDieIds].sort(), ['attack:1'], 'no rerolls on skip');
+  });
+});
+
+describe('Shrewd Scoundrel double (IACP FAQ): all symbols incl. dodge', () => {
+  it('_doubleDieResults doubles every attack symbol', () => {
+    const die = { color: 'red', acc: 2, dmg: 2, surge: 1 };
+    _doubleDieResults(die, 'attack');
+    assert.deepEqual(die, { color: 'red', acc: 4, dmg: 4, surge: 2 });
+  });
+
+  it('_doubleDieResults doubles block/evade and turns a boolean dodge into 2', () => {
+    const die = { color: 'white', block: 1, evade: 1, dodge: true };
+    _doubleDieResults(die, 'defense');
+    assert.equal(die.block, 2);
+    assert.equal(die.evade, 2);
+    assert.equal(die.dodge, 2, 'a doubled Dodge becomes a numeric 2');
+  });
+
+  it('_resolveShrewdScoundrel doubles only when the guess matches the current Damage', async () => {
+    const ctx = deps();
+    // Match: die shows 2 Damage, guess 2 → doubled to 4.
+    const matched = { attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }], shrewdScoundrel: { pool: 'attack', index: 0, guess: 2 } };
+    await _resolveShrewdScoundrel(matched, ctx, thread);
+    assert.equal(matched.attackDiceResults[0].dmg, 4, 'matched guess doubles the die');
+    assert.equal(matched.attackRoll.dmg, 4, 'totals recalculated');
+    assert.equal(matched.shrewdScoundrel, undefined, 'consumed');
+
+    // No match: die shows 1 Damage, guess 2 → unchanged.
+    const missed = { attackDiceResults: [{ color: 'red', acc: 1, dmg: 1, surge: 0 }], shrewdScoundrel: { pool: 'attack', index: 0, guess: 2 } };
+    await _resolveShrewdScoundrel(missed, ctx, thread);
+    assert.equal(missed.attackDiceResults[0].dmg, 1, 'no match → unchanged');
+  });
+});
+
+describe('Resourceful (Lando) staged resolver stores the Shrewd guess', () => {
+  it('pick → Gambit keep → guess sets combat.shrewdScoundrel for the deferred double', async () => {
+    const res = COMBAT_RESOLVERS['reroll:lando_calrissian:attacker'];
+    assert.ok(res, 'Resourceful resolver registered');
+    const ctx = deps();
+    const combat = {
+      attackerDcName: 'Lando Calrissian', attackerPlayerNum: 1, defenderPlayerNum: 2,
+      attackDiceResults: [{ color: 'blue', acc: 1, dmg: 1, surge: 0 }],
+      defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
+      _rerolledDieIds: new Set(),
+    };
+    const a = { combat, ctx, thread, gameId: 'g', id: 'reroll:lando_calrissian:attacker' };
+    // Lando has Gambit + Shrewd: pick attack die 0 → gambit stage
+    let r = await res.apply('a0', a);
+    assert.deepEqual(r, { followUp: true }, 'enters Gambit stage');
+    // keep the color → shrewd guess stage
+    r = await res.apply('keep', a);
+    assert.deepEqual(r, { followUp: true }, 'enters Shrewd guess stage');
+    // guess 1 → reroll + store
+    await res.apply('g1', a);
+    assert.deepEqual(combat.shrewdScoundrel, { pool: 'attack', index: 0, guess: 1 },
+      'guess stored for the deferred end-of-step-3 double');
+    assert.ok(combat._rerolledDieIds.has('attack:0'), 'the die was rerolled');
   });
 });
