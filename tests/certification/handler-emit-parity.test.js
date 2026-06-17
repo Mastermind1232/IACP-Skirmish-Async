@@ -55,6 +55,8 @@ const EMIT_ALLOWLIST = new Set([
   // scan can't see them. Live emission verified in sc-hand-protection.js.
   'sc_hh_open_',
   'sc_hh_skip_',
+  'sc_cc_open_',
+  'sc_cc_skip_',
 ]);
 
 function getRegistrations() {

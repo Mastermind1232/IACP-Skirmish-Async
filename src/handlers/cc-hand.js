@@ -38,6 +38,13 @@ import {
 import { cardNameIncludes } from '../game/card-names.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { findSmugglingCompartmentMsgId, setAsideFromHand, SMUGGLING_COMPARTMENT_NAME } from '../game/smuggling-compartment.js';
+import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAside } from './sc-hand-protection.js';
+
+// Hand-affecting CCs whose effect must let the target exhaust [Smuggling
+// Compartment] AFTER the Negate/Comms window resolves, before the effect.
+// alexanbv 2026-06-17. Cost-0 (deferred past Negation) is wired here; the
+// cost>0 cards need their effect deferred past Comm Disruption (follow-up).
+const SC_HAND_CCS = new Set(['Stall for Time']);
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
@@ -393,6 +400,74 @@ export async function handleScSetAsideConfirm(interaction, ctx) {
   await logGameAction(game, interaction.client, `**[Smuggling Compartment]** — P${ownerNum} exhausted to set aside ${setAside.length} Command card${setAside.length === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' });
   try { await refreshHandAndDiscard(game, ownerNum, interaction.client); } catch { /* best-effort */ }
   saveGames(game.gameId);
+}
+
+// ── [Smuggling Compartment] before a hand-affecting CC's effect (post-counter-window) ──
+// Resume the deferred CC effect after the owner sets aside (or skips).
+async function _resumeScCcEffect(game, ctx, client) {
+  const pend = game.pendingScCc;
+  if (!pend) { ctx.saveGames(game.gameId); return; }
+  delete game.pendingScCc;
+  const { resolveAbility, dcMessageMeta, dcHealthState } = ctx;
+  if (resolveAbility) {
+    const result = resolveAbility(pend.abilityId, { game, playerNum: pend.playedBy, cardName: pend.card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId: pend.msgId });
+    await applyAbilityResult(result, { game, playerNum: pend.playedBy, msgId: pend.fromDc ? pend.msgId : undefined, client, ctx });
+  }
+  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+  ctx.saveGames(game.gameId);
+}
+
+/** Owner opted in — show the hand multi-select. */
+export async function handleScCcOpen(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_cc_open_');
+  const gameId = parts[0];
+  const ownerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hand = game[ccHandKey(ownerNum)] || [];
+  if (hand.length === 0) {
+    await interaction.message.edit({ content: '**[Smuggling Compartment]** — no cards in hand to set aside.', components: [] }).catch(discordCatch);
+    await _resumeScCcEffect(game, ctx, interaction.client);
+    return;
+  }
+  await interaction.message.edit({
+    content: '**[Smuggling Compartment]** — choose Command cards to set aside (returned at the start of your next activation or the next phase):',
+    components: [scSetAsideSelectRow(hand, `sc_cc_confirm_${gameId}_${ownerNum}`)],
+  }).catch(discordCatch);
+}
+
+/** Owner declined — proceed with the effect. */
+export async function handleScCcSkip(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_cc_skip_');
+  const game = await requireGame(interaction, getGame, parts[0]);
+  if (!game) return;
+  await interaction.message.edit({ content: '**[Smuggling Compartment]** — declined; the effect proceeds.', components: [] }).catch(discordCatch);
+  await _resumeScCcEffect(game, ctx, interaction.client);
+}
+
+/** Owner confirmed which CCs to set aside, then resume the effect. */
+export async function handleScCcConfirm(interaction, ctx) {
+  const { getGame, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_cc_confirm_');
+  const gameId = parts[0];
+  const ownerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
+  const count = applyScSetAside(game, ownerNum, interaction.values || []);
+  if (count > 0 && logGameAction) await logGameAction(game, client, `**[Smuggling Compartment]** — P${ownerNum} set aside ${count} Command card${count === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
+  await interaction.message.edit({ content: `**[Smuggling Compartment]** — set aside ${count} card${count === 1 ? '' : 's'}. The effect proceeds.`, components: [] }).catch(discordCatch);
+  await _resumeScCcEffect(game, ctx, interaction.client);
 }
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
@@ -1694,6 +1769,18 @@ export async function handleNegationLetResolve(interaction, ctx) {
   if (resolveAbility && !isCcCanceled(game, card)) {
     const effectData = getCcEffect(card);
     const abilityId = effectData?.abilityId ?? card;
+    // [Smuggling Compartment] — for hand-affecting CCs, the target may exhaust SC
+    // to set aside cards AFTER the Negate window resolves, before the effect.
+    const _scTarget = opponentPlayerNum(playedBy);
+    if (SC_HAND_CCS.has(card) && !game.pendingScCc && scReactionAvailable(game, _scTarget)) {
+      game.pendingScCc = { abilityId, card, playedBy, msgId, fromDc };
+      const offered = await offerScSetAside(game, _scTarget, client, {
+        idPrefix: 'sc_cc',
+        promptText: `Your opponent played **${card}**, which affects your Command hand. **[Smuggling Compartment]** — you may exhaust it to set aside cards first (returned at the start of your next activation or the next phase).`,
+      });
+      if (offered) { saveGames(game.gameId); return; }
+      delete game.pendingScCc;
+    }
     const result = resolveAbility(abilityId, { game, playerNum: playedBy, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId });
     await applyAbilityResult(result, { game, playerNum: playedBy, msgId: fromDc ? msgId : undefined, client, ctx });
   } else if (isCcCanceled(game, card)) {
