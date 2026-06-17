@@ -1635,6 +1635,16 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyForestFightersHit(combat);
     combat.bonusHits = r.bonusHits;
     await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).').catch(discordCatch);
+  } else if (id === 'exploit_weakness') {
+    const r = applyExploitWeaknessSurge(combat);
+    combat.surgeBonus = r.surgeBonus;
+    await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.').catch(discordCatch);
+  } else if (id === 'spectre_cell_atk') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread.send('**Spectre Cell** — +1 Hit (passive).').catch(discordCatch);
+  } else if (id === 'spectre_cell_def') {
+    combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+    await thread.send('**Spectre Cell** — +1 Block (passive).').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3301,11 +3311,8 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(discordCatch);
   }
 
-  // Spectre Cell: passive +1 Hit for all friendly figures while attacking
-  if ((getDcList(game, attackerPlayerNum) || []).some(dc => (dc.dcName || dc) === '[Spectre Cell]')) {
-    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-    await thread.send('**Spectre Cell** — +1 Hit (passive).').catch(discordCatch);
-  }
+  // Spectre Cell (attacker) — MOVED to the mods window
+  // (combat-abilities-mods.js 'spectre_cell_atk' passive).
 
   // Unhinged Director (Krennic): TROOPER/GUARDIAN within 2 (3 with ACS) get +2 from power tokens instead of +1.
   // We compute the FULL set of eligible spender figure keys on the attacker's
@@ -3662,14 +3669,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Find Weakness — MOVED to the mods window (combat-abilities-mods.js 'find_weakness' passive).
 
   // Exploit Weakness (Scout Trooper Elite): +1 Surge if defender has a harmful condition
-  if (hasExploitWeaknessAbility(atkSpecialIds)) {
-    const defConds = game.figureConditions?.[target.figureKey] || [];
-    if (defenderHasHarmfulCondition(defConds)) {
-      const r = applyExploitWeaknessSurge(game.pendingCombat);
-      game.pendingCombat.surgeBonus = r.surgeBonus;
-      await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.');
-    }
-  }
+  // Exploit Weakness — MOVED to the mods window (combat-abilities-mods.js
+  // 'exploit_weakness' passive).
 
   // Conclusion (HK-47): −1 Dodge to defense results while attacking.
   // Per destruct 2026-05-08: applies to Dodge, not Evade. computeCombatResult
@@ -3710,11 +3711,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Cortosis Weave (Echo Base Trooper Elite) — MOVED to the mods window
   // (combat-abilities-mods.js 'cortosis_weave' passive) per alexanbv 2026-06-16.
 
-  // Spectre Cell: passive +1 Block for all friendly figures while defending
-  if (!target.isNpc && (getDcList(game, game.pendingCombat.defenderPlayerNum) || []).some(dc => (dc.dcName || dc) === '[Spectre Cell]')) {
-    game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-    await thread.send('**Spectre Cell** — +1 Block (passive).').catch(discordCatch);
-  }
+  // Spectre Cell (defender) — MOVED to the mods window
+  // (combat-abilities-mods.js 'spectre_cell_def' passive).
 
   // Gamorrean Honor Guard / Composite Plating: MOVED to the mods window
   // (combat-abilities-mods.js 'gamorrean_honor_guard' / 'composite_plating'

@@ -24,6 +24,7 @@ import { hasCunningAbility } from '../game/cunning-helpers.js';
 import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
 import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
+import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -293,6 +294,31 @@ registerCombatAbility({
     const atkConds = game.figureConditions?.[combat.attackerFigureKey] || [];
     return forestFightersQualifies({ isRanged: combat.isRanged, attackerConditions: atkConds });
   },
+});
+
+// Exploit Weakness (Scout Trooper Elite) — +1 Surge if the defender has a
+// harmful condition.
+registerCombatAbility({
+  id: 'exploit_weakness', name: 'Exploit Weakness', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    if (!dcName || !hasExploitWeaknessAbility(ids(eff(deps, dcName)))) return false;
+    const defConds = game.figureConditions?.[combat.target?.figureKey] || [];
+    return defenderHasHarmfulCondition(defConds);
+  },
+});
+
+// Spectre Cell — army-wide passive (DC list holds the [Spectre Cell] command
+// card): attacker gets +1 Hit, defender gets +1 Block.
+registerCombatAbility({
+  id: 'spectre_cell_atk', name: 'Spectre Cell (attacker)', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat) => (getDcList(game, combat.attackerPlayerNum) || [])
+    .some((dc) => (dc.dcName || dc) === '[Spectre Cell]'),
+});
+registerCombatAbility({
+  id: 'spectre_cell_def', name: 'Spectre Cell (defender)', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat) => !combat.target?.isNpc
+    && (getDcList(game, defenderPN(combat)) || []).some((dc) => (dc.dcName || dc) === '[Spectre Cell]'),
 });
 
 // Fury of Kashyyyk — Pierce 1 (conditional attacker modifier, IACP card part 3;

@@ -58,7 +58,6 @@ e('fireproof_attacker', 'Fireproof (Flame Trooper, atk)', 'attacker', 'passive',
 e('autofire', 'Autofire', 'attacker', 'passive', ON, 'autofireActive → autofire_chain surge');
 e('barrage_declare', 'Barrage (CT-1701, declare)', 'attacker', 'passive', ON, 'barrageDefenseBonus → mark barrageAttack');
 e('fire_mission', 'Fire Mission', 'attacker', 'passive', ON, 'fireMissionActive → +Blast 1');
-e('spectre_cell_atk', 'Spectre Cell (attacker)', 'attacker', 'passive', ON, 'DC list has [Spectre Cell] → +1 Hit');
 e('unhinged_director_krennic', 'Unhinged Director (Krennic)', 'attacker', 'interactive', ON, 'eligible spender → +2 token bonus');
 e('fury_of_kashyyyk', 'Fury of Kashyyyk', 'attacker', 'passive', ON, 'elite WOOKIEE proximity → Pierce 1');
 e('payback', 'Payback (Dengar)', 'attacker', 'passive', ON, 'paybackBonusSurge on counter → +Surge');
@@ -72,7 +71,6 @@ e('shock_and_awe', 'Shock and Awe (Cara Dune)', 'attacker', 'passive', ON, 'not 
 e('vanguard', 'Vanguard (AT-RT)', 'attacker', 'interactive', ON, 'pre-target swap + die-swap picker');
 e('shared_intuition', 'Shared Intuition (4-LOM)', 'attacker', 'passive', ON, 'friendly HUNTER ≤3 w/ LOS → +1 Hit');
 e('sharpshooter', 'Sharpshooter (Fennec Shand)', 'attacker', 'passive', ON, 'dist≥5 → auto-Focus');
-e('exploit_weakness', 'Exploit Weakness (Scout Trooper Elite)', 'attacker', 'passive', ON, 'def harmful cond → +1 Surge');
 e('query_declare', 'Query (HK-47, declare flag)', 'attacker', 'interactive', ON, 'sets queryNeedsPrompt (resolves mods)');
 e('front_line', 'Front Line (Echo Base Trooper)', 'attacker', 'interactive', ON, 'dist≤3 → +2 Acc + die swap');
 e('sniper', 'Sniper / Elite Sniper (Alliance Ranger)', 'attacker', 'passive', ON, 'dist≥5 → +forced rerolls');
@@ -104,7 +102,6 @@ e('rogue_smuggler_defend', 'Rogue Smuggler (lose Distracting)', 'defender', 'pas
 e('fireproof_defender', 'Fireproof (Flame Trooper, def)', 'defender', 'passive', ON, 'defenderFireproof');
 e('hunker_down', 'Hunker Down (Cara Dune)', 'defender', 'passive', ON, 'terrain adjacent → +1 Evade');
 e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', ON, 'diplomaticMissionEvade → +1 Evade');
-e('spectre_cell_def', 'Spectre Cell (defender)', 'defender', 'passive', ON, 'DC list has [Spectre Cell] → +1 Block');
 e('slippery_declare', 'Slippery (Alliance Smuggler, declare)', 'defender', 'passive', ON, '-2 Accuracy');
 e('sentinel', 'Sentinel', 'defender', 'passive', ON, 'friendly adjacent w/ sentinel → +1 Block');
 e('protector', 'Protector (Chewbacca)', 'defender', 'passive', ON, 'friendly adjacent → +1 Block');

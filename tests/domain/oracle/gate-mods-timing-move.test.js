@@ -45,6 +45,12 @@ async function attackInto(defenderDc, opts = {}) {
     game.figureConditions = game.figureConditions || {};
     game.figureConditions[a] = opts.attackerConditions;
   }
+  if (opts.defenderConditions) {
+    game.figureConditions = game.figureConditions || {};
+    game.figureConditions[d] = opts.defenderConditions;
+  }
+  if (opts.attackerDcAdd) (game.p1DcList = game.p1DcList || []).push({ dcName: opts.attackerDcAdd });
+  if (opts.defenderDcAdd) (game.p2DcList = game.p2DcList || []).push({ dcName: opts.defenderDcAdd });
   const A = metaFor(dcMessageMeta, game.gameId, 1);
   const D = metaFor(dcMessageMeta, game.gameId, 2);
   const combat = {
@@ -143,5 +149,25 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
   it('Forest Fighters: no Hit when not Hidden', async () => {
     const combat = await attackInto('Rebel Trooper', { attackerDc: 'Ewok Warrior (Elite)', type: 'melee', dist: 1 });
     assert.equal(combat.bonusHits || 0, 0, 'Forest Fighters must NOT apply when not Hidden');
+  });
+
+  it('Exploit Weakness (Scout Trooper Elite): +1 Surge when defender has a harmful condition', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'Scout Trooper (Elite)', defenderConditions: ['Bleed'] });
+    assert.equal(combat.surgeBonus, 1, 'Exploit Weakness must apply +1 Surge once (defender harmful condition)');
+  });
+
+  it('Exploit Weakness: no Surge when defender has no harmful condition', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDc: 'Scout Trooper (Elite)' });
+    assert.equal(combat.surgeBonus || 0, 0, 'Exploit Weakness must NOT apply without a harmful condition');
+  });
+
+  it('Spectre Cell (attacker): +1 Hit when army holds [Spectre Cell]', async () => {
+    const combat = await attackInto('Rebel Trooper', { attackerDcAdd: '[Spectre Cell]' });
+    assert.equal(combat.bonusHits, 1, 'Spectre Cell must apply +1 Hit once (attacker army)');
+  });
+
+  it('Spectre Cell (defender): +1 Block when army holds [Spectre Cell]', async () => {
+    const combat = await attackInto('Rebel Trooper', { defenderDcAdd: '[Spectre Cell]' });
+    assert.equal(combat.bonusBlock, 1, 'Spectre Cell must apply +1 Block once (defender army)');
   });
 });
