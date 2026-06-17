@@ -34,7 +34,7 @@ function makeGameWithFigure(dcName, figureKey, opts = {}) {
     p2ActivatedDcIndices: [],
     figurePositions: { 1: { [figureKey]: 'a1' }, 2: {} },
     figureConditions: opts.conditions ? { [figureKey]: opts.conditions.slice() } : {},
-    youWillNotDenyMeActive: opts.ywndm ? { playerNum: 1 } : null,
+    youWillNotDenyMeActive: opts.ywndm ? { 1: true } : null,
     secondChanceDcMsgId: opts.secondChance ? { msg_x: 1 } : {},
   };
 }

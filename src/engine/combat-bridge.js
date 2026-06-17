@@ -1216,18 +1216,20 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           delete game.nextHostileDefeatVpBonus[attackerPlayerNum];
           await logGameAction(game, client, `**Worth Every Credit** — +${_wecAmt} bonus VP (${game[_vpK].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
-        // You Will Not Deny Me: on any hostile defeat, Fifth Brother recovers 2 HP → card goes to game box
-        if (game.youWillNotDenyMeActive) {
-          const _ywndmData = game.youWillNotDenyMeActive;
-          const _fifthKey = Object.keys(game.figurePositions?.[_ywndmData.playerNum] || {}).find(k => dcNameFromFigureKey(k).toLowerCase().includes('fifth brother'));
+        // You Will Not Deny Me: on a hostile defeat, the ATTACKER's Fifth Brother
+        // recovers 2 HP → card goes to game box. Per-player (the beneficiary is
+        // whoever defeated the hostile). alexanbv 2026-06-17.
+        if (game.youWillNotDenyMeActive?.[attackerPlayerNum]) {
+          const _ywndmPn = attackerPlayerNum;
+          const _fifthKey = Object.keys(game.figurePositions?.[_ywndmPn] || {}).find(k => dcNameFromFigureKey(k).toLowerCase().includes('fifth brother'));
           if (_fifthKey) {
-            const _fifthMsgId = (() => { for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _ywndmData.playerNum && mm.dcName?.toLowerCase().includes('fifth')) return mid; } return null; })();
+            const _fifthMsgId = (() => { for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _ywndmPn && mm.dcName?.toLowerCase().includes('fifth')) return mid; } return null; })();
             if (_fifthMsgId) {
-              const { healed: _fifthHealed } = healHp(dcHealthState, game, _fifthMsgId, 0, 2, _ywndmData.playerNum);
+              const { healed: _fifthHealed } = healHp(dcHealthState, game, _fifthMsgId, 0, 2, _ywndmPn);
               if (_fifthHealed > 0) {
                 await logGameAction(game, client, `**You Will Not Deny Me** — Fifth Brother recovered 2 HP after hostile defeat. Card returns to game box.`, { phase: 'ROUND', icon: 'card' });
               }
-              game.youWillNotDenyMeActive = null;
+              delete game.youWillNotDenyMeActive[_ywndmPn];
               // Move card to game box
               game.gameBox = game.gameBox || [];
               game.gameBox.push('You Will Not Deny Me');
@@ -1241,9 +1243,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
               if (_ywndmCur <= 0 && deps && deps.processFigureDefeat) {
                 await logGameAction(game, client, `\u{1F480} **You Will Not Deny Me** \u2014 fell off while **Fifth Brother** is at **0 HP**; defeated.`, { phase: 'ROUND', icon: 'attack' });
                 await deps.processFigureDefeat(game, {
-                  defeatedPlayerNum: _ywndmData.playerNum,
+                  defeatedPlayerNum: _ywndmPn,
                   figureKey: _fifthKey,
-                  attackerPlayerNum: attackerPlayerNum != null ? attackerPlayerNum : (_ywndmData.playerNum === 1 ? 2 : 1),
+                  attackerPlayerNum: attackerPlayerNum != null ? attackerPlayerNum : (_ywndmPn === 1 ? 2 : 1),
                   source: 'You Will Not Deny Me (fell off)',
                 });
               }

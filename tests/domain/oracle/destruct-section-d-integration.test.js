@@ -182,7 +182,7 @@ test('5th + YWNDM + Zillo end-state: Fifth Brother immune + harmful conditions i
     p2ActivatedDcIndices: [],
     figurePositions: { 1: { 'Fifth Brother-1-0': 'a1' }, 2: {} },
     figureConditions: { 'Fifth Brother-1-0': ['Bleed', 'Stun'] },
-    youWillNotDenyMeActive: { playerNum: 1 },
+    youWillNotDenyMeActive: { 1: true },
     secondChanceDcMsgId: {},
   };
   // YWNDM protects Fifth Brother regardless of HP.

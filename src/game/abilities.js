@@ -12104,7 +12104,10 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.setsYouWillNotDenyMe) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.youWillNotDenyMeActive = { playerNum };
+    // Per-player: each player could run Fifth Brother + YWNDM, so a mirror match
+    // keeps each player's flag separate. alexanbv 2026-06-17.
+    game.youWillNotDenyMeActive = game.youWillNotDenyMeActive || {};
+    game.youWillNotDenyMeActive[playerNum] = true;
     return {
       applied: true,
       logMessage: '**You Will Not Deny Me** active — Fifth Brother cannot be defeated, ignores conditions, and recovers 2 Damage each time a hostile figure is defeated this round.',
@@ -12195,7 +12198,10 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.setsWreakVengeance) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.wreakVengeanceActive = { playerNum };
+    // Per-player: each player could run Maul (Dual-Bladed Fury), so a mirror
+    // match keeps each player's Wreak Vengeance separate. alexanbv 2026-06-17.
+    game.wreakVengeanceActive = game.wreakVengeanceActive || {};
+    game.wreakVengeanceActive[playerNum] = true;
     return {
       applied: true,
       logMessage: '**Wreak Vengeance** active — when using Dual-Bladed Fury this activation, choose both effects instead of 1.',
@@ -12312,7 +12318,12 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.setsUnlimitedPower) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.unlimitedPowerActive = { playerNum };
+    // Per-player (activation scope) — alexanbv 2026-06-17. NOTE: no reader of
+    // unlimitedPowerActive was found (the Emperor's targeting range check that
+    // should drop the 4-space limit this round) — the effect may not actually be
+    // applied yet. Flagged for follow-up.
+    game.unlimitedPowerActive = game.unlimitedPowerActive || {};
+    game.unlimitedPowerActive[playerNum] = true;
     return {
       applied: true,
       logMessage: '**Unlimited Power** — The Emperor may target any friendly figure on the map (not limited to within 4 spaces) this round.',

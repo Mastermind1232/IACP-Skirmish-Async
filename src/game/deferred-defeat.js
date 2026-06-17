@@ -48,7 +48,7 @@ export async function completeDeferredDefeat(game, ctx, payload) {
   if (curHp > 0) {
     return { wasDefeated: false };
   }
-  if (game.youWillNotDenyMeActive?.playerNum === payload.controllerPlayerNum) {
+  if (game.youWillNotDenyMeActive?.[payload.controllerPlayerNum]) {
     const fName = dcNameFromFigureKey(payload.figureKey);
     if (String(fName).toLowerCase().includes('fifth')) {
       return { wasDefeated: false };

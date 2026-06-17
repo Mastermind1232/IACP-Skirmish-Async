@@ -3358,11 +3358,11 @@ export async function handleDcAbilityChoice(interaction, ctx) {
   const meta = dcMessageMeta.get(msgId);
 
   // Wreak Vengeance: when dual_bladed_fury is used and wreakVengeanceActive is set, resolve BOTH chooseOne options
-  if (abilityId === 'dual_bladed_fury' && game.wreakVengeanceActive?.playerNum === playerNum && resolveAbility) {
+  if (abilityId === 'dual_bladed_fury' && game.wreakVengeanceActive?.[playerNum] && resolveAbility) {
     const commonCtx = { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState, hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects };
     const r0 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 0 });
     const r1 = resolveAbility(abilityId, { ...commonCtx, choiceIndex: 1 });
-    delete game.wreakVengeanceActive;
+    if (game.wreakVengeanceActive) delete game.wreakVengeanceActive[playerNum];
     const logParts = [r0.logMessage, r1.logMessage].filter(Boolean);
     const wvLog = `**Wreak Vengeance** — Both Dual-Bladed Fury effects applied:\n${logParts.join('\n')}`;
     await interaction.deferUpdate().catch(discordCatch);

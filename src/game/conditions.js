@@ -61,8 +61,19 @@ export function isConditionImmune(game, figureKey) {
  * @param {string} figureKey
  * @returns {boolean}
  */
+/** YWNDM is per-player now — protect this figure only if ITS OWNER has YWNDM
+ * active (a Fifth Brother whose own player played the card). alexanbv 2026-06-17. */
+function ywndmActiveForFigure(game, figureKey) {
+  const a = game?.youWillNotDenyMeActive;
+  if (!a) return false;
+  for (const pn of [1, 2]) {
+    if (a[pn] && game.figurePositions?.[pn]?.[figureKey]) return true;
+  }
+  return false;
+}
+
 export function areConditionEffectsSuppressed(game, figureKey) {
-  if (!game?.youWillNotDenyMeActive) return false;
+  if (!ywndmActiveForFigure(game, figureKey)) return false;
   const dcName = dcNameFromFigureKey(figureKey);
   if (dcName?.toLowerCase().includes('fifth brother')) return true;
   return false;
@@ -93,8 +104,8 @@ export function areConditionEffectsSuppressed(game, figureKey) {
  */
 export function isCannotBeDefeated(game, figureKey, msgId = null) {
   if (!game) return false;
-  // YWNDM applies to Fifth Brother only.
-  if (game.youWillNotDenyMeActive) {
+  // YWNDM applies to Fifth Brother only — and only its owner's (per-player).
+  if (ywndmActiveForFigure(game, figureKey)) {
     const dcName = dcNameFromFigureKey(figureKey);
     if (dcName?.toLowerCase().includes('fifth brother')) return true;
   }

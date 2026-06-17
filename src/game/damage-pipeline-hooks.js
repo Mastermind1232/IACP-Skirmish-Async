@@ -225,7 +225,7 @@ BEFORE_DEFEATED_HOOKS.push({
   sync: true,
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
-    if (game.youWillNotDenyMeActive?.playerNum !== opts.controllerPlayerNum) return false;
+    if (!game.youWillNotDenyMeActive?.[opts.controllerPlayerNum]) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     return !!dcName && dcName.toLowerCase().includes('fifth');
   },

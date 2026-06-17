@@ -524,7 +524,7 @@ export function isImmuneToDirectDefeat(game, controllerPlayerNum, figureKey) {
   if (!game || !controllerPlayerNum || !figureKey) return false;
   // You Will Not Deny Me (Fifth Brother): active while the CC is
   // attached and youWillNotDenyMeActive flags it for this side.
-  if (game.youWillNotDenyMeActive?.playerNum === controllerPlayerNum) {
+  if (game.youWillNotDenyMeActive?.[controllerPlayerNum]) {
     const dcName = String(figureKey).split('-')[0] || '';
     if (dcName.toLowerCase().includes('fifth')) return true;
   }
