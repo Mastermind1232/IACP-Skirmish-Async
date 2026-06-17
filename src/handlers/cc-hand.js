@@ -166,25 +166,29 @@ export async function handleCcCounterPass(interaction, ctx) {
   saveGames(game.gameId);
 }
 
-// Resolve the stack: fire resolved non-counter effects; route cancelled cards to
-// the when-discarded pipeline (a counter card's "effect" IS its cancellation).
+// Resolve the stack: fire resolved non-counter effects (step 4 SC prompt + the
+// effect, via the shared deferred-effect machinery); route cancelled cards to
+// the when-discarded pipeline. A counter card's "effect" IS its cancellation, so
+// a resolved counter does nothing further here.
 async function _resolveCcCounterWindow(game, gameId, ctx, client) {
   const outcome = resolveAndCloseWindow(game);
   for (const entry of outcome) {
     const isCounter = entry.card === NEGATION || entry.card === COMM_DISRUPTION;
     if (entry.status === 'cancelled') {
+      // Cancelled → when-discarded pipeline (Windfall / Built on Hope), NOT resolved.
       fireCcDiscarded(game, entry.playedBy, entry.card, { fromDeck: false });
-      await ctx.logGameAction?.(game, client, `**${entry.card}** was cancelled.`, { phase: 'ACTION', icon: 'card' });
+      await ctx.logGameAction?.(game, client, `**${entry.card}** was cancelled (effects suppressed).`, { phase: 'ACTION', icon: 'card' });
       continue;
     }
-    if (isCounter) continue; // the cancellation already happened via the stack
-    if (ctx.resolveAbility) {
-      const result = ctx.resolveAbility(entry.abilityId || entry.card, {
-        game, playerNum: entry.playedBy, cardName: entry.card, figureKey: entry.figureKey,
-        dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat,
-      });
-      await applyAbilityResult(result, { game, playerNum: entry.playedBy, client, ctx });
-    }
+    if (isCounter) continue;
+    // Resolved card → run the Smuggling Compartment step (if it interacts) then
+    // the effect, reusing the deferred-effect path (handles requiresChoice /
+    // PowerToken / Space prompts too). The played card is already in discard.
+    game.pendingCcEffect = {
+      abilityId: entry.abilityId || entry.card, card: entry.card, playedBy: entry.playedBy,
+      msgId: entry.msgId ?? null, fromDc: !!entry.fromDc, scProtect: SC_HAND_CCS.has(entry.card),
+    };
+    await _offerScThenResolveDeferredCc(game, ctx, client);
   }
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
 }
@@ -995,6 +999,36 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const effectData = getCcEffect(card);
   const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
   const abilityId = effectData?.abilityId ?? card;
+
+  // ── UNIFIED CC PLAY (alexanbv 2026-06-17) ──────────────────────────────────
+  // Every play routes through the recursive Negate/Comms counter-window; the
+  // effect resolves only if not cancelled — no snapshot, no revert. This
+  // REPLACES the legacy cost-branch below (left as dead code pending a live
+  // playtest, then deleted). Order: block check → commit card → on-play triggers
+  // → counter-window (which folds in the Smuggling Compartment step + resolve).
+  {
+    // 1. Block check — a figure prevented from playing CCs (Shadow Ops, Mak).
+    if (game.shadowOpsBlockedPlayer === playerNum) {
+      await interaction.followUp({ content: '**Shadow Ops** — you cannot play Command cards this round.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    // 2. Commit the played card to discard + refresh the player's hand UI.
+    const _uHand = (game[handKey] || []).slice();
+    const _uIdx = _uHand.indexOf(card);
+    if (_uIdx >= 0) _uHand.splice(_uIdx, 1);
+    game[handKey] = _uHand;
+    game[discardKey] = (game[discardKey] || []).concat(card);
+    await interaction.message.delete().catch(discordCatch);
+    await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
+    const _uLog = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+    if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
+    // 3. On-play triggers (Hunt Dissent, Adapt) fire for the played card.
+    await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+    // 4. Open the recursive counter-window; it resolves the effect or cancels it.
+    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, interaction.client);
+    saveGames(game.gameId);
+    return;
+  }
 
   // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
   // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
