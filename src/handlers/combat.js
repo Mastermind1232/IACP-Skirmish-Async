@@ -3346,14 +3346,16 @@ export async function handleAttackTarget(interaction, ctx) {
     // Targeting Computer (attachment) — reroll MOVED to the gate rerolls window
     // (CSV [Targeting Computer] row, attachment-presence). Dead count removed.
 
-    // Driven by Hatred (Darth Vader): +1 Hit, reroll 1 atk die (Brutality loss handled separately)
+    // Driven by Hatred (Darth Vader): +1 Hit. The reroll is offered by the gate
+    // ([Driven by Hatred] attachment reroll row); the old eager rerollOneAttackDie
+    // count is dead (its consumer is in the retired legacy block). Brutality loss
+    // is handled separately.
     if (cardNameIncludes(_atkUpgrades, 'Driven by Hatred')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
     }
-    // Heir to the Jedi (Luke): reroll 1 atk die; +1 Hit on Ranged; Saber Strike Focus handled at declaration
+    // Heir to the Jedi (Luke): +1 Hit on Ranged; Saber Strike Focus handled at
+    // declaration. The reroll is offered by the gate ([Heir to the Jedi] row).
     if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi')) {
-      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
     // Rogue Smuggler (Han Solo) — reroll MOVED to the gate rerolls window
@@ -3443,9 +3445,17 @@ export async function handleAttackTarget(interaction, ctx) {
       exhaustAttachment(game, msgId, 'Explosive Armaments');
       await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
     }
-    // The Darksaber: exhaust while attacking → reroll 1 attack die
+    // The Darksaber: exhaust while attacking → reroll 1 attack die.
+    // KNOWN GAP (alexanbv 2026-06-17): the reroll itself is now offered by the
+    // gate ([The Darksaber] attack:rerolls row), but the CSV limit column is
+    // "None" so the gate treats it as once-per-attack rather than EXHAUST. This
+    // block still exhausts the attachment EAGERLY at declaration (premature — it
+    // fires even if the player ultimately skips the reroll), and the gate's
+    // applies doesn't re-check the exhausted state. Proper fix = exhaust-on-use
+    // wiring in the gate (offer only if !isAttachmentExhausted; exhaust at
+    // resolve via combat.attackerMsgId) + drop this eager block. Same pattern
+    // needed for Trusted Ally (aura attachment — needs the bearer's msgId).
     if (cardNameIncludes(_atkUpgrades, 'The Darksaber') && !cardNameIncludes(_exh, 'The Darksaber')) {
-      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       exhaustAttachment(game, msgId, 'The Darksaber');
       await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch(discordCatch);
     }
