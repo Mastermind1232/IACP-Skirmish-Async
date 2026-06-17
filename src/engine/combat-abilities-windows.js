@@ -24,9 +24,12 @@ import { isCardPendingChange } from './cards-pending-change.js';
 // a friendly third party) — alexanbv 2026-06-16 said to leave these as exceptions
 // for now; they need army-wide / other-figure detection, not the attacker/defender
 // figure check. Skipped here so they aren't offered (wrongly) via this path.
-// CCs with a bespoke INTERACTIVE combat effect (a sub-pick), routed to a
-// dedicated resolver via params.kind 'cc_interactive' (not the plain playCC path).
-const INTERACTIVE_CC = new Set(['Heightened Reflexes']);
+// CCs with a bespoke INTERACTIVE combat effect (a sub-pick) used to be routed to
+// a dedicated resolver via params.kind 'cc_interactive'. Heightened Reflexes now
+// resolves via its removeDefenseDieResults ccEffect (requiresChoice over the
+// rolled dice) through the unified counter-window, so this set is empty
+// (alexanbv 2026-06-17). Kept for any future bespoke interactive combat CC.
+const INTERACTIVE_CC = new Set([]);
 
 const CC_THIRD_PARTY_EXCEPTIONS = new Set([
   'Concentrated Fire', 'Guardian Stance', 'Bodyguard', 'Get Behind Me!',
