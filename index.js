@@ -108,6 +108,8 @@ import { cleanupRoundStart } from './src/game/activation-state.js';
 import { getRecoveryReason } from './src/engine/recovery.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
+import { resumeCombatGateAfterCc } from './src/handlers/combat.js';
+import { registerCombatGateResume } from './src/game/cc-counter-window.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { captureSnapshot, computeDiff, createEvent, appendToBuffer, getRecentEvents, clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from './src/event-log.js';
 import { translateDiffToEvents } from './src/domain/diff-translator.js';
@@ -3599,6 +3601,15 @@ function buildAllDeps() {
     getCheckpointById,
   };
 }
+
+// Combat CCs route through the unified counter-window (cc-hand); after it
+// resolves, the attack gate must re-drive with the FULL combat ctx. cc-hand
+// can't build that ctx, so we register a resume here (where buildContext +
+// buildAllDeps live) that the window's resolver invokes. alexanbv 2026-06-17.
+registerCombatGateResume(async (game, client) => {
+  const combatCtx = buildContext('combat', buildAllDeps());
+  await resumeCombatGateAfterCc(game, combatCtx, client);
+});
 
 // Startup validation: every dep key in CONTEXT_GROUPS must exist in buildAllDeps()
 {

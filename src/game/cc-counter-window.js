@@ -89,3 +89,14 @@ export function resolveAndCloseWindow(game) {
 export function clearCounterWindow(game) {
   if (game) delete game.ccCounterWindow;
 }
+
+// ── Combat gate-resume registry ─────────────────────────────────────────────
+// Combat CCs route through the SAME counter-window as hand CCs. After it
+// resolves, the combat attack gate must re-drive (return to that phase's
+// options). The counter-window resolution lives in cc-hand (ccHand ctx), but
+// _driveGatePath needs the full combat ctx — so index.js registers a resume
+// that builds the combat ctx and calls combat.js's resumeCombatGateAfterCc.
+// Kept in this neutral module to avoid a cc-hand <-> combat import cycle.
+let _combatGateResume = null;
+export function registerCombatGateResume(fn) { _combatGateResume = fn; }
+export function getCombatGateResume() { return _combatGateResume; }

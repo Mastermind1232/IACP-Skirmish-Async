@@ -224,13 +224,14 @@ import {
   removeFigurePosition, getHandChannelId,
 } from '../game/player-helpers.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { getPlayableReactionCardsForTiming, playCC } from '../game/cc-timing.js';
+import { getPlayableReactionCardsForTiming, playCC, canPlayCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { onCcPlayed } from './cc-hand.js';
+import { onCcPlayed, runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
+import { registerCombatGateResume } from '../game/cc-counter-window.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -756,6 +757,26 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
     },
   });
   ctx.saveGames?.(game.gameId);
+}
+
+/**
+ * Re-drive the attack gate after a combat CC's counter-window resolves. Invoked
+ * via the registry (registerCombatGateResume) from cc-hand's
+ * _resolveCcCounterWindow once the Negate/Comms window for a combat CC closes —
+ * the gate paused on play; this returns to that phase's options. Reconstructs
+ * the gate from the stored { window } + pendingCombat (never stores transient
+ * handlers). alexanbv 2026-06-17.
+ */
+export async function resumeCombatGateAfterCc(game, ctx, client) {
+  const pend = game?.pendingCombatCcResolve;
+  if (!pend) return;
+  delete game.pendingCombatCcResolve;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== pend.gameId) { ctx.saveGames?.(game.gameId); return; }
+  const cfg = _GATE_WINDOWS[pend.window];
+  if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
+  await _driveGatePath(pend.window, thread, game, combat, ctx);
 }
 
 // ── Full-attack sequence driver wiring (alexanbv 2026-06-15 rebuild) ──────────
@@ -1884,34 +1905,44 @@ export async function handleModsPick(interaction, ctx) {
     passModsSide(gate, side);
     await _driveGatePath(window, thread, game, combat, ctx);
   } else if (getCombatAbility(pick)?.params?.kind === 'cc') {
-    // Command-Card button in the combat sequence (alexanbv 2026-06-16: "this is the
-    // method that should be called whenever a button corresponding to a CC is
-    // clicked in the combat sequence"). The figure is already populated — it's the
-    // active side's combat figure. playCC validates (in-hand / figure / not-blocked
-    // / timing), executes the effect, and disposes (discard or game box).
-    // TODO(next): comms-jammer cancel + opponent negate/Comm-Disruption prompt
-    // before execute, reusing cc-hand.js promptCommDisruption/Negation.
+    // Command-Card button in the combat sequence — routed through the UNIFIED
+    // counter-window like a hand play (alexanbv 2026-06-17). The attack gate
+    // PAUSES for the Negate/Comms window and re-drives (back to this phase's
+    // options) after the play resolves or is cancelled, via
+    // _resolveCcCounterWindow → resumeCombatGateAfterCc. No snapshot, no revert.
     const _ccReg = getCombatAbility(pick);
+    const _ccCard = _ccReg.params.card;
     // False Orders / Lure: the controller plays the attacker-side CC.
     const ccPn = side === 'attacker'
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    // Pre-play combat snapshot so a Comm-Disruption cancel can revert a combat-
-    // modifying CC (Wild Attack's dice, etc.) (alexanbv 2026-06-16).
-    const _ccSnap = combat ? JSON.parse(JSON.stringify(combat)) : null;
-    const ccRes = await playCC(game, ccPn, ccFig, _ccReg.params.card, { ctx });
-    if (!ccRes.ok && thread) await thread.send(`⚠️ Can't play ${_ccReg.params.card}: ${ccRes.reason}`).catch(discordCatch);
-    else if (ccRes.cancelled && thread) await thread.send(`**${_ccReg.params.card}** was cancelled (${ccRes.cancelled}).`).catch(discordCatch);
-    else {
-      if (ccRes.result) await applyAbilityResult(ccRes.result, { game, playerNum: ccPn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: interaction.client, ctx });
-      // Opponent counter-window: Negation (cost 0) / Comm Disruption (cost <= opponent SPY groups).
-      const _ccCost = ctx.getCcEffect?.(_ccReg.params.card)?.cost ?? 0;
-      await onCcPlayed(game, gameId, ccPn, _ccReg.params.card, _ccCost, interaction, ctx, { combatSnapshot: _ccSnap });
+    const _ccCheck = canPlayCC(game, ccPn, ccFig, _ccCard, { allowNotInHand: false });
+    if (!_ccCheck.ok) {
+      if (thread) await thread.send(`⚠️ Can't play ${_ccCard}: ${_ccCheck.reason}`).catch(discordCatch);
+      await _driveGatePath(window, thread, game, combat, ctx);
+    } else {
+      const _ccEff = ctx.getCcEffect?.(_ccCard);
+      const _ccCost = typeof _ccEff?.cost === 'number' ? _ccEff.cost : 0;
+      const _ccAbilityId = _ccEff?.abilityId ?? _ccCard;
+      // Dispose the played card to discard.
+      const _ccHand = game[ccHandKey(ccPn)] || [];
+      const _ccHi = _ccHand.indexOf(_ccCard);
+      if (_ccHi >= 0) _ccHand.splice(_ccHi, 1);
+      game[ccHandKey(ccPn)] = _ccHand;
+      game[ccDiscardKey(ccPn)] = (game[ccDiscardKey(ccPn)] || []).concat(_ccCard);
+      // The play happened — mark the gate ability used now.
+      recordModsChoice(gate, side, pick);
+      _markGateAbilityUsed(game, combat, pick);
+      // On-play triggers (Hunt Dissent, Adapt).
+      await runCcPlayTriggers(game, ccPn, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+      // Pause the gate: store the resume descriptor + open the counter-window.
+      game.pendingCombatCcResolve = { window, side, gameId };
+      await openCcCounterWindow(game, gameId, {
+        card: _ccCard, cost: _ccCost, playedBy: ccPn, figureKey: ccFig, abilityId: _ccAbilityId,
+        msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
+      }, ctx, interaction.client);
     }
-    recordModsChoice(gate, side, pick);
-    _markGateAbilityUsed(game, combat, pick);
-    await _driveGatePath(window, thread, game, combat, ctx);
   } else {
     const r = _resolverFor(pick);
     if (r) {

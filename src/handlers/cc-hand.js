@@ -39,7 +39,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { findSmugglingCompartmentMsgId, setAsideFromHand, SMUGGLING_COMPARTMENT_NAME } from '../game/smuggling-compartment.js';
 import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAside } from './sc-hand-protection.js';
-import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow } from '../game/cc-counter-window.js';
+import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow, getCombatGateResume } from '../game/cc-counter-window.js';
 import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
 
 // Hand-affecting CCs whose effect must let the target (the opponent) exhaust
@@ -191,6 +191,12 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
     await _offerScThenResolveDeferredCc(game, ctx, client);
   }
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+  // Combat CC: the attack gate paused for this window — re-drive it (return to
+  // that phase's options) now that the play has resolved or been cancelled.
+  if (game.pendingCombatCcResolve) {
+    const resume = getCombatGateResume();
+    if (resume) await resume(game, client);
+  }
 }
 
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
