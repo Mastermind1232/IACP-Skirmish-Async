@@ -986,6 +986,8 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   game.roundAbilityUsed = {};
   // Deadly Precision (CC) is a "this round" effect — clear it each new round.
   game.deadlyPrecisionActive = {};
+  // There is Another (Leia CC) relaxes CC play-legality for one round — clear it.
+  game.thereIsAnotherActive = {};
 
   // Mission SOR async effects: dispatch via the mission-eor-effects
   // registry (which now handles both EoR and SOR). Halts early on any

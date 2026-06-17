@@ -5087,8 +5087,9 @@
     },
     "There is Another": {
       "type": "ccEffect",
-      "label": "Draw 1 Command card",
+      "label": "Draw 1 Command card; this round you may play unique CCs restricted to a FORCE USER DC name in your army",
       "draw": 1,
+      "setsThereIsAnother": true,
       "wiredStatus": "wired"
     },
     "There Is No Try": {

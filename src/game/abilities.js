@@ -4039,8 +4039,9 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training)
-  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0) {
+  // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training).
+  // setsThereIsAnother carries its own dedicated handler (draw + round flag), so skip it here.
+  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && !entry.setsThereIsAnother) {
     const { game, playerNum, combat, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     if (entry.drawIfTrait) {
@@ -12176,6 +12177,25 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: '**Deadly Precision** — this round, your attacks apply −1 Dodge to the defense results.',
+    };
+  }
+
+  // ccEffect: setsThereIsAnother (There is Another, Leia) — draw 1, and this round
+  // you may play UNIQUE CCs whose figure-name restriction matches another FORCE
+  // USER Deployment card in your army (a Force-User-only Fast Learner). The
+  // legality relaxation lives in cc-timing.js isCcPlayLegalByRestriction.
+  // alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && entry.setsThereIsAnother) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const drew = (typeof entry.draw === 'number' && entry.draw > 0) ? drawCcCards(game, playerNum, entry.draw) : [];
+    game.thereIsAnotherActive = game.thereIsAnotherActive || {};
+    game.thereIsAnotherActive[playerNum] = true;
+    return {
+      applied: true,
+      drewCards: drew.length > 0 ? drew : undefined,
+      refreshHand: drew.length > 0,
+      logMessage: `**There is Another** — drew ${drew.length} Command card${drew.length === 1 ? '' : 's'}. This round you may play unique CCs restricted to a FORCE USER DC name in your army.`,
     };
   }
 

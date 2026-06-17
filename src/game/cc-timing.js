@@ -568,6 +568,35 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     }
   }
 
+  // There is Another (Leia CC): while active this round, you may play a unique CC
+  // whose figure-name restriction names ANY FORCE USER — even one not in your
+  // army (e.g. Leia plays Son of Skywalker, restricted to Luke, without fielding
+  // Luke). A Force-User-only Fast Learner. The named figure need not be present;
+  // it only has to be a Force User. Your army must field a Force User (the card
+  // is Leia-restricted, so this always holds, but we guard defensively).
+  // alexanbv 2026-06-17.
+  if (game.thereIsAnotherActive?.[playerNum]) {
+    const isForceUserName = (nm) => {
+      const e = dcEffects[nm] || dcEffects[String(nm).replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim()];
+      return (e?.keywords || []).map((k) => String(k).toLowerCase()).includes('force user');
+    };
+    const armyHasForceUser = dcList.some((dc) => isForceUserName(typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc));
+    if (armyHasForceUser) {
+      // The CC's restriction must name a FORCE USER figure (present or not). Only
+      // figure-name restrictions match a catalog DC name; trait restrictions
+      // (e.g. "FORCE USER") never match a name, so they are unaffected.
+      for (const [dcName, eff] of Object.entries(dcEffects)) {
+        if (!(eff?.keywords || []).map((k) => String(k).toLowerCase()).includes('force user')) continue;
+        const base = String(dcName).replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim().toLowerCase();
+        if (!base) continue;
+        for (const alt of alternatives) {
+          const altLow = alt.trim();
+          if (base === altLow || base.includes(altLow) || altLow.includes(base)) return { legal: true, thereIsAnother: true };
+        }
+      }
+    }
+  }
+
   return { legal: false, reason: `No figure matches "playable by: ${playableBy}" in your army.` };
 }
 

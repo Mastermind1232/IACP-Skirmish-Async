@@ -814,6 +814,7 @@ const ROUND_NULL_FLAGS = [
   'windfallActive',
   'wreakVengeanceActive',
   'deadlyPrecisionActive',
+  'thereIsAnotherActive',
   'toughLuckPlayerNum',
   'thereIsNoTryPlayerNum',
   'youWillNotDenyMeActive',
