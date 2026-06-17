@@ -1946,6 +1946,16 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     await thread?.send('**Prey on the Weak** — +1 Pierce, +1 Accuracy (target costs less).').catch(discordCatch);
     return;
   }
+  if (id === 'explosive_armaments_surge') {
+    (combat.bonusSurgeAbilities = combat.bonusSurgeAbilities || []).push('damage 1, blast 1');
+    return;
+  }
+  if (id === 'feeding_frenzy_surge') {
+    (combat.bonusSurgeAbilities = combat.bonusSurgeAbilities || []).push('recover 2');
+    return;
+  }
+  if (id === 'wookiee_avenger_defend') { combat.wookieeAvengerDefend = true; return; }
+  if (id === 'rogue_smuggler_distracting') { combat.rougeSmuggler_loseDistracting = true; return; }
   if (id === 'pulse_cannon') {
     combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
     combat.bonusHits = (combat.bonusHits || 0) + 1;
@@ -3500,14 +3510,9 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure is
     // now a gate mods passive (prey_on_the_weak, cost comparison in its applies).
-    // Explosive Armaments (HUNTER/DROID): Surge: +1 Damage, Blast 1
-    if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments')) {
-      _pc.bonusSurgeAbilities.push('damage 1, blast 1');
-    }
-    // Feeding Frenzy (CREATURE): Surge: Recover 2 while attacking adjacent
-    if (cardNameIncludes(_atkUpgrades, 'Feeding Frenzy') && distanceToTarget <= 1) {
-      _pc.bonusSurgeAbilities.push('recover 2');
-    }
+    // Explosive Armaments Surge (+1 Damage, Blast 1) and Feeding Frenzy Surge
+    // (Recover 2 while adjacent) are now gate mods passives
+    // (combat-abilities-attachment-auto.js → _fireModsPassive). alexanbv 2026-06-17.
     // Focused on the Kill (IG-88): lose Surge: Recover 3, gain Surge: Pierce 1; pre-attack Focus
     if (cardNameIncludes(_atkUpgrades, 'Focused on the Kill')) {
       _pc.removeSurgeKeys = (_pc.removeSurgeKeys || []).concat(['recover 3']);
@@ -3534,10 +3539,8 @@ export async function handleAttackTarget(interaction, ctx) {
     // --- Defender attachments ---
     // Combat Suit: reduce Pierce by 1 — now a gate mods passive
     // (combat-abilities-attachment-auto.js → _fireModsPassive). alexanbv 2026-06-17.
-    // Wookiee Avenger (defending): convert Dodge → Evade (handled in computeCombatResult)
-    if (cardNameIncludes(_defUpgrades, 'Wookiee Avenger')) {
-      _pc.wookieeAvengerDefend = true;
-    }
+    // Wookiee Avenger (defending): convert Dodge → Evade — now a gate defender
+    // mods passive (wookiee_avenger_defend → _fireModsPassive). alexanbv 2026-06-17.
     // Cross Training (defending): exhaust to reroll 1 defense die with color swap (flagged for reroll window)
     if (cardNameIncludes(_defUpgrades, 'Cross Training')) {
       const _ctExh = game.exhaustedSkirmishUpgrades?.[_defMsgId] || [];
@@ -3546,10 +3549,8 @@ export async function handleAttackTarget(interaction, ctx) {
         _pc.crossTrainingDefMsgId = _defMsgId;
       }
     }
-    // Rogue Smuggler (defender): lose Distracting — negate the passive if present
-    if (cardNameIncludes(_defUpgrades, 'Rogue Smuggler')) {
-      _pc.rougeSmuggler_loseDistracting = true;
-    }
+    // Rogue Smuggler (defender): lose Distracting — now a gate defender mods
+    // passive (rogue_smuggler_distracting → _fireModsPassive). alexanbv 2026-06-17.
     // --- Exhaust-based attacker attachments ---
     // Scavenged Weaponry (+1 Hit, on_declare), Explosive Armaments (Blast 1,
     // mods), Feeding Frenzy (+1 Hit vs a damaged target, mods) are now OFFERED in

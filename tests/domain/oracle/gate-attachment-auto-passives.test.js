@@ -64,4 +64,28 @@ describe('Automatic attachment mods passives (gate-fired, not eager)', () => {
     assert.equal(c.bonusPierce, 1);
     assert.equal(c.bonusAccuracy, 1);
   });
+
+  it('Explosive Armaments / Feeding Frenzy grant surge abilities (FF adjacent-only)', async () => {
+    const ff = getCombatAbility('feeding_frenzy_surge');
+    const game = { p1DcAttachments: { m1: ['Feeding Frenzy'] } };
+    assert.equal(ff.applies(game, { attackerMsgId: 'm1', distanceToTarget: 1 }), true, 'adjacent → granted');
+    assert.equal(ff.applies(game, { attackerMsgId: 'm1', distanceToTarget: 3 }), false, 'ranged → not granted');
+    const c = { bonusSurgeAbilities: [] };
+    await _fireModsPassive('attacker', 'explosive_armaments_surge', thread, {}, c, {});
+    assert.deepEqual(c.bonusSurgeAbilities, ['damage 1, blast 1']);
+    await _fireModsPassive('attacker', 'feeding_frenzy_surge', thread, {}, c, {});
+    assert.deepEqual(c.bonusSurgeAbilities, ['damage 1, blast 1', 'recover 2']);
+  });
+
+  it('Defender flags: Wookiee Avenger Dodge→Evade and Rogue Smuggler lose-Distracting', async () => {
+    const wa = getCombatAbility('wookiee_avenger_defend');
+    assert.equal(wa.side, 'defender');
+    const game = { p2DcAttachments: { d1: ['Wookiee Avenger', 'Rogue Smuggler'] } };
+    assert.equal(wa.applies(game, { target: { msgId: 'd1' } }), true);
+    const c = {};
+    await _fireModsPassive('defender', 'wookiee_avenger_defend', thread, game, c, {});
+    await _fireModsPassive('defender', 'rogue_smuggler_distracting', thread, game, c, {});
+    assert.equal(c.wookieeAvengerDefend, true);
+    assert.equal(c.rougeSmuggler_loseDistracting, true);
+  });
 });

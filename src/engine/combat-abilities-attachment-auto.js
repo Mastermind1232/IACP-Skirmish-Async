@@ -45,6 +45,14 @@ const AUTO_ATTACHMENT_PASSIVES = [
       const def = c.targetStats?.cost ?? dcCost(deps, c.defenderDcName);
       return atk != null && def != null && atk > def;
     } },
+  // Surge GRANTS (added to the surge pool, spent in spend_surges). Explosive
+  // Armaments grants Surge: +1 Damage, Blast 1 (always, separate from its exhaust
+  // Blast); Feeding Frenzy grants Surge: Recover 2 only while attacking adjacent.
+  { id: 'explosive_armaments_surge', name: 'Explosive Armaments', side: 'attacker', card: 'Explosive Armaments' },
+  { id: 'feeding_frenzy_surge', name: 'Feeding Frenzy', side: 'attacker', card: 'Feeding Frenzy', cond: (g, c) => (c.distanceToTarget ?? 99) <= 1 },
+  // Defender flags read later in the pipeline (computeCombatResult / Distracting).
+  { id: 'wookiee_avenger_defend', name: 'Wookiee Avenger', side: 'defender', card: 'Wookiee Avenger' },
+  { id: 'rogue_smuggler_distracting', name: 'Rogue Smuggler', side: 'defender', card: 'Rogue Smuggler' },
 ];
 
 let _registered = false;
