@@ -958,13 +958,16 @@ export function resolveAbility(abilityId, context) {
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
     if (!activatingPos) return { applied: false, manualMessage: '**Emperor** — No position on the board. Resolve manually.' };
+    // Unlimited Power (CC): while active for this player, Emperor may target ANY
+    // other friendly figure on the map, not just within 4 spaces. alexanbv 2026-06-17.
+    const _unlimitedPower = !!game.unlimitedPowerActive?.[playerNum];
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > 4) continue;
+      if (!_unlimitedPower && countGameSpaces(game, activatingPos, pos) > 4) continue;
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Emperor** — No other friendly figures within 4 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: _unlimitedPower ? '**Emperor** — No other friendly figures on the map.' : '**Emperor** — No other friendly figures within 4 spaces.' };
     return {
       applied: false,
       requiresChoice: true,
