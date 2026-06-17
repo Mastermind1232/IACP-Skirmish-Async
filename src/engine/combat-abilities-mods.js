@@ -15,6 +15,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
 import { hasAgileAbility } from '../game/agile-jet-trooper-helpers.js';
 import { hasSlipperyAbility } from '../game/slippery-smuggler-helpers.js';
+import { hasTakeCoverAbility } from '../game/take-cover-jawa-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -172,19 +173,28 @@ registerCombatAbility({
   },
 });
 
+// Defender result-modifier passives moved from declaration (handleAttackTarget)
+// into the mods window per alexanbv 2026-06-16 "they must be implemented at the
+// right timing". Detection keyed off combat.defenderDcName (variant-qualified —
+// the figureKey base name misses the "(Regular)"/"(Elite)" dc-effects entry).
+const defenderDcNameOf = (combat) => combat.defenderDcName
+  || (combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null);
+
 // Slippery (Alliance Smuggler) — while defending, -2 Accuracy to the attack.
-// Moved from declaration (handleAttackTarget) into the mods window per alexanbv
-// 2026-06-16 "they must be implemented at the right timing".
 registerCombatAbility({
   id: 'slippery', name: 'Slippery', windows: ['mods'], side: 'defender', kind: 'passive',
   applies: (game, combat, side, deps) => {
-    // Prefer the variant-qualified name on combat (e.g. "Alliance Smuggler
-    // (Regular)") — the figureKey only carries the base name, which misses the
-    // variant-keyed dc-effects entry.
-    const dcName = combat.defenderDcName
-      || (combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null);
-    if (!dcName) return false;
-    return hasSlipperyAbility(ids(eff(deps, dcName)));
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasSlipperyAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Take Cover (Jawa Scavenger) — while defending, +1 Block and -1 Evade.
+registerCombatAbility({
+  id: 'take_cover', name: 'Take Cover', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasTakeCoverAbility(ids(eff(deps, dcName)));
   },
 });
 

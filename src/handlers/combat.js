@@ -1588,6 +1588,11 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const bump = applySlipperyBonus({ bonusAccuracy: combat.bonusAccuracy });
     combat.bonusAccuracy = bump.bonusAccuracy;
     await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.').catch(discordCatch);
+  } else if (id === 'take_cover') {
+    const bump = applyTakeCoverBonus({ bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
+    combat.bonusBlock = bump.bonusBlock;
+    combat.bonusEvade = bump.bonusEvade;
+    await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3974,16 +3979,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // MOVED to the mods window (combat-abilities-mods.js 'slippery' passive +
   // _fireModsPassive) per alexanbv 2026-06-16 — declaration is the wrong timing.
 
-  // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade
-  if (hasTakeCoverAbility(defSpecialIds)) {
-    const bump = applyTakeCoverBonus({
-      bonusBlock: game.pendingCombat.bonusBlock,
-      bonusEvade: game.pendingCombat.bonusEvade,
-    });
-    game.pendingCombat.bonusBlock = bump.bonusBlock;
-    game.pendingCombat.bonusEvade = bump.bonusEvade;
-    await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.');
-  }
+  // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade.
+  // MOVED to the mods window (combat-abilities-mods.js 'take_cover' passive).
 
   // Aim (Rebel Trooper E/R): +1 Hit, +2 Accuracy if figure has not moved this activation
   if (hasAimAbility(atkSpecialIds)) {

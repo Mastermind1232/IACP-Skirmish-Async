@@ -69,4 +69,10 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     const combat = await attackInto('Rebel Trooper');
     assert.equal(combat.bonusAccuracy || 0, 0, 'no Slippery → no accuracy change');
   });
+
+  it('Take Cover (Jawa Scavenger): +1 Block / -1 Evade applied once via the mods window', async () => {
+    const combat = await attackInto('Jawa Scavenger (Regular)');
+    assert.equal(combat.bonusBlock, 1, 'Take Cover must apply +1 Block exactly once');
+    assert.equal(combat.bonusEvade, -1, 'Take Cover must apply -1 Evade exactly once');
+  });
 });
