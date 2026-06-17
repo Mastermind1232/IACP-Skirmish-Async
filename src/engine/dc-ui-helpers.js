@@ -9,12 +9,20 @@ export function getDcUpgradeAttachments(game, msgId) {
   return (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []);
 }
 
+// A Squad Upgrade figure sits at index = base figure count and is the only thing
+// that ever gets a nickname there — use that as the signal to include it in
+// per-figure UI (conditions / tokens / nicknames). alexanbv 2026-06-17.
+function effFiguresForMeta(game, meta, dgIndex, baseFigures) {
+  const suNick = game?.figureNicknames?.[`${meta.dcName}-${dgIndex}-${baseFigures}`];
+  return baseFigures + (suNick ? 1 : 0);
+}
+
 export function getConditionsForDcMessage(game, meta, deps) {
   if (!game?.figureConditions || !meta?.dcName) return undefined;
   const stats = deps.getDcStats(meta.dcName);
-  const figures = stats.figures ?? 1;
   const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
   const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figures = effFiguresForMeta(game, meta, dgIndex, stats.figures ?? 1);
   const out = [];
   let hasAny = false;
   for (let i = 0; i < figures; i++) {
@@ -29,9 +37,9 @@ export function getConditionsForDcMessage(game, meta, deps) {
 export function getTokensForDcMessage(game, meta, deps) {
   if (!game?.figurePowerTokens || !meta?.dcName) return undefined;
   const stats = deps.getDcStats(meta.dcName);
-  const figures = stats.figures ?? 1;
   const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
   const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figures = effFiguresForMeta(game, meta, dgIndex, stats.figures ?? 1);
   const out = [];
   let hasAny = false;
   for (let i = 0; i < figures; i++) {
@@ -46,10 +54,10 @@ export function getTokensForDcMessage(game, meta, deps) {
 export function getNicknamesForDcMessage(game, meta, deps) {
   if (!game?.figureNicknames || !meta?.dcName) return undefined;
   const stats = deps.getDcStats(meta.dcName);
-  const figures = stats.figures ?? 1;
-  if (figures <= 1) return undefined;
   const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
   const dgIndex = dgMatch ? dgMatch[1] : '1';
+  const figures = effFiguresForMeta(game, meta, dgIndex, stats.figures ?? 1);
+  if (figures <= 1) return undefined;
   const out = [];
   let hasAny = false;
   for (let i = 0; i < figures; i++) {

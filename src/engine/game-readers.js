@@ -35,12 +35,14 @@ export function isGroupDefeated(game, playerNum, dcIndex, deps) {
   const displayName = typeof dc === 'object' ? dc.displayName : dcName;
   const dgMatch = displayName?.match(/\[(?:DG|Group) (\d+)\]/);
   const dgIndex = dgMatch ? dgMatch[1] : '1';
-  const stats = deps.getDcStats(dcName);
-  const figureCount = stats.figures ?? 1;
   const poses = game.figurePositions?.[playerNum] || {};
-  for (let f = 0; f < figureCount; f++) {
-    const figureKey = `${dcName}-${dgIndex}-${f}`;
-    if (figureKey in poses) return false;
+  // Any figure with this group's prefix on the board → not defeated. Iterating by
+  // prefix (rather than a fixed base figure count) automatically counts a Squad
+  // Upgrade figure (e.g. `${dcName}-${dgIndex}-2`), so a group is still "alive"
+  // while only its SU figure remains — per the IACP rule. alexanbv 2026-06-17.
+  const prefix = `${dcName}-${dgIndex}-`;
+  for (const k of Object.keys(poses)) {
+    if (k.startsWith(prefix)) return false;
   }
   return true;
 }

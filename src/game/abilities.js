@@ -13,6 +13,7 @@ import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOr
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
+import { groupEffectiveFigures } from './squad-upgrades.js';
 
 
 import { getDcEffect } from './dc-helpers.js';
@@ -12577,6 +12578,7 @@ export function resolveAbility(abilityId, context) {
 /** Count defeated friendly figures for player (deployed but no longer on map). */
 function countDefeatedFriendlyFigures(game, playerNum) {
   const dcList = getDcList(game, playerNum) || [];
+  const msgIds = getDcMessageIds(game, playerNum) || [];
   const poses = game.figurePositions?.[playerNum] || {};
   let defeated = 0;
   for (let i = 0; i < dcList.length; i++) {
@@ -12587,7 +12589,9 @@ function countDefeatedFriendlyFigures(game, playerNum) {
     const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : String(i + 1);
     const stats = getStatsForDc(dcName);
-    const figureCount = stats?.figures ?? 1;
+    // Count the Squad Upgrade figure in the group total (defeated = total alive
+    // - current). alexanbv 2026-06-17.
+    const figureCount = groupEffectiveFigures(game, msgIds[i], stats?.figures ?? 1);
     const prefix = `${dcName}-${dgIndex}-`;
     let current = 0;
     for (const k of Object.keys(poses)) {

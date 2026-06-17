@@ -6,12 +6,19 @@
  *   placed when deploying this group. (CRR GROUPS)
  *
  * Implementation: `stats.figures` from dc-effects.json is the canonical
- *   group-size field. Every init-figures path reads it as
+ *   BASE group-size field. Every init-figures path reads it as
  *   `const figureCount = stats?.figures ?? 1;` and loops
  *   `for (let f = 0; f < figureCount; f++)` to create one health slot
  *   (and later one figure slot) per figure. Applies at headless game
- *   init (3 sites in init-dc-state.js) and at runtime reads
- *   (game-readers.js:39).
+ *   init (3 sites in init-dc-state.js).
+ *
+ * Squad Upgrade note (alexanbv 2026-06-17): a Squad Upgrade adds ONE extra
+ *   figure ABOVE the base count, so the base `stats.figures` is no longer the
+ *   whole story — the effective count is base+SU (effectiveFigureCount). Init
+ *   still places the base figures; the SU figure's health box is added at attach
+ *   and it's placed via the deploy components. `isGroupDefeated` (game-readers.js)
+ *   therefore detects defeat by figure-position PREFIX (which naturally counts
+ *   the SU figure), not by looping to a fixed base count.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,9 +48,14 @@ describe('PROBE-PD-GRP-002: group size (stats.figures) drives starting figure co
       `init-dc-state.js must iterate per figure — matched ${matches.length} — CRR-GRP-002`);
   });
 
-  it('002c: source — game-readers.js reads the same stats.figures field at runtime', () => {
-    assert.match(GAME_READERS_SRC, /const figureCount = stats\.figures \?\? 1;/,
-      'game-readers.js must read stats.figures at runtime — CRR-GRP-002');
+  it('002c: source — game-readers.js detects group-defeat by figure-position prefix (SU-aware)', () => {
+    // isGroupDefeated now iterates figure positions by `${dcName}-${dgIndex}-`
+    // prefix so a Squad Upgrade figure (index = base count) keeps the group alive
+    // while it survives — rather than looping to a fixed base figure count.
+    assert.match(GAME_READERS_SRC, /const prefix = `\$\{dcName\}-\$\{dgIndex\}-`;/,
+      'isGroupDefeated must detect defeat by figure prefix (counts the SU figure) — CRR-GRP-002');
+    assert.match(GAME_READERS_SRC, /if \(k\.startsWith\(prefix\)\) return false;/,
+      'any figure with the group prefix on the board → not defeated — CRR-GRP-002');
   });
 
   it('002d: data — multi-figure groups carry figures >= 2 in dc-effects.json', () => {

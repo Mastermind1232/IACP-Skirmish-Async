@@ -32,3 +32,22 @@ export function squadUpgradeOnGroup(attachments) {
 export function effectiveFigureCount(baseFigures, attachments) {
   return (baseFigures || 0) + (squadUpgradeOnGroup(attachments) ? 1 : 0);
 }
+
+/** A deployed group's attachment list, by its DC message id. */
+export function attachmentsForMsgId(game, msgId) {
+  return game?.p1DcAttachments?.[msgId] || game?.p2DcAttachments?.[msgId] || [];
+}
+
+/** Effective figure count for a deployed group identified by its msgId. */
+export function groupEffectiveFigures(game, msgId, baseFigures) {
+  return effectiveFigureCount(baseFigures, attachmentsForMsgId(game, msgId));
+}
+
+/**
+ * The SU figure's OWN health for a group (from the SU card), or null when the
+ * group has no Squad Upgrade. getDcStats resolves the SU card's stats.
+ */
+export function groupSuFigureHealth(game, msgId, getDcStats) {
+  const su = squadUpgradeOnGroup(attachmentsForMsgId(game, msgId));
+  return su ? (getDcStats?.(su)?.health ?? null) : null;
+}

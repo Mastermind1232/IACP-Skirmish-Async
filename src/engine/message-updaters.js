@@ -6,6 +6,7 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
 import { isActivationActionInProgress } from '../game/activation-state.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { getPlayAreaId } from '../game/player-helpers.js';
+import { groupEffectiveFigures, groupSuFigureHealth } from '../game/squad-upgrades.js';
 import { getMovementBankForFigure } from '../game/game-helpers.js';
 import { runWithLimit, DISCORD_REFRESH_CONCURRENCY } from '../utils/concurrency.js';
 
@@ -610,11 +611,17 @@ export async function refreshAllGameComponents(game, client, deps) {
     const stats = deps.getDcStats(meta.dcName);
     const figureless = deps.isFigurelessDc(meta.dcName);
     if (!figureless && stats.health != null) {
-      const figures = stats.figures ?? 1;
+      const baseFigures = stats.figures ?? 1;
+      // A Squad Upgrade adds one figure with its OWN health box — size to
+      // base+SU and default the SU box to the SU figure's health, not the base
+      // group's. Don't truncate an already-extended state. alexanbv 2026-06-17.
+      const figures = groupEffectiveFigures(game, msgId, baseFigures);
+      const suHealth = groupSuFigureHealth(game, msgId, deps.getDcStats);
       healthState = Array.from({ length: figures }, (_, i) => {
         const existing = healthState[i];
-        const cur = existing?.[0] != null ? existing[0] : stats.health;
-        const max = existing?.[1] != null ? existing[1] : stats.health;
+        const defHealth = (suHealth != null && i >= baseFigures) ? suHealth : stats.health;
+        const cur = existing?.[0] != null ? existing[0] : defHealth;
+        const max = existing?.[1] != null ? existing[1] : defHealth;
         return [cur, max];
       });
       deps.dcHealthState.set(msgId, healthState);
