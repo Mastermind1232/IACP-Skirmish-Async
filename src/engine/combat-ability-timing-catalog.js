@@ -36,7 +36,6 @@ e('full_of_rage', 'Full of Rage (Krrsantan)', 'attacker', 'passive', ON, '3+ dmg
 e('fly_by', 'Fly-By (Jet Trooper Elite)', 'attacker', 'passive', ON, 'dist≤2 → +1 blue die');
 e('utinni', 'Utinni!', 'attacker', 'passive', ON, 'roundUtinniJawaBuffs + Jawa → +1 Acc + VP surge');
 e('merciless', 'Merciless (HK Assassin Droid Elite)', 'attacker', 'interactive', ON, 'defender has harmful cond → use prompt');
-e('aim', 'Aim (Rebel Trooper)', 'attacker', 'passive', ON, 'figure did not move → +1 Hit, +2 Acc');
 e('knowledge_and_defense_redraw', 'Knowledge and Defense (redraw surge)', 'attacker', 'interactive', ON, 'KD in discard + FORCE USER');
 e('targeting_network_redraw', 'Targeting Network (redraw surge)', 'attacker', 'interactive', ON, 'TN in discard + DROID');
 e('imperial_loadout', 'Imperial Loadout (Purge Trooper Elite)', 'attacker', 'passive', ON, 'config loadout → inject surges');

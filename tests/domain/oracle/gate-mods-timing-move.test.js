@@ -161,13 +161,9 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     assert.equal(combat.surgeBonus || 0, 0, 'Exploit Weakness must NOT apply without a harmful condition');
   });
 
-  it('Spectre Cell (attacker): +1 Hit when army holds [Spectre Cell]', async () => {
-    const combat = await attackInto('Rebel Trooper', { attackerDcAdd: '[Spectre Cell]' });
-    assert.equal(combat.bonusHits, 1, 'Spectre Cell must apply +1 Hit once (attacker army)');
-  });
-
-  it('Spectre Cell (defender): +1 Block when army holds [Spectre Cell]', async () => {
-    const combat = await attackInto('Rebel Trooper', { defenderDcAdd: '[Spectre Cell]' });
-    assert.equal(combat.bonusBlock, 1, 'Spectre Cell must apply +1 Block once (defender army)');
+  it('Aim (Rebel Trooper attacker, not moved): +1 Hit / +2 Accuracy via the mods window', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Rebel Trooper (Elite)' });
+    assert.equal(combat.bonusHits, 1, 'Aim must apply +1 Hit once');
+    assert.equal(combat.bonusAccuracy, 2, 'Aim must apply +2 Accuracy once');
   });
 });

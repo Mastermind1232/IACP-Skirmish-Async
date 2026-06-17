@@ -1635,16 +1635,15 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyForestFightersHit(combat);
     combat.bonusHits = r.bonusHits;
     await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).').catch(discordCatch);
+  } else if (id === 'aim') {
+    const bump = applyAimBonus({ bonusHits: combat.bonusHits, bonusAccuracy: combat.bonusAccuracy });
+    combat.bonusHits = bump.bonusHits;
+    combat.bonusAccuracy = bump.bonusAccuracy;
+    await thread.send('**Aim** — Has not moved this activation: +1 Hit, +2 Accuracy.').catch(discordCatch);
   } else if (id === 'exploit_weakness') {
     const r = applyExploitWeaknessSurge(combat);
     combat.surgeBonus = r.surgeBonus;
     await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.').catch(discordCatch);
-  } else if (id === 'spectre_cell_atk') {
-    combat.bonusHits = (combat.bonusHits || 0) + 1;
-    await thread.send('**Spectre Cell** — +1 Hit (passive).').catch(discordCatch);
-  } else if (id === 'spectre_cell_def') {
-    combat.bonusBlock = (combat.bonusBlock || 0) + 1;
-    await thread.send('**Spectre Cell** — +1 Block (passive).').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3978,18 +3977,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Take Cover (Jawa Scavenger E/R): while defending, +1 Block and -1 Evade.
   // MOVED to the mods window (combat-abilities-mods.js 'take_cover' passive).
 
-  // Aim (Rebel Trooper E/R): +1 Hit, +2 Accuracy if figure has not moved this activation
-  if (hasAimAbility(atkSpecialIds)) {
-    if (aimBonusApplies(attackerFigureKey, game.figureMoved)) {
-      const bump = applyAimBonus({
-        bonusHits: game.pendingCombat.bonusHits,
-        bonusAccuracy: game.pendingCombat.bonusAccuracy,
-      });
-      game.pendingCombat.bonusHits = bump.bonusHits;
-      game.pendingCombat.bonusAccuracy = bump.bonusAccuracy;
-      await thread.send('**Aim** — Has not moved this activation: +1 Hit, +2 Accuracy.');
-    }
-  }
+  // Aim (Rebel Trooper) — MOVED to the mods window (combat-abilities-mods.js
+  // 'aim' passive) per alexanbv 2026-06-16 "Aim is a mod".
 
   // Dead Precise (Ko-Tun Feralo) — per destruct 2026-05-08:
   // "When a figure within 3 spaces of Ko-Tun is attacking, if it spent

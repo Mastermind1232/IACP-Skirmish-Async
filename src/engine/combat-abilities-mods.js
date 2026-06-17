@@ -25,6 +25,7 @@ import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
 import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
+import { hasAimAbility, aimBonusApplies } from '../game/aim-rebel-trooper-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -296,6 +297,17 @@ registerCombatAbility({
   },
 });
 
+// Aim (Rebel Trooper) — +1 Hit, +2 Accuracy if the figure has not moved this
+// activation (alexanbv 2026-06-16: "Aim is a mod").
+registerCombatAbility({
+  id: 'aim', name: 'Aim', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = attackerDcNameOf(combat);
+    return !!dcName && hasAimAbility(ids(eff(deps, dcName)))
+      && aimBonusApplies(combat.attackerFigureKey, game.figureMoved);
+  },
+});
+
 // Exploit Weakness (Scout Trooper Elite) — +1 Surge if the defender has a
 // harmful condition.
 registerCombatAbility({
@@ -308,18 +320,10 @@ registerCombatAbility({
   },
 });
 
-// Spectre Cell — army-wide passive (DC list holds the [Spectre Cell] command
-// card): attacker gets +1 Hit, defender gets +1 Block.
-registerCombatAbility({
-  id: 'spectre_cell_atk', name: 'Spectre Cell (attacker)', windows: ['mods'], side: 'attacker', kind: 'passive',
-  applies: (game, combat) => (getDcList(game, combat.attackerPlayerNum) || [])
-    .some((dc) => (dc.dcName || dc) === '[Spectre Cell]'),
-});
-registerCombatAbility({
-  id: 'spectre_cell_def', name: 'Spectre Cell (defender)', windows: ['mods'], side: 'defender', kind: 'passive',
-  applies: (game, combat) => !combat.target?.isNpc
-    && (getDcList(game, defenderPN(combat)) || []).some((dc) => (dc.dcName || dc) === '[Spectre Cell]'),
-});
+// Spectre Cell — NOT a combat mod. The errata version grants tokens at the
+// start of the round + a once-per-round exhaust (alexanbv 2026-06-16). The
+// "+1 Damage/+1 Block passive" was the pre-errata version (still in the DB —
+// flagged for a data fix); it does not belong in any combat window.
 
 // Fury of Kashyyyk — Pierce 1 (conditional attacker modifier, IACP card part 3;
 // alexanbv 2026-06-16 "implement fury to spec with both restrictions"). Auto-
