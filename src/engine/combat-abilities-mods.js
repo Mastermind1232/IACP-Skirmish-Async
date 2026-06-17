@@ -25,7 +25,6 @@ import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
 import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
-import { hasAimAbility, aimBonusApplies } from '../game/aim-rebel-trooper-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -297,16 +296,9 @@ registerCombatAbility({
   },
 });
 
-// Aim (Rebel Trooper) — +1 Hit, +2 Accuracy if the figure has not moved this
-// activation (alexanbv 2026-06-16: "Aim is a mod").
-registerCombatAbility({
-  id: 'aim', name: 'Aim', windows: ['mods'], side: 'attacker', kind: 'passive',
-  applies: (game, combat, side, deps) => {
-    const dcName = attackerDcNameOf(combat);
-    return !!dcName && hasAimAbility(ids(eff(deps, dcName)))
-      && aimBonusApplies(combat.attackerFigureKey, game.figureMoved);
-  },
-});
+// Aim (Rebel Trooper) — CARD PENDING IACP CHANGE (alexanbv 2026-06-16: "rebel
+// trooper E card has been changed. Ignore that ability for now"). Not wired
+// until the new text lands. See cards-pending-change.js.
 
 // Exploit Weakness (Scout Trooper Elite) — +1 Surge if the defender has a
 // harmful condition.

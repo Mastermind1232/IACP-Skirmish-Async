@@ -18,6 +18,7 @@ import { getCcEffect } from '../data-loader.js';
 import { getCcHand, opponentPlayerNum } from '../game/player-helpers.js';
 import { figureMatchesCcRestriction } from '../game/cc-timing.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { isCardPendingChange } from './cards-pending-change.js';
 
 // Command Cards played by a figure OTHER than the attacker/defender (reactions by
 // a friendly third party) — alexanbv 2026-06-16 said to leave these as exceptions
@@ -84,6 +85,9 @@ export function registerCsvWindowAbilities() {
     for (const r of rows) {
       const gate = SPEC_TO_GATE[r.timing];
       if (!gate) continue;
+      // Skip cards whose IACP text is mid-change — don't offer the soon-to-be-
+      // wrong ability (alexanbv 2026-06-16). See cards-pending-change.js.
+      if (isCardPendingChange(r.card)) continue;
       const side = (r.attack_side === 'attacker' || r.attack_side === 'defender') ? r.attack_side : null;
       if (!side) continue;
       // Skip if a hand-wired executable already covers this ability name in this window.

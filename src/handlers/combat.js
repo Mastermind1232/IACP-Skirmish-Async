@@ -1635,11 +1635,6 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyForestFightersHit(combat);
     combat.bonusHits = r.bonusHits;
     await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).').catch(discordCatch);
-  } else if (id === 'aim') {
-    const bump = applyAimBonus({ bonusHits: combat.bonusHits, bonusAccuracy: combat.bonusAccuracy });
-    combat.bonusHits = bump.bonusHits;
-    combat.bonusAccuracy = bump.bonusAccuracy;
-    await thread.send('**Aim** — Has not moved this activation: +1 Hit, +2 Accuracy.').catch(discordCatch);
   } else if (id === 'exploit_weakness') {
     const r = applyExploitWeaknessSurge(combat);
     combat.surgeBonus = r.surgeBonus;

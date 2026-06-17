@@ -161,9 +161,6 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     assert.equal(combat.surgeBonus || 0, 0, 'Exploit Weakness must NOT apply without a harmful condition');
   });
 
-  it('Aim (Rebel Trooper attacker, not moved): +1 Hit / +2 Accuracy via the mods window', async () => {
-    const combat = await attackInto('Stormtrooper', { attackerDc: 'Rebel Trooper (Elite)' });
-    assert.equal(combat.bonusHits, 1, 'Aim must apply +1 Hit once');
-    assert.equal(combat.bonusAccuracy, 2, 'Aim must apply +2 Accuracy once');
-  });
+  // Aim (Rebel Trooper Elite) is a CARD PENDING IACP CHANGE — intentionally not
+  // wired (see cards-pending-change.js). No test until the new text lands.
 });
