@@ -13,7 +13,7 @@ import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOr
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
-import { groupEffectiveFigures } from './squad-upgrades.js';
+import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
 
 import { getDcEffect } from './dc-helpers.js';
@@ -12491,6 +12491,7 @@ export function resolveAbility(abilityId, context) {
 
     // 1st call: find eligible defeated figures
     const candidates = [];
+    const _reinfMsgIds = getDcMessageIds(game, playerNum) || [];
     for (let i = 0; i < dcList.length; i++) {
       const dc = dcList[i];
       const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
@@ -12499,18 +12500,28 @@ export function resolveAbility(abilityId, context) {
       const dgMatch = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
       const dgIndex = dgMatch ? dgMatch[1] : String(i + 1);
       const stats = getStatsForDc(dcName);
-      const keywords = stats?.keywords || [];
-      if (pdf.traitFilter?.length && !pdf.traitFilter.some((t) => keywords.includes(t))) continue;
-      if (pdf.excludeTraits?.length && pdf.excludeTraits.some((t) => keywords.includes(t))) continue;
-      if (pdf.nonUnique && stats?.unique) continue;
-      const figureCost = stats?.subCost ?? stats?.cost ?? 0;
-      if (pdf.maxReinforcementCost != null && figureCost > pdf.maxReinforcementCost) continue;
-      if (pdf.maxFigureCost != null && figureCost > pdf.maxFigureCost) continue;
-      const figureCount = stats?.figures ?? 1;
-      for (let figIdx = 0; figIdx < figureCount; figIdx++) {
+      // Per-figure filtering: each figure is judged by ITS OWN card. The base
+      // figures use the group's stats; a Squad Upgrade figure (index >= base
+      // count) uses the SU CARD's traits + printed cost — so it Reinforces at its
+      // own cost, independent of the base group, and a 4+ SU figure is excluded
+      // even when the base group is <= 3. alexanbv 2026-06-17.
+      const baseFigCount = stats?.figures ?? 1;
+      const _suCard = squadUpgradeOnGroup(attachmentsForMsgId(game, _reinfMsgIds[i]));
+      const _suStats = _suCard ? getStatsForDc(`[${_suCard}]`) : null;
+      const totalFigs = baseFigCount + (_suCard ? 1 : 0);
+      for (let figIdx = 0; figIdx < totalFigs; figIdx++) {
+        const _isSu = _suCard && figIdx >= baseFigCount;
+        const _fStats = _isSu ? _suStats : stats;
+        const _fKw = _fStats?.keywords || [];
+        if (pdf.traitFilter?.length && !pdf.traitFilter.some((t) => _fKw.includes(t))) continue;
+        if (pdf.excludeTraits?.length && pdf.excludeTraits.some((t) => _fKw.includes(t))) continue;
+        if (pdf.nonUnique && _fStats?.unique) continue;
+        const _fCost = _fStats?.subCost ?? _fStats?.cost ?? 0;
+        if (pdf.maxReinforcementCost != null && _fCost > pdf.maxReinforcementCost) continue;
+        if (pdf.maxFigureCost != null && _fCost > pdf.maxFigureCost) continue;
         const fk = `${dcName}-${dgIndex}-${figIdx}`;
         if (!poses[fk]) {
-          const suffix = figureCount <= 1 ? '' : ` (${String.fromCharCode(65 + figIdx)})`;
+          const suffix = totalFigs <= 1 ? '' : ` (${_isSu ? _suCard : String.fromCharCode(65 + figIdx)})`;
           candidates.push({ figureKey: fk, label: `${displayName || dcName}${suffix}` });
         }
       }
