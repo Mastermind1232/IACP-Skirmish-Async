@@ -4891,7 +4891,12 @@ export async function handleCombatRoll(interaction, ctx) {
       }
     }
 
-    // --- Enter reroll window ---
+    // --- Enter reroll window (LEGACY ad-hoc reroll engine) ---
+    // Dead in gate mode: the gate drives rerolls via the data-driven rerolls
+    // window + the _rerolledDieIds lock, not this forcedRerollQueue/bucket. The
+    // legacy block also applied premature side effects (exhaust/deplete) before
+    // the player rerolled — skipping it in gate mode fixes that. alexanbv 2026-06-16.
+    if (!combat._seqActive) {
     const atkInnate = getInnateRerolls(combat.attackerDcName);
     const defenderDcName = dcNameFromFigureKey(combat.target?.figureKey ?? '');
     const defInnate = getInnateRerolls(defenderDcName);
@@ -5385,7 +5390,9 @@ export async function handleCombatRoll(interaction, ctx) {
     // are computed but unused — kept only because the back-compat
     // shim getInnateRerolls + the AI engine still read them.
     void atkRerolls; void defRerolls;
-    // G12: Track which die indices have been rerolled (each die max once)
+    } // end legacy reroll engine (skipped entirely in gate mode)
+    // Legacy per-side reroll-index trackers (the gate uses _rerolledDieIds);
+    // initialized here for any legacy-handler back-compat.
     combat.attackerRerolledIndices = [];
     combat.defenderRerolledIndices = [];
     if (combat._seqActive) {
