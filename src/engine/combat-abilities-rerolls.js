@@ -38,6 +38,12 @@ export function registerRerollAbilities() {
       // registered as a die-turn in combat-abilities-special.js. Skip it here so
       // the reroll resolver doesn't shadow the die-turn one (alexanbv 2026-06-16).
       if (card === 'Rapid Recalibration') continue;
+      // Gambit + Shrewd Scoundrel (Lando) are NOT standalone reroll sources —
+      // they're modifiers ON a reroll (alexanbv 2026-06-16: "gambit applies to
+      // ANY reroll, shrewd scoundrel only to Resourceful"). Gambit is injected as
+      // a color-swap stage on any of Lando's rerolls; Shrewd Scoundrel is folded
+      // into the Resourceful resolver. So don't register them as reroll buttons.
+      if (r.ability === 'Gambit' || r.ability === 'Shrewd Scoundrel') continue;
       // "Force the defender to reroll a defense die" (Versatile Weaponry) — the
       // ATTACKER's ability, but it rerolls a DEFENSE die and is usable while the
       // owner is attacking (alexanbv 2026-06-16 re-audit). Pool = defense.

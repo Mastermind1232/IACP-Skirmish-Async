@@ -801,7 +801,17 @@ export async function resumeGateAfterRollInterrupt(thread, game, combat, ctx) {
  * The lock (no die rerolled twice; Zeb/RR exempt) lives inside rerollDie, not
  * here. Mirrors _makeDieTurnResolver's 2-stage prompt/apply + sub-choice flow.
  */
-function _makeRerollResolver({ name, pool, eligible, colorSwap = false, stageKey = 'rr' }) {
+/** Lando's Gambit applies to ANY reroll he takes (alexanbv 2026-06-16): if the
+ * side's figure has gambit_lando, the reroll gains an optional color-swap stage
+ * ("replace the die with another of the same type before rerolling"). */
+function _figureHasGambit(combat, side) {
+  const dc = side === 'defender' ? combat.defenderDcName : combat.attackerDcName;
+  if (!dc) return false;
+  const eff = getDcEffectsGlobal()[dc] || getDcEffectsGlobal()[(dc || '').replace(/\s*\[.*\]\s*$/, '')];
+  return (eff?.specialAbilityIds || []).includes('gambit_lando');
+}
+function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, stageKey = 'rr' }) {
+  const wantsColorSwap = (combat) => colorSwap || _figureHasGambit(combat, side);
   const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
   const dieLabel = (d) => pool === 'attack'
     ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
@@ -816,8 +826,9 @@ function _makeRerollResolver({ name, pool, eligible, colorSwap = false, stageKey
     apply: async (choice, { combat, thread, ctx, gameId, id }) => {
       const sk = `_${stageKey}`;
       if (choice === 'skip') { delete combat[`${sk}Stage`]; delete combat[`${sk}Die`]; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
-      // colorSwap: stage 1 picks the die, stage 2 picks the new color.
-      if (colorSwap && combat[`${sk}Stage`] !== 'color') {
+      // colorSwap (incl. Lando's Gambit): stage 1 picks the die, stage 2 the color.
+      const _cs = wantsColorSwap(combat);
+      if (_cs && combat[`${sk}Stage`] !== 'color') {
         combat[`${sk}Die`] = parseInt(choice, 10); combat[`${sk}Stage`] = 'color';
         const die = combat[diceField]?.[combat[`${sk}Die`]];
         const colors = pool === 'attack' ? ['blue', 'green', 'red', 'yellow'] : ['white', 'black'];
@@ -825,8 +836,8 @@ function _makeRerollResolver({ name, pool, eligible, colorSwap = false, stageKey
         await thread?.send(sanitizeMentions({ content: `**${name}** — choose the new color for die #${combat[`${sk}Die`] + 1}:`, components: chunkButtonsToRows(btns.map(([c, l, s]) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${id}`).setLabel(l).setStyle(_modsStyle(s)))) })).catch(discordCatch);
         return { followUp: true };
       }
-      const idx = colorSwap ? combat[`${sk}Die`] : parseInt(choice, 10);
-      const newColor = colorSwap && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
+      const idx = _cs ? combat[`${sk}Die`] : parseInt(choice, 10);
+      const newColor = _cs && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
       const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
       if (res.ok) thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
       else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
@@ -968,9 +979,9 @@ export const COMBAT_RESOLVERS = {
   // mark combat.soresuFormFigKey here (on a real reroll), and the resolve-step
   // handler applies the conversion + conditional Kanan strain.
   'reroll:kanan_jarrus:defender': {
-    prompt: (a) => _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', stageKey: 'rr_soresu' }).prompt(a),
+    prompt: (a) => _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', side: 'defender', stageKey: 'rr_soresu' }).prompt(a),
     apply: async (choice, a) => {
-      const r = await _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', stageKey: 'rr_soresu' }).apply(choice, a);
+      const r = await _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', side: 'defender', stageKey: 'rr_soresu' }).apply(choice, a);
       if (choice !== 'skip' && !(r && r.followUp)) {
         const { game, combat } = a;
         const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
@@ -1432,7 +1443,7 @@ function _resolverFor(pick) {
     return null;
   }
   if (reg?.params?.kind === 'reroll') {
-    return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+    return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, side: reg.side, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
   }
   if (reg?.params?.kind === 'third_party_cc' && String(reg.params.specKey).startsWith('There Is No Try')) {
     return _makeYodaResolver({ specKey: reg.params.specKey, side: reg.side });
