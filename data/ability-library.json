@@ -2529,7 +2529,7 @@
       "category": "passive-reactive",
       "label": "Hunt Dissent",
       "description": "When your opponent plays a Command card, you may distribute 2 Damage Tokens among friendly figures within 1 space. Limit once per round.",
-      "wiredStatus": "partial"
+      "wiredStatus": "wired"
     },
     "Hunter Protocol": {
       "type": "ccEffect",
