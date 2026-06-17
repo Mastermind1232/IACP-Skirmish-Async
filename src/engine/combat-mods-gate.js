@@ -20,6 +20,7 @@ import './combat-abilities-windows.js'; // condition-driven on_declare/mods/afte
 import './combat-abilities-third-party.js'; // third-party-figure CCs (offered army-wide, figure-picker on play)
 import './combat-abilities-tokens.js'; // power-token spend as an on_declare option (no separate token window)
 import './combat-abilities-exhaust.js'; // exhaust attacker-attachment bonuses (replace eager double-handling) — LAST so they win
+import './combat-abilities-attachment-auto.js'; // automatic attachment mods passives (migrated off the eager declaration path)
 import { abilitiesForWindow } from './combat-timing-registry.js';
 import { buildStepGate } from './combat-ability-gate.js';
 

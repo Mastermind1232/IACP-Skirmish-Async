@@ -1918,6 +1918,23 @@ export async function handleModsSubChoice(interaction, ctx) {
 
 /** Apply a passive mods ability automatically (no player decision). */
 export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
+  // Automatic attachment passives migrated off the eager declaration path
+  // (combat-abilities-attachment-auto.js). alexanbv 2026-06-17.
+  if (id === 'driven_by_hatred_hit') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread?.send('**Driven by Hatred** — +1 Hit.').catch(discordCatch);
+    return;
+  }
+  if (id === 'wookiee_avenger_hit') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread?.send('**Wookiee Avenger** — +1 Hit while attacking.').catch(discordCatch);
+    return;
+  }
+  if (id === 'combat_suit_reduce_pierce') {
+    combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 1;
+    await thread?.send('**Combat Suit** — reduce the attack\'s Pierce by 1.').catch(discordCatch);
+    return;
+  }
   if (id === 'pulse_cannon') {
     combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
     combat.bonusHits = (combat.bonusHits || 0) + 1;
@@ -3457,9 +3474,9 @@ export async function handleAttackTarget(interaction, ctx) {
     // ([Driven by Hatred] attachment reroll row); the old eager rerollOneAttackDie
     // count is dead (its consumer is in the retired legacy block). Brutality loss
     // is handled separately.
-    if (cardNameIncludes(_atkUpgrades, 'Driven by Hatred')) {
-      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-    }
+    // Driven by Hatred (+1 Hit) and Wookiee Avenger (+1 Hit) are now gate mods
+    // passives (combat-abilities-attachment-auto.js → _fireModsPassive), fired in
+    // the modifiers window instead of eagerly here. alexanbv 2026-06-17.
     // Heir to the Jedi (Luke): +1 Hit on Ranged; Saber Strike Focus handled at
     // declaration. The reroll is offered by the gate ([Heir to the Jedi] row).
     if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi')) {
@@ -3467,11 +3484,6 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     // Rogue Smuggler (Han Solo) — reroll MOVED to the gate rerolls window
     // (CSV [Rogue Smuggler] row). Distracting-loss is handled separately below.
-
-    // Wookiee Avenger (Chewbacca): +1 Hit while attacking
-    if (cardNameIncludes(_atkUpgrades, 'Wookiee Avenger')) {
-      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-    }
     // Cross Training: defend-only ability (no attack effect)
     // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
     if (cardNameIncludes(_atkUpgrades, 'Mortar Trooper')) {
@@ -3518,10 +3530,8 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
     // --- Defender attachments ---
-    // Combat Suit: reduce Pierce value of attack results by 1 (min 0, handled in computeCombatResult)
-    if (cardNameIncludes(_defUpgrades, 'Combat Suit')) {
-      _pc.defenderReducePierce = (_pc.defenderReducePierce || 0) + 1;
-    }
+    // Combat Suit: reduce Pierce by 1 — now a gate mods passive
+    // (combat-abilities-attachment-auto.js → _fireModsPassive). alexanbv 2026-06-17.
     // Wookiee Avenger (defending): convert Dodge → Evade (handled in computeCombatResult)
     if (cardNameIncludes(_defUpgrades, 'Wookiee Avenger')) {
       _pc.wookieeAvengerDefend = true;
