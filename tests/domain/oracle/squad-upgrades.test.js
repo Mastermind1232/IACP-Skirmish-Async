@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import {
   isSquadUpgradeCard, squadUpgradeOnGroup, effectiveFigureCount,
   attachmentsForMsgId, groupEffectiveFigures, groupSuFigureHealth,
-  SQUAD_UPGRADE_FIGURE_CARDS,
+  squadUpgradeFigureCard, SQUAD_UPGRADE_FIGURE_CARDS,
 } from '../../../src/game/squad-upgrades.js';
 import { getDeployFigureLabels } from '../../../src/discord/components.js';
 import { isGroupDefeated } from '../../../src/engine/game-readers.js';
@@ -53,6 +53,17 @@ describe('SU msgId helpers', () => {
   it('groupSuFigureHealth returns the SU card HP, else null', () => {
     assert.equal(groupSuFigureHealth(game, 'm1', (n) => ({ 'Flame Trooper': { health: 8 } }[n])), 8);
     assert.equal(groupSuFigureHealth(game, 'm2', () => ({ health: 99 })), null, 'no SU → null');
+  });
+});
+
+describe('SU figure-scoped combat abilities', () => {
+  it('squadUpgradeFigureCard identifies the SU figure by its nickname', () => {
+    const game = { figureNicknames: { 'Heavy Stormtrooper-1-2': 'Z-6 Trooper', 'Heavy Stormtrooper-1-0': 'Custom Name' } };
+    // The SU figure (nicknamed with an SU card) is recognised; a base figure with
+    // a non-SU nickname is not (only SU figures are ever nicknamed in practice).
+    assert.equal(squadUpgradeFigureCard(game, 'Heavy Stormtrooper-1-2'), 'Z-6 Trooper');
+    assert.equal(squadUpgradeFigureCard(game, 'Heavy Stormtrooper-1-0'), null, 'non-SU nickname → null');
+    assert.equal(squadUpgradeFigureCard(game, 'Heavy Stormtrooper-1-1'), null, 'no nickname → null');
   });
 });
 

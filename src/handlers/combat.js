@@ -20,6 +20,7 @@ import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId } from '../game/card-state-helpers.js';
+import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
@@ -3609,8 +3610,10 @@ export async function handleAttackTarget(interaction, ctx) {
     //     (slice 6, maybePromptZilloDiscardForBlock inside proceedAfterRerolls'
     //     DEF block).
   }
-  // Z-6 Trooper Rotary Cannon: before attacking, become Focused
-  if (cardNameIncludes(_atkUpgrades, 'Z-6 Trooper')) {
+  // Z-6 Trooper Rotary Cannon: before attacking, become Focused — FIGURE-SCOPED:
+  // only when the Z-6 Squad Upgrade FIGURE itself is the attacker, not any
+  // group-mate. alexanbv 2026-06-17.
+  if (cardNameIncludes(_atkUpgrades, 'Z-6 Trooper') && squadUpgradeFigureCard(game, attackerFigureKey) === 'Z-6 Trooper') {
     if (!attackerConds.includes('Focus')) {
       const _z6Result = applyConditionWithDie(game, attackerFigureKey, 'Focus', game.pendingCombat.attackInfo, 'green');
       if (_z6Result.applied) {

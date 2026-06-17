@@ -7,6 +7,7 @@ import { processFigureDefeat } from './defeat-handler.js';
 import { applyStrain as _applyStrain, triggerBleedAfterAction as _triggerBleedAfterAction } from '../handlers/strain-handler.js';
 import { setupPendingMoveX as _setupPendingMoveX } from '../handlers/move-x-handler.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -1710,7 +1711,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
   const _ftAtkUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
   const _ftBlastRefreshMsgIds = [];
-  if (cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper') && hit) {
+  // Incinerate is the FLAME TROOPER FIGURE's ability — only fires when the Flame
+  // Trooper Squad Upgrade figure itself is the attacker, not a group-mate.
+  // alexanbv 2026-06-17.
+  const _ftAttacking = cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper')
+    && squadUpgradeFigureCard(game, combat.attackerFigureKey) === 'Flame Trooper';
+  if (_ftAttacking && hit) {
     // Apply 1 Strain (1 HP loss) to target if it suffered damage and survived
     if (damage > 0 && targetMsgId) {
       // Fireproof: target immune to Strain if it also has Flame Trooper attachment

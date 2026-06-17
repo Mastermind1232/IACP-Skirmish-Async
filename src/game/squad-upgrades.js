@@ -51,3 +51,14 @@ export function groupSuFigureHealth(game, msgId, getDcStats) {
   const su = squadUpgradeOnGroup(attachmentsForMsgId(game, msgId));
   return su ? (getDcStats?.(su)?.health ?? null) : null;
 }
+
+/**
+ * If this figureKey is a Squad Upgrade FIGURE, return its SU card name, else
+ * null. The SU figure is the only one ever nicknamed with an SU card, so its
+ * combat abilities (Rotary Cannon, Incinerate, Fireproof) are scoped to it by
+ * matching the nickname rather than applying group-wide. alexanbv 2026-06-17.
+ */
+export function squadUpgradeFigureCard(game, figureKey) {
+  const nick = game?.figureNicknames?.[figureKey];
+  return nick && isSquadUpgradeCard(nick) ? nick : null;
+}

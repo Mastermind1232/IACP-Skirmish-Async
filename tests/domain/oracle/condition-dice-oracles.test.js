@@ -109,13 +109,16 @@ describe('ORACLE-CONDDICE-001: Migrated sites use applyConditionWithDie', () => 
       'Focused on the Kill must use applyConditionWithDie');
   });
 
-  it('Z-6 Trooper uses applyConditionWithDie', () => {
+  it('Z-6 Trooper uses applyConditionWithDie, scoped to the SU figure', () => {
     const src = readSrc('src/handlers/combat.js');
     const idx = src.indexOf('Z-6 Trooper Rotary Cannon');
     assert.ok(idx > 0, 'Z-6 Trooper site found');
-    const block = src.slice(idx, idx + 400);
+    const block = src.slice(idx, idx + 600);
     assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
       'Z-6 Trooper must use applyConditionWithDie');
+    // Rotary Cannon is the Z-6 FIGURE's ability — only when the SU figure attacks.
+    assert.ok(block.includes("squadUpgradeFigureCard(game, attackerFigureKey) === 'Z-6 Trooper'"),
+      'Z-6 Trooper Focus must be scoped to the Z-6 Squad Upgrade figure');
   });
 });
 
