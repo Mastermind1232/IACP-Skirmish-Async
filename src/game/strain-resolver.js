@@ -33,6 +33,7 @@
 
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getCcHand, getCcDiscard, getDcAttachments, getDcList, getDcMessageIds, ccHandKey, ccDiscardKey } from './player-helpers.js';
+import { fireCcDiscarded } from './cc-passive-redraw.js';
 
 export const STRAIN_OPTIONS = Object.freeze({
   TAKE_DAMAGE: 'damage',
@@ -137,6 +138,8 @@ export function resolveSingleStrainChoice(game, controllerPlayerNum, option, ctx
     game[discardKey] = (game[discardKey] || []).concat(top);
     out.deckDiscarded = costMult;
     out.applied = true;
+    // When-discarded subroutine (deck): Built on Hope re-draw + Windfall hooks.
+    for (const _c of top) fireCcDiscarded(game, controllerPlayerNum, _c, { fromDeck: true });
     return out;
   }
 

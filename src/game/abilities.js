@@ -8160,6 +8160,9 @@ export function resolveAbility(abilityId, context) {
     game[discardKey] = (game[discardKey] || []).concat(discarded1);
     game[oppHandKey] = oppHand;
     game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded2);
+    // When-discarded subroutine (forced hand discards, both players): re-draw + Windfall hooks.
+    for (const _c of discarded1) fireCcDiscarded(game, playerNum, _c, { fromDeck: false });
+    for (const _c of discarded2) fireCcDiscarded(game, oppNum, _c, { fromDeck: false });
     const parts = [];
     if (discarded1.length) parts.push(`You discarded ${discarded1.map((c) => `**${c}**`).join(', ')}`);
     if (discarded2.length) parts.push(`opponent discarded ${discarded2.length} card(s)`);
@@ -8193,6 +8196,8 @@ export function resolveAbility(abilityId, context) {
     const discarded = oppHand.splice(choiceIndex, 1)[0];
     game[oppHandKey] = oppHand;
     game[oppDiscardKey] = (game[oppDiscardKey] || []).concat(discarded);
+    // When-discarded subroutine (forced hand discard): re-draw passives + Windfall hooks.
+    fireCcDiscarded(game, oppNum, discarded, { fromDeck: false });
     const eff = getCcEffect(discarded);
     const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
     // Self-strain via pendingStrain[] (queues through applyStrain so
