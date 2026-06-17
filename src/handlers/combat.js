@@ -1677,6 +1677,13 @@ export async function _fireOnDeclarePassive(side, id, thread, game, combat, ctx)
       combat.attackInfo = r.attackInfo;
       await thread.send(`**${af.label}** — auto-Focus: +1 ${af.die} die.`).catch(discordCatch);
     }
+    return;
+  }
+  // Fly-By (Jet Trooper Elite) — add a blue die when the target is within 2
+  // (no Focus condition, just an extra attack die).
+  if (id === 'fly_by') {
+    combat.attackInfo = { ...combat.attackInfo, dice: [...(combat.attackInfo.dice || []), 'blue'] };
+    await thread.send('**Fly-By** — target within 2 spaces: +1 blue die.').catch(discordCatch);
   }
 }
 
@@ -2803,12 +2810,8 @@ export async function handleAttackTarget(interaction, ctx) {
   // Mystic Hunter (Zuckuss) + Full of Rage (Krrsantan) — MOVED to the on_declare
   // window (combat-abilities-ondeclare.js passives → _fireOnDeclarePassive) per
   // alexanbv 2026-06-16.
-  // Fly-By (Jet Trooper Elite): if target within 2 spaces, add 1 blue die
-  let _flyByFired = false;
-  if ((_atkEff?.passives || []).includes('Fly-By') && target.dist != null && target.dist <= 2) {
-    attackInfo = { ...attackInfo, dice: [...(attackInfo.dice || []), 'blue'] };
-    _flyByFired = true;
-  }
+  // Fly-By (Jet Trooper Elite) — MOVED to the on_declare window
+  // (combat-abilities-ondeclare.js 'fly_by' passive → _fireOnDeclarePassive).
   // Utinni! (roundUtinniJawaBuffs): Jawa Scavenger gets +1 Accuracy and a VP-earning surge ability
   // Per-figure 2026-05-09 (multifigure-independent-activation rule).
   if (game.roundUtinniJawaBuffs && meta.dcName?.toLowerCase().includes('jawa scavenger')) {
@@ -2886,7 +2889,6 @@ export async function handleAttackTarget(interaction, ctx) {
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
-  if (_flyByFired) await thread.send(`🚀 **Fly-By** — Target within 2 spaces: +1 blue die to attack pool.`).catch(discordCatch);
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
   // (multifigure-independent-activation rule).

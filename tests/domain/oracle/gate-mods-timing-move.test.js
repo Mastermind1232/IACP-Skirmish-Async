@@ -212,4 +212,13 @@ describe('GATE on_declare timing move: auto-Focus fires before the roll, once', 
     const healthy = await attackInto('Stormtrooper', { attackerDc: 'Krrsantan' });
     assert.equal(healthy.attackInfo.dice.length, 2, 'Full of Rage must NOT fire at full health');
   });
+
+  it('Fly-By (Jet Trooper Elite): +1 blue die when target within 2', async () => {
+    const close = await attackInto('Stormtrooper', { attackerDc: 'Jet Trooper (Elite)', type: 'melee', dist: 1 });
+    assert.equal(close.attackInfo.dice.length, 3, 'Fly-By must add a die when target is within 2');
+    assert.equal(close.attackInfo.dice.filter((d) => d === 'blue').length, 2, 'the added die must be blue');
+
+    const far = await attackInto('Stormtrooper', { attackerDc: 'Jet Trooper (Elite)', type: 'range', dist: 4, defSq: 'f1' });
+    assert.equal(far.attackInfo.dice.length, 2, 'Fly-By must NOT fire when target is 3+ away');
+  });
 });

@@ -74,6 +74,14 @@ registerCombatAbility({
 // Mystic Hunter (Zuckuss) — auto-Focus on every attack declaration.
 atkPassive('mystic_hunter', 'Mystic Hunter', ['mystic hunter']);
 
+// Fly-By (Jet Trooper Elite) — +1 blue die when the target is within 2 spaces.
+registerCombatAbility({
+  id: 'fly_by', name: 'Fly-By', windows: ['on_declare'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => !!combat.attackerFigureKey
+    && hasAny(atkEff(combat, deps), 'fly-by')
+    && combat.distanceToTarget != null && combat.distanceToTarget <= 2,
+});
+
 // Full of Rage (Krrsantan) — auto-Focus if the attacker has suffered 3+ damage.
 registerCombatAbility({
   id: 'full_of_rage', name: 'Full of Rage', windows: ['on_declare'], side: 'attacker', kind: 'passive',

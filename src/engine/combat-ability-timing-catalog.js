@@ -31,7 +31,6 @@ const AR = ['after_resolve'];
 // ── ON_DECLARE (CRR step 1+2) ────────────────────────────────────────────────
 // Attacker
 e('focus_condition', 'Focus', 'attacker', 'passive', ON, 'attacker has Focus → +1 green die');
-e('fly_by', 'Fly-By (Jet Trooper Elite)', 'attacker', 'passive', ON, 'dist≤2 → +1 blue die');
 e('utinni', 'Utinni!', 'attacker', 'passive', ON, 'roundUtinniJawaBuffs + Jawa → +1 Acc + VP surge');
 e('merciless', 'Merciless (HK Assassin Droid Elite)', 'attacker', 'interactive', ON, 'defender has harmful cond → use prompt');
 e('knowledge_and_defense_redraw', 'Knowledge and Defense (redraw surge)', 'attacker', 'interactive', ON, 'KD in discard + FORCE USER');
