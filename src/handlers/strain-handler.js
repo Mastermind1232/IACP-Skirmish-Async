@@ -38,11 +38,15 @@
 
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { discordCatch } from '../error-handling.js';
-import { parseCustomId } from '../discord/custom-id.js';
+import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getDcMessageIds, getDcAttachments, getCcHand, ccHandKey, ccDiscardKey, getPlayerId } from '../game/player-helpers.js';
+// sc-hand-protection is loaded dynamically (below) to avoid a module-init cycle:
+// it would otherwise pull a registerStrainFollowup caller into this module's
+// pre-evaluation graph (TDZ on _strainFollowupHandlers). applyStrain already
+// uses dynamic import for the same reason (hostile-enumeration).
 import { exhaustAttachment, depleteDc } from '../game/card-state-helpers.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import {
@@ -160,6 +164,45 @@ export async function applyStrain(game, ctx, opts) {
     }
   }
 
+  // [Smuggling Compartment] vs [Headhunter]: Headhunter forces a RANDOM CC
+  // discard from the controller's hand. If one will fire and the controller
+  // owns an un-exhausted Smuggling Compartment, offer the set-aside first, then
+  // resume the Headhunter resolution against the reduced hand. alexanbv 2026-06-17.
+  if (!opts._scResumed && amount > 0 && _headhunterWillFire(game, controllerPN)) {
+    const { offerScSetAside } = await import('./sc-hand-protection.js');
+    const offered = await offerScSetAside(game, controllerPN, ctx.client, {
+      idPrefix: 'sc_hh',
+      promptText: '**[Headhunter]** is about to make you discard a random Command card. **[Smuggling Compartment]** — you may exhaust it to set aside cards first (returned at the start of your next activation or the next phase).',
+    });
+    if (offered) {
+      game.pendingScHeadhunter = { figureKey, controllerPN, amount, source, followup: opts.followup || null };
+      ctx.saveGames?.(game.gameId);
+      return;
+    }
+  }
+  return _resolveHeadhunterAndStrainChoice(game, ctx, { figureKey, controllerPN, amount, source, followup: opts.followup || null });
+}
+
+/** True if an un-exhausted [Headhunter] on the opponent will fire (its host is in activation). */
+function _headhunterWillFire(game, controllerPN) {
+  const ownerPN = controllerPN === 1 ? 2 : 1;
+  const msgIds = getDcMessageIds(game, ownerPN) || [];
+  const atts = getDcAttachments(game, ownerPN) || {};
+  for (const mid of msgIds) {
+    const a = atts[mid] || [];
+    const exh = game.exhaustedSkirmishUpgrades?.[mid] || [];
+    if (a.includes('Headhunter') && !exh.includes('Headhunter') && game.dcActionsData?.[mid]?.threadId) return true;
+  }
+  return false;
+}
+
+/**
+ * Resolve [Headhunter] (random CC discard / +1 damage) then the per-strain
+ * choice cascade. Split out of applyStrain so the Smuggling Compartment
+ * reaction can defer before Headhunter without re-running the earlier
+ * Fireproof / NPC checks on resume.
+ */
+async function _resolveHeadhunterAndStrainChoice(game, ctx, { figureKey, controllerPN, amount, source, followup }) {
   // ── Headhunter (attachment): when a hostile figure suffers Strain during
   //    the activation of the FIGURE THE HEADHUNTER IS ATTACHED TO, exhaust
   //    to reduce strain by 1 and force the controller to discard a random
@@ -208,7 +251,7 @@ export async function applyStrain(game, ctx, opts) {
   }
   // If Headhunter fully neutralized the strain (was 1, now 0), no prompt.
   if (amount === 0) {
-    return _runStrainFollowup(game, ctx, opts.followup || null);
+    return _runStrainFollowup(game, ctx, followup || null);
   }
 
   const eventId = `strain_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -224,7 +267,7 @@ export async function applyStrain(game, ctx, opts) {
     udPrompted: false,
     udResolved: false,
     udMsgId: null,
-    followup: opts.followup || null,
+    followup: followup || null,
   };
   game.pendingStrainEvent = ev;
 
@@ -476,4 +519,72 @@ function _splitEventId(suffix) {
   const idx = suffix.indexOf('_');
   if (idx < 0) return [suffix, ''];
   return [suffix.slice(0, idx), suffix.slice(idx + 1)];
+}
+
+// ─── [Smuggling Compartment] vs [Headhunter] ───────────────────────────────
+// The set-aside reaction offered before Headhunter's random CC discard. After
+// the owner sets aside (or skips), resume the deferred strain resolution so
+// Headhunter discards from the reduced hand.
+
+async function _resumeHeadhunterAfterSc(game, ctx) {
+  const pend = game.pendingScHeadhunter;
+  if (!pend) { ctx.saveGames?.(game.gameId); return; }
+  delete game.pendingScHeadhunter;
+  await _resolveHeadhunterAndStrainChoice(game, ctx, { ...pend });
+  ctx.saveGames?.(game.gameId);
+}
+
+/** Owner opted in — show the hand multi-select. */
+export async function handleScHeadhunterOpen(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_hh_open_');
+  const gameId = parts[0];
+  const ownerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hand = game[ccHandKey(ownerNum)] || [];
+  if (hand.length === 0) {
+    await interaction.message.edit({ content: '**[Smuggling Compartment]** — no cards in hand to set aside.', components: [] }).catch(discordCatch);
+    await _resumeHeadhunterAfterSc(game, ctx);
+    return;
+  }
+  const { scSetAsideSelectRow } = await import('./sc-hand-protection.js');
+  await interaction.message.edit({
+    content: '**[Smuggling Compartment]** — choose Command cards to set aside before Headhunter (returned at the start of your next activation or the next phase):',
+    components: [scSetAsideSelectRow(hand, `sc_hh_confirm_${gameId}_${ownerNum}`)],
+  }).catch(discordCatch);
+}
+
+/** Owner declined — proceed with Headhunter. */
+export async function handleScHeadhunterSkip(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_hh_skip_');
+  const game = await requireGame(interaction, getGame, parts[0], { silent: true });
+  if (!game) return;
+  await interaction.message.edit({ content: '**[Smuggling Compartment]** — declined; Headhunter proceeds.', components: [] }).catch(discordCatch);
+  await _resumeHeadhunterAfterSc(game, ctx);
+}
+
+/** Owner confirmed which CCs to set aside, then resume Headhunter against the reduced hand. */
+export async function handleScHeadhunterConfirm(interaction, ctx) {
+  const { getGame, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_hh_confirm_');
+  const gameId = parts[0];
+  const ownerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
+  const { applyScSetAside } = await import('./sc-hand-protection.js');
+  const count = applyScSetAside(game, ownerNum, interaction.values || []);
+  if (count > 0 && logGameAction) await logGameAction(game, client, `**[Smuggling Compartment]** — P${ownerNum} set aside ${count} Command card${count === 1 ? '' : 's'} before Headhunter.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  await interaction.message.edit({ content: `**[Smuggling Compartment]** — set aside ${count} card${count === 1 ? '' : 's'}. Headhunter proceeds.`, components: [] }).catch(discordCatch);
+  await _resumeHeadhunterAfterSc(game, ctx);
 }

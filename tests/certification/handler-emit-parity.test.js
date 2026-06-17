@@ -50,6 +50,11 @@ const EMIT_ALLOWLIST = new Set([
   'extra_armor_cancel_',    // round.js:1733 — comment says "kept for backwards compat but no longer used in the new UI"
   'botmenu_recover_',       // recover.js:26 handleBotmenuRecover — superseded by resync_
   'slow_on_draw_resume_',   // alexanbv 2026-05-09 architectural fix: SoTD migrated to combatStack push/pop, no Resume button posted; handler kept for legacy state recovery only
+  // Emitted via the shared sc-hand-protection.js offer helper using a dynamic
+  // `${idPrefix}_open_`/`_skip_` template (idPrefix='sc_hh'), so the static
+  // scan can't see them. Live emission verified in sc-hand-protection.js.
+  'sc_hh_open_',
+  'sc_hh_skip_',
 ]);
 
 function getRegistrations() {

@@ -187,7 +187,7 @@ import {
 } from './defeat-cc-prompts.js';
 import { handleFastLearnerPickNamed, handleFastLearnerPickMara } from './fast-learner-picker.js';
 import { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue } from './move-interrupts-handler.js';
-import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain } from './strain-handler.js';
+import { handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz, applyStrain, handleScHeadhunterOpen, handleScHeadhunterSkip, handleScHeadhunterConfirm } from './strain-handler.js';
 import { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
 import {
   handleFavSave, handleFavRemove, handleFavRename,
@@ -612,6 +612,9 @@ register('strain_resolve_ud_skip_', handleStrainUdSkip, 'interrupts');
 register('strain_resolve_damage_', handleStrainChoiceDamage, 'interrupts');
 register('strain_resolve_discard_', handleStrainChoiceDiscard, 'interrupts');
 register('strain_resolve_paz_', handleStrainChoicePaz, 'interrupts');
+register('sc_hh_open_', handleScHeadhunterOpen, 'interrupts');
+register('sc_hh_skip_', handleScHeadhunterSkip, 'interrupts');
+register('sc_hh_confirm_', handleScHeadhunterConfirm, 'interrupts');
 register('last_resort_use_', handleLastResort, 'interrupts');
 register('last_resort_skip_', handleLastResort, 'interrupts');
 register('yhsiw_transfer_', handleYHSIW, 'interrupts');
