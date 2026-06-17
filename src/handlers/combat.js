@@ -19,7 +19,7 @@ import { figureMpRemaining, consumeMovementPoints } from '../game/game-helpers.j
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
-import { exhaustAttachment, depleteDc } from '../game/card-state-helpers.js';
+import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId } from '../game/card-state-helpers.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
@@ -253,8 +253,16 @@ import { markAbilityUsed as _markAbilityUsed, limitGuard as _limitGuard, ability
  * abilities without a limit.
  */
 function _markGateAbilityUsed(game, combat, pick) {
-  const p = getCombatAbility(pick)?.params;
+  const reg = getCombatAbility(pick);
+  const p = reg?.params;
   if (p?.card && p?.ability) _markAbilityUsed(game, combat, p);
+  // Exhaust-on-use (alexanbv 2026-06-17): an exhaust ability exhausts its card
+  // ONLY when actually used — not eagerly at declaration. Once exhausted, its
+  // `applies` no longer offers it (until the card readies in the status phase).
+  if (p?.exhaustOnUse) {
+    const mid = combatSelfAttachmentMsgId(combat, reg.side);
+    if (mid) exhaustAttachment(game, mid, p.exhaustOnUse);
+  }
 }
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -3445,20 +3453,11 @@ export async function handleAttackTarget(interaction, ctx) {
       exhaustAttachment(game, msgId, 'Explosive Armaments');
       await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
     }
-    // The Darksaber: exhaust while attacking → reroll 1 attack die.
-    // KNOWN GAP (alexanbv 2026-06-17): the reroll itself is now offered by the
-    // gate ([The Darksaber] attack:rerolls row), but the CSV limit column is
-    // "None" so the gate treats it as once-per-attack rather than EXHAUST. This
-    // block still exhausts the attachment EAGERLY at declaration (premature — it
-    // fires even if the player ultimately skips the reroll), and the gate's
-    // applies doesn't re-check the exhausted state. Proper fix = exhaust-on-use
-    // wiring in the gate (offer only if !isAttachmentExhausted; exhaust at
-    // resolve via combat.attackerMsgId) + drop this eager block. Same pattern
-    // needed for Trusted Ally (aura attachment — needs the bearer's msgId).
-    if (cardNameIncludes(_atkUpgrades, 'The Darksaber') && !cardNameIncludes(_exh, 'The Darksaber')) {
-      exhaustAttachment(game, msgId, 'The Darksaber');
-      await thread.send('**The Darksaber** — Exhausted: +1 attack reroll.').catch(discordCatch);
-    }
+    // The Darksaber: exhaust while attacking → reroll 1 attack die. Now fully
+    // gate-handled ([The Darksaber] attack:rerolls row, params.exhaustOnUse): the
+    // reroll is offered only while the card is READY and the attachment exhausts
+    // ON USE (not eagerly here), so skipping the reroll leaves it ready.
+    // alexanbv 2026-06-17.
     // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
     if (cardNameIncludes(_atkUpgrades, 'Feeding Frenzy') && !cardNameIncludes(_exh, 'Feeding Frenzy')) {
       const _ffDefHs = _defMsgId ? dcHealthState?.get(_defMsgId) : null;

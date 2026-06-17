@@ -77,6 +77,23 @@ describe('Saska Power Converter is gated on a Device token (any friendly bearer)
   });
 });
 
+describe('Exhaust reroll attachments are offered only while READY', () => {
+  it('The Darksaber: offered when ready, suppressed when exhausted, marked exhaust-on-use', () => {
+    const ab = getCombatAbility('reroll:the_darksaber:attacker');
+    assert.ok(ab, 'Darksaber reroll registered');
+    assert.equal(ab.params.exhaustOnUse, 'The Darksaber', 'tagged exhaust-on-use');
+    const combat = {
+      attackerPlayerNum: 1, attackerFigureKey: 'Sabine Wren', attackerDcName: 'Sabine Wren',
+      attackerMsgId: 'm1', attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }],
+      _rerolledDieIds: new Set(),
+    };
+    const game = { p1DcAttachments: { m1: ['The Darksaber'] }, exhaustedSkirmishUpgrades: {} };
+    assert.equal(ab.applies(game, combat), true, 'ready → offered');
+    game.exhaustedSkirmishUpgrades.m1 = ['The Darksaber'];
+    assert.equal(ab.applies(game, combat), false, 'exhausted → not offered');
+  });
+});
+
 describe('"player that rolled it must reroll" force-reroll idiom routes the pool', () => {
   it('Precision (Grand Inquisitor) — choose any die → pool "any"', () => {
     const ab = getCombatAbility('reroll:the_grand_inquisitor:attacker');

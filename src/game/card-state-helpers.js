@@ -56,6 +56,24 @@ export function isAttachmentExhausted(game, msgId, name) {
 }
 
 /**
+ * The DC message id carrying a combat side's OWN attachment: attacker → the
+ * attacking DC (combat.attackerMsgId), defender → the target DC
+ * (combat.target.msgId). AURA attachments worn by a third figure (e.g. Trusted
+ * Ally on a friendly within 3) are NOT resolvable here — they need
+ * dcMessageMeta to locate the bearer. Returns null when unknown.
+ *
+ * @param {object} combat
+ * @param {'attacker'|'defender'} side
+ * @returns {string|null}
+ */
+export function combatSelfAttachmentMsgId(combat, side) {
+  if (!combat) return null;
+  return side === 'defender'
+    ? (combat.target?.msgId ?? combat.defenderMsgId ?? null)
+    : (combat.attackerMsgId ?? null);
+}
+
+/**
  * Mark a Deployment card as depleted. Additive only — the CRR-DPL-002
  * invariant requires skirmish to never reset, splice, or flip-faceup
  * depleted-card state.

@@ -16,6 +16,7 @@ import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
 import { stripBrackets } from '../game/card-names.js';
+import { isAttachmentExhausted, combatSelfAttachmentMsgId } from '../game/card-state-helpers.js';
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -83,6 +84,17 @@ export function registerRerollAbilities() {
       const effLimit = (r.limit && String(r.limit).toLowerCase() !== 'none') ? r.limit : 'once per attack';
       const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || ''), card: r.card, ability: r.ability, limit: effLimit };
       const limGuard = limitGuard(effLimit, abilityLimitKey(r.card, r.ability));
+      // EXHAUST abilities (alexanbv 2026-06-17: "everything that is an exhaust
+      // ability should have limit: ready — only exhaust if used, and once
+      // exhausted no longer offered"). Detect an exhaust attachment/upgrade on the
+      // side's OWN figure (msgId resolvable from combat); offer only while READY
+      // and exhaust it at resolve (handled by _markGateAbilityUsed via
+      // params.exhaustOnUse). AURA exhaust attachments (Trusted Ally — worn by a
+      // friendly within 3) need the bearer's msgId via dcMessageMeta, not available
+      // in this pure predicate, so they stay on the interim path for now.
+      const isExhaustCard = (r.card_type === 'Attachment' || r.card_type === 'Upgrade') && /exhaust/i.test(r.effect || '');
+      const isAura = /another friendly|friendly figure within|within \d/i.test(`${r.effect || ''} ${r.conditional || ''}`);
+      if (isExhaustCard && !isAura) params.exhaustOnUse = stripBrackets(card);
       // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
       // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
       // derived from affects_self / affects_others. CC/attachment/upgrade rerolls
@@ -127,6 +139,11 @@ export function registerRerollAbilities() {
           // Don't offer a reroll already used in its scope (default once per
           // attack; wider for Saska/Lando).
           if (!limGuard(game, combat)) return false;
+          // Exhaust abilities: offer only while the card is READY (not exhausted).
+          if (params.exhaustOnUse) {
+            const mid = combatSelfAttachmentMsgId(combat, side);
+            if (mid && isAttachmentExhausted(game, mid, params.exhaustOnUse)) return false;
+          }
           if (pool === 'any') {
             return selectableDieIndices(combat, { pool: 'attack' }).length
               + selectableDieIndices(combat, { pool: 'defense' }).length > 0;
