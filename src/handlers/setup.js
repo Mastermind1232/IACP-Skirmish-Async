@@ -21,6 +21,7 @@ import {
 } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, isFigurelessDc } from '../game/index.js';
 import { stripBrackets, cardNameEquals } from '../game/card-names.js';
+import { isSquadUpgradeCard } from '../game/squad-upgrades.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requireParticipant } from '../utils/guards.js';
 import { resolveStartOfRoundEffect } from './round.js';
@@ -306,9 +307,8 @@ export async function applySetupAttachment(game, playerNum, card, dcMsgId, ctx) 
     }
   }
 
-  // Squad Upgrade figures (Z-6 Trooper, Mortar Trooper, Riot Trooper): auto-set nickname for the SU figure
-  const SU_FIGURE_CARDS = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
-  if (SU_FIGURE_CARDS.some(c => cardNameEquals(c, card))) {
+  // Squad Upgrade figures (Z-6 / Mortar / Flame Trooper): auto-set nickname for the SU figure
+  if (isSquadUpgradeCard(card)) {
     const dcList = getDcList(game, playerNum) || [];
     const dcMsgIds = getDcMessageIds(game, playerNum) || [];
     const dcIdx = dcMsgIds.indexOf(dcMsgId);

@@ -9,6 +9,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { squadUpgradeOnGroup, effectiveFigureCount } from '../game/squad-upgrades.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
@@ -1274,7 +1275,7 @@ async function buildAndSendAttackTargets(
       const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
       const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      const _fmTotalFigs = _fmFigCount + (_fmSuAtts.some(a => ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'].includes(a)) ? 1 : 0);
+      const _fmTotalFigs = effectiveFigureCount(_fmFigCount, _fmSuAtts);
       outer2: for (let fi2 = 0; fi2 < _fmTotalFigs; fi2++) {
         if (fi2 === figureIndex) continue; // already checked
         const otherFk = `${meta.dcName}-${_fmDgIdx}-${fi2}`;
@@ -2784,12 +2785,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       if (selectedFig >= baseFigCount) {
         // Squad upgrade figure — check attachment stats
         const getDcEffects = ctx.getDcEffects;
-        const suNames = ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'];
-        for (const su of suNames) {
-          if (cardNameIncludes(_suUpgrades, su)) {
-            const suEff = getDcEffects?.()?.[`[${su}]`];
-            if (suEff?.attack?.dice) { printedDiceCount = suEff.attack.dice.length; break; }
-          }
+        const su = squadUpgradeOnGroup(_suUpgrades);
+        if (su) {
+          const suEff = getDcEffects?.()?.[`[${su}]`] || getDcEffects?.()?.[su];
+          if (suEff?.attack?.dice) printedDiceCount = suEff.attack.dice.length;
         }
       }
       if (printedDiceCount >= 2) {

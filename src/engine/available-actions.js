@@ -9,6 +9,7 @@
 import { ACTION_TYPES, buildCustomId } from './action-types.js';
 import { getPlayerId, getInitiativePlayerNum, opponentPlayerNum, getCcHand, getDcList, getActivatedDcIndices } from '../game/player-helpers.js';
 import { PHASES, ROUND_PHASES } from '../game/phase.js';
+import { effectiveFigureCount } from '../game/squad-upgrades.js';
 import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
 import { clearPendingCelebration } from '../game/interrupts.js';
@@ -2347,7 +2348,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       const _fmDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       const _fmFigCount = getDcStats(meta.dcName)?.figures ?? 1;
       const _fmSuAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-      const _fmTotalFigs = _fmFigCount + (_fmSuAtts.some(a => ['Z-6 Trooper', 'Mortar Trooper', 'Riot Trooper'].includes(a)) ? 1 : 0);
+      const _fmTotalFigs = effectiveFigureCount(_fmFigCount, _fmSuAtts);
       fmRetry: for (let fi2 = 0; fi2 < _fmTotalFigs; fi2++) {
         if (fi2 === figureIndex) continue;
         const otherFk = `${meta.dcName}-${_fmDgIdx}-${fi2}`;
