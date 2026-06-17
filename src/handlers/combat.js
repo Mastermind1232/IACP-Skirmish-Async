@@ -933,6 +933,34 @@ function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
 export const COMBAT_RESOLVERS = {
+  // Twin Sabers (Ahsoka Tano) — bespoke reroll resolver (alexanbv 2026-06-16:
+  // "rerolls ALL attack dice or ALL defense dice, except dice already
+  // rerolled"). The attacker chooses to reroll all of their own attack pool, OR
+  // force the defender to reroll all of their defense pool. selectableDieIndices
+  // already excludes already-rerolled dice (the combined lock).
+  'reroll:ahsoka_tano:attacker': {
+    prompt: ({ combat }) => {
+      const atkN = _selectableDieIndices(combat, { pool: 'attack' }).length;
+      const defN = _selectableDieIndices(combat, { pool: 'defense' }).length;
+      return {
+        content: '**Twin Sabers** — reroll ALL of one pool (dice already rerolled are excluded):',
+        buttons: [
+          ['atk', `Reroll all my attack dice (${atkN})`],
+          ['def', `Force defender to reroll all defense dice (${defN})`],
+          ['skip', 'Skip', 'secondary'],
+        ],
+      };
+    },
+    apply: async (choice, { combat, ctx, thread }) => {
+      if (choice === 'skip') { thread?.send('**Twin Sabers** — Skipped.').catch(discordCatch); return; }
+      const pool = choice === 'def' ? 'defense' : 'attack';
+      let n = 0;
+      for (const i of _selectableDieIndices(combat, { pool })) {
+        if (_rerollDie(combat, ctx, { pool, index: i }).ok) n++;
+      }
+      thread?.send(`**Twin Sabers** — rerolled all ${pool} dice (${n}).`).catch(discordCatch);
+    },
+  },
   // Soresu Form (Kanan Jarrus) — bespoke reroll resolver (alexanbv 2026-06-16):
   // the reroll is a normal defense-die reroll, but its RIDERS (convert each
   // Dodge → 2 Block + 1 Evade, and Kanan suffers 1 Strain unless the rerolling
