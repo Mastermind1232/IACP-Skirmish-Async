@@ -2290,11 +2290,11 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   if (!dcHealthState || !findDcMessageIdForFigure) return;
   const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey);
   if (!msgId) return;
-  // Flame Trooper Fireproof: cannot suffer Strain
-  const _fpUpg = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-  if (cardNameIncludes(_fpUpg, 'Flame Trooper')) {
+  // Flame Trooper Fireproof: only the FLAME TROOPER FIGURE itself is immune to
+  // Strain — not the whole group it's attached to. alexanbv 2026-06-17.
+  if (squadUpgradeFigureCard(game, figureKey) === 'Flame Trooper') {
     const dcName = dcNameFromFigureKey(figureKey);
-    await thread.send(`**Fireproof** — **${dcName}** is immune to Strain from ${abilityLabel}.`).catch(discordCatch);
+    await thread.send(`**Fireproof** — **${dcName}** (Flame Trooper) is immune to Strain from ${abilityLabel}.`).catch(discordCatch);
     return;
   }
   const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
@@ -3668,11 +3668,13 @@ export async function handleAttackTarget(interaction, ctx) {
       delete game.drivenByHatredAttackPenalty[msgId];
     }
   }
-  // Flame Trooper Fireproof: this figure cannot suffer Strain (mark on combat object for handlers)
-  if (cardNameIncludes(_atkUpgrades, 'Flame Trooper')) {
+  // Flame Trooper Fireproof: only the Flame Trooper FIGURE itself is immune to
+  // Strain/Bleed — mark the flag only when the attacking/defending figure IS the
+  // Flame Trooper Squad Upgrade figure, not any group-mate. alexanbv 2026-06-17.
+  if (squadUpgradeFigureCard(game, attackerFigureKey) === 'Flame Trooper') {
     game.pendingCombat.attackerFireproof = true;
   }
-  if (cardNameIncludes(_defUpgrades, 'Flame Trooper')) {
+  if (squadUpgradeFigureCard(game, game.pendingCombat.target?.figureKey) === 'Flame Trooper') {
     game.pendingCombat.defenderFireproof = true;
   }
   // Autofire: add chain attack surge ability + mark on combat

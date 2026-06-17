@@ -894,10 +894,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         const _sbAttDcName = combat.attackerDcName || '';
         const _sbAttEff = getDcEffects()?.[_sbAttDcName];
         if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
-          // Flame Trooper Fireproof: cannot suffer Strain
-          const _sbTargetUpgrades = game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || [];
-          if (cardNameIncludes(_sbTargetUpgrades, 'Flame Trooper')) {
-            await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** is immune to Strain from Stun Batons.`, { phase: 'ROUND', icon: 'card' });
+          // Flame Trooper Fireproof: only the Flame Trooper FIGURE is immune.
+          if (squadUpgradeFigureCard(game, combat.target?.figureKey) === 'Flame Trooper') {
+            await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** (Flame Trooper) is immune to Strain from Stun Batons.`, { phase: 'ROUND', icon: 'card' });
           } else {
           game.figureConditions = game.figureConditions || {};
           game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
@@ -1741,10 +1740,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
         : [];
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
-        // Fireproof self-skip: own Incinerate Blast doesn't strain own
-        // Flame Trooper figures (per the attacker's Fireproof passive).
-        // applyStrain handles the TARGET-side Fireproof check below.
-        if (_ftBlastPn === attackerPlayerNum && cardNameIncludes(_ftAtkUpgrades, 'Flame Trooper')) continue;
+        // Fireproof is per-figure: only the Flame Trooper FIGURE itself is immune
+        // to Incinerate Blast Strain, not other figures in its group. alexanbv
+        // 2026-06-17. (applyStrain re-checks Fireproof, but skip + log here too.)
+        if (squadUpgradeFigureCard(game, _ftBlastFk) === 'Flame Trooper') continue;
         const _ftBlastMsgId = findDcMessageIdForFigure(game.gameId, _ftBlastPn, _ftBlastFk);
         if (!_ftBlastMsgId) continue;
         const _ftBlastHsBefore = dcHealthState.get(_ftBlastMsgId);
