@@ -485,6 +485,25 @@ async function _resumeScCcEffect(game, ctx, client) {
         await spCh.send(payload).catch(discordCatch);
       }
     }
+    // Behind Enemy Lines reorder (requiresReorder) — separate from the choice
+    // chain; post the deck-order picker to the player's hand channel.
+    if (result.requiresReorder?.cards?.length > 1) {
+      setPendingBELReorder(game, { deckKey: result.requiresReorder.deckKey, cards: result.requiresReorder.cards, picked: [], playerNum: pend.playedBy, gameId: game.gameId });
+      const belChId = getHandChannelId(game, pend.playedBy);
+      const belCh = belChId ? await fetchGameChannel(client, belChId) : null;
+      if (belCh) {
+        const belBtns = result.requiresReorder.cards.map((c, i) => new ButtonBuilder().setCustomId(`bel_reorder_1_${game.gameId}_${i}`).setLabel(`1st: ${c}`.slice(0, 80)).setStyle(ButtonStyle.Primary));
+        await belCh.send({ content: `**Behind Enemy Lines** — Choose which card goes **on top** of the opponent's deck:`, components: [new ActionRowBuilder().addComponents(...belBtns.slice(0, 5))] }).catch(discordCatch);
+      }
+    }
+    // Private reveal (e.g. "look at opponent's hand") — to the player's hand
+    // channel (the old eager path used an ephemeral followUp; deferred has no
+    // interaction, so the hand channel is the private equivalent).
+    if (result.revealToPlayer) {
+      const rvChId = getHandChannelId(game, pend.playedBy);
+      const rvCh = rvChId ? await fetchGameChannel(client, rvChId) : null;
+      if (rvCh) await rvCh.send({ content: String(result.revealToPlayer).slice(0, 1900) }).catch(discordCatch);
+    }
   }
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   ctx.saveGames(game.gameId);
@@ -1036,295 +1055,6 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     return;
   }
 
-  // For cost > 0 with an ability: try to resolve before moving the card. If we can't apply (timing/context),
-  // prompt "We don't think you can do this right now" with [Play anyway] / [Unplay] so the card isn't consumed.
-  if (cost !== 0 && ctx.resolveAbility) {
-    // DEFER the effect past the counter-window when (a) a Comm Disruption window
-    // would open — Comms must cancel BEFORE the effect resolves, like Negation
-    // does for cost-0 (alexanbv 2026-06-17) — or (b) it's a hand-affecting CC
-    // that offers [Smuggling Compartment]. The card is committed now; the effect
-    // resolves only if not cancelled (handleCommDisruptionSkip), or immediately
-    // if no CD window actually opens.
-    if (SC_HAND_CCS.has(card) || _commDisruptionWindowWouldOpen(game, playerNum, card, cost)) {
-      hand.splice(idx, 1);
-      game[handKey] = hand;
-      game[discardKey] = game[discardKey] || [];
-      game[discardKey].push(card);
-      const _scHandChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
-      await interaction.message.delete().catch(discordCatch);
-      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-      const _scLogMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-      game.pendingCcEffect = { abilityId, card, playedBy: playerNum, msgId: null, fromDc: false, scProtect: SC_HAND_CCS.has(card) };
-      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _scLogMsg?.id });
-      // Triggers + Comm-Disruption window (Negation is cost-0 only).
-      await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel: _scHandChannel, logMsg: _scLogMsg });
-      if (game.pendingCommDisruptionPrompt) { saveGames(game.gameId); return; } // resolved after the CD window closes
-      await _offerScThenResolveDeferredCc(game, ctx, interaction.client);
-      saveGames(game.gameId);
-      return;
-    }
-    // Slice #77 (destruct 2026-05-06): snapshot pendingCombat BEFORE
-    // resolveAbility mutates combat-flag state. If opponent CDs the play,
-    // handleCommDisruptionPlay restores from this snapshot — undoing
-    // Brace's added die, Tools for the Job's flag, Aim's bonus, etc.
-    // VP / drawn cards aren't snapshotted (known gap).
-    const _ccPreSnap = game.pendingCombat
-      ? JSON.parse(JSON.stringify(game.pendingCombat))
-      : null;
-    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, dcExhaustedState: ctx.dcExhaustedState, combat: game.combat || game.pendingCombat });
-    if (result.requiresChoice && result.choiceOptions?.length > 0) {
-      // Choice required: we must commit the play first, then send choice buttons.
-      hand.splice(idx, 1);
-      game[handKey] = hand;
-      game[discardKey] = game[discardKey] || [];
-      game[discardKey].push(card);
-      // C57: De Wanna Wanga passive reshuffle
-      { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
-        if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
-      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
-      const handMessages = await handChannel.messages.fetch({ limit: 20 });
-      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-      if (handMsg) {
-        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
-        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
-      }
-      await interaction.message.delete().catch(discordCatch);
-      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-      const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
-      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      // choiceForControllerPlayerNum (Dirty Trick): per CRR, the choice
-      // belongs to the TARGET'S CONTROLLER (opponent of the card player).
-      // Route the prompt to that player's hand channel and stamp
-      // clickerPlayerNum so the click handler validates against the
-      // opponent rather than the card player.
-      const _clickerPN = result.choiceForControllerPlayerNum ?? playerNum;
-      const _isOpponentChoice = _clickerPN !== playerNum;
-      setPendingCcChoice(game, {
-        abilityId,
-        choiceOptions: result.choiceOptions,
-        gameId,
-        playerNum,
-        card,
-        ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
-        ...(_isOpponentChoice ? { clickerPlayerNum: _clickerPN } : {}),
-      });
-      const btns = result.choiceOptions.map((opt) => {
-        const label = String(opt).slice(0, 80);
-        return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
-      });
-      const rows = chunkButtonsToRows(btns);
-      const _promptChannel = _isOpponentChoice
-        ? await fetchGameChannel(interaction.client, _clickerPN === 1 ? game.p1HandId : game.p2HandId).catch(() => handChannel)
-        : handChannel;
-      const _promptHeader = _isOpponentChoice
-        ? `**${card}** — your figure was targeted; choose one:`
-        : `**Choose one** (for **${card}**):`;
-      await _promptChannel.send({ content: _promptHeader, components: rows }).catch(discordCatch);
-      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
-      // combat snapshot so CD-cancel can revert combat-flag mutations.
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
-      saveGames(game.gameId);
-      return;
-    }
-    if (result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
-      // Space choice required: commit play, then send space grid + map (reusable pick-a-space pattern).
-      const { getBoardStateForMovement, getMapAttachmentForSpaces } = ctx;
-      if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
-        await interaction.followUp({ content: 'Space choice not supported (missing helpers). Resolve manually.', ephemeral: true }).catch(discordCatch);
-        return;
-      }
-      hand.splice(idx, 1);
-      game[handKey] = hand;
-      game[discardKey] = game[discardKey] || [];
-      game[discardKey].push(card);
-      // C57: De Wanna Wanga passive reshuffle
-      { const _dww = checkHandDiscardPassiveReshuffle(game, playerNum, card);
-        if (_dww.reshuffled && logGameAction) await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck.`, { phase: 'ROUND', icon: 'card' }); }
-      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
-      const handMessages = await handChannel.messages.fetch({ limit: 20 });
-      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-      if (handMsg) {
-        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
-        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
-      }
-      await interaction.message.delete().catch(discordCatch);
-      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-      const effectDesc2 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
-      await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc2}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card });
-      setPendingCcSpaceChoice(game, { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null });
-      const boardState = getBoardStateForMovement(game, null);
-      const ccMapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
-      const ccHeader = `**Pick a space** (for **${card}**)`;
-      const ccContextKey = gameId;
-      game.pendingSpacePick = game.pendingSpacePick || {};
-      game.pendingSpacePick[ccContextKey] = {
-        validSpaces: result.validSpaces,
-        cellPrefix: `cc_space_${gameId}_`,
-        mapSpaces: ccMapSpaces,
-        headerText: ccHeader,
-      };
-      const { rows: ccRowBtns } = buildRowPickerButtons(result.validSpaces, `space_row_${ccContextKey}_`);
-      const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
-      const payload = { content: `${ccHeader}:\nChoose a row:`, components: ccRowBtns.slice(0, 5), fetchReply: true };
-      if (mapAttachment) payload.files = [mapAttachment];
-      await handChannel.send(payload).catch(discordCatch);
-      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
-      // combat snapshot so CD-cancel can revert combat-flag mutations.
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
-      saveGames(game.gameId);
-      return;
-    }
-    if (result.applied) {
-      // Effect applied: resolveAbility already mutated game (e.g. drew cards); remove played card from current hand and add to discard.
-      const handNow = (game[handKey] || []).slice();
-      const idxNow = handNow.indexOf(card);
-      if (idxNow >= 0) handNow.splice(idxNow, 1);
-      game[handKey] = handNow;
-      game[discardKey] = (game[discardKey] || []).concat(card);
-      const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
-      const handMessages = await handChannel.messages.fetch({ limit: 20 });
-      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-      const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-      if (handMsg) {
-        const handPayload = buildHandDisplayPayload(game[handKey], deck, gameId, game, playerNum);
-        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
-      }
-      await interaction.message.delete().catch(discordCatch);
-      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-      const effectDesc3 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
-      const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc3}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-      await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
-      if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
-        const handChannelId2 = getHandChannelId(game, playerNum);
-        if (handChannelId2) {
-          game.pendingPowerTokenGrant.channelId = handChannelId2;
-          const ptCh = await fetchGameChannel(interaction.client, handChannelId2);
-          if (ptCh) {
-            const { grants } = game.pendingPowerTokenGrant;
-            const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
-            const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
-            const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
-              new ButtonBuilder().setCustomId(`power_token_choice_${gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
-            );
-            await ptCh.send({
-              content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
-              components: [new ActionRowBuilder().addComponents(btns)],
-            }).catch(discordCatch);
-          }
-        }
-      }
-      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
-      if (result.revealToPlayer) {
-        await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch(discordCatch);
-      }
-      // Behind Enemy Lines reorder: if result has requiresReorder, post card-order picker buttons
-      if (result.requiresReorder?.cards?.length > 1) {
-        const _belCards = result.requiresReorder.cards;
-        const _belDeckKey = result.requiresReorder.deckKey;
-        setPendingBELReorder(game, { deckKey: _belDeckKey, cards: _belCards, picked: [], playerNum, gameId });
-        const _belBtns = _belCards.map((c, i) =>
-          new ButtonBuilder()
-            .setCustomId(`bel_reorder_1_${gameId}_${i}`)
-            .setLabel(`1st: ${c}`.slice(0, 80))
-            .setStyle(ButtonStyle.Primary)
-        );
-        const _belHandId = getHandChannelId(game, playerNum);
-        const _belHandCh = await fetchGameChannel(interaction.client, _belHandId);
-        await _belHandCh.send({
-          content: `**Behind Enemy Lines** — Choose which card goes **on top** of the opponent's deck:`,
-          components: [new ActionRowBuilder().addComponents(..._belBtns.slice(0, 5))],
-        }).catch(discordCatch);
-      }
-      // Windfall is discard-triggered now (fireCcDiscarded), not play-triggered —
-      // the old windfallActive VP-on-every-play logic was removed (alexanbv 2026-06-17).
-      // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
-      // combat snapshot so CD-cancel can revert combat-flag mutations
-      // (Brace, Tools for the Job, Aim, etc.).
-      await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, _ccPreSnap);
-      saveGames(game.gameId);
-      return;
-    }
-    if (!result.applied && result.manualMessage) {
-      // Timing/context mismatch: don't move the card; ping in hand with Play anyway / Unplay (same as illegal-CC flow).
-      setPendingIllegalCcPlay(game, { playerNum, card, reason: result.manualMessage, fromContext: true });
-      const handId = getHandChannelId(game, playerNum);
-      const handChannel = await fetchGameChannel(client, handId);
-      const msg = await withDiscordRetry(() => handChannel.send({
-        content: `We don't think you can do this right now: ${result.manualMessage}\n\nChoose **Ignore and play** to play it anyway (resolve manually), or **Unplay** to cancel.`,
-        components: [getIllegalCcPlayButtons(gameId)],
-      }));
-      game.pendingIllegalCcPlay.messageId = msg.id;
-      await interaction.message.delete().catch(discordCatch);
-      saveGames(game.gameId);
-      return;
-    }
-  }
-
-  // Cost 0 (negation flow) or no resolveAbility / effect didn't need pre-check: move card first, then resolve/log as before.
-  hand.splice(idx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(card);
-  // C57: De Wanna Wanga passive — once per round, when discarded from hand, shuffle into deck instead
-  const _dwwResult = checkHandDiscardPassiveReshuffle(game, playerNum, card);
-  if (_dwwResult.reshuffled && logGameAction) {
-    await logGameAction(game, interaction.client, `**De Wanna Wanga** (passive) — Shuffled back into command deck instead of staying in discard.`, { phase: 'ROUND', icon: 'card' });
-  }
-  const handChannel = await fetchGameChannel(interaction.client, isP1Hand ? game.p1HandId : game.p2HandId);
-  const handMessages = await handChannel.messages.fetch({ limit: 20 });
-  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-  const deck = playerNum === 1 ? (game.player1CcDeck || []) : (game.player2CcDeck || []);
-  if (handMsg) {
-    const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
-    const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-    handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-    await handMsg.edit({
-      content: handPayload.content,
-      embeds: handPayload.embeds,
-      files: handPayload.files || [],
-      components: handPayload.components,
-    }).catch(discordCatch);
-  }
-  await interaction.message.delete().catch(discordCatch);
-  await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-  const effectDesc4 = effectData?.effect ? `\n> *${effectData.effect}*` : '';
-  const logMsg = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.${effectDesc4}`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  if (cost === 0 && ctx.getNegationResponseButtons) {
-    // Cost-0: effect is DEFERRED until the Negation window closes. Record undo,
-    // then run the unified CC-play subroutine (triggers + Negation/Comms).
-    if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
-    await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg });
-    saveGames(game.gameId);
-    return;
-  }
-  if (ctx.resolveAbility) {
-    const result = ctx.resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, dcExhaustedState: ctx.dcExhaustedState, combat: game.combat || game.pendingCombat });
-    await applyAbilityResult(result, { game, playerNum, client: interaction.client, ctx });
-    if (result.revealToPlayer) {
-      await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch(discordCatch);
-    }
-  }
-  // Windfall is now a discard-triggered effect (fireCcDiscarded), not a
-  // play-time flag — the old windfallActive VP-on-every-play logic was removed
-  // (alexanbv 2026-06-17: "Windfall should not need a flag... does NOT count
-  // when a CC is used/played").
-  if (ctx.pushUndo) {
-    ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
-  }
-  // Cost>0: effect already resolved above. Run the unified CC-play subroutine
-  // (triggers + counter-window; Negation is skipped since cost>0).
-  await onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg });
-  saveGames(game.gameId);
 }
 
 /** DO SOMETHING ELSE — cancel the pending play. */
