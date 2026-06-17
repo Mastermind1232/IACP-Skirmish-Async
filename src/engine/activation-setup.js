@@ -16,6 +16,7 @@ import {
   ccDeckKey, ccHandKey,
 } from '../game/player-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
+import { groupEffectiveFigures } from '../game/squad-upgrades.js';
 import { awrRange, enumerateAwrTargets } from '../game/awr-helpers.js';
 import { detectDroidKitTrigger } from '../game/droid-kit-helpers.js';
 import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
@@ -331,7 +332,9 @@ export async function finalizeActivation({
   game.movementBank = game.movementBank || {};
   const _pendingMp = game.pendingMpBonus?.[msgId] ?? 0;
   if (_pendingMp) delete game.pendingMpBonus[msgId];
-  const _b10FigCount = Math.max(1, getDcEffect(dcName)?.figures ?? 1);
+  // Effective count includes a Squad Upgrade figure so it gets its own MP bank
+  // slot. alexanbv 2026-06-17.
+  const _b10FigCount = Math.max(1, groupEffectiveFigures(game, msgId, getDcEffect(dcName)?.figures ?? 1));
   const _b10PerFig = {};
   for (let _i = 0; _i < _b10FigCount; _i++) {
     _b10PerFig[_i] = { total: _pendingMp, remaining: _pendingMp };
@@ -373,7 +376,9 @@ export async function finalizeActivation({
   // counts so each figure must complete its own 2 actions before another
   // figure can act.
   const _b12Eff = getDcEffect(dcName);
-  const _b12FigCount = Math.max(1, _b12Eff?.figures ?? 1);
+  // Effective count includes a Squad Upgrade figure so it gets its own per-figure
+  // action budget (it activates as a full group member). alexanbv 2026-06-17.
+  const _b12FigCount = Math.max(1, groupEffectiveFigures(game, msgId, _b12Eff?.figures ?? 1));
   const _b12PerFig = {};
   for (let _i = 0; _i < _b12FigCount; _i++) _b12PerFig[_i] = DC_ACTIONS_PER_ACTIVATION;
   game.dcActionsData = game.dcActionsData || {};
