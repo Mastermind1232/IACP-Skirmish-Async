@@ -48,7 +48,7 @@ import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
 // handleNegationLetResolve; Collect Intel / Intelligence Leak (cost>0) defer
 // past Comm Disruption via the SC_HAND_CCS branch in handleCcPlaySelect.
 // (Strategic Shift picks its target mid-effect, so it isn't covered here.)
-const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak']);
+const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak', 'Strategic Shift']);
 
 // Would a Comm Disruption window open for this cost>0 CC? Mirrors the gate in
 // promptCommDisruption (opponent has live friendly SPY groups AND cost <= that
