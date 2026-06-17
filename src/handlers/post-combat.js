@@ -388,7 +388,13 @@ export async function handleInterrogatePick(interaction, ctx) {
       const intOppDiscardKey = ccDiscardKey(intOPN);
       intGame[intOppDiscardKey] = intGame[intOppDiscardKey] || [];
       intGame[intOppDiscardKey].push(intChosen);
+      // When-discarded subroutine (both forced discards): re-draw passives + Windfall hooks.
+      const { fireCcDiscarded } = await import('../game/cc-passive-redraw.js');
+      const _intDiscA = fireCcDiscarded(intGame, intAPN, intOwnCard, { fromDeck: false });
+      const _intDiscB = fireCcDiscarded(intGame, intOPN, intChosen, { fromDeck: false });
       if (intThread) await intThread.send(`**Interrogate** — Discarded **${intOwnCard}** from your hand; **${intChosen}** removed from opponent's hand.`).catch(discordCatch);
+      if (_intDiscA.windfallSelfVp > 0 && intThread) await intThread.send(`**Windfall** — P${intAPN} gains **1 VP** (Windfall discarded).`).catch(discordCatch);
+      if (_intDiscB.windfallSelfVp > 0 && intThread) await intThread.send(`**Windfall** — P${intOPN} gains **1 VP** (Windfall discarded).`).catch(discordCatch);
       await updateHandChannelMessages(intGame, client).catch(discordCatch);
     }
   } else {

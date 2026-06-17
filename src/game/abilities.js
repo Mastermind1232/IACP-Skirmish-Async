@@ -58,7 +58,7 @@ import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hos
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
-import { checkDeckDiscardPassiveRedraws } from './cc-passive-redraw.js';
+import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 
 
 /**
@@ -8367,10 +8367,10 @@ export function resolveAbility(abilityId, context) {
         const removed = deck.splice(0, n);
         game[deckKey] = deck;
         game[discardKey] = (game[discardKey] || []).concat(removed);
-        // CC Passive Redraw: deck-discard trigger (Built on Hope)
+        // When-discarded subroutine (deck): Built on Hope re-draw + Windfall hooks.
         const _prRedrawn = [];
         for (const _prCard of removed) {
-          const _prResult = checkDeckDiscardPassiveRedraws(game, oppNum, _prCard);
+          const _prResult = fireCcDiscarded(game, oppNum, _prCard, { fromDeck: true });
           _prRedrawn.push(..._prResult.redrawn);
         }
         const _prMsg = _prRedrawn.length > 0
@@ -8395,10 +8395,10 @@ export function resolveAbility(abilityId, context) {
     const removed = deck.splice(0, n);
     game[deckKey] = deck;
     game[discardKey] = (game[discardKey] || []).concat(removed);
-    // CC Passive Redraw: deck-discard trigger (Built on Hope)
+    // When-discarded subroutine (deck): Built on Hope re-draw + Windfall hooks.
     const _stmRedrawn = [];
     for (const _stmCard of removed) {
-      const _stmResult = checkDeckDiscardPassiveRedraws(game, oppNum, _stmCard);
+      const _stmResult = fireCcDiscarded(game, oppNum, _stmCard, { fromDeck: true });
       _stmRedrawn.push(..._stmResult.redrawn);
     }
     const _stmMsg = _stmRedrawn.length > 0
@@ -12339,14 +12339,26 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setsWindfall (Windfall — gain VP equal to cost when CCs are discarded from hand)
-  if (entry.type === 'ccEffect' && entry.setsWindfall) {
+  // ccEffect: windfallOnPlay (Windfall, Doctor Aphra) — played as a reaction to
+  // one of your Command cards being discarded; gain VP equal to that card's
+  // cost. The discard subroutine (fireCcDiscarded) records the most-recent
+  // discarded card's cost per player in game.windfallDiscardCost; we read and
+  // clear it here. Windfall's OTHER ability (+1 VP when Windfall itself is
+  // discarded) is awarded automatically inside fireCcDiscarded — no flag.
+  // alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && entry.windfallOnPlay) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.windfallActive = { playerNum };
+    const cost = game.windfallDiscardCost?.[playerNum] ?? 0;
+    if (game.windfallDiscardCost) delete game.windfallDiscardCost[playerNum];
+    const vk = vpKey(playerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total || 0) + cost;
     return {
       applied: true,
-      logMessage: '**Windfall** active — each time a Command card is played, you gain VP equal to its cost.',
+      logMessage: cost > 0
+        ? `**Windfall** — gained **${cost} VP** (cost of the discarded Command card).`
+        : '**Windfall** — no recently discarded Command card to value (0 VP).',
     };
   }
 

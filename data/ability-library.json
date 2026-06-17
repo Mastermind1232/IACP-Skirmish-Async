@@ -5378,10 +5378,9 @@
     },
     "Windfall": {
       "type": "ccEffect",
-      "label": "When CCs discarded from hand/deck: gain VP equal to their cost",
-      "logMessage": "**Windfall** — When a Command card is discarded from your hand or deck, VPs equal to its cost are awarded automatically. When Windfall itself is discarded, +1 VP is awarded automatically.",
+      "label": "Play when one of your CCs is discarded: gain VP equal to that card's cost (Windfall discarded itself: +1 VP, via the discard subroutine)",
       "wiredStatus": "wired",
-      "setsWindfall": true
+      "windfallOnPlay": true
     },
     "wisdom_yoda": {
       "type": "dcSpecial",

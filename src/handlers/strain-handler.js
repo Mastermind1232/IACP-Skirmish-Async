@@ -235,6 +235,10 @@ async function _resolveHeadhunterAndStrainChoice(game, ctx, { figureKey, control
         const _hhDiscardKey = ccDiscardKey(controllerPN);
         game[_hhDiscardKey] = (game[_hhDiscardKey] || []).concat(_hhDiscarded);
         await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller discards **${_hhDiscarded}** from hand.`, { phase: 'ROUND', icon: 'card' });
+        // When-discarded subroutine (forced hand discard): re-draw passives + Windfall hooks.
+        const { fireCcDiscarded } = await import('../game/cc-passive-redraw.js');
+        const _hhDisc = fireCcDiscarded(game, controllerPN, _hhDiscarded, { fromDeck: false });
+        if (_hhDisc.windfallSelfVp > 0) await ctx.logGameAction?.(game, ctx.client, `**Windfall** — P${controllerPN} gains **1 VP** (Windfall discarded).`, { phase: 'ROUND', icon: 'card' });
       } else {
         _hhExtraDamage = 1;
         await ctx.logGameAction?.(game, ctx.client, `**Headhunter** — Strain on **${dcNameFromFigureKey(figureKey)}** reduced by 1; controller has no CCs in hand → suffers 1 Damage instead.`, { phase: 'ROUND', icon: 'card' });

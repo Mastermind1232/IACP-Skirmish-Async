@@ -11,9 +11,9 @@
  *   C68 — Rebel Graffiti: Sabine Wren in army → re-draw at start of round
  *   C74 — Targeting Network: DROID spends a surge → re-draw
  */
-import { getDcKeywords } from '../data-loader.js';
+import { getDcKeywords, getCcEffect } from '../data-loader.js';
 import {
-  ccHandKey, ccDiscardKey, ccDeckKey, getDcList,
+  ccHandKey, ccDiscardKey, ccDeckKey, getDcList, vpKey,
 } from './player-helpers.js';
 
 // ── Passive redraw card definitions ──────────────────────────────────────────
@@ -286,4 +286,57 @@ export function checkHandDiscardPassiveReshuffle(game, playerNum, cardName) {
   game[deckKey] = deck;
   game.deWannaWangaUsedThisRound[playerNum] = true;
   return { reshuffled: true };
+}
+
+/**
+ * Central "when a Command card is DISCARDED from hand or deck" subroutine.
+ *
+ * Fires ONLY on genuine discards — NOT when a card is played/used (alexanbv
+ * 2026-06-17: "When a card is discarded (does NOT count when a CC is used/
+ * played) there should be a marker that triggers a 'when discarded'
+ * subroutine"). Discard sites call this AFTER the card has been placed in the
+ * discard pile (so the re-draw passives can retrieve it from there).
+ *
+ * Hooks:
+ *  - re-draw passives: Built on Hope (deck), De Wanna Wanga (hand)
+ *  - Windfall: when Windfall itself is discarded, its owner gains 1 VP; and the
+ *    discarded card's cost is recorded so a Windfall reaction-play can award
+ *    VP=cost (read + cleared by the Windfall ccEffect handler).
+ *
+ * @param {object} game
+ * @param {number} ownerPlayerNum - whose hand/deck the card left
+ * @param {string} cardName
+ * @param {object} [opts]
+ * @param {boolean} [opts.fromDeck=false] - discarded from deck (vs hand)
+ * @returns {{ redrawn: string[], windfallSelfVp: number, recordedCost: number }}
+ */
+export function fireCcDiscarded(game, ownerPlayerNum, cardName, { fromDeck = false } = {}) {
+  const out = { redrawn: [], windfallSelfVp: 0, recordedCost: 0 };
+  if (!game || !ownerPlayerNum || !cardName) return out;
+
+  // 1. Re-draw passives (deck vs hand).
+  if (fromDeck) {
+    out.redrawn = checkDeckDiscardPassiveRedraws(game, ownerPlayerNum, cardName).redrawn || [];
+  } else if (checkHandDiscardPassiveReshuffle(game, ownerPlayerNum, cardName).reshuffled) {
+    out.redrawn = [cardName];
+  }
+
+  // 2. Windfall (Doctor Aphra) — "When this card is discarded from your hand or
+  //    deck, gain 1 VP." The discarded card IS Windfall ⇒ its owner gains 1 VP.
+  if (cardName === 'Windfall') {
+    const vk = vpKey(ownerPlayerNum);
+    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+    game[vk].total = (game[vk].total || 0) + 1;
+    out.windfallSelfVp = 1;
+  }
+
+  // 3. Record the discarded card's cost so a Windfall reaction-play ("Use when a
+  //    Command card is discarded from your hand or deck. You gain VPs equal to
+  //    that card's cost.") can award it. Per-player; the Windfall handler reads
+  //    and clears it.
+  out.recordedCost = getCcEffect(cardName)?.cost ?? 0;
+  game.windfallDiscardCost = game.windfallDiscardCost || {};
+  game.windfallDiscardCost[ownerPlayerNum] = out.recordedCost;
+
+  return out;
 }

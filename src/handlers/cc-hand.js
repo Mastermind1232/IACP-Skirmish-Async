@@ -23,7 +23,7 @@ import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPen
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
-import { checkHandDiscardPassiveReshuffle } from '../game/cc-passive-redraw.js';
+import { checkHandDiscardPassiveReshuffle, fireCcDiscarded } from '../game/cc-passive-redraw.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from '../game/adaptive-skills-helpers.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
@@ -1020,14 +1020,8 @@ export async function handleCcConfirmPlay(interaction, ctx) {
           components: [new ActionRowBuilder().addComponents(..._belBtns.slice(0, 5))],
         }).catch(discordCatch);
       }
-      // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
-      if (game.windfallActive && cost > 0 && card !== 'Windfall') {
-        const wfNum = game.windfallActive.playerNum;
-        const wfKey = vpKeyFn(wfNum);
-        game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
-        game[wfKey].total = (game[wfKey].total || 0) + cost;
-        await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
-      }
+      // Windfall is discard-triggered now (fireCcDiscarded), not play-triggered —
+      // the old windfallActive VP-on-every-play logic was removed (alexanbv 2026-06-17).
       // C14: Comm Disruption — prompt opponent. Pass pre-resolveAbility
       // combat snapshot so CD-cancel can revert combat-flag mutations
       // (Brace, Tools for the Job, Aim, etc.).
@@ -1095,14 +1089,10 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       await interaction.followUp({ content: result.revealToPlayer, ephemeral: true }).catch(discordCatch);
     }
   }
-  // Windfall: award VP to windfall owner when a cost > 0 card is played (skip when Windfall itself is played)
-  if (game.windfallActive && cost > 0 && card !== 'Windfall') {
-    const wfNum = game.windfallActive.playerNum;
-    const wfKey = vpKeyFn(wfNum);
-    game[wfKey] = game[wfKey] || { total: 0, kills: 0, objectives: 0 };
-    game[wfKey].total = (game[wfKey].total || 0) + cost;
-    await logGameAction(game, interaction.client, `**Windfall**: P${wfNum} gains +${cost} VP.`, { icon: 'card' });
-  }
+  // Windfall is now a discard-triggered effect (fireCcDiscarded), not a
+  // play-time flag — the old windfallActive VP-on-every-play logic was removed
+  // (alexanbv 2026-06-17: "Windfall should not need a flag... does NOT count
+  // when a CC is used/played").
   if (ctx.pushUndo) {
     ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: logMsg?.id });
   }
@@ -2040,9 +2030,12 @@ export async function handleCcDiscardSelect(interaction, ctx) {
       components: handPayload.components,
     }).catch(discordCatch);
   }
+  // When-discarded subroutine (NOT a play): re-draw passives + Windfall hooks.
+  const _disc = fireCcDiscarded(game, playerNum, card, { fromDeck: false });
   await interaction.message.delete().catch(discordCatch);
   await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
+  if (_disc.windfallSelfVp > 0) await logGameAction(game, interaction.client, `**Windfall** — P${playerNum} gains **1 VP** (Windfall discarded).`, { icon: 'card' });
   saveGames(game.gameId);
 }
 

@@ -1215,11 +1215,13 @@ test('resolveAbility Terminal Network sets terminalControlPlayerNum', () => {
   assert.strictEqual(game.terminalControlPlayerNum, 2);
 });
 
-test('resolveAbility Windfall sets windfallActive with playerNum', () => {
-  const game = { gameId: 'g-wf3' };
+test('resolveAbility Windfall (reaction play) gains VP = recorded discard cost', () => {
+  // Windfall is now discard-triggered, not a play-time flag (alexanbv 2026-06-17).
+  const game = { gameId: 'g-wf3', player1VP: { total: 0, kills: 0, objectives: 0 }, windfallDiscardCost: { 1: 2 } };
   const result = resolveAbility('Windfall', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
-  assert.deepStrictEqual(game.windfallActive, { playerNum: 1 });
+  assert.strictEqual(game.player1VP.total, 2);
+  assert.strictEqual(game.windfallActive, undefined);
 });
 
 test('resolveAbility Still Faster Than You sets stillFasterPlayerNum', () => {

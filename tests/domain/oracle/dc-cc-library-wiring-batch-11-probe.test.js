@@ -65,7 +65,7 @@ const BATCH = [
   ['Utinni!',                ['roundUtinniJawaBuffs']],
   ['Whistling Birds',        ['whistlingBirdsEffect']],
   ['Wild Fire',              ['defensePoolRemoveMax']],
-  ['Windfall',               ['setsWindfall']],
+  ['Windfall',               ['windfallOnPlay']],
   ['Wreak Vengeance',        ['setsWreakVengeance']],
 ];
 

@@ -811,7 +811,7 @@ const ROUND_NULL_FLAGS = [
   'doubleMatchingIconsOnReroll',
   'pendingHunterProtocol',
   'holdGroundPlayerNum',
-  'windfallActive',
+  'windfallDiscardCost',
   'wreakVengeanceActive',
   'deadlyPrecisionActive',
   'thereIsAnotherActive',
