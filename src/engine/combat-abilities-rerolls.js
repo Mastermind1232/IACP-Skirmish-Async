@@ -11,7 +11,7 @@
 // needs the extra guard predicate; params + resolver are already generic.
 
 import { loadAbilitySpec, getPlayerCardNames } from './combat-ability-db.js';
-import { opponentPlayerNum } from '../game/player-helpers.js';
+import { opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
@@ -156,3 +156,27 @@ export function registerRerollAbilities() {
 }
 
 registerRerollAbilities();
+
+// Capitalize (CC) — the ATTACKER plays it while attacking to reroll 1 die of
+// EITHER pool ("the player that rolled it must reroll"). side='None' in the CSV
+// so the data-driven loop skips it; register it explicitly as an attacker
+// rerolls CC with pool 'any'. The resolver (COMBAT_RESOLVERS['capitalize'])
+// discards the CC + rerolls the chosen die. alexanbv 2026-06-17.
+let _capitalizeRegistered = false;
+export function registerCapitalize() {
+  if (_capitalizeRegistered) return;
+  _capitalizeRegistered = true;
+  registerCombatAbility({
+    id: 'capitalize', name: 'Capitalize', windows: ['rerolls'], side: 'attacker',
+    kind: 'interactive', params: { kind: 'capitalize', card: 'Capitalize' },
+    applies: (game, combat) => {
+      const pn = combat.attackerPlayerNum;
+      if (!pn) return false;
+      if (!(getCcHand(game, pn) || []).includes('Capitalize')) return false;
+      return selectableDieIndices(combat, { pool: 'attack' }).length
+        + selectableDieIndices(combat, { pool: 'defense' }).length > 0;
+    },
+  });
+}
+
+registerCapitalize();

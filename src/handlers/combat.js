@@ -1131,7 +1131,48 @@ function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion
  *   args = { game, combat, thread, ctx, side, gameId, id }
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
+/**
+ * Capitalize (CC) — alexanbv 2026-06-17. The attacker plays it while attacking
+ * to reroll 1 die of EITHER pool (attack OR defense — unlike Battlefield
+ * Awareness which is attack-only). Offer every selectable die as a<i>/d<i>;
+ * clicking discards the CC (playCC) and rerolls the chosen die via the shared
+ * lock. No figure-picker (it's the attacker's own hand card).
+ */
+function _makeCapitalizeResolver() {
+  const lbl = (p, d) => p === 'attack'
+    ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
+    : `${d?.block || 0}b/${d?.evade || 0}e${d?.dodge ? '/dodge' : ''}`;
+  return {
+    prompt: ({ combat }) => {
+      const atk = _selectableDieIndices(combat, { pool: 'attack' });
+      const def = _selectableDieIndices(combat, { pool: 'defense' });
+      if (atk.length + def.length === 0) return { content: '**Capitalize** — no eligible die to reroll.', buttons: [['skip', 'OK', 'secondary']] };
+      const ad = combat.attackDiceResults || [], dd = combat.defenseDiceResults || [];
+      return {
+        content: '**Capitalize** — choose any die; the player that rolled it rerolls it:',
+        buttons: [
+          ...atk.map((i) => [`a${i}`, `Attack #${i + 1} (${lbl('attack', ad[i])})`]),
+          ...def.map((i) => [`d${i}`, `Defense #${i + 1} (${lbl('defense', dd[i])})`]),
+          ['skip', 'Skip', 'secondary'],
+        ],
+      };
+    },
+    apply: async (choice, { game, combat, ctx, thread }) => {
+      if (choice === 'skip') { await thread?.send('**Capitalize** — Skipped.').catch(discordCatch); return undefined; }
+      await playCC(game, combat.attackerPlayerNum, combat.attackerFigureKey, 'Capitalize', { ctx, skipExecute: true });
+      const p = choice[0] === 'd' ? 'defense' : 'attack';
+      const idx = parseInt(choice.slice(1), 10);
+      const res = _rerollDie(combat, ctx, { pool: p, index: idx });
+      if (res.ok) await thread?.send(`**Capitalize** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+      else await thread?.send(`**Capitalize** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      return undefined;
+    },
+  };
+}
+
 export const COMBAT_RESOLVERS = {
+  // Capitalize (CC) — attacker rerolls any attack/defense die (pool 'any').
+  capitalize: _makeCapitalizeResolver(),
   // Resourceful (Lando Calrissian) — staged resolver folding in Gambit
   // (color-swap) + Shrewd Scoundrel (deferred double). alexanbv 2026-06-16.
   'reroll:lando_calrissian:attacker': _makeResourcefulResolver('attacker'),

@@ -86,6 +86,31 @@ describe('Shrewd Scoundrel double (IACP FAQ): all symbols incl. dodge', () => {
   });
 });
 
+describe('Capitalize (CC): attacker rerolls ANY attack or defense die', () => {
+  function combat() {
+    return {
+      attackerPlayerNum: 1, attackerFigureKey: 'Han Solo-1-0',
+      attackDiceResults: [{ color: 'blue', acc: 1, dmg: 1, surge: 0 }],
+      defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
+      _rerolledDieIds: new Set(),
+    };
+  }
+  it('offers BOTH pools (unlike Battlefield Awareness, which is attack-only)', () => {
+    const res = COMBAT_RESOLVERS.capitalize;
+    assert.ok(res, 'Capitalize resolver registered');
+    const p = res.prompt({ combat: combat() });
+    const ids = p.buttons.map((b) => b[0]);
+    assert.ok(ids.includes('a0'), 'offers an attack die');
+    assert.ok(ids.includes('d0'), 'offers a defense die');
+  });
+  it('rerolling a defense die locks it', async () => {
+    const c = combat();
+    const game = { player1CcHand: ['Capitalize'], player1CcDiscard: [] };
+    await COMBAT_RESOLVERS.capitalize.apply('d0', { game, combat: c, ctx: deps(), thread });
+    assert.ok(c._rerolledDieIds.has('defense:0'), 'defense die rerolled + locked');
+  });
+});
+
 describe('Resourceful (Lando) staged resolver stores the Shrewd guess', () => {
   it('pick → Gambit keep → guess sets combat.shrewdScoundrel for the deferred double', async () => {
     const res = COMBAT_RESOLVERS['reroll:lando_calrissian:attacker'];
