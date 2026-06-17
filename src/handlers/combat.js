@@ -243,7 +243,7 @@ import { startSequence as _startSequence, advanceSequence as _advanceSequence } 
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
 import { auraGrantedSurges as _auraGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
-import { markAbilityUsed as _markAbilityUsed } from '../engine/combat-conditions.js';
+import { markAbilityUsed as _markAbilityUsed, limitGuard as _limitGuard, abilityLimitKey as _abilityLimitKey } from '../engine/combat-conditions.js';
 
 /**
  * Mark a gate ability used for its limit scope after it resolves (alexanbv
@@ -866,7 +866,12 @@ function _makeResourcefulResolver(side) {
     const dc = side === 'defender' ? combat.defenderDcName : combat.attackerDcName;
     return getDcEffectsGlobal()[dc] || getDcEffectsGlobal()[(dc || '').replace(/\s*\[.*\]\s*$/, '')];
   };
-  const hasShrewd = (combat) => (eff(combat)?.specialAbilityIds || []).includes('shrewd_scoundrel_lando');
+  // Shrewd Scoundrel is once per activation (CSV) — only offer the guess if Lando
+  // has the ability AND it hasn't already been used this activation. alexanbv 2026-06-17.
+  const _shrewdLimit = (game, combat) =>
+    _limitGuard('once per activation', _abilityLimitKey('Lando Calrissian', 'Shrewd Scoundrel'))(game, combat);
+  const hasShrewd = (game, combat) =>
+    (eff(combat)?.specialAbilityIds || []).includes('shrewd_scoundrel_lando') && _shrewdLimit(game, combat);
   const dieField = (pool) => (pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults');
   const postSub = (thread, gameId, id, content, btns) => thread?.send(sanitizeMentions({
     content,
@@ -886,7 +891,7 @@ function _makeResourcefulResolver(side) {
         ],
       };
     },
-    apply: async (choice, { combat, ctx, thread, gameId, id }) => {
+    apply: async (choice, { game, combat, ctx, thread, gameId, id }) => {
       const st = combat[sk] || {};
       const doReroll = async () => {
         // Store the Shrewd guess for the DEFERRED double (end of rerolls step).
@@ -909,16 +914,22 @@ function _makeResourcefulResolver(side) {
           await postSub(thread, gameId, id, `**Gambit** — replace die #${st.index + 1} with another of the same type, or keep:`, [...colors.map((c) => [c, c, 'primary']), ['keep', `Keep ${die?.color || 'color'}`, 'secondary']]);
           return { followUp: true };
         }
-        if (hasShrewd(combat)) return askGuess();
+        if (hasShrewd(game, combat)) return askGuess();
         await doReroll(); return undefined;
       }
       if (st.stage === 'gambit') {
         st.newColor = choice === 'keep' ? undefined : choice;
-        if (hasShrewd(combat)) return askGuess();
+        if (hasShrewd(game, combat)) return askGuess();
         await doReroll(); return undefined;
       }
       if (st.stage === 'guess') {
         st.guess = choice === 'gskip' ? null : parseInt(choice.slice(1), 10);
+        // A real guess (not "No guess") USES Shrewd Scoundrel — mark its
+        // once-per-activation limit so Resourceful's later rerolls this
+        // activation won't re-offer the guess. alexanbv 2026-06-17.
+        if (typeof st.guess === 'number') {
+          _markAbilityUsed(game, combat, { card: 'Lando Calrissian', ability: 'Shrewd Scoundrel', limit: 'once per activation' });
+        }
         await doReroll(); return undefined;
       }
       return undefined;

@@ -14,7 +14,7 @@ import { loadAbilitySpec, getPlayerCardNames } from './combat-ability-db.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
-import { conditionForRow, makeCondition } from './combat-conditions.js';
+import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -58,7 +58,16 @@ export function registerRerollAbilities() {
       if (seen.has(id)) continue; // truly duplicate row
       seen.add(id);
       const pool = forcesDefenderReroll ? 'defense' : (side === 'attacker' ? 'attack' : 'defense');
-      const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || '') };
+      // card/ability/limit ride along so the gate's _markGateAbilityUsed marks
+      // the owner's used-list after a LIMITED reroll resolves (alexanbv
+      // 2026-06-16: "when a once-per-round/activation/attack ability is used, mark
+      // that limitation after it resolves"). The 5 limited reroll rows — Purge
+      // Commander/Coordinated Hunt (per attack), Saska Teft/Power Converter (per
+      // round), Wing Guard/Bespin Security (per attack), Lando/Shrewd Scoundrel
+      // (per activation, handled in its bespoke resolver) — are now guarded +
+      // marked; the 73 unlimited rows pass through (markAbilityUsed no-ops on None).
+      const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || ''), card: r.card, ability: r.ability, limit: r.limit };
+      const limGuard = limitGuard(r.limit, abilityLimitKey(r.card, r.ability));
       // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
       // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
       // derived from affects_self / affects_others. CC/attachment/upgrade rerolls
@@ -90,6 +99,9 @@ export function registerRerollAbilities() {
           } else if (!getPlayerCardNames(game, pn).some((n) => String(n).toLowerCase() === cardLc)) {
             return false;
           }
+          // Don't offer a limited reroll that's already been used in its scope
+          // (per attack/round/activation). Unlimited rows have a pass-through guard.
+          if (!limGuard(game, combat)) return false;
           return selectableDieIndices(combat, { pool }).length > 0;
         },
       });

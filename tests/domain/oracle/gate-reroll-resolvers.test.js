@@ -97,7 +97,8 @@ describe('Resourceful (Lando) staged resolver stores the Shrewd guess', () => {
       defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
       _rerolledDieIds: new Set(),
     };
-    const a = { combat, ctx, thread, gameId: 'g', id: 'reroll:lando_calrissian:attacker' };
+    const game = { activationAbilityUsed: {} };
+    const a = { game, combat, ctx, thread, gameId: 'g', id: 'reroll:lando_calrissian:attacker' };
     // Lando has Gambit + Shrewd: pick attack die 0 → gambit stage
     let r = await res.apply('a0', a);
     assert.deepEqual(r, { followUp: true }, 'enters Gambit stage');
