@@ -44,7 +44,7 @@ const BATCH = [
   ['Call the Vanguard',       ['callTheVanguardEffect']],
   ['Capitalize',              ['addForcedRerollEntry']],
   ['cc:against_the_odds',     ['focusGainToUpToNFigures', 'vpCondition']],
-  ['cc:eyes_on_the_prize',    ['informational']],
+  ['cc:eyes_on_the_prize',    ['eyesOnThePrize']],
   ['cc:gauntlet_blade',       ['rollOneDie', 'rollOneDieTarget', 'rollOneDieSurgeSelfPowerToken']],
   ['Change of Plans',         ['changeOfPlansEffect']],
   ['Chaotic Force',           ['chaoticForceEffect']],

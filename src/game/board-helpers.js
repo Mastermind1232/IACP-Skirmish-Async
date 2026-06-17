@@ -159,6 +159,48 @@ export function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, map
   return getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId, tokenSet).length > 0;
 }
 
+/**
+ * Eyes on the Prize (Scum CC): the friendly figureKeys eligible for the
+ * per-figure benefit — those carrying or controlling a crate or mission token.
+ *   - carrying: the figure holds a crate/contraband token (game.figureContraband)
+ *   - controlling: the figure is on or adjacent to a crate token (game.crateTokens)
+ *     or a mission token whose space the player controls (getSpaceController)
+ * Control is resolved per token space via getSpaceController so contested tokens
+ * don't qualify. The effect is an optional self-buff, so adjacency-based control
+ * (the same test mission rules use) is the intended granularity. alexanbv 2026-06-17.
+ * @returns {string[]} eligible friendly figure keys
+ */
+export function eyesOnThePrizeEligibleFigures(game, playerNum, mapId) {
+  const positions = game.figurePositions?.[playerNum] || {};
+  const eligible = new Set();
+  // (a) carrying a crate / contraband
+  for (const [fk, carrying] of Object.entries(game.figureContraband || {})) {
+    if (carrying && positions[fk]) eligible.add(fk);
+  }
+  // (b) controlling a crate or mission token — collect the token spaces the
+  // player controls, then any friendly figure on/adjacent to one qualifies.
+  const controlledTokenCoords = new Set();
+  for (const [coord, toks] of Object.entries(game.crateTokens || {})) {
+    if (Array.isArray(toks) && toks.length && getSpaceController(game, mapId, coord) === playerNum) {
+      controlledTokenCoords.add(normalizeCoord(coord));
+    }
+  }
+  const variant = game?.selectedMission?.variant || 'a';
+  const missionSide = variant === 'a' ? 'missionA' : 'missionB';
+  const missionCoords = getMissionTokenCoords(getMapTokensData()?.[mapId]?.[missionSide]);
+  for (const coord of missionCoords) {
+    if (getSpaceController(game, mapId, coord) === playerNum) controlledTokenCoords.add(normalizeCoord(coord));
+  }
+  if (controlledTokenCoords.size > 0) {
+    const tokenSet = toLowerSet([...controlledTokenCoords]);
+    for (const fk of Object.keys(positions)) {
+      if (eligible.has(fk)) continue;
+      if (getFigureAdjacentCoordsFromSet(game, playerNum, fk, mapId, tokenSet).length > 0) eligible.add(fk);
+    }
+  }
+  return [...eligible];
+}
+
 /** Effective speed, accounting for mission-defined carry penalty and round bonuses (Fuel Upgrade, etc.). */
 export function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
   let base = getDcStats(dcName).speed ?? 4;

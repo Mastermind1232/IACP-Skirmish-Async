@@ -665,8 +665,7 @@
     "cc:eyes_on_the_prize": {
       "type": "ccEffect",
       "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
-      "informational": true,
-      "logMessage": "**Eyes on the Prize** — Each friendly figure carrying or controlling a crate or mission token may either recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition. Resolve manually per figure.",
+      "eyesOnThePrize": true,
       "wiredStatus": "wired"
     },
     "cc:fleet_footed": {

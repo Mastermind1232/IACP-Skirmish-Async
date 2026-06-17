@@ -11,7 +11,7 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.j
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { countGameSpaces, getActiveTerminals } from './board-helpers.js';
+import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
@@ -4148,6 +4148,57 @@ export function resolveAbility(abilityId, context) {
     }
     const remaining = uniqueHand();
     return { applied: false, requiresChoice: true, choiceOptions: [...remaining, FK_DONE] };
+  }
+
+  // ccEffect: eyesOnThePrize (Eyes on the Prize, Scum) — at the start of a round,
+  // each friendly figure carrying or controlling a crate or mission token may
+  // recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition.
+  // Per-figure via the requiresChoice loop; Power Token grants are accumulated
+  // and resolved together at the end (choose type). alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && entry.eyesOnThePrize) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const mapId = game.selectedMap?.id;
+
+    // Phase 1 — enumerate eligible figures and open the first per-figure choice.
+    if (chosenFigureKey == null && !game.pendingEyesOnThePrize) {
+      const figs = mapId ? eyesOnThePrizeEligibleFigures(game, playerNum, mapId) : [];
+      if (figs.length === 0) {
+        return { applied: true, logMessage: '**Eyes on the Prize** — no friendly figures are carrying or controlling a crate or mission token.' };
+      }
+      game.pendingEyesOnThePrize = { playerNum, figures: figs, idx: 0, ptGrants: [] };
+      return _eyesPromptForFigure(figs[0]);
+    }
+
+    const st = game.pendingEyesOnThePrize;
+    if (!st) return { applied: true, logMessage: '**Eyes on the Prize** — resolved.' };
+    // Apply the chosen action to the current figure (chosenFigureKey = action code).
+    const action = chosenFigureKey;
+    const fk = st.figures[st.idx];
+    if (fk && action && action !== 'skip') {
+      if (action === 'recover' && dcHealthState && dcMessageMeta) {
+        const msgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+        if (msgId) healHp(dcHealthState, game, msgId, parseFigureKey(fk).figureIndex, 1, playerNum);
+      } else if (action === 'powertoken') {
+        st.ptGrants.push({ figureKey: fk, figName: dcNameFromFigureKey(fk) || fk, count: 1 });
+      } else if (action === 'condition') {
+        const existing = game.figureConditions?.[fk] || [];
+        const harmful = existing.find((c) => HARMFUL_CONDITIONS.includes(c));
+        if (harmful) filterCondition(game, fk, harmful);
+      }
+    }
+    st.idx++;
+    if (st.idx < st.figures.length) {
+      return _eyesPromptForFigure(st.figures[st.idx]);
+    }
+    // Done — resolve accumulated Power Token grants (choose type) together, if any.
+    const grants = st.ptGrants;
+    delete game.pendingEyesOnThePrize;
+    if (grants.length > 0) {
+      game.pendingPowerTokenGrant = { grants, channelId: null, playerNum };
+      return { applied: true, requiresPowerTokenChoice: true, refreshDcEmbed: true, logMessage: `**Eyes on the Prize** — resolved; ${grants.length} figure${grants.length === 1 ? '' : 's'} gain a Power Token (choose type).` };
+    }
+    return { applied: true, refreshDcEmbed: true, logMessage: '**Eyes on the Prize** — resolved.' };
   }
 
   // ccEffect: +N MP from Speed (Urgency: Speed+2) — requires active activation
@@ -12775,4 +12826,20 @@ function findMsgIdForFigureKey(game, playerNum, figureKey, dcMessageMeta) {
     if (keys.includes(figureKey)) return msgId;
   }
   return null;
+}
+
+/** Eyes on the Prize: build the per-figure 3-way (+ skip) requiresChoice result. */
+function _eyesPromptForFigure(figureKey) {
+  const name = dcNameFromFigureKey(figureKey) || figureKey;
+  return {
+    applied: false,
+    requiresChoice: true,
+    choiceOptions: [
+      `Recover 1 Damage — ${name}`,
+      `Gain 1 Power Token — ${name}`,
+      `Discard 1 HARMFUL — ${name}`,
+      `Skip — ${name}`,
+    ],
+    choiceValues: ['recover', 'powertoken', 'condition', 'skip'],
+  };
 }
