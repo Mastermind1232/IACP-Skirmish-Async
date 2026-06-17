@@ -9,7 +9,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleScCcConfirm } from '../../../src/handlers/cc-hand.js';
+import { handleScCcConfirm, handleCommDisruptionSkip } from '../../../src/handlers/cc-hand.js';
 
 function harness(values) {
   const game = {
@@ -19,7 +19,7 @@ function harness(values) {
     p2DcList: [{ dcName: '[Smuggling Compartment]' }],
     p2DcMessageIds: ['m-sc'],
     exhaustedSkirmishUpgrades: {},
-    pendingScCc: { abilityId: 'Stall for Time', card: 'Stall for Time', playedBy: 1, msgId: null, fromDc: false },
+    pendingCcEffect: { abilityId: 'Stall for Time', card: 'Stall for Time', playedBy: 1, msgId: null, fromDc: false },
   };
   const calls = { resolveAbility: [], applyResult: 0, winCheck: 0 };
   const interaction = {
@@ -54,7 +54,7 @@ describe('SC before a hand-affecting CC — handleScCcConfirm', () => {
     assert.ok((game.exhaustedSkirmishUpgrades['m-sc'] || []).some((n) => /Smuggling Compartment/.test(n)), 'SC exhausted');
     assert.equal(calls.resolveAbility.length, 1, 'deferred effect resolved once');
     assert.equal(calls.resolveAbility[0].abilityId, 'Stall for Time');
-    assert.equal(game.pendingScCc, undefined, 'pending cleared');
+    assert.equal(game.pendingCcEffect, undefined, 'pending cleared');
   });
 
   it('blocks a non-owner', async () => {
@@ -65,9 +65,29 @@ describe('SC before a hand-affecting CC — handleScCcConfirm', () => {
     assert.equal(calls.resolveAbility.length, 0);
   });
 
+  it('resolves a general cost>0 deferred effect (no SC) when the Comms window is skipped', async () => {
+    // A non-hand-affecting cost>0 CC deferred only for the Comms window: skipping
+    // Comms must now resolve its effect (Comms cancels before effect; skip = resolve).
+    const resolved = [];
+    const game = {
+      gameId: 'g1', player1Id: 'u1', player2Id: 'u2',
+      pendingCommDisruptionPrompt: { targetPlayerNum: 2, playedCard: 'Some Card', playedBy: 1 },
+      pendingCcEffect: { abilityId: 'Some Card', card: 'Some Card', playedBy: 1, msgId: null, fromDc: false, scProtect: false },
+    };
+    const interaction = { customId: 'comm_disruption_skip_g1', user: { id: 'u2' }, followUp: async () => {}, message: { edit: async () => {} } };
+    const ctx = {
+      getGame: () => game, saveGames: () => {}, client: {}, dcMessageMeta: new Map(), dcHealthState: new Map(),
+      resolveAbility: (abilityId) => { resolved.push(abilityId); return { applied: true }; },
+      checkWinConditions: async () => {},
+    };
+    await handleCommDisruptionSkip(interaction, ctx);
+    assert.deepEqual(resolved, ['Some Card'], 'the deferred effect resolves on Comms skip');
+    assert.equal(game.pendingCcEffect, undefined, 'pending cleared');
+  });
+
   it('stands up the choice prompt when the deferred effect is interactive (Intel Leak)', async () => {
     const { game, interaction, ctx } = harness(['A']);
-    game.pendingScCc = { abilityId: 'Intelligence Leak', card: 'Intelligence Leak', playedBy: 1, msgId: null, fromDc: false };
+    game.pendingCcEffect = { abilityId: 'Intelligence Leak', card: 'Intelligence Leak', playedBy: 1, msgId: null, fromDc: false };
     game.p1HandId = 'hand1';
     ctx.resolveAbility = () => ({ requiresChoice: true, choiceOptions: ['Card X', 'Card Y'] });
     await handleScCcConfirm(interaction, ctx);
