@@ -57,7 +57,8 @@ describe('CRR-COMBAT-MODIFIERS-ORDER: step-4 attacker modifiers fire before defe
       getDown:         offsetOf('// Get Down (Onar Koma)'),
       elusive:         offsetOf('// Elusive (CC)'),
       defensiveStance: offsetOf('// Defensive Stance (Diala Passil)'),
-      soresuForm:      offsetOf('// Soresu Form (Kanan Jarrus)'),
+      // Soresu Form's declaration grant was moved to the gate rerolls window
+      // (bespoke resolver) — no longer a declaration-order modifier here.
       lucky:           offsetOf('// Lucky (R2-D2)'),
     };
     const maxAtk = Math.max(...Object.values(ATK));

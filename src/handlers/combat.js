@@ -933,6 +933,35 @@ function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion
  * Abilities not yet in this map fall back to the legacy inline handling.
  */
 export const COMBAT_RESOLVERS = {
+  // Soresu Form (Kanan Jarrus) — bespoke reroll resolver (alexanbv 2026-06-16):
+  // the reroll is a normal defense-die reroll, but its RIDERS (convert each
+  // Dodge → 2 Block + 1 Evade, and Kanan suffers 1 Strain unless the rerolling
+  // figure is a FORCE USER) fire ONLY when the reroll is actually taken. So we
+  // mark combat.soresuFormFigKey here (on a real reroll), and the resolve-step
+  // handler applies the conversion + conditional Kanan strain.
+  'reroll:kanan_jarrus:defender': {
+    prompt: (a) => _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', stageKey: 'rr_soresu' }).prompt(a),
+    apply: async (choice, a) => {
+      const r = await _makeRerollResolver({ name: 'Soresu Form', pool: 'defense', stageKey: 'rr_soresu' }).apply(choice, a);
+      if (choice !== 'skip' && !(r && r.followUp)) {
+        const { game, combat } = a;
+        const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+        const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+        const defPos = combat.target?.figureKey ? game.figurePositions?.[defPN]?.[combat.target.figureKey] : null;
+        const eff = getDcEffectsGlobal() || {};
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
+          const fn = dcNameFromFigureKey(fk);
+          const fe = eff[fn] || eff[(fn || '').replace(/\s*\[.*\]\s*$/, '')];
+          if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
+          if (mapSp && defPos && _isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
+            combat.soresuFormFigKey = fk; // resolve-step handler does the Dodge conversion + Kanan strain
+            break;
+          }
+        }
+      }
+      return r;
+    },
+  },
   spray_fire: {
     prompt: () => ({ content: '**Spray Fire** — apply **-3 Accuracy, +1 Surge**?', buttons: [['apply', 'Apply (-3 Acc, +1 Surge)'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { combat, thread }) => {
@@ -4798,22 +4827,11 @@ export async function handleCombatRoll(interaction, ctx) {
         }
       }
     }
-    // Soresu Form (Kanan Jarrus on defender's team): +1 def reroll for a friendly within 3 spaces
-    {
-      const defFigs = game.figurePositions?.[defenderPlayerNum] || {};
-      const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
-      const defPos = combat.target?.coord;
-      for (const [fk, pos] of Object.entries(defFigs)) {
-        const fn = dcNameFromFigureKey(fk);
-        const fe = getDcEff()[fn] || getDcEff()[(fn).replace(/\s*\[.*\]\s*$/, '')];
-        if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
-        if (defPos && isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
-          _pushVoluntary(defenderPlayerNum, 'defense', `Soresu Form (${fn})`);
-          combat.soresuFormFigKey = fk;
-          break;
-        }
-      }
-    }
+    // Soresu Form (Kanan Jarrus) — MOVED to the gate: the reroll is offered in
+    // the rerolls window (CSV row), and its bespoke resolver
+    // (COMBAT_RESOLVERS['reroll:kanan_jarrus:defender']) sets soresuFormFigKey
+    // ONLY when the reroll is taken, so the resolve-step Dodge conversion + Kanan
+    // strain fire on-use (not eagerly). alexanbv 2026-06-16.
 
     // Cower (C-3PO, Imperial Officer Regular): +1 def reroll if adjacent to a friendly figure.
     // CRR p.21 COMPANIONS: "A companion is adjacent to each figure and
