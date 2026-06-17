@@ -3137,10 +3137,9 @@ export async function handleAttackTarget(interaction, ctx) {
   const _defUpgrades = _defMsgId ? (game.p1DcAttachments?.[_defMsgId] || game.p2DcAttachments?.[_defMsgId] || []) : [];
   if (_atkUpgrades.length || _defUpgrades.length) {
     const _pc = game.pendingCombat;
-    // Targeting Computer (attachment): +1 atk reroll while attacking
-    if (cardNameIncludes(_atkUpgrades, 'Targeting Computer')) {
-      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
-    }
+    // Targeting Computer (attachment) — reroll MOVED to the gate rerolls window
+    // (CSV [Targeting Computer] row, attachment-presence). Dead count removed.
+
     // Driven by Hatred (Darth Vader): +1 Hit, reroll 1 atk die (Brutality loss handled separately)
     if (cardNameIncludes(_atkUpgrades, 'Driven by Hatred')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
@@ -3151,10 +3150,9 @@ export async function handleAttackTarget(interaction, ctx) {
       _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
       if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
     }
-    // Rogue Smuggler (Han Solo): reroll 1 atk die (Distracting loss handled separately)
-    if (cardNameIncludes(_atkUpgrades, 'Rogue Smuggler')) {
-      _pc.rerollOneAttackDie = (_pc.rerollOneAttackDie || 0) + 1;
-    }
+    // Rogue Smuggler (Han Solo) — reroll MOVED to the gate rerolls window
+    // (CSV [Rogue Smuggler] row). Distracting-loss is handled separately below.
+
     // Wookiee Avenger (Chewbacca): +1 Hit while attacking
     if (cardNameIncludes(_atkUpgrades, 'Wookiee Avenger')) {
       _pc.bonusHits = (_pc.bonusHits || 0) + 1;
