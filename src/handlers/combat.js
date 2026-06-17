@@ -609,7 +609,7 @@ const _GATE_WINDOWS = {
   },
   on_declare: {
     field: 'onDeclareGate', pickPrefix: 'combat_ondeclare_pick_', title: 'On-Declare',
-    firePassive: null, // on-declare passives auto-fire inline; gate carries only interactive abilities
+    firePassive: (side, id, thread, game, combat, ctx) => _fireOnDeclarePassive(side, id, thread, game, combat, ctx),
     onComplete: async (thread, game, combat, ctx) => { delete combat.onDeclareGate; if (ctx._onDeclareGateDone) await ctx._onDeclareGateDone(thread, game, combat); },
   },
   // Remaining attack windows (alexanbv 2026-06-15 "build the WHOLE sequence with
@@ -1654,6 +1654,29 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
     await thread.send('**Soresu Form** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
     combat.soresuFormFigKey = null;
+  }
+}
+
+// On-declare passive effects (fire in the on_declare gate, BEFORE the roll —
+// these add a die / apply a condition to the pool, so they must precede the
+// roll mechanic). Moved from the inline declaration block in handleAttackTarget
+// per alexanbv 2026-06-16 "implement at the right timing". Each auto-Focus
+// ability applies the Focus condition + adds a bonus die to the attack pool
+// (mirrors applyConditionWithDie at declaration).
+export async function _fireOnDeclarePassive(side, id, thread, game, combat, ctx) {
+  const AUTO_FOCUS = {
+    battle_meditation: { cond: 'Focus', die: 'green', label: 'Battle Meditation' },
+    mystic_hunter:     { cond: 'Focus', die: 'green', label: 'Mystic Hunter' },
+    full_of_rage:      { cond: 'Focus', die: 'green', label: 'Full of Rage' },
+    sharpshooter:      { cond: 'Focus', die: 'green', label: 'Sharpshooter' },
+  };
+  const af = AUTO_FOCUS[id];
+  if (af) {
+    const r = applyConditionWithDie(game, combat.attackerFigureKey, af.cond, combat.attackInfo, af.die);
+    if (r.applied) {
+      combat.attackInfo = r.attackInfo;
+      await thread.send(`**${af.label}** — auto-Focus: +1 ${af.die} die.`).catch(discordCatch);
+    }
   }
 }
 
@@ -3449,14 +3472,9 @@ export async function handleAttackTarget(interaction, ctx) {
   const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
 
   // Battle Meditation / Assassin (Diala Passil, BT-1): auto-Focus before attacking
-  if (hasBattleMeditationAbility(atkSpecialIds)) {
-    const _bmResult = applyConditionWithDie(game, attackerFigureKey, BATTLE_MEDITATION_CONDITION, game.pendingCombat.attackInfo, BATTLE_MEDITATION_BONUS_DIE);
-    if (_bmResult.applied) {
-      game.pendingCombat.attackInfo = _bmResult.attackInfo;
-      const bm_label = battleMeditationLabel(meta.dcName);
-      await thread.send(`**${bm_label}** — **${meta.dcName}** is **Focused** before attacking (+1 green die).`);
-    }
-  }
+  // Battle Meditation — MOVED to the on_declare window (combat-abilities-
+  // ondeclare.js 'battle_meditation' passive → _fireOnDeclarePassive) per
+  // alexanbv 2026-06-16.
 
   // Full of Rage (Krrsantan): auto-Focus if 3+ damage suffered
   if (hasFullOfRageAbility(atkSpecialIds) && fullOfRageDamageTriggered(atkDamageSuffered)) {

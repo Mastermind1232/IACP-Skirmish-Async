@@ -164,3 +164,21 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
   // Aim (Rebel Trooper Elite) is a CARD PENDING IACP CHANGE — intentionally not
   // wired (see cards-pending-change.js). No test until the new text lands.
 });
+
+// on_declare auto-Focus abilities fire in the on_declare window (BEFORE the
+// roll) and add a bonus die to the attack pool exactly once.
+describe('GATE on_declare timing move: auto-Focus fires before the roll, once', () => {
+  it('Battle Meditation (Diala Passil): adds +1 green die at on_declare', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Diala Passil' });
+    // attackInfo.dice started as ['blue','green']; Battle Meditation adds one green.
+    assert.equal(combat.attackInfo.dice.length, 3,
+      `Battle Meditation must add exactly one die (got ${JSON.stringify(combat.attackInfo.dice)})`);
+    assert.equal(combat.attackInfo.dice.filter((d) => d === 'green').length, 2,
+      'the added die must be green');
+  });
+
+  it('control: a non-Battle-Meditation attacker gets no extra die', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Stormtrooper' });
+    assert.equal(combat.attackInfo.dice.length, 2, 'no auto-Focus → pool unchanged');
+  });
+});

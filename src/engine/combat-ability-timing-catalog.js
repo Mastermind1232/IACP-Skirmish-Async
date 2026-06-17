@@ -61,7 +61,6 @@ e('unhinged_director_krennic', 'Unhinged Director (Krennic)', 'attacker', 'inter
 e('fury_of_kashyyyk', 'Fury of Kashyyyk', 'attacker', 'passive', ON, 'elite WOOKIEE proximity → Pierce 1');
 e('payback', 'Payback (Dengar)', 'attacker', 'passive', ON, 'paybackBonusSurge on counter → +Surge');
 e('no_cheating', 'No Cheating (debuff)', 'attacker', 'passive', ON, 'roundDebuff → auto-remove atk dice');
-e('battle_meditation', 'Battle Meditation / Assassin auto-Focus', 'attacker', 'passive', ON, 'hasBattleMeditationAbility → auto-Focus');
 e('fury', 'Fury (Wookiee Warriors)', 'attacker', 'passive', ON, '5+ dmg → +1 Surge');
 e('relentless', 'Relentless', 'attacker', 'passive', ON, 'in range → applyStrain to target');
 e('advanced_targeting_computer', 'Advanced Targeting Computer (Dark Trooper Mk III)', 'attacker', 'passive', ON, 'auto-Focus');

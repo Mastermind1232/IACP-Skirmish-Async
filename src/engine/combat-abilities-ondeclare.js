@@ -48,6 +48,19 @@ function defAbility(id, name, keys, notResolvedFlag) {
   });
 }
 
+// Attacker PASSIVE on-declare abilities (auto-fire before the roll via the
+// on_declare gate's firePassive → _fireOnDeclarePassive). alexanbv 2026-06-16:
+// moved out of the inline declaration block into the on_declare window.
+function atkPassive(id, name, keys) {
+  registerCombatAbility({
+    id, name, side: 'attacker', kind: 'passive', windows: ['on_declare'],
+    applies: (game, combat, side, deps) => !!combat.attackerFigureKey && hasAny(atkEff(combat, deps), ...keys),
+  });
+}
+
+// Battle Meditation — auto-Focus (+1 green die) before attacking.
+atkPassive('battle_meditation', 'Battle Meditation', ['battle_meditation']);
+
 // ── Attacker interactive on-declare DC abilities ─────────────────────────────
 atkAbility('merciless', 'Merciless', ['merciless'], 'mercilessResolved');
 atkAbility('flawless_execution', 'Flawless Execution', ['flawless_execution'], 'flawlessResolved');
