@@ -282,6 +282,10 @@ export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
     ? (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum))
     : combat.attackerPlayerNum;
   if (!relevantPN) return false;
+  // INFO-LEAK TODO (alexanbv 2026-06-17): strictly, the window should be offered
+  // to the relevant player REGARDLESS of whether they actually hold Tough Luck,
+  // so that prompting (or not) doesn't reveal hand information. For now we only
+  // prompt when they hold it — left as-is per Destruct; revisit to always prompt.
   if (!(getCcHand(game, relevantPN) || []).includes('Tough Luck')) return false;
   combat._pendingToughLuck = { pool, idx, playerNum: relevantPN };
   setPendingToughLuck(game, { side: pool === 'attack' ? 'atk' : 'def', idx });
@@ -4275,6 +4279,33 @@ export async function handleAttackTarget(interaction, ctx) {
           game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
           await thread.send(`**Protector** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
           sentinelApplied = true;
+        }
+      }
+    }
+  }
+
+  // Supporting Fire (J4X-7): while ANOTHER friendly figure is attacking a figure
+  // adjacent to J4X-7, apply Pierce 1 (once per activation). Attacker-side analog
+  // of Sentinel/Protector. Companions share spaces, so "adjacent to J4X-7"
+  // INCLUDES the target being IN J4X-7's own space — hence targetCoord is in the
+  // set too (alexanbv 2026-06-17).
+  if (mapSpaces && targetCoord && !target.isNpc && !game.pendingCombat?.noFriendliesActive) {
+    const _sfKey = 'J4X-7:Supporting Fire';
+    if (!game.activationAbilityUsed?.[_sfKey]) {
+      const adjToTargetSF = new Set((mapSpaces.adjacency?.[targetCoord] || []).map((s) => String(s).toLowerCase()));
+      adjToTargetSF.add(targetCoord); // J4X-7 may share the target's space (companion)
+      const atkFigPos = game.figurePositions?.[attackerPlayerNum] || {};
+      for (const [fk, pos] of Object.entries(atkFigPos)) {
+        if (fk === attackerFigureKey) continue; // "another friendly figure"
+        if (!adjToTargetSF.has(String(pos).toLowerCase())) continue;
+        const _sfName = dcNameFromFigureKey(fk);
+        const _sfEff = getDcEffectsGlobal()[_sfName] || getDcEffectsGlobal()[_sfName?.replace(/\s*\[.*\]\s*$/, '')];
+        if ((_sfEff?.specialAbilityIds || []).includes('supporting_fire')) {
+          game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
+          game.activationAbilityUsed = game.activationAbilityUsed || {};
+          game.activationAbilityUsed[_sfKey] = true;
+          await thread.send(`**Supporting Fire** (${_sfName}) — the target is adjacent to (or shares) its space, +1 Pierce.`).catch(discordCatch);
+          break;
         }
       }
     }

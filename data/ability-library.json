@@ -3688,6 +3688,14 @@
       "description": "While a friendly figure is defending and you are adjacent to the target space, apply +1 Block.",
       "wiredStatus": "wired"
     },
+    "supporting_fire": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-attack",
+      "label": "Supporting Fire",
+      "description": "While another friendly figure is attacking a figure adjacent to you (companions may share the target's space), apply Pierce 1. Limit once per activation.",
+      "wiredStatus": "wired"
+    },
     "programming_override_4lom": {
       "type": "dcSpecial",
       "category": "passive",

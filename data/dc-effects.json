@@ -3698,6 +3698,9 @@
       "unique": true,
       "abilities": [
         "Pierce 1"
+      ],
+      "specialAbilityIds": [
+        "supporting_fire"
       ]
     },
     "Jabba the Hutt": {
