@@ -372,6 +372,7 @@ export async function handleScSetAsideConfirm(interaction, ctx) {
     await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
   const chosen = interaction.values || [];
   const handKey = ccHandKey(ownerNum);
   const { hand: newHand, setAside } = setAsideFromHand(game[handKey] || [], chosen);

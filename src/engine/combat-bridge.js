@@ -11,7 +11,8 @@ import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { resolvePendingCombat } from '../game/combat-stack.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList } from '../game/player-helpers.js';
+import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js';
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
@@ -2468,7 +2469,36 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (intOpponentHand.length === 0) {
       await thread.send(`**Interrogate** — Opponent's hand is empty; no card to choose.`).catch(discordCatch);
     } else {
-      setPendingInterrogate(game, { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
+      setPendingInterrogate(game, { gameId: game.gameId, attackerPlayerNum: intAttackerPlayerNum, opponentPlayerNum: intOpponentPlayerNum, opponentHandSnapshot: [...intOpponentHand], chosenCardName: null, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum, combatThreadId: combat.combatThreadId });
+      // Interrogate is an ability that affects the opponent's Command cards, so
+      // [Smuggling Compartment] Part 1 applies: before Blaise looks at the hand,
+      // the opponent may exhaust SC to set aside cards. If they own an
+      // un-exhausted copy, open that reaction first and defer the picker until it
+      // resolves (post-combat handlers resume it). alexanbv 2026-06-17.
+      const intScMid = findSmugglingCompartmentMsgId(getDcList(game, intOpponentPlayerNum), getDcMessageIds(game, intOpponentPlayerNum));
+      const intScUsable = intScMid && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[intScMid], 'Smuggling Compartment');
+      const intScHandChId = intScUsable ? getHandChannelId(game, intOpponentPlayerNum) : null;
+      if (intScUsable && intScHandChId) {
+        game.pendingInterrogate.awaitingSc = true;
+        const intScOwnerId = getPlayerId(game, intOpponentPlayerNum);
+        try {
+          const intScCh = await fetchGameChannel(client, intScHandChId);
+          if (intScCh) {
+            await intScCh.send(sanitizeMentions({
+              content: `**Interrogate** — your opponent's Agent Blaise is about to look at your hand. **[Smuggling Compartment]** — you may exhaust it to set aside Command cards first (returned at the start of your next activation or the next phase).`,
+              allowedMentions: { users: [intScOwnerId] },
+              components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`sc_int_open_${game.gameId}_${intOpponentPlayerNum}`).setLabel('Set aside CCs (Smuggling Compartment)').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`sc_int_skip_${game.gameId}_${intOpponentPlayerNum}`).setLabel('No').setStyle(ButtonStyle.Secondary),
+              )],
+            })).catch(discordCatch);
+            await thread.send(`**Interrogate** — waiting on the opponent's **[Smuggling Compartment]** reaction…`).catch(discordCatch);
+            return true;
+          }
+        } catch (err) {
+          console.error('Interrogate Smuggling Compartment offer error:', err);
+        }
+      }
       const intOwnerId = getPlayerId(game, intAttackerPlayerNum);
       const intBtns = intOpponentHand.slice(0, 4).map((cardName, i) =>
         new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)

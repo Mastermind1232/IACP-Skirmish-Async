@@ -169,7 +169,7 @@ import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleToughLuck, handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
-import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
+import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleAdaptBlaisePick } from './blaise-adapt.js';
@@ -585,6 +585,9 @@ register('me_skip_', handleMilitaryEfficiencyPick, 'postCombat');
 register('interrogate_pick_', handleInterrogatePick, 'postCombat');
 register('interrogate_discard_', handleInterrogatePick, 'postCombat');
 register('interrogate_skip_', handleInterrogatePick, 'postCombat');
+register('sc_int_open_', handleScInterrogateOpen, 'postCombat');
+register('sc_int_skip_', handleScInterrogateSkip, 'postCombat');
+register('sc_int_confirm_', handleScInterrogateConfirm, 'postCombat');
 
 // --- Interrupts ---
 register('still_faster_use_', handleStillFaster, 'interrupts');

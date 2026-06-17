@@ -7,15 +7,18 @@
  *   mastery_pick_ / mastery_skip_
  *   interrogate_pick_ / interrogate_discard_ / interrogate_skip_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { getMapData, getCcEffect } from '../data-loader.js';
-import { ccHandKey, ccDiscardKey, ccDeckKey } from '../game/player-helpers.js';
+import { ccHandKey, ccDiscardKey, ccDeckKey, getPlayerId, getHandChannelId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { clearPendingReaction, setPendingRightBackAtYa, clearPendingRightBackAtYa, clearPendingMastery, clearPendingMilitaryEfficiency, clearPendingInterrogate } from '../game/interrupts.js';
-import { fetchCombatThread } from '../discord/channel-helpers.js';
+import { fetchCombatThread, fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
+import { cardNameIncludes } from '../game/card-names.js';
+import { exhaustAttachment } from '../game/card-state-helpers.js';
+import { findSmugglingCompartmentMsgId, setAsideFromHand } from '../game/smuggling-compartment.js';
 
 /**
  * reaction_skip_
@@ -398,4 +401,124 @@ export async function handleInterrogatePick(interaction, ctx) {
   await finishCombatResolution(intGame, intCombat, intRT, new Set(intEmbed), client);
   saveGames(game.gameId);
   return;
+}
+
+/**
+ * [Smuggling Compartment] vs Interrogate — present Blaise's hand picker from the
+ * CURRENT opponent hand (after any set-aside). Returns true if the picker was
+ * posted, false if the opponent's hand is now empty (caller finishes combat).
+ */
+async function presentInterrogatePicker(game, client) {
+  const pend = game.pendingInterrogate;
+  if (!pend) return false;
+  const thread = await fetchCombatThread(client, pend.combatThreadId || pend.combat?.combatThreadId);
+  const oppHand = game[ccHandKey(pend.opponentPlayerNum)] || [];
+  if (oppHand.length === 0) {
+    if (thread) await thread.send(`**Interrogate** — Opponent's hand is empty after **[Smuggling Compartment]**; no card to choose.`).catch(discordCatch);
+    return false;
+  }
+  pend.opponentHandSnapshot = [...oppHand];
+  pend.awaitingSc = false;
+  const ownerId = getPlayerId(game, pend.attackerPlayerNum);
+  const btns = oppHand.slice(0, 4).map((cardName, i) =>
+    new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger));
+  if (thread) await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> **Interrogate** — ⚠️ *Opponent: look away!* Pick the card you want to target:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+  return true;
+}
+
+/** After the SC reaction resolves, resume Interrogate (or finish combat if the hand emptied). */
+async function _resumeInterrogateAfterSc(game, ctx) {
+  const { client, saveGames, checkPostCombatSurges, finishCombatResolution } = ctx;
+  const pend = game.pendingInterrogate;
+  if (!pend) { saveGames(game.gameId); return; }
+  const posted = await presentInterrogatePicker(game, client);
+  if (!posted) {
+    const { combat, resultText, initialEmbedRefreshMsgIds, defenderPlayerNum, attackerPlayerNum } = pend;
+    const ownerId = getPlayerId(game, attackerPlayerNum);
+    clearPendingInterrogate(game);
+    const thread = await fetchCombatThread(client, pend.combatThreadId || combat?.combatThreadId);
+    const triggered = thread ? await checkPostCombatSurges(game, combat, resultText, new Set(initialEmbedRefreshMsgIds), thread, ownerId, defenderPlayerNum) : false;
+    if (!triggered) await finishCombatResolution(game, combat, resultText, new Set(initialEmbedRefreshMsgIds), client);
+  }
+  saveGames(game.gameId);
+}
+
+/** [Smuggling Compartment] vs Interrogate — owner opted in: show a multi-select of their hand. */
+export async function handleScInterrogateOpen(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_int_open_');
+  const gameId = parts[0];
+  const oppNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, oppNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hand = game[ccHandKey(oppNum)] || [];
+  if (hand.length === 0) {
+    await interaction.message.edit({ content: '**[Smuggling Compartment]** — no cards in hand to set aside.', components: [] }).catch(discordCatch);
+    await _resumeInterrogateAfterSc(game, ctx);
+    return;
+  }
+  const seen = new Set();
+  const opts = [];
+  for (const c of hand) {
+    if (seen.has(c)) continue;
+    seen.add(c);
+    opts.push(new StringSelectMenuOptionBuilder().setLabel(c.slice(0, 100)).setValue(c));
+    if (opts.length >= 25) break;
+  }
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`sc_int_confirm_${gameId}_${oppNum}`)
+    .setPlaceholder('Choose Command cards to set aside')
+    .setMinValues(1)
+    .setMaxValues(opts.length)
+    .addOptions(opts);
+  await interaction.message.edit({
+    content: '**[Smuggling Compartment]** — choose Command cards to set aside before Interrogate (returned at the start of your next activation or the next phase):',
+    components: [new ActionRowBuilder().addComponents(select)],
+  }).catch(discordCatch);
+}
+
+/** [Smuggling Compartment] vs Interrogate — owner declined: proceed with Interrogate. */
+export async function handleScInterrogateSkip(interaction, ctx) {
+  const { getGame } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_int_skip_');
+  const game = await requireGame(interaction, getGame, parts[0], { silent: true });
+  if (!game) return;
+  await interaction.message.edit({ content: '**[Smuggling Compartment]** — declined; Interrogate proceeds.', components: [] }).catch(discordCatch);
+  await _resumeInterrogateAfterSc(game, ctx);
+}
+
+/** [Smuggling Compartment] vs Interrogate — owner confirmed which CCs to set aside, then resume. */
+export async function handleScInterrogateConfirm(interaction, ctx) {
+  const { getGame, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'sc_int_confirm_');
+  const gameId = parts[0];
+  const oppNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (interaction.user.id !== getPlayerId(game, oppNum)) {
+    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
+  const chosen = interaction.values || [];
+  const handKey = ccHandKey(oppNum);
+  const { hand: newHand, setAside } = setAsideFromHand(game[handKey] || [], chosen);
+  if (setAside.length > 0) {
+    const scMid = findSmugglingCompartmentMsgId(getDcList(game, oppNum), getDcMessageIds(game, oppNum));
+    if (scMid) exhaustAttachment(game, scMid, 'Smuggling Compartment');
+    game[handKey] = newHand;
+    game.smugglingCompartmentSetAside = game.smugglingCompartmentSetAside || {};
+    game.smugglingCompartmentSetAside[oppNum] = [...(game.smugglingCompartmentSetAside[oppNum] || []), ...setAside];
+    if (logGameAction) await logGameAction(game, client, `**[Smuggling Compartment]** — P${oppNum} set aside ${setAside.length} Command card${setAside.length === 1 ? '' : 's'} before Interrogate.`, { phase: 'COMBAT', icon: 'card' }).catch(() => {});
+  }
+  await interaction.message.edit({ content: `**[Smuggling Compartment]** — set aside ${setAside.length} card${setAside.length === 1 ? '' : 's'}. Interrogate proceeds.`, components: [] }).catch(discordCatch);
+  await _resumeInterrogateAfterSc(game, ctx);
 }
