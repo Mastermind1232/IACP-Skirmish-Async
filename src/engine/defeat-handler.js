@@ -44,6 +44,7 @@ import { setPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 import { getDcEffects, getDcStats } from '../data-loader.js';
 import { getDcList, getDcMessageIds, ccHandKey, ccDeckKey, getHandChannelId, dcAttachmentsKey } from '../game/player-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
+import { isSquadUpgradeCard } from '../game/squad-upgrades.js';
 
 export async function processFigureDefeat(game, opts, deps) {
   const {
@@ -127,7 +128,12 @@ export async function processFigureDefeat(game, opts, deps) {
   let vp = 0;
   let attachmentVp = 0;
   if (awardVp) {
-    vp = calculateKillVp(dcName);
+    // A Squad Upgrade figure is scored as a FIGURE at ITS OWN printed cost, not
+    // the base group's per-figure cost. The SU figure is the only one ever
+    // nicknamed with an SU card. alexanbv 2026-06-17.
+    const _suNick = game.figureNicknames?.[figureKey];
+    const _vpCard = (_suNick && isSquadUpgradeCard(_suNick)) ? _suNick : dcName;
+    vp = calculateKillVp(_vpCard);
     if (vp > 0) awardKillVp(game, attackerPlayerNum, vp);
 
     // 2b. Attachment VP: when last figure in group defeated, award attachment deployment cost
@@ -141,6 +147,10 @@ export async function processFigureDefeat(game, opts, deps) {
         const attKey = dcAttachmentsKey(defeatedPlayerNum);
         const attachments = game[attKey]?.[msgId] || [];
         for (const attName of attachments) {
+          // Squad Upgrades do NOT score attachment VP on the last base figure's
+          // death — the SU FIGURE's VP was scored when that figure was defeated
+          // (above). alexanbv 2026-06-17.
+          if (isSquadUpgradeCard(attName)) continue;
           const attStats = getDcStats(attName);
           const attCost = attStats?.cost ?? 0;
           if (attCost !== 0) {
