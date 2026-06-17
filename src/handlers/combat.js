@@ -1018,6 +1018,23 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, st
   };
 }
 
+/**
+ * Exhaust-attachment bonus resolver (Scavenged Weaponry +1 Hit, Explosive
+ * Armaments Blast 1, Feeding Frenzy +1 Hit) — alexanbv 2026-06-17. No sub-choice:
+ * clicking the button applies the stat bonus; the gate's _markGateAbilityUsed
+ * then exhausts the attachment (params.exhaustOnUse). Replaces the eager
+ * declaration handling so the card exhausts ONLY when the player uses it.
+ */
+function _makeExhaustBonusResolver({ card, effect, label }) {
+  return {
+    apply: async (_choice, { combat, thread }) => {
+      if (effect === 'hit') combat.bonusHits = (combat.bonusHits || 0) + 1;
+      else if (effect === 'blast') combat.bonusBlast = (combat.bonusBlast || 0) + 1;
+      await thread?.send(`**${card}** — Exhausted: ${label} applied to this attack.`).catch(discordCatch);
+    },
+  };
+}
+
 /** Mods-step convenience wrapper (existing call sites unchanged). */
 async function _driveModsGatePath(thread, game, combat, ctx) {
   return _driveGatePath('mods', thread, game, combat, ctx);
@@ -1695,6 +1712,9 @@ function _resolverFor(pick) {
   }
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, side: reg.side, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+  }
+  if (reg?.params?.kind === 'exhaust_bonus') {
+    return _makeExhaustBonusResolver({ card: reg.params.card, effect: reg.params.effect, label: reg.params.label });
   }
   if (reg?.params?.kind === 'third_party_cc' && String(reg.params.specKey).startsWith('There Is No Try')) {
     return _makeYodaResolver({ specKey: reg.params.specKey, side: reg.side });
@@ -3518,36 +3538,15 @@ export async function handleAttackTarget(interaction, ctx) {
     if (cardNameIncludes(_defUpgrades, 'Rogue Smuggler')) {
       _pc.rougeSmuggler_loseDistracting = true;
     }
-    // --- Exhaust-based attacker attachments (auto-applied, once per round) ---
-    const _exh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
-    // Scavenged Weaponry: exhaust when declare attack → +1 Hit
-    if (cardNameIncludes(_atkUpgrades, 'Scavenged Weaponry') && !cardNameIncludes(_exh, 'Scavenged Weaponry')) {
-      _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-      exhaustAttachment(game, msgId, 'Scavenged Weaponry');
-      await thread.send('**Scavenged Weaponry** — Exhausted: +1 Hit applied to this attack.').catch(discordCatch);
-    }
-    // Explosive Armaments: exhaust while attacking → Blast 1
-    if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments') && !cardNameIncludes(_exh, 'Explosive Armaments')) {
-      _pc.bonusBlast = (_pc.bonusBlast || 0) + 1;
-      exhaustAttachment(game, msgId, 'Explosive Armaments');
-      await thread.send('**Explosive Armaments** — Exhausted: Blast 1 applied to this attack.').catch(discordCatch);
-    }
-    // The Darksaber: exhaust while attacking → reroll 1 attack die. Now fully
-    // gate-handled ([The Darksaber] attack:rerolls row, params.exhaustOnUse): the
-    // reroll is offered only while the card is READY and the attachment exhausts
-    // ON USE (not eagerly here), so skipping the reroll leaves it ready.
-    // alexanbv 2026-06-17.
-    // Feeding Frenzy: exhaust while attacking a damaged figure → +1 Hit
-    if (cardNameIncludes(_atkUpgrades, 'Feeding Frenzy') && !cardNameIncludes(_exh, 'Feeding Frenzy')) {
-      const _ffDefHs = _defMsgId ? dcHealthState?.get(_defMsgId) : null;
-      const _ffDefFi = target.figureKey ? parseInt((target.figureKey.match(/-(\d+)$/) || [])[1] || '0', 10) : 0;
-      const _ffHp = _ffDefHs?.[_ffDefFi];
-      if (_ffHp && _ffHp[0] < _ffHp[1]) {
-        _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-        exhaustAttachment(game, msgId, 'Feeding Frenzy');
-        await thread.send('**Feeding Frenzy** — Exhausted: target has suffered damage, +1 Hit applied.').catch(discordCatch);
-      }
-    }
+    // --- Exhaust-based attacker attachments ---
+    // Scavenged Weaponry (+1 Hit, on_declare), Explosive Armaments (Blast 1,
+    // mods), Feeding Frenzy (+1 Hit vs a damaged target, mods) are now OFFERED in
+    // their gate windows as interactive exhaust-on-use buttons (combat-abilities-
+    // exhaust.js) — applied only when the player chooses them, exhausting the
+    // card on use. The eager auto-apply here was removed to kill the double
+    // handling (it fired the effect + exhausted at declaration while the gate
+    // also offered a no-op button). alexanbv 2026-06-17. The Darksaber reroll is
+    // likewise gate-handled (attack:rerolls row, params.exhaustOnUse).
     // Zillo Technique (I51-I52) defender's team SU: both effects moved out of
     // declare-time per CRR step-4 modifier timing + Destruct.
     //   - Exhaust to cancel 2 Pierce: post-surge prompt (slice 3,
