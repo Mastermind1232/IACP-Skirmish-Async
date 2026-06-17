@@ -1495,8 +1495,12 @@ export async function handleActPassive(interaction, ctx) {
         const _strDiscKey = ccDiscardKey(_strTargetPn);
         game[_strDiscKey] = game[_strDiscKey] || [];
         game[_strDiscKey].push(_strCard);
+        // When-discarded subroutine (deck): Built on Hope re-draw + Windfall hooks.
+        const { fireCcDiscarded } = await import('../game/cc-passive-redraw.js');
+        const _strDisc = fireCcDiscarded(game, _strTargetPn, _strCard, { fromDeck: true });
         await interaction.message.edit({ content: `🧠 **Strategize** — Discarded **${_strCard}** from the ${_strIsOwn ? 'own' : "opponent's"} deck.`, components: [] }).catch(discordCatch);
         await logGameAction?.(game, client, `**Strategize** (Thrawn) — Discarded ${_strCard} from ${_strIsOwn ? 'own' : "opponent's"} command deck.`, { phase: 'ACTIVATION', icon: 'card' });
+        if (_strDisc.windfallSelfVp > 0) await logGameAction?.(game, client, `**Windfall** — P${_strTargetPn} gains **1 VP** (Windfall discarded).`, { phase: 'ACTIVATION', icon: 'card' });
       } else {
         await interaction.message.edit({ content: `🧠 **Strategize** — Deck is empty; nothing to discard.`, components: [] }).catch(discordCatch);
       }
