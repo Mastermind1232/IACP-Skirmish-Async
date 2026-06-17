@@ -3740,18 +3740,9 @@ export async function handleAttackTarget(interaction, ctx) {
   // passives) per alexanbv 2026-06-16 — declaration is the wrong timing.
 
   // Sniper (Alliance Ranger Regular): forced +1 reroll at 5+ spaces (no "may")
-  if (hasSniperAbility(atkSpecialIds) && sniperGateOpen(distanceToTarget)) {
-    const { rerollOneAttackDie } = applySniperRerolls(game.pendingCombat, false);
-    game.pendingCombat.rerollOneAttackDie = rerollOneAttackDie;
-    await thread.send(`**Sniper** — +1 attack reroll (target ${distanceToTarget} spaces away).`);
-  }
-
-  // Elite Sniper (Alliance Ranger Elite): +2 reroll at 5+ spaces
-  if (hasEliteSniperAbility(atkSpecialIds) && sniperGateOpen(distanceToTarget)) {
-    const { rerollOneAttackDie } = applySniperRerolls(game.pendingCombat, true);
-    game.pendingCombat.rerollOneAttackDie = rerollOneAttackDie;
-    await thread.send(`**Elite Sniper** — +2 attack rerolls (target ${distanceToTarget} spaces away).`);
-  }
+  // Sniper / Elite Sniper (Alliance Ranger) — MOVED to the gate: offered as
+  // distance-gated rerolls in the rerolls window (CSV rows; +1 / up to +2).
+  // The old eager rerollOneAttackDie count is dead in the gate. alexanbv 2026-06-16.
 
   // Much to Learn (Ezra Bridger): per alexanbv 2026-05-11 — surface as a
   // controlled-reroll bucket entry. If a friendly FORCE USER unique is
