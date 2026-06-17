@@ -25,7 +25,7 @@ function metaFor(dcMessageMeta, gameId, pn) {
 }
 
 /** Drive Stormtrooper → defenderDc through the gate; return the resolved combat. */
-async function attackInto(defenderDc) {
+async function attackInto(defenderDc, opts = {}) {
   const built = createTestGame()
     .withMap('mos-eisley-outskirts')
     .withPlayer1Army([{ dcName: 'Stormtrooper' }])
@@ -37,8 +37,10 @@ async function attackInto(defenderDc) {
   game.selfPlay = true;
   const a = firstFigKey(game, 1);
   const d = firstFigKey(game, 2);
-  game.figurePositions[1] = { [a]: 'b1' };
-  game.figurePositions[2] = { [d]: 'c1' };
+  const atkSq = opts.atkSq || 'b1';
+  const defSq = opts.defSq || 'c1';
+  game.figurePositions[1] = { [a]: atkSq };
+  game.figurePositions[2] = { [d]: defSq };
   const A = metaFor(dcMessageMeta, game.gameId, 1);
   const D = metaFor(dcMessageMeta, game.gameId, 2);
   const combat = {
@@ -48,8 +50,9 @@ async function attackInto(defenderDc) {
     defenderDcName: D.meta.dcName,
     attackerFigureIndex: 0, attackerFigureKey: a, attackerConds: [], defenderConds: [],
     target: { msgId: D.msgId, figureKey: d, label: D.meta.dcName },
-    targetSquare: 'c1', targetStats: { defense: ['white'], cost: 5, figures: 1 },
-    attackInfo: { dice: ['blue', 'green'], type: 'melee' }, isRanged: false, distanceToTarget: 1,
+    targetSquare: defSq, targetStats: { defense: ['white'], cost: 5, figures: 1 },
+    attackInfo: { dice: ['blue', 'green'], type: opts.type || 'melee' },
+    isRanged: opts.type === 'range', distanceToTarget: opts.dist || 1,
     bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
     surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
   };
@@ -74,5 +77,25 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     const combat = await attackInto('Jawa Scavenger (Regular)');
     assert.equal(combat.bonusBlock, 1, 'Take Cover must apply +1 Block exactly once');
     assert.equal(combat.bonusEvade, -1, 'Take Cover must apply -1 Evade exactly once');
+  });
+
+  it('Gamorrean Honor Guard: +1 Block on a ranged attack, once', async () => {
+    const combat = await attackInto('Gamorrean Guard (Elite)', { type: 'range', dist: 3, defSq: 'e1' });
+    assert.equal(combat.bonusBlock, 1, 'Gamorrean Honor Guard must apply +1 Block once (ranged)');
+  });
+
+  it('Gamorrean Honor Guard: no Block on a melee attack', async () => {
+    const combat = await attackInto('Gamorrean Guard (Elite)', { type: 'melee', dist: 1 });
+    assert.equal(combat.bonusBlock || 0, 0, 'Gamorrean Honor Guard must NOT apply on a melee attack');
+  });
+
+  it('Composite Plating (Heavy Stormtrooper): +1 Block when attacker 4+ away, once', async () => {
+    const combat = await attackInto('Heavy Stormtrooper (Regular)', { type: 'range', dist: 5, defSq: 'f1' });
+    assert.equal(combat.bonusBlock, 1, 'Composite Plating must apply +1 Block once (attacker 4+ away)');
+  });
+
+  it('Composite Plating: no Block when attacker adjacent', async () => {
+    const combat = await attackInto('Heavy Stormtrooper (Regular)', { type: 'melee', dist: 1 });
+    assert.equal(combat.bonusBlock || 0, 0, 'Composite Plating must NOT apply when attacker is close');
   });
 });

@@ -16,6 +16,8 @@ import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
 import { hasAgileAbility } from '../game/agile-jet-trooper-helpers.js';
 import { hasSlipperyAbility } from '../game/slippery-smuggler-helpers.js';
 import { hasTakeCoverAbility } from '../game/take-cover-jawa-helpers.js';
+import { hasGamorreanHonorGuardAbility, gamorreanHonorGuardApplies } from '../game/gamorrean-honor-guard-helpers.js';
+import { hasCompositePlatingAbility, compositePlatingApplies } from '../game/composite-plating-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
@@ -195,6 +197,26 @@ registerCombatAbility({
   applies: (game, combat, side, deps) => {
     const dcName = defenderDcNameOf(combat);
     return !!dcName && hasTakeCoverAbility(ids(eff(deps, dcName)));
+  },
+});
+
+// Gamorrean Honor Guard — +1 Block while defending during a Ranged attack.
+registerCombatAbility({
+  id: 'gamorrean_honor_guard', name: 'Gamorrean Honor Guard', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasGamorreanHonorGuardAbility(ids(eff(deps, dcName)))
+      && gamorreanHonorGuardApplies(combat.isRanged);
+  },
+});
+
+// Composite Plating (Heavy Stormtrooper Regular) — +1 Block if attacker 4+ away.
+registerCombatAbility({
+  id: 'composite_plating', name: 'Composite Plating', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const dcName = defenderDcNameOf(combat);
+    return !!dcName && hasCompositePlatingAbility(ids(eff(deps, dcName)))
+      && compositePlatingApplies(combat.distanceToTarget);
   },
 });
 

@@ -112,8 +112,6 @@ e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', O
 e('disposable', 'Disposable (Hired Gun Regular)', 'defender', 'passive', ON, '-1 Evade');
 e('cortosis_weave', 'Cortosis Weave (Echo Base Trooper Elite)', 'defender', 'passive', ON, '-2 Pierce');
 e('spectre_cell_def', 'Spectre Cell (defender)', 'defender', 'passive', ON, 'DC list has [Spectre Cell] → +1 Block');
-e('gamorrean_honor_guard', 'Gamorrean Honor Guard', 'defender', 'passive', ON, 'Ranged attack → +1 Block');
-e('composite_plating', 'Composite Plating (Heavy Stormtrooper Reg)', 'defender', 'passive', ON, 'attacker ≥4 → +1 Block');
 e('slippery_declare', 'Slippery (Alliance Smuggler, declare)', 'defender', 'passive', ON, '-2 Accuracy');
 e('sentinel', 'Sentinel', 'defender', 'passive', ON, 'friendly adjacent w/ sentinel → +1 Block');
 e('protector', 'Protector (Chewbacca)', 'defender', 'passive', ON, 'friendly adjacent → +1 Block');

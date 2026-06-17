@@ -1593,6 +1593,14 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.bonusBlock = bump.bonusBlock;
     combat.bonusEvade = bump.bonusEvade;
     await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.').catch(discordCatch);
+  } else if (id === 'gamorrean_honor_guard') {
+    const { bonusBlock } = applyGamorreanHonorGuardBonus(combat);
+    combat.bonusBlock = bonusBlock;
+    await thread.send('**Gamorrean Honor Guard** — +1 Block (defending against Ranged attack).').catch(discordCatch);
+  } else if (id === 'composite_plating') {
+    const { bonusBlock } = applyCompositePlatingBonus(combat);
+    combat.bonusBlock = bonusBlock;
+    await thread.send('**Composite Plating** — +1 Block (attacker 4+ spaces away).').catch(discordCatch);
   } else if (id === 'negotiate') {
     combat.bonusHits = (combat.bonusHits || 0) + 2;
     combat.negotiateResolved = true;
@@ -3701,19 +3709,9 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Spectre Cell** — +1 Block (passive).').catch(discordCatch);
   }
 
-  // Gamorrean Honor Guard: +1 Block while defending during Ranged attack
-  if (hasGamorreanHonorGuardAbility(defSpecialIds) && gamorreanHonorGuardApplies(isRanged)) {
-    const { bonusBlock } = applyGamorreanHonorGuardBonus(game.pendingCombat);
-    game.pendingCombat.bonusBlock = bonusBlock;
-    await thread.send('**Gamorrean Honor Guard** — +1 Block (defending against Ranged attack).');
-  }
-
-  // Composite Plating (Heavy Stormtrooper Regular): +1 Block if attacker 4+ spaces away
-  if (hasCompositePlatingAbility(defSpecialIds) && compositePlatingApplies(distanceToTarget)) {
-    const { bonusBlock } = applyCompositePlatingBonus(game.pendingCombat);
-    game.pendingCombat.bonusBlock = bonusBlock;
-    await thread.send(`**Composite Plating** — +1 Block (attacker ${distanceToTarget} spaces away).`);
-  }
+  // Gamorrean Honor Guard / Composite Plating: MOVED to the mods window
+  // (combat-abilities-mods.js 'gamorrean_honor_guard' / 'composite_plating'
+  // passives) per alexanbv 2026-06-16 — declaration is the wrong timing.
 
   // Sniper (Alliance Ranger Regular): forced +1 reroll at 5+ spaces (no "may")
   if (hasSniperAbility(atkSpecialIds) && sniperGateOpen(distanceToTarget)) {
