@@ -1499,6 +1499,82 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
 }
 
 /**
+ * Battlefield Awareness (CC) — alexanbv 2026-06-17. A LEADER plays it after
+ * ANOTHER friendly figure within 3 attacks, to reroll 1 of the attack dice.
+ * Staged: pick the LEADER (figure-picker) → play the CC → pick an attack die →
+ * (if the chosen Leader is Lando, a Gambit color-swap stage) → reroll. The
+ * "Leader playing it is the one rerolling" only matters for Lando: if Lando is
+ * the playing Leader, his Gambit lets the die be recolored first (Destruct's
+ * "Battlefield Awareness" interaction). The reroll uses the shared lock
+ * (_rerollDie / _rerolledDieIds), so a BA-rerolled die can't be rerolled again.
+ */
+function _makeBattlefieldAwarenessResolver() {
+  const sk = '_baStage';
+  const label = (fk) => {
+    const base = dcNameFromFigureKey(fk);
+    const tail = String(fk).split('-').slice(-2).join('-');
+    return `${base} (${tail})`.slice(0, 80);
+  };
+  const isLando = (fk) => (getDcEffectsGlobal()[dcNameFromFigureKey(fk)]?.specialAbilityIds || []).includes('gambit_lando');
+  const postSub = (thread, gameId, id, content, btns) => thread?.send(sanitizeMentions({
+    content,
+    components: chunkButtonsToRows(btns.map(([c, l, s]) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${id}`).setLabel(l).setStyle(_modsStyle(s)))),
+  })).catch(discordCatch);
+  const dieLabel = (d) => `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`;
+  return {
+    prompt: ({ game, combat, ctx }) => {
+      const figs = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat, _gateDeps(ctx));
+      if (!figs.length) return null;
+      return { content: '**Battlefield Awareness** — choose the LEADER who plays it:', buttons: figs.map((fk, i) => [String(i), label(fk)]) };
+    },
+    apply: async (choice, { game, combat, thread, ctx, gameId, id }) => {
+      const st = combat[sk] || {};
+      const reroll = async (newColor) => {
+        const res = _rerollDie(combat, ctx, { pool: 'attack', index: st.index, newColor });
+        if (res.ok) await thread?.send(`**Battlefield Awareness** — rerolled attack die #${st.index + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
+        else await thread?.send(`**Battlefield Awareness** — die #${st.index + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+        delete combat[sk];
+      };
+      if (!st.stage) {
+        // Stage 1: a Leader was chosen → validate/dispose the CC, then pick a die.
+        const figs = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat, _gateDeps(ctx));
+        const fk = figs[parseInt(choice, 10)] ?? figs[0];
+        if (!fk) return undefined;
+        await playCC(game, combat.attackerPlayerNum, fk, 'Battlefield Awareness', { ctx, skipExecute: true });
+        st.leader = fk; st.gambit = isLando(fk);
+        const idxs = _selectableDieIndices(combat, { pool: 'attack' });
+        if (!idxs.length) {
+          await thread?.send(`**Battlefield Awareness** played by ${label(fk)} — no attack die available to reroll.`).catch(discordCatch);
+          return undefined;
+        }
+        st.stage = 'die'; combat[sk] = st;
+        const dice = combat.attackDiceResults || [];
+        await postSub(thread, gameId, id, `**Battlefield Awareness** played by ${label(fk)} — choose an attack die to reroll${st.gambit ? ' (Lando: Gambit available)' : ''}:`,
+          [...idxs.map((i) => [String(i), `Die #${i + 1} (${dieLabel(dice[i])})`]), ['skip', 'Skip', 'secondary']]);
+        return { followUp: true };
+      }
+      if (st.stage === 'die') {
+        if (choice === 'skip') { delete combat[sk]; await thread?.send('**Battlefield Awareness** — Skipped.').catch(discordCatch); return undefined; }
+        st.index = parseInt(choice, 10);
+        if (st.gambit) {
+          st.stage = 'color';
+          const die = combat.attackDiceResults?.[st.index];
+          await postSub(thread, gameId, id, `**Gambit** — replace die #${st.index + 1} with another attack die of any color, or keep:`,
+            [...['blue', 'green', 'red', 'yellow'].map((c) => [c, c, 'primary']), ['keep', `Keep ${die?.color || 'color'}`, 'secondary']]);
+          return { followUp: true };
+        }
+        await reroll(undefined); return undefined;
+      }
+      if (st.stage === 'color') {
+        const newColor = ['blue', 'green', 'red', 'yellow'].includes(choice) ? choice : undefined;
+        await reroll(newColor); return undefined;
+      }
+      return undefined;
+    },
+  };
+}
+
+/**
  * There Is No Try (Yoda) — a third-party die-turn (alexanbv 2026-06-16). Yoda is
  * unique, so there's no figure-picker: discard the card (played by the Yoda
  * figure) then go straight to the die-turn. Attacker version turns an attack die;
@@ -1622,6 +1698,9 @@ function _resolverFor(pick) {
   }
   if (reg?.params?.kind === 'third_party_cc' && String(reg.params.specKey).startsWith('There Is No Try')) {
     return _makeYodaResolver({ specKey: reg.params.specKey, side: reg.side });
+  }
+  if (reg?.params?.kind === 'third_party_cc' && reg.params.specKey === 'Battlefield Awareness') {
+    return _makeBattlefieldAwarenessResolver();
   }
   if (reg?.params?.kind === 'third_party_cc') {
     return _makeThirdPartyCcResolver({ specKey: reg.params.specKey, card: reg.params.card || thirdPartyCardName(reg.params.specKey) });

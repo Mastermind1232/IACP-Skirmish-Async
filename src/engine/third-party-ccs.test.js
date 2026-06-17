@@ -113,6 +113,29 @@ describe('Get Behind Me! — GUARDIAN or FORCE USER within 3 of the defender', (
   });
 });
 
+describe('Battlefield Awareness — friendly LEADER within 3 of the attacker (not the attacker)', () => {
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Darth Vader-2-0' } };
+  it('offers a LEADER within 3 on the attacking team, excluding the attacker', () => {
+    const game = {
+      selectedMap: { id: 'm' },
+      figurePositions: {
+        1: { 'Stormtrooper-1-0': 'b2', 'Lando Calrissian-1-1': 'b3' }, // Lando is a LEADER within 3
+        2: { 'Darth Vader-2-0': 'p15' },
+      },
+    };
+    const elig = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat, mapDeps);
+    assert.deepEqual(elig, ['Lando Calrissian-1-1']);
+  });
+  it('does NOT offer the attacker itself even if it is a LEADER (reacts to ANOTHER figure)', () => {
+    const game = {
+      selectedMap: { id: 'm' },
+      figurePositions: { 1: { 'Lando Calrissian-1-0': 'b2' }, 2: { 'Darth Vader-2-0': 'p15' } },
+    };
+    const combat2 = { ...combat, attackerFigureKey: 'Lando Calrissian-1-0' };
+    assert.deepEqual(eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat2, mapDeps), []);
+  });
+});
+
 describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
   it('Guardian Stance grants the defender a forced reroll (pool any)', () => {
     const combat = { defenderPlayerNum: 2, attackerPlayerNum: 1 };

@@ -33,7 +33,9 @@ export const THIRD_PARTY_CC_SPECS = {
   'Guardian Stance':       { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'rerolls',    excludeActive: true },
   'Bodyguard':             { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'on_declare', excludeActive: true },
   'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true },
-  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: 3,     window: 'rerolls',    excludeActive: false },
+  // BA reacts to ANOTHER friendly figure attacking, so the playing LEADER must
+  // NOT be the attacker themselves → excludeActive (alexanbv 2026-06-17).
+  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: 3,     window: 'rerolls',    excludeActive: true },
   // Yoda (There Is No Try) can be played while attacking OR defending — two specs.
   'There Is No Try (attacker)': { side: 'attacker', playableBy: 'Yoda', from: 'attacker', n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
   'There Is No Try (defender)': { side: 'defender', playableBy: 'Yoda', from: 'target',   n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
