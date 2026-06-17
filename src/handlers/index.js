@@ -144,6 +144,9 @@ import {
   handleScCcOpen,
   handleScCcSkip,
   handleScCcConfirm,
+  handleCcCounterNegate,
+  handleCcCounterComms,
+  handleCcCounterPass,
 } from './cc-hand.js';
 import {
   handleBotmenuKill,
@@ -756,6 +759,9 @@ register('cc_attach_to_', handleCcAttachTo, 'ccHand');
 register('cc_play_select_', handleCcPlaySelect, 'ccHand');
 register('cc_discard_select_', handleCcDiscardSelect, 'ccHand');
 register('sc_cc_confirm_', handleScCcConfirm, 'ccHand');
+register('cc_counter_negate_', handleCcCounterNegate, 'ccHand');
+register('cc_counter_comms_', handleCcCounterComms, 'ccHand');
+register('cc_counter_pass_', handleCcCounterPass, 'ccHand');
 register('sc_cc_skip_', handleScCcSkip, 'ccHand');
 register('sc_cc_open_', handleScCcOpen, 'ccHand');
 

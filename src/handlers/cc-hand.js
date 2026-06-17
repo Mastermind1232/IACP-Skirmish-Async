@@ -39,6 +39,8 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { findSmugglingCompartmentMsgId, setAsideFromHand, SMUGGLING_COMPARTMENT_NAME } from '../game/smuggling-compartment.js';
 import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAside } from './sc-hand-protection.js';
+import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow } from '../game/cc-counter-window.js';
+import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
 
 // Hand-affecting CCs whose effect must let the target (the opponent) exhaust
 // [Smuggling Compartment] AFTER the Negate/Comms window resolves, before the
@@ -66,6 +68,127 @@ function _commDisruptionWindowWouldOpen(game, playerNum, card, cost) {
   }).length;
   return spyCount > 0 && cost <= spyCount;
 }
+
+// ── Unified recursive CC counter-window (Negate/Comms) — alexanbv 2026-06-17 ──
+// playCC step 3. Built additively (not yet routed into the live play path) so it
+// can be playtested before replacing the legacy pendingNegation/CD flow. Drives
+// the tested orchestrator (cc-counter-window) + rules (cc-counter-rules).
+
+function _ccSpyGroupCount(game, pn) {
+  const dcEffectsData = getDcEffects() || {};
+  const dcList = (pn === 1 ? game.p1DcList : game.p2DcList) || [];
+  return dcList.filter((dc) => dc && !dc.defeated
+    && (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase()).includes('SPY')).length;
+}
+
+/**
+ * Open the counter-window for a freshly played card and prompt the opponent.
+ * `play` = { card, cost, playedBy, figureKey?, abilityId? }. On resolution this
+ * fires resolved non-counter effects and routes cancelled cards to the
+ * when-discarded pipeline. NOT yet wired into handleCcPlaySelect.
+ */
+export async function openCcCounterWindow(game, gameId, play, ctx, client) {
+  const spyForPlay = (play.card === COMM_DISRUPTION) ? _ccSpyGroupCount(game, play.playedBy) : undefined;
+  openCounterWindow(game, { ...play, spyCount: spyForPlay });
+  await _promptCounterResponder(game, gameId, ctx, client);
+}
+
+async function _promptCounterResponder(game, gameId, ctx, client) {
+  const responder = counterResponder(game);
+  if (!responder) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
+  const top = topCard(game);
+  const spy = _ccSpyGroupCount(game, responder);
+  const hand = game[ccHandKey(responder)] || [];
+  const offer = topAvailableCounters(game, spy).filter((c) => hand.includes(c));
+  if (offer.length === 0) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
+  const chId = getHandChannelId(game, responder);
+  const ch = chId ? await fetchGameChannel(client, chId) : null;
+  if (!ch) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
+  const btns = offer.map((c) => new ButtonBuilder()
+    .setCustomId(c === NEGATION ? `cc_counter_negate_${gameId}` : `cc_counter_comms_${gameId}`)
+    .setLabel(`Play ${c}`).setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder().setCustomId(`cc_counter_pass_${gameId}`).setLabel('Pass (let it resolve)').setStyle(ButtonStyle.Secondary));
+  const ownerId = getPlayerId(game, responder);
+  await ch.send(sanitizeMentions({
+    content: `<@${ownerId}> Your opponent played **${top.card}**. Cancel it?`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(btns)],
+  })).catch(discordCatch);
+}
+
+async function _playCounter(interaction, ctx, counterCard) {
+  const { getGame, saveGames, client, logGameAction } = ctx;
+  const prefix = counterCard === NEGATION ? 'cc_counter_negate_' : 'cc_counter_comms_';
+  const gameId = parseCustomId(interaction.customId, prefix);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const responder = counterResponder(game);
+  if (!responder || interaction.user.id !== getPlayerId(game, responder)) {
+    await interaction.followUp({ content: 'Only the responding player can counter.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hand = game[ccHandKey(responder)] || [];
+  if (!hand.includes(counterCard)) {
+    await interaction.followUp({ content: `${counterCard} is no longer in your hand.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const spy = _ccSpyGroupCount(game, responder);
+  const res = pushCounter(game, { card: counterCard, cost: counterCard === NEGATION ? 1 : 2, playedBy: responder, spyCount: spy });
+  if (!res.ok) {
+    await interaction.followUp({ content: res.reason || 'That counter is not legal here.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const hi = hand.indexOf(counterCard);
+  hand.splice(hi, 1);
+  game[ccHandKey(responder)] = hand;
+  game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
+  await interaction.message.edit({ content: `**${counterCard}** played.`, components: [] }).catch(discordCatch);
+  await logGameAction?.(game, client, `<@${interaction.user.id}> played **${counterCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  await _promptCounterResponder(game, gameId, ctx, client);
+  saveGames(game.gameId);
+}
+
+export async function handleCcCounterNegate(interaction, ctx) { await _playCounter(interaction, ctx, NEGATION); }
+export async function handleCcCounterComms(interaction, ctx) { await _playCounter(interaction, ctx, COMM_DISRUPTION); }
+
+export async function handleCcCounterPass(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  const gameId = parseCustomId(interaction.customId, 'cc_counter_pass_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const responder = counterResponder(game);
+  if (!responder || interaction.user.id !== getPlayerId(game, responder)) {
+    await interaction.followUp({ content: 'Only the responding player can pass.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.message.edit({ content: 'Passed — the play resolves.', components: [] }).catch(discordCatch);
+  await _resolveCcCounterWindow(game, gameId, ctx, client);
+  saveGames(game.gameId);
+}
+
+// Resolve the stack: fire resolved non-counter effects; route cancelled cards to
+// the when-discarded pipeline (a counter card's "effect" IS its cancellation).
+async function _resolveCcCounterWindow(game, gameId, ctx, client) {
+  const outcome = resolveAndCloseWindow(game);
+  for (const entry of outcome) {
+    const isCounter = entry.card === NEGATION || entry.card === COMM_DISRUPTION;
+    if (entry.status === 'cancelled') {
+      fireCcDiscarded(game, entry.playedBy, entry.card, { fromDeck: false });
+      await ctx.logGameAction?.(game, client, `**${entry.card}** was cancelled.`, { phase: 'ACTION', icon: 'card' });
+      continue;
+    }
+    if (isCounter) continue; // the cancellation already happened via the stack
+    if (ctx.resolveAbility) {
+      const result = ctx.resolveAbility(entry.abilityId || entry.card, {
+        game, playerNum: entry.playedBy, cardName: entry.card, figureKey: entry.figureKey,
+        dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, combat: game.combat || game.pendingCombat,
+      });
+      await applyAbilityResult(result, { game, playerNum: entry.playedBy, client, ctx });
+    }
+  }
+  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+}
+
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
