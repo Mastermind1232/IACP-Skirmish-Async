@@ -191,23 +191,19 @@ describe('ORACLE-CONDDICE-003: Pattern B sites use applyConditionWithDie', () =>
       'Advanced Targeting Computer must pass ADV_TARGETING_COMPUTER_BONUS_DIE constant');
   });
 
-  it('Sharpshooter uses applyConditionWithDie', () => {
-    // Sharpshooter predicate was extracted to
-    // src/game/sharpshooter-helpers.js during the medium-risk probe
-    // grind. Handler now delegates slug + range check via
-    // hasSharpshooterAbility / sharpshooterInRange, and the Focus
-    // condition + bonus die are named constants. The
-    // applyConditionWithDie contract is still enforced at the site.
+  it('Sharpshooter uses applyConditionWithDie (now in the on_declare passive)', () => {
+    // Gate cutover (alexanbv 2026-06-16): Sharpshooter moved out of the
+    // declaration block into the on_declare gate passive
+    // (combat-abilities-ondeclare.js detection + _fireOnDeclarePassive effect),
+    // which adds Focus + a green die before the roll via applyConditionWithDie.
     const src = readSrc('src/handlers/combat.js');
-    const idx = src.indexOf('hasSharpshooterAbility(atkSpecialIds) && sharpshooterInRange');
-    assert.ok(idx > 0, 'Sharpshooter site found (post-extraction)');
-    const block = src.slice(idx, idx + 400);
-    assert.ok(block.includes('applyConditionWithDie(game, attackerFigureKey'),
-      'Sharpshooter must use applyConditionWithDie');
-    assert.ok(block.includes('SHARPSHOOTER_CONDITION'),
-      'Sharpshooter must pass SHARPSHOOTER_CONDITION constant');
-    assert.ok(block.includes('SHARPSHOOTER_BONUS_DIE'),
-      'Sharpshooter must pass SHARPSHOOTER_BONUS_DIE constant');
+    const idx = src.indexOf('export async function _fireOnDeclarePassive');
+    assert.ok(idx > 0, '_fireOnDeclarePassive found');
+    const block = src.slice(idx, idx + 1200);
+    assert.ok(/sharpshooter:\s*\{\s*cond:\s*'Focus',\s*die:\s*'green'/.test(block),
+      'Sharpshooter auto-Focus entry (Focus + green die) must be present');
+    assert.ok(block.includes('applyConditionWithDie(game, combat.attackerFigureKey'),
+      'auto-Focus must use applyConditionWithDie on the attacker figure');
   });
 });
 

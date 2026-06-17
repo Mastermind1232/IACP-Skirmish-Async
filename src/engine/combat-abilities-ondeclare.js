@@ -19,6 +19,7 @@
 import { getDcEffects as _getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
+import { sharpshooterInRange } from '../game/sharpshooter-helpers.js';
 
 function atkEff(combat, deps) {
   const all = (deps?.getDcEffects || _getDcEffects)() || {};
@@ -60,6 +61,14 @@ function atkPassive(id, name, keys) {
 
 // Battle Meditation — auto-Focus (+1 green die) before attacking.
 atkPassive('battle_meditation', 'Battle Meditation', ['battle_meditation']);
+
+// Sharpshooter (Fennec Shand) — auto-Focus when the target is 5+ spaces away.
+registerCombatAbility({
+  id: 'sharpshooter', name: 'Sharpshooter', windows: ['on_declare'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => !!combat.attackerFigureKey
+    && hasAny(atkEff(combat, deps), 'sharpshooter')
+    && sharpshooterInRange(combat.distanceToTarget),
+});
 
 // ── Attacker interactive on-declare DC abilities ─────────────────────────────
 atkAbility('merciless', 'Merciless', ['merciless'], 'mercilessResolved');

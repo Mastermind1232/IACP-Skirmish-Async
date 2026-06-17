@@ -3669,13 +3669,8 @@ export async function handleAttackTarget(interaction, ctx) {
   }
 
   // Sharpshooter (Fennec Shand): auto-Focus if target is 5+ spaces away
-  if (hasSharpshooterAbility(atkSpecialIds) && sharpshooterInRange(distanceToTarget)) {
-    const _ssResult = applyConditionWithDie(game, attackerFigureKey, SHARPSHOOTER_CONDITION, game.pendingCombat.attackInfo, SHARPSHOOTER_BONUS_DIE);
-    if (_ssResult.applied) {
-      game.pendingCombat.attackInfo = _ssResult.attackInfo;
-      await thread.send(`**Sharpshooter** — **${meta.dcName}** is **Focused** (target ${distanceToTarget} spaces away, +1 green die).`);
-    }
-  }
+  // Sharpshooter (Fennec Shand) — MOVED to the on_declare window
+  // (combat-abilities-ondeclare.js 'sharpshooter' passive → _fireOnDeclarePassive).
 
   // Find Weakness (Scout Trooper Elite): -1 Evade to defense results (accuracy handled via passives)
   // Find Weakness — MOVED to the mods window (combat-abilities-mods.js 'find_weakness' passive).

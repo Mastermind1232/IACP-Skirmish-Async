@@ -181,4 +181,15 @@ describe('GATE on_declare timing move: auto-Focus fires before the roll, once', 
     const combat = await attackInto('Stormtrooper', { attackerDc: 'Stormtrooper' });
     assert.equal(combat.attackInfo.dice.length, 2, 'no auto-Focus → pool unchanged');
   });
+
+  it('Sharpshooter (Fennec Shand): +1 green die at on_declare when target 5+ away', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Fennec Shand', type: 'range', dist: 5, defSq: 'f1' });
+    assert.equal(combat.attackInfo.dice.length, 3, 'Sharpshooter must add one die at long range');
+    assert.equal(combat.attackInfo.dice.filter((d) => d === 'green').length, 2, 'the added die must be green');
+  });
+
+  it('Sharpshooter: no extra die when target is close', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Fennec Shand', type: 'melee', dist: 1 });
+    assert.equal(combat.attackInfo.dice.length, 2, 'Sharpshooter must NOT fire at short range');
+  });
 });
