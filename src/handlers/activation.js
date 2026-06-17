@@ -26,6 +26,8 @@ import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { exhaustAttachment, depleteDc, isDcDepleted } from '../game/card-state-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
+import { refreshHandAndDiscard } from '../engine/message-updaters.js';
+import { releaseSmugglingCompartmentSetAside } from '../game/smuggling-compartment.js';
 import {
   getPlayerId,
   getDcList,
@@ -1177,6 +1179,15 @@ export async function handleConfirmActivate(interaction, ctx) {
   if (!meta || meta.gameId !== gameId) return;
   const ownerId = getPlayerId(game, meta.playerNum);
   if (interaction.user.id !== ownerId) return;
+  // [Smuggling Compartment] Part 1: cards set aside with the reaction return at
+  // the start of the next activation. Release them as this activation begins.
+  {
+    const _scReleased = releaseSmugglingCompartmentSetAside(game);
+    for (const _scR of _scReleased) {
+      await logGameAction(game, client, `**[Smuggling Compartment]** — P${_scR.playerNum} returns ${_scR.cards.length} set-aside Command card${_scR.cards.length === 1 ? '' : 's'} to hand.`, { phase: 'ACTIVATION', icon: 'card' }).catch(() => {});
+      try { await refreshHandAndDiscard(game, _scR.playerNum, client); } catch { /* best-effort */ }
+    }
+  }
   const remaining = getActivationsRemaining(game, meta.playerNum);
   if (remaining <= 0) {
     await interaction.followUp({ content: 'No activations remaining.', ephemeral: true }).catch(discordCatch);

@@ -3,6 +3,7 @@
  * game.phase is the single source of truth for top-level game phase.
  * game.roundPhase tracks sub-phase within round_active.
  */
+import { releaseSmugglingCompartmentSetAside } from './smuggling-compartment.js';
 
 export const PHASES = {
   LOBBY: 'lobby',
@@ -134,6 +135,11 @@ export function setRoundPhase(game, roundPhase, opts = {}) {
   if (from !== roundPhase && game.massivePushedThisPhase) {
     delete game.massivePushedThisPhase;
   }
+  // [Smuggling Compartment] Part 1: cards set aside with the reaction return to
+  // hand "at the start of the next activation or phase". A phase change is one
+  // such trigger — release them here (pure state move; hand visuals refresh on
+  // the next render). The activation-start trigger lives in handleConfirmActivate.
+  if (from !== roundPhase) releaseSmugglingCompartmentSetAside(game);
   if (from !== roundPhase) game._pendingSave = true;
   game.roundPhase = roundPhase;
   return true;

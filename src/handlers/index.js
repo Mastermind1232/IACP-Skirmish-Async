@@ -141,6 +141,9 @@ import {
   handleExcavationPlay,
   handleCommDisruptionPlay,
   handleCommDisruptionSkip,
+  handleScSetAsideOpen,
+  handleScSetAsideSkip,
+  handleScSetAsideConfirm,
 } from './cc-hand.js';
 import {
   handleBotmenuKill,
@@ -746,6 +749,9 @@ register('map_selection_pick_', handleMapSelectionPick, 'setup');
 register('cc_attach_to_', handleCcAttachTo, 'ccHand');
 register('cc_play_select_', handleCcPlaySelect, 'ccHand');
 register('cc_discard_select_', handleCcDiscardSelect, 'ccHand');
+register('sc_setaside_confirm_', handleScSetAsideConfirm, 'ccHand');
+register('sc_setaside_skip_', handleScSetAsideSkip, 'ccHand');
+register('sc_setaside_', handleScSetAsideOpen, 'ccHand');
 
 /**
  * Return the handler for the given key (prefix), or null if none.

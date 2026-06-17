@@ -16,6 +16,7 @@ import {
   applySmugglingCompartmentReorder,
   setAsideFromHand,
   returnSetAsideToHand,
+  releaseSmugglingCompartmentSetAside,
   SMUGGLING_COMPARTMENT_NAME,
 } from '../../../src/game/smuggling-compartment.js';
 
@@ -88,5 +89,29 @@ describe('Smuggling Compartment — Part 1 set aside + return', () => {
     assert.deepEqual(hand, ['B']);
     const restored = returnSetAsideToHand(hand, setAside);
     assert.deepEqual(restored.slice().sort(), original.slice().sort());
+  });
+});
+
+describe('Smuggling Compartment — Part 1 release trigger', () => {
+  it('returns each player\'s set-aside pile to hand and clears the piles', () => {
+    const game = {
+      player1CcHand: ['Keep1'],
+      player2CcHand: ['Keep2'],
+      smugglingCompartmentSetAside: { 1: ['Hidden A', 'Hidden B'], 2: ['Hidden C'] },
+    };
+    const released = releaseSmugglingCompartmentSetAside(game);
+    assert.deepEqual(game.player1CcHand, ['Keep1', 'Hidden A', 'Hidden B']);
+    assert.deepEqual(game.player2CcHand, ['Keep2', 'Hidden C']);
+    assert.deepEqual(game.smugglingCompartmentSetAside, {});
+    assert.equal(released.length, 2);
+  });
+  it('is a no-op when nothing is set aside', () => {
+    const game = { player1CcHand: ['X'] };
+    assert.deepEqual(releaseSmugglingCompartmentSetAside(game), []);
+    assert.deepEqual(game.player1CcHand, ['X']);
+  });
+  it('skips empty piles', () => {
+    const game = { player1CcHand: [], smugglingCompartmentSetAside: { 1: [] } };
+    assert.deepEqual(releaseSmugglingCompartmentSetAside(game), []);
   });
 });

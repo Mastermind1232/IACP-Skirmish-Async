@@ -101,3 +101,27 @@ export function setAsideFromHand(hand, cardsToSetAside) {
 export function returnSetAsideToHand(hand, setAside) {
   return [...(Array.isArray(hand) ? hand : []), ...(Array.isArray(setAside) ? setAside : [])];
 }
+
+/**
+ * Part 1 return trigger: move every player's set-aside pile back into their
+ * hand and clear the piles. Mutates `game` (hand arrays + the pile map) and
+ * returns the list of releases so callers can log / refresh hand visuals.
+ * Idempotent: a no-op when there is nothing set aside.
+ * @param {object} game
+ * @returns {Array<{playerNum:number, cards:string[]}>}
+ */
+export function releaseSmugglingCompartmentSetAside(game) {
+  const released = [];
+  const piles = game?.smugglingCompartmentSetAside;
+  if (!piles) return released;
+  for (const pnStr of Object.keys(piles)) {
+    const cards = piles[pnStr];
+    if (!Array.isArray(cards) || cards.length === 0) continue;
+    const pn = Number(pnStr);
+    const handKey = pn === 1 ? 'player1CcHand' : 'player2CcHand';
+    game[handKey] = returnSetAsideToHand(game[handKey] || [], cards);
+    released.push({ playerNum: pn, cards: cards.slice() });
+  }
+  if (released.length) game.smugglingCompartmentSetAside = {};
+  return released;
+}
