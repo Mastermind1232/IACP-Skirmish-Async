@@ -246,11 +246,11 @@ export async function onCcPlayed(game, gameId, playerNum, card, cost, interactio
   const { logGameAction, saveGames } = ctx;
   // (1) on-CC-play triggers
   await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-  // (1b) [Smuggling Compartment] Part 1: before this CC resolves, its owner's
-  // opponent — if they field an un-exhausted [Smuggling Compartment] — may
-  // exhaust it to set aside Command cards from hand (returned at the start of
-  // their next activation or the next phase). alexanbv 2026-06-17.
-  await offerSmugglingCompartmentSetAside(game, gameId, opponentPlayerNum(playerNum), card, interaction.client);
+  // NOTE: the old blanket "offer [Smuggling Compartment] on every opponent CC
+  // play" was removed (alexanbv 2026-06-17). It never deferred the effect (so it
+  // was a non-functional prompt) and SC is now correctly scoped to specific
+  // triggers: the hand-affecting CCs (SC_HAND_CCS, offered AFTER the counter-
+  // window) and abilities (Interrogate, Headhunter).
   // (2) counter-window — Negation (cost 0)
   if (cost === 0 && ctx.getNegationResponseButtons) {
     setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel?.id });
@@ -275,132 +275,6 @@ export async function onCcPlayed(game, gameId, playerNum, card, cost, interactio
   await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, combatSnapshot);
 }
 
-/**
- * [Smuggling Compartment] Part 1 — offer the owner a reaction to set aside CCs
- * from hand before an opponent's Command card resolves. Posted privately to the
- * owner's hand channel; gated on an un-exhausted, alive copy and a non-empty
- * hand. The owner clicks → picks cards → they leave hand until the next
- * activation/phase. alexanbv 2026-06-17.
- * @param {object} game
- * @param {string} gameId
- * @param {number} ownerNum - the [Smuggling Compartment] owner (opponent of the player who played)
- * @param {string} card - the CC the opponent just played
- * @param {import('discord.js').Client} client
- */
-export async function offerSmugglingCompartmentSetAside(game, gameId, ownerNum, card, client) {
-  const scMid = findSmugglingCompartmentMsgId(getDcList(game, ownerNum), getDcMessageIds(game, ownerNum));
-  if (!scMid) return;
-  if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[scMid], 'Smuggling Compartment')) return; // already exhausted
-  const hand = game[ccHandKey(ownerNum)] || [];
-  if (hand.length === 0) return;
-  const handChId = getHandChannelId(game, ownerNum);
-  if (!handChId) return;
-  try {
-    const ch = await fetchGameChannel(client, handChId);
-    if (!ch) return;
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`sc_setaside_${gameId}_${ownerNum}`).setLabel('Set aside CCs (Smuggling Compartment)').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`sc_setaside_skip_${gameId}_${ownerNum}`).setLabel('No').setStyle(ButtonStyle.Secondary),
-    );
-    await ch.send(sanitizeMentions({
-      content: `Your opponent played **${card}**. **[Smuggling Compartment]** — you may exhaust it to set aside any number of Command cards from your hand (returned to hand at the start of your next activation or the next phase).`,
-      components: [row],
-      allowedMentions: { users: [getPlayerId(game, ownerNum)] },
-    })).catch(discordCatch);
-  } catch (err) {
-    console.error('Smuggling Compartment set-aside offer error:', err);
-  }
-}
-
-/** [Smuggling Compartment] Part 1 — owner declined the set-aside reaction. */
-export async function handleScSetAsideSkip(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_setaside_skip_');
-  const game = await requireGame(interaction, getGame, parts[0]);
-  if (!game) return;
-  await interaction.message.edit({ content: '**[Smuggling Compartment]** — set-aside declined.', components: [] }).catch(discordCatch);
-}
-
-/**
- * [Smuggling Compartment] Part 1 — owner opted to set aside: present a
- * multi-select of their hand. The card is exhausted on confirm, not on open, so
- * a cancel/empty pick costs nothing.
- */
-export async function handleScSetAsideOpen(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_setaside_');
-  const gameId = parts[0];
-  const ownerNum = parseInt(parts[1], 10);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
-    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const hand = game[ccHandKey(ownerNum)] || [];
-  if (hand.length === 0) {
-    await interaction.message.edit({ content: '**[Smuggling Compartment]** — no cards in hand to set aside.', components: [] }).catch(discordCatch);
-    return;
-  }
-  // De-duplicate option values (a hand can hold duplicates) so the select is valid.
-  const seen = new Set();
-  const opts = [];
-  for (const c of hand) {
-    if (seen.has(c)) continue;
-    seen.add(c);
-    opts.push(new StringSelectMenuOptionBuilder().setLabel(c.slice(0, 100)).setValue(c));
-    if (opts.length >= 25) break;
-  }
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`sc_setaside_confirm_${gameId}_${ownerNum}`)
-    .setPlaceholder('Choose Command cards to set aside')
-    .setMinValues(1)
-    .setMaxValues(opts.length)
-    .addOptions(opts);
-  await interaction.message.edit({
-    content: '**[Smuggling Compartment]** — choose Command cards to set aside (returned at the start of your next activation or the next phase):',
-    components: [new ActionRowBuilder().addComponents(select)],
-  }).catch(discordCatch);
-}
-
-/**
- * [Smuggling Compartment] Part 1 — owner confirmed which CCs to set aside.
- * Exhaust the card, move the chosen cards out of hand into the set-aside pile,
- * and refresh the hand. Returned by handleConfirmActivate / setRoundPhase.
- */
-export async function handleScSetAsideConfirm(interaction, ctx) {
-  const { getGame, saveGames, logGameAction } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_setaside_confirm_');
-  const gameId = parts[0];
-  const ownerNum = parseInt(parts[1], 10);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
-    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
-  const chosen = interaction.values || [];
-  const handKey = ccHandKey(ownerNum);
-  const { hand: newHand, setAside } = setAsideFromHand(game[handKey] || [], chosen);
-  if (setAside.length === 0) {
-    await interaction.message.edit({ content: '**[Smuggling Compartment]** — nothing set aside.', components: [] }).catch(discordCatch);
-    return;
-  }
-  // Exhaust the card now that the reaction is committed.
-  const scMid = findSmugglingCompartmentMsgId(getDcList(game, ownerNum), getDcMessageIds(game, ownerNum));
-  if (scMid) exhaustAttachment(game, scMid, 'Smuggling Compartment');
-  game[handKey] = newHand;
-  game.smugglingCompartmentSetAside = game.smugglingCompartmentSetAside || {};
-  game.smugglingCompartmentSetAside[ownerNum] = [...(game.smugglingCompartmentSetAside[ownerNum] || []), ...setAside];
-  await interaction.message.edit({
-    content: `**[Smuggling Compartment]** — set aside **${setAside.length}** Command card${setAside.length === 1 ? '' : 's'}. They return to your hand at the start of your next activation or the next phase.`,
-    components: [],
-  }).catch(discordCatch);
-  await logGameAction(game, interaction.client, `**[Smuggling Compartment]** — P${ownerNum} exhausted to set aside ${setAside.length} Command card${setAside.length === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' });
-  try { await refreshHandAndDiscard(game, ownerNum, interaction.client); } catch { /* best-effort */ }
-  saveGames(game.gameId);
-}
 
 // ── [Smuggling Compartment] before a hand-affecting CC's effect (post-counter-window) ──
 // Resume the deferred CC effect after the owner sets aside (or skips).
