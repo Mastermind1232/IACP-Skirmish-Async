@@ -4040,8 +4040,9 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: Draw N cards (optionally conditional on figure trait, e.g. Officer's Training).
-  // setsThereIsAnother carries its own dedicated handler (draw + round flag), so skip it here.
-  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && !entry.setsThereIsAnother) {
+  // setsThereIsAnother / forbiddenKnowledge carry their own dedicated handlers
+  // (draw + extra effects), so skip them here.
+  if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && !entry.setsThereIsAnother && !entry.forbiddenKnowledge) {
     const { game, playerNum, combat, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     if (entry.drawIfTrait) {
@@ -4062,6 +4063,91 @@ export function resolveAbility(abilityId, context) {
     }
     const drew = drawCcCards(game, playerNum, entry.draw);
     return { applied: true, drewCards: drew };
+  }
+
+  // ccEffect: forbiddenKnowledge (Forbidden Knowledge, Taron Malicos) — at the
+  // start of your activation, draw 1, then discard 1+ Command cards from hand.
+  // For EACH card discarded, the activating figure recovers 1 Damage, gains 1
+  // movement point, and discards 1 HARMFUL condition. Implemented as a
+  // re-entrant requiresChoice loop (handleCcChoice re-posts each step): the
+  // first call draws + opens the picker; each pick discards one card and applies
+  // the per-card effects, then re-prompts; "Done" (offered once ≥1 discarded)
+  // finalizes. alexanbv 2026-06-17.
+  if (entry.type === 'ccEffect' && entry.forbiddenKnowledge) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenOption } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play at the start of your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const handKey = ccHandKey(playerNum);
+    const discardKey = ccDiscardKey(playerNum);
+    const FK_DONE = '✓ Done discarding';
+    const uniqueHand = () => [...new Set(game[handKey] || [])].slice(0, 24);
+
+    // Phase 1 — first entry: draw, then open the discard picker.
+    if (chosenOption == null) {
+      const drew = drawCcCards(game, playerNum, entry.draw || 1);
+      game.pendingForbiddenKnowledge = { msgId, playerNum, discarded: 0 };
+      const hand = uniqueHand();
+      if (hand.length === 0) {
+        delete game.pendingForbiddenKnowledge;
+        return { applied: true, drewCards: drew.length ? drew : undefined, refreshHand: true, logMessage: `**Forbidden Knowledge** — drew ${drew.length} card; no Command cards to discard.` };
+      }
+      // "discard 1 or more": require at least one discard before Done is offered.
+      return { applied: false, requiresChoice: true, choiceOptions: hand };
+    }
+
+    // Phase 2 — a pick (card name or Done).
+    const st = game.pendingForbiddenKnowledge;
+    if (!st || st.msgId !== msgId) {
+      return { applied: true, logMessage: '**Forbidden Knowledge** — resolved.' };
+    }
+    if (chosenOption === FK_DONE) {
+      const n = st.discarded;
+      delete game.pendingForbiddenKnowledge;
+      return {
+        applied: true,
+        refreshHand: true,
+        refreshDcEmbed: true,
+        logMessage: `**Forbidden Knowledge** — discarded **${n}** Command card${n === 1 ? '' : 's'}; recovered ${n} Damage, gained ${n} MP, and discarded up to ${n} HARMFUL condition${n === 1 ? '' : 's'}.`,
+      };
+    }
+    // Discard the chosen card and apply the per-card effects on the activating figure.
+    const hand = game[handKey] || [];
+    const idx = hand.indexOf(chosenOption);
+    if (idx >= 0) {
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = [...(game[discardKey] || []), chosenOption];
+      st.discarded++;
+      // recover 1 Damage on the activating group's most-damaged figure
+      if (dcHealthState) {
+        const hs = dcHealthState.get(msgId) || [];
+        for (let i = 0; i < hs.length; i++) {
+          const e = hs[i];
+          if (!Array.isArray(e)) continue;
+          const [cur, max] = e;
+          const mx = max ?? cur;
+          if (mx == null || cur == null || mx - cur <= 0) continue;
+          hs[i] = [cur + 1, mx];
+          dcHealthState.set(msgId, hs);
+          syncHealthStateToList(game, playerNum, msgId, hs);
+          break;
+        }
+      }
+      // +1 movement point (bankable; the figure is activating)
+      addMovementPoints(game, msgId, 1);
+      // discard 1 HARMFUL condition
+      game.figureConditions = game.figureConditions || {};
+      for (const fk of figureKeys) {
+        const existing = game.figureConditions[fk] || [];
+        const harmful = existing.find((c) => HARMFUL_CONDITIONS.includes(c));
+        if (harmful) { filterCondition(game, fk, harmful); break; }
+      }
+    }
+    const remaining = uniqueHand();
+    return { applied: false, requiresChoice: true, choiceOptions: [...remaining, FK_DONE] };
   }
 
   // ccEffect: +N MP from Speed (Urgency: Speed+2) — requires active activation

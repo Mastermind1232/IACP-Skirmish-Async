@@ -1964,8 +1964,9 @@
     },
     "Forbidden Knowledge": {
       "type": "ccEffect",
-      "label": "Draw 1 Command card",
+      "label": "Draw 1 Command card, then discard 1+ CCs; recover 1 Damage, +1 MP, and discard 1 HARMFUL condition per card discarded",
       "draw": 1,
+      "forbiddenKnowledge": true,
       "wiredStatus": "wired"
     },
     "Force Drain": {
