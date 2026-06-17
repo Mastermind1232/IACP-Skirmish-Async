@@ -8,14 +8,19 @@
 // Match by DC/card BASE name (variant suffixes like " (Elite)" stripped).
 export const CARDS_PENDING_CHANGE = new Set([
   'Rebel Trooper',        // Aim (Elite) reworked
-  'Mortar Trooper',       // [Mortar Trooper] / Guidance Systems
+  '[Mortar Trooper]',     // Guidance Systems
   '74-Z Speeder Bike',    // Forward Mounted Blasters etc.
   'Leia Organa',
   'CT-1701',              // Barrage / Cover Fire
   'Yoda',                 // Force Deflection
   'Bantha Rider',         // Wild Beast
-  'K-2SO',                // KX security droid
   'Get Behind Me!',       // CC reworked
+  'Stimulants',           // changing
+  'Wookiee Rage',         // changing
+  'The Armorer',          // changing
+  'Bo-Katan Kryze',       // changing
+  // NOTE: K-2SO STAYS (alexanbv 2026-06-16). The new "KX security droid" is a
+  // separate card not yet in the DB — nothing to mark for it.
 ]);
 
 /** Strip variant/group suffixes and test membership. */
