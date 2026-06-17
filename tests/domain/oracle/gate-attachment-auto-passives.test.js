@@ -42,4 +42,26 @@ describe('Automatic attachment mods passives (gate-fired, not eager)', () => {
     await _fireModsPassive('defender', 'combat_suit_reduce_pierce', thread, game, c, {});
     assert.equal(c.defenderReducePierce, 1);
   });
+
+  it('Heir to the Jedi: +1 Hit only on a Ranged attack', async () => {
+    const ab = getCombatAbility('heir_to_the_jedi_hit');
+    const game = { p1DcAttachments: { m1: ['Heir to the Jedi'] } };
+    assert.equal(ab.applies(game, { attackerMsgId: 'm1', isRanged: true }), true);
+    assert.equal(ab.applies(game, { attackerMsgId: 'm1', isRanged: false }), false, 'melee → no');
+    const c = { bonusHits: 0 };
+    await _fireModsPassive('attacker', 'heir_to_the_jedi_hit', thread, game, c, {});
+    assert.equal(c.bonusHits, 1);
+  });
+
+  it('Prey on the Weak: +1 Pierce +1 Acc only when attacker costs more than target', async () => {
+    const ab = getCombatAbility('prey_on_the_weak');
+    const game = { p1DcAttachments: { m2: ['Prey on the Weak'] } };
+    const deps = { getDcEffects: () => ({ Bossk: { cost: 10 } }) };
+    assert.equal(ab.applies(game, { attackerMsgId: 'm2', attackerDcName: 'Bossk', targetStats: { cost: 5 } }, 'attacker', deps), true);
+    assert.equal(ab.applies(game, { attackerMsgId: 'm2', attackerDcName: 'Bossk', targetStats: { cost: 15 } }, 'attacker', deps), false, 'pricier target → no');
+    const c = { bonusPierce: 0, bonusAccuracy: 0 };
+    await _fireModsPassive('attacker', 'prey_on_the_weak', thread, game, c, {});
+    assert.equal(c.bonusPierce, 1);
+    assert.equal(c.bonusAccuracy, 1);
+  });
 });

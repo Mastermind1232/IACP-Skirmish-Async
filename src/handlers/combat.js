@@ -1935,6 +1935,17 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     await thread?.send('**Combat Suit** — reduce the attack\'s Pierce by 1.').catch(discordCatch);
     return;
   }
+  if (id === 'heir_to_the_jedi_hit') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread?.send('**Heir to the Jedi** — +1 Hit (Ranged attack).').catch(discordCatch);
+    return;
+  }
+  if (id === 'prey_on_the_weak') {
+    combat.bonusPierce = (combat.bonusPierce || 0) + 1;
+    combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 1;
+    await thread?.send('**Prey on the Weak** — +1 Pierce, +1 Accuracy (target costs less).').catch(discordCatch);
+    return;
+  }
   if (id === 'pulse_cannon') {
     combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
     combat.bonusHits = (combat.bonusHits || 0) + 1;
@@ -3477,11 +3488,9 @@ export async function handleAttackTarget(interaction, ctx) {
     // Driven by Hatred (+1 Hit) and Wookiee Avenger (+1 Hit) are now gate mods
     // passives (combat-abilities-attachment-auto.js → _fireModsPassive), fired in
     // the modifiers window instead of eagerly here. alexanbv 2026-06-17.
-    // Heir to the Jedi (Luke): +1 Hit on Ranged; Saber Strike Focus handled at
-    // declaration. The reroll is offered by the gate ([Heir to the Jedi] row).
-    if (cardNameIncludes(_atkUpgrades, 'Heir to the Jedi')) {
-      if (isRanged) _pc.bonusHits = (_pc.bonusHits || 0) + 1;
-    }
+    // Heir to the Jedi (Luke): +1 Hit on Ranged is now a gate mods passive
+    // (heir_to_the_jedi_hit). Saber Strike pre-attack Focus is still handled
+    // below (a declaration-time die effect, not a modifier). alexanbv 2026-06-17.
     // Rogue Smuggler (Han Solo) — reroll MOVED to the gate rerolls window
     // (CSV [Rogue Smuggler] row). Distracting-loss is handled separately below.
     // Cross Training: defend-only ability (no attack effect)
@@ -3489,15 +3498,8 @@ export async function handleAttackTarget(interaction, ctx) {
     if (cardNameIncludes(_atkUpgrades, 'Mortar Trooper')) {
       _pc.guidanceSystemsAvailable = true;
     }
-    // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure
-    if (cardNameIncludes(_atkUpgrades, 'Prey on the Weak')) {
-      const _potwAtkCost = getDcStats(meta.dcName)?.cost ?? 0;
-      const _potwDefCost = _pc.targetStats?.cost ?? 99;
-      if (_potwAtkCost > _potwDefCost) {
-        _pc.bonusPierce = (_pc.bonusPierce || 0) + 1;
-        _pc.bonusAccuracy = (_pc.bonusAccuracy || 0) + 1;
-      }
-    }
+    // Prey on the Weak (HUNTER): Pierce 1 + Accuracy 1 vs lower-cost figure is
+    // now a gate mods passive (prey_on_the_weak, cost comparison in its applies).
     // Explosive Armaments (HUNTER/DROID): Surge: +1 Damage, Blast 1
     if (cardNameIncludes(_atkUpgrades, 'Explosive Armaments')) {
       _pc.bonusSurgeAbilities.push('damage 1, blast 1');

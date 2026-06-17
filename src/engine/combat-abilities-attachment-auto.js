@@ -24,11 +24,27 @@ function defenderAttachments(game, combat) {
   return m ? (game?.p1DcAttachments?.[m] || game?.p2DcAttachments?.[m] || []) : [];
 }
 
-// id ↔ effect handled in _fireModsPassive. card = the attachment name to detect.
+/** A DC's point cost (variant-name tolerant), or undefined. */
+function dcCost(deps, name) {
+  const e = deps?.getDcEffects?.() || {};
+  return e[name]?.cost ?? e[String(name || '').replace(/\s*\(.*\)\s*$/, '').trim()]?.cost;
+}
+
+// id ↔ effect handled in _fireModsPassive. card = the attachment to detect; cond
+// = an extra predicate (Ranged-only, cost comparison) ANDed with attachment presence.
 const AUTO_ATTACHMENT_PASSIVES = [
   { id: 'driven_by_hatred_hit', name: 'Driven by Hatred', side: 'attacker', card: 'Driven by Hatred' },
   { id: 'wookiee_avenger_hit', name: 'Wookiee Avenger', side: 'attacker', card: 'Wookiee Avenger' },
   { id: 'combat_suit_reduce_pierce', name: 'Combat Suit', side: 'defender', card: 'Combat Suit' },
+  // Heir to the Jedi: +1 Hit only on a Ranged attack.
+  { id: 'heir_to_the_jedi_hit', name: 'Heir to the Jedi', side: 'attacker', card: 'Heir to the Jedi', cond: (g, c) => !!c.isRanged },
+  // Prey on the Weak: +1 Pierce +1 Accuracy when the attacker costs MORE than the target.
+  { id: 'prey_on_the_weak', name: 'Prey on the Weak', side: 'attacker', card: 'Prey on the Weak',
+    cond: (g, c, deps) => {
+      const atk = dcCost(deps, c.attackerDcName);
+      const def = c.targetStats?.cost ?? dcCost(deps, c.defenderDcName);
+      return atk != null && def != null && atk > def;
+    } },
 ];
 
 let _registered = false;
@@ -38,10 +54,14 @@ export function registerAutoAttachmentPassives() {
   for (const a of AUTO_ATTACHMENT_PASSIVES) {
     registerCombatAbility({
       id: a.id, name: a.name, windows: ['mods'], side: a.side, kind: 'passive',
-      applies: (game, combat) => cardNameIncludes(
-        a.side === 'attacker' ? attackerAttachments(game, combat) : defenderAttachments(game, combat),
-        a.card,
-      ),
+      applies: (game, combat, _side, deps) => {
+        const present = cardNameIncludes(
+          a.side === 'attacker' ? attackerAttachments(game, combat) : defenderAttachments(game, combat),
+          a.card,
+        );
+        if (!present) return false;
+        return a.cond ? a.cond(game, combat, deps) : true;
+      },
     });
   }
 }
