@@ -15,6 +15,7 @@ import { opponentPlayerNum } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
+import { stripBrackets } from '../game/card-names.js';
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -102,7 +103,10 @@ export function registerRerollAbilities() {
         : deviceTokenGated
           ? makeCondition({ type: 'attacker_has_device_token' })
           : (isDC ? conditionForRow(r) : null);
-      const cardLc = card.toLowerCase();
+      // Attachment rows carry a BRACKETED card name (e.g. "[The Darksaber]") while
+      // game.pXDcAttachments stores the bare name — normalize both with
+      // stripBrackets so attachment rerolls are actually offered. alexanbv 2026-06-17.
+      const cardLc = stripBrackets(card).toLowerCase();
       registerCombatAbility({
         // Label with the ABILITY name (Targeting Computer / Foresight), not the
         // figure/card name (alexanbv 2026-06-16 re-audit) — for DC reroll abilities
@@ -117,7 +121,7 @@ export function registerRerollAbilities() {
             // The ability's figure (or owner-aura) must include the attacker —
             // NOT merely "the player holds the card."
             if (!rowCond(game, combat)) return false;
-          } else if (!getPlayerCardNames(game, pn).some((n) => String(n).toLowerCase() === cardLc)) {
+          } else if (!getPlayerCardNames(game, pn).some((n) => stripBrackets(String(n)).toLowerCase() === cardLc)) {
             return false;
           }
           // Don't offer a reroll already used in its scope (default once per
