@@ -42,3 +42,35 @@ export function availableCounters(targetCost, cancellerSpyCount = 0) {
   if (canCancelCc(COMM_DISRUPTION, targetCost, cancellerSpyCount)) out.push(COMM_DISRUPTION);
   return out;
 }
+
+/**
+ * Resolve a counter-window play stack and return each entry's final status
+ * ('resolved' | 'cancelled').
+ *
+ * The stack is bottom-to-top in play order: index 0 is the original card, and
+ * each later entry is a counter targeting the entry immediately below it. It
+ * unwinds LIFO — the last counter played is itself uncountered, so it resolves
+ * and cancels its target; a cancelled counter does NOT cancel its own target, so
+ * the target below it survives and resolves. Thus statuses alternate, gated by
+ * the cancel rules (a resolved counter only cancels its target if `canCancelCc`
+ * allows it). The classic case: Element of Surprise (0) ← Negation ← Comm
+ * Disruption ⇒ Comms resolves, Negation is cancelled, Element of Surprise
+ * resolves. alexanbv 2026-06-17.
+ *
+ * @param {Array<{card:string, cost:number, spyCount?:number}>} stack
+ *   - card: the played card name; cost: its cost; spyCount: the player's friendly
+ *     SPY-group count when they played it (used when the card is a Comm Disruption).
+ * @returns {Array<'resolved'|'cancelled'>} parallel to `stack`
+ */
+export function resolveCounterStack(stack) {
+  const n = Array.isArray(stack) ? stack.length : 0;
+  const status = new Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    if (i === n - 1) { status[i] = 'resolved'; continue; } // top is uncountered
+    const above = stack[i + 1];
+    const cancelledByAbove = status[i + 1] === 'resolved'
+      && canCancelCc(above.card, stack[i].cost, above.spyCount || 0);
+    status[i] = cancelledByAbove ? 'cancelled' : 'resolved';
+  }
+  return status;
+}
