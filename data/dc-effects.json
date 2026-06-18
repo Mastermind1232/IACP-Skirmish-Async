@@ -1281,7 +1281,7 @@
         "white"
       ],
       "surgeAbilities": [
-        "+3 damage",
+        "damage 3",
         "accuracy 2",
         "pierce 1, hide"
       ],
@@ -1363,7 +1363,7 @@
       "surgeAbilities": [
         "accuracy 2",
         "damage 1",
-        "damage token"
+        "hit token"
       ],
       "attachment": false,
       "elite": true,
@@ -1732,7 +1732,7 @@
       "surgeAbilities": [
         "damage 2",
         "accuracy 2",
-        "damage token 2"
+        "hit token 2"
       ],
       "attachment": false,
       "elite": true,
@@ -2133,8 +2133,7 @@
       ],
       "surgeAbilities": [
         "damage 2",
-        "accuracy 2",
-        "gifted_mechanic"
+        "accuracy 2"
       ],
       "attachment": false,
       "elite": true,
