@@ -230,7 +230,7 @@ import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-d
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { onCcPlayed, runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
+import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
 import { registerCombatGateResume } from '../game/cc-counter-window.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';

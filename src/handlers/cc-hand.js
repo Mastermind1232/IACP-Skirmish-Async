@@ -387,47 +387,10 @@ export async function runCcPlayTriggers(game, playerNum, deps) {
   }
 }
 
-/**
- * The single "a CC was played" subroutine (alexanbv 2026-06-14): run on EVERY
- * CC play, in order — (1) fire on-CC-play triggers, then (2) open the opponent's
- * counter-window: Negation when the card cost 0, and Comm Disruption when the
- * card's cost ≤ the opponent's friendly SPY groups. The CC's own effect is
- * resolved by the caller (immediately for cost>0; deferred until the Negation
- * window closes for cost-0).
- * @param {object} deps { handChannel, logMsg }
- */
-export async function onCcPlayed(game, gameId, playerNum, card, cost, interaction, ctx, { handChannel, logMsg, combatSnapshot = null } = {}) {
-  const { logGameAction, saveGames } = ctx;
-  // (1) on-CC-play triggers
-  await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-  // NOTE: the old blanket "offer [Smuggling Compartment] on every opponent CC
-  // play" was removed (alexanbv 2026-06-17). It never deferred the effect (so it
-  // was a non-functional prompt) and SC is now correctly scoped to specific
-  // triggers: the hand-affecting CCs (SC_HAND_CCS, offered AFTER the counter-
-  // window) and abilities (Interrogate, Headhunter).
-  // (2) counter-window — Negation (cost 0)
-  if (cost === 0 && ctx.getNegationResponseButtons) {
-    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: handChannel?.id });
-    const oppNum = opponentPlayerNum(playerNum);
-    const oppHandChannel = await fetchGameChannel(interaction.client, getHandChannelId(game, oppNum));
-    if (oppHandChannel) {
-      await oppHandChannel.send(sanitizeMentions({
-        content: `Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
-        components: [ctx.getNegationResponseButtons(gameId)],
-        allowedMentions: { users: [getPlayerId(game, oppNum)] },
-      })).catch(discordCatch);
-    }
-    await logGameAction(game, interaction.client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
-    const waitingMsg = handChannel ? await withDiscordRetry(() => handChannel.send({
-      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
-    })).catch(() => null) : null;
-    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
-  }
-  // (2) counter-window — Comm Disruption (cost ≤ opponent's friendly SPY groups;
-  // gated inside). combatSnapshot lets a CD-cancel revert combat-modifying CCs
-  // (Wild Attack's dice, etc.) played from the combat gate (alexanbv 2026-06-16).
-  await promptCommDisruption(game, gameId, playerNum, card, interaction.client, logGameAction, saveGames, combatSnapshot);
-}
+// onCcPlayed (the old "a CC was played" subroutine with the inline Negation /
+// Comm-Disruption counter-window) was deleted 2026-06-17. Every CC play now
+// routes through the unified recursive counter-window (openCcCounterWindow →
+// _resolveCcCounterWindow). On-play triggers live in runCcPlayTriggers (above).
 
 
 // ── [Smuggling Compartment] before a hand-affecting CC's effect (post-counter-window) ──
