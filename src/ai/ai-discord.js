@@ -14,6 +14,7 @@ import { getHandler, getHandlerGroup } from '../handlers/index.js';
 import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { counterResponder } from '../game/cc-counter-window.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { setPendingCcConfirmation } from '../game/interrupts.js';
 
@@ -316,10 +317,32 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         continue;
       }
 
-      // (Old pendingNegation auto-let-resolve removed 2026-06-17 — CC plays now
-      // open the unified Negate/Comms counter-window via openCcCounterWindow. The
-      // human opponent responds through that window's buttons; auto-passing on the
-      // AI's behalf when the AI is the responder is a tracked follow-up.)
+      // Counter-window auto-pass: when the unified Negate/Comms window is open and
+      // the AI is the responder, the AI lets it resolve via cc_counter_pass_ (the
+      // same handler a human clicks) so the game continues. When the HUMAN is the
+      // responder (the AI played the CC), do nothing — they respond through the live
+      // window. alexanbv 2026-06-18 (mirrors the live game).
+      {
+        let _ccwGuard = 0;
+        while (currentGame.ccCounterWindow && counterResponder(currentGame) === aiPlayerNum && _ccwGuard++ < 8) {
+          const passCustomId = `cc_counter_pass_${currentGame.gameId}`;
+          const passKey = getHandlerKey(passCustomId, 'button');
+          const passHandler = passKey ? getHandler(passKey) : null;
+          if (!passHandler) break;
+          try {
+            const passUserId = aiPlayerNum === 1 ? currentGame.player1Id : currentGame.player2Id;
+            const passInteraction = createLiveAiInteraction(passCustomId, passUserId, currentGame, client);
+            passInteraction.client = client;
+            if (currentGame.generalId) { try { passInteraction.channel = await fetchGameChannel(client, currentGame.generalId); passInteraction.message.channel = passInteraction.channel; } catch {} }
+            const passGroup = getHandlerGroup(passKey);
+            if (passGroup) await passHandler(passInteraction, buildContext(passGroup, buildAllDeps()));
+            else await passHandler(passInteraction);
+          } catch (err) {
+            console.warn(`[AI] counter-window auto-pass error: ${err.message}`);
+            break;
+          }
+        }
+      }
 
       actionLog.push(chosen.customId);
       console.log(`[AI] Step ${step}: ${chosen.type} → ${chosen.customId}`);

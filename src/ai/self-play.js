@@ -14,6 +14,7 @@ import { getHandlerKey } from '../router.js';
 import { getHandler, getHandlerGroup } from '../handlers/index.js';
 import { buildContext } from '../context-factory.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { counterResponder } from '../game/cc-counter-window.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
 import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerified } from '../db.js';
@@ -1337,12 +1338,36 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
-      // (Old pendingNegation auto-let-resolve removed 2026-06-17 — CC plays now
-      // open the unified Negate/Comms counter-window via openCcCounterWindow, not
-      // pendingNegation. In AI self-play the responder currently lacks counters in
-      // the tested scenarios so the window resolves synchronously; auto-passing the
-      // window (dispatch cc_counter_pass_) when an AI responder DOES hold a counter
-      // is a tracked follow-up.)
+      // Counter-window auto-pass: if the just-dispatched action opened the unified
+      // Negate/Comms counter-window (openCcCounterWindow), the AI responder lets it
+      // resolve by dispatching cc_counter_pass_ — the SAME handler a human clicks —
+      // so the played CC's effect actually resolves (rather than the window sitting
+      // open and the effect being dropped). Guarded loop in case a counter stack
+      // needs several passes. alexanbv 2026-06-18 (mirrors the live game; replaces
+      // the old pendingNegation auto-let-resolve).
+      {
+        let _ccwGuard = 0;
+        while (g.ccCounterWindow && _ccwGuard++ < 8) {
+          const passResponder = counterResponder(g);
+          if (!passResponder) break;
+          const passCustomId = `cc_counter_pass_${g.gameId}`;
+          const passKey = getHandlerKey(passCustomId, 'button');
+          const passHandler = passKey ? getHandler(passKey) : null;
+          if (!passHandler) break;
+          try {
+            const passUserId = passResponder === 1 ? g.player1Id : g.player2Id;
+            const passInteraction = createLiveAiInteraction(passCustomId, passUserId, g, client);
+            passInteraction.client = client;
+            if (g.generalId) { try { passInteraction.channel = await fetchGameChannel(client, g.generalId); passInteraction.message.channel = passInteraction.channel; } catch {} }
+            const passGroup = getHandlerGroup(passKey);
+            if (passGroup) await passHandler(passInteraction, buildContext(passGroup, buildAllDeps()));
+            else await passHandler(passInteraction);
+          } catch (err) {
+            console.warn(`[self-play] counter-window auto-pass error: ${err.message}`);
+            break;
+          }
+        }
+      }
 
       // Detect figure defeats via pre/post diff
       const gPostDispatch = getGame(game.gameId);
