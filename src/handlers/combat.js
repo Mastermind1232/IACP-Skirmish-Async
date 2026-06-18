@@ -1047,7 +1047,13 @@ function _makeResourcefulResolver(side) {
   };
 }
 
-function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, stageKey = 'rr' }) {
+function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, dieColor = null, strainCost = 0, stageKey = 'rr' }) {
+  // Die-color restriction (Overpower: only RED/BLACK dice selectable). Composed
+  // with any passed-in eligibility filter. A SELECTION filter, not a color swap.
+  if (dieColor) {
+    const base = eligible;
+    eligible = (d, i) => (!base || base(d, i)) && String(d?.color || '').toLowerCase() === dieColor;
+  }
   // pool 'any' — "choose 1 die; the player that rolled it must reroll it"
   // (Precision, Raider). The owner may pick EITHER pool's die (typically to
   // force the opponent to reroll a good die), so offer attack + defense dice as
@@ -1096,7 +1102,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, st
       const dice = combat[diceField] || [];
       return { content: `**${name}** — choose a ${pool} die to reroll:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dieLabel(dice[i])})`]), ['skip', 'Skip', 'secondary']] };
     },
-    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
+    apply: async (choice, { game, combat, thread, ctx, gameId, id }) => {
       const sk = `_${stageKey}`;
       if (choice === 'skip') { delete combat[`${sk}Stage`]; delete combat[`${sk}Die`]; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
       // colorSwap (incl. Lando's Gambit): stage 1 picks the die, stage 2 the color.
@@ -1112,8 +1118,15 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, st
       const idx = _cs ? combat[`${sk}Die`] : parseInt(choice, 10);
       const newColor = _cs && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
       const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
-      if (res.ok) thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
-      else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      if (res.ok) {
+        thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
+        // Strain cost on use (Rancor's Trained: "suffer 1 Strain to reroll"). The
+        // attacker pays it AFTER a successful reroll. alexanbv 2026-06-18.
+        if (strainCost && game) {
+          await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: strainCost, source: name });
+          thread?.send(`**${name}** — suffered ${strainCost} Strain.`).catch(discordCatch);
+        }
+      } else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
       delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
       return undefined;
     },
@@ -1823,7 +1836,7 @@ function _resolverFor(pick) {
     return _makeTokenResolver({ side: reg.params.side });
   }
   if (reg?.params?.kind === 'reroll') {
-    return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, side: reg.side, colorSwap: !!reg.params.colorSwap, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
+    return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, side: reg.side, colorSwap: !!reg.params.colorSwap, dieColor: reg.params.dieColor || null, strainCost: reg.params.strainCost || 0, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
   }
   if (reg?.params?.kind === 'exhaust_bonus') {
     return _makeExhaustBonusResolver({ card: reg.params.card, effect: reg.params.effect, label: reg.params.label });

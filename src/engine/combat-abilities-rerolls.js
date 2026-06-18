@@ -72,6 +72,24 @@ export function registerRerollAbilities() {
           : /choose\s+(?:1|one)\s+defense die/i.test(r.effect || '') ? 'defense'
             : 'any';
       } else pool = (side === 'attacker' ? 'attack' : 'defense');
+      // Survival is Strength (The Armorer): a DEFENDER-side ability that rerolls an
+      // ATTACK die (it lets the defending figure reroll an attacker's die after it
+      // spent a Block). The default pool=(defender→defense) is WRONG — it must
+      // target the attack pool. Detect "reroll … attack die" on a defender row and
+      // override the pool to attack. alexanbv 2026-06-18 (gate-rework audit).
+      if (side === 'defender' && !playerThatRolled && !forcesDefenderReroll && /reroll\s+(?:up to\s+)?\d*\s*attack die/i.test(r.effect || '')) {
+        pool = 'attack';
+      }
+      // Die-COLOR restriction on the reroll selection (Overpower: "reroll 1 red
+      // die" / "reroll 1 black die"). Only dice of that color are selectable — a
+      // selection filter, NOT a color swap. Threaded to the resolver as
+      // params.dieColor (the gate's _makeRerollResolver builds an `eligible`).
+      const colorM = (r.effect || '').match(/reroll\s+(?:up to\s+)?\d*\s*(red|blue|green|yellow|white|black)\s+die/i);
+      const dieColor = colorM ? colorM[1].toLowerCase() : null;
+      // STRAIN cost on use (Rancor's Trained: "suffer 1 Strain to reroll"). The
+      // pipelines column lists "strain;reroll"; the effect names the amount.
+      const strainM = (r.effect || '').match(/suffer\s+(\d+)\s+strain/i);
+      const strainCost = (/strain/i.test(r.pipelines || '') && strainM) ? (parseInt(strainM[1], 10) || 1) : 0;
       // Default limit is ONCE PER ATTACK (alexanbv 2026-06-17: "everything is by
       // default limit once/attack unless otherwise specified" — there is no
       // unlimited reroll). Only an explicit WIDER scope overrides it: "once per
@@ -83,6 +101,8 @@ export function registerRerollAbilities() {
       // _markGateAbilityUsed marks the owner used-list after the reroll resolves.
       const effLimit = (r.limit && String(r.limit).toLowerCase() !== 'none') ? r.limit : 'once per attack';
       const params = { kind: 'reroll', pool, count: deriveCount(r.effect), colorSwap: /color/i.test(r.effect || ''), card: r.card, ability: r.ability, limit: effLimit };
+      if (dieColor) params.dieColor = dieColor;
+      if (strainCost) params.strainCost = strainCost;
       const limGuard = limitGuard(effLimit, abilityLimitKey(r.card, r.ability));
       // EXHAUST abilities (alexanbv 2026-06-17: "everything that is an exhaust
       // ability should have limit: ready — only exhaust if used, and once
@@ -148,7 +168,10 @@ export function registerRerollAbilities() {
             return selectableDieIndices(combat, { pool: 'attack' }).length
               + selectableDieIndices(combat, { pool: 'defense' }).length > 0;
           }
-          return selectableDieIndices(combat, { pool }).length > 0;
+          // Die-color-restricted rerolls (Overpower) are only offered when a die of
+          // the required color is selectable — not just any die in the pool.
+          const eligible = params.dieColor ? (d) => String(d?.color || '').toLowerCase() === params.dieColor : undefined;
+          return selectableDieIndices(combat, { pool, eligible }).length > 0;
         },
       });
     }

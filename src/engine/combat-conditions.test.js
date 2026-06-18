@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeCondition, attackerDcName, conditionForRow, limitGuard, abilityLimitKey, markAbilityUsed } from './combat-conditions.js';
+import { makeCondition, attackerDcName, conditionForRow, conditionalGuard, limitGuard, abilityLimitKey, markAbilityUsed } from './combat-conditions.js';
 
 describe('once/round usage marking (owner-keyed, pipeline-driven)', () => {
   it('markAbilityUsed suppresses a once/round ability until the SOR reset clears it', () => {
@@ -77,5 +77,55 @@ describe('combat-conditions: the condition-predicate layer', () => {
 
   it('attackerDcName falls back to the figure key', () => {
     assert.equal(attackerDcName({ attackerFigureKey: 'Cara Dune-1-0' }), 'cara dune');
+  });
+});
+
+describe('combat-conditions: gate-rework reroll-condition primitives (2026-06-18)', () => {
+  // chopper-base-atollon: l3↔l4 adjacent, n3 far from l3.
+  const MAP = { id: 'chopper-base-atollon' };
+
+  it('affected_adjacent_to_friendly: another friendly figure within 1 (Cower)', () => {
+    const c = makeCondition({ type: 'affected_adjacent_to_friendly', side: 'defender' });
+    const game = (allyCell) => ({ selectedMap: MAP, figurePositions: { 2: { 'C-3P0-2-0': 'l3', 'Ally-2-0': allyCell } } });
+    const combat = { defenderPlayerNum: 2, target: { figureKey: 'C-3P0-2-0' }, defenderDcName: 'C-3P0' };
+    assert.ok(c(game('l4'), combat), 'adjacent ally → true');
+    assert.ok(!c(game('n3'), combat), 'no adjacent ally → false');
+  });
+
+  it('affected_adjacent_to_friendly excludes the figure itself (needs ANOTHER figure)', () => {
+    const c = makeCondition({ type: 'affected_adjacent_to_friendly', side: 'defender' });
+    const game = { selectedMap: MAP, figurePositions: { 2: { 'C-3P0-2-0': 'l3' } } };
+    assert.ok(!c(game, { defenderPlayerNum: 2, target: { figureKey: 'C-3P0-2-0' }, defenderDcName: 'C-3P0' }), 'alone → false');
+  });
+
+  it('affected_adjacent_to_friendly with keyword filter (Squad Training: TROOPER)', () => {
+    const c = makeCondition({ type: 'affected_adjacent_to_friendly', keyword: 'TROOPER', side: 'attacker' });
+    const game = (allyDc) => ({ selectedMap: MAP, figurePositions: { 1: { 'Stormtrooper (Elite)-1-0': 'l3', [`${allyDc}-1-1`]: 'l4' } } });
+    const combat = { attackerPlayerNum: 1, attackerDcName: 'Stormtrooper (Elite)', attackerFigureKey: 'Stormtrooper (Elite)-1-0' };
+    assert.ok(c(game('Stormtrooper (Elite)'), combat), 'adjacent friendly TROOPER → true');
+    assert.ok(!c(game('Greedo'), combat), 'adjacent friendly non-TROOPER → false');
+  });
+
+  it('attacker_target_adjacent: attacker and target within 1 (Precision)', () => {
+    const c = makeCondition({ type: 'attacker_target_adjacent' });
+    // Real DC names so the footprint-size lookup is deterministic (Greedo/Stormtrooper are 1×1).
+    const game = (tgtCell) => ({ selectedMap: MAP, figurePositions: { 1: { 'Greedo-1-0': 'l3' }, 2: { 'Stormtrooper-2-0': tgtCell } } });
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Greedo-1-0', target: { figureKey: 'Stormtrooper-2-0' } };
+    assert.ok(c(game('l4'), combat), 'adjacent target → true');
+    assert.ok(!c(game('n3'), combat), 'distant target → false');
+  });
+
+  it('defender_spent_block reads combat.defenderSpentBlock (Survival is Strength)', () => {
+    const c = makeCondition({ type: 'defender_spent_block' });
+    assert.ok(c({}, { defenderSpentBlock: true }));
+    assert.ok(!c({}, { defenderSpentBlock: false }));
+  });
+
+  it('conditionalGuard maps the recognised reroll-condition prose to primitives', () => {
+    // "spent a Block symbol" → defender_spent_block
+    assert.ok(conditionalGuard('friendly figure within 3 spaces spent a Block symbol during this attack')({}, { defenderSpentBlock: true }));
+    assert.ok(!conditionalGuard('it spent a Block symbol during this attack')({}, {}));
+    // "against an adjacent figure" → attacker_target_adjacent (no map → false)
+    assert.ok(!conditionalGuard('attacking or defending against an adjacent figure')({}, { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'A-1-0', target: { figureKey: 'B-2-0' } }));
   });
 });

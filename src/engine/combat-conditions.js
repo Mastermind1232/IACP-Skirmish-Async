@@ -153,6 +153,86 @@ export function makeCondition(spec) {
         return !kws.includes('LARGE') && !kws.includes('MASSIVE');
       };
     }
+    // The AFFECTED figure (attacker or defender per side) is ADJACENT to ANOTHER
+    // friendly figure (a teammate other than itself) — "while adjacent to a
+    // friendly figure" (Cower). Optionally the friendly must carry a KEYWORD
+    // ("another friendly TROOPER", Squad Training) and/or an AFFILIATION (Bespin
+    // Security's "SCUM TROOPER"). Adjacency = within 1 of any cell, footprint-aware.
+    case 'affected_adjacent_to_friendly': {
+      const side = spec.side || 'attacker';
+      const kw = spec.keyword ? String(spec.keyword).toUpperCase() : null;
+      const affil = spec.affiliation ? norm(spec.affiliation) : null;
+      return (game, combat) => {
+        const aff = affectedFigure(game, combat, side);
+        const mapId = game?.selectedMap?.id;
+        if (!aff.figureKey || aff.pn == null || !mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const affCells = figureCells(game, aff.pn, aff.figureKey);
+        if (!affCells.length) return false;
+        const team = game.figurePositions?.[aff.pn] || {};
+        const all = getDcEffects() || {};
+        for (const fk of Object.keys(team)) {
+          if (fk === aff.figureKey) continue; // "another" — exclude self
+          if (kw || affil) {
+            const dc = dcNameFromFigureKey(fk);
+            const e = all[dc] || all[norm(dc)];
+            if (kw && !((e?.keywords || []).map((k) => String(k).toUpperCase()).includes(kw))) continue;
+            if (affil && norm(e?.affiliation) !== affil) continue;
+          }
+          for (const oc of figureCells(game, aff.pn, fk)) {
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1)) return true;
+          }
+        }
+        return false;
+      };
+    }
+    // The ATTACKER and the TARGET (defender) are ADJACENT — "attacking or
+    // defending against an adjacent figure" (Precision). Footprint-aware,
+    // side-independent (both attacker & defender rows want attacker↔target ≤1).
+    case 'attacker_target_adjacent': {
+      return (game, combat) => {
+        const mapId = game?.selectedMap?.id;
+        if (!mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const aPn = combat?.attackerPlayerNum;
+        const dPn = combat?.defenderPlayerNum ?? (aPn ? opponentPlayerNum(aPn) : null);
+        const aFk = combat?.attackerFigureKey;
+        const dFk = combat?.target?.figureKey;
+        if (aPn == null || dPn == null || !aFk || !dFk) return false;
+        const aCells = figureCells(game, aPn, aFk);
+        const dCells = figureCells(game, dPn, dFk);
+        if (!aCells.length || !dCells.length) return false;
+        for (const ac of aCells) for (const dc of dCells) if (isWithinSpaces(mapSp, ac, dc, 1)) return true;
+        return false;
+      };
+    }
+    // The DEFENDER spent a Block (symbol/token) during this attack (Survival is
+    // Strength). The pipeline sets combat.defenderSpentBlock when a Block is spent.
+    case 'defender_spent_block':
+      return (game, combat) => !!combat?.defenderSpentBlock;
+    // The AFFECTED figure carries a keyword AND (optionally) an affiliation —
+    // "SCUM TROOPER" = TROOPER keyword + Scum affiliation (Bespin Security).
+    case 'affected_has_keyword_affiliation': {
+      const side = spec.side || 'attacker';
+      const kw = String(spec.keyword || '').toUpperCase();
+      const affil = norm(spec.affiliation);
+      return (game, combat) => {
+        if (!affectedKeywords(game, combat, side).includes(kw)) return false;
+        const dc = affectedFigure(game, combat, side).figureKey;
+        const raw = side === 'defender' ? (combat?.defenderDcName || dcNameFromFigureKey(dc || '')) : (combat?.attackerDcName || dcNameFromFigureKey(dc || ''));
+        const e = (getDcEffects() || {})[raw] || (getDcEffects() || {})[norm(raw)];
+        return norm(e?.affiliation) === affil;
+      };
+    }
+    // Disjunction of affected-figure filters — "a friendly LEADER or SCUM TROOPER"
+    // (Bespin Security). spec.preds is an array of {type,...} sub-specs; usable iff
+    // ANY holds.
+    case 'affected_keyword_any': {
+      const preds = (spec.preds || []).map((p) => makeCondition(p));
+      return (game, combat) => preds.some((p) => p(game, combat));
+    }
     default:
       return () => true;
   }
@@ -162,10 +242,13 @@ export function makeCondition(spec) {
  * Guard predicate from the CSV `conditional` column (ANDed with the affects-based
  * usability). Data-derived per type; unknown prose → no extra restriction (the
  * affects-based check already scoped usage). One sub-method per recognised guard.
+ * `row` (optional) carries the CSV row so side-sensitive guards (adjacency to the
+ * AFFECTED figure) know which figure to center on; falls back to attacker side.
  */
-export function conditionalGuard(conditional, card) {
+export function conditionalGuard(conditional, card, row) {
   const s = String(conditional || '').toLowerCase();
   if (!s || s === 'none') return () => true;
+  const side = (row?.attack_side === 'defender') ? 'defender' : 'attacker';
   if (/spend (a|any|1).*token|after you spend|spent a.*token|power token/.test(s)) return makeCondition({ type: 'spent_any_token' });
   // target space is N or more / fewer spaces away (ranged sniper conditions).
   const dm = s.match(/target space is (\d+) or more/);
@@ -177,6 +260,18 @@ export function conditionalGuard(conditional, card) {
     return (game, combat) => !(game?.attackPerformedThisActivation?.[combat?.attackerFigureKey]);
   }
   if (/device token/.test(s)) return makeCondition({ type: 'attacker_has_device_token' });
+  // "spent a Block symbol during this attack" (Survival is Strength).
+  if (/spent a block/.test(s)) return makeCondition({ type: 'defender_spent_block' });
+  // "attacking or defending against an adjacent figure" (Precision) — the attacker
+  // and the target must be adjacent.
+  if (/against an adjacent figure/.test(s)) return makeCondition({ type: 'attacker_target_adjacent' });
+  // "adjacent to another friendly TROOPER" (Squad Training) — the affected figure
+  // adjacent to another friendly figure with the named keyword. Check BEFORE the
+  // generic "adjacent to a friendly figure" so the keyword filter is applied.
+  const adjKw = s.match(/adjacent to (?:another |a )?friendly (trooper|droid|leader|hunter|wookiee|spy|brawler|guardian|creature|smuggler|vehicle|mobile)/);
+  if (adjKw) return makeCondition({ type: 'affected_adjacent_to_friendly', keyword: adjKw[1].toUpperCase(), side });
+  // "adjacent to a friendly figure" (Cower).
+  if (/adjacent to (?:a )?friendly figure/.test(s)) return makeCondition({ type: 'affected_adjacent_to_friendly', side });
   return () => true; // unmodeled prose → no extra restriction yet (TODO: graduate)
 }
 
@@ -238,6 +333,15 @@ export function markAbilityUsed(game, combat, { card, ability, limit }) {
 /** Keyword/size constraint on the AFFECTED figure from affects_others prose, or null. */
 function affectedFilter(s, side) {
   if (/\bsmall\b/.test(s)) return makeCondition({ type: 'affected_is_small', side });
+  // "LEADER or SCUM TROOPER" (Bespin Security) — a disjunction where the second
+  // branch is keyword TROOPER + Scum affiliation. Match before the single-keyword
+  // loop so the "or" isn't collapsed to just LEADER.
+  if (/leader or scum trooper/.test(s)) {
+    return makeCondition({ type: 'affected_keyword_any', preds: [
+      { type: 'affected_has_keyword', keyword: 'LEADER', side },
+      { type: 'affected_has_keyword_affiliation', keyword: 'TROOPER', affiliation: 'Scum', side },
+    ] });
+  }
   for (const kw of ['trooper', 'droid', 'vehicle', 'mobile', 'wookiee', 'hunter', 'leader', 'spy', 'brawler', 'guardian', 'creature', 'smuggler']) {
     if (new RegExp(`\\b${kw}\\b`).test(s)) return makeCondition({ type: 'affected_has_keyword', keyword: kw.toUpperCase(), side });
   }
@@ -286,7 +390,7 @@ export function conditionForRow(row) {
   const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';
   const selfPred = affectsSelf ? makeCondition({ type: 'attacker_is_self', card: row.card, side }) : null;
   const othersPred = othersPredicate(row?.affects_others, row?.card, side);
-  const guard = conditionalGuard(row?.conditional, row?.card);
+  const guard = conditionalGuard(row?.conditional, row?.card, row);
   const limit = limitGuard(row?.limit, `${row?.card}:${row?.ability}`);
   return (game, combat) => {
     // self FIRST, then others — usable iff the attacker is in the affected set …
