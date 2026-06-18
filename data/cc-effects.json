@@ -1240,7 +1240,7 @@
       "cost": 2,
       "playableBy": "The Armorer",
       "timing": "startOfRound",
-      "effect": "Use at the start of the round. During this round, after an attack targeting a friendly figure within 4 spaces resolves, if that figure spent a Power Token, that figure recovers 1 Damage."
+      "effect": "Use at the start of the round. During this round, after an attack targeting a friendly figure within 4 spaces resolves, if that figure spent a Block Token, that figure recovers 1 Damage."
     },
     "Marked Territory": {
       "cost": 0,

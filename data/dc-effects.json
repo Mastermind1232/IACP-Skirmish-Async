@@ -465,7 +465,7 @@
       "affiliation": "Any"
     },
     "[Spectre Cell]": {
-      "abilityText": "Include this card in your army only if each group in your army has \"Spectre\" or \"Chopper\" as part of its sub-name.\n\nAt the start of each round, distribute 1 Damage and 1 Block among friendly figures. Limit once per round.",
+      "abilityText": "Include this card in your army only if each group in your army has \"Spectre\" or \"Chopper\" as part of its sub-name.\n\nAt the start of each round, distribute 1 Damage token and 1 Block token among friendly figures. Limit once per round.\n\nExhaust this card during a friendly figure's activation to choose another friendly figure. The chosen figure gains 2 movement points and may interrupt to perform an attack.",
       "keywords": [],
       "cost": 2,
       "attachment": false,
