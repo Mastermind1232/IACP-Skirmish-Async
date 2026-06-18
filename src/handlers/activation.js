@@ -394,6 +394,17 @@ export async function fireLieInAmbushWhenDeployed(game, playerNum, dcName, figur
     await logGameAction(game, client, `🥷 **In The Shadows** — **${dcName}** becomes **Hidden** when deployed.`, { phase: 'ROUND', icon: 'deployed' });
   }
 
+  // ── Ambush (non-interactive) — Ewok Warrior becomes Hidden ─────────────────
+  // Card text "After YOU are deployed, you become Hidden" is a PER-FIGURE
+  // when-deployed trigger, so it fires on LiA — unlike phase-level "after
+  // deployment" abilities (E-Web Forward Emplacement, Smooth Landing, Beskar
+  // Armor, …) which do NOT. (alexanbv 2026-06-18: the CSV tags Ambush
+  // after_deployment, but the card wording is the per-figure form.)
+  if (passives.includes('Ambush')) {
+    for (const fk of placedKeys) applyCondition(game, fk, 'Hide');
+    await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** when deployed.`, { phase: 'ROUND', icon: 'deployed' });
+  }
+
   // ── Imperial Loadout (interactive) — Purge Trooper gains 1 Loadout card ─────
   if (sIds.includes('imperial_loadout_purge_trooper')) {
     const loadoutCards = getLoadoutCards();

@@ -234,7 +234,7 @@ Echo Base Trooper (Regular),DC,Efficient Travel,1,always,None,automatic,TRUE,Non
 Emperor Palpatine,DC,Emperor,1,during_activation,None,prompt,FALSE,another figure within 4 spaces,None,once per activation,FALSE,"Choose another figure within 4 spaces; that figure interrupts to perform an attack",None,None
 Emperor Palpatine,DC,Tempt,1,start_of_activation,None,prompt,FALSE,a figure of your choice,None,None,FALSE,"A figure of your choice suffers 1 Damage and gains 1 Damage Token",damage;damage_token,None
 Emperor Palpatine,DC,Force Lightning,1,special_action,None,prompt,FALSE,a figure within 4 spaces and line of sight and each figure adjacent to it,None,None,FALSE,"Choose a figure within 4 spaces and line of sight; that figure suffers 3 Damage and becomes Weakened, and each figure adjacent to it suffers 1 Damage",damage;condition,None
-Ewok Warrior (Elite),DC,Ambush,1,after_deployment,None,automatic,TRUE,None,None,None,FALSE,"You become Hidden",condition,None
+Ewok Warrior (Elite),DC,Ambush,1,when_deployed,None,automatic,TRUE,None,None,None,FALSE,"You become Hidden",condition,None
 Ewok Warrior (Elite),DC,Forest Fighters,1,attack:modifiers,attacker,automatic,TRUE,None,performing a Melee attack while you are Hidden,None,FALSE,"Apply +1 Damage to the attack results",damage,None
 Ewok Warrior (Elite),DC,Sling Barrage,1,special_action,None,prompt,TRUE,None,None,None,FALSE,"Perform a Ranged attack using your printed attack pool; during this attack you may reroll up to 1 attack die for each other figure in your group with line of sight to the defender",reroll,None
 Ezra Bridger,DC,Brash,1,start_of_round,None,automatic,TRUE,None,None,None,FALSE,"Move up to 4 spaces",move,None
