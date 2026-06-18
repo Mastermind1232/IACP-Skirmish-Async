@@ -383,6 +383,23 @@ export function getCcEffect(cardName) {
   return (stripped && stripped !== cardName) ? (ccEffectsData.cards?.[stripped] || null) : null;
 }
 
+/**
+ * Two-timing model (alexanbv 2026-06-18): a Command Card's TAKE-EFFECT timing.
+ * Every CC has a PLAY (use) `timing` (when it is offered + played + any choice is
+ * made) and a TAKE-EFFECT timing (when its effect actually applies). They are the
+ * SAME for the vast majority of cards, so `effectTiming` is OPTIONAL and DEFAULTS
+ * to `timing` — the hundreds of same-timing cards need no data change. A card
+ * whose effect lands in a different window sets `effectTiming` explicitly. Returns
+ * null when the card is unknown.
+ * @param {string} cardName
+ * @returns {string|null}
+ */
+export function getCcEffectTiming(cardName) {
+  const data = getCcEffect(cardName);
+  if (!data) return null;
+  return data.effectTiming || data.timing || null;
+}
+
 /** Ability library (F1): id → { type, surgeCost?, label?, ... }. Used by game/abilities.js. */
 export function getAbilityLibrary() {
   return abilityLibrary;

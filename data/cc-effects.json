@@ -103,7 +103,8 @@
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
       "effect": "Use during your activation. During your group's activation, apply +1 Hit to the attack results of the next 2 attacks performed by friendly figures.",
-      "abilityId": "Beatdown"
+      "abilityId": "Beatdown",
+      "effectTiming": "duringAttackModifiers"
     },
     "Behind Enemy Lines": {
       "cost": 1,
@@ -152,7 +153,8 @@
       "playableBy": "Jabba the Hutt",
       "timing": "specialAction",
       "effect": "Special Action: Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Hit to the attack results.",
-      "abilityId": "Blood Feud"
+      "abilityId": "Blood Feud",
+      "effectTiming": "whenAttackDeclaredOnMarkedGroup"
     },
     "Bodyguard": {
       "cost": 1,
@@ -229,7 +231,8 @@
       "playableBy": "Captain Terro",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Hit to the attack results.",
-      "abilityId": "Cavalry Charge"
+      "abilityId": "Cavalry Charge",
+      "effectTiming": "duringAttackModifiers"
     },
     "Celebration": {
       "cost": 0,
@@ -417,21 +420,24 @@
       "playableBy": "Any Figure",
       "timing": "duringAttack",
       "effect": "Use while attacking to apply +2 Accuracy to the attack results.",
-      "abilityId": "Deadeye"
+      "abilityId": "Deadeye",
+      "effectTiming": "duringAttackModifiers"
     },
     "Deadly Precision": {
       "cost": 0,
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "startOfActivation",
       "effect": "Use at the start of your activation. While attacking during this round, apply -1 Dodge to the defense results.",
-      "abilityId": "Deadly Precision"
+      "abilityId": "Deadly Precision",
+      "effectTiming": "duringAttackModifiers"
     },
     "Deathblow": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
       "effect": "Use when you declare a Melee attack to apply +1 Hit to the attack results. If the defender has the Ranged attack type, apply an additional +1 Hit to the attack results.",
-      "abilityId": "Deathblow"
+      "abilityId": "Deathblow",
+      "effectTiming": "duringAttackModifiers"
     },
     "Debts Repaid": {
       "cost": 3,
@@ -452,7 +458,8 @@
       "playableBy": "FORCE USER",
       "timing": "whenAttackDeclaredOnYou",
       "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, the attacker suffers 1 Damage.",
-      "abilityId": "Deflection"
+      "abilityId": "Deflection",
+      "effectTiming": "afterAttackResolves"
     },
     "Demoralizing Monologue": {
       "cost": 1,
@@ -631,7 +638,8 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to choose an adjacent hostile figure. The next attack targeting that figure gains Pierce 3.",
-      "abilityId": "Expose Weakness"
+      "abilityId": "Expose Weakness",
+      "effectTiming": "duringAttackModifiers"
     },
     "Extra Protection": {
       "cost": 1,
@@ -1125,7 +1133,8 @@
       "playableBy": "Any Figure",
       "timing": "specialAction",
       "effect": "Special Action: During this round, while defending, apply +1 Block and -2 Accuracy to the results.",
-      "abilityId": "Take Cover"
+      "abilityId": "Take Cover",
+      "effectTiming": "duringAttackModifiers"
     },
     "Take Initiative": {
       "cost": 0,
@@ -1290,7 +1299,7 @@
       "effect": "Special Action: Choose 1 adjacent friendly figure. Ready that figure's Deployment card.",
       "abilityId": "New Orders"
     },
-"Of No Importance": {
+    "Of No Importance": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "whenOneOfYourFiguresDefeated",
@@ -1409,7 +1418,8 @@
       "playableBy": "TECHNICIAN",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 Evade Token. While defending during this round, apply +1 Block to your defense results for each Evade result.",
-      "abilityId": "Personal Energy Shield"
+      "abilityId": "Personal Energy Shield",
+      "effectTiming": "duringAttackModifiers"
     },
     "Pickpocket": {
       "cost": 1,

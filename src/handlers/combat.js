@@ -240,6 +240,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 // Slice C: timing-window gate machine (flag-gated migration, default off).
 import { buildModsGate, buildWindowGate } from '../engine/combat-mods-gate.js';
 import { buildOnDeclareGate } from '../engine/combat-ondeclare-gate.js';
+import { stashPendingModifier, drainPendingModifiers, applyPendingEffect } from '../engine/combat-pending-modifiers.js';
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
@@ -1412,26 +1413,52 @@ export const COMBAT_RESOLVERS = {
       if (strain) await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: 'Heavy Repeater' });
     },
   },
+  // Query (HK-47) — TWO-TIMING: played/chosen at on_declare (the defender
+  // decides). "Become Bleeding" resolves IMMEDIATELY (Bleed token now);
+  // "accept +1 Damage" stashes a mods-window pending modifier (+1 Hit) that the
+  // 'pending_modifiers_drain' passive applies when the mods window runs.
   query: {
     prompt: () => ({ content: '🤖 **Query (HK-47)** — become Bleeding (avoid +1 Damage) or accept +1 Damage?', buttons: [['bleed', 'Become Bleeding'], ['accept', 'Accept +1 Damage', 'danger']] }),
     apply: async (choice, { game, combat, thread }) => {
       if (choice === 'bleed') {
+        // IMMEDIATE branch — apply the Bleed token now (no later modifier).
         if (combat.target?.figureKey) { const { applyCondition } = await import('../game/conditions.js'); applyCondition(game, combat.target.figureKey, 'Bleed'); }
         thread?.send('🩸 **Query** — Defender became Bleeding (no damage bonus).').catch(discordCatch);
-      } else { combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('💢 **Query** — Defender accepted +1 Damage.').catch(discordCatch); }
+      } else {
+        // MODS branch — the +1 Damage takes effect in the modifiers window.
+        stashPendingModifier(combat, 'mods', { source: 'Query (HK-47)', effect: { bonusHits: 1 } });
+        thread?.send('💢 **Query** — Defender accepted +1 Damage (applied in the modifiers window).').catch(discordCatch);
+      }
       combat.queryResolved = true; delete combat.queryNeedsPrompt;
     },
   },
+  // Negotiate (Hondo) — TWO-TIMING: Hondo's attacker ability played/chosen at
+  // on_declare; the DEFENDER decides (mention them). "Pay 2 VP" resolves
+  // IMMEDIATELY (defender loses 2 VP now, no further effect). "Accept +2 Damage"
+  // stashes a mods-window pending modifier (+2 Hit) applied when the mods window
+  // runs (via 'pending_modifiers_drain').
   negotiate: {
-    // Hondo's attacker ability; the DEFENDER decides pay-or-accept (mention them).
     prompt: ({ game, combat }) => {
       const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-      return { content: `<@${game[`player${defPN}Id`]}> **Negotiate (Hondo)** — pay **2 VP** to avoid +2 Damage, or accept +2 Damage:`, buttons: [['pay', 'Pay 2 VP'], ['accept', 'Accept +2 Damage', 'danger']], mentionUserId: game[`player${defPN}Id`] };
+      const defVp = (defPN === 1 ? game.player1VP?.total : game.player2VP?.total) ?? 0;
+      // Defender with <2 VP can't pay → only the +2 Damage branch is offered.
+      const buttons = defVp >= 2
+        ? [['pay', 'Pay 2 VP'], ['accept', 'Accept +2 Damage', 'danger']]
+        : [['accept', 'Accept +2 Damage (cannot pay)', 'danger']];
+      return { content: `<@${game[`player${defPN}Id`]}> **Negotiate (Hondo)** — pay **2 VP** to avoid +2 Damage, or accept +2 Damage:`, buttons, mentionUserId: game[`player${defPN}Id`] };
     },
     apply: async (choice, { game, combat, thread, ctx }) => {
       const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-      if (choice === 'pay') { deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2); thread?.send('**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage.').catch(discordCatch); if (ctx?.checkWinConditions) await ctx.checkWinConditions(game, ctx.client ?? thread?.client); }
-      else { combat.bonusHits = (combat.bonusHits || 0) + 2; thread?.send('**Negotiate** — +2 Damage applied.').catch(discordCatch); }
+      if (choice === 'pay') {
+        // IMMEDIATE branch — defender pays 2 VP now; the attack gets no bonus.
+        deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2);
+        thread?.send('**Negotiate** — Defender paid 2 VP to Hondo. No bonus damage.').catch(discordCatch);
+        if (ctx?.checkWinConditions) await ctx.checkWinConditions(game, ctx.client ?? thread?.client);
+      } else {
+        // MODS branch — the +2 Damage takes effect in the modifiers window.
+        stashPendingModifier(combat, 'mods', { source: 'Negotiate (Hondo)', effect: { bonusHits: 2 } });
+        thread?.send('**Negotiate** — +2 Damage will be applied in the modifiers window.').catch(discordCatch);
+      }
       combat.negotiateResolved = true;
     },
   },
@@ -2100,6 +2127,17 @@ export async function handleToughLuckGate(interaction, ctx) {
 
 /** Apply a passive mods ability automatically (no player decision). */
 export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
+  // Two-timing model (alexanbv 2026-06-18): GENERAL drain of pending modifiers
+  // stashed for the mods window by an ability played at an earlier timing
+  // (Hondo/HK-47 +Damage, Cavalry Charge round buff, …). Applies each structured
+  // delta onto the combat counters and reports the source. Not card-specific.
+  if (id === 'pending_modifiers_drain') {
+    for (const { source, effect } of drainPendingModifiers(combat, 'mods')) {
+      applyPendingEffect(combat, effect);
+      if (source) await thread?.send(`**${source}** — applied (deferred to modifiers).`).catch(discordCatch);
+    }
+    return;
+  }
   // Automatic attachment passives migrated off the eager declaration path
   // (combat-abilities-attachment-auto.js). alexanbv 2026-06-17.
   if (id === 'driven_by_hatred_hit') {
@@ -2207,10 +2245,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyExploitWeaknessSurge(combat);
     combat.surgeBonus = r.surgeBonus;
     await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.').catch(discordCatch);
-  } else if (id === 'negotiate') {
-    combat.bonusHits = (combat.bonusHits || 0) + 2;
-    combat.negotiateResolved = true;
-    await thread.send('**Negotiate** — Defender has fewer than 2 VP; **+2 Damage** auto-applied.').catch(discordCatch);
+  // 'negotiate' is no longer a mods passive (two-timing: moved to the on_declare
+  // gate; its +2 Damage now lands here via the generic 'pending_modifiers_drain'
+  // above). No mods-passive branch needed.
   } else if (id === 'defensive_stance') {
     const dr = combat.defenseRoll || {};
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
@@ -4189,10 +4226,12 @@ export async function handleAttackTarget(interaction, ctx) {
   // Conclusion (HK-47) — MOVED to the mods window (combat-abilities-mods.js
   // 'conclusion' attacker passive) per alexanbv 2026-06-16.
 
-  // Query (HK-47): defender prompt deferred to proceedAfterRerolls
-  // (modifier step) — same pattern as Negotiate. Per destruct 2026-05-08
-  // defender chooses "become Bleeding" or "accept +1 Damage". Tagged
-  // here at declare time; resolved at modifier step.
+  // Query (HK-47): TWO-TIMING (alexanbv 2026-06-18). On the live sequence path
+  // Query is now OFFERED + CHOSEN at the on_declare gate (combat-abilities-
+  // ondeclare.js 'query'; the defender picks "become Bleeding" NOW or "accept
+  // +1 Damage" as a mods pending modifier). The queryNeedsPrompt flag remains
+  // only as the guard for the LEGACY proceedAfterRerolls path (non-sequence /
+  // selfPlay fallback); it is a no-op on the live gate path.
   if (hasQueryAbility(atkSpecialIds)) {
     game.pendingCombat.queryNeedsPrompt = true;
   }

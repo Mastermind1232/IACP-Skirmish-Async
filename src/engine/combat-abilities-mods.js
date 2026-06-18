@@ -28,6 +28,20 @@ import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/
 import { makeCondition } from './combat-conditions.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
+import { hasPendingModifiers } from './combat-pending-modifiers.js';
+
+// Two-timing model (alexanbv 2026-06-18): the GENERAL mods-window drain of
+// PENDING MODIFIERS. Any ability played at an earlier window (on_declare,
+// start_of_round, …) whose effect lands at `mods` stashes a structured modifier
+// via stashPendingModifier(combat, 'mods', …). This passive drains and applies
+// them when the mods window runs — alongside the abilities normally offered.
+// It is NOT Hondo/HK-47-specific: it serves every stashed mods modifier. Fired
+// first (attacker side) so the deltas land before the side's own mods. The
+// resolver lives in combat.js#_fireModsPassive ('pending_modifiers_drain').
+registerCombatAbility({
+  id: 'pending_modifiers_drain', name: 'Pending Modifiers', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat) => hasPendingModifiers(combat, 'mods'),
+});
 
 const D = (deps, name, fallback) => (deps && deps[name]) || fallback;
 function eff(deps, dcName) {
@@ -55,19 +69,12 @@ registerCombatAbility({
   },
 });
 
-registerCombatAbility({
-  id: 'negotiate', name: 'Negotiate', windows: ['mods'], side: 'attacker',
-  // <2 VP on defender → auto +2 (passive); defender can pay → they choose (interactive).
-  kind: (game, combat) => {
-    const pn = defenderPN(combat);
-    const vp = (pn === 1 ? game.player1VP?.total : game.player2VP?.total) ?? 0;
-    return vp < 2 ? 'passive' : 'interactive';
-  },
-  applies: (game, combat, side, deps) => {
-    if (!combat.attackerFigureKey) return false;
-    return ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('negotiate_hondo');
-  },
-});
+// Negotiate (Hondo) + Query (HK-47) MOVED to the on_declare window
+// (combat-abilities-ondeclare.js) per the two-timing model (alexanbv
+// 2026-06-18): they are PLAYED/CHOSEN at on_declare — the opponent decides —
+// and the chosen branch either resolves IMMEDIATELY (pay VP / Bleed token) or
+// stashes a mods-window pending modifier (+Damage) drained by
+// 'pending_modifiers_drain' above. They are no longer offered at `mods`.
 
 registerCombatAbility({
   id: 'call_the_shots', name: 'Call the Shots', windows: ['mods'], side: 'attacker', kind: 'interactive',
@@ -107,11 +114,6 @@ registerCombatAbility({
     if (!hasAgileAbility(ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))))) return false;
     return ((combat.defenseRoll?.block || 0) + (combat.bonusBlock || 0)) > 0;
   },
-});
-
-registerCombatAbility({
-  id: 'query', name: 'Query', windows: ['mods'], side: 'defender', kind: 'interactive',
-  applies: (game, combat) => !!combat.queryNeedsPrompt,
 });
 
 registerCombatAbility({

@@ -36,13 +36,19 @@ describe('mods resolvers: attacker', () => {
     assert.equal(c.heavyRepeaterResolved, true);
   });
 
-  it('negotiate accept → +2 Damage; pay → VP transfer', async () => {
+  it('negotiate (two-timing): accept STASHES a mods +2 Damage modifier; pay → VP transfer NOW', async () => {
+    // Two-timing model: chosen at on_declare. "accept" defers the +2 Damage to
+    // the modifiers window (a pending modifier), NOT an immediate bonusHits.
     const cAcc = { attackerPlayerNum: 1, defenderPlayerNum: 2 }; await COMBAT_RESOLVERS.negotiate.apply('accept', baseArgs(cAcc));
-    assert.equal(cAcc.bonusHits, 2); assert.equal(cAcc.negotiateResolved, true);
+    assert.equal(cAcc.bonusHits, undefined); // NOT applied immediately
+    assert.deepEqual(cAcc.pendingModifiers.mods, [{ source: 'Negotiate (Hondo)', effect: { bonusHits: 2 } }]);
+    assert.equal(cAcc.negotiateResolved, true);
+    // "pay" resolves IMMEDIATELY — defender loses 2 VP now, no pending modifier.
     const g = { player1VP: { total: 0, kills: 0, objectives: 0 }, player2VP: { total: 5, kills: 0, objectives: 0 } };
     const cPay = { attackerPlayerNum: 1, defenderPlayerNum: 2 }; await COMBAT_RESOLVERS.negotiate.apply('pay', baseArgs(cPay, g));
     assert.equal(g.player2VP.total, 3); // defender paid 2
     assert.ok(g.player1VP.total >= 2); // attacker gained
+    assert.equal(cPay.pendingModifiers, undefined); // immediate — nothing deferred
     assert.equal(cPay.negotiateResolved, true);
   });
 });
@@ -65,12 +71,17 @@ describe('mods resolvers: defender', () => {
     assert.equal(c.bonusBlock, 1); assert.equal(c.getDownResolved, true);
   });
 
-  it('query accept → +1 Damage; bleed → applies Bleed to defender', async () => {
+  it('query (two-timing): accept STASHES a mods +1 Damage modifier; bleed → applies Bleed NOW', async () => {
+    // Two-timing model: chosen at on_declare. "accept" defers +1 Damage to the
+    // modifiers window (a pending modifier); "bleed" applies the token immediately.
     const cAcc = { target: { figureKey: 'D-1-0' } }; await COMBAT_RESOLVERS.query.apply('accept', baseArgs(cAcc));
-    assert.equal(cAcc.bonusHits, 1); assert.equal(cAcc.queryResolved, true);
+    assert.equal(cAcc.bonusHits, undefined); // NOT applied immediately
+    assert.deepEqual(cAcc.pendingModifiers.mods, [{ source: 'Query (HK-47)', effect: { bonusHits: 1 } }]);
+    assert.equal(cAcc.queryResolved, true);
     const g = { figureConditions: {} };
     const cBleed = { target: { figureKey: 'D-1-0' } }; await COMBAT_RESOLVERS.query.apply('bleed', baseArgs(cBleed, g));
     assert.ok((g.figureConditions['D-1-0'] || []).includes('Bleed')); assert.equal(cBleed.queryResolved, true);
+    assert.equal(cBleed.pendingModifiers, undefined); // immediate — nothing deferred
   });
 
   it('elusive nullifies the chosen attack die + worst defense die; skip resolves', async () => {
@@ -146,9 +157,15 @@ describe('mods passives: auto-fire effects', () => {
     const c = {}; await _fireModsPassive('attacker', 'pulse_cannon', thread, {}, c, {});
     assert.equal(c.bonusAccuracy, 4); assert.equal(c.bonusHits, 1); assert.equal(c.pulseCannonResolved, true);
   });
-  it('negotiate (auto, defender <2 VP) → +2 Damage', async () => {
-    const c = {}; await _fireModsPassive('attacker', 'negotiate', thread, {}, c, {});
-    assert.equal(c.bonusHits, 2); assert.equal(c.negotiateResolved, true);
+  it('pending_modifiers_drain → applies a stashed mods modifier (two-timing)', async () => {
+    // Two-timing model: Negotiate/Query (and any deferred-to-mods ability) stash
+    // a pending modifier at their play timing; the GENERAL drain passive applies
+    // it when the mods window runs. (Replaces the old mods-passive 'negotiate'
+    // auto branch — negotiate is now chosen at on_declare.)
+    const c = { pendingModifiers: { mods: [{ source: 'Negotiate (Hondo)', effect: { bonusHits: 2 } }] } };
+    await _fireModsPassive('attacker', 'pending_modifiers_drain', thread, {}, c, {});
+    assert.equal(c.bonusHits, 2);
+    assert.equal(c.pendingModifiers, undefined); // drained
   });
   it('defensive_stance + soresu convert a Dodge to +2 Block / +1 Evade', async () => {
     const c1 = { defenseRoll: { block: 0, evade: 0, dodge: true } }; await _fireModsPassive('defender', 'defensive_stance', thread, {}, c1, {});

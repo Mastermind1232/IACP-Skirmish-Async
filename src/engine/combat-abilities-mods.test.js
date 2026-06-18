@@ -34,10 +34,20 @@ describe('mods-window abilities via the timing registry', () => {
     assert.equal(find(out, 'spray_fire').kind, 'interactive');
   });
 
-  it('Negotiate kind flips on defender VP (passive <2, interactive ≥2)', () => {
+  it('Negotiate is NOT a mods ability (two-timing: moved to on_declare)', () => {
+    // Two-timing model (alexanbv 2026-06-18): Negotiate is now PLAYED/CHOSEN at
+    // on_declare; its +2 Damage lands at mods via a pending modifier, not by
+    // being offered as a mods ability.
     const d = deps({ Atk: { specialAbilityIds: ['negotiate_hondo'] }, Def: {} });
-    assert.equal(find(at('attacker', game({ player2VP: { total: 1 } }), combat(), d), 'negotiate').kind, 'passive');
-    assert.equal(find(at('attacker', game({ player2VP: { total: 9 } }), combat(), d), 'negotiate').kind, 'interactive');
+    assert.equal(find(at('attacker', game({ player2VP: { total: 1 } }), combat(), d), 'negotiate'), undefined);
+    assert.equal(find(at('attacker', game({ player2VP: { total: 9 } }), combat(), d), 'negotiate'), undefined);
+  });
+
+  it('pending_modifiers_drain passive appears only when a mods modifier is stashed', () => {
+    const d = deps({ Atk: { specialAbilityIds: [] }, Def: {} });
+    assert.equal(find(at('attacker', game(), combat(), d), 'pending_modifiers_drain'), undefined);
+    const c = combat({ pendingModifiers: { mods: [{ source: 'X', effect: { bonusHits: 1 } }] } });
+    assert.equal(find(at('attacker', game(), c, d), 'pending_modifiers_drain').kind, 'passive');
   });
 
   it('Pulse Cannon (passive) only with a spent power token', () => {

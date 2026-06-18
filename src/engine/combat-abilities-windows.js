@@ -85,9 +85,31 @@ export function registerCsvWindowAbilities() {
   }
   const seen = new Set();
   for (const rows of loadAbilitySpec().values()) {
+    // TWO-TIMING (alexanbv 2026-06-18): a Command Card has a PLAY (use) timing
+    // and a TAKE-EFFECT timing. The CSV encodes these as SEPARATE part rows —
+    // the play row (often `resolution=prompt`, frequently a non-gate timing like
+    // start_of_round/during_activation, marked "use timing") and later
+    // `resolution=automatic` EFFECT rows at attack:modifiers/after_resolves
+    // (marked "effect timing"/"conditional bonus"). The card must be OFFERED
+    // ONCE — at its play window — NOT re-offered as a no-op button at every
+    // effect window. So for a CC we compute the PLAY part (its lowest part
+    // number) and skip any LATER automatic gate row: that is an effect-timing
+    // modifier, applied when the play resolves (round-buff flag / pending
+    // modifier), not a separate play offer. Single-row CCs (play==effect, e.g.
+    // Parry, Stroke of Brilliance) are unaffected — their only row is the play row.
+    const _ccRows = rows.filter((x) => x.card_type === 'CC');
+    const _ccPlayPart = _ccRows.length
+      ? Math.min(..._ccRows.map((x) => parseInt(x.part, 10) || 1))
+      : null;
     for (const r of rows) {
       const gate = SPEC_TO_GATE[r.timing];
       if (!gate) continue;
+      // CC effect-timing rider: a later automatic part of a CC whose play part is
+      // earlier. Not a play offer — skip it (the card is offered at its play part).
+      if (r.card_type === 'CC' && r.resolution === 'automatic'
+          && _ccPlayPart != null && (parseInt(r.part, 10) || 1) > _ccPlayPart) {
+        continue;
+      }
       // Skip cards whose IACP text is mid-change — don't offer the soon-to-be-
       // wrong ability (alexanbv 2026-06-16). See cards-pending-change.js.
       if (isCardPendingChange(r.card)) continue;

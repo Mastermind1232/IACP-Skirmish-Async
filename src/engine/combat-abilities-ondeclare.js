@@ -109,3 +109,26 @@ atkAbility('much_to_learn', 'Much to Learn', ['much_to_learn'], 'muchToLearnReso
 defAbility('the_force_is_with_me', 'The Force is With Me', ['the_force_is_with_me_chirrut'], 'forceIsWithMeResolved');
 defAbility('strike_me_down', 'Strike Me Down', ['strike_me_down_obiwan'], 'strikeMeDownResolved');
 defAbility('force_exhaustion', 'Force Exhaustion', ['force_exhaustion'], 'forceExhaustionResolved');
+
+// ── Two-timing split-effect abilities (alexanbv 2026-06-18) ───────────────────
+// Negotiate (Hondo) + Query (HK-47): PLAY timing = on_declare — the OPPONENT
+// makes the choice when the attack is declared. The chosen branch resolves PART
+// immediately and PART as a mods-window modifier:
+//   Negotiate: opponent pays 2 VP NOW (immediate), OR +2 Damage stashed for mods.
+//   Query:     defender becomes Bleeding NOW (immediate), OR +1 Damage for mods.
+// The choice prompt + branch routing live in the resolvers (combat.js
+// COMBAT_RESOLVERS 'negotiate'/'query'); here we just OFFER them at on_declare.
+// Negotiate is Hondo's attacker ability (the defender decides via the prompt);
+// Query is the defender's ability. Both are interactive (a choice is made).
+registerCombatAbility({
+  id: 'negotiate', name: 'Negotiate', windows: ['on_declare'], side: 'attacker', kind: 'interactive',
+  applies: (game, combat, side, deps) => !!combat.attackerFigureKey
+    && !combat.negotiateResolved
+    && hasAny(atkEff(combat, deps), 'negotiate_hondo'),
+});
+registerCombatAbility({
+  id: 'query', name: 'Query', windows: ['on_declare'], side: 'attacker', kind: 'interactive',
+  applies: (game, combat, side, deps) => !!combat.attackerFigureKey
+    && !combat.queryResolved
+    && hasAny(atkEff(combat, deps), 'query_hk47'),
+});
