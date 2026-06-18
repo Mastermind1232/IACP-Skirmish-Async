@@ -22,6 +22,27 @@ import { isWithinSpaces } from '../game/spatial.js';
 
 const _auraBearerDeps = { getMapData, isWithinSpaces, getDcList, getDcMessageIds };
 
+// LINE-OF-SIGHT gated reroll cards (gate-rework 2026-06-18). Maps a CSV card to
+// the LOS condition spec that gates its reroll button. Reusable primitives in
+// combat-conditions.js do the spatial work; this is the only per-card mapping.
+//   includeSelf:true  → the friendly_with_los_to_attacker primitive already
+//     folds in the attacker-is-owner branch, so the LOS condition REPLACES the
+//     row's self/others condition (Coordinated Hunt).
+//   includeSelf:false → the LOS condition is ANDed with attacker_is_self so only
+//     the owner's attack triggers it (Light It Up; Shared Calculations is a
+//     forces-defender-reroll row whose base is already attacker_is_self).
+const LOS_REROLL_CONDITIONS = {
+  // "While you or a friendly HUNTER in your line of sight is attacking, it may
+  // reroll 1 attack die" — the attacker is the owner OR a friendly HUNTER has LOS.
+  'Purge Commander (Elite)': { type: 'friendly_with_los_to_attacker', keyword: 'HUNTER', includeSelf: true },
+  // "if a friendly DROID within 3 has LOS to the target space, force the defender
+  // to reroll 1 defense die" — the owner (Zuckuss) is attacking AND a DROID aura.
+  'Zuckuss': { type: 'friendly_within_n_with_los_to_target', keyword: 'DROID', n: 3, includeSelf: false },
+  // "if the target did not have LOS to you at the start of your activation, reroll
+  // up to 1 attack die" — the owner (Rebel Pathfinder) attacking + the LOS snapshot.
+  'Rebel Pathfinder (Elite)': { type: 'target_no_los_to_attacker_start', includeSelf: false },
+};
+
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
   const m = String(effect || '').toLowerCase().match(/reroll\s+(?:up to\s+)?(\d+)/);
@@ -155,11 +176,32 @@ export function registerRerollAbilities() {
       // attacker-has-token condition REPLACES the figure-identity condition that
       // conditionForRow would otherwise derive. alexanbv 2026-06-17.
       const deviceTokenGated = /device token/i.test(r.conditional || '');
-      const rowCond = forcesDefenderReroll
+      let rowCond = forcesDefenderReroll
         ? makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' })
         : deviceTokenGated
           ? makeCondition({ type: 'attacker_has_device_token' })
           : (isDC ? conditionForRow(r) : null);
+      // LINE-OF-SIGHT gated reroll auras (gate-rework 2026-06-18). The CSV
+      // self/others prose can't express "in your line of sight" / "has LOS to the
+      // target space", so these rows' usability is the LOS condition (reusable
+      // primitives in combat-conditions.js), ANDed where a base self-condition
+      // also applies. No per-card hardcoding beyond mapping the card → its LOS spec.
+      const losSpec = LOS_REROLL_CONDITIONS[r.card];
+      if (losSpec) {
+        const losCond = makeCondition(losSpec);
+        // Coordinated Hunt: usable if the attacker IS Purge Commander (self) OR a
+        // friendly HUNTER has LOS to the attacker — the friendly_with_los_to_attacker
+        // primitive already includes the self branch (includeSelf), so it replaces
+        // the (unmodeled-others) conditionForRow result. Shared Calculations /
+        // Light It Up: the LOS condition is the gate; AND it with the self check so
+        // a non-owner figure can't trigger another team's card.
+        const selfCheck = makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' });
+        rowCond = losSpec.includeSelf === false
+          ? (game, combat) => selfCheck(game, combat) && losCond(game, combat)
+          // "you OR a friendly … in LOS": the owner attacking always qualifies
+          // (self branch), else a friendly with LOS does.
+          : (game, combat) => selfCheck(game, combat) || losCond(game, combat);
+      }
       // Attachment rows carry a BRACKETED card name (e.g. "[The Darksaber]") while
       // game.pXDcAttachments stores the bare name — normalize both with
       // stripBrackets so attachment rerolls are actually offered. alexanbv 2026-06-17.
@@ -232,3 +274,69 @@ export function registerCapitalize() {
 }
 
 registerCapitalize();
+
+// ── forcedRerollQueue drain in the GATE rerolls window (gate-rework 2026-06-18) ──
+//
+// Several reroll-granting effects (Guardian Stance, Battlefield Awareness, Cross
+// Training, Doubt, Demoralizing Monologue, Versatile Weaponry, Raider, Precision,
+// Survival is Strength, …) have attack_side='None' in the CSV so the data-driven
+// registration loop above skips them; the legacy path pushes them into
+// combat.forcedRerollQueue (third-party-ccs.js / the ad-hoc reroll path). In GATE
+// mode the rerolls window never drained that queue, so those grants were ORPHANED.
+//
+// Fix: surface each pending queue entry as an optional reroll button in the gate
+// rerolls window for the controlling side. Because the gate snapshot fixes its
+// interactive id list at build time, we register a small fixed set of SLOTS per
+// side (forced_reroll:<side>:<i>); slot i is offered iff there are MORE than i
+// pending entries the side controls. The resolver (COMBAT_RESOLVERS) consumes the
+// i-th pending entry through the generic reroll path and decrements/clears it.
+const FORCED_REROLL_SLOTS = 6; // generous upper bound on simultaneous grants
+
+/** Player number controlling `side` for this combat. */
+function _sidePlayerNum(combat, side) {
+  return side === 'attacker'
+    ? combat?.attackerPlayerNum
+    : (combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null));
+}
+/** The pending (remaining>0) queue entries this side controls, with their queue index. */
+export function pendingForcedRerolls(combat, side) {
+  const pn = _sidePlayerNum(combat, side);
+  if (pn == null) return [];
+  const q = combat?.forcedRerollQueue || [];
+  const out = [];
+  for (let i = 0; i < q.length; i++) {
+    const e = q[i];
+    if (e && e.controlPlayer === pn && (e.remaining ?? 0) > 0) out.push({ entry: e, queueIndex: i, slot: out.length });
+  }
+  return out;
+}
+
+let _forcedRerollRegistered = false;
+export function registerForcedRerollSlots() {
+  if (_forcedRerollRegistered) return;
+  _forcedRerollRegistered = true;
+  for (const side of ['attacker', 'defender']) {
+    for (let i = 0; i < FORCED_REROLL_SLOTS; i++) {
+      const id = `forced_reroll:${side}:${i}`;
+      registerCombatAbility({
+        id, name: 'Granted Reroll', windows: ['rerolls'], side, kind: 'interactive',
+        params: { kind: 'forced_reroll', slot: i, side },
+        // Offer slot i iff this side controls MORE than i pending forced rerolls,
+        // AND a die is actually selectable for that entry's pool.
+        applies: (game, combat) => {
+          const pend = pendingForcedRerolls(combat, side);
+          const me = pend[i];
+          if (!me) return false;
+          const pool = me.entry.pool || 'any';
+          if (pool === 'any') {
+            return selectableDieIndices(combat, { pool: 'attack' }).length
+              + selectableDieIndices(combat, { pool: 'defense' }).length > 0;
+          }
+          return selectableDieIndices(combat, { pool }).length > 0;
+        },
+      });
+    }
+  }
+}
+
+registerForcedRerollSlots();

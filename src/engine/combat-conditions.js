@@ -12,7 +12,7 @@
 
 import { dcNameFromFigureKey } from '../game/index.js';
 import { getMapData, getDcEffects, getFigureSize } from '../data-loader.js';
-import { isWithinSpaces } from '../game/spatial.js';
+import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getEffectiveFigureSize } from '../game/board-helpers.js';
@@ -58,6 +58,25 @@ function affectedKeywords(game, combat, side) {
   const raw = side === 'defender' ? (combat?.defenderDcName || dcNameFromFigureKey(fk || '')) : (combat?.attackerDcName || dcNameFromFigureKey(fk || ''));
   const all = getDcEffects() || {};
   const e = all[raw] || all[norm(raw)];
+  return (e?.keywords || []).map((k) => String(k).toUpperCase());
+}
+
+/** The target SPACE (coord, lowercased) for this combat — explicit coord, else the target figure's head cell. */
+function targetCoord(game, combat) {
+  if (combat?.target?.coord) return String(combat.target.coord).toLowerCase();
+  const dPn = combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null);
+  const fk = combat?.target?.figureKey;
+  const pos = (dPn != null && fk) ? game?.figurePositions?.[dPn]?.[fk] : null;
+  return pos ? String(pos).toLowerCase() : null;
+}
+/** The attacker's CURRENT head cell (coord, lowercased). */
+function attackerCoord(game, combat) {
+  const pos = game?.figurePositions?.[combat?.attackerPlayerNum]?.[combat?.attackerFigureKey];
+  return pos ? String(pos).toLowerCase() : null;
+}
+/** Keywords (UPPERCASE) of a figure by its figureKey. */
+function figureKeywords(fk) {
+  const e = (getDcEffects() || {})[dcNameFromFigureKey(fk)] || (getDcEffects() || {})[norm(dcNameFromFigureKey(fk))];
   return (e?.keywords || []).map((k) => String(k).toUpperCase());
 }
 
@@ -232,6 +251,79 @@ export function makeCondition(spec) {
     case 'affected_keyword_any': {
       const preds = (spec.preds || []).map((p) => makeCondition(p));
       return (game, combat) => preds.some((p) => p(game, combat));
+    }
+    // ── LINE-OF-SIGHT auras (gate-rework 2026-06-18) — reusable LOS-gated
+    // conditions modeled with hasLineOfSightByCoord (footprint-aware, blocked by
+    // figures/terrain). Each scans the attacker's friendly team for an owner
+    // figure that satisfies a keyword + an LOS relation. ────────────────────────
+    //
+    // A friendly figure (optionally with KEYWORD) has LOS to the ATTACKER —
+    // "a friendly HUNTER in your line of sight" (Coordinated Hunt). When
+    // includeSelf is true the attacking figure itself counts (its own ability).
+    case 'friendly_with_los_to_attacker': {
+      const kw = spec.keyword ? String(spec.keyword).toUpperCase() : null;
+      const includeSelf = spec.includeSelf !== false;
+      return (game, combat) => {
+        const mapId = game?.selectedMap?.id;
+        if (!mapId) return false;
+        const mapSp = getMapData(mapId);
+        const atkPos = attackerCoord(game, combat);
+        if (!mapSp || !atkPos) return false;
+        const team = game.figurePositions?.[combat?.attackerPlayerNum] || {};
+        for (const [fk, pos] of Object.entries(team)) {
+          if (!pos) continue;
+          const isSelf = fk === combat?.attackerFigureKey;
+          if (isSelf && !includeSelf) continue;
+          if (kw && !figureKeywords(fk).includes(kw)) continue;
+          if (isSelf) return true; // the attacker trivially "has LOS" to itself
+          if (hasLineOfSightByCoord(game, String(pos).toLowerCase(), atkPos, mapSp, getFigureSize)) return true;
+        }
+        return false;
+      };
+    }
+    // A friendly figure (optionally with KEYWORD) within N of the attacker AND
+    // with LOS to the TARGET SPACE — "a friendly DROID within 3 has LOS to the
+    // target space" (Shared Calculations, Shared Intuition). `excludeSelf`
+    // (default true) excludes the attacking figure ("another friendly …").
+    case 'friendly_within_n_with_los_to_target': {
+      const kw = spec.keyword ? String(spec.keyword).toUpperCase() : null;
+      const n = spec.n ?? 3;
+      const excludeSelf = spec.excludeSelf !== false;
+      return (game, combat) => {
+        const mapId = game?.selectedMap?.id;
+        if (!mapId) return false;
+        const mapSp = getMapData(mapId);
+        const atkPos = attackerCoord(game, combat);
+        const tgt = targetCoord(game, combat);
+        if (!mapSp || !atkPos || !tgt) return false;
+        const team = game.figurePositions?.[combat?.attackerPlayerNum] || {};
+        for (const [fk, pos] of Object.entries(team)) {
+          if (!pos) continue;
+          if (excludeSelf && fk === combat?.attackerFigureKey) continue;
+          if (kw && !figureKeywords(fk).includes(kw)) continue;
+          if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), atkPos, n)) continue;
+          if (hasLineOfSightByCoord(game, String(pos).toLowerCase(), tgt, mapSp, getFigureSize)) return true;
+        }
+        return false;
+      };
+    }
+    // The TARGET did NOT have LOS to the attacker at the START of the attacker's
+    // activation — "if the target did not have LOS to you at the start of your
+    // activation" (Light It Up). Snapshot = the attacker's stashed
+    // activationStartPositions cell; LOS is geometric so re-checking from the
+    // current target space to that start cell reproduces the activation-start
+    // relation (the attacker's start cell is fixed; the target's own movement is
+    // its current position — see FLAG in the report re: target movement).
+    case 'target_no_los_to_attacker_start': {
+      return (game, combat) => {
+        const mapId = game?.selectedMap?.id;
+        if (!mapId) return false;
+        const mapSp = getMapData(mapId);
+        const startPos = game?.activationStartPositions?.[combat?.attackerFigureKey];
+        const tgt = targetCoord(game, combat);
+        if (!mapSp || !startPos || !tgt) return false;
+        return !hasLineOfSightByCoord(game, tgt, String(startPos).toLowerCase(), mapSp, getFigureSize);
+      };
     }
     default:
       return () => true;

@@ -70,7 +70,11 @@ e('flawless_execution', 'Flawless Execution (Cad Bane)', 'attacker', 'interactiv
 // catalog entry here so the catalog import doesn't overwrite the executable one
 // (alexanbv 2026-06-18 FIX-1; the prior entry was a passive AI-default swap).
 e('vanguard', 'Vanguard (AT-RT)', 'attacker', 'interactive', ON, 'pre-target swap + die-swap picker');
-e('shared_intuition', 'Shared Intuition (4-LOM)', 'attacker', 'passive', ON, 'friendly HUNTER ≤3 w/ LOS → +1 Hit');
+// 'shared_intuition' (4-LOM) is now an EXECUTABLE mods passive
+// (combat-abilities-mods.js — +1 Damage when a friendly HUNTER ≤3 has LOS to the
+// target space), gated on the reusable LOS aura primitive. No timing-only catalog
+// entry here so the catalog import doesn't clobber the executable one
+// (gate-rework 2026-06-18; the prior entry was an on_declare placeholder).
 e('query_declare', 'Query (HK-47, declare flag)', 'attacker', 'interactive', ON, 'sets queryNeedsPrompt (resolves mods)');
 e('front_line', 'Front Line (Echo Base Trooper)', 'attacker', 'interactive', ON, 'dist≤3 → +2 Acc + die swap');
 e('sniper', 'Sniper / Elite Sniper (Alliance Ranger)', 'attacker', 'passive', ON, 'dist≥5 → +forced rerolls');

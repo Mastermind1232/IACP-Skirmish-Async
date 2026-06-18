@@ -298,6 +298,24 @@ registerCombatAbility({
   applies: (game, combat) => !!combat.attackerSpentPowerToken && _deadPreciseKoTunAura(game, combat),
 });
 
+// Shared Intuition (4-LOM) [attacker] — gate-rework 2026-06-18. "While attacking,
+// if another friendly HUNTER within 3 has line of sight to the target space, apply
+// +1 Damage." A mods passive (automatic +1 Damage) gated on the reusable LOS aura
+// primitive (friendly_within_n_with_los_to_target). Detection requires 4-LOM to be
+// the attacker (the owner) AND the HUNTER-within-3-with-LOS-to-target condition.
+// Preservation Protocol can strip the ability (sid removed from the dc entry), so
+// the sid check covers that. Effect: COMBAT_RESOLVERS via _fireModsPassive.
+const _sharedIntuitionLosAura = makeCondition({ type: 'friendly_within_n_with_los_to_target', keyword: 'HUNTER', n: 3, includeSelf: false });
+registerCombatAbility({
+  id: 'shared_intuition', name: 'Shared Intuition', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (combat.noFriendliesActive || !combat.attackerFigureKey) return false;
+    const atkName = attackerDcNameOf(combat);
+    if (!ids(eff(deps, atkName)).includes('shared_intuition')) return false;
+    return _sharedIntuitionLosAura(game, combat);
+  },
+});
+
 // Deadly Precision (CC) — this round, the playing player's attacks apply -1
 // Dodge. Round-scoped per-player flag set by the CC; cleared at round start.
 // alexanbv 2026-06-17.

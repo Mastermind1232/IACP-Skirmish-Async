@@ -239,6 +239,7 @@ import { stashPendingModifier, drainPendingModifiers, applyPendingEffect } from 
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
+import { pendingForcedRerolls } from '../engine/combat-abilities-rerolls.js';
 import { auraGrantedSurges as _auraGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { markAbilityUsed as _markAbilityUsed, limitGuard as _limitGuard, abilityLimitKey as _abilityLimitKey } from '../engine/combat-conditions.js';
@@ -1139,6 +1140,66 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
 }
 
 /**
+ * GATE forcedRerollQueue-drain resolver (gate-rework 2026-06-18). Slot `i` for a
+ * side consumes the i-th pending queue entry the side controls — a reroll grant
+ * pushed by the legacy path (Guardian Stance, Battlefield Awareness, Cross
+ * Training, Doubt, Demoralizing Monologue, Versatile Weaponry, Raider, …) that the
+ * data-driven loop skips (attack_side='None'). Applies the reroll through the
+ * SAME generic reroll path (_rerollDie / the shared lock) per the entry's pool,
+ * then decrements `remaining` (clearing the entry when it hits 0). The reroll is
+ * optional (a Skip button) — declining leaves the entry for later.
+ */
+function _makeForcedRerollResolver({ slot, side }) {
+  const lbl = (p, d) => p === 'attack'
+    ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
+    : `${d?.block || 0}b/${d?.evade || 0}e${d?.dodge ? '/dodge' : ''}`;
+  const me = (combat) => pendingForcedRerolls(combat, side)[slot];
+  return {
+    prompt: ({ combat }) => {
+      const entry = me(combat)?.entry;
+      if (!entry) return { content: '**Granted Reroll** — none pending.', buttons: [['skip', 'OK', 'secondary']] };
+      const pool = entry.pool || 'any';
+      const src = entry.source ? `${entry.source} — ` : '';
+      if (pool === 'any') {
+        const atk = _selectableDieIndices(combat, { pool: 'attack' });
+        const def = _selectableDieIndices(combat, { pool: 'defense' });
+        const ad = combat.attackDiceResults || [], dd = combat.defenseDiceResults || [];
+        return {
+          content: `**${src}Granted Reroll** — choose any die to reroll:`,
+          buttons: [
+            ...atk.map((i) => [`a${i}`, `Attack #${i + 1} (${lbl('attack', ad[i])})`]),
+            ...def.map((i) => [`d${i}`, `Defense #${i + 1} (${lbl('defense', dd[i])})`]),
+            ['skip', 'Skip', 'secondary'],
+          ],
+        };
+      }
+      const idxs = _selectableDieIndices(combat, { pool });
+      const dice = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults) || [];
+      return {
+        content: `**${src}Granted Reroll** — choose a ${pool} die to reroll:`,
+        buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${lbl(pool, dice[i])})`]), ['skip', 'Skip', 'secondary']],
+      };
+    },
+    apply: async (choice, { combat, ctx, thread }) => {
+      const found = me(combat);
+      if (!found) return undefined;
+      const entry = found.entry;
+      if (choice === 'skip') { await thread?.send(`**${entry.source || 'Granted Reroll'}** — Skipped.`).catch(discordCatch); return undefined; }
+      const pool = entry.pool || 'any';
+      let p, idx;
+      if (pool === 'any') { p = choice[0] === 'd' ? 'defense' : 'attack'; idx = parseInt(choice.slice(1), 10); }
+      else { p = pool; idx = parseInt(choice, 10); }
+      const res = _rerollDie(combat, ctx, { pool: p, index: idx });
+      if (res.ok) await thread?.send(`**${entry.source || 'Granted Reroll'}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+      else await thread?.send(`**${entry.source || 'Granted Reroll'}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      // Decrement the consumed grant; clear it when exhausted.
+      entry.remaining = (entry.remaining ?? 1) - 1;
+      return undefined;
+    },
+  };
+}
+
+/**
  * Exhaust-attachment bonus resolver (Scavenged Weaponry +1 Hit, Explosive
  * Armaments Blast 1, Feeding Frenzy +1 Hit) — alexanbv 2026-06-17. No sub-choice:
  * clicking the button applies the stat bonus; the gate's _markGateAbilityUsed
@@ -1352,6 +1413,81 @@ export const COMBAT_RESOLVERS = {
         }
       }
       return r;
+    },
+  },
+  // Diala Passil's Defensive Stance reroll RIDER — gate-rework 2026-06-18. The
+  // rider on a real defense-die reroll: "if you do, convert each Dodge result to 2 Block and 1
+  // Evade." Modeled on the Soresu rider — a normal defense-die reroll, and ONLY on
+  // a non-skip reroll does the Dodge conversion fire. Diala is the defender herself
+  // (no third-party figure), so convert combat.defenseRoll inline after the reroll.
+  // Mirrors the resolve-step Diala conversion (which keeps firing for the auto
+  // Dodge-conversion keyword path); this handles the reroll-rider variant.
+  'reroll:diala_passil:defender': {
+    prompt: (a) => _makeRerollResolver({ name: 'Defensive Stance', pool: 'defense', side: 'defender', stageKey: 'rr_diala' }).prompt(a),
+    apply: async (choice, a) => {
+      const r = await _makeRerollResolver({ name: 'Defensive Stance', pool: 'defense', side: 'defender', stageKey: 'rr_diala' }).apply(choice, a);
+      if (choice !== 'skip' && !(r && r.followUp)) {
+        const { combat, thread } = a;
+        const dr = combat.defenseRoll || {};
+        if (dr.dodge) {
+          combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
+          await thread?.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+        }
+      }
+      return r;
+    },
+  },
+  // Much to Learn (Ezra Bridger) — gate-rework 2026-06-18. "You may reroll 1 attack
+  // die; if that figure is a FORCE USER you may turn that attack die to any side
+  // instead." The attacking figure being a FORCE USER unlocks the turn-to-any-side
+  // ALTERNATIVE (via the existing _makeDieTurnResolver). Non-FORCE-USER attackers
+  // get just the plain attack-die reroll.
+  'reroll:ezra_bridger:attacker': {
+    prompt: ({ game, combat, ctx }) => {
+      const eff = getDcEffectsGlobal() || {};
+      const an = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+      const e = eff[an] || eff[(an || '').replace(/\s*\[.*\]\s*$/, '')];
+      const kws = [...(e?.keywords || []), ...(e?.traits || [])].map((k) => String(k).toUpperCase());
+      const isForceUser = kws.includes('FORCE USER');
+      if (!isForceUser) {
+        return _makeRerollResolver({ name: 'Much to Learn', pool: 'attack', side: 'attacker', stageKey: 'rr_ezra' }).prompt({ game, combat, ctx });
+      }
+      const n = _selectableDieIndices(combat, { pool: 'attack' }).length;
+      if (!n) return { content: '**Much to Learn** — no eligible attack die.', buttons: [['skip', 'OK', 'secondary']] };
+      return {
+        content: '**Much to Learn** — FORCE USER: reroll 1 attack die, OR turn 1 attack die to any side instead:',
+        buttons: [['reroll', 'Reroll 1 attack die'], ['turn', 'Turn 1 attack die to any side'], ['skip', 'Skip', 'secondary']],
+      };
+    },
+    apply: async (choice, a) => {
+      const { combat, thread } = a;
+      const eff = getDcEffectsGlobal() || {};
+      const an = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+      const e = eff[an] || eff[(an || '').replace(/\s*\[.*\]\s*$/, '')];
+      const kws = [...(e?.keywords || []), ...(e?.traits || [])].map((k) => String(k).toUpperCase());
+      const isForceUser = kws.includes('FORCE USER');
+      const rerollR = _makeRerollResolver({ name: 'Much to Learn', pool: 'attack', side: 'attacker', stageKey: 'rr_ezra' });
+      const turnR = _makeDieTurnResolver({ name: 'Much to Learn', eligible: (dice) => dice.map((_d, i) => i), stageKey: 'mtl_turn' });
+      if (!isForceUser) return rerollR.apply(choice, a);
+      // FORCE USER: the first click selects the MODE; subsequent clicks belong to
+      // the chosen sub-resolver (tracked on combat so the gate's follow-up routes back).
+      const mode = combat._mtlMode;
+      if (!mode) {
+        if (choice === 'skip') { await thread?.send('**Much to Learn** — Skipped.').catch(discordCatch); return undefined; }
+        combat._mtlMode = choice === 'turn' ? 'turn' : 'reroll';
+        const sub = combat._mtlMode === 'turn' ? turnR : rerollR;
+        const p = await sub.prompt(a);
+        if (p && p.buttons) {
+          await thread?.send(sanitizeMentions({ content: p.content, components: chunkButtonsToRows(p.buttons.map(([c, l, s]) => new ButtonBuilder().setCustomId(`combat_modsub_${a.gameId}_${c}_${a.id}`).setLabel(l).setStyle(_modsStyle(s)))) })).catch(discordCatch);
+          return { followUp: true };
+        }
+        delete combat._mtlMode;
+        return undefined;
+      }
+      const sub = mode === 'turn' ? turnR : rerollR;
+      const res = await sub.apply(choice, a);
+      if (!(res && res.followUp)) delete combat._mtlMode;
+      return res;
     },
   },
   spray_fire: {
@@ -1931,6 +2067,9 @@ function _resolverFor(pick) {
   if (reg?.params?.kind === 'reroll') {
     return _makeRerollResolver({ name: reg.name, pool: reg.params.pool, side: reg.side, colorSwap: !!reg.params.colorSwap, dieColor: reg.params.dieColor || null, strainCost: reg.params.strainCost || 0, stageKey: `rr_${String(pick).replace(/[^a-z0-9]/gi, '').slice(0, 24)}` });
   }
+  if (reg?.params?.kind === 'forced_reroll') {
+    return _makeForcedRerollResolver({ slot: reg.params.slot, side: reg.params.side });
+  }
   if (reg?.params?.kind === 'exhaust_bonus') {
     return _makeExhaustBonusResolver({ card: reg.params.card, effect: reg.params.effect, label: reg.params.label });
   }
@@ -2334,6 +2473,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyExploitWeaknessSurge(combat);
     combat.surgeBonus = r.surgeBonus;
     await thread.send('**Exploit Weakness** — defender has a harmful condition, +1 Surge.').catch(discordCatch);
+  } else if (id === 'shared_intuition') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread.send('**Shared Intuition** (4-LOM) — friendly HUNTER within 3 has LOS to the target: +1 Damage.').catch(discordCatch);
   // 'negotiate' is no longer a mods passive (two-timing: moved to the on_declare
   // gate; its +2 Damage now lands here via the generic 'pending_modifiers_drain'
   // above). No mods-passive branch needed.
