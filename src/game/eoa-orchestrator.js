@@ -21,9 +21,9 @@
  * lives in src/handlers/eoa-handler.js.
  */
 
-import { opponentPlayerNum } from './player-helpers.js';
+import { opponentPlayerNum, getCcHand } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, dcAbilityFlags } from '../data-loader.js';
 
 // End-of-activation DC passive abilities, detected via the activating DC's
 // `passives` list in the card data. Per alexanbv 2026-06-13. 0-0-0's
@@ -80,9 +80,12 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
   const _dgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const _selFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
   const _selfFk = `${dcName}-${_dgIdx}-${_selFig}`;
-  const _passives = getDcEffects()?.[dcName]?.passives || [];
+  // Detect via dcAbilityFlags (passives ∪ abilities) — named EoA abilities
+  // (Hold the Line, Shield, In The Shadows) live in the `abilities` field
+  // per the 2026-06-15 data split, not `passives`.
+  const _abilityFlags = dcAbilityFlags(getDcEffects()?.[dcName]);
   for (const [pname, info] of Object.entries(EOA_PASSIVE_ABILITIES)) {
-    if (!_passives.includes(pname)) continue;
+    if (!_abilityFlags.includes(pname)) continue;
     descriptors.push({
       id: `${info.subPromptKey}:${msgId}`,
       ownerPlayerNum: playerNum,
@@ -105,7 +108,51 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     });
   }
 
+  // Force Surge (Command Card, timing endOfActivation, playableBy Force
+  // User): "Use at the end of your activation to move up to 1 space. Then,
+  // choose an adjacent hostile figure. That figure suffers 2 Damage and 1
+  // Strain." Previously only surfaced via the generic end-of-activation
+  // reaction-card prompt; it was never an EoA descriptor (the eoa-
+  // orchestrator header listed it as intended but it was unwired). Wire it
+  // as a player-choice EoA descriptor for the ACTIVATOR when they hold the
+  // card AND field a Force User (the card's playableBy restriction). The
+  // pick routes into the normal CC-play pipeline in eoa-handler.js so the
+  // Move-X + adjacent-hostile resolution is the same as playing it from
+  // hand.
+  if (getCcHand(game, playerNum)?.includes?.('Force Surge')) {
+    const _fsFigureKey = _firstForceUserFigureKey(game, playerNum);
+    if (_fsFigureKey) {
+      descriptors.push({
+        id: `force_surge:${msgId}`,
+        ownerPlayerNum: playerNum,
+        sourceMsgId: msgId,
+        sourceLabel: 'Force Surge (move 1, adjacent hostile suffers 2 Damage + 1 Strain)',
+        subPromptKey: 'force_surge',
+        extras: { dcName, cardName: 'Force Surge', figureKey: _fsFigureKey },
+      });
+    }
+  }
+
   return descriptors;
+}
+
+/**
+ * Find a friendly FORCE USER figure key for the given player (the figure
+ * that "plays" Force Surge — its playableBy restriction). Returns the first
+ * matching live figure key, or null. Kept local so the orchestrator stays
+ * free of the heavier cc-timing dependency graph.
+ */
+function _firstForceUserFigureKey(game, playerNum) {
+  const positions = game.figurePositions?.[playerNum] || {};
+  const dcEff = getDcEffects() || {};
+  for (const [fk, pos] of Object.entries(positions)) {
+    if (!pos) continue;
+    const dcName = fk.replace(/-\d+-\d+$/, '');
+    const eff = dcEff[dcName] || dcEff[dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+    const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (kws.includes('FORCE USER')) return fk;
+  }
+  return null;
 }
 
 /**

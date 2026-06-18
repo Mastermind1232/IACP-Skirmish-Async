@@ -21,8 +21,13 @@ function readSrc(relPath) {
 // BEHAVIORAL TESTS — applyEndOfActivationEffects()
 // ══════════════════════════════════════════════════════════════════════════════
 
-describe('B-ENDACT-001: Shield grants Block Token when none present', () => {
-  it('grants 1 Block Token to figure with no Block tokens', async () => {
+// 2026-06 audit: Shield / In The Shadows / Unnerving / Hold the Line are no
+// longer auto-fired by applyEndOfActivationEffects(). They are PLAYER-CHOICE
+// orchestrator descriptors (eoa-orchestrator.js → eoa-handler.js). These
+// tests now assert the auto-fire path is GONE (no double-fire) and that the
+// descriptor enumeration is the single path.
+describe('B-ENDACT-001: Shield is NOT auto-fired (player-choice descriptor only)', () => {
+  it('applyEndOfActivationEffects does not grant a Block Token automatically', async () => {
     const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       figurePositions: { 1: { 'Riot Trooper (Elite)-1-0': 'a3', 'Riot Trooper (Elite)-1-1': 'a4' } },
@@ -34,35 +39,25 @@ describe('B-ENDACT-001: Shield grants Block Token when none present', () => {
       displayName: 'Riot Trooper (Elite)',
       msgId: 'rt-msg-1',
     });
-    const shieldEffects = applied.filter(e => e.effect === 'Shield');
-    assert.strictEqual(shieldEffects.length, 2, 'Shield fired for both figures');
-    assert.ok(game.figurePowerTokens['Riot Trooper (Elite)-1-0']?.includes('Block'),
-      'Figure 0 has Block token');
-    assert.ok(game.figurePowerTokens['Riot Trooper (Elite)-1-1']?.includes('Block'),
-      'Figure 1 has Block token');
+    assert.strictEqual(applied.filter(e => e.effect === 'Shield').length, 0, 'Shield no longer auto-fires');
+    assert.ok(!game.figurePowerTokens['Riot Trooper (Elite)-1-0']?.includes('Block'), 'No auto Block token');
   });
 
-  it('does not grant Block Token when figure already has one', async () => {
-    const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
+  it('Shield is enumerated as a single EoA descriptor instead', async () => {
+    const { enumerateActivatorEoaDescriptors } = await import('../../../src/game/eoa-orchestrator.js');
+    const msgId = 'rt-msg-1';
     const game = {
-      figurePositions: { 1: { 'Riot Trooper (Elite)-1-0': 'a3' } },
-      figurePowerTokens: { 'Riot Trooper (Elite)-1-0': ['Block'] },
+      dcMessageMeta: new Map([[msgId, { displayName: 'Riot Trooper (Elite) [Group 1]', gameId: 'g', playerNum: 1, dcName: 'Riot Trooper (Elite)' }]]),
+      dcActionsData: { [msgId]: { selectedFigure: 0 } },
+      figurePositions: { 1: {} },
     };
-    const { applied } = applyEndOfActivationEffects(game, {
-      dcName: 'Riot Trooper (Elite)',
-      playerNum: 1,
-      displayName: 'Riot Trooper (Elite)',
-      msgId: 'rt-msg-2',
-    });
-    const shieldEffects = applied.filter(e => e.effect === 'Shield');
-    assert.strictEqual(shieldEffects.length, 0, 'Shield did not fire (already has Block)');
-    assert.strictEqual(game.figurePowerTokens['Riot Trooper (Elite)-1-0'].length, 1,
-      'Still has exactly 1 Block token');
+    const shield = enumerateActivatorEoaDescriptors(game, { dcName: 'Riot Trooper (Elite)', playerNum: 1, msgId }).filter(d => d.subPromptKey === 'shield');
+    assert.strictEqual(shield.length, 1, 'exactly one shield descriptor');
   });
 });
 
-describe('B-ENDACT-002: In The Shadows applies Hidden to ISB Infiltrator Elite', () => {
-  it('applies Hide condition to all figures in DG', async () => {
+describe('B-ENDACT-002: In The Shadows is NOT auto-fired (player-choice descriptor only)', () => {
+  it('applyEndOfActivationEffects does not auto-Hide ISB Infiltrator figures', async () => {
     const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       figurePositions: { 2: { 'ISB Infiltrator (Elite)-1-0': 'b2', 'ISB Infiltrator (Elite)-1-1': 'b3' } },
@@ -74,12 +69,8 @@ describe('B-ENDACT-002: In The Shadows applies Hidden to ISB Infiltrator Elite',
       displayName: 'ISB Infiltrator (Elite)',
       msgId: 'isb-msg-1',
     });
-    const itsEffects = applied.filter(e => e.effect === 'In The Shadows');
-    assert.strictEqual(itsEffects.length, 1, 'In The Shadows fired');
-    assert.ok(game.figureConditions['ISB Infiltrator (Elite)-1-0']?.includes('Hide'),
-      'Figure 0 is Hidden');
-    assert.ok(game.figureConditions['ISB Infiltrator (Elite)-1-1']?.includes('Hide'),
-      'Figure 1 is Hidden');
+    assert.strictEqual(applied.filter(e => e.effect === 'In The Shadows').length, 0, 'In The Shadows no longer auto-fires');
+    assert.ok(!game.figureConditions['ISB Infiltrator (Elite)-1-0']?.includes('Hide'), 'No auto Hide');
   });
 });
 
@@ -130,8 +121,8 @@ describe('B-ENDACT-003: Unnerving applies Weaken to adjacent hostiles', () => {
   });
 });
 
-describe('B-ENDACT-004: Hold the Line grants Block tokens per hostile with LOS', () => {
-  it('grants 0 Block tokens when no figure positions', async () => {
+describe('B-ENDACT-004: Hold the Line is NOT auto-fired (player-choice descriptor only)', () => {
+  it('applyEndOfActivationEffects does not auto-grant Hold the Line', async () => {
     const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       figurePositions: { 1: {}, 2: {} },
@@ -143,9 +134,19 @@ describe('B-ENDACT-004: Hold the Line grants Block tokens per hostile with LOS',
       displayName: 'Baze Malbus',
       msgId: 'baze-msg-1',
     });
-    const htlEffects = applied.filter(e => e.effect === 'Hold the Line');
-    assert.strictEqual(htlEffects.length, 1, 'Hold the Line always fires for Baze');
-    assert.ok(htlEffects[0].message.includes('0 Block Token'), 'Message shows 0 tokens');
+    assert.strictEqual(applied.filter(e => e.effect === 'Hold the Line').length, 0, 'Hold the Line no longer auto-fires');
+  });
+
+  it('Hold the Line is enumerated as a single EoA descriptor instead', async () => {
+    const { enumerateActivatorEoaDescriptors } = await import('../../../src/game/eoa-orchestrator.js');
+    const msgId = 'baze-msg-1';
+    const game = {
+      dcMessageMeta: new Map([[msgId, { displayName: 'Baze Malbus', gameId: 'g', playerNum: 1, dcName: 'Baze Malbus' }]]),
+      dcActionsData: { [msgId]: { selectedFigure: 0 } },
+      figurePositions: { 1: {} },
+    };
+    const htl = enumerateActivatorEoaDescriptors(game, { dcName: 'Baze Malbus', playerNum: 1, msgId }).filter(d => d.subPromptKey === 'hold_the_line');
+    assert.strictEqual(htl.length, 1, 'exactly one hold_the_line descriptor');
   });
 });
 
@@ -325,13 +326,35 @@ describe('ORACLE-ENDACT-003: Shared function is Discord-agnostic', () => {
   });
 });
 
-describe('ORACLE-ENDACT-004: Flawless Execution pattern preserved — choice effects remain in handleEndTurn', () => {
-  it('Trust Goes Both Ways remains in handleEndTurn (choice-based, not extracted)', () => {
+describe('ORACLE-ENDACT-004: Trust Goes Both Ways EoA consolidated into the orchestrator', () => {
+  // 2026-06 audit: the legacy ad-hoc `trust_goes_both_ways_jyn` end-of-
+  // activation prompt (and its `act_passive_..._trustboth_` handler) was
+  // REMOVED from handleEndTurn — it double-wired the ability with a different
+  // once-per-round key than the EoA orchestrator. The single player-choice
+  // path is now the orchestrator descriptor `trust_both_ways_eoa`.
+  it('legacy trustboth emitter + handler no longer present in activation.js', () => {
     const src = readSrc('src/handlers/activation.js');
-    const fnIdx = src.indexOf('export async function handleEndTurn');
-    const fnEnd = src.indexOf('\nexport ', fnIdx + 1);
-    const block = src.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 3000);
-    assert.ok(block.includes('trust_goes_both_ways_jyn'),
-      'Trust Goes Both Ways must remain in handleEndTurn (choice-based)');
+    // The button emitter and the act_passive handler branch are gone (comments
+    // referencing the removal are allowed).
+    assert.ok(!/setCustomId\(`act_passive_[^`]*_trustboth_/.test(src),
+      'legacy act_passive trustboth button emitter must be removed');
+    assert.ok(!/ability === 'trustboth'/.test(src),
+      'legacy trustboth act_passive handler branch must be removed');
+  });
+
+  it("Trust Goes Both Ways EoA is a player-choice orchestrator descriptor", () => {
+    const eoaSrc = readSrc('src/game/eoa-orchestrator.js');
+    assert.ok(eoaSrc.includes('trust_both_ways_eoa'),
+      'EoA orchestrator must enumerate trust_both_ways_eoa');
+    const handlerSrc = readSrc('src/handlers/eoa-handler.js');
+    assert.ok(handlerSrc.includes('trust_both_ways_eoa'),
+      'eoa-handler must resolve trust_both_ways_eoa');
+  });
+
+  it('the once-per-round key is unified (per-msgId) across SoA and EoA', () => {
+    const eoaSrc = readSrc('src/game/eoa-orchestrator.js');
+    const soaSrc = readSrc('src/game/soa-orchestrator.js');
+    assert.ok(eoaSrc.includes('trustBothWays_${msgId}'), 'EoA uses per-msgId key');
+    assert.ok(soaSrc.includes('trustBothWays_${msgId}'), 'SoA uses per-msgId key');
   });
 });

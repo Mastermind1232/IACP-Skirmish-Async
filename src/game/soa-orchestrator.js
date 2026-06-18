@@ -26,7 +26,7 @@
  */
 
 import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds, ccDeckKey, getActivatedDcIndices } from './player-helpers.js';
-import { getDcEffects, getMapData, getFigureSize } from '../data-loader.js';
+import { getDcEffects, getMapData, getFigureSize, dcAbilityFlags } from '../data-loader.js';
 import { countGameSpaces } from './board-helpers.js';
 import { cardNameIncludes } from './card-names.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
@@ -157,10 +157,20 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
-  // Mounted (Captain Terro / Kuiil / Dewback): grant 3 MP. Per destruct
+  // Mounted (Captain Terro / Kuiil / Dewback / 74-Z Speeder Bike Elite /
+  // Tauntaun Rider): grant 3 MP at start of activation. Per destruct
   // 2026-05-07 even auto grants must be player-driven (timing matters).
+  // Detection is robust across all data shapes: the per-card
+  // `mounted_*` specialAbilityIds, the named-ability flag set
+  // (dcAbilityFlags = passives ∪ abilities — "Mounted" lives in
+  // `abilities` for 74-Z + Tauntaun Rider, which neither a mounted_* id
+  // nor a `Mounted` passive would catch), and finally an abilityText
+  // fallback ("Mounted:" as a named ability heading) so any future
+  // Mounted card is covered even if it isn't tagged.
   const _abilityIds = eff?.specialAbilityIds || [];
-  if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || (eff?.passives || []).includes('Mounted')) {
+  const _mountedFlag = dcAbilityFlags(eff).includes('Mounted');
+  const _mountedText = /(^|\n)\s*Mounted:/.test(eff?.abilityText || '');
+  if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || _mountedFlag || _mountedText) {
     descriptors.push({
       id: `mounted:${msgId}`,
       ownerPlayerNum: playerNum,
@@ -402,6 +412,42 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         sourceLabel: 'Hair Trigger',
         subPromptKey: 'hair_trigger',
         extras: { dcName: 'Jyn Odan', jynFigureKey: _jynFk, targetFigureKey: _actFk, targetMsgId: msgId, targetPlayerNum: playerNum, activatingFigureIndex: figureIndex },
+      });
+    }
+  }
+
+  // I'm One With the Force (Chirrut Imwe): opponent-activation SoA
+  // trigger, modelled on Hair Trigger. Card text: "At the start of a
+  // hostile figure's activation, you may move up to 2 spaces to a space
+  // adjacent to a hostile figure. Limit once per round." Owner = Chirrut's
+  // player (the opponent of the activator — the activating figure is the
+  // "hostile figure" whose activation start triggers it). Enumerated once
+  // per Chirrut per round, regardless of which hostile figure is
+  // activating (so it appears at the first hostile activation the owner
+  // wants to use it on). The actual "move adjacent to a hostile" target
+  // check happens at fire time via the Move-X picker, not here.
+  if (game) {
+    const _ciOwnerPn = opponentPlayerNum(playerNum); // Chirrut's player
+    const _ciDcList = getDcList(game, _ciOwnerPn) || [];
+    const _ciDcMsgIds = getDcMessageIds(game, _ciOwnerPn) || [];
+    for (let _ci = 0; _ci < _ciDcList.length; _ci++) {
+      const _chir = _ciDcList[_ci];
+      if (!_chir?.dcName || _chir.dcName !== 'Chirrut Imwe') continue;
+      const _ciMsgId = _ciDcMsgIds[_ci];
+      if (!_ciMsgId) continue;
+      // Once-per-round limit (per Chirrut DC).
+      if (game.chirrutOneWithForceUsed?.[_ciMsgId]) continue;
+      const _ciDgIdx = (_chir.displayName || _chir.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _ciFk = `Chirrut Imwe-${_ciDgIdx}-0`;
+      const _ciPos = game.figurePositions?.[_ciOwnerPn]?.[_ciFk];
+      if (!_ciPos) continue;
+      descriptors.push({
+        id: `i_am_one_with_the_force:${_ciMsgId}->${msgId}`,
+        ownerPlayerNum: _ciOwnerPn,
+        sourceMsgId: _ciMsgId,
+        sourceLabel: "I'm One With the Force",
+        subPromptKey: 'i_am_one_with_the_force',
+        extras: { dcName: 'Chirrut Imwe', chirrutFigureKey: _ciFk, chirrutPlayerNum: _ciOwnerPn },
       });
     }
   }

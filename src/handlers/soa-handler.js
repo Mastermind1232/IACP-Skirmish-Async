@@ -224,6 +224,15 @@ export async function handleSoaPick(interaction, ctx) {
       content: `\u{1F52B} **Hair Trigger** — **Jyn Odan** may interrupt to perform a free attack against **${targetName}**:`,
       components: [row],
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'i_am_one_with_the_force') {
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Move up to 2 (adjacent to a hostile)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{262F}\u{FE0F} **I'm One With the Force** — **Chirrut Imwe** may move up to **2 spaces** to a space adjacent to a hostile figure:`,
+      components: [row],
+    }).catch(discordCatch);
   } else if (desc.subPromptKey === 'companion_order') {
     const cmpName = desc.extras?.companionName || 'companion';
     const hostName = desc.extras?.dcName || displayName;
@@ -1056,6 +1065,48 @@ export async function handleSoaFire(interaction, ctx) {
       await interaction.message.edit({ content: `\u{1F52B} **Hair Trigger** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
       await interaction.followUp({ content: `Unknown Hair Trigger choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+
+  // --- I'm One With the Force (Chirrut Imwe) ---
+  // Apply: set up a Move-X for Chirrut (up to 2 spaces, bypass terrain
+  // costs per "move up to 2 spaces") and post the picker. The owner moves
+  // Chirrut adjacent to a hostile figure. Once per round per Chirrut DC.
+  } else if (desc.subPromptKey === 'i_am_one_with_the_force') {
+    if (choiceKey === 'skip') {
+      await interaction.message.edit({ content: `\u{262F}\u{FE0F} **I'm One With the Force** — Skipped.`, components: [] }).catch(discordCatch);
+    } else if (choiceKey === 'apply') {
+      const chirrutMsgId = desc.sourceMsgId;
+      const chirrutFk = desc.extras?.chirrutFigureKey;
+      const chirrutPn = desc.extras?.chirrutPlayerNum ?? ownerPlayerNum;
+      if (!chirrutFk || !game.figurePositions?.[chirrutPn]?.[chirrutFk]) {
+        await interaction.followUp({ content: 'Chirrut is no longer on the board.', ephemeral: true }).catch(discordCatch);
+        return;
+      }
+      game.chirrutOneWithForceUsed = game.chirrutOneWithForceUsed || {};
+      game.chirrutOneWithForceUsed[chirrutMsgId] = true;
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[chirrutMsgId] = {
+        remaining: 2,
+        source: "I'm One With the Force",
+        playerNum: chirrutPn,
+        figureKey: chirrutFk,
+        dcName: 'Chirrut Imwe',
+        threadId: null,
+        bypassCosts: true,
+        msgId: chirrutMsgId,
+        nextAction: null,
+      };
+      try {
+        const { postMoveXPicker } = await import('./move-x-handler.js');
+        await postMoveXPicker(game, ctx, chirrutMsgId).catch((err) => console.error("I'm One With the Force MOVE-X picker failed:", err?.message ?? err));
+      } catch (err) {
+        console.error("I'm One With the Force MOVE-X integration failed:", err?.message ?? err);
+      }
+      await interaction.message.edit({ content: `\u{262F}\u{FE0F} **I'm One With the Force** — **Chirrut Imwe** moves up to 2 spaces (move adjacent to a hostile figure).`, components: [] }).catch(discordCatch);
+      if (logGameAction) await logGameAction(game, client, `\u{262F}\u{FE0F} **I'm One With the Force** — Chirrut Imwe moves up to 2 spaces.`, { phase: 'ROUND', icon: 'activate' });
+    } else {
+      await interaction.followUp({ content: `Unknown I'm One With the Force choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 

@@ -6,7 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats, getPairedActiveMsgId, getCompanionMsgIdForHost } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
-import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
+import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -54,7 +54,6 @@ import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 
-import { getDcEffect } from '../game/dc-helpers.js';
 /**
  * Determine the companion (if any) for a given DC, considering both
  * direct companion fields (e.g. Iden Versio → Dio) and attachment-based
@@ -66,9 +65,17 @@ import { getDcEffect } from '../game/dc-helpers.js';
 // getCompanionForDc and formatCompanionStats moved to ../engine/activation-setup.js
 
 /**
- * Field Tactics (Death Trooper Elite/Regular): after activation ends, choose a
- * friendly TROOPER or LEADER figure within 2 spaces (cost ≤6) to perform an
- * interrupt free attack.  Modelled on Coordinated Raid (pendingCoordinatedRaid).
+ * Field Tactics (Death Trooper Elite/Regular). Card text: "After your
+ * activation, you may immediately ACTIVATE a friendly TROOPER or LEADER group
+ * with cost 6 or less. That group loses 'Field Tactics' this round."
+ *
+ * Per the 2026-06 audit this is an immediate ACTIVATION grant, not a free
+ * interrupt attack. The chosen group is activated now (out of normal turn
+ * order) through the standard activation flow — modelled on Squad Swarm: set
+ * an activation-grant flag + chosen target, then prompt the owner to click the
+ * group's card to begin. (The legacy `pendingFieldTactics` free-attack path in
+ * combat.js is retained but no longer triggered here; it remains a structural
+ * mutex member.)
  *
  * @param {object} game
  * @param {object} meta - dcMessageMeta entry for the activating DC
@@ -87,19 +94,17 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
   const ownerId = getPlayerId(game, meta.playerNum);
   const gameId = game.gameId;
   if (validTargets.length === 1) {
-    // Auto-select the only eligible figure
+    // Auto-select the only eligible group and grant its immediate activation.
     const chosenFk = validTargets[0];
     const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, meta.playerNum, chosenFk) : null;
-    if (chosenMsgId) {
-      setPendingFieldTactics(game, { forMsgId: chosenMsgId, chosenFigureKey: chosenFk, triggeredByMsgId: dcMsgId });
-    }
-    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-    game.roundFigureAbilityUsed[ftRoundKey] = true;
+    grantFieldTacticsActivation(game, meta.playerNum, chosenMsgId, ftRoundKey);
     const chosenName = dcNameFromFigureKey(chosenFk);
-    await logGameAction(game, client, `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, { phase: 'ROUND', icon: 'activate' });
+    await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — **${chosenName}**'s group may **immediately activate** now (it loses Field Tactics this round). Click its card to begin.`, {
+      phase: 'ROUND', icon: 'activate', allowedMentions: { users: [ownerId] },
+    });
     return;
   }
-  // Multiple targets — show picker buttons
+  // Multiple targets — show picker buttons (one per eligible group figure).
   const btns = validTargets.slice(0, 20).map(fk => {
     const label = dcNameFromFigureKey(fk);
     return new ButtonBuilder()
@@ -114,10 +119,22 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
       .setStyle(ButtonStyle.Secondary)
   );
   const rows = chunkButtonsToRows(btns);
-  await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — Choose a friendly TROOPER/LEADER (cost ≤6) within 2 spaces to perform a free interrupt attack:`, {
+  await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — Choose a friendly TROOPER/LEADER group (cost ≤6) within 2 spaces to **immediately activate**:`, {
     components: rows,
     allowedMentions: { users: [ownerId] },
   });
+}
+
+/**
+ * Record the Field Tactics immediate-activation grant + spend the round-once
+ * guard. Mirrors the Squad Swarm flag (`squadSwarmPlayerNum`): the chosen
+ * group activates through the normal activation flow on the next card click.
+ */
+function grantFieldTacticsActivation(game, playerNum, chosenMsgId, ftRoundKey) {
+  game.fieldTacticsActivationPlayerNum = playerNum;
+  game.fieldTacticsActivationMsgId = chosenMsgId || null;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  game.roundFigureAbilityUsed[ftRoundKey] = true;
 }
 
 /**
@@ -656,35 +673,15 @@ export async function handleEndTurn(interaction, ctx) {
   // Deterministic end-of-activation effects now handled by applyEndOfActivationEffects()
   // in handleDcEndActivation (shared with headless). Only choice-based effects remain here.
 
-  // Trust Goes Both Ways (Jyn Erso): end-of-activation trigger (limit once per round, shared with start-of-activation)
-  {
-    const _tgbwEff = getDcEffect(meta.dcName);
-    if ((_tgbwEff?.specialAbilityIds || []).includes('trust_goes_both_ways_jyn')) {
-      const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const _tgbwActFig = game.dcActionsData?.[dcMsgId]?.selectedFigure ?? 0;
-      const _tgbwSelfFk = `${meta.dcName}-${_tgbwDgIndex}-${_tgbwActFig}`;
-      // Per alexanbv 2026-06-13: per FIGURE (key by the figure, not the group).
-      const _tgbwRoundKey = `trustBothWays_${_tgbwSelfFk}`;
-      if (!game.roundFigureAbilityUsed?.[_tgbwRoundKey]) {
-        const _tgbwSelfPos = game.figurePositions?.[meta.playerNum]?.[_tgbwSelfFk];
-        const _tgbwFriendlies = _tgbwSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
-          .filter(([fk, fp]) => fk !== _tgbwSelfFk && fp && countGameSpaces(game, _tgbwSelfPos, fp) <= 1) : [];
-        if (_tgbwFriendlies.length > 0) {
-          const ownerId = getPlayerId(game, meta.playerNum);
-          const _tgbwSlice = _tgbwFriendlies.slice(0, 4);
-          const _tgbwLabels = figureChoiceLabels(_tgbwSlice.map(([fk]) => fk));
-          const btns = _tgbwSlice.map(([fk], i) =>
-            new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_${fk}`).setLabel(_tgbwLabels[i]).setStyle(ButtonStyle.Primary)
-          );
-          btns.push(new ButtonBuilder().setCustomId(`act_passive_${game.gameId}_${dcMsgId}_trustboth_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-          await logGameAction(game, client, `<@${ownerId}> 🤝 **Trust Goes Both Ways** (end of activation) — Choose an adjacent friendly figure. You and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`, {
-            components: chunkButtonsToRows(btns),
-            allowedMentions: { users: [ownerId] },
-          });
-        }
-      }
-    }
-  }
+  // Trust Goes Both Ways (Jyn Erso): the end-of-activation branch is now a
+  // PLAYER-CHOICE descriptor in the EoA orchestrator (subPromptKey
+  // 'trust_both_ways_eoa', enumerated in src/game/eoa-orchestrator.js and
+  // resolved in src/handlers/eoa-handler.js). The legacy ad-hoc prompt that
+  // used to live here (`act_passive_..._trustboth_`) was REMOVED: it double-
+  // wired the ability across two handlers with two different once-per-round
+  // keys (per-figure here vs per-msgId in the orchestrator), so it could fire
+  // twice. The single canonical key is now `trustBothWays_${msgId}`, shared
+  // by both the SoA and EoA orchestrator branches.
 
   const actionsData = game.dcActionsData?.[dcMsgId];
   if (actionsData?.threadId) {
@@ -1611,49 +1608,11 @@ export async function handleActPassive(interaction, ctx) {
         await interaction.message.edit({ content: `🧠 **Strategize** — Deck is empty; nothing to discard.`, components: [] }).catch(discordCatch);
       }
     }
-  // --- Trust Goes Both Ways: chosen figure gains 1 MP ---
-  } else if (ability === 'trustboth') {
-    if (choice === 'skip') {
-      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — Skipped.`, components: [] }).catch(discordCatch);
-    } else {
-      const targetFk = choice;
-      const targetDcName = dcNameFromFigureKey(targetFk);
-      const { figureIndex: targetFigIdx } = parseFigureKey(targetFk);
-      // Find target's msgId for health state
-      let targetMsgId = null;
-      for (const [mId, mMeta] of dcMessageMeta) {
-        if (mMeta.gameId !== gameId) continue;
-        if (mMeta.dcName === targetDcName && mMeta.playerNum === meta.playerNum) {
-          targetMsgId = mId;
-          break;
-        }
-      }
-      // Self (Jyn) figure key
-      const _tgbwDgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const selfFk = `${meta.dcName}-${_tgbwDgIndex}-0`;
-      // Recover 1 Damage from Jyn
-      const selfHeal = healHp(dcHealthState, game, msgId, 0, 1, meta.playerNum);
-      // Recover 1 Damage from target
-      let targetHeal = { healed: 0 };
-      if (targetMsgId) {
-        targetHeal = healHp(dcHealthState, game, targetMsgId, targetFigIdx, 1, meta.playerNum);
-      }
-      // Grant 1 Surge Token to both
-      grantPowerTokens(game, selfFk, 'Surge', 1);
-      grantPowerTokens(game, targetFk, 'Surge', 1);
-      // Mark once-per-round PER FIGURE (alexanbv 2026-06-13): key by the
-      // activating figure, matching the end-of-activation prompt gate.
-      const _tgbwRoundKey = `trustBothWays_${selfFk}`;
-      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      game.roundFigureAbilityUsed[_tgbwRoundKey] = true;
-      const selfName = meta.displayName || meta.dcName;
-      const parts = [];
-      if (selfHeal.healed > 0) parts.push(`**${selfName}** recovered 1 Damage`);
-      if (targetHeal.healed > 0) parts.push(`**${targetDcName}** recovered 1 Damage`);
-      parts.push(`both gained **1 Surge Token**`);
-      await interaction.message.edit({ content: `🤝 **Trust Goes Both Ways** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
-      await logGameAction?.(game, client, `**Trust Goes Both Ways** (Jyn Erso) — ${parts.join('; ')}.`, { phase: 'ACTIVATION', icon: 'activate' });
-    }
+  // --- Trust Goes Both Ways: REMOVED. Both the start- and end-of-activation
+  //     branches are now player-choice orchestrator descriptors
+  //     (subPromptKeys 'trust_both_ways' / 'trust_both_ways_eoa', resolved in
+  //     soa-handler.js / eoa-handler.js). The legacy `trustboth` act_passive
+  //     handler was deleted along with its emitter to stop the double-fire. ---
   // --- Token Distribution: used by Arms Distribution and Long-Laid Plans ---
   } else if (ability === 'tokendist') {
     const pending = game.pendingTokenDistribution;
@@ -2368,15 +2327,12 @@ export async function handleFieldTacticsPick(interaction, ctx) {
   }
   const findDcMsgIdForFigure = ctx.findDcMessageIdForFigure;
   const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, triggerMeta.playerNum, figureKey) : null;
-  if (chosenMsgId) {
-    setPendingFieldTactics(game, { forMsgId: chosenMsgId, chosenFigureKey: figureKey, triggeredByMsgId: triggerMsgId });
-  }
   const ftRoundKey = `fieldTactics_${triggerMsgId}`;
-  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-  game.roundFigureAbilityUsed[ftRoundKey] = true;
+  grantFieldTacticsActivation(game, triggerMeta.playerNum, chosenMsgId, ftRoundKey);
   const chosenName = dcNameFromFigureKey(figureKey);
-  await interaction.message.edit({ content: `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, components: [] }).catch(discordCatch);
-  await logGameAction(game, client, `**Field Tactics** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.`, { phase: 'ROUND', icon: 'activate' });
+  const _ftMsg = `**Field Tactics** — **${chosenName}**'s group may **immediately activate** now (it loses Field Tactics this round). Click its card to begin.`;
+  await interaction.message.edit({ content: _ftMsg, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, _ftMsg, { phase: 'ROUND', icon: 'activate' });
   saveGames(game.gameId);
 }
 

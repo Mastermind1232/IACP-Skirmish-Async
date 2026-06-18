@@ -758,6 +758,7 @@ const ROUND_OBJECT_FLAGS = [
   'pendingSoaResolution',
   'voraciousUsed',
   'jynHairTriggerUsed',
+  'chirrutOneWithForceUsed',
 ];
 
 const ROUND_NULL_FLAGS = [
@@ -784,6 +785,8 @@ const ROUND_NULL_FLAGS = [
   'roundSmugglersTricksPlayerNum',
   'squadSwarmPlayerNum',
   'squadSwarmCumulativeCost',
+  'fieldTacticsActivationPlayerNum',
+  'fieldTacticsActivationMsgId',
   'whenDefeatHostileWithin3GainBlockTokens',
   'pendingRushPush',
   'pendingMassivePush',

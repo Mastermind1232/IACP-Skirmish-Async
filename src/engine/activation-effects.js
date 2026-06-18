@@ -2,16 +2,10 @@
  * Deterministic activation effects — shared between Discord and headless.
  * No Discord dependency. Uses only game-state primitives.
  */
-import { getDcEffects, getDcStats, getMapData } from '../data-loader.js';
-import { applyCondition, isConditionImmune, filterCondition } from '../game/conditions.js';
-import { grantPowerTokens, grantMovementBank } from '../game/game-helpers.js';
-import { opponentPlayerNum, getActivatedDcIndices, setActivatedDcIndices, getCcHand, getDcList, getDcMessageIds } from '../game/player-helpers.js';
-import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
-import { reduceHp } from '../game/damage-helpers.js';
-import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
-import { getFigureSize } from '../data-loader.js';
-import { cardNameIncludes } from '../game/card-names.js';
-import { countGameSpaces } from '../game/board-helpers.js';
+import { getDcEffects } from '../data-loader.js';
+import { filterCondition } from '../game/conditions.js';
+import { getActivatedDcIndices, setActivatedDcIndices, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 /**
  * Apply deterministic start-of-activation passives for a DC that is beginning activation.
@@ -127,78 +121,15 @@ export function applyEndOfActivationEffects(game, { dcName, playerNum, displayNa
     applied.push({ effect: 'Weaken discard', message: `**Weakened** — **${dcNameFromFigureKey(fk)}** discarded Weaken at end of activation.` });
   }
 
-  // Shield (Riot Trooper E/R): if no Block tokens, gain 1 Block Token
-  if ((dcEff?.passives || []).includes('Shield')) {
-    for (const fk of figureKeys) {
-      const tokens = game.figurePowerTokens?.[fk] || [];
-      if (!tokens.includes('Block')) {
-        grantPowerTokens(game, fk, 'Block', 1);
-        const fkName = dcNameFromFigureKey(fk);
-        applied.push({ effect: 'Shield', message: `**Shield** — **${fkName}** gained 1 **Block Token** at end of activation.` });
-      }
-    }
-  }
-
-  // In The Shadows (ISB Infiltrator Elite): become Hidden
-  if (dcName === 'ISB Infiltrator (Elite)') {
-    let anyHidden = false;
-    for (const fk of figureKeys) {
-      applyCondition(game, fk, 'Hide');
-      anyHidden = true;
-    }
-    if (anyHidden) {
-      applied.push({ effect: 'In The Shadows', message: `**In The Shadows** — **ISB Infiltrator (Elite)** figures became **Hidden** at end of activation.` });
-    }
-  }
-
-  // Unnerving (0-0-0): each adjacent hostile becomes Weakened
-  if (dcName === '0-0-0') {
-    const enemyNum = opponentPlayerNum(playerNum);
-    const ms = getMapData(game.selectedMap?.id);
-    const weakened = [];
-    for (const fk of figureKeys) {
-      const pos = game.figurePositions?.[playerNum]?.[fk];
-      if (!pos) continue;
-      const posNorm = String(pos).toLowerCase();
-      const adj = (ms?.adjacency?.[posNorm] || []).map(a => String(a).toLowerCase());
-      for (const [eFk, ePos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        if (!ePos) continue;
-        if (!adj.includes(String(ePos).toLowerCase())) continue;
-        if (isConditionImmune(game, eFk)) continue;
-        if (applyCondition(game, eFk, 'Weaken')) {
-          weakened.push(dcNameFromFigureKey(eFk));
-        }
-      }
-    }
-    if (weakened.length > 0) {
-      applied.push({ effect: 'Unnerving', message: `**Unnerving** — **0-0-0** Weakened adjacent hostiles: ${weakened.join(', ')}.` });
-    }
-  }
-
-  // Hold the Line (Baze Malbus): gain 1 Block Token per hostile with LOS
-  if (dcName === 'Baze Malbus') {
-    const htlFk = `Baze Malbus-${dgIndex}-0`;
-    const htlPos = game.figurePositions?.[playerNum]?.[htlFk];
-    let blockCount = 0;
-    if (htlPos) {
-      const enemyNum = opponentPlayerNum(playerNum);
-      const ms = getMapData(game.selectedMap?.id);
-      const allFootprints = getAllFigureFootprints(game, getFigureSize);
-      const htlFp = getFigureFootprint(game, playerNum, htlFk, getFigureSize);
-      for (const [eFk] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
-        const eFp = getFigureFootprint(game, enemyNum, eFk, getFigureSize);
-        if (!eFp.length) continue;
-        if (hasFigureLineOfSight(htlFp, eFp, ms, allFootprints)) blockCount++;
-      }
-    }
-    if (blockCount > 0) {
-      grantPowerTokens(game, htlFk, 'Block', blockCount);
-    }
-    applied.push({
-      effect: 'Hold the Line',
-      message: `**Hold the Line** — **${displayName || 'Baze Malbus'}** gained **${blockCount} Block Token${blockCount !== 1 ? 's' : ''}** (${blockCount} hostile${blockCount !== 1 ? 's' : ''} with LOS).`,
-    });
-  }
+  // Shield (Riot Trooper E/R), In The Shadows (ISB Infiltrator Elite),
+  // Unnerving (0-0-0), and Hold the Line (Baze Malbus): these were
+  // previously auto-fired here. Per the owner's rule (destruct 2026-05-07
+  // "let players pick to trigger each one") every EoA ability must be
+  // PLAYER CHOICE. They are now enumerated as player-choice descriptors in
+  // src/game/eoa-orchestrator.js (subPromptKeys shield / in_the_shadows /
+  // unnerving / hold_the_line) and resolved in src/handlers/eoa-handler.js.
+  // The auto-fire blocks were removed to stop double-firing (once here,
+  // once via the orchestrator descriptor).
 
   // Son of Skywalker: auto-ready Luke's DC after any activation ends (not Luke's own)
   if (game.sonOfSkywalkerActive) {

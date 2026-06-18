@@ -53,4 +53,56 @@ describe('enumerateActivatorEoaDescriptors — DC passive EoA abilities', () => 
     const { game, opts } = gameFor('Stormtrooper', 'Stormtrooper [Group 1]');
     assert.deepStrictEqual(enumerateActivatorEoaDescriptors(game, opts), []);
   });
+
+  it('each double-wired EoA ability is enumerated EXACTLY ONCE (no auto-fire duplicate)', () => {
+    // Regression guard for the 2026-06 audit: Shield / In The Shadows /
+    // Unnerving / Hold the Line used to fire BOTH automatically (in
+    // activation-effects.js) AND as an orchestrator descriptor. The auto-fire
+    // was deleted; the descriptor is the single player-choice path. Assert the
+    // enumerator yields exactly one descriptor for each.
+    for (const [dc, key] of [
+      ['Baze Malbus', 'hold_the_line'],
+      ['Riot Trooper (Elite)', 'shield'],
+      ['ISB Infiltrator (Elite)', 'in_the_shadows'],
+      ['0-0-0', 'unnerving'],
+    ]) {
+      const { game, opts } = gameFor(dc, `${dc} [Group 1]`);
+      const matches = enumerateActivatorEoaDescriptors(game, opts).filter((d) => d.subPromptKey === key);
+      assert.strictEqual(matches.length, 1, `${dc} -> exactly one ${key} descriptor`);
+    }
+  });
+});
+
+describe('enumerateActivatorEoaDescriptors — Force Surge (CC)', () => {
+  function gameWithHand(dcName, hand, figures) {
+    const msgId = 'm1';
+    return {
+      game: {
+        dcMessageMeta: new Map([[msgId, { displayName: `${dcName} [DG 1]`, gameId: 'g', playerNum: 1, dcName }]]),
+        dcActionsData: { [msgId]: { selectedFigure: 0 } },
+        figurePositions: { 1: figures, 2: {} },
+        player1CcHand: hand,
+      },
+      opts: { dcName, playerNum: 1, msgId },
+    };
+  }
+
+  it('Force User holding Force Surge -> force_surge descriptor', () => {
+    const { game, opts } = gameWithHand('Luke Skywalker', ['Force Surge'], { 'Luke Skywalker-1-0': 'a1' });
+    const descs = enumerateActivatorEoaDescriptors(game, opts);
+    const fs = descs.find((d) => d.subPromptKey === 'force_surge');
+    assert.ok(fs, 'force_surge descriptor present');
+    assert.strictEqual(fs.extras.cardName, 'Force Surge');
+    assert.strictEqual(fs.extras.figureKey, 'Luke Skywalker-1-0');
+  });
+
+  it('no Force Surge in hand -> no descriptor', () => {
+    const { game, opts } = gameWithHand('Luke Skywalker', [], { 'Luke Skywalker-1-0': 'a1' });
+    assert.ok(!enumerateActivatorEoaDescriptors(game, opts).some((d) => d.subPromptKey === 'force_surge'));
+  });
+
+  it('Force Surge held but no Force User figure -> no descriptor', () => {
+    const { game, opts } = gameWithHand('Stormtrooper', ['Force Surge'], { 'Stormtrooper-1-0': 'a1' });
+    assert.ok(!enumerateActivatorEoaDescriptors(game, opts).some((d) => d.subPromptKey === 'force_surge'));
+  });
 });

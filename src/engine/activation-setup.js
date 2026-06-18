@@ -302,6 +302,14 @@ export async function finalizeActivation({
     game.strengthInNumbersPlayerNum = null;
   }
 
+  // B7b. Clear Field Tactics immediate-activation grant. Once the granted
+  // group begins activating (or any of this player's groups does), the
+  // one-shot grant is consumed. Mirrors the Squad Swarm flag lifecycle.
+  if (game.fieldTacticsActivationPlayerNum === playerNum) {
+    game.fieldTacticsActivationPlayerNum = null;
+    game.fieldTacticsActivationMsgId = null;
+  }
+
   // B8. Create activation thread (with reuse logic)
   const threadName = displayName.length > 100 ? displayName.slice(0, 97) + '…' : displayName;
   let thread;
