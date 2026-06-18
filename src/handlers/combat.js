@@ -191,11 +191,9 @@ import {
   FULL_OF_RAGE_CONDITION,
   FULL_OF_RAGE_BONUS_DIE,
 } from '../game/full-of-rage-helpers.js';
-import {
-  hasFuryAbility,
-  furyDamageTriggered,
-  FURY_SURGE_BONUS,
-} from '../game/fury-helpers.js';
+// Fury (Wookiee Warrior) is now a gate mods passive ('fury_wookiee'); its
+// detection/effect moved to combat-abilities-mods.js + _fireModsPassive, so the
+// fury-helpers are no longer imported here. alexanbv 2026-06-18.
 import {
   hasMonCalaSfLokuAbility,
   MON_CALA_SF_LOKU_CONDITION,
@@ -795,7 +793,7 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
 // ── Full-attack sequence driver wiring (alexanbv 2026-06-15 rebuild) ──────────
 // Shared gate-builder deps + per-window passive-firer.
 function _gateDeps(ctx) {
-  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize, getSquadCohesionTokens, dcHealthState: ctx.dcHealthState };
+  return { getDcEffects: ctx.getDcEffects, getMapData, isWithinSpaces: _isWithinSpaces, getFigureSize, getSquadCohesionTokens, dcHealthState: ctx.dcHealthState, findDcMessageIdForFigure: ctx.findDcMessageIdForFigure };
 }
 /**
  * Build the sequence-driver handlers for an in-flight attack. Reconstructed on
@@ -2184,6 +2182,29 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'fury_kashyyyk_pierce') {
     combat.bonusPierce = (combat.bonusPierce || 0) + 1;
     await thread.send('**Fury of Kashyyyk** — +1 Pierce (elite WOOKIEE, target within 2, friendly WOOKIEE within 2 of the defender).').catch(discordCatch);
+  } else if (id === 'protector' || id === 'sentinel') {
+    // "1 Sentinel or Protector per attack" — a single combined +1 Block. Both can
+    // be eligible this attack; only the first fired applies (shared flag).
+    if (!combat._sentinelProtectorApplied) {
+      combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+      combat._sentinelProtectorApplied = true;
+      const label = id === 'protector' ? 'Protector' : 'Sentinel';
+      await thread.send(`**${label}** — adjacent to the targeted space: +1 Block for the defender.`).catch(discordCatch);
+    }
+  } else if (id === 'supporting_fire') {
+    combat.bonusPierce = (combat.bonusPierce || 0) + 1;
+    game.activationAbilityUsed = game.activationAbilityUsed || {};
+    game.activationAbilityUsed['J4X-7:Supporting Fire'] = true; // once per activation
+    await thread.send('**Supporting Fire** (J4X-7) — friendly attacking a figure adjacent to J4X-7: +1 Pierce.').catch(discordCatch);
+  } else if (id === 'air_support') {
+    combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
+    await thread.send('✈️ **Air Support** (Bodhi Rook) — friendly spent a Power Token while unfocused: +2 Accuracy.').catch(discordCatch);
+  } else if (id === 'the_generals_ranks') {
+    combat.bonusHits = (combat.bonusHits || 0) + 1;
+    await thread.send("**The General's Ranks** — +1 Damage (attack outside your activation).").catch(discordCatch);
+  } else if (id === 'fury_wookiee') {
+    combat.surgeBonus = (combat.surgeBonus || 0) + 1;
+    await thread.send('**Fury** — Wookiee Warrior has suffered 5+ Damage: +1 Surge.').catch(discordCatch);
   } else if (id === 'slippery') {
     const bump = applySlipperyBonus({ bonusAccuracy: combat.bonusAccuracy });
     combat.bonusAccuracy = bump.bonusAccuracy;
@@ -3799,15 +3820,10 @@ export async function handleAttackTarget(interaction, ctx) {
       }
     }
   }
-  // The General's Ranks: +1 Hit when attacking during a non-activation (not this group's activation)
-  if (cardNameIncludes(_atkUpgrades, "The General's Ranks")) {
-    const _tgrActionsData = game.dcActionsData?.[msgId];
-    if (!_tgrActionsData?.threadId) {
-      // Not in this group's activation — non-activation attack
-      game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-      await thread.send("**The General's Ranks** — +1 Hit (non-activation attack).").catch(discordCatch);
-    }
-  }
+  // The General's Ranks: +1 Damage on a non-activation attack — now a gate mods
+  // passive (combat-abilities-mods.js 'the_generals_ranks' → _fireModsPassive),
+  // fired in the modifiers window. The eager declaration-time detection was
+  // deleted to kill the double handling. alexanbv 2026-06-18.
   // Scavenged Walker: -1 Hit penalty on end-of-round interrupt attack
   if (game.scavengedWalkerAttackPenalty?.[msgId]) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
@@ -4012,10 +4028,9 @@ export async function handleAttackTarget(interaction, ctx) {
   const atkSpecialIds = atkEff?.specialAbilityIds || [];
   const defSpecialIds = defEff?.specialAbilityIds || [];
 
-  // Health state for HP-conditional abilities (Full of Rage, Fury)
-  const atkHpArr = dcHealthState?.get(msgId) || [];
-  const atkFigHp = atkHpArr[figureIndex];
-  const atkDamageSuffered = atkFigHp ? Math.max(0, (atkFigHp[1] ?? atkFigHp[0] ?? 0) - (atkFigHp[0] ?? 0)) : 0;
+  // (Health-state read for HP-conditional abilities removed: Full of Rage moved
+  // to on_declare, Fury to the mods gate — neither computes suffered-damage here
+  // any longer. alexanbv 2026-06-18.)
 
   // Battle Meditation / Assassin (Diala Passil, BT-1): auto-Focus before attacking
   // Battle Meditation — MOVED to the on_declare window (combat-abilities-
@@ -4026,11 +4041,10 @@ export async function handleAttackTarget(interaction, ctx) {
   // (combat-abilities-ondeclare.js 'full_of_rage' passive → _fireOnDeclarePassive)
   // per alexanbv 2026-06-16. (Both the early + late declaration sites removed.)
 
-  // Fury (Wookiee Warriors): +1 Surge if 5+ damage
-  if (hasFuryAbility(atkSpecialIds) && furyDamageTriggered(atkDamageSuffered)) {
-    game.pendingCombat.furyBonus = FURY_SURGE_BONUS;
-    await thread.send(`**Fury** — Wookiee Warrior is **Furious** (+1 Surge, having suffered ${atkDamageSuffered} damage).`);
-  }
+  // Fury (Wookiee Warriors): +1 Surge if 5+ damage — now a gate mods passive
+  // (combat-abilities-mods.js 'fury_wookiee' → _fireModsPassive, +1 surgeBonus),
+  // fired in the modifiers window. The eager declaration-time detection was
+  // deleted to kill the double handling. alexanbv 2026-06-18.
 
   // Cunning (Han Solo, Jyn Odan, Nexu): while defending, +1 Block per Evade result
   // Cunning — MOVED to the mods window (combat-abilities-mods.js 'cunning' passive).
@@ -4320,74 +4334,13 @@ export async function handleAttackTarget(interaction, ctx) {
   // Forest Fighters (Ewok Warrior Elite) — MOVED to the mods window
   // (combat-abilities-mods.js 'forest_fighters' passive).
 
-  // Sentinel / Protector: scan defender's friendlies for adjacent-to-target, +1 Block. Limit 1 per attack.
-  // Per destruct 2026-05-07: "No figures are considered friendly during" Lure / False Orders attacks.
-  // Sentinel/Protector are friendly-gated defender-side reactions — skip entirely when noFriendliesActive.
-  if (mapSpaces && targetCoord && !target.isNpc && !game.pendingCombat?.noFriendliesActive) {
-    const adjToTargetSP = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
-    adjToTargetSP.add(targetCoord);
-    const defFigPos = game.figurePositions?.[defenderPlayerNum] || {};
-    const defenderKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
-    const defenderIsGuardian = defenderKws.includes('GUARDIAN');
-    let sentinelApplied = false;
-    for (const [fk, pos] of Object.entries(defFigPos)) {
-      if (sentinelApplied) break;
-      if (fk === target.figureKey) continue; // skip the defender itself
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-      const fkAbilityIds = fkEff?.specialAbilityIds || [];
-      if (!adjToTargetSP.has(String(pos).toLowerCase())) continue;
-      // Sentinel: only defends non-GUARDIAN figures
-      if (fkAbilityIds.includes('sentinel') && !defenderIsGuardian) {
-        game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-        await thread.send(`**Sentinel** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
-        sentinelApplied = true;
-      }
-      // Protector (Chewbacca): works for ALL friendly defenders (no GUARDIAN restriction).
-      // Wookiee Avenger replaces Protector — the upgraded card lists WA in its
-      // specials slot instead of Protector. Skip Protector when WA is attached
-      // to this Chewbacca's DC (parallel to DBH stripping Brutality).
-      if (!sentinelApplied && fkAbilityIds.includes('protector')) {
-        const _protMsgId = findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, fk);
-        const _protAtts = _protMsgId
-          ? (game.p1DcAttachments?.[_protMsgId] || game.p2DcAttachments?.[_protMsgId] || [])
-          : [];
-        const _protReplaced = cardNameIncludes(_protAtts, 'Wookiee Avenger');
-        if (!_protReplaced) {
-          game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-          await thread.send(`**Protector** (${fkDcName}) — adjacent to target space, +1 Block for defender.`);
-          sentinelApplied = true;
-        }
-      }
-    }
-  }
-
-  // Supporting Fire (J4X-7): while ANOTHER friendly figure is attacking a figure
-  // adjacent to J4X-7, apply Pierce 1 (once per activation). Attacker-side analog
-  // of Sentinel/Protector. Companions share spaces, so "adjacent to J4X-7"
-  // INCLUDES the target being IN J4X-7's own space — hence targetCoord is in the
-  // set too (alexanbv 2026-06-17).
-  if (mapSpaces && targetCoord && !target.isNpc && !game.pendingCombat?.noFriendliesActive) {
-    const _sfKey = 'J4X-7:Supporting Fire';
-    if (!game.activationAbilityUsed?.[_sfKey]) {
-      const adjToTargetSF = new Set((mapSpaces.adjacency?.[targetCoord] || []).map((s) => String(s).toLowerCase()));
-      adjToTargetSF.add(targetCoord); // J4X-7 may share the target's space (companion)
-      const atkFigPos = game.figurePositions?.[attackerPlayerNum] || {};
-      for (const [fk, pos] of Object.entries(atkFigPos)) {
-        if (fk === attackerFigureKey) continue; // "another friendly figure"
-        if (!adjToTargetSF.has(String(pos).toLowerCase())) continue;
-        const _sfName = dcNameFromFigureKey(fk);
-        const _sfEff = getDcEffectsGlobal()[_sfName] || getDcEffectsGlobal()[_sfName?.replace(/\s*\[.*\]\s*$/, '')];
-        if ((_sfEff?.specialAbilityIds || []).includes('supporting_fire')) {
-          game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
-          game.activationAbilityUsed = game.activationAbilityUsed || {};
-          game.activationAbilityUsed[_sfKey] = true;
-          await thread.send(`**Supporting Fire** (${_sfName}) — the target is adjacent to (or shares) its space, +1 Pierce.`).catch(discordCatch);
-          break;
-        }
-      }
-    }
-  }
+  // Sentinel / Protector (defender, +1 Block adjacent to the targeted space) and
+  // Supporting Fire (J4X-7 attacker, +1 Pierce) are now gate mods passives
+  // (combat-abilities-mods.js 'protector'/'sentinel'/'supporting_fire' →
+  // _fireModsPassive), fired in the modifiers window. The eager declaration-time
+  // detection was deleted to kill the double handling. The Wookiee-Avenger-
+  // replaces-Protector case is handled by stripping `protector` from the upgraded
+  // Chewbacca's specials at deploy time (parallel to DBH stripping Brutality).
 
   // Keep the Peace Elite (Wing Guard Elite): attacker suffers 1 Strain when attacking space adjacent to you
   // Limit 1 per group activation — track per activation via roundFigureAbilityUsed
@@ -7652,50 +7605,12 @@ function removeSpentToken(game, figureKey, index) {
   if (game.figurePowerTokens[figureKey].length === 0) delete game.figurePowerTokens[figureKey];
 }
 
-/**
- * Air Support (Bodhi Rook): "When a friendly figure spends a Power Token
- * while attacking, apply +2 Accuracy to the attack results."
- *
- * Per alexanbv 2026-05-13 clarification: the +2 Accuracy fires only when
- * the **attacker is not Focused** at the moment of token-spend (canonical
- * card text — overrides the dc-effects.json paraphrase). Focus is checked
- * at click time so mid-attack Focus changes are respected.
- *
- * Trigger condition (all four must hold):
- *  - The token-spender is the attacker side (not defender).
- *  - At least one friendly figure on the attacker's team has the
- *    `air_support_bodhi` ability id.
- *  - The attacker does not currently have the Focus condition.
- *  - Bodhi is alive (has a position on the board).
- *
- * No range gate per card text — Bodhi grants air support board-wide.
- */
-async function _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker) {
-  if (!isAttacker) return;
-  const atkPN = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
-  if (!atkPN) return;
-  const dcEff = ctx?.getDcEffects ? ctx.getDcEffects() : getDcEffectsGlobal();
-  if (!dcEff) return;
-  const friendlyPositions = game.figurePositions?.[atkPN] || {};
-  let bodhiFigKey = null;
-  for (const [fk, pos] of Object.entries(friendlyPositions)) {
-    if (!pos) continue;
-    const fkDcName = dcNameFromFigureKey(fk);
-    const fkEff = dcEff[fkDcName] || dcEff[(fkDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((fkEff?.specialAbilityIds || []).includes('air_support_bodhi')) {
-      bodhiFigKey = fk;
-      break;
-    }
-  }
-  if (!bodhiFigKey) return;
-  const atkConds = game.figureConditions?.[combat.attackerFigureKey] || [];
-  if (atkConds.includes('Focus')) return;
-  combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
-  const bodhiDcName = dcNameFromFigureKey(bodhiFigKey);
-  if (thread) {
-    await thread.send(`✈️ **Air Support** (${bodhiDcName}) — Attacker spent a Power Token while unfocused: **+2 Accuracy** applied.`).catch(discordCatch);
-  }
-}
+// Air Support (Bodhi Rook) — "When a friendly figure spends a Power Token while
+// attacking, apply +2 Accuracy" (only while the attacker is NOT Focused, per
+// alexanbv 2026-05-13) — migrated to a gate mods passive ('air_support' →
+// _fireModsPassive), gated on combat.attackerSpentPowerToken + unfocused +
+// Bodhi-in-play. The token-spend-time _maybeApplyAirSupport calls were removed
+// to kill the double handling. alexanbv 2026-06-18.
 
 // --- Rogue One token sharing helpers ---
 
@@ -9781,8 +9696,8 @@ export async function handleCombatToken(interaction, ctx) {
     }
     // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
     if (combat.pendingWildRole === 'attacker') combat.attackerSpentPowerToken = true;
-    // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
-    await _maybeApplyAirSupport(thread, game, combat, ctx, combat.pendingWildRole === 'attacker');
+    // Air Support (Bodhi Rook) — now a gate mods passive ('air_support' →
+    // _fireModsPassive), gated on combat.attackerSpentPowerToken + unfocused.
     // Track defender modifications for Quick Strike (Electrostaff loadout)
     if (combat.pendingWildRole === 'defender') combat.defenderRerolledOrModified = true;
     // Track Block spending for Mandalorian Steel / Personal Combat Shield
@@ -9857,8 +9772,7 @@ export async function handleCombatToken(interaction, ctx) {
     await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${scTokenType} from ${scEntry.ownerName}`, { phase: 'ROUND', icon: 'attack' });
     if (isAttacker) combat.attackerSpentPowerToken = true;
-    // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
-    await _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker);
+    // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
     if (!isAttacker) combat.defenderRerolledOrModified = true;
     if (!isAttacker && scTokenType === 'Block') combat.defenderSpentBlock = true;
     if (!isAttacker && scTokenType === 'Block') {
@@ -9909,8 +9823,7 @@ export async function handleCombatToken(interaction, ctx) {
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
   if (isAttacker) combat.attackerSpentPowerToken = true;
-  // Air Support (Bodhi Rook): +2 Accuracy when a friendly attacker spends a token (unfocused).
-  await _maybeApplyAirSupport(thread, game, combat, ctx, isAttacker);
+  // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
   // Track defender modifications for Quick Strike (Electrostaff loadout)
   if (!isAttacker) combat.defenderRerolledOrModified = true;
   // Track Block token spending for Mandalorian Steel

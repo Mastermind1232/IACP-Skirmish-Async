@@ -37,11 +37,16 @@ test('FO/Lure combat init sets noFriendliesActive=true', () => {
 
 // ── Sentinel / Protector ──────────────────────────────────────────────────
 
-test('Sentinel/Protector loop guarded by noFriendliesActive', () => {
-  const src = readSrc('src/handlers/combat.js');
-  // The Sentinel scan condition includes noFriendliesActive check.
-  const sentinelGate = src.match(/Sentinel \/ Protector[^\n]*\n[\s\S]{0,300}!game\.pendingCombat\?\.noFriendliesActive/);
-  assert.ok(sentinelGate, 'Sentinel/Protector loop skipped when noFriendliesActive');
+test('Sentinel/Protector gate passives guarded by noFriendliesActive', () => {
+  // Gate cutover (2026-06-18): the legacy inline scan in combat.js was retired;
+  // Sentinel and Protector are now gate mods passives. Each `applies` must still
+  // bail when noFriendliesActive (Lure/FO) — no figure is friendly to the
+  // controlled attacker, so the friendly-adjacent shield can't trigger.
+  const src = readSrc('src/engine/combat-abilities-mods.js');
+  assert.match(src, /id: 'protector'[\s\S]{0,400}combat\.noFriendliesActive/,
+    'Protector gate passive gated by noFriendliesActive');
+  assert.match(src, /id: 'sentinel'[\s\S]{0,400}combat\.noFriendliesActive/,
+    'Sentinel gate passive gated by noFriendliesActive');
 });
 
 // ── Get Behind Me / Bodyguard target swap ─────────────────────────────────

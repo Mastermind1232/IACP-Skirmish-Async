@@ -83,3 +83,106 @@ describe('mods-window abilities via the timing registry', () => {
     assert.equal(find(at('defender', game(), combat(), d), 'spray_fire'), undefined);
   });
 });
+
+// ── Third-party / automatic mods passives (slice: round-trigger-wiring) ───────
+describe('third-party mods passives via the timing registry', () => {
+  // deps where adjacency is data-driven by an explicit near-set rather than
+  // always-true, so "fires when adjacent / not when far" can be exercised.
+  function depsAdj(effMap, nearPairs = []) {
+    const near = new Set(nearPairs.map(([a, b]) => `${a}|${b}`));
+    return {
+      getDcEffects: () => effMap,
+      getMapData: () => ({ adjacency: {} }),
+      isWithinSpaces: (_m, a, b) => near.has(`${a}|${b}`) || near.has(`${b}|${a}`),
+      getFigureSize: () => [1, 1],
+      findDcMessageIdForFigure: () => null,
+    };
+  }
+
+  it('Protector: +1 Block passive only when a friendly protector owner is adjacent to the target', () => {
+    const eff = { Atk: { specialAbilityIds: [] }, Chewbacca: { specialAbilityIds: ['protector'] }, Def: { specialAbilityIds: [] } };
+    const g = game({ figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3', 'Chewbacca-1-0': 'c4' } } });
+    // Adjacent → fires.
+    const fires = at('defender', g, combat(), depsAdj(eff, [['c4', 'c3']]));
+    assert.equal(find(fires, 'protector').kind, 'passive');
+    // Not adjacent → does not fire.
+    const notFires = at('defender', g, combat(), depsAdj(eff, []));
+    assert.equal(find(notFires, 'protector'), undefined);
+  });
+
+  it('Protector: suppressed when the protector owner has the Wookiee Avenger attachment', () => {
+    const eff = { Atk: {}, Chewbacca: { specialAbilityIds: ['protector'] }, Def: {} };
+    const g = game({ figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3', 'Chewbacca-1-0': 'c4' } } });
+    g.p2DcAttachments = { msg1: ['Wookiee Avenger'] };
+    const d = depsAdj(eff, [['c4', 'c3']]);
+    d.findDcMessageIdForFigure = () => 'msg1';
+    assert.equal(find(at('defender', g, combat(), d), 'protector'), undefined);
+  });
+
+  it('Sentinel: fires for a non-GUARDIAN defender, suppressed when the defender is a GUARDIAN', () => {
+    const eff = { Atk: {}, RG: { specialAbilityIds: ['sentinel'] }, Def: { keywords: [] } };
+    const g = game({ figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3', 'RG-1-0': 'c4' } } });
+    const d = depsAdj(eff, [['c4', 'c3']]);
+    assert.equal(find(at('defender', g, combat(), d), 'sentinel').kind, 'passive');
+    // GUARDIAN defender → Sentinel does NOT shield it.
+    const effG = { Atk: {}, RG: { specialAbilityIds: ['sentinel'] }, Def: { keywords: ['GUARDIAN'] } };
+    const dG = depsAdj(effG, [['c4', 'c3']]);
+    assert.equal(find(at('defender', g, combat({ defenderDcName: 'Def' }), dG), 'sentinel'), undefined);
+  });
+
+  it('Supporting Fire: +1 Pierce passive when ANOTHER friendly attacks a figure adjacent to J4X-7; not once used', () => {
+    const eff = { Atk: {}, 'J4X-7': { specialAbilityIds: ['supporting_fire'] }, Def: {} };
+    const g = game({ figurePositions: { 1: { 'Atk-1-0': 'a1', 'J4X-7-1-0': 'c4' }, 2: { 'Def-1-0': 'c3' } } });
+    const d = depsAdj(eff, [['c4', 'c3']]);
+    assert.equal(find(at('attacker', g, combat(), d), 'supporting_fire').kind, 'passive');
+    // Once-per-activation used → suppressed.
+    const gUsed = game({ figurePositions: g.figurePositions, activationAbilityUsed: { 'J4X-7:Supporting Fire': true } });
+    assert.equal(find(at('attacker', gUsed, combat(), d), 'supporting_fire'), undefined);
+    // J4X-7 itself attacking ("another friendly") → suppressed.
+    assert.equal(find(at('attacker', g, combat({ attackerDcName: 'J4X-7' }), d), 'supporting_fire'), undefined);
+  });
+
+  it('Air Support: +2 Accuracy passive only with a spent power token, Bodhi in play, and an unfocused attacker', () => {
+    const eff = { Atk: {}, 'Bodhi Rook': { specialAbilityIds: ['air_support_bodhi'] }, Def: {} };
+    const g = game({ figurePositions: { 1: { 'Atk-1-0': 'a1', 'Bodhi Rook-1-0': 'b1' }, 2: { 'Def-1-0': 'c3' } } });
+    const d = depsAdj(eff, []);
+    // No token spent → nothing.
+    assert.equal(find(at('attacker', g, combat(), d), 'air_support'), undefined);
+    // Token spent + unfocused → fires.
+    assert.equal(find(at('attacker', g, combat({ attackerSpentPowerToken: true }), d), 'air_support').kind, 'passive');
+    // Focused attacker → suppressed.
+    const gF = game({ figurePositions: g.figurePositions, figureConditions: { 'Atk-1-0': ['Focus'] } });
+    assert.equal(find(at('attacker', gF, combat({ attackerSpentPowerToken: true }), d), 'air_support'), undefined);
+    // Bodhi not in play → suppressed.
+    const gNoBodhi = game({ figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3' } } });
+    assert.equal(find(at('attacker', gNoBodhi, combat({ attackerSpentPowerToken: true }), d), 'air_support'), undefined);
+  });
+
+  it("The General's Ranks: +1 Damage passive only outside the owner's activation", () => {
+    const eff = { Atk: {}, Def: {} };
+    const d = depsAdj(eff, []);
+    // Attachment present, no active activation thread → fires.
+    const gOut = game({ p1DcAttachments: { msgA: ["The General's Ranks"] }, dcActionsData: { msgA: {} } });
+    assert.equal(find(at('attacker', gOut, combat({ attackerMsgId: 'msgA' }), d), 'the_generals_ranks').kind, 'passive');
+    // During the owner's activation (threadId set) → suppressed.
+    const gIn = game({ p1DcAttachments: { msgA: ["The General's Ranks"] }, dcActionsData: { msgA: { threadId: 't1' } } });
+    assert.equal(find(at('attacker', gIn, combat({ attackerMsgId: 'msgA' }), d), 'the_generals_ranks'), undefined);
+    // No attachment → suppressed.
+    assert.equal(find(at('attacker', game(), combat({ attackerMsgId: 'msgA' }), d), 'the_generals_ranks'), undefined);
+  });
+
+  it('Fury (Wookiee Warrior): +1 Surge passive only when the attacker has suffered 5+ Damage', () => {
+    const eff = { Atk: { specialAbilityIds: ['fury_wookiee_elite'] }, Def: {} };
+    // dcHealthState: Map<msgId, [[currentHp, maxHp], ...]>. Suffered = max - current.
+    const hs5 = new Map([['msgA', [[5, 10]]]]); // suffered 5 → fires
+    const hs4 = new Map([['msgA', [[6, 10]]]]); // suffered 4 → no
+    const d5 = { ...depsAdj(eff, []), dcHealthState: hs5 };
+    const d4 = { ...depsAdj(eff, []), dcHealthState: hs4 };
+    const c = combat({ attackerMsgId: 'msgA', attackerFigureIndex: 0 });
+    assert.equal(find(at('attacker', game(), c, d5), 'fury_wookiee').kind, 'passive');
+    assert.equal(find(at('attacker', game(), c, d4), 'fury_wookiee'), undefined);
+    // No Fury ability id → never offered.
+    const dNo = { ...depsAdj({ Atk: { specialAbilityIds: [] }, Def: {} }, []), dcHealthState: hs5 };
+    assert.equal(find(at('attacker', game(), c, dNo), 'fury_wookiee'), undefined);
+  });
+});

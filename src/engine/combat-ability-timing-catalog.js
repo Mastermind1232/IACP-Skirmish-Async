@@ -49,7 +49,9 @@ e('focused_on_the_kill', 'Focused on the Kill (IG-88)', 'attacker', 'passive', O
 e('scavenged_weaponry', 'Scavenged Weaponry (attachment)', 'attacker', 'passive', ON, 'exhaust → +1 Hit');
 e('the_darksaber_declare', 'The Darksaber (attachment, declare)', 'attacker', 'passive', ON, 'exhaust → +1 reroll');
 e('rotary_cannon_z6', 'Rotary Cannon (Z-6 Trooper)', 'attacker', 'passive', ON, 'atk upgrade → auto-Focus');
-e('the_generals_ranks', 'The General\'s Ranks (attachment)', 'attacker', 'passive', ON, 'non-activation attack → +1 Hit');
+// 'the_generals_ranks' is now an EXECUTABLE mods passive (combat-abilities-mods.js,
+// +1 Damage outside the owner's activation) — no timing-only catalog entry here so
+// it isn't clobbered by the catalog import (registerCombatAbility is per-id).
 e('fireproof_attacker', 'Fireproof (Flame Trooper, atk)', 'attacker', 'passive', ON, 'no Strain on self-damage');
 e('autofire', 'Autofire', 'attacker', 'passive', ON, 'autofireActive → autofire_chain surge');
 e('barrage_declare', 'Barrage (CT-1701, declare)', 'attacker', 'passive', ON, 'barrageDefenseBonus → mark barrageAttack');
@@ -97,8 +99,9 @@ e('fireproof_defender', 'Fireproof (Flame Trooper, def)', 'defender', 'passive',
 e('hunker_down', 'Hunker Down (Cara Dune)', 'defender', 'passive', ON, 'terrain adjacent → +1 Evade');
 e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', ON, 'diplomaticMissionEvade → +1 Evade');
 e('slippery_declare', 'Slippery (Alliance Smuggler, declare)', 'defender', 'passive', ON, '-2 Accuracy');
-e('sentinel', 'Sentinel', 'defender', 'passive', ON, 'friendly adjacent w/ sentinel → +1 Block');
-e('protector', 'Protector (Chewbacca)', 'defender', 'passive', ON, 'friendly adjacent → +1 Block');
+// 'sentinel' + 'protector' are now EXECUTABLE mods passives (combat-abilities-mods.js,
+// +1 Block when an owner is adjacent to the targeted space) — no timing-only catalog
+// entries here so they aren't clobbered by the catalog import.
 e('improvised_cover_verena', 'Improvised Cover (Verena Talos)', 'defender', 'passive', ON, 'adjacent cover → +1 Block');
 e('inside_job', 'Inside Job (Hoth Battle Station A)', 'defender', 'passive', ON, 'mission zone → +Block/+Evade');
 e('the_force_is_with_me', 'The Force is With Me (Chirrut)', 'defender', 'interactive', ON, 'Ranged + adjacent hostiles → -1 Dmg picker');

@@ -26,6 +26,9 @@ import { hasForestFightersAbility, forestFightersQualifies } from '../game/fores
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
 import { makeCondition } from './combat-conditions.js';
+import { cardNameIncludes } from '../game/card-names.js';
+import { getFootprintCells } from '../game/coords.js';
+import { getEffectiveFigureSize } from '../game/board-helpers.js';
 import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { hasPendingModifiers } from './combat-pending-modifiers.js';
@@ -50,6 +53,15 @@ function eff(deps, dcName) {
 }
 const ids = (e) => e?.specialAbilityIds || [];
 const defenderPN = (combat) => combat.defenderPlayerNum ?? (combat.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null);
+
+/** Footprint cells (lowercased) a figure occupies, size-aware. */
+function _figureCellsFor(game, pn, figureKey, deps) {
+  const pos = game?.figurePositions?.[pn]?.[figureKey];
+  if (!pos) return [];
+  const dcName = dcNameFromFigureKey(figureKey);
+  const size = getEffectiveFigureSize(game, figureKey, dcName) || D(deps, 'getFigureSize', _getFigureSize)(dcName);
+  return getFootprintCells(pos, size).map((c) => String(c).toLowerCase());
+}
 
 // ── Attacker mods ────────────────────────────────────────────────────────────
 
@@ -373,5 +385,157 @@ registerCombatAbility({
       if (within(mapSp, String(pos).toLowerCase(), String(targetPos).toLowerCase(), 2)) return true;
     }
     return false;
+  },
+});
+
+// ── Third-party / automatic mods passives (migrated off the eager declaration
+// path in handlers/combat.js per the slice-migration pattern; the inline blocks
+// are deleted so the effect lands ONCE, in the modifiers window). ─────────────
+
+const _normName = (s) => String(s || '').replace(/\s*\[.*\]\s*$/, '').trim().toLowerCase();
+
+// Protector (Chewbacca) [defender] — +1 Block for an adjacent friendly figure
+// being targeted. Owner = the figure with `protector`; fires when that owner is
+// adjacent to the targeted space (the defender). Combined "1 Sentinel or
+// Protector per attack" cap enforced in _fireModsPassive via a shared flag.
+// Wookiee Avenger replaces Protector — a Chewbacca whose DC has the [Wookiee
+// Avenger] attachment loses Protector, so it is skipped here (mirrors the retired
+// inline's _protReplaced guard). Owner scanned manually for that attachment.
+registerCombatAbility({
+  id: 'protector', name: 'Protector', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (combat.noFriendliesActive || !combat.target?.figureKey || combat.target?.isNpc) return false;
+    const defPn = defenderPN(combat);
+    const targetFk = combat.target.figureKey;
+    const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
+    if (defPn == null || !mapSp) return false;
+    const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const targetCells = _figureCellsFor(game, defPn, targetFk, deps);
+    if (!targetCells.length) return false;
+    const team = game.figurePositions?.[defPn] || {};
+    const findMid = deps?.findDcMessageIdForFigure;
+    for (const fk of Object.keys(team)) {
+      if (fk === targetFk) continue;
+      if (!ids(eff(deps, dcNameFromFigureKey(fk))).includes('protector')) continue;
+      // Wookiee Avenger attached → this Chewbacca lost Protector.
+      const msgId = findMid ? findMid(game.gameId, defPn, fk) : null;
+      const atts = msgId ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
+      if (cardNameIncludes(atts, 'Wookiee Avenger')) continue;
+      for (const oc of _figureCellsFor(game, defPn, fk, deps)) {
+        for (const tc of targetCells) if (within(mapSp, oc, tc, 1)) return true;
+      }
+    }
+    return false;
+  },
+});
+
+// Shared scan: a FRIENDLY figure carrying `ability` (on the team owning side `pn`,
+// resolved via injected deps so it is testable) is within 1 of the TARGET space.
+// `excludeSelfKey` skips a specific owner figureKey ("another friendly figure").
+function _friendlyWithAbilityNearTarget(game, combat, deps, { ability, ownerPn, excludeFigureKey }) {
+  const defPn = defenderPN(combat);
+  const targetFk = combat.target?.figureKey;
+  const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
+  if (defPn == null || ownerPn == null || !targetFk || !mapSp) return false;
+  const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+  const targetCells = _figureCellsFor(game, defPn, targetFk, deps);
+  if (!targetCells.length) return false;
+  const team = game.figurePositions?.[ownerPn] || {};
+  for (const fk of Object.keys(team)) {
+    if (excludeFigureKey && fk === excludeFigureKey) continue;
+    if (!ids(eff(deps, dcNameFromFigureKey(fk))).includes(ability)) continue;
+    for (const oc of _figureCellsFor(game, ownerPn, fk, deps)) {
+      for (const tc of targetCells) if (within(mapSp, oc, tc, 1)) return true;
+    }
+  }
+  return false;
+}
+
+// Sentinel (Royal Guard Elite + Regular) [defender] — same shape as Protector,
+// but the DEFENDER must be a NON-GUARDIAN figure.
+registerCombatAbility({
+  id: 'sentinel', name: 'Sentinel', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (combat.noFriendliesActive || !combat.target?.figureKey || combat.target?.isNpc) return false;
+    const defName = combat.defenderDcName || dcNameFromFigureKey(combat.target.figureKey);
+    const defKws = (eff(deps, defName)?.keywords || []).map((k) => String(k).toUpperCase());
+    if (defKws.includes('GUARDIAN')) return false; // Sentinel only shields NON-GUARDIANs
+    return _friendlyWithAbilityNearTarget(game, combat, deps, { ability: 'sentinel', ownerPn: defenderPN(combat) });
+  },
+});
+
+// Supporting Fire (J4X-7) [attacker] — Pierce 1 when ANOTHER friendly attacks a
+// figure adjacent to J4X-7 (owner). Once per activation (J4X-7:Supporting Fire).
+registerCombatAbility({
+  id: 'supporting_fire', name: 'Supporting Fire', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (combat.noFriendliesActive || !combat.target?.figureKey || combat.target?.isNpc) return false;
+    if (game.activationAbilityUsed?.['J4X-7:Supporting Fire']) return false;
+    // "another friendly figure is attacking" — the attacker is NOT the J4X-7 owner.
+    const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+    if (_normName(atkName) === 'j4x-7') return false;
+    return _friendlyWithAbilityNearTarget(game, combat, deps, {
+      ability: 'supporting_fire', ownerPn: combat.attackerPlayerNum, excludeFigureKey: combat.attackerFigureKey,
+    });
+  },
+});
+
+// Air Support (Bodhi Rook) [attacker] — +2 Accuracy when a friendly figure
+// spends a Power Token while attacking and the attacker is NOT Focused. Owner
+// (Bodhi) need only be in play (board-wide). alexanbv 2026-05-13: the unfocused
+// gate is the canonical card text.
+registerCombatAbility({
+  id: 'air_support', name: 'Air Support', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (!combat.attackerFigureKey || !combat.attackerSpentPowerToken) return false;
+    const atkConds = game.figureConditions?.[combat.attackerFigureKey] || [];
+    if (atkConds.includes('Focus')) return false;
+    // Bodhi (air_support_bodhi owner) need only be in play — board-wide, no range.
+    const team = game.figurePositions?.[combat.attackerPlayerNum] || {};
+    for (const fk of Object.keys(team)) {
+      if (ids(eff(deps, dcNameFromFigureKey(fk))).includes('air_support_bodhi')) return true;
+    }
+    return false;
+  },
+});
+
+// The General's Ranks (attachment) [attacker] — +1 Damage if it is NOT the
+// owner's activation. "Not your activation" = the attacker's DC has no active
+// activation thread (the inline detection: game.dcActionsData[msgId].threadId).
+function _generalsRanksAttached(game, combat) {
+  const msgId = combat.attackerMsgId;
+  if (!msgId) return false;
+  const atts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  return cardNameIncludes(atts, "The General's Ranks");
+}
+registerCombatAbility({
+  id: 'the_generals_ranks', name: "The General's Ranks", windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat) => {
+    if (!_generalsRanksAttached(game, combat)) return false;
+    return !(game.dcActionsData?.[combat.attackerMsgId]?.threadId); // not my activation
+  },
+});
+
+// Fury (Wookiee Warrior Elite/Regular) [attacker] — +1 Surge if the attacker has
+// suffered 5+ Damage. Suffered-damage derived from dcHealthState (deps) at the
+// attacker's footprint, mirroring the retired inline computation.
+function _attackerDamageSuffered(game, combat, deps) {
+  const hs = deps?.dcHealthState;
+  const msgId = combat.attackerMsgId;
+  if (!hs || !msgId) return 0;
+  const arr = hs.get(msgId) || [];
+  const fi = game.dcActionsData?.[msgId]?.selectedFigure ?? combat.attackerFigureIndex ?? 0;
+  const entry = arr[fi];
+  if (!entry) return 0;
+  // entry = [currentHp, maxHp] → suffered = max - current.
+  return Math.max(0, (entry[1] ?? entry[0] ?? 0) - (entry[0] ?? 0));
+}
+registerCombatAbility({
+  id: 'fury_wookiee', name: 'Fury', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const sids = ids(eff(deps, atkName));
+    if (!sids.includes('fury_wookiee_elite') && !sids.includes('fury_wookiee_reg')) return false;
+    return _attackerDamageSuffered(game, combat, deps) >= 5;
   },
 });
