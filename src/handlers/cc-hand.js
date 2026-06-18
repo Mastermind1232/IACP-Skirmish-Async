@@ -406,16 +406,24 @@ async function _resumeScCcEffect(game, ctx, client) {
     // Interactive effects (e.g. Intelligence Leak's looker pick) return
     // requiresChoice — stand up the choice prompt for the player who played it.
     if (result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
+      // Dirty-Trick-style cards route the choice to the OPPONENT's controller
+      // (choiceForControllerPlayerNum) instead of the player who played the CC.
+      const clickerPN = result.choiceForControllerPlayerNum ?? pend.playedBy;
+      const isOpponentChoice = clickerPN !== pend.playedBy;
       setPendingCcChoice(game, {
         abilityId: pend.abilityId, gameId: game.gameId, playerNum: pend.playedBy, card: pend.card,
         choiceOptions: result.choiceOptions,
         ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
+        ...(isOpponentChoice ? { clickerPlayerNum: clickerPN } : {}),
       });
-      const chId = getHandChannelId(game, pend.playedBy);
+      const chId = getHandChannelId(game, clickerPN);
       const ch = chId ? await fetchGameChannel(client, chId) : null;
       if (ch) {
+        const header = isOpponentChoice
+          ? `**${pend.card}** — your figure was targeted; choose one:`
+          : `**Choose one** (for **${pend.card}**):`;
         const btns = result.choiceOptions.map((opt) => new ButtonBuilder().setCustomId(`cc_choice_${game.gameId}_${opt}`).setLabel(String(opt).slice(0, 80)).setStyle(ButtonStyle.Secondary));
-        await ch.send({ content: `**Choose one** (for **${pend.card}**):`, components: chunkButtonsToRows(btns).slice(0, 5) }).catch(discordCatch);
+        await ch.send({ content: header, components: chunkButtonsToRows(btns).slice(0, 5) }).catch(discordCatch);
       }
     } else if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
       // Power-token-type choice (e.g. a deferred CC granting a token).
@@ -1814,79 +1822,14 @@ async function _commitExcavationPlay(game, ctx, interaction, params) {
     saveGames(game.gameId);
     return;
   }
-  // Cost 0: open the Negation window before resolving. handleNegationPlay
-  // (cancels) marks the card via markTopCcCanceled — the played card stays
-  // wherever it currently is (game box for excavation), per CRR. Comm
-  // Disruption can also fire on cost-0 plays.
-  if (cost === 0 && getNegationResponseButtons) {
-    setPendingNegation(game, { playedBy: playerNum, card, fromDc: false, handChannelId: getHandChannelId(game, playerNum) });
-    const oppNum = opponentPlayerNum(playerNum);
-    const oppHandId = getHandChannelId(game, oppNum);
-    const oppHandChannel = oppHandId ? await fetchGameChannel(client, oppHandId) : null;
-    if (oppHandChannel) {
-      const oppId = getPlayerId(game, oppNum);
-      await oppHandChannel.send(sanitizeMentions({
-        content: `Your opponent played **${card}** via **Excavation** (cost 0). You may play **Negation** to cancel it.`,
-        components: [getNegationResponseButtons(gameId)],
-        allowedMentions: { users: [oppId] },
-      })).catch(discordCatch);
-    }
-    await logGameAction(game, client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
-    await promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames);
-    saveGames(game.gameId);
-    return;
-  }
-  // Cost > 0: resolveAbility immediately, then prompt Comm Disruption.
-  if (resolveAbility) {
-    const _ccPreSnap = game.pendingCombat ? JSON.parse(JSON.stringify(game.pendingCombat)) : null;
-    const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.combat || game.pendingCombat });
-    const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
-    if (!aarResult.handled && result.requiresChoice && Array.isArray(result.choiceOptions) && result.choiceOptions.length > 0) {
-      const _clickerPN = result.choiceForControllerPlayerNum ?? playerNum;
-      const _isOpponentChoice = _clickerPN !== playerNum;
-      setPendingCcChoice(game, {
-        abilityId, choiceOptions: result.choiceOptions, gameId, playerNum, card,
-        ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}),
-        ...(_isOpponentChoice ? { clickerPlayerNum: _clickerPN } : {}),
-      });
-      const btns = result.choiceOptions.map((opt) => {
-        const label = String(opt).slice(0, 80);
-        return new ButtonBuilder().setCustomId(`cc_choice_${gameId}_${opt}`).setLabel(label).setStyle(ButtonStyle.Secondary);
-      });
-      const rows = chunkButtonsToRows(btns);
-      const promptHandId = getHandChannelId(game, _clickerPN);
-      const promptCh = promptHandId ? await fetchGameChannel(client, promptHandId) : null;
-      const header = _isOpponentChoice
-        ? `**${card}** — your figure was targeted; choose one:`
-        : `**Choose one** (for **${card}**):`;
-      if (promptCh) await promptCh.send({ content: header, components: rows }).catch(discordCatch);
-    }
-    if (!aarResult.handled && result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
-      if (getBoardStateForMovement && getMapAttachmentForSpaces) {
-        setPendingCcSpaceChoice(game, { abilityId, gameId, playerNum, card, validSpaces: result.validSpaces, chosenFigureKey: result.chosenFigureKey ?? null });
-        const handChannelId = getHandChannelId(game, playerNum);
-        const handCh = handChannelId ? await fetchGameChannel(client, handChannelId) : null;
-        if (handCh) {
-          const boardState = getBoardStateForMovement(game, null);
-          const ccMapSpaces = boardState?.mapSpaces || { spaces: result.validSpaces };
-          const ccHeader = `**Pick a space** (for **${card}**)`;
-          game.pendingSpacePick = game.pendingSpacePick || {};
-          game.pendingSpacePick[gameId] = {
-            validSpaces: result.validSpaces,
-            cellPrefix: `cc_space_${gameId}_`,
-            mapSpaces: ccMapSpaces,
-            headerText: ccHeader,
-          };
-          const { rows: rowBtns } = buildRowPickerButtons(result.validSpaces, `space_row_${gameId}_`);
-          const mapAttachment = await getMapAttachmentForSpaces(game, result.validSpaces);
-          const payload = { content: `${ccHeader}:\nChoose a row:`, components: rowBtns.slice(0, 5) };
-          if (mapAttachment) payload.files = [mapAttachment];
-          await handCh.send(payload).catch(discordCatch);
-        }
-      }
-    }
-    await promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames, _ccPreSnap);
-  }
+  // Route through the UNIFIED counter-window (Negate/Comms) — the same path as a
+  // hand play / combat gate / DC play (alexanbv 2026-06-17). The card is already
+  // in the game box (Excavation's "return to game box" disposition above); on
+  // resolve the effect runs via _resumeScCcEffect (choice / space prompts +
+  // choiceForControllerPlayerNum handled there), on cancel the when-discarded
+  // pipeline fires. No more old Negation / Comm-Disruption window.
+  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta, saveGames });
+  await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, client);
   saveGames(game.gameId);
 }
 

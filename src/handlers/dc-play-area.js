@@ -3,6 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
+import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
 import { postMoveXPicker } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -17,9 +18,8 @@ import { countGameSpaces } from '../game/board-helpers.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { setPendingNegation, updatePendingNegation, setPendingCcChoice, clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
+import { clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
 import { depleteDc } from '../game/card-state-helpers.js';
@@ -850,10 +850,10 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
 
   const effectData = getCcEffect(card);
   const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
-  const enteringNegation = cost === 0 && ctx.getNegationResponseButtons;
+  const abilityId = effectData?.abilityId ?? card;
   hand.splice(hand.indexOf(card), 1);
   game[handKey] = hand;
-  if (isCcAttachment(card) && !enteringNegation) {
+  if (isCcAttachment(card)) {
     game[attachKey] = game[attachKey] || {};
     if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
     game[attachKey][msgId].push(card);
@@ -909,81 +909,14 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       }
     }
   }
-  if (enteringNegation) {
-    setPendingNegation(game, { playedBy: meta.playerNum, card, fromDc: true, msgId, wasAttachment: isCcAttachment(card), handChannelId });
-    const oppNum = opponentPlayerNum(meta.playerNum);
-    const oppHandId = getHandChannelId(game, oppNum);
-    const oppHandChannel = await fetchGameChannel(interaction.client, oppHandId);
-    if (oppHandChannel) {
-      const oppId = getPlayerId(game, oppNum);
-      await oppHandChannel.send({
-        content: `<@${oppId}> Your opponent played **${card}** (cost 0). You may play **Negation** to cancel it.`,
-        components: [ctx.getNegationResponseButtons(game.gameId)],
-        allowedMentions: { users: [oppId] },
-      }).catch(discordCatch);
-    }
-    await logGameAction(game, client, `Waiting for opponent to respond to **${card}**...`, { phase: 'ACTION', icon: 'hourglass' });
-    const waitingMsg = await handChannel.send({
-      content: `⏳ **${card}** played — waiting for opponent to respond (Negation window open). You'll be notified here when it resolves.`,
-    }).catch(() => null);
-    if (waitingMsg) updatePendingNegation(game, (p) => { p.waitingMsgId = waitingMsg.id; });
-    if (ctx.pushUndo) {
-      ctx.pushUndo(game, {
-        type: 'cc_play_dc',
-        gameId: game.gameId,
-        msgId,
-        playerNum: meta.playerNum,
-        card,
-        previousHand,
-        previousDiscard,
-        previousAttachments,
-        gameLogMessageId: logMsg?.id,
-      });
-    }
-    saveGames(game.gameId);
-    return;
-  }
-  if (ctx.resolveAbility) {
-    const abilityId = effectData?.abilityId ?? card;
-    const result = ctx.resolveAbility(abilityId, { game, playerNum: meta.playerNum, cardName: card, dcMessageMeta: ctx.dcMessageMeta, dcHealthState: ctx.dcHealthState, msgId });
-    if (result.requiresChoice && result.choiceOptions?.length > 0) {
-      // Choice required: set up pending state and send choice buttons to hand channel
-      setPendingCcChoice(game, { abilityId, choiceOptions: result.choiceOptions, gameId: game.gameId, playerNum: meta.playerNum, ...(result.choiceValues ? { choiceValues: result.choiceValues } : {}) });
-      const { ActionRowBuilder: _AR, ButtonBuilder: _BB, ButtonStyle: _BS } = await import('discord.js');
-      const rows = [];
-      const maxPerRow = 5;
-      for (let i = 0; i < result.choiceOptions.length; i++) {
-        if (i % maxPerRow === 0) rows.push(new _AR());
-        const label = String(result.choiceOptions[i]).slice(0, 80);
-        rows[rows.length - 1].addComponents(
-          new _BB().setCustomId(`cc_choice_${game.gameId}_${i}`).setLabel(label).setStyle(_BS.Secondary)
-        );
-      }
-      const handCh = await fetchGameChannel(interaction.client, handChannelId);
-      if (handCh) await handCh.send({ content: `**Choose one** (for **${card}**):`, components: rows }).catch(discordCatch);
-    } else {
-      await applyAbilityResult(result, { game, playerNum: meta.playerNum, msgId, client: interaction.client, ctx });
-      if (result.requiresPowerTokenChoice && game.pendingPowerTokenGrant?.channelId === null) {
-        const threadId = game.dcActionsData?.[msgId]?.threadId;
-        if (threadId) {
-          game.pendingPowerTokenGrant.channelId = threadId;
-          const ptThread = await fetchGameChannel(interaction.client, threadId);
-          if (ptThread) {
-            const { grants } = game.pendingPowerTokenGrant;
-            const totalCount = grants.reduce((sum, g) => sum + g.count, 0);
-            const figNames = [...new Set(grants.map(g => g.figName))].join(', ');
-            const btns = ['Damage', 'Surge', 'Block', 'Evade'].map(t =>
-              new ButtonBuilder().setCustomId(`power_token_choice_${game.gameId}_${t.toLowerCase()}`).setLabel(t).setStyle(ButtonStyle.Secondary)
-            );
-            await ptThread.send({
-              content: `**Choose power token type** for **${figNames}** (${totalCount > 1 ? `${totalCount} tokens` : '1 token'}):`,
-              components: [new ActionRowBuilder().addComponents(btns)],
-            }).catch(discordCatch);
-          }
-        }
-      }
-    }
-  }
+  // Route through the UNIFIED counter-window (Negate/Comms) — the same path as a
+  // hand play and the combat gate (alexanbv 2026-06-17). The card's disposition
+  // (attachment vs discard) already happened above; on resolve the effect runs
+  // via _resumeScCcEffect (msgId + fromDc are threaded, so PowerToken / choice /
+  // space prompts route correctly), on cancel the when-discarded pipeline fires.
+  // No more old Negation / Comm-Disruption window.
+  await runCcPlayTriggers(game, meta.playerNum, { client, logGameAction, dcMessageMeta, saveGames });
+  await openCcCounterWindow(game, game.gameId, { card, cost, playedBy: meta.playerNum, abilityId, msgId, fromDc: true }, ctx, interaction.client);
   if (ctx.pushUndo) {
     ctx.pushUndo(game, {
       type: 'cc_play_dc',
