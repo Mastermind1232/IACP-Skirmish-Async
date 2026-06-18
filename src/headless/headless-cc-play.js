@@ -14,7 +14,6 @@ import {
   getDcList, getDcMessageIds, dcMatchesPlayableBy,
 } from '../game/player-helpers.js';
 import { getRange } from '../game/spatial.js';
-import { setPendingNegation } from '../game/interrupts.js';
 
 /**
  * Play a command card headlessly. All pre-selection checks (timing, legality,
@@ -161,36 +160,21 @@ async function handleCostPositive(game, playerNum, cardName, abilityId, idx, han
   return { played: true };
 }
 
-// ── Path 3: Cost = 0 (move card, check Negation, then resolve) ──────────────
+// ── Path 3: Cost = 0 (move card, then resolve) ──────────────────────────────
+// The opponent's Negation/Comms counter-window is the unified window's job
+// (openCcCounterWindow); in headless / AI self-play the responder always let the
+// play resolve anyway (self-play auto-passed), so we resolve directly here — no
+// pendingNegation, no dependency on the old Negation handlers. alexanbv 2026-06-17.
 
 async function handleCostZero(game, playerNum, cardName, abilityId, idx, hand,
   handKey, discardKey, baseContext, deps) {
-  const { resolveAbility } = deps;
-
   // Move card from hand to discard FIRST
   hand.splice(idx, 1);
   game[handKey] = hand;
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(cardName);
 
-  // Check for Negation in opponent's hand
-  const oppNum = opponentPlayerNum(playerNum);
-  const oppHandKey = ccHandKey(oppNum);
-  const oppHand = game[oppHandKey] || [];
-  const hasNegation = oppHand.includes('Negation');
-
-  if (hasNegation) {
-    // Set pendingNegation — game loop picks up negation_play/negation_let_resolve
-    setPendingNegation(game, {
-      playedBy: playerNum,
-      card: cardName,
-      fromDc: false,
-      handChannelId: null,
-    });
-    return { played: true, pendingNegation: true };
-  }
-
-  // No Negation — resolve directly
+  // Resolve directly (no headless Negation window).
   const result = resolveInline(abilityId, baseContext, deps);
 
   if (!result.applied && result.manualMessage) {

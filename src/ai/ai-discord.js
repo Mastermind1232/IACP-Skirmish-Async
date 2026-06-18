@@ -15,7 +15,7 @@ import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
-import { clearPendingNegation, setPendingCcConfirmation } from '../game/interrupts.js';
+import { setPendingCcConfirmation } from '../game/interrupts.js';
 
 /** Sentinel user ID prefix for AI players. */
 export const AI_USER_PREFIX = 'ai_player_';
@@ -316,39 +316,10 @@ export async function runAiTurnLive(game, client, buildAllDeps, getGame, options
         continue;
       }
 
-      // Negation auto-resolve: cost-0 CCs set pendingNegation. In AI-vs-human,
-      // the AI is one side — auto-let-resolve on the AI's behalf so the game continues.
-      // (The human opponent still gets normal Negation prompts when THEY play a CC.)
-      if (currentGame.pendingNegation && currentGame.pendingNegation.playedBy === aiPlayerNum) {
-        const negOppNum = aiPlayerNum === 1 ? 2 : 1;
-        const negUserId = negOppNum === 1 ? currentGame.player1Id : currentGame.player2Id;
-        const negCustomId = `negation_let_resolve_${currentGame.gameId}`;
-        try {
-          const negHandlerKey = getHandlerKey(negCustomId, 'button');
-          const negHandler = negHandlerKey ? getHandler(negHandlerKey) : null;
-          if (negHandler) {
-            const negInteraction = createLiveAiInteraction(negCustomId, negUserId, currentGame, client);
-            negInteraction.client = client;
-            if (currentGame.generalId) {
-              try { negInteraction.channel = await fetchGameChannel(client, currentGame.generalId); negInteraction.message.channel = negInteraction.channel; } catch {}
-            }
-            const negGroup = getHandlerGroup(negHandlerKey);
-            const allDepsNeg = buildAllDeps();
-            if (negGroup) {
-              const negCtx = buildContext(negGroup, allDepsNeg);
-              await negHandler(negInteraction, negCtx);
-            } else {
-              await negHandler(negInteraction);
-            }
-            console.log(`[AI] Negation auto-resolved: let "${currentGame.pendingNegation?.card || '?'}" resolve`);
-          } else {
-            clearPendingNegation(currentGame);
-          }
-        } catch (err) {
-          clearPendingNegation(currentGame);
-          console.warn(`[AI] Negation auto-resolve error: ${err.message}`);
-        }
-      }
+      // (Old pendingNegation auto-let-resolve removed 2026-06-17 — CC plays now
+      // open the unified Negate/Comms counter-window via openCcCounterWindow. The
+      // human opponent responds through that window's buttons; auto-passing on the
+      // AI's behalf when the AI is the responder is a tracked follow-up.)
 
       actionLog.push(chosen.customId);
       console.log(`[AI] Step ${step}: ${chosen.type} → ${chosen.customId}`);

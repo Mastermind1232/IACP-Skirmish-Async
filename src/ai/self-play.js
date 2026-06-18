@@ -16,7 +16,6 @@ import { buildContext } from '../context-factory.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { getRecoveryReason } from '../engine/recovery.js';
-import { clearPendingNegation } from '../game/interrupts.js';
 import { insertSelfPlayRun, batchIncrementCoverageDiscord, batchSetCoverageVerified } from '../db.js';
 import { computeTransitionKey } from '../exploration/transition-key.js';
 import { setPhase, PHASES, enableStrictPhaseTransitions } from '../game/phase.js';
@@ -1338,41 +1337,12 @@ export async function runSelfPlayLoop(game, client, opts) {
         continue;
       }
 
-      // Negation auto-resolve: cost-0 CCs set pendingNegation (opponent may play
-      // Negation to cancel). In AI self-play both sides are AI — auto-let-resolve
-      // by dispatching the negation_let_resolve handler so the game continues.
-      if (g.pendingNegation) {
-        const negCard = g.pendingNegation.card;
-        const negOppNum = g.pendingNegation.playedBy === 1 ? 2 : 1;
-        const negUserId = negOppNum === 1 ? g.player1Id : g.player2Id;
-        const negCustomId = `negation_let_resolve_${g.gameId}`;
-        try {
-          const negHandlerKey = getHandlerKey(negCustomId, 'button');
-          const negHandler = negHandlerKey ? getHandler(negHandlerKey) : null;
-          if (negHandler) {
-            const negInteraction = createLiveAiInteraction(negCustomId, negUserId, g, client);
-            negInteraction.client = client;
-            if (g.generalId) {
-              try { negInteraction.channel = await fetchGameChannel(client, g.generalId); negInteraction.message.channel = negInteraction.channel; } catch {}
-            }
-            const negGroup = getHandlerGroup(negHandlerKey);
-            if (negGroup) {
-              const negCtx = buildContext(negGroup, buildAllDeps());
-              await negHandler(negInteraction, negCtx);
-            } else {
-              await negHandler(negInteraction);
-            }
-            console.log(`[self-play] Negation auto-resolved: let "${negCard}" resolve (P${negOppNum} passed)`);
-          } else {
-            // Fallback: just clear the pending state
-            clearPendingNegation(g);
-            console.warn(`[self-play] Negation cleared (no handler for ${negCustomId})`);
-          }
-        } catch (err) {
-          clearPendingNegation(g);
-          console.warn(`[self-play] Negation auto-resolve error: ${err.message}`);
-        }
-      }
+      // (Old pendingNegation auto-let-resolve removed 2026-06-17 — CC plays now
+      // open the unified Negate/Comms counter-window via openCcCounterWindow, not
+      // pendingNegation. In AI self-play the responder currently lacks counters in
+      // the tested scenarios so the window resolves synchronously; auto-passing the
+      // window (dispatch cc_counter_pass_) when an AI responder DOES hold a counter
+      // is a tracked follow-up.)
 
       // Detect figure defeats via pre/post diff
       const gPostDispatch = getGame(game.gameId);
