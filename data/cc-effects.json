@@ -1892,7 +1892,7 @@
     "Tough Luck": {
       "cost": 1,
       "playableBy": "Any Figure",
-      "timing": "other",
+      "timing": "afterOpponentReroll",
       "effect": "Use after your opponent rerolls a die. Remove that die's result from the results."
     },
     "Toxic Dart": {

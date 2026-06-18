@@ -26,92 +26,13 @@ import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
 import { sendPowerTokenOverflowUI, sendModsYn, resumeGateAfterRollInterrupt } from './combat.js';
-import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingToughLuck, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol, clearPendingForceIsWithMe } from '../game/interrupts.js';
+import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { getDcMessageIds as _getDcMessageIdsFiwm } from '../game/player-helpers.js';
 
-export async function handleToughLuck(interaction, ctx) {
-  const {
-    getGame, canActAsPlayer, saveGames, client,
-    recalcAttackTotals, recalcDefenseTotals,
-    sendRerollUI, proceedAfterRerolls,
-    logGameAction,
-  } = ctx;
-
-  const buttonKey = interaction.customId.startsWith('tough_luck_remove_') ? 'tough_luck_remove_' : 'tough_luck_skip_';
-
-  // Tough Luck: remove a rerolled die or skip, then continue reroll flow
-  const parts = splitCustomId(interaction.customId, buttonKey);
-  const gameId = parts[0];
-  const game = await requireGame(interaction, getGame, gameId, { silent: true });
-  if (!game) return;
-  if (!game.pendingToughLuck) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(discordCatch); return; }
-  const tlData = game.pendingToughLuck;
-  const combat = game.pendingCombat;
-  const responder = game.toughLuckPlayerNum;
-  if (!await requirePlayer(interaction, game, interaction.user.id, responder, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
-  if (buttonKey === 'tough_luck_remove_') {
-    const dieIdx = parseInt(parts[1], 10);
-    if (tlData.side === 'atk' && combat?.attackDiceResults?.[dieIdx]) {
-      const die = combat.attackDiceResults[dieIdx];
-      combat.attackDiceResults.splice(dieIdx, 1);
-      // Fix stale reroll tracking: removed die's index is gone, higher indices shift down
-      if (combat.attackerRerolledIndices) {
-        combat.attackerRerolledIndices = combat.attackerRerolledIndices
-          .filter(i => i !== dieIdx)
-          .map(i => i > dieIdx ? i - 1 : i);
-      }
-      const t = recalcAttackTotals(combat.attackDiceResults);
-      combat.attackRoll = { acc: t.acc, dmg: t.dmg, surge: t.surge };
-      await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} attack die. New totals: ${t.acc} acc, ${t.dmg} dmg, ${t.surge} surge.`, { phase: 'ROUND', icon: 'card' });
-    } else if (tlData.side === 'def' && combat?.defenseDiceResults?.[dieIdx]) {
-      const die = combat.defenseDiceResults[dieIdx];
-      combat.defenseDiceResults.splice(dieIdx, 1);
-      // Fix stale reroll tracking: removed die's index is gone, higher indices shift down
-      if (combat.defenderRerolledIndices) {
-        combat.defenderRerolledIndices = combat.defenderRerolledIndices
-          .filter(i => i !== dieIdx)
-          .map(i => i > dieIdx ? i - 1 : i);
-      }
-      const t = recalcDefenseTotals(combat.defenseDiceResults);
-      combat.defenseRoll = { block: t.block, evade: t.evade, dodge: t.dodge };
-      await logGameAction(game, client, `**Tough Luck** — Removed rerolled ${die.color} defense die. New totals: ${t.block} block, ${t.evade} evade.`, { phase: 'ROUND', icon: 'card' });
-    }
-  } else {
-    await logGameAction(game, client, '**Tough Luck** — Skipped.', { phase: 'ROUND', icon: 'card' });
-  }
-  clearPendingToughLuck(game);
-  // Continue reroll flow
-  const thread = await fetchCombatThread(client, combat?.combatThreadId);
-  if (thread && combat) {
-    const side = tlData.side;
-    // alexanbv 2026-05-13: count from queue entries; legacy
-    // attackerRerollsRemaining / defenderRerollsRemaining count fields
-    // are added in for back-compat with paths/tests that still set
-    // them directly.
-    const _atkPN = combat.attackerPlayerNum || 1;
-    const _defPN = combat.defenderPlayerNum ?? (_atkPN === 1 ? 2 : 1);
-    const atkRem = (combat.forcedRerollQueue || [])
-      .filter(e => e.controlPlayer === _atkPN && (e.pool === 'attack' || e.pool === 'any'))
-      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
-      + Math.max(0, combat.attackerRerollsRemaining ?? 0);
-    const defRem = (combat.forcedRerollQueue || [])
-      .filter(e => e.controlPlayer === _defPN && (e.pool === 'defense' || e.pool === 'any'))
-      .reduce((n, e) => n + Math.max(0, e.remaining ?? 0), 0)
-      + Math.max(0, combat.defenderRerollsRemaining ?? 0);
-    if (side === 'atk' && atkRem > 0) {
-      await sendRerollUI(thread, game, combat, 'attacker');
-    } else if (side === 'def' && defRem > 0) {
-      await sendRerollUI(thread, game, combat, 'defender');
-    } else if (side === 'atk' && defRem > 0) {
-      combat.rerollPhase = 'defender';
-      await sendRerollUI(thread, game, combat, 'defender');
-    } else {
-      combat.rerollPhase = null;
-      await proceedAfterRerolls(thread, game, combat, ctx);
-    }
-  }
-  saveGames(game.gameId); return;
-}
+// handleToughLuck (legacy round-long tough_luck_* reaction) removed 2026-06-18.
+// Tough Luck is now a discrete one-shot post-reroll reaction handled entirely by
+// _offerToughLuck + handleToughLuckGate (tlgate_* customIds) in handlers/combat.js.
+// The proactive round-arm (setsToughLuck / game.toughLuckPlayerNum) is gone.
 
 export async function handleThereIsNoTry(interaction, ctx) {
   const {

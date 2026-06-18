@@ -12252,16 +12252,11 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setsToughLuck (Tough Luck — when opponent rerolls a die, remove it from results this round)
-  if (entry.type === 'ccEffect' && entry.setsToughLuck) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.toughLuckPlayerNum = playerNum;
-    return {
-      applied: true,
-      logMessage: 'This round, when your opponent rerolls a die, remove that die from the results.',
-    };
-  }
+  // Tough Luck is NOT a proactively-played round-long effect. It is a discrete
+  // post-reroll REACTION handled entirely by _offerToughLuck + handleToughLuckGate
+  // (combat.js) when the opponent rerolls a die: one card = one die, consumed from
+  // hand on use. There is intentionally no setsToughLuck handler here, and the
+  // ability-library entry no longer carries setsToughLuck. (alexanbv 2026-06-18)
 
   // ccEffect: setsTherIsNoTry (There Is No Try — REBEL FORCE USER die manipulation this round)
   if (entry.type === 'ccEffect' && entry.setsTherIsNoTry) {

@@ -280,6 +280,13 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'whenyouperformrapidfire':
       // Guild Programming: playable while attacking (when performing Rapid Fire)
       return ctx.duringAttack && ctx.isAttacker;
+    case 'afteropponentreroll':
+      // Tough Luck: purely reactive — never show in the proactive "Play CC"
+      // dropdown. It has a dedicated prompt flow (_offerToughLuck → tlgate_*
+      // in handlers/combat.js) that fires after the opponent rerolls a die.
+      // Returning false here keeps it out of the hand dropdown, exactly like
+      // Negation / Comm Disruption (whencommandcardplayed) above.
+      return false;
     case 'other':
       // Disarm, Dying Lunge: playable during your activation (play at actual trigger)
       return ctx.duringActivation;

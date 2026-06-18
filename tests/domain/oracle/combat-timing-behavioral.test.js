@@ -257,7 +257,6 @@ describe('B-CTIME-013: pendingNegation is in ROUND_NULL_FLAGS for round-boundary
       'pendingHavocShot',
       'pendingCleave',
       'pendingCelebration',
-      'pendingToughLuck',
       'pendingThereIsNoTry',
     ];
     for (const key of combatPendings) {

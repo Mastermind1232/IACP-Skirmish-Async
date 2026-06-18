@@ -1072,17 +1072,10 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
-  // During-reroll reactions
-  if (game.pendingToughLuck) {
-    const tl = game.pendingToughLuck;
-    if (playerNum === game.toughLuckPlayerNum) {
-      return [
-        { type: 'tough_luck_remove', customId: `tough_luck_remove_${gameId}_${tl.idx}`, description: 'Tough Luck: Remove rerolled die' },
-        { type: 'tough_luck_skip', customId: `tough_luck_skip_${gameId}`, description: 'Skip Tough Luck' },
-      ];
-    }
-    return [];
-  }
+  // Tough Luck (post-reroll reaction) is handled by the discrete combat gate
+  // (_offerToughLuck → tlgate_* in handlers/combat.js), driven by
+  // combat._pendingToughLuck — not by a round-long game.toughLuckPlayerNum arm.
+  // The legacy game.pendingToughLuck oracle block was removed 2026-06-18.
 
   // Combat sub-phase gate — sequential (destruct 2026-05-06): only the
   // activePlayer can ack. Surface the action exclusively to them.

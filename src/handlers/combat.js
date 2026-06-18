@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingToughLuck, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingFieldTactics, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -304,9 +304,11 @@ export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
   // so that prompting (or not) doesn't reveal hand information. For now we only
   // prompt when they hold it — left as-is per Destruct; revisit to always prompt.
   if (!(getCcHand(game, relevantPN) || []).includes('Tough Luck')) return false;
+  // Discrete one-shot reaction: the entire pending state lives on
+  // combat._pendingToughLuck (read by handleToughLuckGate). We deliberately do
+  // NOT arm any round-long game.toughLuckPlayerNum / game.pendingToughLuck — Tough
+  // Luck reacts to a SINGLE reroll, then is consumed from hand. (alexanbv 2026-06-18)
   combat._pendingToughLuck = { pool, idx, playerNum: relevantPN };
-  setPendingToughLuck(game, { side: pool === 'attack' ? 'atk' : 'def', idx });
-  game.toughLuckPlayerNum = relevantPN;
   const ownerId = game[`player${relevantPN}Id`] ?? '';
   const die = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults)?.[idx];
   const row = new ActionRowBuilder().addComponents(
@@ -2078,8 +2080,6 @@ export async function handleToughLuckGate(interaction, ctx) {
     await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
   }
   delete combat._pendingToughLuck;
-  game.pendingToughLuck = null;
-  game.toughLuckPlayerNum = null;
   // Resume the rerolls window (more rerolls may be available, or it advances).
   await _driveGatePath('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
@@ -6054,32 +6054,10 @@ async function _fireAttackerPostRerollTriggers({ game, combat, thread, ctx, game
       }
     } catch { /* non-fatal */ }
   }
-  // Tough Luck — offer to BOTH the die-owner side AND the player who
-  // caused the reroll, per user spec. The die just rerolled is an
-  // atk die owned by the attacker; the rerolling player is whoever
-  // controlled this queue entry (abilityHolderPN). If they differ,
-  // either side may have TL.
-  const _tlCandidates = new Set();
-  if (game.toughLuckPlayerNum) {
-    // The die's owner side (attacker for atk die). TL is the opponent
-    // of the die-owner — for an atk die that's the defender.
-    if (game.toughLuckPlayerNum === defenderPlayerNum) _tlCandidates.add(defenderPlayerNum);
-    // The rerolling player — e.g. defender's Doubt that just rerolled
-    // the attacker's die; if the rerolling player also has TL, they
-    // get a prompt too. For a sub-picker path the holder is in
-    // abilityHolderPN — TL ownership is read from game.toughLuckPlayerNum
-    // which is set per-player when their TL prep fires.
-    if (game.toughLuckPlayerNum === abilityHolderPN) _tlCandidates.add(abilityHolderPN);
-  }
-  for (const _tlPN of _tlCandidates) {
-    setPendingToughLuck(game, { side: 'atk', idx });
-    const _tlOwner = game[`player${_tlPN}Id`] ?? '';
-    const _tlRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-    );
-    if (thread) await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled attack die.`, components: [_tlRow] }).catch(() => {});
-  }
+  // Tough Luck is now handled exclusively by the discrete gate reaction
+  // (_offerToughLuck → tlgate_* in the gate reroll path), NOT here. The old
+  // round-long game.toughLuckPlayerNum offer was removed 2026-06-18 — Tough Luck
+  // is a one-shot post-reroll reaction consumed from hand, not a round arm.
 }
 
 function _countQueueRerollsForSide(combat, controlPlayer, pool) {
@@ -6764,7 +6742,6 @@ export async function handleCombatReroll(interaction, ctx) {
     }
     return false;
   };
-  let _tlTriggered = false;
   if (choice !== 'done') {
     const idx = parseInt(choice, 10);
     if (side === 'atk') {
@@ -6825,7 +6802,6 @@ export async function handleCombatReroll(interaction, ctx) {
           attackerPlayerNum, defenderPlayerNum,
           abilityHolderPN: attackerPlayerNum, // voluntary path: attacker's own reroll
         });
-        if (game.pendingToughLuck) _tlTriggered = true;
       }
     } else {
       const dice = combat.defenseDiceResults || [];
@@ -6875,21 +6851,12 @@ export async function handleCombatReroll(interaction, ctx) {
           combat.doubleOrNothingApplied = true;
           game.doubleMatchingIconsOnReroll = null;
         }
-        // Tough Luck: if attacker set TL, they may remove this rerolled defense die
-        if (game.toughLuckPlayerNum === attackerPlayerNum) {
-          setPendingToughLuck(game, { side: 'def', idx });
-          const _tlOwner = game[`player${attackerPlayerNum}Id`] ?? '';
-          const _tlRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tough_luck_remove_${gameId}_${idx}`).setLabel(`Remove rerolled ${newDie.color} die`).setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`tough_luck_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await thread.send({ content: `**Tough Luck** — <@${_tlOwner}> may remove the rerolled defense die.`, components: [_tlRow] }).catch(discordCatch);
-          _tlTriggered = true;
-        }
+        // Tough Luck is handled by the discrete gate reaction
+        // (_offerToughLuck → tlgate_*), not by this legacy reroll handler.
+        // The round-long game.toughLuckPlayerNum offer was removed 2026-06-18.
       }
     }
   }
-  if (_tlTriggered) { saveGames(game.gameId); return; }
 
   // Check if current side is done (clicked done or exhausted rerolls)
   if (side === 'atk' && (choice === 'done' || _countQueueRerollsForSide(combat, attackerPlayerNum, 'attack') <= 0)) {

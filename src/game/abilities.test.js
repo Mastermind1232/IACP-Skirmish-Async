@@ -1194,11 +1194,14 @@ test('resolveAbility Shadow Ops for player 2 blocks player 1', () => {
   assert.strictEqual(game.shadowOpsBlockedPlayer, 1);
 });
 
-test('resolveAbility Tough Luck sets toughLuckPlayerNum', () => {
+test('resolveAbility Tough Luck is reaction-only — not a proactive round-long effect', () => {
+  // Tough Luck is a discrete post-reroll reaction (handled by _offerToughLuck +
+  // handleToughLuckGate in combat.js), NOT a proactively-played round-long effect.
+  // resolveAbility must NOT arm any round flag; there is no setsToughLuck handler.
   const game = { gameId: 'g-tl' };
   const result = resolveAbility('Tough Luck', { game, playerNum: 2 });
-  assert.strictEqual(result.applied, true);
-  assert.strictEqual(game.toughLuckPlayerNum, 2);
+  assert.strictEqual(result.applied, false);
+  assert.strictEqual(game.toughLuckPlayerNum, undefined);
 });
 
 test('resolveAbility Hold Ground sets holdGroundPlayerNum', () => {

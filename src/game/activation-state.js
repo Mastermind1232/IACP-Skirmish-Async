@@ -799,7 +799,8 @@ const ROUND_NULL_FLAGS = [
   'sonOfSkywalkerActive',
   'dataTheftStolenCard',
   'conditionalFocusIfDamagedGte',
-  'pendingToughLuck',
+  // pendingToughLuck removed 2026-06-18 — Tough Luck is now the discrete
+  // combat._pendingToughLuck gate reaction, not a round-cleared game flag.
   'pendingBELReorder',
   'pendingThereIsNoTry',
   'pendingSelfDestruct',
@@ -815,7 +816,8 @@ const ROUND_NULL_FLAGS = [
   'wreakVengeanceActive',
   'deadlyPrecisionActive',
   'thereIsAnotherActive',
-  'toughLuckPlayerNum',
+  // toughLuckPlayerNum removed 2026-06-18 — Tough Luck no longer arms a
+  // round-long player flag; it is a one-shot post-reroll reaction.
   'thereIsNoTryPlayerNum',
   'youWillNotDenyMeActive',
   'mandaAsteelPlayerNum',

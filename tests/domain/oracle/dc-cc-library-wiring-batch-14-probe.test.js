@@ -52,7 +52,7 @@ const BATCH = [
   ['There Is No Try',       ['setsTherIsNoTry']],
   ['To the Limit',          ['activationExtraActionThenStun']],
   ['Tools for the Job',     ['attackBonusDice']],
-  ['Tough Luck',            ['setsToughLuck']],
+  ['Tough Luck',            ['reactionOnly', 'reactionTrigger']],
   ['Toxic Dart',            ['chooseAdjacentHostileThen']],
   ['Trandoshan Terror',     ['attackBonusDice', 'attackBonusDiceColor']],
   ['Urgency',               ['mpBonusFromSpeed']],

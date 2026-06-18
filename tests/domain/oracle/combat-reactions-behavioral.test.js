@@ -14,7 +14,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  handleToughLuck, handleThereIsNoTry, handleVetInstincts,
+  handleThereIsNoTry, handleVetInstincts,
   handlePowerConverter, handleDoubtReroll, handleForceExhaustion,
   handleHunterProtocol, handleSlowOnTheDraw, handleSlowOnTheDrawResume,
   handleStrikeMeDown, handleIllicitArms,
@@ -103,182 +103,10 @@ function makeCombat(overrides = {}) {
 }
 
 // ── B-CR-TL: Tough Luck ─────────────────────────────────────────────────────
-
-describe('B-CR-TL: Tough Luck die splice', () => {
-  it('B-CR-TL-001: removes attack die at correct index and recalculates totals', async () => {
-    const combat = makeCombat({ attackerRerolledIndices: [1] });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.strictEqual(combat.attackDiceResults.length, 2, 'one die removed');
-    assert.strictEqual(combat.attackDiceResults[0].color, 'red', 'red preserved at index 0');
-    assert.strictEqual(combat.attackDiceResults[1].color, 'green', 'green shifted to index 1');
-    assert.deepStrictEqual(combat.attackRoll, { acc: 1, dmg: 5, surge: 1 }, 'totals recalculated');
-    assert.ok(game.pendingToughLuck == null, 'pendingToughLuck cleared');
-  });
-
-  it('B-CR-TL-002: removes defense die and recalculates defense totals', async () => {
-    const combat = makeCombat({ defenderRerolledIndices: [0] });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'def' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx);
-
-    assert.strictEqual(combat.defenseDiceResults.length, 1, 'one defense die removed');
-    assert.strictEqual(combat.defenseDiceResults[0].color, 'white', 'white at index 0');
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 }, 'defense totals recalculated');
-  });
-
-  it('B-CR-TL-003: skip path clears pendingToughLuck without mutating dice', async () => {
-    const combat = makeCombat({ attackerRerolledIndices: [1] });
-    const originalDice = [...combat.attackDiceResults];
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_skip_g1', 'player1'), ctx);
-
-    assert.ok(game.pendingToughLuck == null, 'pendingToughLuck cleared');
-    assert.strictEqual(combat.attackDiceResults.length, 3, 'dice unchanged');
-    assert.deepStrictEqual(combat.attackDiceResults, originalDice, 'dice array unchanged');
-  });
-
-  it('B-CR-TL-004: adjusts attackerRerolledIndices after splice (index stability)', async () => {
-    // Setup: dice [red, blue, green], indices [1] (blue rerolled), TL removes blue (index 1)
-    // After splice: dice = [red, green]. Green shifts from index 2 to 1.
-    // Correct behavior: attackerRerolledIndices should be [] (removed index 1)
-    const combat = makeCombat({ attackerRerolledIndices: [1] });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    // After fix: removed die's index gone, higher indices decremented
-    assert.deepStrictEqual(combat.attackerRerolledIndices, [],
-      'rerolled index for removed die should be purged');
-  });
-
-  it('B-CR-TL-005: adjusts multiple rerolledIndices correctly after splice', async () => {
-    // dice [red(0), blue(1), green(2)], rerolled=[0, 2], TL removes blue (index 1)
-    // After splice: dice = [red, green]. Index 0 stays, index 2→1.
-    // Correct: attackerRerolledIndices = [0, 1]
-    const combat = makeCombat({ attackerRerolledIndices: [0, 2] });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.deepStrictEqual(combat.attackerRerolledIndices, [0, 1],
-      'index 0 preserved, index 2 decremented to 1');
-    assert.strictEqual(combat.attackDiceResults.length, 2);
-  });
-
-  it('B-CR-TL-006: adjusts defenderRerolledIndices after defense splice', async () => {
-    // defense dice [black(0), white(1)], rerolled=[0, 1], TL removes black (index 0)
-    // After splice: dice = [white]. Index 0 removed, index 1→0.
-    // Correct: defenderRerolledIndices = [0]
-    const combat = makeCombat({ defenderRerolledIndices: [0, 1] });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'def' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx);
-
-    assert.deepStrictEqual(combat.defenderRerolledIndices, [0],
-      'index 0 removed, index 1 decremented to 0');
-  });
-
-  it('B-CR-TL-007: continues to attacker reroll UI when atkRerolls remain', async () => {
-    const combat = makeCombat({
-      attackerRerolledIndices: [1],
-      attackerRerollsRemaining: 1,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx, calls } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.strictEqual(calls.sendRerollUI.length, 1, 'reroll UI sent');
-    assert.strictEqual(calls.sendRerollUI[0].phase, 'attacker', 'attacker reroll phase');
-  });
-
-  it('B-CR-TL-008: proceeds after rerolls when no rerolls remain', async () => {
-    const combat = makeCombat({
-      attackerRerolledIndices: [1],
-      attackerRerollsRemaining: 0,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx, calls } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.strictEqual(calls.proceedAfterRerolls.length, 1, 'proceedAfterRerolls called');
-    assert.strictEqual(combat.rerollPhase, null, 'rerollPhase set to null');
-  });
-
-  it('B-CR-TL-009: transitions to defender reroll when atk side done but def remains', async () => {
-    const combat = makeCombat({
-      attackerRerolledIndices: [1],
-      attackerRerollsRemaining: 0,
-      defenderRerollsRemaining: 1,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx, calls } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.strictEqual(calls.sendRerollUI.length, 1, 'reroll UI sent');
-    assert.strictEqual(calls.sendRerollUI[0].phase, 'defender', 'transitions to defender');
-    assert.strictEqual(combat.rerollPhase, 'defender');
-  });
-});
+// The legacy round-long handleToughLuck (tough_luck_*) was removed 2026-06-18.
+// Tough Luck is now the discrete _offerToughLuck → handleToughLuckGate (tlgate_*)
+// reaction; its behavioral oracle lives in tough-luck-discrete.test.js +
+// gate-tough-luck.test.js.
 
 // ── B-CR-TINT: There Is No Try ──────────────────────────────────────────────
 
@@ -387,37 +215,8 @@ describe('B-CR-TINT: There Is No Try face replacement', () => {
 // ── B-CR-CHAIN: Multi-step reroll chains ────────────────────────────────────
 
 describe('B-CR-CHAIN: Multi-step reroll chain tests', () => {
-  it('B-CR-CHAIN-001: TL splice → reroll continues → green die at new index is rerollable', async () => {
-    // Full chain: 3 dice, blue (index 1) rerolled, TL removes blue, attacker has 1 reroll remaining.
-    // After TL: dice=[red, green], green at new index 1.
-    // Green was NOT rerolled, so after index adjustment, it should be rerollable at index 1.
-    const combat = makeCombat({
-      attackerRerolledIndices: [1],
-      attackerRerollsRemaining: 1,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx, calls } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    // Verify state after TL
-    assert.strictEqual(combat.attackDiceResults.length, 2);
-    assert.strictEqual(combat.attackDiceResults[1].color, 'green');
-
-    // Verify reroll flow entered
-    assert.strictEqual(calls.sendRerollUI.length, 1, 'reroll UI sent');
-    assert.strictEqual(calls.sendRerollUI[0].phase, 'attacker');
-
-    // Verify green die at new index 1 is NOT in rerolledIndices (it's a fresh die)
-    assert.ok(!combat.attackerRerolledIndices.includes(1),
-      'green die (now at index 1) should NOT be marked as rerolled');
-  });
+  // B-CR-CHAIN-001 (TL splice chain) removed 2026-06-18 — legacy handleToughLuck
+  // is gone; the discrete Tough Luck reaction is covered in tough-luck-discrete.test.js.
 
   it('B-CR-CHAIN-002: TINT face set → reroll window → VI defense bonus chain', async () => {
     // Chain: TINT sets face on die 0 → enters reroll window (attacker has 1 reroll).
@@ -455,60 +254,15 @@ describe('B-CR-CHAIN: Multi-step reroll chain tests', () => {
     assert.strictEqual(combat.vetInstinctsDefenseApplied, true);
   });
 
-  it('B-CR-CHAIN-003: TL defense splice + TINT skip → correct defense totals', async () => {
-    // TL removes black defense die → then TINT skips → totals reflect only white die
-    const combat = makeCombat({
-      defenderRerolledIndices: [0],
-      attackerRerollsRemaining: 0,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingToughLuck: { side: 'def' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-
-    // Step 1: TL removes black die (index 0)
-    const { ctx: ctx1 } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx1);
-
-    assert.strictEqual(combat.defenseDiceResults.length, 1, 'one die remains');
-    assert.strictEqual(combat.defenseDiceResults[0].color, 'white');
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 });
-
-    // Step 2: TINT skip (no further mutations)
-    game.pendingThereIsNoTry = {};
-    const { ctx: ctx2 } = buildCtx(game);
-    await handleThereIsNoTry(mockInteraction('there_is_no_try_skip_g1', 'player2'), ctx2);
-
-    assert.strictEqual(combat.tintResolved, true);
-    // Defense totals unchanged
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 },
-      'defense totals stable after TINT skip');
-  });
+  // B-CR-CHAIN-003 (TL defense splice + TINT skip) removed 2026-06-18 — legacy
+  // handleToughLuck is gone. TINT skip is still covered by B-CR-TINT tests.
 });
 
 // ── B-CR-REJECT: Rejected sequences ────────────────────────────────────────
 
 describe('B-CR-REJECT: Rejected/no-op sequences', () => {
-  it('B-CR-REJECT-001: TL with no pendingToughLuck is no-op', async () => {
-    const combat = makeCombat();
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: null,
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    const origDice = JSON.parse(JSON.stringify(combat.attackDiceResults));
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    assert.deepStrictEqual(combat.attackDiceResults, origDice, 'dice unchanged');
-  });
+  // B-CR-REJECT-001 (TL no-op) removed 2026-06-18 — legacy handleToughLuck gone;
+  // the discrete gate handler's "no pending" guard is covered by gate-tough-luck.test.js.
 
   it('B-CR-REJECT-002: TINT with no pendingThereIsNoTry is no-op for die pick', async () => {
     const combat = makeCombat();
@@ -542,29 +296,8 @@ describe('B-CR-REJECT: Rejected/no-op sequences', () => {
 // ── B-CR-CLEANUP: State cleanup ─────────────────────────────────────────────
 
 describe('B-CR-CLEANUP: State cleanup after handlers', () => {
-  it('B-CR-CLEANUP-001: TL clears pendingToughLuck on both remove and skip', async () => {
-    // Remove path
-    const combat1 = makeCombat({ attackerRerolledIndices: [1] });
-    const game1 = {
-      gameId: 'g1', player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' }, toughLuckPlayerNum: 1,
-      pendingCombat: combat1,
-    };
-    const { ctx: ctx1 } = buildCtx(game1);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx1);
-    assert.ok(game1.pendingToughLuck == null);
-
-    // Skip path
-    const combat2 = makeCombat();
-    const game2 = {
-      gameId: 'g1', player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' }, toughLuckPlayerNum: 1,
-      pendingCombat: combat2,
-    };
-    const { ctx: ctx2 } = buildCtx(game2);
-    await handleToughLuck(mockInteraction('tough_luck_skip_g1', 'player1'), ctx2);
-    assert.ok(game2.pendingToughLuck == null);
-  });
+  // B-CR-CLEANUP-001 (TL clears pendingToughLuck) removed 2026-06-18 — legacy
+  // handleToughLuck gone; discrete-path cleanup is covered in tough-luck-discrete.test.js.
 
   it('B-CR-CLEANUP-002: TINT sets tintResolved on both face pick and skip', async () => {
     // Face path
@@ -1469,72 +1202,9 @@ describe('B-CR-IA: Illicit Arms CC discard for +1 Hit', () => {
 // ── B-CR-XCHAIN: Cross-handler chains ───────────────────────────────────────
 
 describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
-  it('B-CR-XCHAIN-001: TL splice → PC reroll: PC-rerolled die index survives TL splice', async () => {
-    // Scenario: 3 dice. PC rerolled index 2 earlier. Attacker also rerolled index 0.
-    // TL removes index 0. After splice: dice=[die1, die2(PC)].
-    // Verify: die at new index 1 (was PC's die at index 2) IS still marked as rerolled.
-    const combat = makeCombat({
-      attackerRerolledIndices: [0, 2], // die 0 and die 2 (PC) were rerolled
-      attackerRerollsRemaining: 1,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-
-    // TL removes die at index 0
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx);
-
-    // After splice: dice = [blue(was 1), green(was 2)]
-    assert.strictEqual(combat.attackDiceResults.length, 2);
-    assert.strictEqual(combat.attackDiceResults[0].color, 'blue', 'blue shifted to index 0');
-    assert.strictEqual(combat.attackDiceResults[1].color, 'green', 'green shifted to index 1');
-
-    // Rerolled indices: was [0, 2] → remove 0, decrement 2→1 → [1]
-    assert.deepStrictEqual(combat.attackerRerolledIndices, [1],
-      'PC die (was index 2) correctly tracked at new index 1');
-
-    // Blue at index 0 is NOT in rerolled — it's freshly eligible
-    assert.ok(!combat.attackerRerolledIndices.includes(0),
-      'blue die (shifted to 0) is NOT rerolled — eligible for attacker reroll');
-  });
-
-  it('B-CR-XCHAIN-002: TL splice → subsequent reroll still tracks correctly', async () => {
-    // After TL splice adjusts indices, simulate what happens if the attacker then
-    // rerolls a die — the new index must not collide with adjusted indices.
-    const combat = makeCombat({
-      attackerRerolledIndices: [1], // blue was rerolled
-      attackerRerollsRemaining: 1,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      pendingToughLuck: { side: 'atk' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-
-    // TL removes blue (index 1) → dice = [red, green]
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx);
-
-    // rerolledIndices = [] (index 1 removed, nothing above it)
-    assert.deepStrictEqual(combat.attackerRerolledIndices, []);
-
-    // Now simulate attacker rerolling green (index 1 in the new array)
-    // This would normally happen via combat.js reroll handler, but we can
-    // verify the index is eligible by checking it's not in rerolledIndices
-    assert.ok(!combat.attackerRerolledIndices.includes(1),
-      'green at new index 1 is eligible for reroll');
-    assert.ok(!combat.attackerRerolledIndices.includes(0),
-      'red at index 0 is also eligible');
-  });
+  // B-CR-XCHAIN-001 / -002 (TL splice + index-stability chains) removed 2026-06-18 —
+  // legacy handleToughLuck gone. The discrete Tough Luck reaction zeroes a die's
+  // RESULT in place (no splice / no index shuffle), covered by tough-luck-discrete.test.js.
 
   it('B-CR-XCHAIN-003: PC → VI defense chain: PC _resumeRerollFlow hands off to VI', async () => {
     // PC resolves color swap. Defender has Vet Instincts active.
@@ -1611,40 +1281,8 @@ describe('B-CR-XCHAIN: Cross-handler chain tests', () => {
     assert.strictEqual(combat.attackerRerollsRemaining, 1);
   });
 
-  it('B-CR-XCHAIN-005: TL defense splice → TINT face set → totals reflect both mutations', async () => {
-    // Defense chain: TL removes a defense die, then TINT sets a face on the remaining die.
-    // Start: defense = [black(2B/0E), white(1B/1E)]
-    const combat = makeCombat({
-      defenderRerolledIndices: [1], // white was rerolled
-      attackerRerollsRemaining: 0,
-      defenderRerollsRemaining: 0,
-    });
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingToughLuck: { side: 'def' },
-      toughLuckPlayerNum: 1,
-      pendingCombat: combat,
-    };
-
-    // Step 1: TL removes white (index 1) → defense = [black(2B/0E)]
-    const { ctx: ctx1 } = buildCtx(game);
-    await handleToughLuck(mockInteraction('tough_luck_remove_g1_1', 'player1'), ctx1);
-
-    assert.strictEqual(combat.defenseDiceResults.length, 1);
-    assert.deepStrictEqual(combat.defenseRoll, { block: 2, evade: 0, dodge: 0 });
-
-    // Step 2: TINT sets black die face to 1B/1E
-    game.pendingThereIsNoTry = { pickedDieIdx: 0 };
-    const { ctx: ctx2 } = buildCtx(game);
-    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_0_1_1_0', 'player2'), ctx2);
-
-    assert.strictEqual(combat.defenseDiceResults[0].block, 1);
-    assert.strictEqual(combat.defenseDiceResults[0].evade, 1);
-    assert.deepStrictEqual(combat.defenseRoll, { block: 1, evade: 1, dodge: 0 },
-      'totals reflect both TL removal and TINT face set');
-  });
+  // B-CR-XCHAIN-005 (TL defense splice → TINT face set) removed 2026-06-18 —
+  // legacy handleToughLuck gone; discrete Tough Luck no longer splices dice.
 });
 
 // ── B-CR-INVARIANT: Pending-state / reroll invariants ───────────────────────
@@ -1653,23 +1291,10 @@ describe('B-CR-INVARIANT: Pending-state and reroll invariants', () => {
   it('B-CR-INV-001: all combat-reaction handlers clear their pending flag on both paths', async () => {
     // Verify that every handler clears its pending state on both accept and skip/no.
     // This is a meta-test — each handler's pending flag name and clear behavior.
+    // ToughLuck removed from this meta-check 2026-06-18 — legacy handleToughLuck
+    // gone; the discrete gate handler's clear-on-resolve is covered directly in
+    // tough-luck-discrete.test.js.
     const pendingChecks = [
-      {
-        name: 'ToughLuck',
-        field: 'pendingToughLuck',
-        accept: async (game, ctx) => {
-          game.pendingToughLuck = { side: 'atk' };
-          game.toughLuckPlayerNum = 1;
-          game.pendingCombat = makeCombat({ attackerRerolledIndices: [0] });
-          await handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx);
-        },
-        skip: async (game, ctx) => {
-          game.pendingToughLuck = { side: 'atk' };
-          game.toughLuckPlayerNum = 1;
-          game.pendingCombat = makeCombat();
-          await handleToughLuck(mockInteraction('tough_luck_skip_g1', 'player1'), ctx);
-        },
-      },
       {
         name: 'ThereIsNoTry',
         field: 'pendingThereIsNoTry',
@@ -1782,16 +1407,9 @@ describe('B-CR-INVARIANT: Pending-state and reroll invariants', () => {
   it('B-CR-INV-002: rerollPhase set to null when no rerolls remain after any handler', async () => {
     // After TL, TINT, VI, PC, Doubt each resolve with 0 rerolls remaining,
     // rerollPhase should be null (not stuck in a stale phase).
+    // TL entry removed 2026-06-18 — legacy handleToughLuck gone; the discrete gate
+    // handler resumes the rerolls window via _driveGatePath, covered by gate tests.
     const handlers = [
-      {
-        name: 'TL',
-        setup: (game) => {
-          game.pendingToughLuck = { side: 'atk' };
-          game.toughLuckPlayerNum = 1;
-          game.pendingCombat = makeCombat({ attackerRerolledIndices: [0] });
-        },
-        run: async (game, ctx) => handleToughLuck(mockInteraction('tough_luck_remove_g1_0', 'player1'), ctx),
-      },
       {
         name: 'TINT',
         setup: (game) => {

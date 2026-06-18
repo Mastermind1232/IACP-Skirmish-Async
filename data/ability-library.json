@@ -5129,10 +5129,11 @@
     },
     "Tough Luck": {
       "type": "ccEffect",
-      "label": "After opponent rerolls a die: remove that die from the results",
-      "logMessage": "**Tough Luck** — After your opponent rerolls a die, remove that die's result entirely from the results. You will be prompted after each opponent reroll.",
+      "label": "After opponent rerolls a die: remove that die's result",
+      "logMessage": "**Tough Luck** — After your opponent rerolls a die, remove that die's result from the results.",
       "wiredStatus": "wired",
-      "setsToughLuck": true
+      "reactionOnly": true,
+      "reactionTrigger": "afterOpponentReroll"
     },
     "Toxic Dart": {
       "type": "ccEffect",

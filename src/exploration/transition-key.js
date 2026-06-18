@@ -32,7 +32,6 @@ export const PENDING_STATE_KEYS = [
   'pendingIllicitArms',
   'pendingPowerConverter',
   'pendingThereIsNoTry',
-  'pendingToughLuck',
   'pendingHunterProtocol',
   'pendingBleeding',
   'pendingEe3Carbine',

@@ -214,7 +214,7 @@ const PENDING_KEYS = [
   'pendingCoverFire', 'pendingPowerTokenOverflow', 'pendingStrainChoice', 'pendingStillFaster',
   'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
   'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
-  'pendingToughLuck', 'pendingHunterProtocol',
+  'pendingHunterProtocol',
   // Ability / activation sub-states
   'pendingPowerTokenGrant', 'pendingCelebration', 'pendingDcAbilityChoice',
   'pendingRushPush', 'pendingLastResort', 'pendingFalseOrders',
