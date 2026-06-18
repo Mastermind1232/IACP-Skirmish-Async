@@ -2223,7 +2223,8 @@
       "elite": true,
       "affiliation": "Imperial",
       "abilities": [
-        "Professional"
+        "Professional",
+        "Mounted"
       ]
     },
     "Diala Passil": {
@@ -4262,7 +4263,10 @@
       "attachment": false,
       "elite": true,
       "unique": true,
-      "affiliation": "Scum"
+      "affiliation": "Scum",
+      "abilities": [
+        "Mounted"
+      ]
     },
     "KX-Series Security Droid (Elite)": {
       "abilityText": "Special Action (Shoulder Rush): Move up to 2 spaces and choose an adjacent hostile figure. If that figure is SMALL, push it 1 space and enter the space it exited. Then, perform an attack targeting the chosen figure.\n\nDeference Protocol: Once per round, when a friendly LEADER enters an adjacent space, you may gain 1 Block token.",

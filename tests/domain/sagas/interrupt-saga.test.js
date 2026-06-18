@@ -21,13 +21,9 @@ describe('InterruptSaga', () => {
   // toughLuck saga removed 2026-06-18 — Tough Luck is now a discrete
   // combat._pendingToughLuck gate reaction (tlgate_*), not an InterruptSaga.
 
-  it('fieldTactics: creates with correct config and accepts options', () => {
-    const saga = new InterruptSaga('i-3', 'fieldTactics', 1, { targetFigure: 'Stormtrooper-0-0' });
-    assert.equal(saga.state.pendingField, 'pendingFieldTactics');
-    assert.equal(saga.state.handlerPrefix, 'field_tactics_');
-    assert.equal(saga.state.targetFigure, 'Stormtrooper-0-0');
-    assert.ok(saga.isActive());
-  });
+  // fieldTactics saga removed 2026-06-18 — Field Tactics now grants an
+  // immediate activation (fieldTacticsActivation*), not a pendingFieldTactics
+  // interrupt saga, so it is no longer an InterruptSaga / INTERRUPT_CONFIG entry.
 
   it('unknown interrupt type falls back to generated config', () => {
     const saga = new InterruptSaga('i-4', 'customInterrupt', 2);
@@ -38,7 +34,7 @@ describe('InterruptSaga', () => {
 
   it('INTERRUPT_CONFIG has entries for all known interrupts', () => {
     const expectedKeys = [
-      'stillFaster', 'lastResort', 'fieldTactics',
+      'stillFaster', 'lastResort',
       'emperorInterrupt', 'executiveOrder', 'bombardmentSorin',
       'firingSquad', 'coordinatedRaid', 'awr', 'thereIsNoTry',
       'hunterProtocol', 'selfDestruct', 'rushPush', 'coverFire',

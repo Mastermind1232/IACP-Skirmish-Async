@@ -80,7 +80,6 @@ export const INTERRUPT_TYPES = Object.freeze({
   COORDINATED_RAID:      'coordinated-raid',
   EXECUTIVE_ORDER:       'executive-order',
   FIGHTING_KNIFE:        'fighting-knife',
-  FIELD_TACTICS:         'field-tactics',
   THERE_IS_NO_TRY:       'there-is-no-try',
   SPREAD_THE_PAIN:       'spread-the-pain',
   PUNISHING_STRIKE:      'punishing-strike',
@@ -532,9 +531,6 @@ export function clearPendingExecutiveOrder(game) { _clearDual(game, 'pendingExec
 
 export function setPendingFightingKnife(game, payload) { _setDual(game, 'pendingFightingKnife', INTERRUPT_TYPES.FIGHTING_KNIFE, payload); }
 export function clearPendingFightingKnife(game) { _clearDual(game, 'pendingFightingKnife', INTERRUPT_TYPES.FIGHTING_KNIFE); }
-
-export function setPendingFieldTactics(game, payload) { _setDual(game, 'pendingFieldTactics', INTERRUPT_TYPES.FIELD_TACTICS, payload); }
-export function clearPendingFieldTactics(game) { _clearDual(game, 'pendingFieldTactics', INTERRUPT_TYPES.FIELD_TACTICS); }
 
 export function setPendingThereIsNoTry(game, payload) { _setDual(game, 'pendingThereIsNoTry', INTERRUPT_TYPES.THERE_IS_NO_TRY, payload); }
 export function clearPendingThereIsNoTry(game) { _clearDual(game, 'pendingThereIsNoTry', INTERRUPT_TYPES.THERE_IS_NO_TRY); }

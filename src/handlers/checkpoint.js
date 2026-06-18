@@ -76,7 +76,6 @@ const INTERRUPT_GATE_MESSAGES = {
   [INTERRUPT_TYPES.COORDINATED_RAID]: 'a Coordinated Raid prompt is open',
   [INTERRUPT_TYPES.EXECUTIVE_ORDER]: 'an Executive Order prompt is open',
   [INTERRUPT_TYPES.FIGHTING_KNIFE]: 'a Fighting Knife prompt is open',
-  [INTERRUPT_TYPES.FIELD_TACTICS]: 'a Field Tactics prompt is open',
   [INTERRUPT_TYPES.THERE_IS_NO_TRY]: 'a There Is No Try prompt is open',
   [INTERRUPT_TYPES.SPREAD_THE_PAIN]: 'a Spread the Pain prompt is open',
   [INTERRUPT_TYPES.PUNISHING_STRIKE]: 'a Punishing Strike prompt is open',

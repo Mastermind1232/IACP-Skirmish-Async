@@ -5,7 +5,6 @@ export const INTERRUPT_CONFIG = {
   // toughLuck removed 2026-06-18 — Tough Luck is now a discrete gate reaction
   // (tlgate_*) on combat._pendingToughLuck, not a game.pendingToughLuck interrupt saga.
   lastResort: { pendingField: 'pendingLastResort', handlerPrefix: 'last_resort_' },
-  fieldTactics: { pendingField: 'pendingFieldTactics', handlerPrefix: 'field_tactics_' },
   emperorInterrupt: { pendingField: 'pendingEmperorInterrupt', handlerPrefix: 'emperor_interrupt_' },
   executiveOrder: { pendingField: 'pendingExecutiveOrder', handlerPrefix: 'executive_order_' },
   bombardmentSorin: { pendingField: 'pendingBombardmentSorin', handlerPrefix: 'bombardment_sorin_' },

@@ -12,7 +12,6 @@
  *   - Riot Trooper Elite
  *   - ISB Infiltrator (both)
  *   - Blend In
- *   - Force Surge
  *   - Rebel Graffiti
  *   - Jyn Erso (Trust Goes Both Ways, EoA branch)
  *
@@ -21,7 +20,7 @@
  * lives in src/handlers/eoa-handler.js.
  */
 
-import { opponentPlayerNum, getCcHand } from './player-helpers.js';
+import { opponentPlayerNum } from './player-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
 import { getDcEffects, dcAbilityFlags } from '../data-loader.js';
 
@@ -108,51 +107,14 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     });
   }
 
-  // Force Surge (Command Card, timing endOfActivation, playableBy Force
-  // User): "Use at the end of your activation to move up to 1 space. Then,
-  // choose an adjacent hostile figure. That figure suffers 2 Damage and 1
-  // Strain." Previously only surfaced via the generic end-of-activation
-  // reaction-card prompt; it was never an EoA descriptor (the eoa-
-  // orchestrator header listed it as intended but it was unwired). Wire it
-  // as a player-choice EoA descriptor for the ACTIVATOR when they hold the
-  // card AND field a Force User (the card's playableBy restriction). The
-  // pick routes into the normal CC-play pipeline in eoa-handler.js so the
-  // Move-X + adjacent-hostile resolution is the same as playing it from
-  // hand.
-  if (getCcHand(game, playerNum)?.includes?.('Force Surge')) {
-    const _fsFigureKey = _firstForceUserFigureKey(game, playerNum);
-    if (_fsFigureKey) {
-      descriptors.push({
-        id: `force_surge:${msgId}`,
-        ownerPlayerNum: playerNum,
-        sourceMsgId: msgId,
-        sourceLabel: 'Force Surge (move 1, adjacent hostile suffers 2 Damage + 1 Strain)',
-        subPromptKey: 'force_surge',
-        extras: { dcName, cardName: 'Force Surge', figureKey: _fsFigureKey },
-      });
-    }
-  }
+  // Force Surge is intentionally NOT an EoA descriptor. Per the project
+  // owner 2026-06-18: it is an OPTIONAL Command Card and already surfaces
+  // through the generic end-of-activation reaction-card play-from-hand
+  // prompt. Wiring it as a descriptor here would force a second, redundant
+  // prompt that the player must dismiss every end of activation. The
+  // optional play-from-hand path is the only offer.
 
   return descriptors;
-}
-
-/**
- * Find a friendly FORCE USER figure key for the given player (the figure
- * that "plays" Force Surge — its playableBy restriction). Returns the first
- * matching live figure key, or null. Kept local so the orchestrator stays
- * free of the heavier cc-timing dependency graph.
- */
-function _firstForceUserFigureKey(game, playerNum) {
-  const positions = game.figurePositions?.[playerNum] || {};
-  const dcEff = getDcEffects() || {};
-  for (const [fk, pos] of Object.entries(positions)) {
-    if (!pos) continue;
-    const dcName = fk.replace(/-\d+-\d+$/, '');
-    const eff = dcEff[dcName] || dcEff[dcName.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
-    const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
-    if (kws.includes('FORCE USER')) return fk;
-  }
-  return null;
 }
 
 /**

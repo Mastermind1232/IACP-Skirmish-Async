@@ -157,20 +157,15 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  const _abilityIds = eff?.specialAbilityIds || [];
+
   // Mounted (Captain Terro / Kuiil / Dewback / 74-Z Speeder Bike Elite /
   // Tauntaun Rider): grant 3 MP at start of activation. Per destruct
   // 2026-05-07 even auto grants must be player-driven (timing matters).
-  // Detection is robust across all data shapes: the per-card
-  // `mounted_*` specialAbilityIds, the named-ability flag set
-  // (dcAbilityFlags = passives ∪ abilities — "Mounted" lives in
-  // `abilities` for 74-Z + Tauntaun Rider, which neither a mounted_* id
-  // nor a `Mounted` passive would catch), and finally an abilityText
-  // fallback ("Mounted:" as a named ability heading) so any future
-  // Mounted card is covered even if it isn't tagged.
-  const _abilityIds = eff?.specialAbilityIds || [];
-  const _mountedFlag = dcAbilityFlags(eff).includes('Mounted');
-  const _mountedText = /(^|\n)\s*Mounted:/.test(eff?.abilityText || '');
-  if (_abilityIds.includes('mounted_terro') || _abilityIds.includes('mounted_kuiil') || _abilityIds.includes('mounted_dewback') || _mountedFlag || _mountedText) {
+  // Post-2026-06-15 the canonical home for "Mounted" is the `abilities`
+  // array on every Mounted card, so a single named-ability flag check
+  // (dcAbilityFlags = passives ∪ abilities) covers all 5 figures.
+  if (dcAbilityFlags(eff).includes('Mounted')) {
     descriptors.push({
       id: `mounted:${msgId}`,
       ownerPlayerNum: playerNum,

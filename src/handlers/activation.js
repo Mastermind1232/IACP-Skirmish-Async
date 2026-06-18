@@ -73,9 +73,8 @@ import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.j
  * interrupt attack. The chosen group is activated now (out of normal turn
  * order) through the standard activation flow — modelled on Squad Swarm: set
  * an activation-grant flag + chosen target, then prompt the owner to click the
- * group's card to begin. (The legacy `pendingFieldTactics` free-attack path in
- * combat.js is retained but no longer triggered here; it remains a structural
- * mutex member.)
+ * group's card to begin. (The legacy `pendingFieldTactics` free-attack path was
+ * deleted 2026-06-18 — Field Tactics is purely an activation grant now.)
  *
  * @param {object} game
  * @param {object} meta - dcMessageMeta entry for the activating DC

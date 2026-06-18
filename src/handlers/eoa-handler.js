@@ -91,17 +91,6 @@ export async function handleEoaPick(interaction, ctx) {
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
       components: [row],
     }).catch(discordCatch);
-  } else if (desc.subPromptKey === 'force_surge') {
-    // Force Surge (CC) — Apply plays the card through the normal CC-play
-    // pipeline (Move-X + adjacent-hostile resolution); Skip leaves it in hand.
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_apply`).setLabel('Play Force Surge').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-    );
-    await interaction.message.channel.send({
-      content: `\u{2728} **Force Surge** — **${displayName}**: move up to 1 space, then an adjacent hostile suffers **2 Damage + 1 Strain**. Play it now?`,
-      components: [row],
-    }).catch(discordCatch);
   } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
     // Auto-apply DC passive EoA abilities — single Apply/Skip prompt; the
     // effect resolves in handleEoaFire on 'apply'. Per alexanbv 2026-06-13.
@@ -177,29 +166,6 @@ export async function handleEoaFire(interaction, ctx) {
       parts.push(`both gained **1 Surge Token**`);
       await interaction.message.edit({ content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${displayName} + ${targetDcName} recover 1 Damage, gain 1 Surge Token.`, { phase: 'ROUND', icon: 'card' });
-    }
-  } else if (desc.subPromptKey === 'force_surge') {
-    // Play Force Surge through the canonical CC-play pipeline so the Move-X
-    // + adjacent-hostile picker continuation is identical to playing it from
-    // hand. playCC validates (in-hand + Force User), executes via
-    // ctx.resolveAbility, removes from hand, and disposes to discard;
-    // applyAbilityResult drives the UI continuation.
-    if (choiceKey === 'skip') {
-      await interaction.message.edit({ content: `\u{2728} **Force Surge** — Skipped.`, components: [] }).catch(discordCatch);
-    } else {
-      const { playCC } = await import('../game/cc-timing.js');
-      const { applyAbilityResult } = await import('../discord/apply-ability-result.js');
-      const figureKey = desc.extras?.figureKey;
-      const res = await playCC(game, ownerPlayerNum, figureKey, 'Force Surge', { ctx });
-      if (!res?.ok) {
-        await interaction.followUp({ content: res?.reason || 'Force Surge could not be played.', ephemeral: true }).catch(discordCatch);
-      } else {
-        if (res.result) {
-          try { await applyAbilityResult(res.result, { game, playerNum: ownerPlayerNum, client, ctx }); } catch (err) { console.error('Force Surge applyAbilityResult failed:', err?.message ?? err); }
-        }
-        await interaction.message.edit({ content: `\u{2728} **Force Surge** — **${displayName}** plays Force Surge (move 1, adjacent hostile suffers 2 Damage + 1 Strain).`, components: [] }).catch(discordCatch);
-        if (logGameAction) await logGameAction(game, client, `\u{2728} **Force Surge** — ${displayName} (end of activation).`, { phase: 'ROUND', icon: 'card' });
-      }
     }
   } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
     const selfFk = desc.extras?.selfFigureKey;

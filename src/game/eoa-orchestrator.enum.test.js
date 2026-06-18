@@ -73,7 +73,12 @@ describe('enumerateActivatorEoaDescriptors — DC passive EoA abilities', () => 
   });
 });
 
-describe('enumerateActivatorEoaDescriptors — Force Surge (CC)', () => {
+describe('enumerateActivatorEoaDescriptors — Force Surge (CC) is OPTIONAL, not a descriptor', () => {
+  // Per the project owner 2026-06-18: Force Surge is an OPTIONAL Command Card.
+  // It already surfaces through the generic end-of-activation play-from-hand
+  // reaction-card prompt, so it must NOT also be enumerated as an EoA
+  // descriptor (that would force a second, redundant prompt the player has to
+  // dismiss every activation). The enumerator must never yield force_surge.
   function gameWithHand(dcName, hand, figures) {
     const msgId = 'm1';
     return {
@@ -87,13 +92,10 @@ describe('enumerateActivatorEoaDescriptors — Force Surge (CC)', () => {
     };
   }
 
-  it('Force User holding Force Surge -> force_surge descriptor', () => {
+  it('Force User holding Force Surge -> NO force_surge descriptor (optional play-from-hand only)', () => {
     const { game, opts } = gameWithHand('Luke Skywalker', ['Force Surge'], { 'Luke Skywalker-1-0': 'a1' });
     const descs = enumerateActivatorEoaDescriptors(game, opts);
-    const fs = descs.find((d) => d.subPromptKey === 'force_surge');
-    assert.ok(fs, 'force_surge descriptor present');
-    assert.strictEqual(fs.extras.cardName, 'Force Surge');
-    assert.strictEqual(fs.extras.figureKey, 'Luke Skywalker-1-0');
+    assert.ok(!descs.some((d) => d.subPromptKey === 'force_surge'), 'force_surge descriptor must not be enumerated');
   });
 
   it('no Force Surge in hand -> no descriptor', () => {
