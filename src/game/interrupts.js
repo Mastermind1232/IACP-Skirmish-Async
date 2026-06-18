@@ -96,7 +96,6 @@ export const INTERRUPT_TYPES = Object.freeze({
   // moves now use pendingMoveX. Saves from older lobbies that still
   // have an 'ordered-move' interrupt frame are silently ignored.
   WOOK_SLAM_PUSH:        'wook-slam-push',
-  TOUGH_LUCK:            'tough-luck',
   ROGUE_ONE_TOKEN_PICK:  'rogue-one-token-pick',
   REACTION:              'reaction',
   COMM_DISRUPTION_PROMPT:'comm-disruption-prompt',
@@ -572,9 +571,6 @@ export function clearPendingSurgeOverflow(game) { _clearDual(game, 'pendingSurge
 
 export function setPendingWookSlamPush(game, payload) { _setDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH, payload); }
 export function clearPendingWookSlamPush(game) { _clearDual(game, 'pendingWookSlamPush', INTERRUPT_TYPES.WOOK_SLAM_PUSH); }
-
-export function setPendingToughLuck(game, payload) { _setDual(game, 'pendingToughLuck', INTERRUPT_TYPES.TOUGH_LUCK, payload); }
-export function clearPendingToughLuck(game) { _clearDual(game, 'pendingToughLuck', INTERRUPT_TYPES.TOUGH_LUCK); }
 
 export function setPendingRogueOneTokenPick(game, payload) { _setDual(game, 'pendingRogueOneTokenPick', INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK, payload); }
 export function clearPendingRogueOneTokenPick(game) { _clearDual(game, 'pendingRogueOneTokenPick', INTERRUPT_TYPES.ROGUE_ONE_TOKEN_PICK); }

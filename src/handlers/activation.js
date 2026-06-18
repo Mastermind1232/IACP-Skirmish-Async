@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
-import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats } from '../data-loader.js';
+import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats, getPairedActiveMsgId, getCompanionMsgIdForHost } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
 import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, setPendingFieldTactics, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
@@ -23,6 +23,8 @@ import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getDiceData, getDcKeywords } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
+import { setPendingLoadoutSelection } from '../game/interrupts.js';
+import { getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { exhaustAttachment, depleteDc, isDcDepleted } from '../game/card-state-helpers.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
@@ -37,7 +39,6 @@ import {
   getActivationsRemaining,
   getActivatedDcIndices,
   getCcHand,
-  getDcAttachments,
   setActivatedDcIndices,
   recomputeActivationCounts,
   ccDeckKey,
@@ -351,6 +352,112 @@ async function checkLieInAmbushTrigger(game, activatingPlayerNum, ctx) {
 }
 
 /**
+ * Fire ONLY the "when deployed" abilities for a group deployed mid-round via
+ * Lie in Ambush. Per the IACP timing rules, a LiA-deployed group resolves its
+ * WHEN-DEPLOYED abilities but NOT its "after deployment" abilities (which only
+ * trigger during the normal round-1 post-deploy phase).
+ *
+ * The three when-deployed abilities (docs/combat-spec.csv timing=when_deployed):
+ *   - In The Shadows (ISB Infiltrator Elite): become Hidden — non-interactive,
+ *     reuses applyCondition (same apply path as post-deploy.js's in_the_shadows).
+ *   - Shape (Clawdite Shapeshifter): gain 1 Form card — interactive, posts the
+ *     same form_pick_* picker the normal deploy flow does (setup.js).
+ *   - Imperial Loadout (Purge Trooper Elite): gain 1 Loadout card — interactive,
+ *     posts the same loadout_select_/loadout_confirm_ picker (setup.js).
+ *
+ * It deliberately does NOT fire after-deployment abilities (Cross Training,
+ * Ambush, Smooth Landing, Beskar Armor, Security Detail, Infiltration, Strike
+ * Team, Extra Armor, companions, etc.).
+ *
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} dcName — the deployed card name
+ * @param {string[]} figureKeys — the figure keys that were just placed
+ * @param {object} ctx — handler ctx (logGameAction, saveGames, ...)
+ * @param {import('discord.js').Client} client
+ */
+export async function fireLieInAmbushWhenDeployed(game, playerNum, dcName, figureKeys, ctx, client) {
+  const { logGameAction, saveGames } = ctx;
+  const dcEffects = getDcEffects() || {};
+  const eff = dcEffects[dcName] || dcEffects[dcName?.replace(/\s*\(Elite\)\s*$/, '')];
+  if (!eff) return;
+
+  const passives = eff.passives || [];
+  const sIds = eff.specialAbilityIds || [];
+  // Only consider figures that were actually placed on the board.
+  const placedKeys = figureKeys.filter(fk => game.figurePositions?.[playerNum]?.[fk]);
+  if (placedKeys.length === 0) return;
+
+  // ── In The Shadows (non-interactive) — become Hidden ───────────────────────
+  if (passives.includes('In The Shadows')) {
+    for (const fk of placedKeys) applyCondition(game, fk, 'Hide');
+    await logGameAction(game, client, `🥷 **In The Shadows** — **${dcName}** becomes **Hidden** when deployed.`, { phase: 'ROUND', icon: 'deployed' });
+  }
+
+  // ── Imperial Loadout (interactive) — Purge Trooper gains 1 Loadout card ─────
+  if (sIds.includes('imperial_loadout_purge_trooper')) {
+    const loadoutCards = getLoadoutCards();
+    const names = Object.keys(loadoutCards);
+    const figureKey = placedKeys[0];
+    if (names.length > 0) {
+      setPendingLoadoutSelection(game, { figureKey, playerNum });
+      const defaultName = names[0];
+      const selectionRow = new ActionRowBuilder().addComponents(
+        ...names.map((name) => new ButtonBuilder()
+          .setCustomId(`loadout_select_${game.gameId}_${figureKey}_${name}`)
+          .setLabel(name)
+          .setStyle(name === defaultName ? ButtonStyle.Success : ButtonStyle.Primary))
+      );
+      const confirmRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`loadout_confirm_${game.gameId}_${figureKey}`)
+          .setLabel('Confirm Selection')
+          .setStyle(ButtonStyle.Success)
+      );
+      try {
+        const handId = getHandChannelId(game, playerNum);
+        const handChannel = await fetchGameChannel(client, handId);
+        await handChannel.send({
+          content: `⚔️ **Imperial Loadout** — Choose a Loadout card for **${dcName}** (deployed via Lie in Ambush):`,
+          components: [selectionRow, confirmRow],
+        });
+      } catch (err) {
+        console.error('[Lie in Ambush] Failed to send loadout picker:', err.message);
+      }
+    }
+  }
+
+  // ── Shape (interactive) — Clawdite Shapeshifter gains 1 Form card ──────────
+  const _shapeIds = ['shape_clawdite_elite', 'shape_clawdite_reg'];
+  if (sIds.some(id => _shapeIds.includes(id))) {
+    const formCards = getFormCards();
+    const figureKey = placedKeys[0];
+    const takenForms = getFormsChosenByTeamClawdites(game, playerNum, figureKey);
+    const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
+    if (formNames.length > 0) {
+      const row = new ActionRowBuilder().addComponents(
+        ...formNames.map((name) => new ButtonBuilder()
+          .setCustomId(`form_pick_${game.gameId}_${figureKey}_${name}`)
+          .setLabel(name)
+          .setStyle(ButtonStyle.Primary))
+      );
+      try {
+        const handId = getHandChannelId(game, playerNum);
+        const handChannel = await fetchGameChannel(client, handId);
+        await handChannel.send({
+          content: `🔄 **Shape** — Choose a Form card for **${dcName}** (deployed via Lie in Ambush):`,
+          components: [row],
+        });
+      } catch (err) {
+        console.error('[Lie in Ambush] Failed to send form picker:', err.message);
+      }
+    }
+  }
+
+  if (saveGames) saveGames(game.gameId);
+}
+
+/**
  * Handle lia_deploy_zone_ button: deploy the set-aside group to chosen zone.
  */
 export async function handleLiaDeployZone(interaction, ctx) {
@@ -453,25 +560,13 @@ export async function handleLiaDeployZone(interaction, ctx) {
     await interaction.message.delete();
   } catch {}
 
-  // Apply post-deploy effects that were missed because figures weren't on-board at scan time
+  // Fire ONLY the group's WHEN-DEPLOYED abilities (In The Shadows → Hidden,
+  // Clawdite Shape → form picker, Imperial Loadout → loadout config). A group
+  // deployed via Lie in Ambush does NOT fire its "after deployment" abilities
+  // (Cross Training, Ambush, Smooth Landing, companions, etc.) — those only
+  // trigger during the normal round-1 post-deploy phase.
   if (placed > 0) {
-    const atts = getDcAttachments(game, playerNum) || {};
-    const deployedMsgIds = getDcMessageIds(game, playerNum) || [];
-    const deployedDcList = getDcList(game, playerNum) || [];
-    for (let i = 0; i < deployedDcList.length; i++) {
-      if (deployedDcList[i]?.dcName !== dcName) continue;
-      const mid = deployedMsgIds[i];
-      const dcAtts = atts[mid] || [];
-      if (dcAtts.some(a => a.toLowerCase() === 'cross training')) {
-        for (const fk of setAsideKeys) {
-          if (game.figurePositions[playerNum][fk]) {
-            applyCondition(game, fk, 'Hide');
-          }
-        }
-        await logGameAction(game, client, `🥷 **Cross Training** — **${dcName}** becomes **Hidden** after deployment.`, { phase: 'ROUND', icon: 'deployed' });
-      }
-      break;
-    }
+    await fireLieInAmbushWhenDeployed(game, playerNum, dcName, setAsideKeys, ctx, client);
   }
 
   await logGameAction(game, client, `🎯 **Lie in Ambush** — **${dcName}** deployed ${placed} figure(s) to the **${zone}** zone!`, {
