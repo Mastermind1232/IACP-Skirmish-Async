@@ -29,9 +29,8 @@ import { getFigureLabel } from '../engine/game-readers.js';
 import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from '../game/spatial.js';
 import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
-import { playCC } from '../game/cc-timing.js';
-import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { onCcPlayed } from './cc-hand.js';
+import { canPlayCC } from '../game/cc-timing.js';
+import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
 import { _sendPrivateReactionPrompt } from '../engine/combat-bridge.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
@@ -39,7 +38,7 @@ import {
   setPendingFightingKnife, setPendingSpreadThePain,
   setPendingWantonDestruction, setPendingDeflect,
 } from '../game/interrupts.js';
-import { getCcHand } from '../game/player-helpers.js';
+import { getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -1662,42 +1661,61 @@ async function fireReturnFire(thread, game, combat, effect, ctx) {
  * Fire a condition-met after_resolve gate ability when its button is clicked
  * (alexanbv 2026-06-16). Previously `gate_ability` fell through to the default
  * no-op, so every CC/figure-ability button in the post-resolve window silently
- * dropped its click. Now: a Command Card routes through the playCC pipeline
- * (validate → comms-jammer → opponent-cancel → execute → dispose); a figure
- * ability with no executable resolver yet stays a diagnostic no-op (logged).
+ * dropped its click. Now: a Command Card routes through the UNIFIED counter-window
+ * (validate → dispose → on-play triggers → Negate/Comms window → resolve-if-not-
+ * cancelled), pausing the after-attack window until it resolves; a figure ability
+ * with no executable resolver yet stays a diagnostic no-op (logged).
  */
 async function fireGateAbility(thread, game, combat, effect, ctx) {
   const reg = getCombatAbility(effect?.payload?.abilityId);
   const side = effect?.side === 'defender' ? 'defender' : 'attacker';
   if (reg?.params?.kind === 'cc') {
+    // After-attack CC — routed through the UNIFIED counter-window like a hand
+    // play / a combat gate play (alexanbv 2026-06-17). The after-attack window
+    // PAUSES for the Negate/Comms window and re-posts (postPostResolveWindow)
+    // once the play resolves or is cancelled, via _resolveCcCounterWindow →
+    // resumeCombatGateAfterCc (kind 'after_attack'). No snapshot, no revert.
+    const card = reg.params.card;
     const pn = side === 'attacker'
-      ? combat.attackerPlayerNum
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const fig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const _ccSnap = combat ? JSON.parse(JSON.stringify(combat)) : null;
-    const res = await playCC(game, pn, fig, reg.params.card, { ctx });
-    if (thread) {
-      if (!res.ok) await thread.send(`⚠️ Can't play ${reg.params.card}: ${res.reason}`).catch(discordCatch);
-      else if (res.cancelled) await thread.send(`**${reg.params.card}** was cancelled (${res.cancelled}).`).catch(discordCatch);
-      else await thread.send(`**${reg.params.card}** played.`).catch(discordCatch);
+    const check = canPlayCC(game, pn, fig, card, { allowNotInHand: false });
+    if (!check.ok) {
+      if (thread) await thread.send(`⚠️ Can't play ${card}: ${check.reason}`).catch(discordCatch);
+      return undefined;
     }
-    if (res.ok && !res.cancelled) {
-      if (res.result) await applyAbilityResult(res.result, { game, playerNum: pn, msgId: side === 'attacker' ? combat.attackerMsgId : undefined, client: ctx.client, ctx });
-      // Opponent counter-window (Negation cost 0 / Comm Disruption cost ≤ SPY groups).
-      const _ccCost = ctx.getCcEffect?.(reg.params.card)?.cost ?? 0;
-      await onCcPlayed(game, game.gameId, pn, reg.params.card, _ccCost, { client: ctx.client }, ctx, { combatSnapshot: _ccSnap });
-    }
-    return;
+    const eff = ctx.getCcEffect?.(card);
+    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
+    const abilityId = eff?.abilityId ?? card;
+    // Dispose the played card to discard.
+    const hand = game[ccHandKey(pn)] || [];
+    const hi = hand.indexOf(card);
+    if (hi >= 0) hand.splice(hi, 1);
+    game[ccHandKey(pn)] = hand;
+    game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
+    // On-play triggers (Hunt Dissent, Adapt).
+    await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+    // Pause the after-attack window: store the resume descriptor (kind
+    // 'after_attack' → postPostResolveWindow) + open the counter-window.
+    game.pendingCombatCcResolve = { kind: 'after_attack', effectSide: effect.side, gameId: game.gameId };
+    await openCcCounterWindow(game, game.gameId, {
+      card, cost, playedBy: pn, figureKey: fig, abilityId,
+      msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
+    }, ctx, ctx.client);
+    // Signal handleAarFire NOT to re-post the window — the counter-window resume
+    // (postPostResolveWindow) owns the continuation now.
+    return { deferredToCounterWindow: true };
   }
   // Figure ability with no executable resolver yet → diagnostic no-op.
   console.warn(`[after-attack-fire] gate_ability "${reg?.name || effect?.payload?.abilityId}" has no executable resolver; skipping`);
+  return undefined;
 }
 
 export async function fireEffect(thread, game, combat, effect, ctx) {
   switch (effect.type) {
     case 'gate_ability':
-      await fireGateAbility(thread, game, combat, effect, ctx);
-      return;
+      return await fireGateAbility(thread, game, combat, effect, ctx);
     case 'recover':
       await fireRecover(thread, game, combat, effect, ctx);
       return;

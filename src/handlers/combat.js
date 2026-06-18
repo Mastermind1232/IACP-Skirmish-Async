@@ -773,9 +773,19 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
   delete game.pendingCombatCcResolve;
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== pend.gameId) { ctx.saveGames?.(game.gameId); return; }
+  const thread = await fetchCombatThread(client, combat.combatThreadId);
+  // After-attack CC (kind 'after_attack'): re-post the post-resolve window
+  // (the same window handleAarFire would have re-posted) now that the play
+  // resolved or cancelled. alexanbv 2026-06-17.
+  if (pend.kind === 'after_attack') {
+    const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+    await postPostResolveWindow(thread, game, combat, pend.effectSide, ctx);
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
+  // Attack gate CC: re-drive the paused gate (return to that phase's options).
   const cfg = _GATE_WINDOWS[pend.window];
   if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
-  const thread = await fetchCombatThread(client, combat.combatThreadId);
   await _driveGatePath(pend.window, thread, game, combat, ctx);
 }
 

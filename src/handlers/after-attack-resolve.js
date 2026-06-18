@@ -697,7 +697,12 @@ export async function handleAarFire(interaction, ctx) {
     saveGames?.(game.gameId);
     return;
   }
-  await fireEffect(thread, game, combat, effect, ctx);
+  const fireRes = await fireEffect(thread, game, combat, effect, ctx);
+  // A CC fire pauses on its Negate/Comms counter-window; the window's resume
+  // (postPostResolveWindow via resumeCombatGateAfterCc) owns re-posting once the
+  // play resolves or cancels — so don't re-post here, or it double-posts
+  // (the no-counter case resolves synchronously inside fireEffect). alexanbv 2026-06-17.
+  if (fireRes?.deferredToCounterWindow) { saveGames?.(game.gameId); return; }
   // After firing, re-post the window so the player can fire more
   // pending effects, play after-attack CCs from hand, or click Done.
   // destruct 2026-05-08: never auto-advance — Done is mandatory.
