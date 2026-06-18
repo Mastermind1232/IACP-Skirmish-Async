@@ -2255,6 +2255,9 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     const _iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
     if (_iMustGoAlone?.playerNum === enemyPn && dist > _iMustGoAlone.spaces) continue;
 
+    // Blend In (K-2SO): the attached figure cannot be the target of an attack.
+    if (game.blendInUntargetable?.[fk]) continue;
+
     // LOS check with figure blocking (parity with dc-play-area.js)
     // Remove target's own footprint from blocking set (target doesn't block LOS to itself)
     let losBlockingCoords = figureBlockingCoords;

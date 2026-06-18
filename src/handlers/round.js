@@ -721,6 +721,38 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       });
     }
   }
+  // Mortar Launcher (AT-RT): at the end of the round, may move up to 2 spaces,
+  // then choose a space within 3 containing a hostile figure and roll 1 red
+  // die (area damage). Driven from EoR (NOT a mid-activation special action).
+  // (alexanbv 2026-06-18.)
+  {
+    const _mlEff = getDcEffects();
+    for (const pn of _eorPlayers) {
+      const _mlMsgIds = getDcMessageIds(game, pn) || [];
+      const _mlDcList = getDcList(game, pn) || [];
+      for (let i = 0; i < _mlMsgIds.length; i++) {
+        const _mlMid = _mlMsgIds[i];
+        if (!_mlMid) continue;
+        const _mlDc = _mlDcList[i];
+        if (!_mlDc?.dcName || _mlDc.defeated) continue;
+        const _mlAbil = _mlEff[_mlDc.dcName] || _mlEff[_mlDc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        if (!(_mlAbil?.specialAbilityIds || []).includes('mortar_launcher')) continue;
+        // Confirm at least one live figure of this DC is on the board.
+        const _mlDgIdx = (_mlDc.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _mlFk = `${_mlDc.dcName}-${_mlDgIdx}-0`;
+        if (!game.figurePositions?.[pn]?.[_mlFk]) continue;
+        const _mlOwnerId = game[`player${pn}Id`];
+        const _mlRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`mortar_eor_use_${gameId}_${_mlMid}`).setLabel('Use Mortar Launcher (Move 2 + Mortar)').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId(`mortar_eor_skip_${gameId}_${_mlMid}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+        );
+        await logGameAction(game, client, `<@${_mlOwnerId}> 💥 **Mortar Launcher** — **${_mlDc.displayName || _mlDc.dcName}** may move up to 2 spaces, then mortar a space within 3 (end of round).`, {
+          components: [_mlRow],
+          allowedMentions: { users: [_mlOwnerId] },
+        });
+      }
+    }
+  }
   // [Rogue Smuggler] (Han Solo) — once-per-round EoR free attack.
   // Per alexanbv 2026-05-10: the card text uses "Exhaust this card" but
   // we treat this as a once-per-round ability gated on a round-scoped
@@ -751,6 +783,65 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         `<@${_rsOwnerId}> **[Rogue Smuggler]** — **${_rsDc.displayName || _rsDc.dcName}** may interrupt to perform a free attack at end of round (once per round).`,
         { components: [_rsRow], allowedMentions: { users: [_rsOwnerId] } });
     }
+  }
+  // Set a Trap (CC): at end of round, if a trap space is set for this player,
+  // prompt a friendly figure on that space to interrupt and attack a hostile
+  // on that space. Card: "choose a map tile ... at the end of the round,
+  // choose one of your figures on that tile to interrupt to perform an attack
+  // targeting a hostile figure on that tile." Spaces (not tiles) are the
+  // finest unit modeled; the trap fires at the chosen space. (alexanbv 2026-06-18.)
+  for (const pn of _eorPlayers) {
+    const _trapSpace = game.setTrapSpace?.[pn];
+    if (!_trapSpace) continue;
+    const _trapNorm = String(_trapSpace).toLowerCase();
+    // Friendly figures on the trap space.
+    const _trapFriendlies = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (pos && String(pos).toLowerCase() === _trapNorm) _trapFriendlies.push(fk);
+    }
+    // Hostile figures on the trap space (gate: only fire if a target exists).
+    const _trapOppNum = pn === 1 ? 2 : 1;
+    let _trapHasHostile = false;
+    for (const [, pos] of Object.entries(game.figurePositions?.[_trapOppNum] || {})) {
+      if (pos && String(pos).toLowerCase() === _trapNorm) { _trapHasHostile = true; break; }
+    }
+    if (_trapFriendlies.length === 0 || !_trapHasHostile) {
+      await logGameAction(game, client, `🪤 **Set a Trap** — No eligible attacker or no hostile figure on the trap space (**${_trapSpace}**); trap not sprung.`, { phase: 'ROUND', icon: 'round' });
+      continue;
+    }
+    const _trapOwnerId = game[`player${pn}Id`];
+    const _trapBtns = _trapFriendlies.slice(0, 24).map(fk => new ButtonBuilder()
+      .setCustomId(`set_trap_eor_${gameId}_${pn}_${fk}`)
+      .setLabel(truncateLabel(buildFigureButtonLabel(fk, game)))
+      .setStyle(ButtonStyle.Danger)
+    );
+    _trapBtns.push(new ButtonBuilder().setCustomId(`set_trap_eor_${gameId}_${pn}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+    const _trapRows = chunkButtonsToRows(_trapBtns);
+    await logGameAction(game, client, `<@${_trapOwnerId}> 🪤 **Set a Trap** — choose one of your figures on **${_trapSpace}** to interrupt and attack a hostile figure on that space:`, {
+      components: _trapRows.slice(0, 5),
+      allowedMentions: { users: [_trapOwnerId] },
+    });
+  }
+  // Rest in Peace (CC): per errata the "discard this card and draw 1 Command
+  // card" resolves at END OF ROUND, not at play time. The card is already in
+  // discard (CC play auto-discards), satisfying "discard this card"; here we
+  // draw 1 CC for each owner who played it this round. (alexanbv 2026-06-18.)
+  if (Array.isArray(game.restInPeacePending) && game.restInPeacePending.includes(_eorPlayerNum)) {
+    const _ripDeckKey = ccDeckKey(_eorPlayerNum);
+    const _ripHandKey = ccHandKey(_eorPlayerNum);
+    const _ripDeck = game[_ripDeckKey] || [];
+    if (_ripDeck.length > 0) {
+      const _ripDrawn = _ripDeck.shift();
+      const _ripHand = game[_ripHandKey] || [];
+      _ripHand.push(_ripDrawn);
+      game[_ripDeckKey] = _ripDeck;
+      game[_ripHandKey] = _ripHand;
+      await logGameAction(game, client, `🪦 **Rest in Peace** — Player ${_eorPlayerNum} discards Rest in Peace and draws 1 Command card (end of round).`, { phase: 'ROUND', icon: 'card' });
+      if (ctx.updateHandChannelMessages) await ctx.updateHandChannelMessages(game, client);
+    } else {
+      await logGameAction(game, client, `🪦 **Rest in Peace** — Player ${_eorPlayerNum}: Command deck empty, no card drawn (end of round).`, { phase: 'ROUND', icon: 'card' });
+    }
+    game.restInPeacePending = game.restInPeacePending.filter(p => p !== _eorPlayerNum);
   }
   // Driven by Hatred (Darth Vader): end of round, move up to 2 spaces, then may use Force Choke or perform an attack (-1 die)
   for (const pn of _eorPlayers) {
@@ -1417,6 +1508,29 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
             } catch (err) {
               console.error('Rogue One return picker failed:', err);
             }
+          }
+        }
+
+        // [Spectre Cell] (errata): At the start of each round, distribute
+        // 1 Damage and 1 Block token among friendly figures (once per round).
+        // The owner picks a friendly figure for the Damage token, then for the
+        // Block token, via the spectre_cell_dist_ picker.
+        if (dcName === '[Spectre Cell]') {
+          const _scFks = Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => game.figurePositions[playerNum][k]);
+          if (_scFks.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
+            game[`pendingSpectreCell_p${playerNum}`] = { remaining: ['Damage', 'Block'] };
+            const _scBtns = _scFks.slice(0, 24).map(fk => new ButtonBuilder()
+              .setCustomId(`spectre_cell_dist_${gameId}_${playerNum}_${fk}`)
+              .setLabel(truncateLabel(buildFigureButtonLabel(fk, game)))
+              .setStyle(ButtonStyle.Danger)
+            );
+            _stashSorActions(game, _scBtns, 'Spectre Cell', playerNum);
+            const _scRows = chunkButtonsToRows(_scBtns);
+            await logGameAction(game, client, `👻 **[Spectre Cell]** — <@${ownerId}>, choose a friendly figure to gain **1 Damage** token (start of round):`, {
+              components: _scRows.slice(0, 5),
+              allowedMentions: { users: [ownerId] },
+            });
           }
         }
 
@@ -2240,6 +2354,102 @@ export async function handleImpCitadel(interaction, ctx) {
   await resolveStartOfRoundEffect(game, ctx);
   saveGames(game.gameId);
   await interaction.followUp({ content: `Placed ${label} token on Imperial Citadel.`, ephemeral: true }).catch(discordCatch);
+}
+
+/**
+ * Handle spectre_cell_dist_ button: [Spectre Cell] (errata) start-of-round
+ * distribution of 1 Damage + 1 Block token among friendly figures.
+ * customId: spectre_cell_dist_{gameId}_{playerNum}_{figureKey}
+ * Two-step picker: first click places the Damage token, the re-posted picker
+ * places the Block token, then resolves the SoR effect.
+ */
+export async function handleSpectreCellDist(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const full = parseCustomId(interaction.customId, 'spectre_cell_dist_');
+  const parts = full.split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const figureKey = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const ownerId = getPlayerId(game, playerNum);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the Spectre Cell owner can distribute these tokens.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const pending = game[`pendingSpectreCell_p${playerNum}`];
+  if (!pending || !pending.remaining?.length) {
+    await interaction.message.edit({ components: [] }).catch(discordCatch);
+    return;
+  }
+  const tokenType = pending.remaining.shift(); // 'Damage' then 'Block'
+  grantPowerTokens(game, figureKey, tokenType, 1);
+  const figName = dcNameFromFigureKey(figureKey);
+  await logGameAction(game, client, `👻 **[Spectre Cell]** — **${figName}** gains **1 ${tokenType}** token.`, { phase: 'ROUND', icon: 'round' });
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+
+  if (pending.remaining.length > 0) {
+    // Post the next token's picker (Block).
+    const nextType = pending.remaining[0];
+    const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter(k => game.figurePositions[playerNum][k]);
+    const btns = fks.slice(0, 24).map(fk => new ButtonBuilder()
+      .setCustomId(`spectre_cell_dist_${gameId}_${playerNum}_${fk}`)
+      .setLabel(truncateLabel(buildFigureButtonLabel(fk, game)))
+      .setStyle(nextType === 'Damage' ? ButtonStyle.Danger : ButtonStyle.Primary)
+    );
+    _stashSorActions(game, btns, 'Spectre Cell', playerNum);
+    const rows = chunkButtonsToRows(btns);
+    await logGameAction(game, client, `👻 **[Spectre Cell]** — <@${ownerId}>, choose a friendly figure to gain **1 ${nextType}** token:`, {
+      components: rows.slice(0, 5),
+      allowedMentions: { users: [ownerId] },
+    });
+    saveGames(game.gameId);
+    return;
+  }
+  // Both tokens placed — done.
+  delete game[`pendingSpectreCell_p${playerNum}`];
+  await resolveStartOfRoundEffect(game, ctx);
+  saveGames(game.gameId);
+}
+
+/**
+ * Handle set_trap_eor_ button: Set a Trap (CC) end-of-round interrupt attack.
+ * customId: set_trap_eor_{gameId}_{playerNum}_{figureKey|skip}
+ * The chosen friendly figure on the trap space takes a free interrupt attack.
+ */
+export async function handleSetTrapEor(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const full = parseCustomId(interaction.customId, 'set_trap_eor_');
+  const parts = full.split('_');
+  const gameId = parts[0];
+  const pn = parseInt(parts[1], 10);
+  const target = parts.slice(2).join('_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const ownerId = getPlayerId(game, pn);
+  if (interaction.user.id !== ownerId) {
+    await interaction.followUp({ content: 'Only the trap owner may respond.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (target === 'skip') {
+    await logGameAction(game, client, `🪤 **Set a Trap** — skipped.`, { phase: 'ROUND', icon: 'round' });
+    if (game.setTrapSpace) delete game.setTrapSpace[pn];
+    saveGames(game.gameId);
+    return;
+  }
+  // Set free-attack pending on the chosen figure so its next Attack click is
+  // a no-action-cost interrupt attack (mirrors Rogue Smuggler EoR).
+  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+  game.freeAttackBonusPending[target] = true;
+  const figName = dcNameFromFigureKey(target);
+  if (game.setTrapSpace) delete game.setTrapSpace[pn];
+  await logGameAction(game, client,
+    `<@${ownerId}> 🪤 **Set a Trap** — **${figName}** interrupts to perform a free attack against a hostile figure on the trap space. Use the **Attack** button on its DC card.`,
+    { phase: 'ROUND', icon: 'attack', allowedMentions: { users: [ownerId] } });
+  saveGames(game.gameId);
 }
 
 /**

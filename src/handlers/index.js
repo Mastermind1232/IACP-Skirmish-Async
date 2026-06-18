@@ -14,7 +14,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist, handleSetTrapEor } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -169,7 +169,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleAdaptBlaisePick } from './blaise-adapt.js';
 import { handleDefeatPick } from './defeat-pick.js';
@@ -255,6 +255,8 @@ register('ctf_pick_', handleCtfPick, 'round');
 register('ctf_strain_', handleCtfStrain, 'round');
 register('sc_reorder_', handleSmugglingCompartmentReorder, 'round');
 register('imp_citadel_', handleImpCitadel, 'round');
+register('spectre_cell_dist_', handleSpectreCellDist, 'round');
+register('set_trap_eor_', handleSetTrapEor, 'round');
 register('prog_override_', handleProgrammingOverride, 'round');
 register('doubt_fig_', handleDoubtFigPick, 'round');
 register('doubt_remove_', handleDoubtRemove, 'round');
@@ -619,6 +621,8 @@ register('submit_fight_use_', handleSubmitOrFight, 'interrupts');
 register('submit_fight_skip_', handleSubmitOrFight, 'interrupts');
 register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
 register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
+register('mortar_eor_use_', handleMortarEor, 'interrupts');
+register('mortar_eor_skip_', handleMortarEor, 'interrupts');
 register('rs_attack_', handleRogueSmuggler, 'interrupts');
 register('rs_skip_', handleRogueSmuggler, 'interrupts');
 register('wild_beast_trample_', handleWildBeastTrample, 'interrupts');
@@ -792,7 +796,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist, handleSetTrapEor } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -925,7 +929,7 @@ export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll, handleForceIsWithMe } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';
 export { applyStrain, handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz } from './strain-handler.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';

@@ -52,11 +52,11 @@ describe('DC-CC batch-7: ccEffect library-shape contracts', () => {
     assert.equal(e.revealsOpponentDeckTop, 3);
   });
 
-  it('Blend In — applyHide flag set (self-apply Hidden)', () => {
+  it('Blend In — blendInAttach flag set (untargetable attachment on K-2SO)', () => {
     const e = entryOf('Blend In');
     assert.equal(e.type, 'ccEffect');
     assert.equal(e.wiredStatus, 'wired');
-    assert.equal(e.applyHide, true);
+    assert.equal(e.blendInAttach, true);
   });
 
   it('Camouflage — applyHideWhenDefending flag set (defensive Hidden)', () => {

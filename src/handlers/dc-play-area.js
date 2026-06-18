@@ -1170,6 +1170,9 @@ async function buildAndSendAttackTargets(
     if (dist < minRange || dist > effectiveMaxRange) continue;
     const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
     if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
+
+    // Blend In (K-2SO): the attached figure cannot be the target of an attack.
+    if (game.blendInUntargetable?.[k]) continue;
     let losCoords = allFigureBlockingCoords;
     if (allFigureBlockingCoords) {
       const targetEff = getDcEffect(dcName);

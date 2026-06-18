@@ -422,6 +422,22 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
   if (game.namedCcsPlayedPerTiming?.activation) {
     delete game.namedCcsPlayedPerTiming.activation;
   }
+  // Blend In (K-2SO): "Discard this card at the end of your activation."
+  // Clear the untargetable protection for the ending figure(s) and remove the
+  // attachment when K-2SO finishes its activation.
+  if (game.blendInUntargetable) {
+    for (const fk of figureKeys) {
+      const entry = game.blendInUntargetable[fk];
+      if (!entry) continue;
+      delete game.blendInUntargetable[fk];
+      if (entry.msgId) {
+        const attKey = playerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+        const list = game[attKey]?.[entry.msgId];
+        if (Array.isArray(list)) game[attKey][entry.msgId] = list.filter(n => n !== 'Blend In');
+      }
+    }
+    if (Object.keys(game.blendInUntargetable).length === 0) delete game.blendInUntargetable;
+  }
   // Clear MASSIVE pushed-this-phase flag for the activating figure(s)
   // (per CRR 2026-05-09): the rule scopes "current phase" to the
   // activating figure's activation cycle, so once that activation
@@ -923,6 +939,10 @@ const ROUND_ARRAY_FLAGS = [
   'etiquetteBlockPairs',
   'fluctuationSwappedThisRound',
   'abilityExhaustedMsgIds',
+  // Rest in Peace (CC): list of playerNums who played Rest in Peace this round
+  // and owe an end-of-round draw. Consumed + emptied in _runDcEorForPlayer;
+  // reset to [] at round boundary as a safety net. (alexanbv 2026-06-18.)
+  'restInPeacePending',
 ];
 
 const ROUND_FALSE_FLAGS = [

@@ -56,7 +56,7 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
 import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
-import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
@@ -4030,16 +4030,21 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, drewCards: drew };
   }
 
-  // ccEffect: restInPeaceEffect (Rest in Peace) — block all discard-pile access for the round; draw 1 (end-of-round draw)
+  // ccEffect: restInPeaceEffect (Rest in Peace) — block all discard-pile access
+  // for the round. Per card text the "discard this card and draw 1 Command
+  // card" happens at END OF ROUND, not at play, so the draw is deferred to the
+  // EoR flow (round.js _runDcEorForPlayer). The card itself is already in this
+  // player's discard pile (CC play auto-discards), satisfying "discard this
+  // card". We record the owner so EoR draws for the right player.
   if (entry.type === 'ccEffect' && entry.restInPeaceEffect) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.restInPeaceActive = true;
-    const drew = drawCcCards(game, playerNum, entry.draw || 1);
+    game.restInPeacePending = game.restInPeacePending || [];
+    if (!game.restInPeacePending.includes(playerNum)) game.restInPeacePending.push(playerNum);
     return {
       applied: true,
-      drewCards: drew.length > 0 ? drew : undefined,
-      logMessage: '**Rest in Peace** — Players cannot choose, play, or re-draw Command cards in discard piles this round.',
+      logMessage: '**Rest in Peace** — Players cannot choose, play, or re-draw Command cards in discard piles this round. At the end of the round, draw 1 Command card.',
     };
   }
 
@@ -6270,6 +6275,44 @@ export function resolveAbility(abilityId, context) {
     game.roundTrooperSurgeStun[playerNum] = true;
     const hideMsg = toHide.length > 0 ? `${hiddenNames.join(', ')} became Hidden. ` : '';
     return { applied: true, logMessage: `**Covering Fire** — ${hideMsg}This round, your TROOPERs gain Surge: Stun (if already Stunned, +2 Damage instead).`, refreshDcEmbed: true };
+  }
+
+  // ccEffect: blendInAttach (Blend In) — played at start of round by K-2SO.
+  // "Place this card on your Deployment card. It is now an Attachment. You
+  // cannot be the target of an attack. Discard at the end of your activation
+  // or when you declare an attack." We attach the card to K-2SO's DC, set an
+  // untargetable flag on K-2SO's figure(s) (filtered in the attack-target
+  // enumerators), and rely on the EoA / attack-declare hooks to discard it.
+  if (entry.type === 'ccEffect' && entry.blendInAttach) {
+    const { game, playerNum } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Find K-2SO's DC (the card is playableBy K-2SO).
+    const dcList = getDcList(game, playerNum) || [];
+    const msgIds = getDcMessageIds(game, playerNum) || [];
+    let k2Idx = dcList.findIndex(dc => dc && !dc.defeated && (dc.dcName === 'K-2SO'));
+    if (k2Idx < 0) return { applied: false, manualMessage: '**Blend In** — K-2SO is not in play.' };
+    const k2MsgId = msgIds[k2Idx];
+    // Mark every live K-2SO figure as untargetable until Blend In is discarded.
+    game.blendInUntargetable = game.blendInUntargetable || {};
+    let tagged = 0;
+    for (const fk of Object.keys(game.figurePositions?.[playerNum] || {})) {
+      if (!fk.startsWith('K-2SO-')) continue;
+      if (!game.figurePositions[playerNum][fk]) continue;
+      game.blendInUntargetable[fk] = { playerNum, msgId: k2MsgId || null };
+      tagged++;
+    }
+    if (tagged === 0) return { applied: false, manualMessage: '**Blend In** — K-2SO has no figures on the board.' };
+    // Record the attachment for bookkeeping/display.
+    if (k2MsgId) {
+      const attKey = dcAttachmentsKey(playerNum);
+      game[attKey] = game[attKey] || {};
+      game[attKey][k2MsgId] = game[attKey][k2MsgId] || [];
+      if (!game[attKey][k2MsgId].includes('Blend In')) game[attKey][k2MsgId].push('Blend In');
+    }
+    return {
+      applied: true,
+      logMessage: '**Blend In** — Attached to K-2SO. K-2SO cannot be the target of an attack until it ends its activation or declares an attack.',
+    };
   }
 
   // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
@@ -11886,7 +11929,7 @@ export function resolveAbility(abilityId, context) {
     if (chosenSpace) {
       game.setTrapSpace = game.setTrapSpace || {};
       game.setTrapSpace[playerNum] = chosenSpace;
-      return { applied: true, logMessage: `**Set a Trap** — Trap placed at space **${chosenSpace}**. At end of round, if a friendly figure is on that space, they interrupt to attack a hostile on it (announce the interrupt at round end).` };
+      return { applied: true, logMessage: `**Set a Trap** — Trap placed at space **${chosenSpace}**. At end of round, you may choose a friendly figure on that space to interrupt and attack a hostile figure on it.` };
     }
     // Space picker: all currently occupied spaces (friendly + hostile) as candidates
     const oppNum = opponentPlayerNum(playerNum);

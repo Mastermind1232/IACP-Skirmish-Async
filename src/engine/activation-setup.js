@@ -1200,35 +1200,12 @@ export async function finalizeActivation({
     }
   }
 
-  // D42. [Spectre Cell]: NOT SoA per destruct 2026-05-07 — exhaust
-  // anytime during activation. Button posted at activation start for
-  // visibility but stays clickable throughout. The chosen friendly's
-  // interrupt attack uses the granted_attack_* primitive (see
-  // sc_fig_pick handler in src/handlers/activation.js).
-  {
-    const _scDcList = getDcList(game, playerNum) || [];
-    const _scDcMsgIds = getDcMessageIds(game, playerNum) || [];
-    let _scMsgId = null;
-    for (let _scI = 0; _scI < _scDcList.length; _scI++) {
-      if ((_scDcList[_scI]?.dcName || _scDcList[_scI]) === '[Spectre Cell]') { _scMsgId = _scDcMsgIds[_scI] || null; break; }
-    }
-    if (_scMsgId) {
-      const _scExh = game.exhaustedSkirmishUpgrades?.[_scMsgId] || [];
-      const _scDepleted = (game[`p${playerNum}DepletedDcMessageIds`] || []).includes(_scMsgId);
-      if (!cardNameIncludes(_scExh, 'Spectre Cell') && !_scDepleted) {
-        const _scAllFigs = game.figurePositions?.[playerNum] || {};
-        const _scActivatingPrefix = `${dcName}-`;
-        const _scHasOther = Object.entries(_scAllFigs).some(([fk, pos]) => pos && !fk.startsWith(_scActivatingPrefix));
-        if (_scHasOther) {
-          const scRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_spectrecell_use`).setLabel('Use Spectre Cell (+2 MP + interrupt attack)').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_spectrecell_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await thread.send({ content: `**[Spectre Cell]** — At any point during this activation, exhaust to choose another friendly figure: +2 MP and may interrupt to perform an attack.`, components: [scRow] }).catch(discordCatch);
-        }
-      }
-    }
-  }
+  // D42. [Spectre Cell]: ERRATA — the activation-time exhaust (+2 MP +
+  // interrupt attack) was the PRE-errata version and has been retired. The
+  // errata card is a start-of-round ability: distribute 1 Damage + 1 Block
+  // token among friendly figures (once per round), wired in
+  // runStartOfRoundDcEffects (src/handlers/round.js, spectre_cell_dist_).
+  // No mid-activation button is posted. (alexanbv 2026-06-18.)
 
   // D43. Voracious (Rancor): migrated to SoA orchestrator (slice 6 —
   // destruct 2026-05-07). See soa-orchestrator.js

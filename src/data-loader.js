@@ -483,6 +483,12 @@ export function getDcStats(dcName) {
         if (PASSIVE_ONLY_IDS.has(id)) return false;
         const entry = lib.abilities?.[id];
         if (entry?.category === 'passive') return false;
+        // Round-boundary abilities (start-of-round / end-of-round triggers)
+        // are driven by the SoR/EoR round flow, NOT by an activation-time
+        // Special Action button. Without this, e.g. AT-RT's Mortar Launcher
+        // (category 'passive-reactive', trigger 'end-of-round') wrongly
+        // surfaced as a mid-activation Special Action. (alexanbv 2026-06-18.)
+        if (entry?.trigger === 'end-of-round' || entry?.trigger === 'start-of-round') return false;
         return true;
       });
       specialIds = filtered;

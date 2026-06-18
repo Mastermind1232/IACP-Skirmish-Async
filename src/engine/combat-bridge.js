@@ -623,6 +623,18 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (combat.attackerFigureKey) {
     game.attackPerformedThisActivation = game.attackPerformedThisActivation || {};
     game.attackPerformedThisActivation[combat.attackerFigureKey] = true;
+    // Blend In (K-2SO): "Discard this card ... when you declare an attack."
+    // Clear the untargetable protection for the attacking figure and drop the
+    // attachment when K-2SO attacks.
+    if (game.blendInUntargetable?.[combat.attackerFigureKey]) {
+      const _biEntry = game.blendInUntargetable[combat.attackerFigureKey];
+      delete game.blendInUntargetable[combat.attackerFigureKey];
+      if (_biEntry?.msgId) {
+        const _biAttKey = combat.attackerPlayerNum === 1 ? 'p1DcAttachments' : 'p2DcAttachments';
+        const _biList = game[_biAttKey]?.[_biEntry.msgId];
+        if (Array.isArray(_biList)) game[_biAttKey][_biEntry.msgId] = _biList.filter(n => n !== 'Blend In');
+      }
+    }
   }
 
   // NPC target (thug / Krykna / Crate): apply damage directly, skip dcHealthState

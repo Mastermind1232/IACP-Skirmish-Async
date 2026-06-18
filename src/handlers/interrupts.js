@@ -688,6 +688,67 @@ export async function handleScavengedWalker(interaction, ctx) {
   saveGames(_swGame.gameId); return;
 }
 
+// ── 7b. Mortar Launcher (AT-RT) end-of-round ────────────────────────────────
+// At the end of the round, may move up to 2 spaces, then choose a space within
+// 3 containing a hostile figure and roll 1 red die (area damage). Reuses the
+// pendingMoveX → rollOneDieSpacePick continuation that the (now-removed) mid-
+// activation special action used. customId:
+//   mortar_eor_use_{gameId}_{msgId} / mortar_eor_skip_{gameId}_{msgId}
+export async function handleMortarEor(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const buttonKey = interaction.customId.startsWith('mortar_eor_use_') ? 'mortar_eor_use_' : 'mortar_eor_skip_';
+  const suffix = parseCustomId(interaction.customId, buttonKey);
+  const parts = suffix.split('_');
+  const gameId = parts[0]; const msgId = parts[1];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
+  const displayName = meta.displayName || meta.dcName;
+  await interaction.message.edit({ components: [] }).catch(discordCatch);
+  if (buttonKey === 'mortar_eor_skip_') {
+    await logGameAction(game, client, `💥 **Mortar Launcher** — **${displayName}** skipped the end-of-round mortar.`, { phase: 'ROUND', icon: 'round' });
+    saveGames(game.gameId);
+    return;
+  }
+  const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const figureKey = `${meta.dcName}-${dgIdx}-0`;
+  if (!game.figurePositions?.[meta.playerNum]?.[figureKey]) {
+    await logGameAction(game, client, `💥 **Mortar Launcher** — **${displayName}** is not on the board; mortar skipped.`, { phase: 'ROUND', icon: 'round' });
+    saveGames(game.gameId);
+    return;
+  }
+  const range = 3;
+  try {
+    const { setupPendingMoveX } = await import('./move-x-handler.js');
+    await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+      msgId,
+      figureKey,
+      playerNum: meta.playerNum,
+      spaces: 2,
+      source: 'Mortar Launcher',
+      threadId: null,
+      bypassCosts: true,
+      nextAction: {
+        type: 'rollOneDieSpacePick',
+        range,
+        label: 'Mortar Launcher',
+        abilityId: 'mortar_launcher',
+        specialIdx: null,
+        figureIndex: 0,
+        requireHostileOccupant: true,
+        spaceChoiceLabel: `**Mortar Launcher** — Choose a target space within ${range} containing a hostile figure:`,
+      },
+    });
+    await logGameAction(game, client, `💥 **Mortar Launcher** — **${displayName}** may move up to 2 spaces, then choose a target space within ${range}.`, { phase: 'ROUND', icon: 'round' });
+  } catch (err) {
+    console.error('[interrupts] Mortar Launcher EoR stamp failed:', err?.message ?? err);
+  }
+  saveGames(game.gameId);
+}
+
 // ── 8. On a Diplomatic Mission ──────────────────────────────────────────────
 export async function handleOnDiplomatic(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, checkWinConditions } = ctx;

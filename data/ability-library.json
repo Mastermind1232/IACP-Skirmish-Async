@@ -394,8 +394,8 @@
     },
     "Blend In": {
       "type": "ccEffect",
-      "label": "Become Hidden (Hidden is cleared automatically when you attack or are targeted)",
-      "applyHide": true,
+      "label": "Attach to your Deployment card: you cannot be the target of an attack (discard at end of your activation or when you declare an attack)",
+      "blendInAttach": true,
       "wiredStatus": "wired"
     },
     "Blitz": {
