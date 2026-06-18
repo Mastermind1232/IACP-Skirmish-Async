@@ -634,20 +634,20 @@
       "trooperRoundAttackHitBonus": 1,
       "wiredStatus": "wired"
     },
-    "cc:adrenaline": {
+    "Adrenaline": {
       "type": "ccEffect",
       "label": "+5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage",
       "timing": "startOfRound",
       "adrenalineEffect": true,
       "wiredStatus": "wired"
     },
-    "cc:advance_warning": {
+    "Advance Warning": {
       "type": "ccEffect",
       "label": "You and an adjacent friendly figure each gain 1 movement point",
       "advanceWarningEffect": true,
       "wiredStatus": "wired"
     },
-    "cc:against_the_odds": {
+    "Against the Odds": {
       "type": "ccEffect",
       "label": "If opponent has ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥8 more VPs, up to 3 figures become Focused",
       "focusGainToUpToNFigures": 3,
@@ -656,25 +656,25 @@
       },
       "wiredStatus": "wired"
     },
-    "cc:dioxis_fumes": {
+    "Dioxis Fumes": {
       "type": "ccEffect",
       "label": "Each non-DROID suffers 1 Strain; non-DROIDs cannot recover Strain this round",
       "dioxisFumesEffect": true,
       "wiredStatus": "wired"
     },
-    "cc:eyes_on_the_prize": {
+    "Eyes on the Prize": {
       "type": "ccEffect",
       "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
       "eyesOnThePrize": true,
       "wiredStatus": "wired"
     },
-    "cc:fleet_footed": {
+    "Fleet Footed": {
       "type": "ccEffect",
       "label": "Gain 1 movement point",
       "mpBonus": 1,
       "wiredStatus": "wired"
     },
-    "cc:gauntlet_blade": {
+    "Gauntlet Blade": {
       "type": "ccEffect",
       "label": "Roll 1 green die vs adjacent hostile: Dmg = Damage; if Surge, gain Power Token",
       "rollOneDie": "green",

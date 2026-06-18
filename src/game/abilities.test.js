@@ -111,7 +111,7 @@ test('resolveAbility draw with empty deck: draws what is available', () => {
 
 test('resolveAbility Adrenaline returns manual when no WOOKIEEs found', () => {
   const game = { gameId: 'g1', p1DcMessageIds: [], p1DcList: [] };
-  const result = resolveAbility('cc:adrenaline', { game, playerNum: 1, dcHealthState: new Map() });
+  const result = resolveAbility('Adrenaline', { game, playerNum: 1, dcHealthState: new Map() });
   assert.strictEqual(result.applied, false);
   assert.ok(result.manualMessage);
 });
@@ -119,7 +119,7 @@ test('resolveAbility Adrenaline returns manual when no WOOKIEEs found', () => {
 test('resolveAbility Fleet Footed without activation returns manual', () => {
   const game = { gameId: 'g1', dcActionsData: {}, movementBank: {} };
   const dcMessageMeta = new Map();
-  const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
+  const result = resolveAbility('Fleet Footed', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, false);
   assert.ok(result.manualMessage?.includes('activation'));
 });
@@ -134,7 +134,7 @@ test('resolveAbility Fleet Footed with active activation applies +1 MP', () => {
     movementBank: { [msgId]: { perFig: { 0: { total: 4, remaining: 2 } } } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g1', playerNum: 1, dcName: 'Test', displayName: 'Test [Group 1]' }]]);
-  const result = resolveAbility('cc:fleet_footed', { game, playerNum: 1, dcMessageMeta });
+  const result = resolveAbility('Fleet Footed', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(result.logMessage, 'Gained 1 movement point.');
   assert.strictEqual(game.movementBank[msgId].perFig[0].remaining, 3);
@@ -326,7 +326,7 @@ test('resolveAbility Against the Odds when VP condition met applies Focus to all
     player2VP: { total: 12 },
     figurePositions: { 1: { 'Luke-1-0': 'a1', 'Trooper-1-0': 'a2' }, 2: {} },
   };
-  const result = resolveAbility('cc:against_the_odds', { game, playerNum: 1 });
+  const result = resolveAbility('Against the Odds', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.figureConditions['Luke-1-0']?.includes('Focus'), true);
   assert.strictEqual(game.figureConditions['Trooper-1-0']?.includes('Focus'), true);
@@ -339,7 +339,7 @@ test('resolveAbility Against the Odds when VP condition not met does nothing', (
     player2VP: { total: 10 },
     figurePositions: { 1: { 'Luke-1-0': 'a1' }, 2: {} },
   };
-  const result = resolveAbility('cc:against_the_odds', { game, playerNum: 1 });
+  const result = resolveAbility('Against the Odds', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
   assert.ok(!game.figureConditions || !game.figureConditions['Luke-1-0']?.includes('Focus'));
 });
@@ -389,7 +389,7 @@ test('resolveAbility Advance Warning — no adj friendly: activator banks 1 MP, 
     figurePositions: { 1: { 'C-3PO-1-0': 'a1' }, 2: {} },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-aw', playerNum: 1, dcName: 'C-3PO', displayName: 'C-3PO [Group 1]' }]]);
-  const result = resolveAbility('cc:advance_warning', { game, playerNum: 1, dcMessageMeta });
+  const result = resolveAbility('Advance Warning', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.match(result.logMessage, /Activator banks/);
 });

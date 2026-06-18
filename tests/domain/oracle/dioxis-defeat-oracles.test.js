@@ -58,7 +58,7 @@ describe('ORACLE-DIOXIS-001: Dioxis Fumes routes strain through applyStrain', ()
   it('001a: returns pendingStrain[] with one entry per non-DROID figure', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
-    const result = resolveAbility('cc:dioxis_fumes', {
+    const result = resolveAbility('Dioxis Fumes', {
       game, playerNum: 1,
       dcMessageMeta, dcHealthState,
     });
@@ -78,7 +78,7 @@ describe('ORACLE-DIOXIS-001: Dioxis Fumes routes strain through applyStrain', ()
   it('001b: figure position is NOT removed inline (deferred to applyStrain → applyDamage pipeline)', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
-    resolveAbility('cc:dioxis_fumes', {
+    resolveAbility('Dioxis Fumes', {
       game, playerNum: 1,
       dcMessageMeta, dcHealthState,
     });
@@ -94,7 +94,7 @@ describe('ORACLE-DIOXIS-001: Dioxis Fumes routes strain through applyStrain', ()
   it('001c: roundDioxisActive flag is set so non-DROID figures cannot recover Strain this round', () => {
     const { game, dcMessageMeta, dcHealthState } = buildDioxisGame();
 
-    resolveAbility('cc:dioxis_fumes', {
+    resolveAbility('Dioxis Fumes', {
       game, playerNum: 1,
       dcMessageMeta, dcHealthState,
     });

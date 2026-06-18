@@ -12,21 +12,21 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIES.",
-      "abilityId": "cc:adrenaline"
+      "abilityId": "Adrenaline"
     },
     "Advance Warning": {
       "cost": 0,
       "playableBy": "LEADER",
       "timing": "duringActivation",
       "effect": "Use during your activation. You and an adjacent friendly figure each gain 1 movement point.",
-      "abilityId": "cc:advance_warning"
+      "abilityId": "Advance Warning"
     },
     "Against the Odds": {
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "endOfRound",
       "effect": "Use at the end of a round. If your opponent has at least 8 more VPs than you, choose up to 3 of your figures. Those figures become Focused.",
-      "abilityId": "cc:against_the_odds"
+      "abilityId": "Against the Odds"
     },
     "All in a Day's Work": {
       "cost": 3,
@@ -494,7 +494,7 @@
       "playableBy": "DROID or HUNTER",
       "timing": "duringActivation",
       "effect": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-Droid figures cannot recover Strain.",
-      "abilityId": "cc:dioxis_fumes"
+      "abilityId": "Dioxis Fumes"
     },
     "Disable": {
       "cost": 2,
@@ -645,7 +645,7 @@
       "playableBy": "SCUM",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Power Token, or discard 1 HARMFUL condition.",
-      "abilityId": "cc:eyes_on_the_prize"
+      "abilityId": "Eyes on the Prize"
     },
     "Face Me!": {
       "cost": 1,
@@ -728,7 +728,7 @@
       "playableBy": "Any Figure",
       "timing": "duringActivation",
       "effect": "Use during your activation to gain 1 movement point.",
-      "abilityId": "cc:fleet_footed"
+      "abilityId": "Fleet Footed"
     },
     "Flurry of Blades": {
       "cost": 2,
@@ -840,7 +840,7 @@
       "playableBy": "Bo-Katan Kryze",
       "timing": "afterAttackTargetingYouResolved",
       "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled a Surge, gain a Power Token.",
-      "abilityId": "cc:gauntlet_blade"
+      "abilityId": "Gauntlet Blade"
     },
     "Get Behind Me!": {
       "cost": 2,

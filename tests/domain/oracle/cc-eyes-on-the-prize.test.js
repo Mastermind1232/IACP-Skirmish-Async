@@ -41,7 +41,7 @@ describe('Eyes on the Prize — enumeration (carrying)', () => {
 describe('Eyes on the Prize — per-figure loop', () => {
   it('opens a 3-way (+skip) choice for the first eligible figure', () => {
     const game = fixture();
-    const r = resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1 });
+    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
     assert.equal(r.requiresChoice, true);
     assert.deepEqual(r.choiceValues, ['recover', 'powertoken', 'condition', 'skip']);
     assert.equal(r.choiceOptions.length, 4);
@@ -50,8 +50,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('discards a HARMFUL condition when chosen, then finalizes', () => {
     const game = fixture();
-    resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1 });
-    const done = resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1, chosenFigureKey: 'condition' });
+    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'condition' });
     assert.equal(done.applied, true);
     assert.ok(!(game.figureConditions['Jawa-1-0'] || []).includes('Bleed'), 'Bleed discarded');
     assert.ok(!game.pendingEyesOnThePrize, 'cursor cleared');
@@ -59,8 +59,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('accumulates a Power Token grant and resolves it at the end (choose type)', () => {
     const game = fixture();
-    resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1 });
-    const done = resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1, chosenFigureKey: 'powertoken' });
+    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'powertoken' });
     assert.equal(done.requiresPowerTokenChoice, true);
     assert.equal(game.pendingPowerTokenGrant.grants.length, 1);
     assert.equal(game.pendingPowerTokenGrant.grants[0].figureKey, 'Jawa-1-0');
@@ -68,8 +68,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('skip applies nothing', () => {
     const game = fixture();
-    resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1 });
-    const done = resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1, chosenFigureKey: 'skip' });
+    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'skip' });
     assert.equal(done.applied, true);
     assert.deepEqual(game.figureConditions['Jawa-1-0'], ['Bleed'], 'condition untouched');
     assert.equal(game.pendingPowerTokenGrant, undefined);
@@ -78,7 +78,7 @@ describe('Eyes on the Prize — per-figure loop', () => {
   it('reports when no figure qualifies', () => {
     const game = fixture();
     game.figureContraband = {};
-    const r = resolveAbility('cc:eyes_on_the_prize', { game, playerNum: 1 });
+    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
     assert.equal(r.applied, true);
     assert.match(r.logMessage, /no friendly figures/);
   });

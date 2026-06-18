@@ -396,7 +396,7 @@ describe('B-DEFEAT-E2E-001: Dioxis Fumes pendingStrain[] shape', () => {
     assert.ok(officerFigKey, 'Imperial Officer figure exists');
     assert.ok(game.figurePositions[2][officerFigKey], 'figure has position');
 
-    const result = resolveAbility('cc:dioxis_fumes', {
+    const result = resolveAbility('Dioxis Fumes', {
       game,
       playerNum: 1,
       dcMessageMeta,

@@ -1739,7 +1739,7 @@
     {
       "id": "CC-CC-ADRENALINE",
       "type": "ccEffect",
-      "abilityKey": "cc:adrenaline",
+      "abilityKey": "Adrenaline",
       "label": "+5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage",
       "description": null,
       "owners": [
@@ -1781,7 +1781,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['cc:adrenaline'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['Adrenaline'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1808,7 +1808,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:adrenaline'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Adrenaline'] exists with type=ccEffect, wiredStatus=wired",
           "field 'timing' present and non-null",
           "field 'adrenalineEffect' present and non-null"
         ]
@@ -1822,7 +1822,7 @@
     {
       "id": "CC-CC-ADVANCE-WARNING",
       "type": "ccEffect",
-      "abilityKey": "cc:advance_warning",
+      "abilityKey": "Advance Warning",
       "label": "You and an adjacent friendly figure each gain 1 movement point",
       "description": null,
       "owners": [
@@ -1846,7 +1846,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['cc:advance_warning'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['Advance Warning'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1856,7 +1856,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:advance_warning'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Advance Warning'] exists with type=ccEffect, wiredStatus=wired",
           "field 'mpBonus' present and non-null"
         ]
       },
@@ -1869,7 +1869,7 @@
     {
       "id": "CC-CC-AGAINST-THE-ODDS",
       "type": "ccEffect",
-      "abilityKey": "cc:against_the_odds",
+      "abilityKey": "Against the Odds",
       "label": "If opponent has \u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00b0\u00c3\u201a\u00c2\u00a58 more VPs, up to 3 figures become Focused",
       "description": null,
       "owners": [
@@ -1893,7 +1893,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['cc:against_the_odds'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['Against the Odds'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1902,7 +1902,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:against_the_odds'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Against the Odds'] exists with type=ccEffect, wiredStatus=wired",
           "field 'focusGainToUpToNFigures' present and non-null",
           "field 'vpCondition' present and non-null"
         ]
@@ -1916,7 +1916,7 @@
     {
       "id": "CC-CC-DIOXIS-FUMES",
       "type": "ccEffect",
-      "abilityKey": "cc:dioxis_fumes",
+      "abilityKey": "Dioxis Fumes",
       "label": "Each non-DROID suffers 1 Strain; non-DROIDs cannot recover Strain this round",
       "description": null,
       "owners": [
@@ -1941,7 +1941,7 @@
         },
         "riskTier": "low"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['cc:dioxis_fumes'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['Dioxis Fumes'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1949,7 +1949,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:dioxis_fumes'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Dioxis Fumes'] exists with type=ccEffect, wiredStatus=wired",
           "field 'dioxisFumesEffect' present and non-null"
         ]
       },
@@ -1962,7 +1962,7 @@
     {
       "id": "CC-CC-EYES-ON-THE-PRIZE",
       "type": "ccEffect",
-      "abilityKey": "cc:eyes_on_the_prize",
+      "abilityKey": "Eyes on the Prize",
       "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
       "description": null,
       "owners": [
@@ -1986,7 +1986,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['cc:eyes_on_the_prize'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['Eyes on the Prize'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1996,7 +1996,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:eyes_on_the_prize'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Eyes on the Prize'] exists with type=ccEffect, wiredStatus=wired",
           "field 'informational' present and non-null"
         ]
       },
@@ -2009,7 +2009,7 @@
     {
       "id": "CC-CC-FLEET-FOOTED",
       "type": "ccEffect",
-      "abilityKey": "cc:fleet_footed",
+      "abilityKey": "Fleet Footed",
       "label": "Gain 1 movement point",
       "description": null,
       "owners": [
@@ -2033,7 +2033,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['cc:fleet_footed'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js pins structured fields on abilities['Fleet Footed'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -2043,7 +2043,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-12-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:fleet_footed'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Fleet Footed'] exists with type=ccEffect, wiredStatus=wired",
           "field 'mpBonus' present and non-null"
         ]
       },
@@ -2056,7 +2056,7 @@
     {
       "id": "CC-CC-GAUNTLET-BLADE",
       "type": "ccEffect",
-      "abilityKey": "cc:gauntlet_blade",
+      "abilityKey": "Gauntlet Blade",
       "label": "Roll 1 green die vs adjacent hostile: Dmg = Hits; if Surge, gain Power Token",
       "description": null,
       "owners": [
@@ -2080,7 +2080,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['cc:gauntlet_blade'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['Gauntlet Blade'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -2088,7 +2088,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js"
         ],
         "assertions": [
-          "abilities['cc:gauntlet_blade'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Gauntlet Blade'] exists with type=ccEffect, wiredStatus=wired",
           "field 'rollOneDie' present and non-null",
           "field 'rollOneDieTarget' present and non-null",
           "field 'rollOneDieSurgeSelfPowerToken' present and non-null"
