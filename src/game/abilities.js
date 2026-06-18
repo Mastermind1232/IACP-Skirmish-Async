@@ -11922,28 +11922,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Comm Disruption** — You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}: can cancel any opponent CC with cost ≤ ${spyCount}. ${cancelNote} Discard that card and cancel its effects.` };
   }
 
-  // ccEffect: setATrapEffect (Set a Trap) — choose a space; at round end a friendly on that space may attack a hostile on it
+  // ccEffect: setATrapEffect (Set a Trap) — INTENTIONALLY UNIMPLEMENTED.
+  // The printed card chooses a map TILE and, at end of round, lets a friendly
+  // figure on that tile interrupt to attack a hostile on the same tile. This
+  // engine has no model of map tiles (only individual spaces), so the effect
+  // cannot be resolved correctly. Per owner decision it is a no-op until a
+  // tile model exists; deck-loading reports it as unimplemented (see
+  // UNIMPLEMENTED_CARDS in validation.js). (alexanbv 2026-06-18.)
   if (entry.type === 'ccEffect' && entry.setATrapEffect) {
-    const { game, playerNum, chosenSpace } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    if (chosenSpace) {
-      game.setTrapSpace = game.setTrapSpace || {};
-      game.setTrapSpace[playerNum] = chosenSpace;
-      return { applied: true, logMessage: `**Set a Trap** — Trap placed at space **${chosenSpace}**. At end of round, you may choose a friendly figure on that space to interrupt and attack a hostile figure on it.` };
-    }
-    // Space picker: all currently occupied spaces (friendly + hostile) as candidates
-    const oppNum = opponentPlayerNum(playerNum);
-    const occupied = new Set();
-    for (const [, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }
-    for (const [, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) { if (pos) occupied.add(String(pos).toLowerCase()); }
-    if (!occupied.size) {
-      // Fall back to all map spaces
-      const boardState = getBoardStateForMovement(game, null);
-      const allSpaces = Object.keys(boardState?.mapSpaces?.spaces || {});
-      if (!allSpaces.length) return { applied: false, manualMessage: 'No map spaces found. Note the trap location manually.' };
-      return { requiresSpaceChoice: true, validSpaces: allSpaces.slice(0, 25) };
-    }
-    return { requiresSpaceChoice: true, validSpaces: [...occupied] };
+    return {
+      applied: false,
+      manualMessage: '**Set a Trap** is not implemented (requires a map-tile model) — resolve manually if you wish.',
+    };
   }
 
   // dcSpecial: headbuttMove (Tauntaun Rider Headbutt) — move up to N spaces, choose adjacent hostile, roll 1 die
@@ -12273,14 +12263,17 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setsHarshEnvironment (Harsh Environment — round-scoped modifier flag)
+  // ccEffect: setsHarshEnvironment (Harsh Environment) — INTENTIONALLY UNIMPLEMENTED.
+  // The card grants −1 Evade on exterior spaces and +1 Block on interior spaces,
+  // which requires an interior/exterior space classification this engine does
+  // not have. Per owner decision it is a no-op until such a model exists; the
+  // game.harshEnvironmentActive flag is therefore never set, so the consumer in
+  // combat-bridge.js stays dormant. Deck-loading reports it as unimplemented
+  // (see UNIMPLEMENTED_CARDS in validation.js). (alexanbv 2026-06-18.)
   if (entry.type === 'ccEffect' && entry.setsHarshEnvironment) {
-    const { game } = context;
-    if (!game) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.harshEnvironmentActive = true;
     return {
-      applied: true,
-      logMessage: '**Harsh Environment** is now active this round. Figures on **exterior** spaces: −1 Evade. Figures on **interior** spaces: +1 Block. Track manually during defense rolls.',
+      applied: false,
+      manualMessage: '**Harsh Environment** is not implemented (requires an interior/exterior space model) — resolve manually if you wish.',
     };
   }
 

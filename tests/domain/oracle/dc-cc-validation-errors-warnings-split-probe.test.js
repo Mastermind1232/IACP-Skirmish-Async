@@ -17,7 +17,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateDeckLegal, normalizeSquadInput } from '../../../src/game/validation.js';
+import { validateDeckLegal, normalizeSquadInput, UNIMPLEMENTED_CARDS } from '../../../src/game/validation.js';
 
 // Minimal helper: validate a raw dc/cc list pair without asserting cost.
 // These probes only care about the attachment channels, not the 40/15 totals.
@@ -57,5 +57,37 @@ describe('DC-CC: validateDeckLegal — errors vs warnings split', () => {
     const v = validate(['[The Darksaber]', 'Bo-Katan Kryze', 'Sabine Wren']);
     const extenderWarnings = v.warnings.filter(w => /Darksaber/i.test(w));
     assert.equal(extenderWarnings.length, 0, `unexpected redundant warning: ${JSON.stringify(extenderWarnings)}`);
+  });
+});
+
+describe('DC-CC: validateDeckLegal — unimplemented-card guard', () => {
+  it('UNIMPLEMENTED_CARDS lists Set a Trap and Harsh Environment', () => {
+    assert.ok(UNIMPLEMENTED_CARDS.includes('Set a Trap'));
+    assert.ok(UNIMPLEMENTED_CARDS.includes('Harsh Environment'));
+  });
+
+  it('a CC list containing Set a Trap warns "is not implemented"', () => {
+    const v = validate(['Rebel Trooper (Elite)'], ['Set a Trap']);
+    const w = v.warnings.find(x => /Set a Trap/i.test(x) && /not implemented/i.test(x));
+    assert.ok(w, `expected Set a Trap unimplemented warning, got: ${JSON.stringify(v.warnings)}`);
+  });
+
+  it('a CC list containing Harsh Environment warns "is not implemented"', () => {
+    const v = validate(['Rebel Trooper (Elite)'], ['Harsh Environment']);
+    const w = v.warnings.find(x => /Harsh Environment/i.test(x) && /not implemented/i.test(x));
+    assert.ok(w, `expected Harsh Environment unimplemented warning, got: ${JSON.stringify(v.warnings)}`);
+  });
+
+  it('both cards present → both warned, deck still legal as far as the guard is concerned', () => {
+    const v = validate(['Rebel Trooper (Elite)'], ['Set a Trap', 'Harsh Environment']);
+    assert.ok(v.warnings.some(x => /Set a Trap/i.test(x) && /not implemented/i.test(x)));
+    assert.ok(v.warnings.some(x => /Harsh Environment/i.test(x) && /not implemented/i.test(x)));
+    // The guard emits warnings, never errors — it does not hard-block.
+    assert.equal(v.errors.some(e => /not implemented/i.test(e)), false);
+  });
+
+  it('no unimplemented cards → no "not implemented" warnings', () => {
+    const v = validate(['Rebel Trooper (Elite)'], ['Element of Surprise']);
+    assert.equal(v.warnings.some(x => /not implemented/i.test(x)), false);
   });
 });

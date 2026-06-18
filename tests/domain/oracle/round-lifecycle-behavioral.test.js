@@ -579,7 +579,7 @@ describe('B-RNDLC-014: Full round boundary invariant — initiative swap + clean
       figureMoved: { 'Rebel Trooper-1-0': true },
       pendingRushPush: { msgId: '3001', targets: ['Stormtrooper-2-0'] },
       crippledFigures: ['Onar Koma'],
-      harshEnvironmentActive: true,
+      noCommandDrawThisRound: true,
       pendingStartOfRoundResolve: 2,
       // Persistent state that should survive
       figureConditions: { 'Rebel Trooper-1-0': ['Stunned'] },
@@ -613,7 +613,7 @@ describe('B-RNDLC-014: Full round boundary invariant — initiative swap + clean
     assert.deepStrictEqual(game.figureMoved, {}, 'figureMoved reset');
     assert.strictEqual(game.pendingRushPush, null, 'pendingRushPush reset');
     assert.deepStrictEqual(game.crippledFigures, [], 'crippledFigures reset');
-    assert.strictEqual(game.harshEnvironmentActive, false, 'harshEnvironmentActive reset');
+    assert.strictEqual(game.noCommandDrawThisRound, false, 'noCommandDrawThisRound reset');
     assert.strictEqual(game.pendingStartOfRoundResolve, undefined, 'pendingStartOfRoundResolve deleted');
 
     // Persistent state survived

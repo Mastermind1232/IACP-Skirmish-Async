@@ -617,9 +617,10 @@ const ROUND_OBJECT_FLAGS = [
   // pending queue empties.
   'firingSquadLockedTarget',
   'aphraExcavationOptions',
-  // setTrapSpace — alexanbv 2026-05-13: Set a Trap is SoR/EoR scope, so
-  // it resets at round boundary (not per-activation).
-  'setTrapSpace',
+  // setTrapSpace removed 2026-06-18: Set a Trap is intentionally unimplemented
+  // (requires a map-tile model the engine lacks), so this round flag is no
+  // longer written by any code. See setATrapEffect in abilities.js and
+  // UNIMPLEMENTED_CARDS in validation.js.
   // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
   // start; status-phase context = once per round-scoped status phase.
   'wildBeastUsedThisStatusPhase',
@@ -945,7 +946,11 @@ const ROUND_ARRAY_FLAGS = [
 ];
 
 const ROUND_FALSE_FLAGS = [
-  'harshEnvironmentActive',
+  // harshEnvironmentActive removed 2026-06-18: Harsh Environment is
+  // intentionally unimplemented (requires an interior/exterior space model the
+  // engine lacks), so this flag is never set. The dormant consumer in
+  // combat-bridge.js is harmless. See setsHarshEnvironment in abilities.js and
+  // UNIMPLEMENTED_CARDS in validation.js.
   'noCommandDrawThisRound',
   'p1LaunchPanelFlippedThisRound',
   'p2LaunchPanelFlippedThisRound',

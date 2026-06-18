@@ -37,6 +37,17 @@ export const DC_POINTS_LEGAL = 40;
 export const CC_CARDS_LEGAL = 15;
 export const CC_COST_LEGAL = 15;
 
+/**
+ * Single source of truth for cards the engine intentionally does NOT implement.
+ * Each requires a model the engine lacks:
+ *   - "Set a Trap": needs a map-TILE model (only individual spaces are modeled).
+ *   - "Harsh Environment": needs an interior/exterior space classification.
+ * Their ccEffect handlers are no-ops (see abilities.js); deck-loading surfaces
+ * "<card name> is not implemented" through validateDeckLegal's warnings channel
+ * so players know to resolve them manually. Extend this list as needed.
+ */
+export const UNIMPLEMENTED_CARDS = ['Set a Trap', 'Harsh Environment'];
+
 /** Resolve DC list entry to card name (object or string). */
 export function resolveDcName(entry) {
   return typeof entry === 'object' ? (entry.dcName || entry.displayName) : entry;
@@ -289,6 +300,32 @@ export function validateDeckLegal(squad) {
   const attachment = validateAttachmentTargets(dcList);
   errors.push(...attachment.errors);
   const warnings = [...attachment.warnings];
+
+  // ── Unimplemented-card guard ──
+  // Some cards cannot be resolved correctly by this engine (no map-tile /
+  // interior-exterior model). They are accepted into the deck (still legal),
+  // but we warn so players know to resolve them manually. Source of truth:
+  // UNIMPLEMENTED_CARDS.
+  const unimplementedSet = new Set(UNIMPLEMENTED_CARDS.map((n) => n.toLowerCase()));
+  const seenUnimplemented = new Set();
+  const normalizeName = (entry, isDc) => {
+    const n = isDc ? resolveDcName(entry) : entry;
+    return typeof n === 'string' ? n.replace(/^\[|\]$/g, '').trim() : '';
+  };
+  for (const entry of ccList) {
+    const n = normalizeName(entry, false);
+    if (n && unimplementedSet.has(n.toLowerCase()) && !seenUnimplemented.has(n.toLowerCase())) {
+      seenUnimplemented.add(n.toLowerCase());
+      warnings.push(`"${n}" is not implemented (resolve manually).`);
+    }
+  }
+  for (const entry of dcList) {
+    const n = normalizeName(entry, true);
+    if (n && unimplementedSet.has(n.toLowerCase()) && !seenUnimplemented.has(n.toLowerCase())) {
+      seenUnimplemented.add(n.toLowerCase());
+      warnings.push(`"${n}" is not implemented (resolve manually).`);
+    }
+  }
 
   return {
     legal: errors.length === 0,

@@ -784,44 +784,9 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         { components: [_rsRow], allowedMentions: { users: [_rsOwnerId] } });
     }
   }
-  // Set a Trap (CC): at end of round, if a trap space is set for this player,
-  // prompt a friendly figure on that space to interrupt and attack a hostile
-  // on that space. Card: "choose a map tile ... at the end of the round,
-  // choose one of your figures on that tile to interrupt to perform an attack
-  // targeting a hostile figure on that tile." Spaces (not tiles) are the
-  // finest unit modeled; the trap fires at the chosen space. (alexanbv 2026-06-18.)
-  for (const pn of _eorPlayers) {
-    const _trapSpace = game.setTrapSpace?.[pn];
-    if (!_trapSpace) continue;
-    const _trapNorm = String(_trapSpace).toLowerCase();
-    // Friendly figures on the trap space.
-    const _trapFriendlies = [];
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-      if (pos && String(pos).toLowerCase() === _trapNorm) _trapFriendlies.push(fk);
-    }
-    // Hostile figures on the trap space (gate: only fire if a target exists).
-    const _trapOppNum = pn === 1 ? 2 : 1;
-    let _trapHasHostile = false;
-    for (const [, pos] of Object.entries(game.figurePositions?.[_trapOppNum] || {})) {
-      if (pos && String(pos).toLowerCase() === _trapNorm) { _trapHasHostile = true; break; }
-    }
-    if (_trapFriendlies.length === 0 || !_trapHasHostile) {
-      await logGameAction(game, client, `🪤 **Set a Trap** — No eligible attacker or no hostile figure on the trap space (**${_trapSpace}**); trap not sprung.`, { phase: 'ROUND', icon: 'round' });
-      continue;
-    }
-    const _trapOwnerId = game[`player${pn}Id`];
-    const _trapBtns = _trapFriendlies.slice(0, 24).map(fk => new ButtonBuilder()
-      .setCustomId(`set_trap_eor_${gameId}_${pn}_${fk}`)
-      .setLabel(truncateLabel(buildFigureButtonLabel(fk, game)))
-      .setStyle(ButtonStyle.Danger)
-    );
-    _trapBtns.push(new ButtonBuilder().setCustomId(`set_trap_eor_${gameId}_${pn}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const _trapRows = chunkButtonsToRows(_trapBtns);
-    await logGameAction(game, client, `<@${_trapOwnerId}> 🪤 **Set a Trap** — choose one of your figures on **${_trapSpace}** to interrupt and attack a hostile figure on that space:`, {
-      components: _trapRows.slice(0, 5),
-      allowedMentions: { users: [_trapOwnerId] },
-    });
-  }
+  // Set a Trap (CC) is intentionally unimplemented (requires a map-tile model
+  // this engine lacks); see setATrapEffect in abilities.js. No end-of-round
+  // driver fires. (alexanbv 2026-06-18.)
   // Rest in Peace (CC): per errata the "discard this card and draw 1 Command
   // card" resolves at END OF ROUND, not at play time. The card is already in
   // discard (CC play auto-discards), satisfying "discard this card"; here we
@@ -2410,45 +2375,6 @@ export async function handleSpectreCellDist(interaction, ctx) {
   // Both tokens placed — done.
   delete game[`pendingSpectreCell_p${playerNum}`];
   await resolveStartOfRoundEffect(game, ctx);
-  saveGames(game.gameId);
-}
-
-/**
- * Handle set_trap_eor_ button: Set a Trap (CC) end-of-round interrupt attack.
- * customId: set_trap_eor_{gameId}_{playerNum}_{figureKey|skip}
- * The chosen friendly figure on the trap space takes a free interrupt attack.
- */
-export async function handleSetTrapEor(interaction, ctx) {
-  await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, saveGames, logGameAction, client } = ctx;
-  const full = parseCustomId(interaction.customId, 'set_trap_eor_');
-  const parts = full.split('_');
-  const gameId = parts[0];
-  const pn = parseInt(parts[1], 10);
-  const target = parts.slice(2).join('_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const ownerId = getPlayerId(game, pn);
-  if (interaction.user.id !== ownerId) {
-    await interaction.followUp({ content: 'Only the trap owner may respond.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-  if (target === 'skip') {
-    await logGameAction(game, client, `🪤 **Set a Trap** — skipped.`, { phase: 'ROUND', icon: 'round' });
-    if (game.setTrapSpace) delete game.setTrapSpace[pn];
-    saveGames(game.gameId);
-    return;
-  }
-  // Set free-attack pending on the chosen figure so its next Attack click is
-  // a no-action-cost interrupt attack (mirrors Rogue Smuggler EoR).
-  game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-  game.freeAttackBonusPending[target] = true;
-  const figName = dcNameFromFigureKey(target);
-  if (game.setTrapSpace) delete game.setTrapSpace[pn];
-  await logGameAction(game, client,
-    `<@${ownerId}> 🪤 **Set a Trap** — **${figName}** interrupts to perform a free attack against a hostile figure on the trap space. Use the **Attack** button on its DC card.`,
-    { phase: 'ROUND', icon: 'attack', allowedMentions: { users: [ownerId] } });
   saveGames(game.gameId);
 }
 

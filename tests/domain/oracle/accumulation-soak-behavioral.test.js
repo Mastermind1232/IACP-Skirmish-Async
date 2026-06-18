@@ -496,12 +496,12 @@ describe('B-SOAK-004: Pending-state leakage across round boundary', () => {
 
   it('004h: round boolean flags reset to false', () => {
     const game = makeGame();
-    game.harshEnvironmentActive = true;
+    game.p1LaunchPanelFlippedThisRound = true;
     game.noCommandDrawThisRound = true;
 
     cleanupRoundStart(game);
 
-    assert.strictEqual(game.harshEnvironmentActive, false);
+    assert.strictEqual(game.p1LaunchPanelFlippedThisRound, false);
     assert.strictEqual(game.noCommandDrawThisRound, false);
   });
 });
@@ -598,7 +598,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     game.pendingOverrideAttackDice = { msg_a: { dice: ['blue'] } };
     game.deflectionPending = { 2: 1 };
     game.crippledFigures = ['Trooper'];
-    game.harshEnvironmentActive = true;
+    game.noCommandDrawThisRound = true;
     game.moveInProgress = { 'msg_a_0': { mpRemaining: 2 } };
 
     cleanupRoundStart(game);
@@ -607,7 +607,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     assert.deepStrictEqual(game.pendingOverrideAttackDice, {}, 'pending override dice gone');
     assert.deepStrictEqual(game.deflectionPending, {}, 'deflection pending gone');
     assert.deepStrictEqual(game.crippledFigures, [], 'crippled figures gone');
-    assert.strictEqual(game.harshEnvironmentActive, false, 'harsh env gone');
+    assert.strictEqual(game.noCommandDrawThisRound, false, 'round bool flag gone');
     assert.deepStrictEqual(game.moveInProgress, {}, 'move in progress gone');
   });
 
