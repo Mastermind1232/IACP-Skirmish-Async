@@ -117,6 +117,31 @@ registerCombatAbility({
   },
 });
 
+// Charge Generators (AT-DP) — alexanbv 2026-06-18 FIX-3. Card text: "While
+// attacking, if you have suffered fewer than 9 Damage, apply +1 Damage to the
+// attack results and you may reroll 1 attack die." A SINGLE attack:modifiers
+// row in the CSV combines BOTH halves (pipelines damage;reroll), so it's wired
+// here as one mods interactive: +1 Damage (auto) + an optional 1-attack-die
+// reroll. Conditional on the AT-DP figure having suffered <9 Damage
+// (dcHealthState: suffered = maxHp - currentHp). Previously the +1 Damage half
+// had no mods resolver (fell to a no-op button) and the reroll half was unwired
+// (the rerolls loop only reads attack:rerolls rows). Resolver:
+// COMBAT_RESOLVERS.charge_generators.
+registerCombatAbility({
+  id: 'charge_generators', name: 'Charge Generators', windows: ['mods'], side: 'attacker', kind: 'interactive',
+  params: { card: 'AT-DP', ability: 'Charge Generators', limit: 'once per attack' },
+  applies: (game, combat, side, deps) => {
+    if (!combat.attackerFigureKey) return false;
+    if (!ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('charge_generators')) return false;
+    // suffered = maxHp - currentHp for the attacking AT-DP figure (dcHealthState).
+    const hs = deps?.dcHealthState?.get?.(combat.attackerMsgId) || [];
+    const pair = hs[combat.attackerFigureIndex ?? 0];
+    const suffered = pair ? Math.max(0, (pair[1] ?? pair[0] ?? 0) - (pair[0] ?? 0)) : 0;
+    if (!(suffered < 9)) return false;
+    return !(combat._abilityUsedThisAttack?.['AT-DP:Charge Generators']);
+  },
+});
+
 // ── Defender mods ────────────────────────────────────────────────────────────
 
 registerCombatAbility({

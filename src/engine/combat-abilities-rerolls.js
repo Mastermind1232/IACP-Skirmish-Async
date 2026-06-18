@@ -11,12 +11,16 @@
 // needs the extra guard predicate; params + resolver are already generic.
 
 import { loadAbilitySpec, getPlayerCardNames } from './combat-ability-db.js';
-import { opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
+import { opponentPlayerNum, getCcHand, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
 import { stripBrackets } from '../game/card-names.js';
-import { isAttachmentExhausted, combatSelfAttachmentMsgId } from '../game/card-state-helpers.js';
+import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
+import { getMapData } from '../data-loader.js';
+import { isWithinSpaces } from '../game/spatial.js';
+
+const _auraBearerDeps = { getMapData, isWithinSpaces, getDcList, getDcMessageIds };
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 function deriveCount(effect) {
@@ -40,6 +44,14 @@ export function registerRerollAbilities() {
       // registered as a die-turn in combat-abilities-special.js. Skip it here so
       // the reroll resolver doesn't shadow the die-turn one (alexanbv 2026-06-16).
       if (card === 'Rapid Recalibration') continue;
+      // Lasat-Honor Guard (Zeb Orrelios) is a die-TURN that fires AFTER ALL rerolls
+      // ("after any rerolls ... turn 1 die showing only a single attack icon to any
+      // side") — NOT a reroll. It's registered in the SPECIAL window (die-turn) via
+      // combat-abilities-special.js; the CSV files it under attack:rerolls only
+      // because the spec lumps die-turns with rerolls. Skip it here so the generic
+      // reroll resolver doesn't double-offer it alongside the special-window one
+      // (alexanbv 2026-06-18: FIX-7 re-bin to the special window, not rerolls).
+      if (r.ability === 'Lasat-Honor Guard') continue;
       // Gambit + Shrewd Scoundrel (Lando) are NOT standalone reroll sources —
       // they're modifiers ON a reroll (alexanbv 2026-06-16: "gambit applies to
       // ANY reroll, shrewd scoundrel only to Resourceful"). Gambit is injected as
@@ -115,6 +127,19 @@ export function registerRerollAbilities() {
       const isExhaustCard = (r.card_type === 'Attachment' || r.card_type === 'Upgrade') && /exhaust/i.test(r.effect || '');
       const isAura = /another friendly|friendly figure within|within \d/i.test(`${r.effect || ''} ${r.conditional || ''}`);
       if (isExhaustCard && !isAura) params.exhaustOnUse = stripBrackets(card);
+      // AURA exhaust attachments (Trusted Ally — worn by a friendly figure within
+      // N spaces of the attacker) exhaust the BEARER's DC, not the attacker's own
+      // (alexanbv 2026-06-18 FIX-4). The bearer msgId is located via
+      // auraAttachmentBearerMsgId at offer time (ready bearer in range) and at
+      // exhaust time (_markGateAbilityUsed reads params.auraExhaustOnUse). The aura
+      // range comes from the "within N" in the row text (default 3).
+      let auraRange = 3;
+      if (isExhaustCard && isAura) {
+        const wm = `${r.effect || ''} ${r.conditional || ''}`.match(/within\s+(\d+)/i);
+        if (wm) auraRange = parseInt(wm[1], 10) || 3;
+        params.auraExhaustOnUse = stripBrackets(card);
+        params.auraRange = auraRange;
+      }
       // CONDITION (alexanbv 2026-06-16): a DC ability's usability is the row's
       // self-then-others condition (attacker_is_self ∥ owner-centric aura/group),
       // derived from affects_self / affects_others. CC/attachment/upgrade rerolls
@@ -149,7 +174,11 @@ export function registerRerollAbilities() {
             ? combat.attackerPlayerNum
             : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
           if (!pn) return false;
-          if (rowCond) {
+          if (params.auraExhaustOnUse) {
+            // AURA exhaust attachment (Trusted Ally): offer only while a READY
+            // bearer carrying the attachment is within range of the attacker.
+            if (!auraAttachmentBearerMsgId(game, combat, params.auraExhaustOnUse, params.auraRange ?? 3, _auraBearerDeps, true)) return false;
+          } else if (rowCond) {
             // The ability's figure (or owner-aura) must include the attacker —
             // NOT merely "the player holds the card."
             if (!rowCond(game, combat)) return false;

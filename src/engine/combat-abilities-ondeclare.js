@@ -21,6 +21,8 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { sharpshooterInRange } from '../game/sharpshooter-helpers.js';
 import { hasFullOfRageAbility, fullOfRageDamageTriggered } from '../game/full-of-rage-helpers.js';
+import { hasShockAndAweAbility } from '../game/shock-and-awe-helpers.js';
+import { limitGuard, abilityLimitKey } from './combat-conditions.js';
 
 function atkEff(combat, deps) {
   const all = (deps?.getDcEffects || _getDcEffects)() || {};
@@ -94,6 +96,27 @@ registerCombatAbility({
     const pair = hs[combat.attackerFigureIndex ?? 0];
     const suffered = pair ? Math.max(0, (pair[1] ?? pair[0] ?? 0) - (pair[0] ?? 0)) : 0;
     return fullOfRageDamageTriggered(suffered);
+  },
+});
+
+// Shock and Awe (Cara Dune) — PLAYER CHOICE, once per round (alexanbv 2026-06-18
+// FIX-1). Card text: "Once per round, during a Declare Attack step, you may
+// replace 1 Yellow die in your attack pool with 1 Red die." Previously
+// auto-applied inline as an AI default at declaration; now offered as an
+// interactive on_declare gate button so the player decides. The once-per-round
+// limit rides in params (Cara Dune:Shock and Awe) — the gate's
+// _markGateAbilityUsed marks game.roundAbilityUsed on resolve, and limitGuard
+// re-checks it. Resolver: COMBAT_RESOLVERS.shock_and_awe (yellow→red swap).
+const _shockAndAweLimit = limitGuard('once per round', abilityLimitKey('Cara Dune', 'Shock and Awe'));
+registerCombatAbility({
+  id: 'shock_and_awe', name: 'Shock and Awe', windows: ['on_declare'], side: 'attacker', kind: 'interactive',
+  params: { card: 'Cara Dune', ability: 'Shock and Awe', limit: 'once per round' },
+  applies: (game, combat, side, deps) => {
+    if (!combat.attackerFigureKey) return false;
+    if (!hasShockAndAweAbility(atkEff(combat, deps)?.specialAbilityIds || [])) return false;
+    // Only offer while a Yellow die is in the pool to swap, and not yet used this round.
+    if (!(combat.attackInfo?.dice || []).includes('yellow')) return false;
+    return _shockAndAweLimit(game, combat);
   },
 });
 

@@ -74,6 +74,57 @@ export function combatSelfAttachmentMsgId(combat, side) {
 }
 
 /**
+ * Locate the DC message id of the figure WEARING an AURA exhaust attachment for
+ * the attacker's side: a friendly figure within `n` spaces of the attacking
+ * figure whose DC carries `attachmentName`, READY (not exhausted) by default.
+ * Mirrors the legacy Trusted Ally detection (alexanbv 2026-06-18 FIX-4) so the
+ * gate can both OFFER the aura reroll (ready bearer exists) and EXHAUST the
+ * correct bearer on use. Returns the bearer's msgId, or null.
+ *
+ * Pure (no Discord). Spatial + DC-list accessors are INJECTED so this stays
+ * import-light: { getMapData, isWithinSpaces, getDcList, getDcMessageIds }.
+ *
+ * @param {object} game
+ * @param {object} combat        game.pendingCombat
+ * @param {string} attachmentName  e.g. 'Trusted Ally'
+ * @param {number} n             aura range (Trusted Ally = 3)
+ * @param {object} deps          { getMapData, isWithinSpaces, getDcList, getDcMessageIds }
+ * @param {boolean} [requireReady=true]  skip bearers whose attachment is exhausted
+ * @returns {string|null}
+ */
+export function auraAttachmentBearerMsgId(game, combat, attachmentName, n, deps, requireReady = true) {
+  if (!game || !combat || !attachmentName || !deps) return null;
+  const { getMapData, isWithinSpaces, getDcList, getDcMessageIds } = deps;
+  const pn = combat.attackerPlayerNum;
+  const atkFk = combat.attackerFigureKey;
+  if (pn == null || !atkFk) return null;
+  const figs = game.figurePositions?.[pn] || {};
+  const atkPos = figs[atkFk];
+  const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+  if (!atkPos || !mapSp) return null;
+  const dcList = getDcList(game, pn) || [];
+  const dcMsgIds = getDcMessageIds(game, pn) || [];
+  const wantLc = String(attachmentName).toLowerCase();
+  for (const [fk, pos] of Object.entries(figs)) {
+    if (fk === atkFk || !pos) continue;
+    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), n)) continue;
+    const fn = fk.replace(/-\d+-\d+$/, '');
+    for (let i = 0; i < dcList.length; i++) {
+      const dn = dcList[i]?.dcName || dcList[i];
+      if (dn !== fn) continue;
+      const mid = dcMsgIds[i];
+      if (!mid) continue;
+      const atts = game.p1DcAttachments?.[mid] || game.p2DcAttachments?.[mid] || [];
+      const hasAtt = (atts || []).some((a) => String(a?.name || a?.cardName || a).toLowerCase() === wantLc);
+      if (!hasAtt) continue;
+      if (requireReady && isAttachmentExhausted(game, mid, attachmentName)) continue;
+      return mid;
+    }
+  }
+  return null;
+}
+
+/**
  * Mark a Deployment card as depleted. Additive only — the CRR-DPL-002
  * invariant requires skirmish to never reset, splice, or flip-faceup
  * depleted-card state.

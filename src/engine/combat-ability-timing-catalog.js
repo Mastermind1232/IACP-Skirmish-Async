@@ -64,7 +64,11 @@ e('fury', 'Fury (Wookiee Warriors)', 'attacker', 'passive', ON, '5+ dmg → +1 S
 e('relentless', 'Relentless', 'attacker', 'passive', ON, 'in range → applyStrain to target');
 e('advanced_targeting_computer', 'Advanced Targeting Computer (Dark Trooper Mk III)', 'attacker', 'passive', ON, 'auto-Focus');
 e('flawless_execution', 'Flawless Execution (Cad Bane)', 'attacker', 'interactive', ON, 'auto-Focus or die+token pickers');
-e('shock_and_awe', 'Shock and Awe (Cara Dune)', 'attacker', 'passive', ON, 'not used → yellow→red swap');
+// 'shock_and_awe' (Cara Dune) is now an EXECUTABLE on_declare INTERACTIVE
+// (combat-abilities-ondeclare.js): a PLAYER CHOICE, once per round, to swap 1
+// Yellow attack die for 1 Red. Per the per-id-clobber rule, NO timing-only
+// catalog entry here so the catalog import doesn't overwrite the executable one
+// (alexanbv 2026-06-18 FIX-1; the prior entry was a passive AI-default swap).
 e('vanguard', 'Vanguard (AT-RT)', 'attacker', 'interactive', ON, 'pre-target swap + die-swap picker');
 e('shared_intuition', 'Shared Intuition (4-LOM)', 'attacker', 'passive', ON, 'friendly HUNTER ≤3 w/ LOS → +1 Hit');
 e('query_declare', 'Query (HK-47, declare flag)', 'attacker', 'interactive', ON, 'sets queryNeedsPrompt (resolves mods)');
@@ -123,7 +127,12 @@ e('overpower_atk', 'Overpower (red die)', 'attacker', 'interactive', RR, 'Royal 
 e('overpower_def', 'Overpower (black die)', 'defender', 'interactive', RR, 'hasOverpowerAbility(def)');
 e('foresight', 'Foresight (Vader)', 'defender', 'interactive', RR, 'hasForesightAbility');
 e('defensive_stance_reroll', 'Defensive Stance (reroll grant, Diala)', 'defender', 'interactive', RR, 'hasDefensiveStanceAbility');
-e('charge_generators', 'Charge Generators', 'attacker', 'interactive', RR, '<9 dmg suffered');
+// 'charge_generators' (AT-DP) is now an EXECUTABLE mods interactive
+// (combat-abilities-mods.js: +1 Damage gated on suffered<9, plus an optional
+// attack-die reroll — both halves of its single attack:modifiers CSV row). Per
+// the same per-id-clobber rule as 'the_generals_ranks' above, NO timing-only
+// catalog entry here so the catalog import doesn't overwrite the executable one
+// (alexanbv 2026-06-18 FIX-3; the prior RR entry mis-binned it to rerolls).
 e('inspiring', 'Inspiring (Luke)', 'attacker', 'interactive', RR, 'friendly Inspiring within 3');
 e('soresu_form_reroll', 'Soresu Form (reroll grant, Kanan)', 'defender', 'interactive', RR, 'friendly soresu within 3');
 e('cower', 'Cower (C-3PO / Imperial Officer)', 'defender', 'interactive', RR, 'adjacent friendly');

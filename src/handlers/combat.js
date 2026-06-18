@@ -19,7 +19,7 @@ import { figureMpRemaining, consumeMovementPoints } from '../game/game-helpers.j
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
-import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId } from '../game/card-state-helpers.js';
+import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
 import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
@@ -168,9 +168,6 @@ import {
   ADV_TARGETING_COMPUTER_BONUS_DIE,
 } from '../game/adv-targeting-computer-helpers.js';
 import {
-  hasShockAndAweAbility,
-  buildShockAndAweRoundKey,
-  isShockAndAweAlreadyUsed,
   applyShockAndAweDieSwap,
 } from '../game/shock-and-awe-helpers.js';
 import {
@@ -263,6 +260,15 @@ function _markGateAbilityUsed(game, combat, pick) {
   if (p?.exhaustOnUse) {
     const mid = combatSelfAttachmentMsgId(combat, reg.side);
     if (mid) exhaustAttachment(game, mid, p.exhaustOnUse);
+  }
+  // AURA exhaust attachments (Trusted Ally — worn by a friendly figure within N
+  // of the attacker): exhaust the BEARER's DC, not the attacker's own (alexanbv
+  // 2026-06-18 FIX-4). Re-locate the ready bearer (the one that granted the
+  // reroll) and mark it exhausted so it can't be reused until readied.
+  if (p?.auraExhaustOnUse) {
+    const deps = { getMapData, isWithinSpaces: _isWithinSpaces, getDcList, getDcMessageIds };
+    const mid = auraAttachmentBearerMsgId(game, combat, p.auraExhaustOnUse, p.auraRange ?? 3, deps, true);
+    if (mid) exhaustAttachment(game, mid, p.auraExhaustOnUse);
   }
 }
 
@@ -1388,6 +1394,49 @@ export const COMBAT_RESOLVERS = {
       combat.callTheShotsResolved = true;
     },
   },
+  // Charge Generators (AT-DP) — alexanbv 2026-06-18 FIX-3. +1 Damage (always)
+  // and an optional reroll of 1 attack die. Both halves of the single
+  // attack:modifiers CSV row. The +1 Damage applies on either choice; the reroll
+  // half is taken only on "reroll". The gate marks it used (once per attack) via
+  // params after this resolves.
+  charge_generators: {
+    prompt: ({ combat }) => {
+      const n = _selectableDieIndices(combat, { pool: 'attack' }).length;
+      return {
+        content: `**Charge Generators** — apply **+1 Damage**${n ? ' and optionally reroll 1 attack die' : ''}:`,
+        buttons: n
+          ? [['reroll', '+1 Damage & reroll 1 attack die'], ['noreroll', '+1 Damage only', 'secondary']]
+          : [['noreroll', '+1 Damage', 'primary']],
+      };
+    },
+    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
+      // Stage 1: apply +1 Damage (always), then branch on reroll vs not.
+      if (combat._chargeGenStage !== 'pick') {
+        combat.bonusHits = (combat.bonusHits || 0) + 1;
+        if (choice === 'reroll') {
+          const idxs = _selectableDieIndices(combat, { pool: 'attack' });
+          combat._chargeGenStage = 'pick';
+          const dice = combat.attackDiceResults || [];
+          const btns = [
+            ...idxs.map((i) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${i}_${id}`).setLabel(`Die #${i + 1} (${dice[i]?.acc || 0}a/${dice[i]?.dmg || 0}d/${dice[i]?.surge || 0}s)`.slice(0, 80)).setStyle(ButtonStyle.Primary)),
+            new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_skip_${id}`).setLabel('Skip reroll').setStyle(ButtonStyle.Secondary),
+          ];
+          await thread?.send({ content: '**Charge Generators** — +1 Damage applied. Choose an attack die to reroll:', components: chunkButtonsToRows(btns) }).catch(discordCatch);
+          return { followUp: true };
+        }
+        thread?.send('**Charge Generators** — +1 Damage applied.').catch(discordCatch);
+        return undefined;
+      }
+      // stage 2 — a die was picked (or skip).
+      delete combat._chargeGenStage;
+      if (choice === 'skip') { thread?.send('**Charge Generators** — +1 Damage applied (reroll skipped).').catch(discordCatch); return undefined; }
+      const idx = parseInt(choice, 10);
+      const res = _rerollDie(combat, ctx, { pool: 'attack', index: idx });
+      if (res.ok) thread?.send(`**Charge Generators** — +1 Damage; rerolled attack die #${idx + 1} → ${res.newDie?.acc || 0}a/${res.newDie?.dmg || 0}d/${res.newDie?.surge || 0}s.`).catch(discordCatch);
+      else thread?.send(`**Charge Generators** — +1 Damage; die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      return undefined;
+    },
+  },
   get_down: {
     prompt: () => ({ content: '**Get Down** — apply +1 Block or +1 Evade?', buttons: [['block', '+1 Block'], ['evade', '+1 Evade'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { game, combat, thread }) => {
@@ -1594,6 +1643,25 @@ export const COMBAT_RESOLVERS = {
         } else thread?.send('**EE-3 Carbine** — that die is gone.').catch(discordCatch);
       } else thread?.send('**EE-3 Carbine** — Skipped.').catch(discordCatch);
       combat._ee3OnDeclareDecided = true;
+    },
+  },
+  // Shock and Awe (Cara Dune) — on_declare PLAYER CHOICE, once per round
+  // (alexanbv 2026-06-18 FIX-1). Replace 1 Yellow attack die with 1 Red die.
+  // The once-per-round limit is marked by the gate's _markGateAbilityUsed via the
+  // ability's params (Cara Dune:Shock and Awe); this resolver only does the swap.
+  shock_and_awe: {
+    prompt: ({ combat }) => {
+      const hasYellow = (combat.attackInfo?.dice || []).includes('yellow');
+      if (!hasYellow) return { content: '**Shock and Awe** — no Yellow die to swap.', buttons: [['skip', 'OK', 'secondary']] };
+      return { content: '**Shock and Awe** — replace 1 Yellow attack die with 1 Red die?', buttons: [['use', 'Yellow → Red'], ['skip', 'Skip', 'secondary']] };
+    },
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'use' && combat.attackInfo?.dice) {
+        const r = applyShockAndAweDieSwap(combat.attackInfo.dice);
+        if (r.applied) { combat.attackInfo = { ...combat.attackInfo, dice: r.dice }; thread?.send('**Shock and Awe** — 1 Yellow die replaced with Red.').catch(discordCatch); }
+        else thread?.send('**Shock and Awe** — no Yellow die to swap.').catch(discordCatch);
+      } else thread?.send('**Shock and Awe** — Skipped.').catch(discordCatch);
+      combat._shockAndAweDecided = true;
     },
   },
   // ── special (sample) ─────────────────────────────────────────────────────
@@ -4158,19 +4226,12 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  // Shock and Awe (Cara Dune): once per round, replace 1 Yellow die with Red
-  if (hasShockAndAweAbility(atkSpecialIds)) {
-    const sawKey = buildShockAndAweRoundKey(attackerFigureKey);
-    if (!isShockAndAweAlreadyUsed(game.roundFigureAbilityUsed, sawKey)) {
-      const r = applyShockAndAweDieSwap(game.pendingCombat.attackInfo.dice || []);
-      if (r.applied) {
-        game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: r.dice };
-        if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
-        game.roundFigureAbilityUsed[sawKey] = true;
-        await thread.send('**Shock and Awe** — 1 Yellow die replaced with Red.');
-      }
-    }
-  }
+  // Shock and Awe (Cara Dune): MOVED to the on_declare gate as a PLAYER CHOICE
+  // (alexanbv 2026-06-18 FIX-1). Previously auto-applied the yellow→red swap here
+  // as an AI default; the card reads "you MAY replace", once per round, so it is
+  // now an interactive on_declare ability (combat-abilities-ondeclare.js
+  // 'shock_and_awe' + COMBAT_RESOLVERS.shock_and_awe) with the once-per-round
+  // limit enforced by the gate's limitGuard / _markGateAbilityUsed.
 
   // Vanguard (AT-RT): now driven by a pre-target player-choice picker
   // in dc-play-area.js (mirrors EE-3 Carbine). The swap, if any, is
