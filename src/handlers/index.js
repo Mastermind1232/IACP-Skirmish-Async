@@ -134,13 +134,9 @@ import {
   handleCcSpacePick,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
-  handleNegationPlay,
-  handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
   handleExcavationPlay,
-  handleCommDisruptionPlay,
-  handleCommDisruptionSkip,
   handleScCcOpen,
   handleScCcSkip,
   handleScCcConfirm,
@@ -498,13 +494,9 @@ register('cc_choice_', handleCcChoice, 'ccHand');
 register('cc_space_', handleCcSpacePick, 'ccHand');
 register('illegal_cc_ignore_', handleIllegalCcIgnore, 'ccHand');
 register('illegal_cc_unplay_', handleIllegalCcUnplay, 'ccHand');
-register('negation_play_', handleNegationPlay, 'ccHand');
-register('negation_let_resolve_', handleNegationLetResolve, 'ccHand');
 register('celebration_play_', handleCelebrationPlay, 'ccHand');
 register('celebration_pass_', handleCelebrationPass, 'ccHand');
 register('excavation_play_', handleExcavationPlay, 'ccHand');
-register('comm_disruption_play_', handleCommDisruptionPlay, 'ccHand');
-register('comm_disruption_skip_', handleCommDisruptionSkip, 'ccHand');
 
 // --- Favorites ---
 register('fav_save_', handleFavSave, 'favorites');
@@ -913,8 +905,6 @@ export {
   handleCcChoice,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
-  handleNegationPlay,
-  handleNegationLetResolve,
   handleCelebrationPlay,
   handleCelebrationPass,
   handleExcavationPlay,

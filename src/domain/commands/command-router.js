@@ -47,8 +47,6 @@ export const PREFIX_TO_COMMAND = {
   'cc_choice_': COMMAND_TYPES.PlayCommandCard,
   'cc_attach_to_': COMMAND_TYPES.PlayCommandCard,
   'cc_space_': COMMAND_TYPES.PlayCommandCard,
-  'negation_play_': COMMAND_TYPES.NegationAttempt,
-  'negation_let_resolve_': COMMAND_TYPES.NegationResolve,
   'dc_cc_special_': COMMAND_TYPES.PlayCommandCard,
   'dc_cc_double_': COMMAND_TYPES.PlayCommandCard,
   'dc_cc_eoa_': COMMAND_TYPES.PlayCommandCard,
@@ -172,8 +170,6 @@ export function parsePayloadFromCustomId(customId, prefix) {
     case 'cc_choice_':
     case 'cc_attach_to_':
     case 'cc_space_':
-    case 'negation_play_':
-    case 'negation_let_resolve_':
     case 'dc_cc_special_':
     case 'dc_cc_double_':
     case 'dc_cc_eoa_':

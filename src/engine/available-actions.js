@@ -288,17 +288,6 @@ function getRoundActiveActions(game, playerNum, deps) {
   const gameId = game.gameId;
 
   // Check for pending sub-states first
-  // Negation must be checked before combat/movement — it blocks all play until resolved
-  if (game.pendingNegation) {
-    return getNegationActions(game, playerNum);
-  }
-
-  // Comm Disruption prompt — opponent must respond before game continues
-  if (game.pendingCommDisruptionPrompt) {
-    const cdActions = getCommDisruptionActions(game, playerNum);
-    if (cdActions.length > 0) return cdActions;
-  }
-
   // Power Token Overflow takes priority over combat — must discard before continuing
   if (game.pendingPowerTokenOverflow?.length > 0) {
     const overflowActions = getOverflowActions(game, playerNum);
@@ -1403,41 +1392,6 @@ function getMovementActions(game, playerNum, deps) {
   }
 
   return actions;
-}
-
-// ── Negation ─────────────────────────────────────────────────────────────────
-
-function getNegationActions(game, playerNum) {
-  const neg = game.pendingNegation;
-  if (!neg) return [];
-
-  const oppPn = opponentPlayerNum(neg.playedBy);
-  if (playerNum !== oppPn) return [];
-
-  return [
-    {
-      type: 'negation_play',
-      customId: `negation_play_${game.gameId}`,
-      description: 'Play Negation',
-    },
-    {
-      type: 'negation_let_resolve',
-      customId: `negation_let_resolve_${game.gameId}`,
-      description: 'Let card resolve',
-    },
-  ];
-}
-
-// ── Comm Disruption ──────────────────────────────────────────────────────────
-
-function getCommDisruptionActions(game, playerNum) {
-  const cd = game.pendingCommDisruptionPrompt;
-  if (!cd || cd.targetPlayerNum !== playerNum) return [];
-  const gameId = game.gameId;
-  return [
-    { type: ACTION_TYPES.COMM_DISRUPTION_PLAY, customId: buildCustomId(ACTION_TYPES.COMM_DISRUPTION_PLAY, { gameId }), description: 'Play Comm Disruption to cancel' },
-    { type: ACTION_TYPES.COMM_DISRUPTION_SKIP, customId: buildCustomId(ACTION_TYPES.COMM_DISRUPTION_SKIP, { gameId }), description: 'Skip Comm Disruption' },
-  ];
 }
 
 // ── Start of Round ───────────────────────────────────────────────────────────

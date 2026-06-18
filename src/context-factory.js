@@ -49,7 +49,7 @@ const CONTEXT_GROUPS = {
     'sendRoundActivationPhaseMessage', 'runStartOfRoundDcEffects', 'logGameAction', 'sendPhaseGateMessages',
     'buildDiscardPileDisplayPayload', 'updateDiscardPileMessage', 'getCcEffect',
     'isCcAttachment', 'isCcPlayableNow', 'isCcPlayLegalByRestriction',
-    'getIllegalCcPlayButtons', 'getNegationResponseButtons',
+    'getIllegalCcPlayButtons',
     'updateAttachmentMessageForDc', 'getPlayableCcFromHand', 'resolveAbility',
     'updateDcActionsMessage', 'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
     'getDcStats', 'getDcPlayAreaComponents', 'buildBoardMapPayload', 'getBoardStateForMovement',
@@ -79,7 +79,7 @@ const CONTEXT_GROUPS = {
     'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
     'getMovementMinimapAttachment', 'clearMoveGridMessages',
     'getLegalInteractOptions', 'FIGURE_LETTERS', 'resolveAbility',
-    'getNegationResponseButtons', 'sendBleedingPrompt', 'updateMovementBankMessage',
+    'sendBleedingPrompt', 'updateMovementBankMessage',
     'getCommandCardImagePath', 'getConditionCardPath', 'buildBoardMapPayload',
     'findDcMessageIdForFigure', 'isGroupDefeated', 'checkWinConditions',
     'getMapAttachmentForSpaces',
@@ -356,7 +356,7 @@ const CONTEXT_GROUPS = {
 
   recover: [
     'getGame', 'saveGames', 'client', 'logGameAction',
-    'getNegationResponseButtons', 'sendReadyToResolveRolls',
+    'sendReadyToResolveRolls',
     'updateHandChannelMessages', 'getMoveMpButtonRows',
     'sendPhaseGateMessages',
     'getDetermineInitiativeButtons',

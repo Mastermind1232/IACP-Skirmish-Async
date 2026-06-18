@@ -55,25 +55,12 @@ describe('CC: Negation', () => {
       assert.ok(cc.effect?.toLowerCase().includes('cost of 0'), 'targets 0-cost CCs');
     }
   });
-  it('pendingNegation structure is correct', () => {
-    const game = {};
-    game.pendingNegation = {
-      playerNum: 2,
-      cardName: 'Adrenaline',
-      combatThreadId: 'thread-1',
-    };
-    assert.strictEqual(game.pendingNegation.playerNum, 2);
-  });
 });
 
 // ── CC-4: Comm Disruption ───────────────────────────────────────────────────
 
 describe('CC: Comm Disruption', () => {
   it('exists in data', () => assertCCExists('Comm Disruption'));
-  it('pendingCommDisruptionPrompt blocks CC play', () => {
-    const game = { pendingCommDisruptionPrompt: { playerNum: 1 } };
-    assert.ok(game.pendingCommDisruptionPrompt);
-  });
 });
 
 // ── CC-5: Jundland Terror ───────────────────────────────────────────────────
@@ -412,9 +399,7 @@ describe('CC: Handler registration', () => {
     const { default: fs } = await import('fs');
     const content = fs.readFileSync('src/handlers/index.js', 'utf8');
     const prefixes = [
-      'negation_play_', 'negation_let_resolve_',
       'celebration_play_', 'celebration_pass_',
-      'comm_disruption_play_', 'comm_disruption_skip_',
       'cc_play_', 'cc_confirm_play_', 'cc_cancel_play_',
       'strain_choice_alldmg_', 'strain_choice_discard_',
     ];

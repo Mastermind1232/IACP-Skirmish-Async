@@ -76,7 +76,7 @@ import {
   getGeneralSetupButtons, getMapTypeButtons, getMapConfirmButton,
   getMissionSelectDrawMenu, getMissionSelectionPickMenu,
   getDeploymentZoneButtons, getCcShuffleDrawButton,
-  getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
+  getIllegalCcPlayButtons, getCelebrationButtons,
   getLobbyEmbed, getLobbyStartButton, updateThreadName,
   getDeploySpaceGridRows, buildDeployRowButtons,
   getDeployFigureLabelsFromDiscord,
@@ -575,7 +575,7 @@ export function buildHeadlessDeps(options = {}) {
     updateActivationsMessage, getGeneralSetupButtons, getMapTypeButtons,
     getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu,
     getDeploymentZoneButtons, getCcShuffleDrawButton,
-    getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
+    getIllegalCcPlayButtons, getCelebrationButtons,
     getLobbyEmbed, getLobbyStartButton, updateThreadName,
     getDeploySpaceGridRows, buildDeployRowButtons,
 

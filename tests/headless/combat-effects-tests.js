@@ -14,7 +14,7 @@ import {
 } from '../../src/game/index.js';
 import { isConditionImmune, HARMFUL_CONDITIONS } from '../../src/game/conditions.js';
 import {
-  getPlayerId, getDcList, getDcMessageIds, opponentPlayerNum,
+  getDcList, getDcMessageIds,
 } from '../../src/game/player-helpers.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -345,99 +345,11 @@ describe('Combat effects: conditions', () => {
   });
 });
 
-// ── Suite 3: Negation ───────────────────────────────────────────────────────
-
-describe('Combat effects: negation', () => {
-  it('pendingNegation structure is correct', () => {
-    const game = {};
-    game.pendingNegation = {
-      playedBy: 1,
-      card: 'Strength of Spirit',
-      fromDc: false,
-      handChannelId: 'p2-hand-test',
-    };
-
-    assert.strictEqual(game.pendingNegation.playedBy, 1);
-    assert.strictEqual(game.pendingNegation.card, 'Strength of Spirit');
-    assert.strictEqual(game.pendingNegation.fromDc, false);
-  });
-
-  it('negation_play customId format is correct', () => {
-    const gameId = 'test1';
-    const customId = `negation_play_${gameId}`;
-    const parts = customId.replace('negation_play_', '').split('_');
-    assert.strictEqual(parts[0], gameId);
-  });
-
-  it('negation_let_resolve customId format is correct', () => {
-    const gameId = 'test1';
-    const customId = `negation_let_resolve_${gameId}`;
-    const parts = customId.replace('negation_let_resolve_', '').split('_');
-    assert.strictEqual(parts[0], gameId);
-  });
-
-  it('Negation play removes card from hand and cancels (simulated)', () => {
-    const { game } = buildCombatGame({
-      p1CcHand: ['Strength of Spirit'],
-      p2CcHand: ['Negation'],
-    });
-
-    game.pendingNegation = {
-      playedBy: 1,
-      card: 'Strength of Spirit',
-      fromDc: false,
-      handChannelId: 'p2-hand-test',
-    };
-
-    // Simulate negation_play: remove Negation from P2 hand, discard both cards
-    const negIdx = game.player2CcHand.indexOf('Negation');
-    assert.ok(negIdx >= 0, 'Negation is in P2 hand');
-
-    game.player2CcHand.splice(negIdx, 1);
-    game.player2CcDiscard = game.player2CcDiscard || [];
-    game.player2CcDiscard.push('Negation');
-
-    delete game.pendingNegation;
-
-    assert.ok(!game.player2CcHand.includes('Negation'), 'Negation removed from hand');
-    assert.ok(game.player2CcDiscard.includes('Negation'), 'Negation in discard');
-    assert.strictEqual(game.pendingNegation, undefined, 'pendingNegation cleared');
-  });
-
-  it('Let resolve clears pendingNegation without discarding', () => {
-    const { game } = buildCombatGame({
-      p2CcHand: ['Negation'],
-    });
-
-    game.pendingNegation = {
-      playedBy: 1,
-      card: 'Pummel',
-      fromDc: false,
-      handChannelId: 'p2-hand-test',
-    };
-
-    // Simulate negation_let_resolve
-    const negationStillInHand = game.player2CcHand.includes('Negation');
-    delete game.pendingNegation;
-
-    assert.ok(negationStillInHand, 'Negation stays in hand (not played)');
-    assert.strictEqual(game.pendingNegation, undefined, 'pendingNegation cleared');
-  });
-
-  it('Negation can only be played by opponent of card player', () => {
-    const game = {};
-    game.pendingNegation = {
-      playedBy: 1,
-      card: 'Take Initiative',
-      fromDc: false,
-      handChannelId: 'p2-hand-test',
-    };
-
-    const cardPlayer = game.pendingNegation.playedBy;
-    const negatingPlayer = opponentPlayerNum(cardPlayer);
-    assert.strictEqual(negatingPlayer, 2, 'P2 is the opponent who can negate');
-  });
-});
+// ── Suite 3: (removed) ───────────────────────────────────────────────────────
+// The old Negation-window simulation tests were removed when the legacy
+// handleNegationPlay / handleNegationLetResolve handlers were deleted. The
+// unified counter-window is covered by cc-counter-window*-tests (including
+// combat traces).
 
 // ── Suite 4: Celebration ─────────────────────────────────────────────────────
 
@@ -596,8 +508,6 @@ describe('Combat effects: handler registration', () => {
       'combat_reroll_',
       'bleed_accept_',
       'bleed_prevent_',
-      'negation_play_',
-      'negation_let_resolve_',
       'celebration_play_',
       'celebration_pass_',
       'extra_armor_pick_',
@@ -638,14 +548,14 @@ describe('Combat effects: interrupt pending states', () => {
 
   it('multiple combat interrupt states can coexist', () => {
     const game = {};
-    game.pendingNegation = { playedBy: 1, card: 'Pummel' };
+    game.pendingSlowOnTheDraw = { blockedPlayerNum: 1, combatThreadId: 'thread-789' };
     game.pendingCelebration = { attackerPlayerNum: 2 };
 
-    assert.ok(game.pendingNegation, 'Negation pending');
+    assert.ok(game.pendingSlowOnTheDraw, 'Slow on the Draw pending');
     assert.ok(game.pendingCelebration, 'Celebration pending');
 
-    delete game.pendingNegation;
-    assert.strictEqual(game.pendingNegation, undefined, 'Negation cleared');
+    delete game.pendingSlowOnTheDraw;
+    assert.strictEqual(game.pendingSlowOnTheDraw, undefined, 'Slow on the Draw cleared');
     assert.ok(game.pendingCelebration, 'Celebration still pending');
   });
 });

@@ -454,7 +454,6 @@ import {
   getCcShuffleDrawButton,
   getCcActionButtons,
   getIllegalCcPlayButtons,
-  getNegationResponseButtons,
   getCelebrationButtons,
   getSelectSquadButton,
   getHandSquadButtons,
@@ -3528,7 +3527,7 @@ function buildAllDeps() {
     updateActivationsMessage, getGeneralSetupButtons, getMapTypeButtons,
     getMapConfirmButton, getMissionSelectDrawMenu, getMissionSelectionPickMenu,
     getDeploymentZoneButtons, getCcShuffleDrawButton,
-    getIllegalCcPlayButtons, getNegationResponseButtons, getCelebrationButtons,
+    getIllegalCcPlayButtons, getCelebrationButtons,
     getLobbyEmbed, getLobbyStartButton, updateThreadName, getDeploySpaceGridRows,
     buildDeployRowButtons,
 
@@ -4892,18 +4891,19 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ── Pending CC-response global gate ──────────────────────────────────
-  // Per alexanbv 2026-05-11: when an opponent has been prompted with a
-  // Negation or Comm Disruption response, ALL other gameplay buttons
-  // must be locked until they either counter or let the original CC
-  // resolve. Only the 4 response-handler prefixes (and a small set of
-  // always-available admin buttons) are allowed through during the
-  // pause. Putting the gate at dispatch means every handler is
-  // covered automatically — no per-handler guard maintenance.
+  // Per alexanbv 2026-05-11: when a CC has been played and the unified
+  // Negate/Comms counter-window is open for the opponent, ALL other
+  // gameplay buttons are locked until the responder counters or lets the
+  // CC resolve. Only the counter-response prefixes (and a small set of
+  // always-available admin buttons) are allowed through during the pause.
+  // Putting the gate at dispatch means every handler is covered
+  // automatically — no per-handler guard maintenance. Migrated to the new
+  // window's game.ccCounterWindow state 2026-06-18 (was pendingNegation /
+  // pendingCommDisruptionPrompt).
   const _CC_RESPONSE_PREFIXES = new Set([
-    'negation_play_',
-    'negation_let_resolve_',
-    'comm_disruption_play_',
-    'comm_disruption_skip_',
+    'cc_counter_negate_',
+    'cc_counter_comms_',
+    'cc_counter_pass_',
   ]);
   const _ALWAYS_ALLOWED_PREFIXES = new Set([
     // Admin / out-of-band actions that must still work even when paused
@@ -4914,16 +4914,9 @@ client.on('interactionCreate', async (interaction) => {
     try {
       const _gateGameId = resolveGameIdForLock(interaction);
       const _gateGame = _gateGameId ? getGame(_gateGameId) : null;
-      if (_gateGame?.pendingNegation) {
+      if (_gateGame?.ccCounterWindow) {
         await interaction.followUp({
-          content: '⏸️ Waiting for opponent to resolve **Negation** response (counter or let resolve). All other actions are paused.',
-          ephemeral: true,
-        }).catch(discordCatch);
-        return;
-      }
-      if (_gateGame?.pendingCommDisruptionPrompt) {
-        await interaction.followUp({
-          content: '⏸️ Waiting for opponent to resolve **Comm Disruption** prompt. All other actions are paused.',
+          content: '⏸️ Waiting for opponent to respond to a Command Card (counter it or let it resolve). All other actions are paused.',
           ephemeral: true,
         }).catch(discordCatch);
         return;

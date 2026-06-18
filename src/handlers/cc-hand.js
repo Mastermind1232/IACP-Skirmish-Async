@@ -19,7 +19,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
-import { setPendingNegation, updatePendingNegation, clearPendingNegation, setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingCommDisruptionPrompt, clearPendingCommDisruptionPrompt, setPendingIKnowEverything, clearPendingIKnowEverything, setPendingBELReorder } from '../game/interrupts.js';
+import { setPendingCcChoice, clearPendingCcChoice, clearPendingCelebration, setPendingCcConfirmation, clearPendingCcConfirmation, setPendingCcSpaceChoice, clearPendingCcSpaceChoice, setPendingCcAttachment, clearPendingCcAttachment, setPendingIllegalCcPlay, clearPendingIllegalCcPlay, setPendingIKnowEverything, clearPendingIKnowEverything, setPendingBELReorder } from '../game/interrupts.js';
 import { normalizeSquadInput } from '../game/validation.js';
 import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -238,28 +238,9 @@ function recordCcOnCombatStack(game, playerNum, card) {
 }
 
 /**
- * Slice 5.7: mark the most-recently-played CC as canceled so downstream
- * effect-firing code skips it. Also tags game.canceledCcs[card] for
- * out-of-combat consumers (legacy promptCommDisruption + Negation paths).
- *
- * Per destruct 2026-05-05: cancellation suppresses ALL effects of the
- * canceled CC including "when discarded" triggers.
- */
-function markTopCcCanceled(game, card) {
-  const cbt = game?.combat || game?.pendingCombat;
-  const stack = cbt?.ccPlayStack;
-  if (Array.isArray(stack) && stack.length > 0) {
-    const top = stack[stack.length - 1];
-    if (top && top.ccName === card) top.canceled = true;
-  }
-  game.canceledCcs = game.canceledCcs || {};
-  game.canceledCcs[card] = true;
-}
-
-/**
- * Slice 5.7: read whether a card's most recent play was canceled. Used by
- * handleNegationLetResolve to skip resolveAbility when CD already canceled
- * the same card (dual-prompt race fix).
+ * Read whether a card's most recent play was canceled. (Defensive guard kept
+ * in the deferred-resolve path; game.canceledCcs is no longer written by the
+ * deleted old window, so this is effectively always false now.)
  */
 function isCcCanceled(game, card) {
   return Boolean(game?.canceledCcs?.[card]);
@@ -271,101 +252,12 @@ function clearCcCanceled(game, card) {
 }
 
 /**
- * Slice 5.6 (destruct 2026-05-05 — counter-on-counter recursion):
- * undo a top-of-stack cancel for `card`. Used when a counter-Negation
- * cancels the Negation that targeted `card`, restoring the original
- * play's effects. Walks the stack from top to find the most recent
- * play of `card` and clears its canceled flag; also clears the global
- * canceledCcs marker.
- */
-function unmarkTopCcCanceled(game, card) {
-  const cbt = game?.combat || game?.pendingCombat;
-  const stack = cbt?.ccPlayStack;
-  if (Array.isArray(stack)) {
-    for (let i = stack.length - 1; i >= 0; i--) {
-      if (stack[i].ccName === card && stack[i].canceled) {
-        stack[i].canceled = false;
-        break;
-      }
-    }
-  }
-  if (game?.canceledCcs) delete game.canceledCcs[card];
-}
-
-/**
- * C14: After a CC is played, check if opponent has Comm Disruption in hand
- * and prompt them to play it reactively.
- * @param {object} game - Game state
- * @param {string} gameId - Game ID
- * @param {number} playerNum - Player who just played a CC
- * @param {string} card - Name of the CC that was just played
- * @param {object} client - Discord client
- * @param {Function} logGameAction
- * @param {Function} saveGames
- */
-/**
- * Optional `combatSnapshot` arg (slice 5.7 / #77 follow-up): a deep clone of
- * `game.pendingCombat` taken BEFORE the CC's effects mutated combat state.
- * If the opponent plays CD, handleCommDisruptionPlay restores from this
- * snapshot to revert combat-flag mutations (Brace, Tools for the Job, Aim,
- * etc.). Other game state (VP, drawn cards) is not snapshotted — those
- * cost > 0 effects survive cancellation as a known gap.
- */
-async function promptCommDisruption(game, gameId, playerNum, card, client, logGameAction, saveGames, combatSnapshot) {
-  // Don't prompt for Comm Disruption itself or Negation
-  if (card === 'Comm Disruption' || card === 'Negation') return;
-  const oppNum = opponentPlayerNum(playerNum);
-  // Slice 5.5 (hidden info, destruct 2026-05-05): we used to gate the prompt
-  // on `oppHand.includes('Comm Disruption')`, which leaked hand contents —
-  // the absence of a prompt told the playing player their opponent did NOT
-  // hold CD. Per CRR hidden-info rules the opponent must always be given
-  // the option to respond. The click handler already validates hand
-  // contents at click time ("Comm Disruption is no longer in your hand").
-  // SPY-count and cost gates remain — those use visible board info.
-  const dcEffectsData = getDcEffects() || {};
-  const oppDcList = (oppNum === 1 ? game.p1DcList : game.p2DcList) || [];
-  const spyCount = oppDcList.filter((dc) => {
-    if (!dc || dc.defeated) return false;
-    const kws = (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
-    return kws.includes('SPY');
-  }).length;
-  if (spyCount <= 0) return;
-  // Get the played card's cost
-  const getCcEffect = (await import('../data-loader.js')).getCcEffect;
-  const playedEffect = getCcEffect(card);
-  const playedCost = typeof playedEffect?.cost === 'number' ? playedEffect.cost : 0;
-  if (playedCost > spyCount) return; // can't cancel — cost too high
-  // Prompt the opponent in their hand channel
-  const oppHandId = getHandChannelId(game, oppNum);
-  if (!oppHandId) return;
-  try {
-    const oppHandChannel = await fetchGameChannel(client, oppHandId);
-    const oppId = getPlayerId(game, oppNum);
-    setPendingCommDisruptionPrompt(game, { targetPlayerNum: oppNum, playedCard: card, playedBy: playerNum, gameId, combatSnapshot: combatSnapshot ?? null });
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`comm_disruption_play_${gameId}`).setLabel('Play Comm Disruption').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`comm_disruption_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-    );
-    await withDiscordRetry(() => oppHandChannel.send(sanitizeMentions({
-      content: `<@${oppId}> Your opponent played **${card}** (cost ${playedCost}). You have **${spyCount}** friendly SPY group${spyCount !== 1 ? 's' : ''}. Play **Comm Disruption** to cancel it?`,
-      components: [row],
-      allowedMentions: { users: [oppId] },
-    })));
-    saveGames(game.gameId);
-  } catch (err) {
-    // Non-fatal: if we can't prompt, the game continues
-    console.error('[Comm Disruption] Failed to prompt opponent:', err.message);
-  }
-}
-
-/**
  * Unified "a CC was played" trigger subroutine (alexanbv 2026-06-14): fires
  * every on-CC-play ability for the player who just played, regardless of the
  * card's cost. Previously these fired only on the cost>0 path, so a cost-0 CC
  * never triggered Kallus Hunt Dissent / Blaise Adapt — this consolidates them
- * into one call used by both paths. (The Negation/Comm-Disruption counter-
- * window is the other half of the CC-play subroutine — see the cost-gated
- * Negation block + promptCommDisruption.)
+ * into one call used by every play path. (The opponent's Negate/Comms counter-
+ * window is the other half of the CC-play subroutine — see openCcCounterWindow.)
  * @param {object} game
  * @param {number} playerNum  the player who played the CC
  * @param {object} deps  { client, logGameAction, dcMessageMeta, saveGames }
@@ -1044,105 +936,6 @@ export async function handleCcCancelPlay(interaction, ctx) {
 }
 
 /**
- * C14: Handler for "Play Comm Disruption" button.
- * Plays Comm Disruption from the opponent's hand to cancel the played card.
- */
-export async function handleCommDisruptionPlay(interaction, ctx) {
-  const { getGame, getCcEffect, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, saveGames, client } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'comm_disruption_play_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const pending = game.pendingCommDisruptionPrompt;
-  if (!pending) {
-    await interaction.followUp({ content: 'No Comm Disruption prompt pending.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const { targetPlayerNum, playedCard, playedBy } = pending;
-  if (!await requirePlayer(interaction, game, interaction.user.id, targetPlayerNum, canActAsPlayer, 'Only the prompted player can respond.')) return;
-  clearPendingCommDisruptionPrompt(game);
-
-  // Remove Comm Disruption from hand and add to discard
-  const handKey = ccHandKey(targetPlayerNum);
-  const discardKey = ccDiscardKey(targetPlayerNum);
-  const hand = (game[handKey] || []).slice();
-  const cdIdx = hand.indexOf('Comm Disruption');
-  if (cdIdx < 0) {
-    await interaction.followUp({ content: 'Comm Disruption is no longer in your hand.', ephemeral: true }).catch(discordCatch);
-    saveGames(game.gameId);
-    return;
-  }
-  // Slice 5.8 (destruct 2026-05-05, "SPY count locked at play time"):
-  // re-validate SPY count + cost AT CLICK TIME, not at prompt-post time.
-  // SPYs may have died between prompt and click — the rule is that the
-  // CD player's count is whatever it is the moment they decide to play
-  // it, then locked through resolution.
-  const dcEffectsData = getDcEffects() || {};
-  const cdDcList = (targetPlayerNum === 1 ? game.p1DcList : game.p2DcList) || [];
-  const cdSpyCount = cdDcList.filter((dc) => {
-    if (!dc || dc.defeated) return false;
-    const kws = (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase());
-    return kws.includes('SPY');
-  }).length;
-  const playedEffectAtClick = getCcEffect ? getCcEffect(playedCard) : null;
-  const playedCostAtClick = typeof playedEffectAtClick?.cost === 'number' ? playedEffectAtClick.cost : 0;
-  if (cdSpyCount <= 0 || playedCostAtClick > cdSpyCount) {
-    await interaction.followUp({ content: `Cannot play Comm Disruption: cost ${playedCostAtClick} exceeds your **${cdSpyCount}** friendly SPY group${cdSpyCount === 1 ? '' : 's'}.`, ephemeral: true }).catch(discordCatch);
-    saveGames(game.gameId);
-    return;
-  }
-  hand.splice(cdIdx, 1);
-  game[handKey] = hand;
-  game[discardKey] = (game[discardKey] || []).concat('Comm Disruption');
-
-  // Slice 5.7: mark the canceled CC so downstream code (Negation
-  // let-resolve, applyAbilityResult callers, "when discarded" hooks)
-  // can skip ALL its effects per destruct 2026-05-05.
-  markTopCcCanceled(game, playedCard);
-  // Slice #77: revert combat-flag mutations baked in by resolveAbility
-  // before the CD prompt opened. The snapshot was taken pre-resolve in
-  // handleCcConfirmPlay's cost > 0 path. Brace's added die, Tools for
-  // the Job's flag, Aim's bonus etc. live on pendingCombat — restoring
-  // the pre-resolve snapshot reverts them. VP / drawn-card mutations
-  // are NOT reverted (known gap).
-  if (pending.combatSnapshot && game.pendingCombat) {
-    game.pendingCombat = pending.combatSnapshot;
-  }
-  // Dual-prompt race fix: a cost-0 CC can be targeted by both Negation
-  // and Comm Disruption simultaneously. CD canceling means Negation must
-  // not subsequently resolveAbility on let-resolve. Clear pendingNegation
-  // here; handleNegationLetResolve also reads isCcCanceled as a backstop.
-  if (game.pendingNegation && game.pendingNegation.card === playedCard) {
-    clearPendingNegation(game);
-  }
-  // [Smuggling Compartment] — if a hand-affecting CC had deferred its effect past
-  // this CD window, the cancel means it never resolves; drop the pending effect.
-  if (game.pendingCcEffect && game.pendingCcEffect.card === playedCard) delete game.pendingCcEffect;
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-  await refreshHandAndDiscard(game, targetPlayerNum, interaction.client, ctx);
-  await logGameAction(game, interaction.client, `**Comm Disruption** — <@${interaction.user.id}> cancelled **${playedCard}** (locked at ${cdSpyCount} SPY)! Discard that card and cancel ALL its effects (including any "when discarded" triggers).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  saveGames(game.gameId);
-}
-
-/**
- * C14: Handler for "Skip" Comm Disruption button.
- */
-export async function handleCommDisruptionSkip(interaction, ctx) {
-  const { getGame, saveGames } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'comm_disruption_skip_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  clearPendingCommDisruptionPrompt(game);
-  await interaction.message.edit({ components: [] }).catch(discordCatch);
-  // [Smuggling Compartment] — a hand-affecting CC deferred its effect past this
-  // CD window; now that CD was skipped, offer SC then resolve the effect.
-  if (game.pendingCcEffect) {
-    await _offerScThenResolveDeferredCc(game, ctx, interaction.client);
-    return;
-  }
-  saveGames(game.gameId);
-}
-
-/**
  * Resolve a CC play: remove from hand, add to discard, update messages, log. Used by normal play and illegal_cc_ignore.
  * @param {object} game - Game state
  * @param {number} playerNum - 1 or 2
@@ -1463,206 +1256,6 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
   saveGames(game.gameId);
 }
 
-/** @param {import('discord.js').ButtonInteraction} interaction — "Play Negation" to cancel opponent's cost-0 CC. */
-export async function handleNegationPlay(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'negation_play_');
-  const game = getGame(gameId);
-  if (!game || !game.pendingNegation) {
-    await interaction.followUp({ content: 'No pending play to negate.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const { playedBy, card, waitingMsgId, handChannelId, counterTargetCard, counterTargetPlayedBy } = game.pendingNegation;
-  const oppNum = opponentPlayerNum(playedBy);
-  // Slice 5.6: detect counter-Negation. If this pending was set up as a
-  // counter against opponent's Negation, the player clicking is the
-  // ORIGINAL playedBy (counterTargetPlayedBy) — they're countering the
-  // counter. Effect: cancel the Negation (which was canceling
-  // counterTargetCard), uncancel counterTargetCard, resolve it normally.
-  const _isCounterNegation = card === 'Negation' && counterTargetCard != null;
-  if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can play Negation.')) return;
-  const handKey = ccHandKey(oppNum);
-  const discardKey = ccDiscardKey(oppNum);
-  const hand = game[handKey] || [];
-  const idx = hand.indexOf('Negation');
-  if (idx < 0) {
-    await interaction.followUp({ content: "You don't have Negation in your hand.", ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  hand.splice(idx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Negation');
-  clearPendingNegation(game);
-  // Slice 5.6: counter-Negation — the previously-played Negation gets
-  // canceled, restoring the originally-targeted CC. Resolve that CC's
-  // effect now via resolveAbility.
-  if (_isCounterNegation && counterTargetCard) {
-    unmarkTopCcCanceled(game, counterTargetCard);
-    await refreshHandAndDiscard(game, oppNum, client, ctx);
-    await interaction.message.edit({ content: `**Counter-Negation** — your **Negation** was countered. **${counterTargetCard}** resolves.`, components: [] }).catch(discordCatch);
-    const _negPlayerId2 = getPlayerId(game, oppNum);
-    await logGameAction(game, client, `<@${_negPlayerId2}> played **Negation** to counter — **${counterTargetCard}** resolves.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [_negPlayerId2] } });
-    if (resolveAbility) {
-      const effectData = getCcEffect ? getCcEffect(counterTargetCard) : null;
-      const abilityId = effectData?.abilityId ?? counterTargetCard;
-      const result = resolveAbility(abilityId, { game, playerNum: counterTargetPlayedBy, cardName: counterTargetCard, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
-      await applyAbilityResult(result, { game, playerNum: counterTargetPlayedBy, client, ctx });
-    }
-    // Counter-Negation resolved a CC that may have granted VP. Re-check
-    // win conditions (deferred while negation prompt was pending).
-    if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-    saveGames(game.gameId);
-    return;
-  }
-  // Slice 5.7: mark the canceled CC so downstream effect-firing code
-  // skips ALL its effects (including "when discarded" triggers) per
-  // destruct 2026-05-05.
-  markTopCcCanceled(game, card);
-  // Dual-prompt race fix: clear any pending CD prompt for the same card.
-  if (game.pendingCommDisruptionPrompt && game.pendingCommDisruptionPrompt.playedCard === card) {
-    clearPendingCommDisruptionPrompt(game);
-  }
-  await refreshHandAndDiscard(game, oppNum, client, ctx);
-  await interaction.message.edit({ content: `**Negation** cancelled **${card}**.`, components: [] }).catch(discordCatch);
-  const negPlayerId = getPlayerId(game, oppNum);
-  await logGameAction(game, client, `<@${negPlayerId}> played **Negation** — cancelled **${card}** (all effects suppressed).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [negPlayerId] } });
-  // Notify the player whose card was cancelled
-  if (waitingMsgId && handChannelId) {
-    const playingHandChannel = await fetchGameChannel(client, handChannelId);
-    if (playingHandChannel) {
-      const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
-      const playedById = getPlayerId(game, playedBy);
-      if (waitingMsg) await waitingMsg.edit({ content: `❌ Your **${card}** was cancelled by your opponent's **Negation**. <@${playedById}>` }).catch(discordCatch);
-    }
-  }
-  // Slice 5.6 (destruct 2026-05-05 — counter-on-counter recursion):
-  // Negation itself is a cost-0 Command card. Per CRR + destruct, the
-  // original player may respond to the opponent's Negation with their
-  // own Negation (a counter-Negation), which would cancel the
-  // counter-CC and restore the original card's effects.
-  //
-  // Re-call promptForNegation targeting the ORIGINAL player (playedBy)
-  // with `card='Negation'` so the existing setPendingNegation /
-  // handleNegationPlay flow handles it. The counter-Negation context
-  // is captured in pendingNegation.counterTargetCard so handleNegationPlay
-  // can detect this is a counter-counter case and uncancel the
-  // originally-cancelled CC instead of just marking 'Negation' canceled.
-  // Limit depth to 1: if the counter-Negation gets countered itself,
-  // the next level falls through (rare in practice; tracked by
-  // counterDepth on pendingNegation).
-  const _origHandKey = ccHandKey(playedBy);
-  const _origHand = game[_origHandKey] || [];
-  if (_origHand.includes('Negation') || true) {
-    // Hidden-info compliance: prompt regardless of hand (player may have
-    // received a card via reaction etc.). Consistent with promptCommDisruption.
-    setPendingNegation(game, {
-      playedBy: oppNum,
-      card: 'Negation',
-      fromDc: false,
-      msgId: null,
-      wasAttachment: false,
-      handChannelId: null,
-      counterTargetCard: card,
-      counterTargetPlayedBy: playedBy,
-    });
-    try {
-      const _origHandId = getHandChannelId(game, playedBy);
-      if (_origHandId) {
-        const _origHandChannel = await fetchGameChannel(client, _origHandId);
-        const _origPlayerId = getPlayerId(game, playedBy);
-        await _origHandChannel.send({
-          content: `<@${_origPlayerId}> Opponent played **Negation** to cancel your **${card}**. You may play your own **Negation** to counter and restore your card.`,
-          components: [ctx.getNegationResponseButtons ? ctx.getNegationResponseButtons(game.gameId) : new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`negation_play_${game.gameId}`).setLabel('Play Negation (Counter)').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`negation_let_resolve_${game.gameId}`).setLabel('Let it resolve').setStyle(ButtonStyle.Secondary),
-          )],
-          allowedMentions: { users: [_origPlayerId] },
-        }).catch(discordCatch);
-      }
-    } catch (_e) { /* non-fatal: prompt failure leaves CC canceled */ }
-  }
-  saveGames(game.gameId);
-}
-
-/** @param {import('discord.js').ButtonInteraction} interaction — "Let it resolve" for pending cost-0 CC. */
-export async function handleNegationLetResolve(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, saveGames, resolveAbility, dcMessageMeta, dcHealthState, updateDcActionsMessage, updateAttachmentMessageForDc, isCcAttachment, ensureMovementBankMessage, updateMovementBankMessage } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'negation_let_resolve_');
-  const game = getGame(gameId);
-  if (!game || !game.pendingNegation) {
-    await interaction.followUp({ content: 'No pending play to resolve.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const { playedBy, card, fromDc, msgId, wasAttachment, waitingMsgId, handChannelId, counterTargetCard } = game.pendingNegation;
-  const oppNum = opponentPlayerNum(playedBy);
-  if (!await requirePlayer(interaction, game, interaction.user.id, oppNum, canActAsPlayer, 'Only the opponent can choose to let it resolve.')) return;
-  clearPendingNegation(game);
-  // Slice 5.6: counter-Negation let-resolve. The opponent's Negation
-  // (canceling counterTargetCard) resolves uncountered → counterTargetCard
-  // stays canceled. No resolveAbility needed — the cancel was already
-  // applied by the first handleNegationPlay; we just confirm.
-  if (card === 'Negation' && counterTargetCard) {
-    await interaction.message.edit({ content: `**${counterTargetCard}** stays cancelled — Negation was not countered.`, components: [] }).catch(discordCatch);
-    saveGames(game.gameId);
-    return;
-  }
-  await interaction.message.edit({ content: `**${card}** resolves.`, components: [] }).catch(discordCatch);
-  if (fromDc && msgId && wasAttachment && updateAttachmentMessageForDc && isCcAttachment?.(card)) {
-    const attachKey = ccAttachmentsKey(playedBy);
-    const discardKey = ccDiscardKey(playedBy);
-    const discard = game[discardKey] || [];
-    const idx = discard.indexOf(card);
-    if (idx >= 0) {
-      discard.splice(idx, 1);
-      game[discardKey] = discard;
-    }
-    game[attachKey] = game[attachKey] || {};
-    if (!Array.isArray(game[attachKey][msgId])) game[attachKey][msgId] = [];
-    game[attachKey][msgId].push(card);
-    await updateAttachmentMessageForDc(game, playedBy, msgId, client);
-  }
-  // Slice 5.7: skip resolveAbility if a parallel counter (CD) already
-  // canceled this card. Without this, the dual-prompt race lets a
-  // canceled CC's effects fire when Negation's "let resolve" is clicked
-  // after CD already canceled.
-  if (resolveAbility && !isCcCanceled(game, card)) {
-    const effectData = getCcEffect(card);
-    const abilityId = effectData?.abilityId ?? card;
-    // [Smuggling Compartment] — for hand-affecting CCs, the target may exhaust SC
-    // to set aside cards AFTER the Negate window resolves, before the effect.
-    const _scTarget = opponentPlayerNum(playedBy);
-    if (SC_HAND_CCS.has(card) && !game.pendingCcEffect && scReactionAvailable(game, _scTarget)) {
-      game.pendingCcEffect = { abilityId, card, playedBy, msgId, fromDc, scProtect: true };
-      const offered = await offerScSetAside(game, _scTarget, client, {
-        idPrefix: 'sc_cc',
-        promptText: `Your opponent played **${card}**, which affects your Command hand. **[Smuggling Compartment]** — you may exhaust it to set aside cards first (returned at the start of your next activation or the next phase).`,
-      });
-      if (offered) { saveGames(game.gameId); return; }
-      delete game.pendingCcEffect;
-    }
-    const result = resolveAbility(abilityId, { game, playerNum: playedBy, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId });
-    await applyAbilityResult(result, { game, playerNum: playedBy, msgId: fromDc ? msgId : undefined, client, ctx });
-  } else if (isCcCanceled(game, card)) {
-    await logGameAction(game, client, `**${card}** had already been cancelled by another counter — effects suppressed.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
-  }
-  clearCcCanceled(game, card);
-  // Notify the player whose card resolved
-  if (waitingMsgId && handChannelId) {
-    const playingHandChannel = await fetchGameChannel(client, handChannelId);
-    if (playingHandChannel) {
-      const waitingMsg = await playingHandChannel.messages.fetch(waitingMsgId).catch(() => null);
-      const playedById = getPlayerId(game, playedBy);
-      if (waitingMsg) await waitingMsg.edit({ content: `✅ **${card}** resolved! <@${playedById}>` }).catch(discordCatch);
-    }
-  }
-  // Re-check win conditions: the resolved CC may have granted VP that
-  // would end the game (was deferred while the negation prompt was
-  // pending). Per alexanbv 2026-05-11.
-  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-  saveGames(game.gameId);
-}
-
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Celebration" to gain 4 VP. */
 export async function handleCelebrationPlay(interaction, ctx) {
   const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client, saveGames } = ctx;
@@ -1770,7 +1363,7 @@ export async function handleExcavationPlay(interaction, ctx) {
  * and handleIllegalCcIgnore (when pendingIllegalCcPlay.excavationPlay).
  */
 async function _commitExcavationPlay(game, ctx, interaction, params) {
-  const { getCcEffect, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, getNegationResponseButtons, client, saveGames } = ctx;
+  const { getCcEffect, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, client, saveGames } = ctx;
   const { gameId, card, playerNum, sourcePN, sourceDiscardKey } = params;
   // Re-validate card still in source discard (state may have shifted
   // between prompt and click — Mastery, redraws, etc).

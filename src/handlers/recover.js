@@ -426,7 +426,6 @@ export async function runRecovery(game, gameId, ctx) {
   // guards are the single source of truth for "is this recovery relevant?"
   await tryRecover('bothSquadsReady',     () => recoverBothSquadsReady(game, gameId, ctx));
   await tryRecover('pendingCombat',       () => recoverPendingCombat(game, gameId, ctx));
-  await tryRecover('pendingNegation',     () => recoverPendingNegation(game, gameId, ctx));
   await tryRecover('setupAttachment',     () => recoverSetupAttachmentPhase(game, gameId, ctx));
   await tryRecover('pendingEndTurn',      () => recoverPendingEndTurn(game, gameId, ctx));
   await tryRecover('endOfRoundWhoseTurn', () => recoverEndOfRoundWhoseTurn(game, gameId, ctx));
@@ -575,26 +574,6 @@ async function recoverPendingCombat(game, gameId, ctx) {
     content: '**[Recover]** Combat is in progress. If stuck, check for surge spending, token usage, or other pending decisions in this thread.',
   });
   return 'Sent combat recovery guidance';
-}
-
-// ─── Step 5: Recover pendingNegation ──────────────────────────────────────────
-
-async function recoverPendingNegation(game, gameId, ctx) {
-  if (game.phase !== 'round_active') return null;
-  const { client, getNegationResponseButtons } = ctx;
-  if (!game.pendingNegation) return null;
-
-  const oppNum = opponentPlayerNum(game.pendingNegation.playedBy);
-  const handId = getHandChannelId(game, oppNum);
-  if (!handId) return null;
-
-  const handCh = await fetchGameChannel(client, handId);
-  const buttons = getNegationResponseButtons(gameId);
-  await handCh.send({
-    content: `**[Recover]** Your opponent played a Command Card. Respond with Negation or let it resolve:`,
-    components: [buttons],
-  });
-  return 'Re-sent negation response buttons';
 }
 
 // ─── Step 6: Recover setupAttachmentPhase ─────────────────────────────────────

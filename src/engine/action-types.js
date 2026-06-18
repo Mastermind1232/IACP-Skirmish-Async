@@ -91,10 +91,6 @@ export const ACTION_TYPES = {
   OB_SPACE: 'ob_space',
   BOMB_DROP_SPACE: 'bomb_drop_space',
 
-  // Comm Disruption prompt
-  COMM_DISRUPTION_PLAY: 'comm_disruption_play',
-  COMM_DISRUPTION_SKIP: 'comm_disruption_skip',
-
   // Weapon choice pending states
   ARSENAL_PICK: 'arsenal_pick',
   EE3_PICK_DIE: 'ee3_pick_die',
@@ -250,12 +246,6 @@ export function buildCustomId(type, params = {}) {
       return `ob_space_${gameId}_${msgId}_${params.space}`;
     case ACTION_TYPES.BOMB_DROP_SPACE:
       return `bomb_drop_space_${gameId}_${msgId}_${params.space}`;
-
-    // Comm Disruption prompt
-    case ACTION_TYPES.COMM_DISRUPTION_PLAY:
-      return `comm_disruption_play_${gameId}`;
-    case ACTION_TYPES.COMM_DISRUPTION_SKIP:
-      return `comm_disruption_skip_${gameId}`;
 
     // Weapon choice pending states
     case ACTION_TYPES.ARSENAL_PICK:
