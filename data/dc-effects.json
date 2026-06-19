@@ -2133,7 +2133,8 @@
       ],
       "surgeAbilities": [
         "damage 2",
-        "accuracy 2"
+        "accuracy 2",
+        "open_minded"
       ],
       "attachment": false,
       "elite": true,

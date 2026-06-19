@@ -9609,6 +9609,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;
       if (mod.surgeConcussiveBolt) combat.surgeConcussiveBolt = true;
+      if (mod.surgeOpenMinded) combat.surgeOpenMinded = true;
       // Shrapnel (Drokkatta): mark for picker — Blast 2 vs Splash. The
       // gate at the "Done" transition (sendReadyToResolveRolls call)
       // posts the choice picker if shrapnelChoicePending is set.

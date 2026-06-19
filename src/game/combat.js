@@ -215,6 +215,7 @@ export const SURGE_LABELS = {
   '+1 hit': '+1 Damage', '+2 hits': '+2 Damage', '+1 hit, stun': '+1 Damage, Stun', '+1 hit, pierce 1': '+1 Damage, Pierce 1',
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Damage, Hide',
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
+  'open_minded': 'Open-Minded (1 MP or Power Token)',
   'utinni_vp_1': 'Utinni! (+1 VP)',
   'kd_redraw': 'Re-draw Knowledge and Defense (from discard)',
   'tn_redraw': 'Re-draw Targeting Network (from discard)',
@@ -296,6 +297,8 @@ export function parseSurgeEffect(key) {
   if (k === 'agitate') { out.surgeAgitate = true; return out; }
   // Fell Swoop (Davith Elso): after attack, become Hidden, gain 2 MP, free attack. Limit once per round.
   if (k === 'fell_swoop') { out.surgeFellSwoop = true; return out; }
+  // Open-Minded (Del Meeko): special surge — after the attack resolves, gain 1 MP or 1 Power Token.
+  if (k === 'open_minded') { out.surgeOpenMinded = true; return out; }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
   if (k === 'mastery') { out.surgeMastery = true; return out; }
   // Interrogate (Agent Blaise): look at opponent's hand, choose a CC; may discard equal/greater cost CC to force discard.

@@ -183,8 +183,9 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   if (_atkPassives.includes('Locked and Loaded') && combat.attackerFigureKey) {
     enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'locked_and_loaded', label: 'Locked and Loaded: gain 2 Power Tokens' });
   }
-  // Open-Minded (Del Meeko): gain 1 MP OR 1 Power Token (player choice).
-  if (_atkPassives.includes('Open-Minded') && combat.attackerMsgId && combat.attackerFigureKey) {
+  // Open-Minded (Del Meeko): a SPECIAL SURGE (not an automatic after-resolves passive) —
+  // fires ONLY when a surge was spent on it (combat.surgeOpenMinded). Gain 1 MP OR 1 Power Token.
+  if (combat.surgeOpenMinded && combat.attackerMsgId && combat.attackerFigureKey) {
     enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'open_minded', label: 'Open-Minded: 1 MP or 1 Power Token' });
   }
   // Vader's Finest (Attack+Move special action): "after the attack
