@@ -92,6 +92,25 @@ function _ccSpyGroupCount(game, pn) {
  * fires resolved non-counter effects and routes cancelled cards to the
  * when-discarded pipeline. NOT yet wired into handleCcPlaySelect.
  */
+// Registry of custom post-counter-window resolvers, keyed by the play
+// descriptor's `customResolve` tag. A card whose effect can't be expressed as a
+// plain resolveAbility (Celebration's VP gain, WHEN_DEFEATED CCs' bespoke
+// pickers, mid-combat reroll reactions) registers a continuation here; it runs
+// from _resolveCcCounterWindow ONLY when the card survives the counter-window.
+// Signature: (game, entry, ctx, client) => Promise<void>. Keeps cross-file
+// continuations decoupled (no circular imports), mirroring registerCombatGateResume.
+const _ccCustomResolvers = {};
+export function registerCcCustomResolve(kind, fn) { _ccCustomResolvers[kind] = fn; }
+
+// Celebration: "after a unique hostile figure is defeated, gain 4 VP." Now
+// counterable like any CC — the VP gain lands here only if it survives.
+registerCcCustomResolve('celebration_vp', async (game, entry, ctx, client) => {
+  awardObjectiveVp(game, entry.playedBy, 4);
+  const pid = getPlayerId(game, entry.playedBy);
+  await ctx.logGameAction?.(game, client, `<@${pid}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [pid] } });
+  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+});
+
 export async function openCcCounterWindow(game, gameId, play, ctx, client) {
   const spyForPlay = (play.card === COMM_DISRUPTION) ? _ccSpyGroupCount(game, play.playedBy) : undefined;
   openCounterWindow(game, { ...play, spyCount: spyForPlay });
@@ -186,6 +205,16 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
       continue;
     }
     if (isCounter) continue;
+    // Custom-resolve cards (Celebration, WHEN_DEFEATED CCs, mid-combat reroll
+    // reactions): their effect runs via a bespoke continuation registered by the
+    // originating handler, NOT the generic resolveAbility path. The continuation
+    // fires ONLY here (resolved, uncancelled) — the cancelled branch above skips
+    // it, so a countered card has no effect. alexanbv 2026-06-19.
+    if (entry.customResolve) {
+      const fn = _ccCustomResolvers[entry.customResolve];
+      if (fn) await fn(game, entry, ctx, client);
+      continue;
+    }
     // Resolved card → run the Smuggling Compartment step (if it interacts) then
     // the effect, reusing the deferred-effect path (handles requiresChoice /
     // PowerToken / Space prompts too). The played card is already in discard.
@@ -1285,15 +1314,14 @@ export async function handleCelebrationPlay(interaction, ctx) {
   }
   hand.splice(idx, 1);
   game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Celebration');
-  awardObjectiveVp(game, attackerPlayerNum, 4);
+  game[discardKey] = (game[discardKey] || []).concat('Celebration');
   clearPendingCelebration(game);
   await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
-  await interaction.message.edit({ content: `**Celebration** — +4 VP.`, components: [] }).catch(discordCatch);
-  const celPlayerId = getPlayerId(game, attackerPlayerNum);
-  await logGameAction(game, client, `<@${celPlayerId}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [celPlayerId] } });
-  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
+  await interaction.message.edit({ content: `**Celebration** — played.`, components: [] }).catch(discordCatch);
+  // On-play triggers, then the unified counter-window: Celebration is counterable;
+  // the +4 VP lands via the 'celebration_vp' resolver only if not cancelled.
+  await runCcPlayTriggers(game, attackerPlayerNum, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+  await openCcCounterWindow(game, game.gameId, { card: 'Celebration', cost: 0, playedBy: attackerPlayerNum, abilityId: 'Celebration', customResolve: 'celebration_vp' }, ctx, client);
   saveGames(game.gameId);
 }
 
