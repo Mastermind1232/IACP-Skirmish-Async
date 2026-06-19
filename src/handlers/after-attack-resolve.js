@@ -166,11 +166,15 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
-  // Brutal Cleave (Gaarkhan): "after you resolve an attack during your
-  // activation, you MAY suffer 1 Strain → free attack (1 red + 1 yellow) at a
-  // DIFFERENT figure/object. Limit once per activation." Offered as a player
-  // choice in the after_resolve window; fireBrutalCleave resolves the effect.
-  if (_atkIds.includes('brutal_cleave') && combat.attackerMsgId
+  // Brutal Cleave (Gaarkhan): "after you resolve an attack DURING YOUR
+  // ACTIVATION, you MAY suffer 1 Strain → free attack (1 red + 1 yellow) at a
+  // DIFFERENT figure/object. Limit once per activation." Gated on it being the
+  // attacker's OWN activation (currentActivationTurnPlayerId) — NOT a reaction /
+  // out-of-activation attack — and not already used this activation. Offered as
+  // a player choice in the after_resolve window; fireBrutalCleave resolves it.
+  const _bcOwnActivation = game?.currentActivationTurnPlayerId
+    && game.currentActivationTurnPlayerId === (combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id);
+  if (_atkIds.includes('brutal_cleave') && combat.attackerMsgId && _bcOwnActivation
       && !game?.roundFigureAbilityUsed?.[`brutalCleave_${combat.attackerFigureKey}`]) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
