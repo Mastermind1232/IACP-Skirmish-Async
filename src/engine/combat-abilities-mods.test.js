@@ -219,20 +219,28 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     assert.equal(find(at('attacker', noUpg, c, deps(eff)), 'rogue_one'), undefined);
   });
 
-  // ── FIX-2: Illicit Arms — requires SCUM Bib Fortuna + a CC in hand
-  it('illicit_arms: requires a SCUM Bib Fortuna friendly + a Command card in hand', () => {
-    const eff = { Atk: {}, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Scum' }, Def: {} };
+  // ── FIX-2: Illicit Arms — usable by ANY friendly figure; only restriction is
+  // the player's ARMY affiliation = Scum (alexanbv 2026-06-18). Gated on a Bib
+  // Fortuna (Illicit Arms) in play + a Scum army + a Command card in hand.
+  it('illicit_arms: Scum army + Bib Fortuna in play + a Command card (any attacking figure)', () => {
+    // Attacker figure (Atk) is non-Scum ("Any"); army primary affiliation is Scum.
+    const eff = { Atk: { affiliation: 'Any' }, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Scum' }, Def: {} };
     const g = game({
       figurePositions: { 1: { 'Atk-1-0': 'a1', 'Bib Fortuna-1-0': 'a2' }, 2: { 'Def-1-0': 'c3' } },
+      p1DcList: [{ dcName: 'Bib Fortuna' }, { dcName: 'Atk' }],
       player1CcHand: ['Tough Luck'],
     });
+    // Offered even though the attacking figure itself is not SCUM (any figure may use it).
     assert.equal(find(at('attacker', g, combat(), deps(eff)), 'illicit_arms').kind, 'interactive');
     // No CC in hand → not offered.
     const noCc = game({ ...g, player1CcHand: [] });
     assert.equal(find(at('attacker', noCc, combat(), deps(eff)), 'illicit_arms'), undefined);
-    // Non-SCUM affiliation → not offered.
-    const effImp = { Atk: {}, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Imperial' }, Def: {} };
+    // Non-Scum ARMY → not offered (the restriction is army affiliation, not the figure).
+    const effImp = { Atk: { affiliation: 'Imperial' }, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Imperial' }, Def: {} };
     assert.equal(find(at('attacker', g, combat(), deps(effImp)), 'illicit_arms'), undefined);
+    // Bib Fortuna not in play → not offered even in a Scum army.
+    const noBib = game({ ...g, figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3' } } });
+    assert.equal(find(at('attacker', noBib, combat(), deps(eff)), 'illicit_arms'), undefined);
   });
 
   // ── FIX-2: Zillo Block Boost — defender [Zillo Technique] + a CC in hand

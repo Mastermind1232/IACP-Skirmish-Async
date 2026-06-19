@@ -32,7 +32,7 @@ import { getEffectiveFigureSize } from '../game/board-helpers.js';
 import { opponentPlayerNum, getDcList, getCcHand } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { hasPendingModifiers } from './combat-pending-modifiers.js';
-import { isIllicitArmsEligibleFigure } from '../game/illicit-arms-helpers.js';
+import { figureHasIllicitArms, playerArmyAffiliationIsScum } from '../game/illicit-arms-helpers.js';
 
 // Two-timing model (alexanbv 2026-06-18): the GENERAL mods-window drain of
 // PENDING MODIFIERS. Any ability played at an earlier window (on_declare,
@@ -184,21 +184,25 @@ registerCombatAbility({
 // Illicit Arms (Bib Fortuna) [attacker] — FIX-2 spend-resource, DC ability. Card
 // text: "While a friendly figure is attacking, if your army's affiliation is
 // SCUM, you may discard 1 Command card from your hand to apply +1 Damage to the
-// attack results (once per attack)." A mods interactive gated on a friendly Bib
-// Fortuna carrying Illicit Arms + SCUM affiliation (isIllicitArmsEligibleFigure
-// folds both) AND a Command card in the attacker's hand to spend. Resolver
-// discards 1 CC → +1 Hit (COMBAT_RESOLVERS.illicit_arms). Clobbers the timing-
-// only catalog entry (same id) per the per-id last-write rule.
+// attack results (once per attack)." Usable by ANY friendly attacking figure —
+// the only restriction is the controlling player's ARMY affiliation = Scum (NOT
+// the attacking figure, nor Bib himself, being SCUM). Gated on: (a) a friendly
+// Bib Fortuna carrying Illicit Arms in play, (b) the attacker's army primary
+// affiliation is Scum, (c) a Command card in the attacker's hand to spend.
+// Resolver discards 1 CC → +1 Hit (COMBAT_RESOLVERS.illicit_arms). Clobbers the
+// timing-only catalog entry (same id) per the per-id last-write rule.
 export function illicitArmsEligible(game, combat, deps) {
   const pn = combat.attackerPlayerNum;
   if (!pn) return false;
   if ((getCcHand(game, pn) || []).length === 0) return false; // a CC to spend
   const friendly = game.figurePositions?.[pn] || {};
+  let bibPresent = false;
   for (const fk of Object.keys(friendly)) {
-    const e = eff(deps, dcNameFromFigureKey(fk));
-    if (isIllicitArmsEligibleFigure(e)) return true; // carries Illicit Arms + SCUM
+    if (figureHasIllicitArms(eff(deps, dcNameFromFigureKey(fk)))) { bibPresent = true; break; }
   }
-  return false;
+  if (!bibPresent) return false; // Bib Fortuna (Illicit Arms) must be in play
+  const dcEffects = (D(deps, 'getDcEffects', _getDcEffects))() || {};
+  return playerArmyAffiliationIsScum(getDcList(game, pn) || [], dcEffects);
 }
 registerCombatAbility({
   id: 'illicit_arms', name: 'Illicit Arms (Bib Fortuna)', windows: ['mods'], side: 'attacker', kind: 'interactive',

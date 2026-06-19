@@ -32,3 +32,32 @@ export function isIllicitArmsEligibleFigure(fkEff) {
   const aff = String(fkEff.affiliation || '').toLowerCase();
   return aff === ILLICIT_ARMS_REQUIRED_AFFILIATION;
 }
+
+/**
+ * True iff the figure carries Illicit Arms (Bib Fortuna) — affiliation
+ * agnostic. The Scum restriction belongs to the ARMY, not to Bib the
+ * figure (see playerArmyAffiliationIsScum), so presence is checked alone.
+ */
+export function figureHasIllicitArms(fkEff) {
+  return !!fkEff && hasIllicitArmsAbility(fkEff.specialAbilityIds);
+}
+
+/**
+ * True iff the player's army primary affiliation is Scum. Primary =
+ * the most common non-"Any" affiliation across the player's DC list,
+ * mirroring validateArmyAffiliation / cc-timing army-affiliation logic.
+ * Illicit Arms is usable by ANY friendly figure; the only restriction
+ * is that the controlling player's army is Scum-affiliated.
+ */
+export function playerArmyAffiliationIsScum(dcList, dcEffects) {
+  if (!Array.isArray(dcList) || !dcList.length) return false;
+  const counts = {};
+  for (const dc of dcList) {
+    const name = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!name) continue;
+    const aff = String(dcEffects?.[name]?.affiliation || '').toLowerCase();
+    if (aff && aff !== 'any') counts[aff] = (counts[aff] || 0) + 1;
+  }
+  const primary = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  return primary === ILLICIT_ARMS_REQUIRED_AFFILIATION;
+}
