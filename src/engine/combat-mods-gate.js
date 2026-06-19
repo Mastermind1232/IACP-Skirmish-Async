@@ -40,7 +40,20 @@ import { buildStepGate } from './combat-ability-gate.js';
 export function buildWindowGate(window, game, combat, deps = {}) {
   const attacker = abilitiesForWindow(window, 'attacker', game, combat, deps);
   const defender = abilitiesForWindow(window, 'defender', game, combat, deps);
-  return buildStepGate(window, [...attacker, ...defender]);
+  return buildStepGate(window, _dropDiagnosticDuplicates([...attacker, ...defender]));
+}
+
+// A card/effect can be registered multiple times (a generic `csv:<card>:…`
+// diagnostic entry with NO resolver, PLUS a real `reroll:`/`tpcc:`/bespoke entry),
+// which would surface the SAME ability as two buttons — one of them a no-op
+// (alexanbv 2026-06-19: "all CCs playable at a window should have a button" — one
+// WORKING button each). Drop the diagnostic `csv:` entry whenever a real entry
+// exists for the same name+side. Cards with ONLY a `csv:` entry keep it (so they
+// still get a button); deduping multiple REAL entries is handled per-card.
+function _dropDiagnosticDuplicates(list) {
+  const hasReal = new Set();
+  for (const e of list) if (!String(e.id).startsWith('csv:')) hasReal.add(`${e.side}|${e.name}`);
+  return list.filter((e) => !(String(e.id).startsWith('csv:') && hasReal.has(`${e.side}|${e.name}`)));
 }
 
 /**
