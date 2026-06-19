@@ -271,6 +271,14 @@ export function validateDeckLegal(squad) {
     return n === "[Nemik's Manifesto]" || n === "Nemik's Manifesto";
   });
   const ccCardsLegal = hasNemiksManifesto ? CC_CARDS_LEGAL + 3 : CC_CARDS_LEGAL;
+  // Balance of the Force: "You may include an additional 3 points worth of
+  // Command cards in your deck." → +3 to the legal CC total-cost budget (the
+  // cost-side analogue of Nemik's +3 cards).
+  const hasBalanceOfTheForce = dcList.some((entry) => {
+    const n = resolveDcName(entry);
+    return n === '[Balance of the Force]' || n === 'Balance of the Force';
+  });
+  const ccCostLegal = hasBalanceOfTheForce ? CC_COST_LEGAL + 3 : CC_COST_LEGAL;
   const ccList = squad?.ccList || [];
   let ccCost = 0;
   const unknownCc = [];
@@ -289,8 +297,8 @@ export function validateDeckLegal(squad) {
   if (ccList.length !== ccCardsLegal) {
     errors.push(`Command deck has ${ccList.length} cards. Legal deck is exactly ${ccCardsLegal} cards${hasNemiksManifesto ? ' (Nemik\'s Manifesto: +3)' : ''}.`);
   }
-  if (ccCost !== CC_COST_LEGAL) {
-    errors.push(`Command deck total cost is ${ccCost}. Legal total cost is exactly ${CC_COST_LEGAL}.`);
+  if (ccCost !== ccCostLegal) {
+    errors.push(`Command deck total cost is ${ccCost}. Legal total cost is exactly ${ccCostLegal}${hasBalanceOfTheForce ? ' (Balance of the Force: +3)' : ''}.`);
   }
   // ── Attachment target validation ──
   // Returns { errors, warnings }: errors are hard legality violations (an
