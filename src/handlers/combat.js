@@ -224,8 +224,9 @@ import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-d
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
+import { runCcPlayTriggers, openCcCounterWindow, registerCcCustomResolve } from './cc-hand.js';
 import { registerCombatGateResume } from '../game/cc-counter-window.js';
+import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -2344,6 +2345,31 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
+// Tough Luck's die-removal is its EFFECT; it lands via this continuation only if
+// the card survives the Negate/Comms window (alexanbv 2026-06-19 "all CCs go
+// through the counter window"). The rerolls-window resume is handled separately
+// by resumeCombatGateAfterCc (pendingCombatCcResolve), which runs whether the
+// card resolves or is cancelled. Registered lazily (avoids load-time cycles).
+let _toughLuckResolverRegistered = false;
+function _ensureToughLuckResolver() {
+  if (_toughLuckResolverRegistered) return;
+  _toughLuckResolverRegistered = true;
+  registerCcCustomResolve('tough_luck_remove', async (game, entry, _ctx, client) => {
+    const combat = game.pendingCombat;
+    const tl = entry.toughLuck;
+    if (!combat || !tl) return;
+    const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+    const die = dice?.[tl.idx];
+    if (!die) return;
+    if (tl.pool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
+    else { die.block = 0; die.evade = 0; die.dodge = false; }
+    const recalc = tl.pool === 'attack' ? _recalcAttackTotals : _recalcDefenseTotals;
+    combat[tl.pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
+    const thread = await fetchCombatThread(client, combat.combatThreadId);
+    await thread?.send(`**Tough Luck** — removed the rerolled ${die.color} ${tl.pool} die's result.`).catch(discordCatch);
+  });
+}
+
 export async function handleToughLuckGate(interaction, ctx) {
   const { getGame, saveGames, replyIfGameEnded } = ctx;
   const isRemove = interaction.customId.startsWith('tlgate_remove_');
@@ -2359,26 +2385,31 @@ export async function handleToughLuckGate(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
-  if (isRemove) {
-    const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
-    const die = dice?.[tl.idx];
-    if (die) {
-      // Tough Luck is played → discard it from the responder's hand.
-      const hand = getCcHand(game, tl.playerNum) || [];
-      const hi = hand.indexOf('Tough Luck');
-      if (hi >= 0) { hand.splice(hi, 1); (getCcDiscard(game, tl.playerNum) || []).push('Tough Luck'); }
-      // Remove that die's RESULT (zero its icons), then recalc the pool totals.
-      if (tl.pool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
-      else { die.block = 0; die.evade = 0; die.dodge = false; }
-      const recalc = tl.pool === 'attack' ? ctx.recalcAttackTotals : ctx.recalcDefenseTotals;
-      if (typeof recalc === 'function') combat[tl.pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
-      await thread?.send(`**Tough Luck** — removed the rerolled ${die.color} ${tl.pool} die's result.`).catch(discordCatch);
-    }
-  } else {
-    await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
+  const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+  const die = dice?.[tl.idx];
+  if (isRemove && die) {
+    // Tough Luck is PLAYED — discard it, then route through the unified counter-
+    // window. The die-removal (the 'tough_luck_remove' continuation) lands only
+    // if it survives Negate/Comms; the rerolls window resumes either way via
+    // pendingCombatCcResolve → resumeCombatGateAfterCc.
+    const hand = getCcHand(game, tl.playerNum) || [];
+    const hi = hand.indexOf('Tough Luck');
+    if (hi >= 0) { hand.splice(hi, 1); (getCcDiscard(game, tl.playerNum) || []).push('Tough Luck'); }
+    const tlPool = tl.pool, tlIdx = tl.idx, tlPlayerNum = tl.playerNum;
+    delete combat._pendingToughLuck;
+    _ensureToughLuckResolver();
+    game.pendingCombatCcResolve = { window: 'rerolls', gameId: game.gameId };
+    await runCcPlayTriggers(game, tlPlayerNum, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+    await openCcCounterWindow(game, game.gameId, {
+      card: 'Tough Luck', cost: 0, playedBy: tlPlayerNum, abilityId: 'Tough Luck',
+      customResolve: 'tough_luck_remove', toughLuck: { pool: tlPool, idx: tlIdx },
+    }, ctx, interaction.client);
+    saveGames?.(game.gameId);
+    return;
   }
+  // Skip (or the die vanished) — no play, no counter-window; resume the rerolls window.
+  if (!isRemove) await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
   delete combat._pendingToughLuck;
-  // Resume the rerolls window (more rerolls may be available, or it advances).
   await _driveGatePath('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
