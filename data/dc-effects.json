@@ -2,7 +2,7 @@
   "source": "DC Effect Editor",
   "cards": {
     "74-Z Speeder Bike (Elite)": {
-      "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space occupies the same row as both of your spaces, apply +1 Damage to the attack results.",
+      "abilityText": "Efficient Travel\n\nMounted: At the start of your activation, gain 3 movement points.\n\nThrusters: While moving, you ignore impassable terrain and must enter at least 1 space that you are already occupying.\n\nForward Mounted Blasters: While attacking, if the target space is inline (same row or column) with both of your spaces, you may reroll 1 attack die; otherwise apply -1 Damage to the attack results.",
       "keywords": [
         "TROOPER",
         "VEHICLE"
