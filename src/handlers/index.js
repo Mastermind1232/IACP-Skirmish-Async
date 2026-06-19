@@ -536,7 +536,7 @@ register('forfeit_', handleForfeit, 'forfeit');
 
 // --- Fast-forward & defender CC ---
 register('fast_forward_', handleFastForward, 'fastForward');
-register('dc_cc_defender_', handleDefenderCcPlay, 'defenderCc');
+register('dc_cc_defender_', handleDefenderCcPlay, 'ccHand');
 
 // --- Combat reactions ---
 // Tough Luck's legacy round-long tough_luck_* reaction was removed 2026-06-18.

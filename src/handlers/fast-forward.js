@@ -19,6 +19,7 @@ import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
+import { openCcCounterWindow, runCcPlayTriggers } from './cc-hand.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
@@ -462,23 +463,29 @@ export async function handleDefenderCcPlay(interaction, ctx) {
     await interaction.followUp({ content: "That card is no longer in your hand.", ephemeral: true }).catch(discordCatch);
     return;
   }
-
-
-  // Remove from hand, add to discard
-  hand.splice(hand.indexOf(card), 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(card);
-
-  // Resolve ability
-  if (resolveAbility) {
-    const effectData = getCcEffect(card);
-    const abilityId = effectData?.abilityId ?? card;
-    resolveAbility(abilityId, { game, playerNum, cardName: card, msgId, isDefending: true });
+  // Block check — a figure prevented from playing CCs (Shadow Ops).
+  if (game.shadowOpsBlockedPlayer === playerNum) {
+    await interaction.followUp({ content: '**Shadow Ops** — you cannot play Command cards this round.', ephemeral: true }).catch(discordCatch);
+    return;
   }
 
+  // Commit the card to discard + refresh the hand UI.
+  hand.splice(hand.indexOf(card), 1);
+  game[handKey] = hand;
+  game[discardKey] = (game[discardKey] || []).concat(card);
   await logGameAction(game, client, `🛡️ <@${getPlayerId(game, playerNum)}> played defender CC **${card}**.`, { icon: 'card' });
   await refreshHandAndDiscard(game, playerNum, client, ctx);
+
+  // On-play triggers (Hunt Dissent, Adapt) fire for the played card.
+  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+
+  // Route through the UNIFIED counter-window: ALL CCs are potentially counterable
+  // (Negate/Comms), the fast-forward defender play included (alexanbv 2026-06-19).
+  // The effect resolves only if not cancelled — same path as a normal hand play.
+  const effectData = getCcEffect(card);
+  const abilityId = effectData?.abilityId ?? card;
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, msgId }, ctx, client);
 
   saveGames(game.gameId);
 }
