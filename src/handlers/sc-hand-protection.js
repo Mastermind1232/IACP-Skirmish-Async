@@ -18,13 +18,18 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { getPlayerId, getHandChannelId, getDcList, getDcMessageIds, ccHandKey } from '../game/player-helpers.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { cardNameIncludes } from '../game/card-names.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { discordCatch } from '../error-handling.js';
-import { findSmugglingCompartmentMsgId, setAsideFromHand, scReactionAvailable } from '../game/smuggling-compartment.js';
+import { findSmugglingCompartmentMsgId, setAsideFromHand } from '../game/smuggling-compartment.js';
 
-// scReactionAvailable now lives in the game layer (game/smuggling-compartment.js)
-// so the ability engine can call it too; re-exported here for existing importers.
-export { scReactionAvailable };
+/** True if the owner can react with an un-exhausted [Smuggling Compartment] and has cards. */
+export function scReactionAvailable(game, ownerNum) {
+  const mid = findSmugglingCompartmentMsgId(getDcList(game, ownerNum), getDcMessageIds(game, ownerNum));
+  if (!mid) return false;
+  if (cardNameIncludes(game.exhaustedSkirmishUpgrades?.[mid], 'Smuggling Compartment')) return false;
+  return (game[ccHandKey(ownerNum)] || []).length > 0;
+}
 
 /**
  * Offer the set-aside reaction privately in the owner's hand channel.

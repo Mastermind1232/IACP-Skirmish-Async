@@ -140,9 +140,6 @@ import {
   handleScCcOpen,
   handleScCcSkip,
   handleScCcConfirm,
-  handleScSsOpen,
-  handleScSsSkip,
-  handleScSsConfirm,
   handleCcCounterNegate,
   handleCcCounterComms,
   handleCcCounterPass,
@@ -763,9 +760,6 @@ register('cc_counter_comms_', handleCcCounterComms, 'ccHand');
 register('cc_counter_pass_', handleCcCounterPass, 'ccHand');
 register('sc_cc_skip_', handleScCcSkip, 'ccHand');
 register('sc_cc_open_', handleScCcOpen, 'ccHand');
-register('sc_ss_confirm_', handleScSsConfirm, 'ccHand');
-register('sc_ss_skip_', handleScSsSkip, 'ccHand');
-register('sc_ss_open_', handleScSsOpen, 'ccHand');
 
 /**
  * Return the handler for the given key (prefix), or null if none.

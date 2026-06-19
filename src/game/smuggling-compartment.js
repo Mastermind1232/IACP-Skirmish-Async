@@ -16,24 +16,7 @@
  * alexanbv 2026-06-17: "wire both parts of SC."
  */
 
-import { getDcList, getDcMessageIds, ccHandKey } from './player-helpers.js';
-import { cardNameIncludes } from './card-names.js';
-
 export const SMUGGLING_COMPARTMENT_NAME = '[Smuggling Compartment]';
-
-/**
- * True if `ownerNum` can react with an un-exhausted [Smuggling Compartment] and
- * has cards in hand to set aside. Pure (game-layer) so both the Discord handler
- * (handlers/sc-hand-protection.js re-exports this) and the ability engine
- * (game/abilities.js — e.g. Strategic Shift's post-choice protection) can call
- * it without crossing into the handler layer.
- */
-export function scReactionAvailable(game, ownerNum) {
-  const mid = findSmugglingCompartmentMsgId(getDcList(game, ownerNum), getDcMessageIds(game, ownerNum));
-  if (!mid) return false;
-  if (cardNameIncludes(game?.exhaustedSkirmishUpgrades?.[mid], 'Smuggling Compartment')) return false;
-  return (game?.[ccHandKey(ownerNum)] || []).length > 0;
-}
 
 /**
  * Locate an owned, usable [Smuggling Compartment] in a player's DC list.

@@ -42,12 +42,17 @@ import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAs
 import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow, getCombatGateResume } from '../game/cc-counter-window.js';
 import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
 
-// Hand-affecting CCs whose effect must let the target (the opponent) exhaust
-// [Smuggling Compartment] AFTER the Negate/Comms window resolves, before the
-// effect. alexanbv 2026-06-17. Stall for Time (cost 0) defers past Negation in
+// Hand-affecting CCs whose effect must let the opponent exhaust [Smuggling
+// Compartment] AFTER the Negate/Comms window resolves, before the effect.
+// alexanbv 2026-06-17. Stall for Time (cost 0) defers past Negation in
 // handleNegationLetResolve; Collect Intel / Intelligence Leak (cost>0) defer
 // past Comm Disruption via the SC_HAND_CCS branch in handleCcPlaySelect.
-// (Strategic Shift picks its target mid-effect, so it isn't covered here.)
+// Strategic Shift IS covered the same way: the SC decision is made BEFORE the
+// card-player chooses which player shuffles (alexanbv 2026-06-19 — "decision to
+// exhaust SC is made before which player is chosen"). The pre-choice scProtect
+// offer goes to the opponent; once they react, the effect resolves into the
+// player/player choice, so the card-player sees the SC exhaust and may then
+// choose themselves (shuffle + draw 2) or the opponent (no effect — protected).
 const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak', 'Strategic Shift']);
 
 // Would a Comm Disruption window open for this cost>0 CC? Mirrors the gate in
@@ -186,10 +191,7 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
     // PowerToken / Space prompts too). The played card is already in discard.
     game.pendingCcEffect = {
       abilityId: entry.abilityId || entry.card, card: entry.card, playedBy: entry.playedBy,
-      // scProtect = offer SC BEFORE the effect, to the opponent. Strategic Shift
-      // is excluded: its hand target is chosen mid-effect, so SC is offered
-      // post-choice (handleCcChoice → requiresScHandProtection), not here.
-      msgId: entry.msgId ?? null, fromDc: !!entry.fromDc, scProtect: SC_HAND_CCS.has(entry.card) && entry.card !== 'Strategic Shift',
+      msgId: entry.msgId ?? null, fromDc: !!entry.fromDc, scProtect: SC_HAND_CCS.has(entry.card),
     };
     await _offerScThenResolveDeferredCc(game, ctx, client);
   }
@@ -449,82 +451,6 @@ export async function handleScCcConfirm(interaction, ctx) {
   if (count > 0 && logGameAction) await logGameAction(game, client, `**[Smuggling Compartment]** — P${ownerNum} set aside ${count} Command card${count === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
   await interaction.message.edit({ content: `**[Smuggling Compartment]** — set aside ${count} card${count === 1 ? '' : 's'}. The effect proceeds.`, components: [] }).catch(discordCatch);
   await _resumeScCcEffect(game, ctx, interaction.client);
-}
-
-// ── [Smuggling Compartment] POST-CHOICE protection (Strategic Shift) ──────────
-// Strategic Shift's hand target is chosen mid-effect, so SC is offered AFTER the
-// choice (handleCcChoice → requiresScHandProtection). These handlers mirror the
-// sc_cc_* set but resume by re-resolving the ability with _scResolved (which lets
-// the engine proceed to the shuffle now that the target has protected its hand).
-
-/** Re-resolve Strategic Shift after the target's SC set-aside (or decline). */
-async function _resumeStrategicShiftAfterSc(game, ctx, client) {
-  const pend = game.pendingScChoiceProtect;
-  if (!pend) { ctx.saveGames(game.gameId); return; }
-  delete game.pendingScChoiceProtect;
-  const { resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState } = ctx;
-  if (!resolveAbility) { ctx.saveGames(game.gameId); return; }
-  const result = resolveAbility(pend.abilityId, {
-    game, playerNum: pend.playerNum, dcMessageMeta, dcHealthState, dcExhaustedState,
-    choiceIndex: pend.choiceIndex, _scResolved: true,
-    combat: game.combat || game.pendingCombat,
-  });
-  await applyAbilityResult(result, { game, playerNum: pend.playerNum, client, ctx });
-  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-  ctx.saveGames(game.gameId);
-}
-
-/** Owner opted in — show the hand multi-select. */
-export async function handleScSsOpen(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_ss_open_');
-  const gameId = parts[0];
-  const ownerNum = parseInt(parts[1], 10);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
-    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const hand = game[ccHandKey(ownerNum)] || [];
-  if (hand.length === 0) {
-    await interaction.message.edit({ content: '**[Smuggling Compartment]** — no cards in hand to set aside.', components: [] }).catch(discordCatch);
-    await _resumeStrategicShiftAfterSc(game, ctx, interaction.client);
-    return;
-  }
-  await interaction.message.edit({
-    content: '**[Smuggling Compartment]** — choose Command cards to set aside (returned at the start of your next activation or the next phase):',
-    components: [scSetAsideSelectRow(hand, `sc_ss_confirm_${gameId}_${ownerNum}`)],
-  }).catch(discordCatch);
-}
-
-/** Owner declined — proceed with the shuffle. */
-export async function handleScSsSkip(interaction, ctx) {
-  const { getGame } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_ss_skip_');
-  const game = await requireGame(interaction, getGame, parts[0]);
-  if (!game) return;
-  await interaction.message.edit({ content: '**[Smuggling Compartment]** — declined; the effect proceeds.', components: [] }).catch(discordCatch);
-  await _resumeStrategicShiftAfterSc(game, ctx, interaction.client);
-}
-
-/** Owner confirmed which CCs to set aside, then resume the shuffle. */
-export async function handleScSsConfirm(interaction, ctx) {
-  const { getGame, logGameAction, client } = ctx;
-  const parts = splitCustomId(interaction.customId, 'sc_ss_confirm_');
-  const gameId = parts[0];
-  const ownerNum = parseInt(parts[1], 10);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  if (interaction.user.id !== getPlayerId(game, ownerNum)) {
-    await interaction.followUp({ content: 'Only the card owner can do this.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.deferUpdate().catch(discordCatch); // select interactions are not auto-deferred
-  const count = applyScSetAside(game, ownerNum, interaction.values || []);
-  if (count > 0 && logGameAction) await logGameAction(game, client, `**[Smuggling Compartment]** — P${ownerNum} set aside ${count} Command card${count === 1 ? '' : 's'}.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
-  await interaction.message.edit({ content: `**[Smuggling Compartment]** — set aside ${count} card${count === 1 ? '' : 's'}. The effect proceeds.`, components: [] }).catch(discordCatch);
-  await _resumeStrategicShiftAfterSc(game, ctx, interaction.client);
 }
 
 /** @param {import('discord.js').ModalSubmitInteraction} interaction */
@@ -1199,25 +1125,6 @@ export async function handleCcChoice(interaction, ctx) {
     combat: game.combat || game.pendingCombat,
   });
   clearPendingCcChoice(game);
-  // [Smuggling Compartment] post-choice protection (Strategic Shift): the chosen
-  // player's hand is about to be shuffled away; offer SC set-aside FIRST, then
-  // re-resolve the effect with _scResolved so it proceeds to the shuffle.
-  if (result && result.requiresScHandProtection) {
-    const ownerNum = result.requiresScHandProtection.ownerNum;
-    game.pendingScChoiceProtect = { gameId, abilityId: pending.abilityId, playerNum, card: pending.card, choiceIndex, ownerNum };
-    try { await interaction.message.edit({ content: `**${pending.card}** — chose Player ${ownerNum}; awaiting **[Smuggling Compartment]**…`, components: [] }).catch(discordCatch); } catch {}
-    const offered = await offerScSetAside(game, ownerNum, client, {
-      idPrefix: 'sc_ss',
-      promptText: `Your opponent played **${pending.card}**, which will shuffle your Command hand into your deck. **[Smuggling Compartment]** — you may exhaust it to set aside cards first (returned at the start of your next activation or the next phase).`,
-    });
-    if (!offered) {
-      // SC not actually available (engine gated on it, so rare) — proceed now.
-      await _resumeStrategicShiftAfterSc(game, ctx, client);
-      return;
-    }
-    saveGames(game.gameId);
-    return;
-  }
   const aarResult = await applyAbilityResult(result, { game, playerNum, client, ctx });
   if (!aarResult.handled && aarResult.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
     if (!getBoardStateForMovement || !getMapAttachmentForSpaces) {
