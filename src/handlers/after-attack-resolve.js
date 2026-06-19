@@ -166,6 +166,18 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Leg Hydraulics: gain 1 MP',
     });
   }
+  // Brutal Cleave (Gaarkhan): "after you resolve an attack during your
+  // activation, you MAY suffer 1 Strain → free attack (1 red + 1 yellow) at a
+  // DIFFERENT figure/object. Limit once per activation." Offered as a player
+  // choice in the after_resolve window; fireBrutalCleave resolves the effect.
+  if (_atkIds.includes('brutal_cleave') && combat.attackerMsgId
+      && !game?.roundFigureAbilityUsed?.[`brutalCleave_${combat.attackerFigureKey}`]) {
+    enqueueAfterAttackEffect(combat, {
+      side: 'attacker',
+      type: 'brutal_cleave',
+      label: 'Brutal Cleave: suffer 1 Strain → free attack (different target)',
+    });
+  }
   // MP / token / choice grants — migrated from the inline auto-apply block in
   // combat-bridge.js so they are player-ordered buttons in the after_resolve
   // window, not auto-applied out of sequence (alexanbv 2026-06-16: "any ability

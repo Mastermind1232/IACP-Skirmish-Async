@@ -773,6 +773,34 @@ async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
 }
 
 /**
+ * Brutal Cleave (Gaarkhan): "After you resolve an attack during your activation,
+ * you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die
+ * targeting a DIFFERENT figure or object. Limit once per activation." The whole
+ * effect (strain via the applyStrain pipeline + the override-dice free attack +
+ * the different-target seeding) is the `brutal_cleave` ability-library entry, so
+ * this just resolves it; the player then uses the Attack button. (Trigger wiring
+ * — the effect itself was already defined but never offered. alexanbv 2026-06-19.)
+ */
+async function fireBrutalCleave(thread, game, combat, effect, ctx) {
+  const { logGameAction, client, dcMessageMeta, dcHealthState } = ctx;
+  if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  const bcKey = `brutalCleave_${combat.attackerFigureKey}`;
+  if (game.roundFigureAbilityUsed[bcKey]) return;
+  game.roundFigureAbilityUsed[bcKey] = true;
+  const { resolveAbility } = await import('../game/abilities.js');
+  const { applyAbilityResult } = await import('../discord/apply-ability-result.js');
+  const result = resolveAbility('brutal_cleave', {
+    game, playerNum: combat.attackerPlayerNum, msgId: combat.attackerMsgId,
+    dcMessageMeta, dcHealthState, combat,
+  });
+  await applyAbilityResult(result, { game, playerNum: combat.attackerPlayerNum, msgId: combat.attackerMsgId, client, ctx });
+  if (logGameAction) {
+    await logGameAction(game, client, '**Brutal Cleave** — suffer 1 Strain → free Melee attack (1 red + 1 yellow) at a **different** figure/object. Use the **Attack** button.', { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  }
+}
+
+/**
  * Fell Swoop (Davith Elso surge): apply Hide, present Move 2 picker,
  * then stage the chain attack for after defender step 8 closes. The
  * Move-X picker fires immediately on click; after it drains, the new
@@ -1778,6 +1806,9 @@ export async function fireEffect(thread, game, combat, effect, ctx) {
       return;
     case 'flurry_of_blows':
       await fireFlurryOfBlows(thread, game, combat, effect, ctx);
+      return;
+    case 'brutal_cleave':
+      await fireBrutalCleave(thread, game, combat, effect, ctx);
       return;
     case 'fell_swoop':
       await fireFellSwoop(thread, game, combat, effect, ctx);
