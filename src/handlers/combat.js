@@ -1046,6 +1046,34 @@ function _makeResourcefulResolver(side) {
   };
 }
 
+// Reroll a die — OR, when the rerolling ability is a Command card the side still
+// holds, play it through the counter-window FIRST and defer the reroll to the
+// 'reroll_cc' continuation (alexanbv 2026-06-19: neg/comms before the reroll).
+// Returns 'deferred' (caller returns {followUp:true}) or the reroll result.
+// DC reroll abilities (params.card is a DC name, never in the CC hand) reroll in
+// place exactly as before — so this is a no-op for them.
+async function _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool, index, newColor }) {
+  const card = getCombatAbility(id)?.params?.card;
+  const pn = side === 'attacker'
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+    : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+  const isCc = card && (getCcHand(game, pn) || []).includes(card);
+  if (!isCc) return _rerollDie(combat, ctx, { pool, index, newColor });
+  const _h = game[ccHandKey(pn)] || []; const _hi = _h.indexOf(card);
+  if (_hi >= 0) _h.splice(_hi, 1); game[ccHandKey(pn)] = _h;
+  game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
+  try { recordModsChoice(combat[_GATE_WINDOWS[window].field], side, id); } catch { /* not pending */ }
+  _markGateAbilityUsed(game, combat, id);
+  _ensureRerollCcResolver();
+  await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+  game.pendingCombatCcResolve = { window, kind: 'reroll_card', gameId: game.gameId };
+  await openCcCounterWindow(game, game.gameId, {
+    card, cost: ctx.getCcEffect?.(card)?.cost ?? 0, playedBy: pn, abilityId: card,
+    customResolve: 'reroll_cc', reroll: { pool, idx: index, newColor },
+  }, ctx, ctx.client);
+  return 'deferred';
+}
+
 function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, dieColor = null, strainCost = 0, stageKey = 'rr' }) {
   // Die-color restriction (Overpower: only RED/BLACK dice selectable). Composed
   // with any passed-in eligibility filter. A SELECTION filter, not a color swap.
@@ -1078,12 +1106,13 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
           ],
         };
       },
-      apply: async (choice, { combat, thread, ctx }) => {
+      apply: async (choice, { game, combat, thread, ctx, side, id, window }) => {
         if (choice === 'skip') { thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
         const p = choice[0] === 'd' ? 'defense' : 'attack';
         const idx = parseInt(choice.slice(1), 10);
-        const res = _rerollDie(combat, ctx, { pool: p, index: idx });
-        if (res.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+        const res = await _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool: p, index: idx });
+        if (res === 'deferred') return { followUp: true }; // CC: neg/comms first, reroll in the continuation
+        if (res?.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
         else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
         return undefined;
       },
@@ -1101,7 +1130,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
       const dice = combat[diceField] || [];
       return { content: `**${name}** — choose a ${pool} die to reroll:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dieLabel(dice[i])})`]), ['skip', 'Skip', 'secondary']] };
     },
-    apply: async (choice, { game, combat, thread, ctx, gameId, id }) => {
+    apply: async (choice, { game, combat, thread, ctx, gameId, id, side, window }) => {
       const sk = `_${stageKey}`;
       if (choice === 'skip') { delete combat[`${sk}Stage`]; delete combat[`${sk}Die`]; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
       // colorSwap (incl. Lando's Gambit): stage 1 picks the die, stage 2 the color.
@@ -1116,7 +1145,9 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
       }
       const idx = _cs ? combat[`${sk}Die`] : parseInt(choice, 10);
       const newColor = _cs && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
-      const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
+      delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
+      const res = await _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool, index: idx, newColor });
+      if (res === 'deferred') return { followUp: true }; // CC: neg/comms first, reroll in the continuation
       if (res.ok) {
         thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
         // Strain cost on use (Rancor's Trained: "suffer 1 Strain to reroll"). The
