@@ -2425,15 +2425,17 @@ const _REROLL_CC_CARD_BY_ID = { rapid_recalibration: 'Rapid Recalibration' };
 function _rerollCcCardName(reg, pick) {
   return reg?.params?.card || reg?.params?.specKey || _REROLL_CC_CARD_BY_ID[pick] || null;
 }
-/** True iff a picked gate ability is a reroll/die-modify backed by a CC in hand. */
+/** True iff a picked gate ability is a reroll backed by a CC in hand. Scoped to
+ * the verified reroll CCs — NOT all third-party CCs (Bodyguard etc. use the
+ * generic resolver with its own playCC and would double-dispose). */
 function _isRerollCcPick(pick, ccPn, game) {
   const reg = getCombatAbility(pick);
   const card = _rerollCcCardName(reg, pick);
   if (!card) return false;
-  const w = reg.windows || [];
-  const isRerollKind = w.includes('rerolls') || w.includes('special')
-    || reg.params?.kind === 'capitalize' || reg.params?.kind === 'third_party_cc' || /^reroll:/.test(pick);
-  if (!isRerollKind) return false;
+  const isReroll = reg.params?.kind === 'reroll' || reg.params?.kind === 'capitalize' || /^reroll:/.test(pick)
+    || pick === 'rapid_recalibration'
+    || (reg.params?.kind === 'third_party_cc' && reg.params?.specKey === 'Battlefield Awareness');
+  if (!isReroll) return false;
   const lc = String(card).toLowerCase();
   return (getCcHand(game, ccPn) || []).some((n) => String(n).toLowerCase() === lc);
 }
