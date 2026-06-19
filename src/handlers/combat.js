@@ -2015,11 +2015,11 @@ function _makeBattlefieldAwarenessResolver() {
         delete combat[sk];
       };
       if (!st.stage) {
-        // Stage 1: a Leader was chosen → validate/dispose the CC, then pick a die.
+        // Stage 1: a Leader was chosen → pick a die. The card is already
+        // discarded at gate-pick (Negate/Comms ran first), so no playCC here.
         const figs = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat, _gateDeps(ctx));
         const fk = figs[parseInt(choice, 10)] ?? figs[0];
         if (!fk) return undefined;
-        await playCC(game, combat.attackerPlayerNum, fk, 'Battlefield Awareness', { ctx, skipExecute: true });
         st.leader = fk; st.gambit = isLando(fk);
         const idxs = _selectableDieIndices(combat, { pool: 'attack' });
         if (!idxs.length) {
@@ -2254,7 +2254,7 @@ export async function handleModsPick(interaction, ctx) {
     // die-picker runs on resolve (resumeCombatGateAfterCc), then the normal flow
     // does the reroll + Tough Luck. Cancelled → no die-pick, no reroll.
     const _rReg = getCombatAbility(pick);
-    const _rCard = _rReg.params.card;
+    const _rCard = _rerollCcCardName(_rReg, pick);
     const _rPn = side === 'attacker'
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
@@ -2419,13 +2419,23 @@ function _ensureRerollCcResolver() {
     if (combat) combat._rerollCcSurvivor = entry.rerollResolverPick;
   });
 }
-/** True iff a picked gate ability is a reroll backed by a Command card in hand. */
+// Params-less reroll-CC registrations (card detected in `applies`, not params).
+const _REROLL_CC_CARD_BY_ID = { rapid_recalibration: 'Rapid Recalibration' };
+/** The Command-card name a reroll gate ability plays, across param shapes. */
+function _rerollCcCardName(reg, pick) {
+  return reg?.params?.card || reg?.params?.specKey || _REROLL_CC_CARD_BY_ID[pick] || null;
+}
+/** True iff a picked gate ability is a reroll/die-modify backed by a CC in hand. */
 function _isRerollCcPick(pick, ccPn, game) {
   const reg = getCombatAbility(pick);
-  const card = reg?.params?.card;
+  const card = _rerollCcCardName(reg, pick);
   if (!card) return false;
-  const isReroll = reg.params.kind === 'reroll' || reg.params.kind === 'capitalize' || /^reroll:/.test(pick);
-  return isReroll && (getCcHand(game, ccPn) || []).includes(card);
+  const w = reg.windows || [];
+  const isRerollKind = w.includes('rerolls') || w.includes('special')
+    || reg.params?.kind === 'capitalize' || reg.params?.kind === 'third_party_cc' || /^reroll:/.test(pick);
+  if (!isRerollKind) return false;
+  const lc = String(card).toLowerCase();
+  return (getCcHand(game, ccPn) || []).some((n) => String(n).toLowerCase() === lc);
 }
 
 // Tough Luck's die-removal is its EFFECT; it lands via this continuation only if
