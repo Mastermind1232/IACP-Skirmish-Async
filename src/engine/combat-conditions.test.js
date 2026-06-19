@@ -129,3 +129,67 @@ describe('combat-conditions: gate-rework reroll-condition primitives (2026-06-18
     assert.ok(!conditionalGuard('attacking or defending against an adjacent figure')({}, { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'A-1-0', target: { figureKey: 'B-2-0' } }));
   });
 });
+
+describe('combat-conditions: deferred condition-based primitives (2026-06-18)', () => {
+  // chopper-base-atollon: n4/n5/o4/o5/m8 are 'blocking' terrain; l3↔l4 adjacent,
+  // l3 far from n3. m4/n3 share a corner/edge with the blocking cell n4.
+  const MAP = { id: 'chopper-base-atollon' };
+
+  // ── Set Your Sights (Loku) — target_has_recon_token ────────────────────────
+  it('target_has_recon_token: fires iff the TARGET carries a Recon token', () => {
+    const c = makeCondition({ type: 'target_has_recon_token' });
+    assert.ok(c({ reconTokens: { 'Stormtrooper-2-0': true } }, { target: { figureKey: 'Stormtrooper-2-0' } }), 'recon → true');
+    assert.ok(!c({ reconTokens: {} }, { target: { figureKey: 'Stormtrooper-2-0' } }), 'no recon → false');
+    assert.ok(!c({}, { target: { figureKey: 'Stormtrooper-2-0' } }), 'no reconTokens container → false');
+  });
+
+  // ── Hunker Down (Cara Dune) — near_terrain_type (GEOMETRIC neighbours) ──────
+  it('near_terrain_type: fires when the defender shares a corner/edge with blocking terrain', () => {
+    const c = makeCondition({ type: 'near_terrain_type', side: 'defender', types: ['blocking', 'impassable', 'difficult'] });
+    const game = (cell) => ({ selectedMap: MAP, figurePositions: { 2: { 'Cara Dune-2-0': cell } } });
+    const combat = { defenderPlayerNum: 2, target: { figureKey: 'Cara Dune-2-0' }, defenderDcName: 'Cara Dune' };
+    assert.ok(c(game('m4'), combat), 'm4 shares an edge/corner with blocking n4 → true');
+    assert.ok(c(game('n3'), combat), 'n3 shares an edge with blocking n4 → true');
+    assert.ok(!c(game('l3'), combat), 'l3 is clear of any blocking terrain → false');
+  });
+
+  // ── Improvised Cover (Verena Talos) — affected_adjacent_to_object_or_enemy ──
+  it('affected_adjacent_to_object_or_enemy: adjacent to a NON-friendly figure other than the attacker', () => {
+    const c = makeCondition({ type: 'affected_adjacent_to_object_or_enemy', side: 'defender' });
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Atk-1-0', target: { figureKey: 'Verena Talos-2-0' }, defenderDcName: 'Verena Talos' };
+    // l3 (defender) adjacent to enemy Other-1-1 at l4 (≠ attacker) → true
+    const gEnemy = { selectedMap: MAP, figurePositions: { 1: { 'Atk-1-0': 'm8', 'Other-1-1': 'l4' }, 2: { 'Verena Talos-2-0': 'l3' } } };
+    assert.ok(c(gEnemy, combat), 'adjacent to a non-attacker enemy → true');
+    // only the ATTACKER is adjacent (l4) → false ("other than the attacker")
+    const gAtkOnly = { selectedMap: MAP, figurePositions: { 1: { 'Atk-1-0': 'l4' }, 2: { 'Verena Talos-2-0': 'l3' } } };
+    assert.ok(!c(gAtkOnly, combat), 'only the attacker adjacent → false');
+  });
+
+  it('affected_adjacent_to_object_or_enemy: adjacent to a map OBJECT (crate)', () => {
+    const c = makeCondition({ type: 'affected_adjacent_to_object_or_enemy', side: 'defender' });
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Atk-1-0', target: { figureKey: 'Verena Talos-2-0' }, defenderDcName: 'Verena Talos' };
+    const g = { selectedMap: MAP, objectPositions: { 'crate-l4': 'l4' }, figurePositions: { 1: { 'Atk-1-0': 'm8' }, 2: { 'Verena Talos-2-0': 'l3' } } };
+    assert.ok(c(g, combat), 'adjacent to a crate object → true');
+    const gFar = { selectedMap: MAP, objectPositions: { 'crate-m8': 'm8' }, figurePositions: { 1: { 'Atk-1-0': 'm8' }, 2: { 'Verena Talos-2-0': 'l3' } } };
+    assert.ok(!c(gFar, combat), 'object not adjacent → false');
+  });
+
+  // ── Light It Up (Rebel Pathfinder) — target_no_los_to_attacker_start uses the
+  // TARGET's ACTIVATION-START position, not its (possibly moved) current cell ──
+  it('target_no_los_to_attacker_start: uses the TARGET position AT THE ATTACKER ACTIVATION START (moved-target fix)', () => {
+    const c = makeCondition({ type: 'target_no_los_to_attacker_start' });
+    const combat = { attackerFigureKey: 'Pathfinder-1-0', defenderPlayerNum: 2, target: { figureKey: 'Tgt-2-0' } };
+    // Target's CURRENT cell (m3) has LOS to the attacker start (l3); the target's
+    // ACTIVATION-START cell (i5) did NOT. The condition must read the snapshot.
+    const base = {
+      selectedMap: MAP,
+      activationStartPositions: { 'Pathfinder-1-0': 'l3' },
+      figurePositions: { 1: { 'Pathfinder-1-0': 'l3' }, 2: { 'Tgt-2-0': 'm3' } },
+      activationStartAllPositions: { 'Pathfinder-1-0': 'l3', 'Tgt-2-0': 'i5' },
+    };
+    assert.ok(c(base, combat), 'no LOS at the attacker activation start (snapshot) → true');
+    // Without the snapshot it falls back to the current cell (which DOES have LOS) → false.
+    const noSnap = { ...base, activationStartAllPositions: {} };
+    assert.ok(!c(noSnap, combat), 'fallback to current cell (has LOS) → false');
+  });
+});

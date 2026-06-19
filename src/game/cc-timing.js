@@ -86,6 +86,19 @@ const SPECIAL_ACTION_TIMING = new Set([
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect, opts = {}) {
   // Shadow Ops: opponent cannot play Command cards this round
   if (game?.shadowOpsBlockedPlayer === playerNum) return false;
+  // Vague and Unconvincing (K-2SO): while K-2SO defends, NEITHER player may play
+  // Command cards for the duration of that attack. Derived from the pending combat
+  // (no stored flag) so it self-clears when the attack ends and covers both sides.
+  {
+    const _combat = game?.pendingCombat;
+    const _defFk = _combat?.target?.figureKey;
+    if (_defFk) {
+      const _defName = _combat.defenderDcName || dcNameFromFigureKey(_defFk);
+      const _all = getDcEffects() || {};
+      const _e = _all[_defName] || _all[String(_defName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((_e?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) return false;
+    }
+  }
   // Critical Hit (Mak): target cannot play Command cards this round
   if (game?.criticalHitBlockedPlayer === playerNum) return false;
   // Comms Jammer (ISB Infiltrator Elite): an automatic cancel of the NEXT CC the

@@ -14,7 +14,7 @@ import { dcNameFromFigureKey } from '../game/index.js';
 import { getMapData, getDcEffects, getFigureSize } from '../data-loader.js';
 import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
-import { getFootprintCells } from '../game/coords.js';
+import { getFootprintCells, shiftCoord } from '../game/coords.js';
 import { getEffectiveFigureSize } from '../game/board-helpers.js';
 import { loadAbilitySpec } from './combat-ability-db.js';
 
@@ -310,20 +310,100 @@ export function makeCondition(spec) {
     // The TARGET did NOT have LOS to the attacker at the START of the attacker's
     // activation — "if the target did not have LOS to you at the start of your
     // activation" (Light It Up). Snapshot = the attacker's stashed
-    // activationStartPositions cell; LOS is geometric so re-checking from the
-    // current target space to that start cell reproduces the activation-start
-    // relation (the attacker's start cell is fixed; the target's own movement is
-    // its current position — see FLAG in the report re: target movement).
+    // activationStartPositions cell. CRITICAL: the LOS must use the TARGET'S
+    // position AT THE ATTACKER'S ACTIVATION START, not its current cell (the
+    // target may have moved between then and the attack). We read the target's
+    // start position from game.activationStartAllPositions (a board-wide snapshot
+    // refreshed at each activation start; see activation-setup.js B11). Falls back
+    // to the target's current cell only when no snapshot exists (legacy games).
     case 'target_no_los_to_attacker_start': {
       return (game, combat) => {
         const mapId = game?.selectedMap?.id;
         if (!mapId) return false;
         const mapSp = getMapData(mapId);
         const startPos = game?.activationStartPositions?.[combat?.attackerFigureKey];
-        const tgt = targetCoord(game, combat);
-        if (!mapSp || !startPos || !tgt) return false;
-        return !hasLineOfSightByCoord(game, tgt, String(startPos).toLowerCase(), mapSp, getFigureSize);
+        const tgtFk = combat?.target?.figureKey;
+        const tgtStart = (tgtFk && game?.activationStartAllPositions?.[tgtFk])
+          ? String(game.activationStartAllPositions[tgtFk]).toLowerCase()
+          : targetCoord(game, combat);
+        if (!mapSp || !startPos || !tgtStart) return false;
+        return !hasLineOfSightByCoord(game, tgtStart, String(startPos).toLowerCase(), mapSp, getFigureSize);
       };
+    }
+    // The AFFECTED figure (defender side) SHARES A CORNER OR EDGE with a space
+    // whose terrain is one of `types` — "while you share a corner or edge with a
+    // space containing blocking / impassable / difficult terrain" (Hunker Down).
+    // NB: uses GEOMETRIC 8-neighbours (corner + edge), NOT the movement-adjacency
+    // map — the map's `adjacency` deliberately EXCLUDES blocking/impassable cells
+    // (you can't move into them), so it would never see the terrain the card asks
+    // about. Reusable terrain-proximity primitive; `types` lowercased.
+    case 'near_terrain_type': {
+      const side = spec.side || 'defender';
+      const types = (spec.types || []).map((t) => String(t).toLowerCase());
+      return (game, combat) => {
+        const aff = affectedFigure(game, combat, side);
+        const mapId = game?.selectedMap?.id;
+        if (!aff.figureKey || aff.pn == null || !mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const terrain = mapSp.terrain || {};
+        const affCells = figureCells(game, aff.pn, aff.figureKey);
+        if (!affCells.length) return false;
+        const affSet = new Set(affCells);
+        for (const c of affCells) {
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              if (dx === 0 && dy === 0) continue;
+              const n = String(shiftCoord(c, dx, dy)).toLowerCase();
+              if (affSet.has(n)) continue; // a cell the figure itself occupies
+              if (types.includes(String(terrain[n] || '').toLowerCase())) return true;
+            }
+          }
+        }
+        return false;
+      };
+    }
+    // The AFFECTED figure (defender side) is ADJACENT to a map OBJECT (crate, door,
+    // …) OR to a NON-FRIENDLY figure OTHER THAN THE ATTACKER — "while adjacent to
+    // an object or non-friendly figure other than the attacker" (Improvised Cover).
+    // Objects live in game.objectPositions (keyed objId → coord). Non-friendly =
+    // any figure not on the affected figure's team. Adjacency = within 1, footprint-
+    // aware.
+    case 'affected_adjacent_to_object_or_enemy': {
+      const side = spec.side || 'defender';
+      return (game, combat) => {
+        const aff = affectedFigure(game, combat, side);
+        const mapId = game?.selectedMap?.id;
+        if (!aff.figureKey || aff.pn == null || !mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const affCells = figureCells(game, aff.pn, aff.figureKey);
+        if (!affCells.length) return false;
+        // Objects (crates/doors/etc.) from the unified objectPositions state.
+        for (const pos of Object.values(game.objectPositions || {})) {
+          if (!pos) continue;
+          const oc = String(pos).toLowerCase();
+          for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1)) return true;
+        }
+        // Non-friendly figures (the attacker is excluded by figureKey).
+        const attackerFk = combat?.attackerFigureKey;
+        for (const [pn, team] of Object.entries(game.figurePositions || {})) {
+          if (Number(pn) === Number(aff.pn)) continue; // friendly team — skip
+          for (const fk of Object.keys(team)) {
+            if (fk === attackerFk) continue; // "other than the attacker"
+            for (const ec of figureCells(game, Number(pn), fk)) {
+              for (const ac of affCells) if (isWithinSpaces(mapSp, ec, ac, 1)) return true;
+            }
+          }
+        }
+        return false;
+      };
+    }
+    // The TARGET (defender) carries a Recon token — "attacking a figure with a
+    // Recon token" (Set Your Sights / Loku). Recon tokens live in
+    // game.reconTokens[figureKey] = true (placed by Set Your Sights at setup).
+    case 'target_has_recon_token': {
+      return (game, combat) => !!game?.reconTokens?.[combat?.target?.figureKey];
     }
     default:
       return () => true;

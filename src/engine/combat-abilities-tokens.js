@@ -10,8 +10,29 @@
 // re-drives the gate so the player can spend another or pass. Side-effect import.
 
 import { registerCombatAbility } from './combat-timing-registry.js';
+import { getDcEffects } from '../data-loader.js';
+import { dcNameFromFigureKey } from '../game/index.js';
 
 const ALLOWED = { attacker: ['Damage', 'Surge'], defender: ['Block', 'Evade'] };
+
+/**
+ * Vague and Unconvincing (K-2SO) — DENIAL/lock-out: "While defending, your player
+ * and your opponent cannot spend power tokens or play Command cards." Returns true
+ * when there is a pending combat whose DEFENDER carries vague_and_unconvincing_k2s0
+ * — i.e. BOTH players are locked out of token-spend + CC-play for the duration of
+ * that attack. Derived (no stored flag) so it covers every window of the attack
+ * (on_declare token spend through mods), and self-clears when the combat ends.
+ * Consulted by the token-spend ability gate here and by isCcPlayableNow.
+ */
+export function vagueAndUnconvincingLockoutActive(game) {
+  const combat = game?.pendingCombat;
+  const defFk = combat?.target?.figureKey;
+  if (!defFk) return false;
+  const defName = combat.defenderDcName || dcNameFromFigureKey(defFk);
+  const all = getDcEffects() || {};
+  const e = all[defName] || all[String(defName || '').replace(/\s*\[.*\]\s*$/, '')];
+  return (e?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0');
+}
 
 /** The figure whose tokens this side spends (attacker = attacking figure; defender = target). */
 export function tokenSpenderFigureKey(combat, side) {
@@ -39,6 +60,9 @@ export function registerTokenAbilities() {
       kind: 'interactive',
       params: { kind: 'token', side },
       applies: (game, combat, _side, deps) => {
+        // Vague and Unconvincing (K-2SO defending): NEITHER player may spend power
+        // tokens during this attack — suppress the token-spend button for both sides.
+        if (vagueAndUnconvincingLockoutActive(game)) return false;
         if (eligibleTokenTypes(game, combat, side).length > 0) return true;
         // Squad Cohesion donor-only case: the figure holds no spendable token of
         // its own, but a friendly within 3 (via Ko-Tun) has one (alexanbv 2026-06-16).

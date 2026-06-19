@@ -238,7 +238,68 @@ registerCombatAbility({
   },
 });
 
+// Set Your Sights (Loku Kanoloa) [attacker] — gate-rework 2026-06-18. "While a
+// friendly figure is attacking a figure with a Recon token, apply Pierce 1 to the
+// attack results." A mods passive (automatic +1 Pierce) gated on the TARGET
+// carrying a Recon token (placed at mission start by Loku's setup effect). Owner
+// (Loku) need only be in play — the board-wide recon-token model means any friendly
+// attacker benefits. Clobbers the timing-only catalog entry of the same id
+// (per-id last-write; the catalog entry is deleted in the catalog file). Effect:
+// _fireModsPassive ('set_your_sights' → +1 Pierce).
+const _setYourSightsReconTarget = makeCondition({ type: 'target_has_recon_token' });
+registerCombatAbility({
+  id: 'set_your_sights', name: 'Set Your Sights (Loku)', windows: ['mods'], side: 'attacker', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    if (combat.noFriendliesActive || !combat.attackerFigureKey || !combat.target?.figureKey) return false;
+    if (!_setYourSightsReconTarget(game, combat)) return false;
+    // A friendly Loku (set_your_sights_loku owner) must be in play — board-wide.
+    const team = game.figurePositions?.[combat.attackerPlayerNum] || {};
+    for (const fk of Object.keys(team)) {
+      if (ids(eff(deps, dcNameFromFigureKey(fk))).includes('set_your_sights_loku')) return true;
+    }
+    return false;
+  },
+});
+
 // ── Defender mods ────────────────────────────────────────────────────────────
+
+// Hunker Down (Cara Dune) [defender] — gate-rework 2026-06-18. "While defending,
+// if you share a corner or edge with a space containing blocking, impassable, or
+// difficult terrain, apply +1 Evade to the defense results." A mods passive
+// (automatic +1 Evade) gated on the reusable near_terrain_type primitive. Detection
+// requires the defender to carry hunker_down. Clobbers the timing-only catalog
+// entry of the same id (deleted in the catalog file). Replaces the eager
+// declaration-time inline in handlers/combat.js (which mis-timed it + only worked
+// when target.coord was set). Effect: _fireModsPassive ('hunker_down' → +1 Evade).
+const _hunkerDownNearTerrain = makeCondition({ type: 'near_terrain_type', side: 'defender', types: ['blocking', 'impassable', 'difficult'] });
+registerCombatAbility({
+  id: 'hunker_down', name: 'Hunker Down (Cara Dune)', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const fk = combat.target?.figureKey;
+    if (!fk) return false;
+    if (!ids(eff(deps, defenderDcNameOf(combat))).includes('hunker_down')) return false;
+    return _hunkerDownNearTerrain(game, combat);
+  },
+});
+
+// Improvised Cover (Verena Talos) [defender] — gate-rework 2026-06-18. "While
+// defending, if adjacent to an object or non-friendly figure other than the
+// attacker, apply +1 Block to the defense results." A mods passive (automatic +1
+// Block) gated on the reusable affected_adjacent_to_object_or_enemy primitive.
+// Detection requires the defender to carry improvised_cover_verena. Clobbers the
+// timing-only catalog entry of the same id (deleted in the catalog file). Effect:
+// _fireModsPassive ('improvised_cover_verena' → +1 Block).
+const _improvisedCoverAdjacency = makeCondition({ type: 'affected_adjacent_to_object_or_enemy', side: 'defender' });
+registerCombatAbility({
+  id: 'improvised_cover_verena', name: 'Improvised Cover (Verena Talos)', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const fk = combat.target?.figureKey;
+    if (!fk) return false;
+    if (!ids(eff(deps, defenderDcNameOf(combat))).includes('improvised_cover_verena')) return false;
+    return _improvisedCoverAdjacency(game, combat);
+  },
+});
+
 
 registerCombatAbility({
   id: 'agile', name: 'Agile', windows: ['mods'], side: 'defender', kind: 'interactive',
@@ -316,6 +377,24 @@ registerCombatAbility({
   applies: (game, combat) => {
     if (combat._abilityUsedThisAttack?.['[Zillo Technique]:Block Boost']) return false;
     return zilloBlockBoostEligible(game, combat);
+  },
+});
+
+// Vague and Unconvincing (K-2SO) [defender] — gate-rework 2026-06-18. "While
+// defending, your player and your opponent cannot spend power tokens or play
+// Command cards." This is a DENIAL/lock-out, not a result-counter delta. The
+// actual enforcement is the derived lock-out consulted by the token-spend gate
+// (combat-abilities-tokens.js) and isCcPlayableNow (cc-timing.js), which span the
+// WHOLE attack (on_declare onward). This mods passive is informational only — it
+// reports the lock-out in the modifiers window + completes registry coverage for
+// the ability (it sets no counter). Clobbers the timing-only catalog entry of the
+// same id (deleted in the catalog). Effect: _fireModsPassive ('vague_and_unconvincing').
+registerCombatAbility({
+  id: 'vague_and_unconvincing', name: 'Vague and Unconvincing (K-2SO)', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const fk = combat.target?.figureKey;
+    if (!fk) return false;
+    return ids(eff(deps, defenderDcNameOf(combat))).includes('vague_and_unconvincing_k2s0');
   },
 });
 

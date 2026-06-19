@@ -168,7 +168,7 @@ function ensureGameShape(game) {
     // CC/DC attachments (keyed by msgId)
     'p1CcAttachments', 'p2CcAttachments', 'p1DcAttachments', 'p2DcAttachments',
     // Activation tracking (keyed by msgId or figureKey, reset each activation)
-    'activationStartPositions', 'activationDamagedFigures', 'activationKills',
+    'activationStartPositions', 'activationStartAllPositions', 'activationDamagedFigures', 'activationKills',
     'activationDoubleSpecialAction', 'activationExtraActionThenStun',
     'attackPerformedThisActivation',
     // Round-scoped containers (keyed by msgId/figureKey, reset each round)
@@ -188,7 +188,7 @@ function ensureGameShape(game) {
     // (alexanbv 2026-05-10) — crates flow entirely through the
     // unified object-damage pipeline (objectHealth/objectPositions/
     // objectMeta).
-    'crateTokens', 'deviceTokens',
+    'crateTokens', 'deviceTokens', 'reconTokens',
     'objectHealth', 'objectPositions', 'objectMeta',
     'ancillaryTokens', 'orbitalBombardmentTokens',
     // Misc keyed containers

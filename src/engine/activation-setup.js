@@ -376,6 +376,18 @@ export async function finalizeActivation({
       if (fk.startsWith(_aspPrefix)) game.activationStartPositions[fk] = pos;
     }
   }
+  // B11b. Board-wide position snapshot at the start of THIS activation. Needed by
+  // abilities that ask "where was figure X when my activation began?" — Light It
+  // Up (Rebel Pathfinder) checks whether the TARGET had LOS to the attacker at the
+  // attacker's activation start, and the target is NOT the activating figure, so
+  // its position must be read as-of this moment, not its current (possibly moved)
+  // cell. Refreshed wholesale each activation start. alexanbv 2026-06-18.
+  game.activationStartAllPositions = {};
+  for (const team of Object.values(game.figurePositions || {})) {
+    for (const [fk, pos] of Object.entries(team || {})) {
+      game.activationStartAllPositions[fk] = pos;
+    }
+  }
 
   // B12. Init dcActionsData
   // Per destruct 2026-05-07: multi-figure groups give each figure 2 actions

@@ -116,11 +116,10 @@ import {
   isKtpAlreadyUsed,
   KTP_STRAIN_AMOUNT,
 } from '../game/keep-the-peace-helpers.js';
-import {
-  hasHunkerDownAbility,
-  hasQualifyingTerrainAdjacent,
-  applyHunkerDownEvade,
-} from '../game/hunker-down-helpers.js';
+// Hunker Down (Cara Dune) is now a mods-window gate passive
+// (combat-abilities-mods.js 'hunker_down' → _fireModsPassive) gated on the
+// near_terrain_type condition primitive; the inline declaration-time path +
+// its hunker-down-helpers imports were removed. alexanbv 2026-06-18.
 import {
   hasRelentlessAbility,
   relentlessInRange,
@@ -2546,6 +2545,17 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'shared_intuition') {
     combat.bonusHits = (combat.bonusHits || 0) + 1;
     await thread.send('**Shared Intuition** (4-LOM) — friendly HUNTER within 3 has LOS to the target: +1 Damage.').catch(discordCatch);
+  } else if (id === 'set_your_sights') {
+    combat.bonusPierce = (combat.bonusPierce || 0) + 1;
+    await thread.send('**Set Your Sights** (Loku) — target has a Recon token: Pierce 1.').catch(discordCatch);
+  } else if (id === 'hunker_down') {
+    combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+    await thread.send('**Hunker Down** (Cara Dune) — adjacent to blocking/impassable/difficult terrain: +1 Evade.').catch(discordCatch);
+  } else if (id === 'improvised_cover_verena') {
+    combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+    await thread.send('**Improvised Cover** (Verena Talos) — adjacent to an object or non-friendly figure: +1 Block.').catch(discordCatch);
+  } else if (id === 'vague_and_unconvincing') {
+    await thread.send('**Vague and Unconvincing** (K-2SO) — while K-2SO defends, neither player may spend Power Tokens or play Command cards this attack.').catch(discordCatch);
   // 'negotiate' is no longer a mods passive (two-timing: moved to the on_declare
   // gate; its +2 Damage now lands here via the generic 'pending_modifiers_drain'
   // above). No mods-passive branch needed.
@@ -4336,15 +4346,11 @@ export async function handleAttackTarget(interaction, ctx) {
   const mapSpaces = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
   const targetCoord = target.coord ? String(target.coord).toLowerCase() : null;
 
-  // Hunker Down (Cara Dune): if defender shares edge/corner with blocking/impassable/difficult terrain, +1 Evade
-  if (hasHunkerDownAbility(defSpecialIds) && mapSpaces && targetCoord) {
-    const adjToDefender = new Set((mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase()));
-    if (hasQualifyingTerrainAdjacent(adjToDefender, mapSpaces.terrain || {})) {
-      const r = applyHunkerDownEvade(game.pendingCombat);
-      game.pendingCombat.bonusEvade = r.bonusEvade;
-      await thread.send('**Hunker Down** — Cara Dune is adjacent to terrain, +1 Evade.');
-    }
-  }
+  // Hunker Down (Cara Dune) — MOVED to the mods window (combat-abilities-mods.js
+  // 'hunker_down' passive → _fireModsPassive, +1 Evade) per alexanbv 2026-06-16
+  // "implement at the right timing". The eager declaration-time inline (which only
+  // fired when target.coord was set + mis-timed the modifier) was deleted to kill
+  // the double handling. Now gated on the reusable near_terrain_type primitive.
 
   // On a Diplomatic Mission: +1 Evade on defense for rest of round
   if (_defMsgId && game.diplomaticMissionEvade?.[_defMsgId]) {

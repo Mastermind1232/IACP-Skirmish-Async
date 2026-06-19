@@ -91,7 +91,9 @@ e('override_dice', 'Attack dice override (Saber Strike/Bo-Rifle/etc.)', 'attacke
 e('attack_type_override', 'Attack-type override (Overheated)', 'attacker', 'passive', ON, 'attackTypeOverride');
 e('close_quarters', 'Close Quarters', 'attacker', 'passive', ON, 'adopt adjacent pool +1 Acc -1 def die');
 e('optimal_bombardment', 'Optimal Bombardment', 'attacker', 'passive', ON, '+Blast');
-e('set_your_sights', 'Set Your Sights (Loku, recon token)', 'attacker', 'passive', ON, 'target recon-tokened → Pierce 1');
+// 'set_your_sights' is now an EXECUTABLE mods passive (combat-abilities-mods.js,
+// +1 Pierce when the target carries a Recon token) — no timing-only catalog entry
+// here so it isn't clobbered by the catalog import (per-id last-write).
 e('mon_cala_special_forces', 'Mon Cala Special Forces (Loku)', 'attacker', 'passive', ON, 'recon target → Loku Focus');
 e('ee3_carbine', 'EE-3 Carbine (Boba Fett)', 'attacker', 'interactive', ON, 'MP≥2 → die-swap picker');
 e('element_of_surprise', 'Element of Surprise (CC)', 'attacker', 'interactive', ON, 'pool-mod -1 def die');
@@ -104,13 +106,16 @@ e('wookiee_avenger_defend', 'Wookiee Avenger (defend)', 'defender', 'passive', O
 e('cross_training_declare', 'Cross Training (attachment, declare)', 'defender', 'interactive', ON, 'def upgrade → reroll available');
 e('rogue_smuggler_defend', 'Rogue Smuggler (lose Distracting)', 'defender', 'passive', ON, 'def upgrade → cancel Distracting');
 e('fireproof_defender', 'Fireproof (Flame Trooper, def)', 'defender', 'passive', ON, 'defenderFireproof');
-e('hunker_down', 'Hunker Down (Cara Dune)', 'defender', 'passive', ON, 'terrain adjacent → +1 Evade');
+// 'hunker_down' is now an EXECUTABLE mods passive (combat-abilities-mods.js, +1
+// Evade when adjacent to blocking/impassable/difficult terrain) — no timing-only
+// catalog entry so it isn't clobbered by the catalog import (per-id last-write).
 e('on_a_diplomatic_mission', 'On a Diplomatic Mission', 'defender', 'passive', ON, 'diplomaticMissionEvade → +1 Evade');
 e('slippery_declare', 'Slippery (Alliance Smuggler, declare)', 'defender', 'passive', ON, '-2 Accuracy');
 // 'sentinel' + 'protector' are now EXECUTABLE mods passives (combat-abilities-mods.js,
 // +1 Block when an owner is adjacent to the targeted space) — no timing-only catalog
 // entries here so they aren't clobbered by the catalog import.
-e('improvised_cover_verena', 'Improvised Cover (Verena Talos)', 'defender', 'passive', ON, 'adjacent cover → +1 Block');
+// 'improvised_cover_verena' is likewise now an EXECUTABLE mods passive (+1 Block
+// when adjacent to an object or non-friendly figure) — no timing-only entry here.
 e('inside_job', 'Inside Job (Hoth Battle Station A)', 'defender', 'passive', ON, 'mission zone → +Block/+Evade');
 e('the_force_is_with_me', 'The Force is With Me (Chirrut)', 'defender', 'interactive', ON, 'Ranged + adjacent hostiles → -1 Dmg picker');
 e('strike_me_down', 'Strike Me Down (Obi-Wan)', 'defender', 'interactive', ON, 'yes/decline self-defeat');
@@ -122,7 +127,9 @@ e('iron_will', 'Iron Will (CC)', 'defender', 'interactive', ON, 'damage cap (enf
 e('brace_for_impact', 'Brace for Impact (CC)', 'defender', 'interactive', ON, 'pool-mod +1 black die');
 e('knowledge_and_defense', 'Knowledge and Defense (CC)', 'defender', 'interactive', ON, 'pool-mod +1 black die');
 e('slow_on_the_draw', 'Slow on the Draw (Greedo)', 'defender', 'interactive', ON, 'attacker is Greedo → defender interrupt');
-e('vague_and_unconvincing', 'Vague and Unconvincing (K-2SO)', 'defender', 'passive', ON, 'blocks all tokens + CCs this attack');
+// 'vague_and_unconvincing' is now an EXECUTABLE mods passive (combat-abilities-mods.js,
+// reports the K-2SO lock-out; enforcement is the derived token/CC denial in
+// combat-abilities-tokens.js + cc-timing.js) — no timing-only catalog entry here.
 e('on_declare_tokens_def', 'On-declare power tokens / Squad Cohesion (def)', 'defender', 'interactive', ON, 'token spend window');
 
 // ── REROLLS (CRR step 3) ─────────────────────────────────────────────────────

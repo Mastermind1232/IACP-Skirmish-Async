@@ -212,6 +212,27 @@ describe('isCcPlayableNow', () => {
     assert.ok(isCcPlayableNow(game, 1, 'Test', mockEffect('duringActivation')));
   });
 
+  it('Vague and Unconvincing (K-2SO defending): blocks CC play for BOTH players this attack', () => {
+    // Defender is K-2S0 (carries vague_and_unconvincing_k2s0 in dc-effects). Both
+    // the attacker and the defender are locked out for the duration of the attack.
+    const game = {
+      player1Id: 'u1', player2Id: 'u2',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'K-2S0-2-0' } },
+    };
+    assert.ok(!isCcPlayableNow(game, 1, 'Test', mockEffect('duringAttack')), 'attacker locked out');
+    assert.ok(!isCcPlayableNow(game, 2, 'Test', mockEffect('whileDefending')), 'defender (K-2SO player) locked out');
+  });
+
+  it('Vague lock-out clears once the K-2SO attack is over (no pending combat / different defender)', () => {
+    const noCombat = { player1Id: 'u1', player2Id: 'u2', currentActivationTurnPlayerId: 'u1' };
+    assert.ok(isCcPlayableNow(noCombat, 1, 'Test', mockEffect('duringActivation')), 'no pending combat → playable');
+    const otherDefender = {
+      player1Id: 'u1', player2Id: 'u2',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'Stormtrooper-2-0' } },
+    };
+    assert.ok(isCcPlayableNow(otherDefender, 1, 'Test', mockEffect('duringAttack')), 'non-K-2SO defender → playable');
+  });
+
   it('blocks play when commsJammerActivePlayerNum blocks opponent', () => {
     const game = { ...activationGame, commsJammerActivePlayerNum: 1 };
     // Player 2 is jammed (commsJammer active by player 1, blocks opponent = player 2)

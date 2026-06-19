@@ -263,3 +263,49 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     assert.equal(find(at('attacker', noAtt, c, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
   });
 });
+
+describe('Deferred condition-based mods passives (2026-06-18)', () => {
+  // These use the REAL map (chopper-base-atollon) since their conditions read
+  // getMapData() directly, not the injected deps.getMapData. n4 is 'blocking';
+  // m4/n3 share a corner/edge with n4; l3↔l4 adjacent.
+  const MAP = { id: 'chopper-base-atollon' };
+
+  it('set_your_sights (attacker): fires iff target has a Recon token AND a friendly Loku is in play', () => {
+    const d = deps({ 'Loku Kanoloa': { specialAbilityIds: ['set_your_sights_loku'] }, Atk: { specialAbilityIds: [] }, Stormtrooper: {} });
+    const g = (recon, withLoku = true) => game({
+      selectedMap: MAP, reconTokens: recon,
+      figurePositions: { 1: withLoku ? { 'Atk-1-0': 'l3', 'Loku Kanoloa-1-1': 'm3' } : { 'Atk-1-0': 'l3' }, 2: { 'Stormtrooper-2-0': 'n3' } },
+    });
+    const c = combat({ attackerDcName: 'Atk', target: { figureKey: 'Stormtrooper-2-0' }, defenderDcName: 'Stormtrooper' });
+    assert.equal(find(at('attacker', g({ 'Stormtrooper-2-0': true }), c, d), 'set_your_sights')?.kind, 'passive', 'recon + Loku → offered');
+    assert.equal(find(at('attacker', g({}), c, d), 'set_your_sights'), undefined, 'no recon token → not offered');
+    assert.equal(find(at('attacker', g({ 'Stormtrooper-2-0': true }, false), c, d), 'set_your_sights'), undefined, 'no Loku in play → not offered');
+  });
+
+  it('hunker_down (defender): +1 Evade only when Cara Dune shares a corner/edge with blocking terrain', () => {
+    const d = deps({ Atk: {}, 'Cara Dune': { specialAbilityIds: ['hunker_down'] } });
+    const g = (cell) => game({ selectedMap: MAP, figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Cara Dune-2-0': cell } } });
+    const c = combat({ target: { figureKey: 'Cara Dune-2-0' }, defenderDcName: 'Cara Dune' });
+    assert.equal(find(at('defender', g('m4'), c, d), 'hunker_down')?.kind, 'passive', 'adjacent to blocking n4 → offered');
+    assert.equal(find(at('defender', g('l3'), c, d), 'hunker_down'), undefined, 'clear of terrain → not offered');
+    const noSid = deps({ Atk: {}, 'Cara Dune': { specialAbilityIds: [] } });
+    assert.equal(find(at('defender', g('m4'), c, noSid), 'hunker_down'), undefined, 'no hunker_down sid → not offered');
+  });
+
+  it('improvised_cover_verena (defender): +1 Block when adjacent to an object or non-friendly figure', () => {
+    const d = deps({ Atk: {}, Other: {}, 'Verena Talos': { specialAbilityIds: ['improvised_cover_verena'] } });
+    const c = combat({ attackerFigureKey: 'Atk-1-0', target: { figureKey: 'Verena Talos-2-0' }, defenderDcName: 'Verena Talos' });
+    const gEnemy = game({ selectedMap: MAP, figurePositions: { 1: { 'Atk-1-0': 'm8', 'Other-1-1': 'l4' }, 2: { 'Verena Talos-2-0': 'l3' } } });
+    assert.equal(find(at('defender', gEnemy, c, d), 'improvised_cover_verena')?.kind, 'passive', 'adjacent enemy → offered');
+    const gAlone = game({ selectedMap: MAP, figurePositions: { 1: { 'Atk-1-0': 'm8' }, 2: { 'Verena Talos-2-0': 'l3' } } });
+    assert.equal(find(at('defender', gAlone, c, d), 'improvised_cover_verena'), undefined, 'nothing adjacent → not offered');
+  });
+
+  it('vague_and_unconvincing (defender): offered iff K-2SO is the defender', () => {
+    const d = deps({ Atk: {}, 'K-2S0': { specialAbilityIds: ['vague_and_unconvincing_k2s0'] }, Other: { specialAbilityIds: [] } });
+    const cK2 = combat({ target: { figureKey: 'K-2S0-2-0' }, defenderDcName: 'K-2S0' });
+    assert.equal(find(at('defender', game({ selectedMap: MAP }), cK2, d), 'vague_and_unconvincing')?.kind, 'passive');
+    const cOther = combat({ target: { figureKey: 'Other-2-0' }, defenderDcName: 'Other' });
+    assert.equal(find(at('defender', game({ selectedMap: MAP }), cOther, d), 'vague_and_unconvincing'), undefined);
+  });
+});
