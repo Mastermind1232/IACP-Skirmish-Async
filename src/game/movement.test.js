@@ -15,6 +15,7 @@ import {
   getReachableSpaces,
   getPathCost,
   getMovementPath,
+  getMovementPathAvoiding,
 } from './movement.js';
 
 /** Build 5x5 grid a1..e5 with orthogonal adjacency. */
@@ -176,6 +177,35 @@ test('getMovementPath', () => {
   assert.ok(Array.isArray(path));
   assert.ok(path.length >= 2);
   assert.strictEqual(path[0], 'a1');
+});
+
+test('getMovementPathAvoiding routes around a danger cell at equal MP cost', () => {
+  const mapSpaces = buildGrid5x5();
+  const board = buildTempBoardState(mapSpaces, []);
+  const orthProfile = { ...defaultProfile, allowDiagonal: false };
+  const cache = computeMovementCache('a1', 4, board, orthProfile);
+  // b2 is reachable from a1 via b1 OR a2 — both cost 2. Mark b1 dangerous
+  // (e.g. enemy adjacent): the avoider must take a1→a2→b2.
+  const avoided = getMovementPathAvoiding(cache, board, 'a1', 'b2', '1x1', orthProfile, new Set(['b1']));
+  assert.deepStrictEqual(avoided, ['a1', 'a2', 'b2']);
+  // Symmetric: mark a2 dangerous instead → must take a1→b1→b2.
+  const avoided2 = getMovementPathAvoiding(cache, board, 'a1', 'b2', '1x1', orthProfile, new Set(['a2']));
+  assert.deepStrictEqual(avoided2, ['a1', 'b1', 'b2']);
+});
+
+test('getMovementPathAvoiding never costs extra MP (falls back to a shortest path)', () => {
+  const mapSpaces = buildGrid5x5();
+  const board = buildTempBoardState(mapSpaces, []);
+  const orthProfile = { ...defaultProfile, allowDiagonal: false };
+  const cache = computeMovementCache('a1', 4, board, orthProfile);
+  // Both intermediate routes dangerous → still returns a length-3 shortest path.
+  const path = getMovementPathAvoiding(cache, board, 'a1', 'b2', '1x1', orthProfile, new Set(['b1', 'a2']));
+  assert.strictEqual(path.length, 3);
+  assert.strictEqual(path[0], 'a1');
+  assert.strictEqual(path[2], 'b2');
+  // No danger set → identical to plain getMovementPath length.
+  const plain = getMovementPathAvoiding(cache, board, 'a1', 'b2', '1x1', orthProfile, new Set());
+  assert.strictEqual(plain.length, 3);
 });
 
 test('getReachableSpaces mp 0 returns empty', () => {

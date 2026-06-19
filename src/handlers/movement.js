@@ -1142,7 +1142,20 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   const shortName = (displayName || meta.displayName || '').replace(/\s*\[(?:DG|Group) \d+\]$/, '') || displayName;
   const pLabel = `P${playerNum}`;
   const ownerId = getPlayerId(game, playerNum);
-  const path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
+  // Point-A-to-point-B auto-path. Among equal-MP shortest routes, prefer the one
+  // that touches the fewest enemy-adjacent ("danger") cells, so the figure
+  // avoids triggering Parting Blow / Dirty Trick / Self-Defense / Overwatch when
+  // an equally-cheap route exists (alexanbv 2026-06-19). Same MP cost & length;
+  // only the route through equal-cost cells changes. Feeds the move log AND the
+  // downstream interrupt detection below.
+  let path = getMovementPath(cache, startCoord, newTopLeft, newSize, profile);
+  try {
+    const { getMovementPathAvoiding } = await import('../game/movement.js');
+    const { computeEnemyAdjacencyDangerSet } = await import('../game/movement-interrupts.js');
+    const dangerSet = computeEnemyAdjacencyDangerSet(game, playerNum);
+    const avoided = getMovementPathAvoiding(cache, boardState, startCoord, newTopLeft, newSize, profile, dangerSet);
+    if (Array.isArray(avoided) && avoided.length >= 2) path = avoided;
+  } catch { /* fall back to the plain shortest path */ }
   const startDisplay = bottomLeftCoord(startCoord, profile.size).toUpperCase();
   const pathStr = path.length > 1
     ? ` via ${path.map((c) => bottomLeftCoord(String(c), profile.size).toUpperCase()).join(' → ')}`

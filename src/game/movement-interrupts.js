@@ -42,6 +42,39 @@ function hasCardInHand(game, playerNum, cardName) {
 }
 
 /**
+ * Compute the set of cells from which entering or exiting would be adjacent to
+ * (or onto) an enemy figure — i.e. the cells whose traversal can trigger a
+ * movement interrupt (Parting Blow / Dirty Trick / Self-Defense / Overwatch).
+ * The destination-move auto-pather feeds this to getMovementPathAvoiding so an
+ * A→B move prefers an equal-length route that touches fewer of these cells.
+ *
+ * A cell X is "dangerous" when X is an enemy footprint cell OR X is adjacent to
+ * one — matching the interrupt trigger test (exitingSpace adjacent-to or on an
+ * enemy cell).
+ *
+ * @param {object} game
+ * @param {number} movingPlayerNum
+ * @returns {Set<string>} normalized danger cells
+ */
+export function computeEnemyAdjacencyDangerSet(game, movingPlayerNum) {
+  const mapId = game.selectedMap?.id;
+  const adjacency = (mapId ? getMapData(mapId)?.adjacency : null) || {};
+  const oppNum = opponentPlayerNum(movingPlayerNum);
+  const hostilePositions = game.figurePositions?.[oppNum] || {};
+  const danger = new Set();
+  for (const [hfk, hPos] of Object.entries(hostilePositions)) {
+    if (!hPos) continue;
+    const hSize = game.figureOrientations?.[hfk] || '1x1';
+    const hCells = getFootprintCells(hPos, hSize).map(c => normalizeCoord(c));
+    for (const c of hCells) {
+      danger.add(c);
+      for (const n of (adjacency[c] || [])) danger.add(normalizeCoord(n));
+    }
+  }
+  return danger;
+}
+
+/**
  * Walk the movement path and detect interrupt opportunities for C23, C15, C43.
  *
  * @param {object} game - game state

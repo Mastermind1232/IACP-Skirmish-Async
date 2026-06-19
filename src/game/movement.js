@@ -926,6 +926,74 @@ export function getMovementPath(cache, startCoord, destTopLeft, destSize, profil
   return path;
 }
 
+/**
+ * Like getMovementPath, but among all MINIMUM-MP-COST shortest paths start→dest
+ * it returns the one that touches the fewest "danger" cells — cells from which
+ * entering/exiting would be adjacent to an enemy figure (i.e. cells that trigger
+ * Parting Blow / Dirty Trick / Self-Defense / Overwatch).  This lets a point-A-
+ * to-point-B move avoid enemy spaces "if possible" without ever costing extra MP:
+ * a less-dangerous route is chosen only when it is exactly as cheap.
+ *
+ * Pure reconstruction over the existing cache — does NOT alter reachability or
+ * cost (computeMovementCache is untouched).  Falls back to getMovementPath when
+ * there is no danger set, the path is trivial, or the DAG walk fails.
+ *
+ * @param {object} cache - result of computeMovementCache (needs .nodes)
+ * @param {object} board - same board passed to computeMovementCache
+ * @param {string} startCoord
+ * @param {string} destTopLeft
+ * @param {string} destSize
+ * @param {object} profile - movement profile (needs .size and step rules)
+ * @param {Set<string>} dangerSet - normalized danger cells to avoid
+ * @returns {string[]} path of topLeft coords (same length as getMovementPath)
+ */
+export function getMovementPathAvoiding(cache, board, startCoord, destTopLeft, destSize, profile, dangerSet) {
+  const plain = getMovementPath(cache, startCoord, destTopLeft, destSize, profile);
+  if (!dangerSet || dangerSet.size === 0 || !cache?.nodes || plain.length <= 2) return plain;
+  const startTopLeft = normalizeCoord(startCoord);
+  const startKey = movementStateKey(startTopLeft, profile.size);
+  const destKey = movementStateKey(normalizeCoord(destTopLeft), destSize || profile.size);
+  if (!cache.nodes.has(startKey) || !cache.nodes.has(destKey)) return plain;
+  const isDanger = (tl) => dangerSet.has(normalizeCoord(tl));
+  // Process nodes in increasing min-cost order: every shortest-path DAG edge
+  // goes from a strictly cheaper node to a costlier one (step cost ≥ 1), so a
+  // node's predecessors are always finalized before it.
+  const ordered = [...cache.nodes.values()].sort((a, b) => a.cost - b.cost);
+  const dangerOf = new Map([[startKey, isDanger(startTopLeft) ? 1 : 0]]);
+  const parent2 = new Map();
+  for (const u of ordered) {
+    if (!dangerOf.has(u.key)) continue;
+    const uDanger = dangerOf.get(u.key);
+    const neighbors = getNeighborStates(u, board, profile);
+    for (const nb of neighbors) {
+      const step = evaluateMovementStep(u, nb, board, profile);
+      if (!step) continue;
+      const vKey = movementStateKey(nb.topLeft, nb.size);
+      const vNode = cache.nodes.get(vKey);
+      if (!vNode) continue;
+      if (vNode.cost !== u.cost + step.cost) continue; // not a min-cost DAG edge
+      const vDanger = uDanger + (isDanger(nb.topLeft) ? 1 : 0);
+      if (!dangerOf.has(vKey) || vDanger < dangerOf.get(vKey)) {
+        dangerOf.set(vKey, vDanger);
+        parent2.set(vKey, u.key);
+      }
+    }
+  }
+  if (destKey !== startKey && !parent2.has(destKey)) return plain;
+  const path = [];
+  const guard = new Set();
+  let key = destKey;
+  while (key && !guard.has(key)) {
+    guard.add(key);
+    const node = cache.nodes.get(key);
+    if (!node) break;
+    path.unshift(node.topLeft);
+    if (key === startKey) break;
+    key = parent2.get(key);
+  }
+  return (path.length >= 2 && normalizeCoord(path[0]) === startTopLeft) ? path : plain;
+}
+
 export function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
   const cached = moveState.movementCache;
   if (!cached || (moveState.cacheMaxMp || 0) < mpLimit || !(cached.cells instanceof Map)) {
