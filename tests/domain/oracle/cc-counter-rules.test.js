@@ -88,4 +88,17 @@ describe('resolveCounterStack — chains', () => {
     ];
     assert.deepEqual(resolveCounterStack(stack), ['resolved', 'cancelled', 'resolved']);
   });
+
+  // alexanbv 2026-06-19: "confirm comms can cancel comms can cancel negate can
+  // cancel a 0 pt." The full 4-deep chain on a cost-0 card.
+  it('Comms ← Comms ← Negate ← cost-0 card: the top Comms cancels the inner Comms, so Negate resolves and the 0-cost card is cancelled', () => {
+    const stack = [
+      { card: 'Element of Surprise', cost: 0 },           // A plays a cost-0 card
+      { card: NEGATION, cost: 1, spyCount: 0 },            // B Negates it (cost-0 → legal)
+      { card: COMM_DISRUPTION, cost: 2, spyCount: 1 },     // A Comms the Negation (cost-1 ≤ 1 SPY)
+      { card: COMM_DISRUPTION, cost: 2, spyCount: 2 },     // B Comms A's Comms (cost-2 ≤ 2 SPY)
+    ];
+    // Top Comms resolves → cancels A's Comms → Negation resolves → cancels the 0-cost card.
+    assert.deepEqual(resolveCounterStack(stack), ['cancelled', 'resolved', 'cancelled', 'resolved']);
+  });
 });
