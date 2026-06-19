@@ -399,11 +399,20 @@ export function makeCondition(spec) {
         return false;
       };
     }
-    // The TARGET (defender) carries a Recon token — "attacking a figure with a
-    // Recon token" (Set Your Sights / Loku). Recon tokens live in
-    // game.reconTokens[figureKey] = true (placed by Set Your Sights at setup).
+    // The TARGET (defender) carries the attacker's Recon token — "attacking a
+    // figure with a Recon token" (Set Your Sights / Loku). Recon tokens are
+    // OWNER-keyed: post-deploy placement writes game.reconTokens[playerNum] =
+    // { figureKey } (handlers/post-deploy.js handleSetYourSightsPick), so each
+    // player keeps a separate token (mirror matches). The condition fires only
+    // when the attacking player's own token sits on the target figure — matching
+    // the live inline path (handlers/combat.js handleAttackTarget).
     case 'target_has_recon_token': {
-      return (game, combat) => !!game?.reconTokens?.[combat?.target?.figureKey];
+      return (game, combat) => {
+        const pn = combat?.attackerPlayerNum;
+        const tfk = combat?.target?.figureKey;
+        if (!pn || !tfk) return false;
+        return game?.reconTokens?.[pn]?.figureKey === tfk;
+      };
     }
     default:
       return () => true;

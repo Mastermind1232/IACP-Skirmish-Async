@@ -136,11 +136,15 @@ describe('combat-conditions: deferred condition-based primitives (2026-06-18)', 
   const MAP = { id: 'chopper-base-atollon' };
 
   // ── Set Your Sights (Loku) — target_has_recon_token ────────────────────────
-  it('target_has_recon_token: fires iff the TARGET carries a Recon token', () => {
+  it('target_has_recon_token: fires iff the attacker\'s OWNER-keyed Recon token sits on the TARGET', () => {
     const c = makeCondition({ type: 'target_has_recon_token' });
-    assert.ok(c({ reconTokens: { 'Stormtrooper-2-0': true } }, { target: { figureKey: 'Stormtrooper-2-0' } }), 'recon → true');
-    assert.ok(!c({ reconTokens: {} }, { target: { figureKey: 'Stormtrooper-2-0' } }), 'no recon → false');
-    assert.ok(!c({}, { target: { figureKey: 'Stormtrooper-2-0' } }), 'no reconTokens container → false');
+    // Recon tokens are owner-keyed: game.reconTokens[playerNum] = { figureKey }.
+    const cmb = { attackerPlayerNum: 1, target: { figureKey: 'Stormtrooper-2-0' } };
+    assert.ok(c({ reconTokens: { 1: { figureKey: 'Stormtrooper-2-0' } } }, cmb), 'attacker token on target → true');
+    assert.ok(!c({ reconTokens: { 1: { figureKey: 'Other-2-9' } } }, cmb), 'token on another figure → false');
+    assert.ok(!c({ reconTokens: { 2: { figureKey: 'Stormtrooper-2-0' } } }, cmb), 'opponent\'s token (wrong owner) → false');
+    assert.ok(!c({ reconTokens: {} }, cmb), 'no recon → false');
+    assert.ok(!c({}, cmb), 'no reconTokens container → false');
   });
 
   // ── Hunker Down (Cara Dune) — near_terrain_type (GEOMETRIC neighbours) ──────

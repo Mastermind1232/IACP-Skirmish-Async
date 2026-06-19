@@ -284,10 +284,13 @@ describe('Deferred condition-based mods passives (2026-06-18)', () => {
       selectedMap: MAP, reconTokens: recon,
       figurePositions: { 1: withLoku ? { 'Atk-1-0': 'l3', 'Loku Kanoloa-1-1': 'm3' } : { 'Atk-1-0': 'l3' }, 2: { 'Stormtrooper-2-0': 'n3' } },
     });
-    const c = combat({ attackerDcName: 'Atk', target: { figureKey: 'Stormtrooper-2-0' }, defenderDcName: 'Stormtrooper' });
-    assert.equal(find(at('attacker', g({ 'Stormtrooper-2-0': true }), c, d), 'set_your_sights')?.kind, 'passive', 'recon + Loku → offered');
+    // Recon tokens are OWNER-keyed: game.reconTokens[playerNum] = { figureKey }.
+    const c = combat({ attackerPlayerNum: 1, attackerDcName: 'Atk', target: { figureKey: 'Stormtrooper-2-0' }, defenderDcName: 'Stormtrooper' });
+    assert.equal(find(at('attacker', g({ 1: { figureKey: 'Stormtrooper-2-0' } }), c, d), 'set_your_sights')?.kind, 'passive', 'recon + Loku → offered');
     assert.equal(find(at('attacker', g({}), c, d), 'set_your_sights'), undefined, 'no recon token → not offered');
-    assert.equal(find(at('attacker', g({ 'Stormtrooper-2-0': true }, false), c, d), 'set_your_sights'), undefined, 'no Loku in play → not offered');
+    // Token on a DIFFERENT figure → not offered (must sit on the target).
+    assert.equal(find(at('attacker', g({ 1: { figureKey: 'Other-2-9' } }), c, d), 'set_your_sights'), undefined, 'token on another figure → not offered');
+    assert.equal(find(at('attacker', g({ 1: { figureKey: 'Stormtrooper-2-0' } }, false), c, d), 'set_your_sights'), undefined, 'no Loku in play → not offered');
   });
 
   it('hunker_down (defender): +1 Evade only when Cara Dune shares a corner/edge with blocking terrain', () => {
