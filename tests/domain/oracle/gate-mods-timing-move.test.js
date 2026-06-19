@@ -41,6 +41,8 @@ async function attackInto(defenderDc, opts = {}) {
   const defSq = opts.defSq || 'c1';
   game.figurePositions[1] = { [a]: atkSq };
   game.figurePositions[2] = { [d]: defSq };
+  // Set Your Sights (Loku): place P1's owner-keyed Recon token on the target.
+  if (opts.reconOnTarget) game.reconTokens = { 1: { figureKey: d } };
   if (opts.attackerConditions) {
     game.figureConditions = game.figureConditions || {};
     game.figureConditions[a] = opts.attackerConditions;
@@ -231,5 +233,18 @@ describe('GATE on_declare timing move: auto-Focus fires before the roll, once', 
 
     const far = await attackInto('Stormtrooper', { attackerDc: 'Jet Trooper (Elite)', type: 'range', dist: 4, defSq: 'f1' });
     assert.equal(far.attackInfo.dice.length, 2, 'Fly-By must NOT fire when target is 3+ away');
+  });
+
+  it('Set Your Sights (Loku): +1 Pierce applied EXACTLY ONCE when attacking a Recon-tokened target', async () => {
+    // Regression: the old inline handleAttackTarget Pierce + the mods gate
+    // passive both fired once the gate's recon condition was fixed → double
+    // Pierce. The inline was removed; only the gate passive applies it now.
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Loku Kanoloa', reconOnTarget: true });
+    assert.equal(combat.bonusPierce, 1, 'Set Your Sights must apply +1 Pierce exactly once (not 2)');
+  });
+
+  it('Set Your Sights: no Pierce when the target has no Recon token', async () => {
+    const combat = await attackInto('Stormtrooper', { attackerDc: 'Loku Kanoloa' });
+    assert.equal(combat.bonusPierce || 0, 0, 'no Recon token → no Set Your Sights Pierce');
   });
 });

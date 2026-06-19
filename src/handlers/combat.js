@@ -273,22 +273,6 @@ function _markGateAbilityUsed(game, combat, pick) {
 }
 
 /**
- * Is a figure with the given specialAbilityId currently ALIVE (on the board) for
- * a player? Aura/token abilities (Set Your Sights, etc.) end when their source
- * figure is defeated. alexanbv 2026-06-17.
- */
-function _figureWithAbilityAlive(game, playerNum, abilityId) {
-  const figs = game?.figurePositions?.[playerNum] || {};
-  const eff = getDcEffectsGlobal() || {};
-  for (const fk of Object.keys(figs)) {
-    const n = dcNameFromFigureKey(fk);
-    const e = eff[n] || eff[(n || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((e?.specialAbilityIds || []).includes(abilityId)) return true;
-  }
-  return false;
-}
-
-/**
  * Tough Luck (CC) — the single generic post-reroll reaction (alexanbv 2026-06-17:
  * "one or two functions, not multiple in each ability"). After ANY reroll, the
  * RELEVANT player by the die's POOL — attack die → the DEFENDER, defense die →
@@ -4791,21 +4775,10 @@ export async function handleAttackTarget(interaction, ctx) {
   // step-4 attacker modifier window (proceedAfterRerolls) via the
   // combat_passive_ prompt pattern.
 
-  // Improvised Cover (Verena Talos): +1 Block if adjacent to object or non-friendly, non-attacker figure
-  if (defSpecialIds.includes('improvised_cover_verena') && mapSpaces && targetCoord) {
-    const adjToDefIC = (mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase());
-    // Check for adjacent hostile/neutral figures (attacker's figures that aren't the attacker)
-    const atkFigPosIC = game.figurePositions?.[attackerPlayerNum] || {};
-    let icFound = false;
-    for (const [fk, pos] of Object.entries(atkFigPosIC)) {
-      if (fk === attackerFigureKey) continue;
-      if (adjToDefIC.includes(String(pos).toLowerCase())) { icFound = true; break; }
-    }
-    if (icFound) {
-      game.pendingCombat.bonusBlock = (game.pendingCombat.bonusBlock || 0) + 1;
-      await thread.send('**Improvised Cover** — Adjacent to non-friendly figure (not attacker): +1 Block.');
-    }
-  }
+  // Improvised Cover (Verena Talos): +1 Block is now applied by the LIVE mods-gate
+  // passive ('improvised_cover_verena' → _fireModsPassive), with the broader
+  // object-OR-enemy-figure condition. The old inline +Block here was removed to
+  // avoid a DOUBLE Block (Batch 2 added the gate passive but left this inline).
 
   // Inside Job (Hoth Battle Station A): defense modifier based on deployment zone
   {
@@ -4923,12 +4896,12 @@ export async function handleAttackTarget(interaction, ctx) {
   // like this should be player-sensitive and only work while the figure is alive."
   const _myRecon = game.reconTokens?.[attackerPlayerNum];
   const _reconOnTarget = _myRecon?.figureKey === target.figureKey;
-  // Set Your Sights — Pierce 1 when ANY friendly figure attacks the tokened figure
-  // (gated on Loku still being alive — the aura ends if its source is defeated).
-  if (_reconOnTarget && _figureWithAbilityAlive(game, attackerPlayerNum, 'set_your_sights_loku')) {
-    game.pendingCombat.bonusPierce = (game.pendingCombat.bonusPierce || 0) + 1;
-    await thread.send('**Set Your Sights** — Attacking figure with Recon token: +Pierce 1.');
-  }
+  // Set Your Sights Pierce 1 is now applied by the LIVE mods-gate passive
+  // ('set_your_sights' → _fireModsPassive), so the old inline +Pierce here was
+  // removed to avoid a DOUBLE Pierce once the gate passive's recon-token
+  // condition was corrected to the owner-keyed shape (commit 6c661702). The
+  // gate passive uses the same condition (target carries the attacker's Recon
+  // token + a live Loku), so behaviour is unchanged — just single, not double.
   // Mon Cala SF — Loku becomes Focused when LOKU attacks the tokened figure
   // (inherently requires the attacker to be a live Loku).
   if (_reconOnTarget && hasMonCalaSfLokuAbility(atkSpecialIds)) {
