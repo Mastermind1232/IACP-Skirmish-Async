@@ -1266,8 +1266,8 @@ WHEN_DEFEATED_HOOKS.push({
  * figure's owner; Saw lives on the OTHER side, so that side does the
  * choosing.
  *
- * Once-per-round limit not yet enforced — preserve parity with the
- * old inline path, revisit alongside the per-round-limit cleanup.
+ * Once per round (alexanbv 2026-06-19): gated on
+ * game.brutalTacticsUsedThisRound[triggerSidePn], reset at round start.
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'brutal_tactics',
@@ -1277,6 +1277,7 @@ WHEN_DEFEATED_HOOKS.push({
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     if (!opts.defeatedPos) return false;
     const triggerSidePn = opts.controllerPlayerNum === 1 ? 2 : 1;
+    if (game.brutalTacticsUsedThisRound?.[triggerSidePn]) return false; // once per round
     const figs = Object.keys(game.figurePositions?.[triggerSidePn] || {});
     return figs.some(fk => {
       const dcN = dcNameFromFigureKey(fk);
@@ -1294,6 +1295,10 @@ WHEN_DEFEATED_HOOKS.push({
       eligible.push({ figureKey: fk, label: dcNameFromFigureKey(fk) });
     }
     if (eligible.length === 0) return;
+    // Mark the once-per-round use now that the trigger has eligible targets.
+    const triggerSidePn = opts.controllerPlayerNum === 1 ? 2 : 1;
+    game.brutalTacticsUsedThisRound = game.brutalTacticsUsedThisRound || {};
+    game.brutalTacticsUsedThisRound[triggerSidePn] = true;
     const { openDefeatPick } = await import('../handlers/defeat-pick.js');
     await openDefeatPick(game, ctx, {
       kind: 'bt',
@@ -1410,8 +1415,11 @@ WHEN_DEFEATED_HOOKS.push({
     return dcNameFromFigureKey(opts.figureKey) === 'Tauntaun Rider';
   },
   apply: async (game, opts, ctx) => {
+    // Useful Hide distributes 2 Evade Tokens among friendly figures with NO
+    // range restriction (alexanbv 2026-06-19; the old ≤3-space filter was not
+    // on the card).
     const friendly = Object.entries(game.figurePositions?.[opts.controllerPlayerNum] || {})
-      .filter(([k, pos]) => k !== opts.figureKey && pos && countGameSpaces(game, opts.defeatedPos, pos) <= 3)
+      .filter(([k, pos]) => k !== opts.figureKey && pos)
       .map(([k]) => ({ figureKey: k, label: dcNameFromFigureKey(k) }));
     if (friendly.length === 0) return;
     const { openDefeatPick } = await import('../handlers/defeat-pick.js');

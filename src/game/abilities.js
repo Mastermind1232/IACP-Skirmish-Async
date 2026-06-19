@@ -1158,8 +1158,19 @@ export function resolveAbility(abilityId, context) {
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
-    const validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**On My Mark** — No other friendly figures on the board.' };
+    let validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
+    // "another friendly figure IN YOUR LINE OF SIGHT" (CSV row 261) — filter to
+    // targets the activating figure can see (alexanbv 2026-06-19).
+    const _omActPos = game.figurePositions?.[playerNum]?.[activatingKey];
+    const _omMs = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+    const _omGfs = context.getFigureSize;
+    if (_omActPos && _omMs && typeof _omGfs === 'function') {
+      validTargets = validTargets.filter((fk) => {
+        const tPos = game.figurePositions[playerNum][fk];
+        return tPos && hasLineOfSightByCoord(game, _omActPos, tPos, _omMs, _omGfs);
+      });
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**On My Mark** — No friendly figure in your line of sight.' };
     return {
       applied: false,
       requiresChoice: true,
@@ -10958,9 +10969,13 @@ export function resolveAbility(abilityId, context) {
       const dcN = dcNameFromFigureKey(fk);
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
-      if (kws.includes('TROOPER') && (eff.cost ?? 0) >= 4) { validKeys.push(fk); validLabels.push(`${dcN} (cost ${eff.cost})`); }
+      // "figure cost of 4 or greater" — figure cost is subCost ?? cost (a
+      // multi-figure elite group's per-figure cost), NOT the group total
+      // (alexanbv 2026-06-19).
+      const figureCost = eff.subCost ?? eff.cost ?? 0;
+      if (kws.includes('TROOPER') && figureCost >= 4) { validKeys.push(fk); validLabels.push(`${dcN} (figure cost ${figureCost})`); }
     }
-    if (!validKeys.length) return { applied: false, manualMessage: 'No TROOPER figures with cost 4+ in play.' };
+    if (!validKeys.length) return { applied: false, manualMessage: 'No TROOPER figures with figure cost 4+ in play.' };
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt: ${n}`), choiceValues: validKeys };
   }
 

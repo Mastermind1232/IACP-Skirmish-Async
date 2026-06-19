@@ -168,7 +168,8 @@ describe('PROBE-FIELD-TACTICS-ELITE-004: target enumeration (keyword + cost + ra
     assert.deepStrictEqual(out, []);
   });
 
-  it('includes a target at exactly 2 spaces, excludes at 3+', () => {
+  it('includes targets regardless of distance (no range restriction)', () => {
+    // alexanbv 2026-06-19: Field Tactics has NO range restriction.
     const game = buildGame({
       positions: {
         'Death Trooper (Elite)-1-0': 'a1',
@@ -181,11 +182,11 @@ describe('PROBE-FIELD-TACTICS-ELITE-004: target enumeration (keyword + cost + ra
     const game3 = buildGame({
       positions: {
         'Death Trooper (Elite)-1-0': 'a1',
-        'Jet Trooper (Regular)-1-0': 'd1',
+        'Jet Trooper (Regular)-1-0': 'd1', // 3+ spaces away — still eligible now
       },
     });
     const atThree = enumerateFieldTacticsTargets(game3, META, dcEffects());
-    assert.deepStrictEqual(atThree, []);
+    assert.deepStrictEqual(atThree, ['Jet Trooper (Regular)-1-0']);
   });
 
   it('missing DC effect entry for target → excluded (fail-safe)', () => {

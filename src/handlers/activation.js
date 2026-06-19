@@ -96,7 +96,7 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
     // Auto-select the only eligible group and grant its immediate activation.
     const chosenFk = validTargets[0];
     const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, meta.playerNum, chosenFk) : null;
-    grantFieldTacticsActivation(game, meta.playerNum, chosenMsgId, ftRoundKey);
+    grantFieldTacticsActivation(game, meta.playerNum, chosenMsgId);
     const chosenName = dcNameFromFigureKey(chosenFk);
     await logGameAction(game, client, `<@${ownerId}> **Field Tactics** — **${chosenName}**'s group may **immediately activate** now (it loses Field Tactics this round). Click its card to begin.`, {
       phase: 'ROUND', icon: 'activate', allowedMentions: { users: [ownerId] },
@@ -129,11 +129,14 @@ async function maybePromptFieldTactics(game, meta, dcMsgId, logGameAction, clien
  * guard. Mirrors the Squad Swarm flag (`squadSwarmPlayerNum`): the chosen
  * group activates through the normal activation flow on the next card click.
  */
-function grantFieldTacticsActivation(game, playerNum, chosenMsgId, ftRoundKey) {
+function grantFieldTacticsActivation(game, playerNum, chosenMsgId) {
   game.fieldTacticsActivationPlayerNum = playerNum;
   game.fieldTacticsActivationMsgId = chosenMsgId || null;
   game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-  game.roundFigureAbilityUsed[ftRoundKey] = true;
+  // "That group loses Field Tactics this round" — lock the ACTIVATED group's
+  // own key (alexanbv 2026-06-19), not the triggering Death Trooper's, so an
+  // activated Field Tactics group cannot itself trigger Field Tactics this round.
+  if (chosenMsgId) game.roundFigureAbilityUsed[fieldTacticsRoundKey(chosenMsgId)] = true;
 }
 
 /**
@@ -2326,8 +2329,7 @@ export async function handleFieldTacticsPick(interaction, ctx) {
   }
   const findDcMsgIdForFigure = ctx.findDcMessageIdForFigure;
   const chosenMsgId = findDcMsgIdForFigure ? findDcMsgIdForFigure(gameId, triggerMeta.playerNum, figureKey) : null;
-  const ftRoundKey = `fieldTactics_${triggerMsgId}`;
-  grantFieldTacticsActivation(game, triggerMeta.playerNum, chosenMsgId, ftRoundKey);
+  grantFieldTacticsActivation(game, triggerMeta.playerNum, chosenMsgId);
   const chosenName = dcNameFromFigureKey(figureKey);
   const _ftMsg = `**Field Tactics** — **${chosenName}**'s group may **immediately activate** now (it loses Field Tactics this round). Click its card to begin.`;
   await interaction.message.edit({ content: _ftMsg, components: [] }).catch(discordCatch);

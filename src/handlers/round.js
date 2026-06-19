@@ -1081,6 +1081,11 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   game.deadlyPrecisionActive = {};
   // There is Another (Leia CC) relaxes CC play-legality for one round — clear it.
   game.thereIsAnotherActive = {};
+  // Hold Ground (CC): "until the end of the round" — clear the holder each round
+  // (alexanbv 2026-06-19; previously persisted across rounds).
+  game.holdGroundPlayerNum = null;
+  // Brutal Tactics (Saw): once-per-round trigger limit — reset each round.
+  game.brutalTacticsUsedThisRound = {};
 
   // Mission SOR async effects: dispatch via the mission-eor-effects
   // registry (which now handles both EoR and SOR). Halts early on any

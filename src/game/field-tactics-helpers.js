@@ -64,14 +64,18 @@ export function fieldTacticsOrigin(game, meta) {
  *  - NOT in the activating DG (skip same prefix)
  *  - Owner DC has TROOPER or LEADER keyword (case-insensitive)
  *  - Owner DC cost ≤ 6
- *  - Within FIELD_TACTICS_RANGE spaces of the origin
+ *
+ * NOTE: the card has NO range restriction (alexanbv 2026-06-19); the prior
+ * ≤2-space filter was a spurious limit and has been removed.
  *
  * @returns {string[]} ordered list of figure keys
  */
 export function enumerateFieldTacticsTargets(game, meta, dcEffects) {
+  // The activating group must still have a live figure (it just activated);
+  // its prefix is used to exclude its own figures. No range restriction.
   const origin = fieldTacticsOrigin(game, meta);
   if (!origin) return [];
-  const { prefix, originPos } = origin;
+  const { prefix } = origin;
   const out = [];
   for (const [fk, pos] of Object.entries(game?.figurePositions?.[meta.playerNum] || {})) {
     if (!pos) continue;
@@ -82,7 +86,6 @@ export function enumerateFieldTacticsTargets(game, meta, dcEffects) {
     const kws = (fkEff.keywords || []).map((k) => String(k).toUpperCase());
     if (!FIELD_TACTICS_REQUIRED_KEYWORDS.some((req) => kws.includes(req))) continue;
     if ((fkEff.cost ?? 99) > FIELD_TACTICS_MAX_COST) continue;
-    if (countGameSpaces(game, originPos, pos) > FIELD_TACTICS_RANGE) continue;
     out.push(fk);
   }
   return out;
