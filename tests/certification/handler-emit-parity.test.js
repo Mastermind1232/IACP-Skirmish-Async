@@ -57,6 +57,11 @@ const EMIT_ALLOWLIST = new Set([
   'sc_hh_skip_',
   'sc_cc_open_',
   'sc_cc_skip_',
+  // Strategic Shift post-choice protection — same dynamic `${idPrefix}_open_`/
+  // `_skip_` template (idPrefix='sc_ss'). Live emission in handleCcChoice via
+  // offerScSetAside; sc_ss_confirm_ is a literal (handleScSsOpen) so it's seen.
+  'sc_ss_open_',
+  'sc_ss_skip_',
 ]);
 
 function getRegistrations() {

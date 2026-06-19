@@ -14,6 +14,7 @@ import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures } from './board-helpers.js';
 import { applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
+import { scReactionAvailable } from './smuggling-compartment.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
 
@@ -9019,6 +9020,18 @@ export function resolveAbility(abilityId, context) {
         choiceOptions: ['Player 1', 'Player 2'],
         choiceCount: 2,
         manualMessage: 'Choose which player shuffles their hand into their deck, then draws 2.',
+      };
+    }
+    // [Smuggling Compartment] hand-protection: the chosen player is about to
+    // shuffle their hand away, so — before that — they may exhaust SC to set
+    // aside cards (Destruct 2026-06-17: SC fires before any hand-affecting
+    // effect). The target is only known AFTER this mid-effect choice, so the
+    // offer is made here (post-choice) by the handler layer; on resume it
+    // re-enters with _scResolved set and proceeds to the shuffle.
+    if (!context._scResolved && scReactionAvailable(game, targetNum)) {
+      return {
+        applied: false,
+        requiresScHandProtection: { ownerNum: targetNum, choiceIndex },
       };
     }
     const deckKey = ccDeckKey(targetNum);
