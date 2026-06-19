@@ -86,10 +86,13 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
 
     for (const hf of hostileFigures) {
       // --- C23: Parting Blow (BRAWLER, once per move) ---
+      // alexanbv 2026-06-19: "exiting ANY adjacent space counts" — the trigger
+      // is exiting a space adjacent to the Brawler, even if the mover is STILL
+      // adjacent after the step (matches the cell-by-cell extractMoveInterrupt-
+      // Opportunities path). Previously required fully leaving adjacency.
       if (!partingBlowTriggered) {
         const wasAdjacent = hf.cells.some(c => exitAdj.has(c) || c === exitingSpace);
-        const stillAdjacent = hf.cells.some(c => enterAdj.has(c) || c === enteringSpace);
-        if (wasAdjacent && !stillAdjacent) {
+        if (wasAdjacent) {
           if (dcHasTrait(hf.dcName, ['BRAWLER']) && hasCardInHand(game, oppNum, 'Parting Blow')) {
             partingBlowTriggered = true;
             const displayName = hf.dcName.replace(/_/g, ' ');
@@ -109,9 +112,10 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
       // --- C15: Dirty Trick (SMUGGLER or HUNTER, entering adjacent) ---
       {
         const nowAdjacent = hf.cells.some(c => enterAdj.has(c) || c === enteringSpace);
-        const wasAdjacentBefore = hf.cells.some(c => exitAdj.has(c) || c === exitingSpace);
-        // Only trigger when entering adjacency (not already adjacent)
-        if (nowAdjacent && !wasAdjacentBefore) {
+        // alexanbv 2026-06-19: entering ANY adjacent space counts (reading (a)),
+        // even if the mover was already adjacent before the step — matches the
+        // cell-by-cell extractMoveInterruptOpportunities path.
+        if (nowAdjacent) {
           if (dcHasTrait(hf.dcName, ['SMUGGLER', 'HUNTER']) && hasCardInHand(game, oppNum, 'Dirty Trick')) {
             const displayName = hf.dcName.replace(/_/g, ' ');
             // Avoid duplicate triggers for the same figure in the same move

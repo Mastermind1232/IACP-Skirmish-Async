@@ -78,11 +78,13 @@ describe('B-MVINT-001: Parting Blow fires when BRAWLER hostile exits adjacency',
   });
 });
 
-// ── B-MVINT-002: Parting Blow does NOT fire when still adjacent ─────────────
+// ── B-MVINT-002: Parting Blow fires on exiting ANY adjacent space ───────────
+// alexanbv 2026-06-19: reading (a) — exiting a space adjacent to the BRAWLER
+// triggers Parting Blow even if the mover REMAINS adjacent after the step.
 
-describe('B-MVINT-002: Parting Blow does NOT fire when hostile still adjacent', () => {
-  it('002: hostile BRAWLER on b1, figure moves a1→a2 (b1 still adjacent to a2)', () => {
-    // b1 is adjacent to both a1 and a2
+describe('B-MVINT-002: Parting Blow fires when exiting an adjacent space (still adjacent after)', () => {
+  it('002: hostile BRAWLER on b1, figure moves a1→a2 (b1 adjacent to both — exits a1)', () => {
+    // b1 is adjacent to both a1 and a2; exiting a1 (an adjacent space) fires PB.
     const game = makeGame({
       figurePositions: {
         1: { 'Rebel Trooper-1-0': 'a1' },
@@ -94,7 +96,8 @@ describe('B-MVINT-002: Parting Blow does NOT fire when hostile still adjacent', 
     const triggers = detectPostMoveInterrupts(game, 1, 'Rebel Trooper-1-0', ['a1', 'a2']);
 
     const pb = triggers.find(t => t.type === 'partingBlow');
-    assert.strictEqual(pb, undefined, 'no Parting Blow — hostile still adjacent');
+    assert.ok(pb, 'Parting Blow fires — exited a space adjacent to the BRAWLER (reading (a))');
+    assert.strictEqual(pb.candidateFigureKey, 'Agent Kallus-1-0');
   });
 });
 
@@ -191,10 +194,12 @@ describe('B-MVINT-006: Dirty Trick fires when SMUGGLER/HUNTER hostile enters adj
   });
 });
 
-// ── B-MVINT-007: Dirty Trick does NOT fire when already adjacent ────────────
+// ── B-MVINT-007: Dirty Trick fires on entering ANY adjacent space ───────────
+// alexanbv 2026-06-19: reading (a) — entering a space adjacent to the
+// SMUGGLER/HUNTER triggers Dirty Trick even if the mover was already adjacent.
 
-describe('B-MVINT-007: Dirty Trick does NOT fire when hostile was already adjacent', () => {
-  it('007: SMUGGLER on b1, figure moves a1→a2 (b1 adjacent to both)', () => {
+describe('B-MVINT-007: Dirty Trick fires when entering an adjacent space (already adjacent before)', () => {
+  it('007: SMUGGLER on b1, figure moves a1→a2 (b1 adjacent to both — enters a2)', () => {
     const game = makeGame({
       figurePositions: {
         1: { 'Rebel Trooper-1-0': 'a1' },
@@ -206,7 +211,8 @@ describe('B-MVINT-007: Dirty Trick does NOT fire when hostile was already adjace
     const triggers = detectPostMoveInterrupts(game, 1, 'Rebel Trooper-1-0', ['a1', 'a2']);
 
     const dt = triggers.find(t => t.type === 'dirtyTrick');
-    assert.strictEqual(dt, undefined, 'no Dirty Trick — hostile was already adjacent');
+    assert.ok(dt, 'Dirty Trick fires — entered a space adjacent to the SMUGGLER (reading (a))');
+    assert.strictEqual(dt.candidateFigureKey, 'Alliance Smuggler (Elite)-1-0');
   });
 });
 
@@ -344,10 +350,10 @@ describe('B-MVINT-013: Empty or single-space path returns no triggers', () => {
 // ── B-MVINT-014: Multi-step path detects trigger at correct step ────────────
 
 describe('B-MVINT-014: Multi-step path detects trigger at correct step', () => {
-  it('014: path a2→a1→d1, Parting Blow fires at step a1→d1 (not a2→a1)', () => {
-    // BRAWLER on b1
-    // a2 adj includes b1 ✓, a1 adj includes b1 ✓ → step a2→a1: still adjacent, no trigger
-    // a1 adj includes b1 ✓, d1 adj does NOT include b1 → step a1→d1: exits adjacency, triggers
+  it('014: path a2→a1→d1, Parting Blow fires at FIRST adjacent-exit step a2→a1', () => {
+    // BRAWLER on b1; reading (a): PB fires the first time the mover EXITS a space
+    // adjacent to the BRAWLER, regardless of whether it stays adjacent after.
+    // a2 adj includes b1 ✓ → step a2→a1 exits the adjacent space a2 → fires here.
     const game = makeGame({
       figurePositions: {
         1: { 'Rebel Trooper-1-0': 'a2' },
@@ -360,8 +366,8 @@ describe('B-MVINT-014: Multi-step path detects trigger at correct step', () => {
 
     const pb = triggers.find(t => t.type === 'partingBlow');
     assert.ok(pb, 'Parting Blow fires');
-    assert.strictEqual(pb.triggerSpace, 'a1',
-      'trigger at a1 (exiting space where adjacency was lost), not a2');
+    assert.strictEqual(pb.triggerSpace, 'a2',
+      'trigger at a2 (first exit of a space adjacent to the BRAWLER, once per move)');
   });
 
   it('014b: same path, Dirty Trick SMUGGLER on e1 fires at step a1→d1 (enters adjacency)', () => {
