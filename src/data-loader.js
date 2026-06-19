@@ -312,6 +312,31 @@ export function getDcKeywords(game) {
       }
     }
 
+    // ── Technician Training (Upgrade): grants the TECHNICIAN trait to the named
+    // figures in ALL armies whenever EITHER player includes it (CSV row 88,
+    // alexanbv 2026-06-19). It is an army-wide upgrade, so it appears in a
+    // player's dcList like Balance of the Force / Temporary Alliance. ──
+    const _ttInPlay = [1, 2].some((pn) => {
+      const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+      return Array.isArray(dcList) && dcList.some((e) => {
+        const n = typeof e === 'object' ? (e.dcName || e.displayName) : e;
+        return n === '[Technician Training]' || n === 'Technician Training';
+      });
+    });
+    if (_ttInPlay) {
+      const TT_NAMES = new Set([
+        'C1-10P', 'Jarrod Kelvin', "Mak Eshka'rey", 'R2-D2', 'Chewbacca',
+        'Jawa Scavenger', 'Ugnaught Tinkerer', 'Doctor Aphra', 'Zuckuss',
+        'E-Web Engineer', 'General Sorin',
+      ]);
+      for (const name of Object.keys(dcEffects)) {
+        const base = name.replace(/\s*\((?:Elite|Regular)\)\s*$/, '');
+        if (!TT_NAMES.has(name) && !TT_NAMES.has(base)) continue;
+        if (!out[name]) out[name] = Array.isArray(dcEffects[name].keywords) ? [...dcEffects[name].keywords] : [];
+        if (!out[name].some((k) => String(k).toUpperCase() === 'TECHNICIAN')) out[name].push('TECHNICIAN');
+      }
+    }
+
     // ── Adaptive Skills (Mara Jade): inject trait based on army affiliation ──
     for (const pn of [1, 2]) {
       const dcList = pn === 1 ? game.p1DcList : game.p2DcList;

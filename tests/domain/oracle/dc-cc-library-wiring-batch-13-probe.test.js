@@ -48,7 +48,7 @@ const BATCH = [
   ['Improvised Weapons',    ['overrideAttackDice', 'overrideAttackType', 'freeAttackBonus']],
   ['In the Shadows',        ['roundInTheShadowsPlayerNum']],
   ['Jump Jets',             ['mpBonus']],
-  ['Karabast!',             ['chooseAdjacentHostileThen']],
+  ['Karabast!',             ['karabastEffect']],
   ['Lightbow',              ['freeAttackBonus', 'overrideAttackDice', 'overrideAttackType', 'overrideBonusAccuracy']],
   ['Lock On',               ['attackAccuracyBonus']],
   ['Mandalorian Tactics',   ['chooseOne']],

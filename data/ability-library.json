@@ -2841,11 +2841,9 @@
     },
     "Karabast!": {
       "type": "ccEffect",
-      "label": "Per your Damage choose hostile within 2, each suffers 1 (one auto)",
-      "chooseAdjacentHostileThen": {
-        "damage": 1,
-        "range": 2
-      },
+      "label": "For each Damage you've suffered, choose a hostile within 2; each chosen suffers 1 Damage",
+      "karabastEffect": true,
+      "karabastRange": 2,
       "wiredStatus": "wired"
     },
     "keep_the_peace_elite": {

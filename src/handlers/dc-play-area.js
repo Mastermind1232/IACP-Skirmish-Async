@@ -1392,7 +1392,10 @@ async function buildAndSendAttackTargets(
     const arcTag = (_arcActive && t.arcingShotValid === false) ? ' [No Arc]' : '';
     // Marksman-only targets are selectable: clicking will auto-play Marksman
     // before resolving the attack (handleDcAttackTarget consumes the card).
-    const selectable = !noLOS || t.requiresMarksman;
+    // Arcing Shot: a target with no direct LOS is selectable when it is adjacent
+    // to an empty space in the attacker's LOS (arcingShotValid) — that is the
+    // whole point of the card (alexanbv 2026-06-19).
+    const selectable = !noLOS || t.requiresMarksman || (_arcActive && t.arcingShotValid === true);
     return new ButtonBuilder()
       .setCustomId(`attack_target_${msgId}_${figureIndex}_${targetIndex}`)
       .setLabel(`${t.label} (${t.coord.toUpperCase()})${noLOS ? (t.requiresMarksman ? marksmanTag : ' [No LOS]') : daTag}${arcTag}`.slice(0, 80))

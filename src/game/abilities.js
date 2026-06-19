@@ -3548,6 +3548,41 @@ export function resolveAbility(abilityId, context) {
     }
     const validSpaces = [...validSet];
     if (validSpaces.length === 0) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (no spaces in range).` };
+    // Move-first (Din's Wrist Flamethrower: "Move up to 2 spaces, THEN choose a
+    // space within 2"). Set up the Move-X picker; its rollOneDieSpacePick
+    // continuation recomputes the valid spaces from the post-move position and
+    // posts the burst-space picker, which routes the chosen space back to
+    // resolveAbility(abilityId, {chosenSpace}) → Phase 2 above. (The previous
+    // code ignored freeMoveBonus on this path — alexanbv 2026-06-19.)
+    if (typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.fixedAreaRequiresAdjacentHostile && msgId) {
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[msgId] = {
+        remaining: entry.freeMoveBonus,
+        source: entry.label || 'Move X',
+        playerNum,
+        figureKey: activatingFigureKey,
+        dcName: meta?.dcName || '',
+        threadId: null,
+        msgId,
+        bypassCosts: !!entry.freeMoveBypassCosts,
+        nextAction: {
+          type: 'rollOneDieSpacePick',
+          range,
+          label: entry.label || 'Area Effect',
+          abilityId,
+          specialIdx: context.specialIdx ?? null,
+          figureIndex: selectedFig,
+          requireHostileOccupant: false,
+          spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:`,
+        },
+      };
+      return {
+        applied: true,
+        pendingMoveXMsgId: msgId,
+        logMessage: `**${entry.label}** — Move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''} first, then choose a space within ${range}.`,
+        activeMsgId: msgId,
+      };
+    }
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**${entry.label}** — Choose a space within ${range}:` };
   }
 
@@ -7792,6 +7827,87 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Wookiee Rage** — ${damagePerTarget} Damage per target (${damageSuffered} Damage suffered). Choose up to 3 adjacent hostiles.` };
   }
 
+  // ccEffect: karabastEffect (Karabast!) — "For each Damage you have suffered,
+  // choose a hostile figure within 2 spaces; each chosen figure suffers 1 Damage."
+  // Multi-pick with the number of picks = Damage suffered by the activating
+  // figure; the SAME figure may be chosen more than once (each pick = 1 Damage).
+  if (entry.type === 'ccEffect' && entry.karabastEffect) {
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const oppNum = opponentPlayerNum(playerNum);
+    const selfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!selfMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const selfHs = dcHealthState?.get(selfMsgId) || [];
+    const selectedFig = game.dcActionsData?.[selfMsgId]?.selectedFigure ?? 0;
+    const selfEntry = selfHs[selectedFig];
+    const damageSuffered = selfEntry ? Math.max(0, (selfEntry[1] ?? 0) - (selfEntry[0] ?? selfEntry[1] ?? 0)) : 0;
+    const RANGE = entry.karabastRange ?? 2;
+    const maxPicks = damageSuffered;
+    const _enumHostiles = () => {
+      const selfMeta = dcMessageMeta.get(selfMsgId);
+      const selfKeys = selfMeta ? getFigureKeysForDcMsg(game, playerNum, selfMeta) : [];
+      const selfFk = selfKeys[selectedFig] || selfKeys[0];
+      const selfPos = selfFk ? game.figurePositions?.[playerNum]?.[selfFk] : null;
+      const vals = [];
+      if (selfPos) {
+        for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+          if (!coord) continue;
+          if (countGameSpaces(game, selfPos, coord) <= RANGE) vals.push(fk);
+        }
+      }
+      return vals;
+    };
+    // Done → apply 1 Damage per accumulated pick (grouped by figure).
+    if (chosenFigureKey === 'karabast_done') {
+      const picks = game._karabastTargets || [];
+      delete game._karabastTargets;
+      if (!picks.length) return { applied: true, logMessage: '**Karabast!** — No targets chosen.' };
+      const counts = {};
+      for (const fk of picks) counts[fk] = (counts[fk] || 0) + 1;
+      const refreshIds = []; const parts = [];
+      for (const [fk, n] of Object.entries(counts)) {
+        const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+        if (!tMsgId || !dcHealthState) continue;
+        const tHs = dcHealthState.get(tMsgId) || [];
+        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+        const tEntry = tHs[figIdx];
+        if (!tEntry) continue;
+        const [cur, max] = tEntry;
+        const newCur = Math.max(0, (cur ?? max) - n);
+        tHs[figIdx] = [newCur, max];
+        dcHealthState.set(tMsgId, tHs);
+        syncHealthStateToList(game, oppNum, tMsgId, tHs);
+        parts.push(`**${dcNameFromFigureKey(fk)}** ${cur ?? max}→${newCur} (${n} Damage)`);
+        if (!refreshIds.includes(tMsgId)) refreshIds.push(tMsgId);
+      }
+      return { applied: true, logMessage: `**Karabast!** — ${parts.join(', ')}.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds };
+    }
+    // Accumulate a pick (repeats allowed).
+    if (chosenFigureKey) {
+      game._karabastTargets = game._karabastTargets || [];
+      game._karabastTargets.push(chosenFigureKey);
+      if (game._karabastTargets.length >= maxPicks) {
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: 'karabast_done' });
+      }
+      const vals = _enumHostiles();
+      if (vals.length === 0) return resolveAbility(abilityId, { ...context, chosenFigureKey: 'karabast_done' });
+      const opts = [...figureChoiceLabels(vals)];
+      opts.push(`Done (${game._karabastTargets.length}/${maxPicks} chosen)`);
+      vals.push('karabast_done');
+      return { applied: true, requiresChoice: true, choiceOptions: opts, choiceValues: vals, logMessage: `**Karabast!** — choose hostile ${game._karabastTargets.length + 1} of up to ${maxPicks} (within ${RANGE} spaces), or Done.` };
+    }
+    // First call.
+    if (maxPicks <= 0) return { applied: true, logMessage: '**Karabast!** — 0 Damage suffered; no targets.' };
+    game._karabastTargets = [];
+    const vals = _enumHostiles();
+    if (vals.length === 0) return { applied: true, logMessage: `**Karabast!** — No hostile figures within ${RANGE} spaces.` };
+    const opts = [...figureChoiceLabels(vals)];
+    opts.push('Done (0 chosen)');
+    vals.push('karabast_done');
+    return { applied: true, requiresChoice: true, choiceOptions: opts, choiceValues: vals, logMessage: `**Karabast!** — ${maxPicks} Damage suffered: choose up to ${maxPicks} hostile(s) within ${RANGE} spaces; each chosen suffers 1 Damage.` };
+  }
+
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
   // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
   //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.
@@ -9954,28 +10070,59 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: friendlyLabels.map((n) => `Defeat ${n}`), choiceValues: friendlyFigureKeys };
   }
 
-  // ccEffect: induceRageEffect (Induce Rage) — chosen figures discard all conditions, gain 1 Damage Token per condition
+  // ccEffect: induceRageEffect (Induce Rage) — the player CHOOSES up to 2 figures
+  // ("up to 2 figures", CSV row 737); each chosen figure discards all of its
+  // conditions then gains 1 Damage (Hit) Token per condition discarded. Either
+  // player's figures are eligible (the choice is strategic).
   if (entry.type === 'ccEffect' && entry.induceRageEffect) {
-    const { game, playerNum } = context;
+    const { game, playerNum, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const results = [];
-    let figuresProcessed = 0;
-    for (const pn of [1, 2]) {
-      for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
-        const conds = [...(game.figureConditions?.[fk] || [])];
-        if (!conds.length || figuresProcessed >= 2) continue;
-        // Remove each condition through filterCondition (respects disarm lock)
-        for (const c of conds) filterCondition(game, fk, c);
-        const remaining = (game.figureConditions?.[fk] || []).length;
-        const count = conds.length - remaining;
-        if (count > 0) grantPowerTokens(game, fk, 'Damage', count);
-        const dcName = dcNameFromFigureKey(fk);
-        results.push(`**${dcName}** lost [${conds.filter(c => !(game.figureConditions?.[fk] || []).includes(c)).join(', ')}] → +${count} Damage Token${count !== 1 ? 's' : ''}`);
-        figuresProcessed++;
+    const MAX = entry.induceRageMaxTargets ?? 2;
+    const _enumWithConditions = () => {
+      const vals = [];
+      for (const pn of [1, 2]) {
+        for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
+          if ((game.figureConditions?.[fk] || []).length > 0) vals.push(fk);
+        }
       }
+      return vals;
+    };
+    const _processFigure = (fk) => {
+      const conds = [...(game.figureConditions?.[fk] || [])];
+      for (const c of conds) filterCondition(game, fk, c); // respects disarm lock
+      const remaining = (game.figureConditions?.[fk] || []).length;
+      const count = conds.length - remaining;
+      if (count > 0) grantPowerTokens(game, fk, 'Damage', count);
+      const discarded = conds.filter((c) => !(game.figureConditions?.[fk] || []).includes(c));
+      return `**${dcNameFromFigureKey(fk)}** lost [${discarded.join(', ')}] → +${count} Damage Token${count !== 1 ? 's' : ''}`;
+    };
+    if (chosenFigureKey === 'induce_rage_done') {
+      const res = game._induceRageResults || [];
+      delete game._induceRageResults; delete game._induceRageCount;
+      return { applied: true, logMessage: res.length ? `**Induce Rage** — ${res.join('; ')}.` : '**Induce Rage** — No figures chosen.' };
     }
-    if (!results.length) return { applied: true, logMessage: '**Induce Rage** — No figures with conditions found.' };
-    return { applied: true, logMessage: `**Induce Rage** — ${results.join('; ')}.` };
+    if (chosenFigureKey) {
+      game._induceRageResults = game._induceRageResults || [];
+      game._induceRageCount = game._induceRageCount || 0;
+      game._induceRageResults.push(_processFigure(chosenFigureKey));
+      game._induceRageCount++;
+      if (game._induceRageCount >= MAX) return resolveAbility(abilityId, { ...context, chosenFigureKey: 'induce_rage_done' });
+      const vals = _enumWithConditions(); // processed figure now has no conditions → auto-excluded
+      if (vals.length === 0) return resolveAbility(abilityId, { ...context, chosenFigureKey: 'induce_rage_done' });
+      const opts = [...figureChoiceLabels(vals)];
+      opts.push(`Done (${game._induceRageCount}/${MAX} chosen)`);
+      vals.push('induce_rage_done');
+      return { applied: true, requiresChoice: true, choiceOptions: opts, choiceValues: vals, logMessage: `**Induce Rage** — choose figure ${game._induceRageCount + 1} of up to ${MAX}, or Done.` };
+    }
+    // First call.
+    game._induceRageResults = [];
+    game._induceRageCount = 0;
+    const vals = _enumWithConditions();
+    if (vals.length === 0) return { applied: true, logMessage: '**Induce Rage** — No figures with conditions found.' };
+    const opts = [...figureChoiceLabels(vals)];
+    opts.push('Done (0 chosen)');
+    vals.push('induce_rage_done');
+    return { applied: true, requiresChoice: true, choiceOptions: opts, choiceValues: vals, logMessage: `**Induce Rage** — choose up to ${MAX} figure(s): each discards all conditions and gains 1 Damage Token per condition discarded.` };
   }
 
   // ccEffect: ferocityEffect (Ferocity) — choose a CREATURE figure, it performs 1 free attack
