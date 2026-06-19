@@ -19,6 +19,7 @@ import { stripBrackets } from '../game/card-names.js';
 import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
 import { getMapData } from '../data-loader.js';
 import { isWithinSpaces } from '../game/spatial.js';
+import { chargeGeneratorsActive } from './combat-abilities-mods.js';
 
 const _auraBearerDeps = { getMapData, isWithinSpaces, getDcList, getDcMessageIds };
 
@@ -274,6 +275,32 @@ export function registerCapitalize() {
 }
 
 registerCapitalize();
+
+// Charge Generators (AT-DP) — REROLLS half (FIX-1 split). The card's "you may
+// reroll 1 attack die" lives in the rerolls window, gated on the SAME suffered<9
+// condition as the mods +1 Damage half (chargeGeneratorsActive). The CSV files
+// the whole ability under attack:modifiers, so the data-driven loop never sees
+// this — register it explicitly as an attacker reroll (pool 'attack', count 1).
+// The generic _makeRerollResolver (via params.kind='reroll') serves it. Distinct
+// once-per-attack limit key from the mods half so the two are independent.
+let _chargeGenRerollRegistered = false;
+export function registerChargeGeneratorsReroll() {
+  if (_chargeGenRerollRegistered) return;
+  _chargeGenRerollRegistered = true;
+  const limGuard = limitGuard('once per attack', abilityLimitKey('AT-DP', 'Charge Generators (Reroll)'));
+  registerCombatAbility({
+    id: 'charge_generators_reroll', name: 'Charge Generators', windows: ['rerolls'], side: 'attacker',
+    kind: 'interactive',
+    params: { kind: 'reroll', pool: 'attack', count: 1, colorSwap: false, card: 'AT-DP', ability: 'Charge Generators (Reroll)', limit: 'once per attack' },
+    applies: (game, combat, side, deps) => {
+      if (!chargeGeneratorsActive(game, combat, deps)) return false;
+      if (!limGuard(game, combat)) return false;
+      return selectableDieIndices(combat, { pool: 'attack' }).length > 0;
+    },
+  });
+}
+
+registerChargeGeneratorsReroll();
 
 // ── forcedRerollQueue drain in the GATE rerolls window (gate-rework 2026-06-18) ──
 //

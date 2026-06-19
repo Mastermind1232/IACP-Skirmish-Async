@@ -30,3 +30,33 @@ describe('rerolls gate: data-driven (CSV) reroll detection', () => {
     assert.ok(!atkIds({}, c).includes(ID), 'locked die → not selectable → not offered');
   });
 });
+
+// FIX-1: AT-DP Charge Generators is SPLIT — the +1 Damage at mods, the REROLL in
+// the rerolls window ('charge_generators_reroll'), both gated on suffered<9.
+describe('rerolls gate: Charge Generators reroll half (FIX-1 split)', () => {
+  const CG = 'charge_generators_reroll';
+  const eff = { 'AT-DP': { specialAbilityIds: ['charge_generators'] } };
+  const cgCombat = (overrides = {}) => ({
+    attackerPlayerNum: 1, attackerDcName: 'AT-DP', attackerFigureKey: 'AT-DP-1-0', attackerMsgId: 'm', attackerFigureIndex: 0,
+    attackDiceResults: [{ color: 'blue', dmg: 0, surge: 0, acc: 1 }], ...overrides,
+  });
+  const cgDeps = (suffered) => ({ getDcEffects: () => eff, dcHealthState: new Map([['m', [[16 - suffered, 16]]]]) });
+
+  it('reroll is OFFERED in the rerolls window while suffered<9', () => {
+    const reg = getCombatAbility(CG);
+    assert.ok(reg, 'charge_generators_reroll should be registered');
+    assert.equal(reg.params?.kind, 'reroll');
+    assert.equal(reg.params?.pool, 'attack');
+    const list = abilitiesForWindow('rerolls', 'attacker', {}, cgCombat(), cgDeps(3)).map((a) => a.id);
+    assert.ok(list.includes(CG), 'suffered 3 < 9 → reroll offered');
+  });
+
+  it('reroll is NOT offered at suffered>=9, nor once used this attack', () => {
+    let list = abilitiesForWindow('rerolls', 'attacker', {}, cgCombat(), cgDeps(9)).map((a) => a.id);
+    assert.ok(!list.includes(CG), 'suffered 9 → not offered');
+    // Once the reroll half is used (its own limit key) → not re-offered.
+    const cUsed = cgCombat({ _abilityUsedThisAttack: { 'AT-DP:Charge Generators (Reroll)': true } });
+    list = abilitiesForWindow('rerolls', 'attacker', {}, cUsed, cgDeps(3)).map((a) => a.id);
+    assert.ok(!list.includes(CG), 'reroll used this attack → not re-offered');
+  });
+});

@@ -1216,6 +1216,49 @@ function _makeExhaustBonusResolver({ card, effect, label }) {
   };
 }
 
+/**
+ * Reusable "spend/discard a resource → apply a bonus" mods resolver (FIX-2,
+ * alexanbv 2026-06-18). Pattern: optionally spend one of a resource X for a stat
+ * bonus Y. Stage 1 lists the spendable resources as buttons (+ Skip); on a pick,
+ * `spend(choice, args)` removes that resource and the bonus is applied, then a log
+ * line is posted. No multi-stage. Used by Rogue One (discard an ally Power Token →
+ * +1 Damage), Illicit Arms (discard a Command card → +1 Damage), Zillo Block Boost
+ * (discard a Command card → +1 Block).
+ *   options(game, combat) → [[choice, label], …] of spendable resources
+ *   spend(choice, { game, combat }) → mutate state to remove the resource; return
+ *        a short description of what was spent (or null to abort)
+ *   bonus(combat) → mutate combat to apply the stat bonus; return its label
+ */
+function _makeSpendResourceResolver({ name, options, spend, bonus }) {
+  return {
+    prompt: ({ game, combat }) => {
+      const opts = options(game, combat) || [];
+      if (opts.length === 0) return { content: `**${name}** — nothing to spend.`, buttons: [['skip', 'OK', 'secondary']] };
+      return { content: `**${name}** — choose a resource to spend:`, buttons: [...opts, ['skip', 'Skip', 'secondary']] };
+    },
+    apply: async (choice, args) => {
+      const { thread } = args;
+      if (choice === 'skip') { thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
+      const spent = await spend(choice, args);
+      if (spent == null) { thread?.send(`**${name}** — could not spend that resource.`).catch(discordCatch); return undefined; }
+      const label = bonus(args.combat);
+      thread?.send(`**${name}** — discarded ${spent}: ${label} applied.`).catch(discordCatch);
+      return undefined;
+    },
+  };
+}
+
+/** Discard a specific Command card from a player's hand → discard pile. Returns the card name discarded, or null. */
+function _discardCcFromHand(game, playerNum, cardName) {
+  const hand = game[ccHandKey(playerNum)] || [];
+  const i = hand.indexOf(cardName);
+  if (i < 0) return null;
+  hand.splice(i, 1);
+  game[ccHandKey(playerNum)] = hand;
+  game[ccDiscardKey(playerNum)] = (game[ccDiscardKey(playerNum)] || []).concat(cardName);
+  return cardName;
+}
+
 /** Mods-step convenience wrapper (existing call sites unchanged). */
 async function _driveModsGatePath(thread, game, combat, ctx) {
   return _driveGatePath('mods', thread, game, combat, ctx);
@@ -1535,41 +1578,14 @@ export const COMBAT_RESOLVERS = {
   // attack:modifiers CSV row. The +1 Damage applies on either choice; the reroll
   // half is taken only on "reroll". The gate marks it used (once per attack) via
   // params after this resolves.
+  // Charge Generators (AT-DP) — MODS half (FIX-1 split). Applies ONLY +1 Damage;
+  // the 1-attack-die reroll is the SEPARATE rerolls-window button
+  // ('charge_generators_reroll' → _makeRerollResolver). No sub-choice — clicking
+  // the button applies the bonus immediately.
   charge_generators: {
-    prompt: ({ combat }) => {
-      const n = _selectableDieIndices(combat, { pool: 'attack' }).length;
-      return {
-        content: `**Charge Generators** — apply **+1 Damage**${n ? ' and optionally reroll 1 attack die' : ''}:`,
-        buttons: n
-          ? [['reroll', '+1 Damage & reroll 1 attack die'], ['noreroll', '+1 Damage only', 'secondary']]
-          : [['noreroll', '+1 Damage', 'primary']],
-      };
-    },
-    apply: async (choice, { combat, thread, ctx, gameId, id }) => {
-      // Stage 1: apply +1 Damage (always), then branch on reroll vs not.
-      if (combat._chargeGenStage !== 'pick') {
-        combat.bonusHits = (combat.bonusHits || 0) + 1;
-        if (choice === 'reroll') {
-          const idxs = _selectableDieIndices(combat, { pool: 'attack' });
-          combat._chargeGenStage = 'pick';
-          const dice = combat.attackDiceResults || [];
-          const btns = [
-            ...idxs.map((i) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${i}_${id}`).setLabel(`Die #${i + 1} (${dice[i]?.acc || 0}a/${dice[i]?.dmg || 0}d/${dice[i]?.surge || 0}s)`.slice(0, 80)).setStyle(ButtonStyle.Primary)),
-            new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_skip_${id}`).setLabel('Skip reroll').setStyle(ButtonStyle.Secondary),
-          ];
-          await thread?.send({ content: '**Charge Generators** — +1 Damage applied. Choose an attack die to reroll:', components: chunkButtonsToRows(btns) }).catch(discordCatch);
-          return { followUp: true };
-        }
-        thread?.send('**Charge Generators** — +1 Damage applied.').catch(discordCatch);
-        return undefined;
-      }
-      // stage 2 — a die was picked (or skip).
-      delete combat._chargeGenStage;
-      if (choice === 'skip') { thread?.send('**Charge Generators** — +1 Damage applied (reroll skipped).').catch(discordCatch); return undefined; }
-      const idx = parseInt(choice, 10);
-      const res = _rerollDie(combat, ctx, { pool: 'attack', index: idx });
-      if (res.ok) thread?.send(`**Charge Generators** — +1 Damage; rerolled attack die #${idx + 1} → ${res.newDie?.acc || 0}a/${res.newDie?.dmg || 0}d/${res.newDie?.surge || 0}s.`).catch(discordCatch);
-      else thread?.send(`**Charge Generators** — +1 Damage; die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+    apply: async (_choice, { combat, thread }) => {
+      combat.bonusHits = (combat.bonusHits || 0) + 1;
+      thread?.send('**Charge Generators** — +1 Damage applied.').catch(discordCatch);
       return undefined;
     },
   },
@@ -1820,6 +1836,60 @@ export const COMBAT_RESOLVERS = {
         thread?.send('**Zillo Technique** — Exhausted: cancels 2 Pierce.').catch(discordCatch);
       } else thread?.send('**Zillo Technique** — Skipped.').catch(discordCatch);
       combat.zilloPierceResolved = true;
+    },
+  },
+  // ── FIX-2 spend-resource mods resolvers ──────────────────────────────────
+  // Rogue One ([Rogue One] upgrade) — discard 1 Power Token from ANOTHER friendly
+  // figure → +1 Damage. Stage 1 lists each ally token (figureKey#index labelled by
+  // token type); spending removes that token; bonus = +1 Hit.
+  rogue_one: _makeSpendResourceResolver({
+    name: 'Rogue One',
+    options: (game, combat) => getRogueOneDonors(game, combat).map((d) =>
+      [`${d.figureKey}#${d.tokenIndex}`, `${d.dcName}: ${d.tokenType} token`]),
+    spend: (choice, { game }) => {
+      const hash = choice.lastIndexOf('#');
+      const figureKey = choice.slice(0, hash);
+      const index = parseInt(choice.slice(hash + 1), 10);
+      const tokens = game.figurePowerTokens?.[figureKey] || [];
+      if (index < 0 || index >= tokens.length) return null;
+      const type = tokens[index];
+      removeSpentToken(game, figureKey, index);
+      return `${dcNameFromFigureKey(figureKey)}'s ${type} Power Token`;
+    },
+    bonus: (combat) => { combat.bonusHits = (combat.bonusHits || 0) + 1; return '+1 Damage'; },
+  }),
+  // Illicit Arms (Bib Fortuna, DC) — discard 1 Command card from hand → +1 Damage,
+  // only while army affiliation is SCUM (gated in `applies`). Lists the attacker's
+  // CC hand as options.
+  illicit_arms: _makeSpendResourceResolver({
+    name: 'Illicit Arms (Bib Fortuna)',
+    options: (game, combat) => [...new Set(getCcHand(game, combat.attackerPlayerNum) || [])].map((c) => [c, c]),
+    spend: (choice, { game, combat }) => _discardCcFromHand(game, combat.attackerPlayerNum, choice) && `Command card "${choice}"`,
+    bonus: (combat) => { combat.bonusHits = (combat.bonusHits || 0) + 1; return '+1 Damage'; },
+  }),
+  // Zillo Technique — Block Boost ([Zillo Technique] upgrade) — discard 1 Command
+  // card → +1 Block (defender). DISTINCT from the pierce-cancel exhaust.
+  zillo_technique_discard: _makeSpendResourceResolver({
+    name: 'Zillo Technique (Block Boost)',
+    options: (game, combat) => {
+      const defPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      return [...new Set(getCcHand(game, defPn) || [])].map((c) => [c, c]);
+    },
+    spend: (choice, { game, combat }) => {
+      const defPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      return _discardCcFromHand(game, defPn, choice) && `Command card "${choice}"`;
+    },
+    bonus: (combat) => { combat.bonusBlock = (combat.bonusBlock || 0) + 1; return '+1 Block'; },
+  }),
+  // Guidance Systems ([Mortar Trooper] attachment) — FIX-3. -1 Damage + +2
+  // Accuracy, usable MULTIPLE times per attack (no once-per limit; the gate re-
+  // offers it each pass). No sub-choice — clicking applies the trade immediately.
+  guidance_systems: {
+    apply: async (_choice, { combat, thread }) => {
+      combat.bonusHits = (combat.bonusHits || 0) - 1;
+      combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
+      thread?.send('**Guidance Systems** — -1 Damage, +2 Accuracy applied.').catch(discordCatch);
+      return undefined;
     },
   },
   // Zeb (Lasat Honor Guard): turn one single-symbol attack die to any side.

@@ -186,3 +186,80 @@ describe('third-party mods passives via the timing registry', () => {
     assert.equal(find(at('attacker', game(), c, dNo), 'fury_wookiee'), undefined);
   });
 });
+
+describe('FIX-1/2/3 mods gating via the timing registry', () => {
+  // ── FIX-1: Charge Generators (AT-DP) — +1 Damage half at MODS, gated suffered<9
+  it('charge_generators (mods +1 Damage): offered while suffered<9, gone at >=9', () => {
+    const eff = { 'AT-DP': { specialAbilityIds: ['charge_generators'] }, Def: {} };
+    const c = combat({ attackerDcName: 'AT-DP', attackerMsgId: 'm', attackerFigureIndex: 0 });
+    const dLt = { ...deps(eff), dcHealthState: new Map([['m', [[8, 16]]]]) }; // suffered 8 < 9
+    const dGe = { ...deps(eff), dcHealthState: new Map([['m', [[7, 16]]]]) }; // suffered 9
+    assert.equal(find(at('attacker', game(), c, dLt), 'charge_generators').kind, 'interactive');
+    assert.equal(find(at('attacker', game(), c, dGe), 'charge_generators'), undefined);
+    // Once used this attack → no longer offered.
+    const cUsed = { ...c, _abilityUsedThisAttack: { 'AT-DP:Charge Generators (+1 Damage)': true } };
+    assert.equal(find(at('attacker', game(), cUsed, dLt), 'charge_generators'), undefined);
+  });
+
+  // ── FIX-2: Rogue One — needs a listed attacker + Rogue One upgrade + ally token
+  it('rogue_one: offered only with a listed figure, the upgrade, and an ally Power Token', () => {
+    const eff = { 'Cassian Andor': {}, 'Jyn Erso': {}, Def: {} };
+    const base = game({
+      figurePositions: { 1: { 'Cassian Andor-1-0': 'a1', 'Jyn Erso-1-0': 'a2' }, 2: { 'Def-1-0': 'c3' } },
+      figurePowerTokens: { 'Jyn Erso-1-0': ['Damage'] },
+      p1DcList: [{ dcName: '[Rogue One]' }, { dcName: 'Cassian Andor' }],
+    });
+    const c = combat({ attackerFigureKey: 'Cassian Andor-1-0', attackerDcName: 'Cassian Andor' });
+    assert.equal(find(at('attacker', base, c, deps(eff)), 'rogue_one').kind, 'interactive');
+    // No ally token → not offered.
+    const noTok = game({ ...base, figurePowerTokens: {} });
+    assert.equal(find(at('attacker', noTok, c, deps(eff)), 'rogue_one'), undefined);
+    // No Rogue One upgrade → not offered.
+    const noUpg = game({ ...base, p1DcList: [{ dcName: 'Cassian Andor' }] });
+    assert.equal(find(at('attacker', noUpg, c, deps(eff)), 'rogue_one'), undefined);
+  });
+
+  // ── FIX-2: Illicit Arms — requires SCUM Bib Fortuna + a CC in hand
+  it('illicit_arms: requires a SCUM Bib Fortuna friendly + a Command card in hand', () => {
+    const eff = { Atk: {}, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Scum' }, Def: {} };
+    const g = game({
+      figurePositions: { 1: { 'Atk-1-0': 'a1', 'Bib Fortuna-1-0': 'a2' }, 2: { 'Def-1-0': 'c3' } },
+      player1CcHand: ['Tough Luck'],
+    });
+    assert.equal(find(at('attacker', g, combat(), deps(eff)), 'illicit_arms').kind, 'interactive');
+    // No CC in hand → not offered.
+    const noCc = game({ ...g, player1CcHand: [] });
+    assert.equal(find(at('attacker', noCc, combat(), deps(eff)), 'illicit_arms'), undefined);
+    // Non-SCUM affiliation → not offered.
+    const effImp = { Atk: {}, 'Bib Fortuna': { specialAbilityIds: ['illicit_arms_bib'], affiliation: 'Imperial' }, Def: {} };
+    assert.equal(find(at('attacker', g, combat(), deps(effImp)), 'illicit_arms'), undefined);
+  });
+
+  // ── FIX-2: Zillo Block Boost — defender [Zillo Technique] + a CC in hand
+  it('zillo_technique_discard (Block Boost): requires [Zillo Technique] + a CC in hand', () => {
+    const g = game({ p2DcList: [{ dcName: '[Zillo Technique]' }], player2CcHand: ['Tough Luck'] });
+    assert.equal(find(at('defender', g, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard').kind, 'interactive');
+    // No CC in hand → not offered.
+    const noCc = game({ ...g, player2CcHand: [] });
+    assert.equal(find(at('defender', noCc, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard'), undefined);
+    // No Zillo card → not offered.
+    const noZt = game({ ...g, p2DcList: [] });
+    assert.equal(find(at('defender', noZt, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard'), undefined);
+  });
+
+  // ── FIX-3: Guidance Systems — repeatable; NO once-per limit; stops at Damage 0
+  it('guidance_systems: repeatable (no once-per), gated on the [Mortar Trooper] attachment + Damage>0', () => {
+    const g = game({ p1DcAttachments: { m: ['[Mortar Trooper]'] } });
+    const c = combat({ attackerMsgId: 'm', attackRoll: { dmg: 3 } });
+    assert.equal(find(at('attacker', g, c, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
+    // Still offered after a prior use this attack (multiple times per attack).
+    const cUsed = { ...c, _abilityUsedThisAttack: { 'whatever': true } };
+    assert.equal(find(at('attacker', g, cUsed, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
+    // Damage already 0 → -1 would underflow → not offered.
+    const c0 = combat({ attackerMsgId: 'm', attackRoll: { dmg: 0 }, bonusHits: 0 });
+    assert.equal(find(at('attacker', g, c0, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
+    // No Mortar Trooper attachment → not offered.
+    const noAtt = game({ p1DcAttachments: { m: [] } });
+    assert.equal(find(at('attacker', noAtt, c, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
+  });
+});

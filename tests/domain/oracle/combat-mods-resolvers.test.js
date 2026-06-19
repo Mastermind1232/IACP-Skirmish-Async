@@ -178,6 +178,55 @@ describe('mods passives: auto-fire effects', () => {
   });
 });
 
+describe('FIX-1/2/3 mods resolvers: spend-resource + Charge Generators split', () => {
+  it('charge_generators (mods half) applies ONLY +1 Damage (no reroll)', async () => {
+    const c = {}; await COMBAT_RESOLVERS.charge_generators.apply(null, baseArgs(c));
+    assert.equal(c.bonusHits, 1);
+    assert.equal(c._chargeGenStage, undefined); // no multi-stage reroll branch anymore
+  });
+
+  it('rogue_one discards an ally Power Token for +1 Damage', async () => {
+    const game = {
+      figurePositions: { 1: { 'Cassian Andor-1-0': 'a1', 'Jyn Erso-1-0': 'a2' } },
+      figurePowerTokens: { 'Jyn Erso-1-0': ['Damage', 'Surge'] },
+      p1DcList: [{ dcName: '[Rogue One]' }],
+    };
+    const c = { attackerPlayerNum: 1, attackerFigureKey: 'Cassian Andor-1-0' };
+    await COMBAT_RESOLVERS.rogue_one.apply('Jyn Erso-1-0#0', baseArgs(c, game));
+    assert.equal(c.bonusHits, 1);
+    assert.deepEqual(game.figurePowerTokens['Jyn Erso-1-0'], ['Surge']); // index 0 (Damage) removed
+    // Skip applies nothing.
+    const c2 = {}; await COMBAT_RESOLVERS.rogue_one.apply('skip', baseArgs(c2, game));
+    assert.equal(c2.bonusHits, undefined);
+  });
+
+  it('illicit_arms discards a Command card for +1 Damage', async () => {
+    const game = { player1CcHand: ['Tough Luck', 'Element of Surprise'], player1CcDiscard: [] };
+    const c = { attackerPlayerNum: 1 };
+    await COMBAT_RESOLVERS.illicit_arms.apply('Tough Luck', baseArgs(c, game));
+    assert.equal(c.bonusHits, 1);
+    assert.deepEqual(game.player1CcHand, ['Element of Surprise']);
+    assert.deepEqual(game.player1CcDiscard, ['Tough Luck']);
+  });
+
+  it('zillo_technique_discard (Block Boost) discards a CC for +1 Block (defender)', async () => {
+    const game = { player2CcHand: ['Tough Luck'], player2CcDiscard: [] };
+    const c = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
+    await COMBAT_RESOLVERS.zillo_technique_discard.apply('Tough Luck', baseArgs(c, game));
+    assert.equal(c.bonusBlock, 1);
+    assert.deepEqual(game.player2CcHand, []);
+    assert.deepEqual(game.player2CcDiscard, ['Tough Luck']);
+  });
+
+  it('guidance_systems applies -1 Damage + +2 Accuracy and is repeatable (stacks)', async () => {
+    const c = {}; await COMBAT_RESOLVERS.guidance_systems.apply(null, baseArgs(c));
+    assert.equal(c.bonusHits, -1); assert.equal(c.bonusAccuracy, 2);
+    // Apply again — stacks (multiple times per attack).
+    await COMBAT_RESOLVERS.guidance_systems.apply(null, baseArgs(c));
+    assert.equal(c.bonusHits, -2); assert.equal(c.bonusAccuracy, 4);
+  });
+});
+
 describe('mods resolver: crate_block_sink', () => {
   it('sinks N damage into a carried crate for +N Block', async () => {
     const game = {

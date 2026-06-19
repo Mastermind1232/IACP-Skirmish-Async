@@ -29,9 +29,10 @@ import { makeCondition } from './combat-conditions.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
 import { getEffectiveFigureSize } from '../game/board-helpers.js';
-import { opponentPlayerNum, getDcList } from '../game/player-helpers.js';
+import { opponentPlayerNum, getDcList, getCcHand } from '../game/player-helpers.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { hasPendingModifiers } from './combat-pending-modifiers.js';
+import { isIllicitArmsEligibleFigure } from '../game/illicit-arms-helpers.js';
 
 // Two-timing model (alexanbv 2026-06-18): the GENERAL mods-window drain of
 // PENDING MODIFIERS. Any ability played at an earlier window (on_declare,
@@ -117,28 +118,123 @@ registerCombatAbility({
   },
 });
 
-// Charge Generators (AT-DP) — alexanbv 2026-06-18 FIX-3. Card text: "While
-// attacking, if you have suffered fewer than 9 Damage, apply +1 Damage to the
-// attack results and you may reroll 1 attack die." A SINGLE attack:modifiers
-// row in the CSV combines BOTH halves (pipelines damage;reroll), so it's wired
-// here as one mods interactive: +1 Damage (auto) + an optional 1-attack-die
-// reroll. Conditional on the AT-DP figure having suffered <9 Damage
-// (dcHealthState: suffered = maxHp - currentHp). Previously the +1 Damage half
-// had no mods resolver (fell to a no-op button) and the reroll half was unwired
-// (the rerolls loop only reads attack:rerolls rows). Resolver:
-// COMBAT_RESOLVERS.charge_generators.
+// Charge Generators (AT-DP) — alexanbv 2026-06-18 FIX-1 (SPLIT). Card text:
+// "While attacking, if you have suffered fewer than 9 Damage, apply +1 Damage to
+// the attack results AND you may reroll 1 attack die." The two halves live in
+// DIFFERENT windows: the +1 Damage is offered here in MODS; the reroll is a
+// separate REROLLS-window button (combat-abilities-rerolls.js → 'charge_generators
+// _reroll'), gated on the SAME suffered<9 condition. (Previously a single mods
+// interactive did BOTH, which mis-timed the reroll.) This mods half applies ONLY
+// +1 Damage. Conditional on the AT-DP figure having suffered <9 Damage
+// (dcHealthState: suffered = maxHp - currentHp). Resolver:
+// COMBAT_RESOLVERS.charge_generators. Uses a distinct limit key from the reroll
+// half so resolving one does not block the other (independent once-per-attack).
+export function chargeGeneratorsSuffered(game, combat, deps) {
+  const hs = deps?.dcHealthState?.get?.(combat.attackerMsgId) || [];
+  const pair = hs[combat.attackerFigureIndex ?? 0];
+  return pair ? Math.max(0, (pair[1] ?? pair[0] ?? 0) - (pair[0] ?? 0)) : 0;
+}
+export function chargeGeneratorsActive(game, combat, deps) {
+  if (!combat.attackerFigureKey) return false;
+  if (!ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('charge_generators')) return false;
+  return chargeGeneratorsSuffered(game, combat, deps) < 9;
+}
 registerCombatAbility({
   id: 'charge_generators', name: 'Charge Generators', windows: ['mods'], side: 'attacker', kind: 'interactive',
-  params: { card: 'AT-DP', ability: 'Charge Generators', limit: 'once per attack' },
+  params: { card: 'AT-DP', ability: 'Charge Generators (+1 Damage)', limit: 'once per attack' },
   applies: (game, combat, side, deps) => {
-    if (!combat.attackerFigureKey) return false;
-    if (!ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))).includes('charge_generators')) return false;
-    // suffered = maxHp - currentHp for the attacking AT-DP figure (dcHealthState).
-    const hs = deps?.dcHealthState?.get?.(combat.attackerMsgId) || [];
-    const pair = hs[combat.attackerFigureIndex ?? 0];
-    const suffered = pair ? Math.max(0, (pair[1] ?? pair[0] ?? 0) - (pair[0] ?? 0)) : 0;
-    if (!(suffered < 9)) return false;
-    return !(combat._abilityUsedThisAttack?.['AT-DP:Charge Generators']);
+    if (!chargeGeneratorsActive(game, combat, deps)) return false;
+    return !(combat._abilityUsedThisAttack?.['AT-DP:Charge Generators (+1 Damage)']);
+  },
+});
+
+// Rogue One ([Rogue One] upgrade) [attacker] — FIX-2 spend-resource. Card text:
+// "While a listed friendly figure is attacking, it may discard 1 Power Token of
+// any type from another friendly figure to add +1 Damage to the attack results."
+// A mods interactive: the resolver picks a donor ally + spends one of their Power
+// Tokens for +1 Hit (COMBAT_RESOLVERS.rogue_one). `applies` requires the team to
+// hold [Rogue One], the attacker to be a listed Rogue One figure, and at least
+// one OTHER friendly figure to carry a Power Token (the resource to spend). Once
+// per attack. (The legacy surge-window button path is retained for the non-gate
+// flow; the gate offers this mods version.)
+const ROGUE_ONE_FIGURES = ['Baze Malbus', 'Bodhi Rook', 'Cassian Andor', 'Chirrut Imwe', 'Jyn Erso', 'K-2SO'];
+export function rogueOneDonorFigureKeys(game, combat) {
+  const pn = combat.attackerPlayerNum;
+  if (!pn || !combat.attackerFigureKey) return [];
+  const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey);
+  if (!ROGUE_ONE_FIGURES.some((n) => String(atkName).includes(n))) return [];
+  if (!((getDcList(game, pn) || []).some((dc) => (dc?.dcName || dc || '').includes('Rogue One')))) return [];
+  const friendly = game.figurePositions?.[pn] || {};
+  const donors = [];
+  for (const fk of Object.keys(friendly)) {
+    if (fk === combat.attackerFigureKey) continue;
+    if ((game.figurePowerTokens?.[fk] || []).length > 0) donors.push(fk);
+  }
+  return donors;
+}
+registerCombatAbility({
+  id: 'rogue_one', name: 'Rogue One', windows: ['mods'], side: 'attacker', kind: 'interactive',
+  params: { card: '[Rogue One]', ability: 'Rogue One', limit: 'once per attack' },
+  applies: (game, combat) => {
+    if (combat._abilityUsedThisAttack?.['[Rogue One]:Rogue One']) return false;
+    return rogueOneDonorFigureKeys(game, combat).length > 0;
+  },
+});
+
+// Illicit Arms (Bib Fortuna) [attacker] — FIX-2 spend-resource, DC ability. Card
+// text: "While a friendly figure is attacking, if your army's affiliation is
+// SCUM, you may discard 1 Command card from your hand to apply +1 Damage to the
+// attack results (once per attack)." A mods interactive gated on a friendly Bib
+// Fortuna carrying Illicit Arms + SCUM affiliation (isIllicitArmsEligibleFigure
+// folds both) AND a Command card in the attacker's hand to spend. Resolver
+// discards 1 CC → +1 Hit (COMBAT_RESOLVERS.illicit_arms). Clobbers the timing-
+// only catalog entry (same id) per the per-id last-write rule.
+export function illicitArmsEligible(game, combat, deps) {
+  const pn = combat.attackerPlayerNum;
+  if (!pn) return false;
+  if ((getCcHand(game, pn) || []).length === 0) return false; // a CC to spend
+  const friendly = game.figurePositions?.[pn] || {};
+  for (const fk of Object.keys(friendly)) {
+    const e = eff(deps, dcNameFromFigureKey(fk));
+    if (isIllicitArmsEligibleFigure(e)) return true; // carries Illicit Arms + SCUM
+  }
+  return false;
+}
+registerCombatAbility({
+  id: 'illicit_arms', name: 'Illicit Arms (Bib Fortuna)', windows: ['mods'], side: 'attacker', kind: 'interactive',
+  params: { card: 'Bib Fortuna', ability: 'Illicit Arms', limit: 'once per attack' },
+  applies: (game, combat, side, deps) => {
+    if (combat._abilityUsedThisAttack?.['Bib Fortuna:Illicit Arms']) return false;
+    return illicitArmsEligible(game, combat, deps);
+  },
+});
+
+// Guidance Systems ([Mortar Trooper] attachment) [attacker] — FIX-3 repeatable
+// mods choice. Card text: "While attacking, you may apply -1 Damage and +2
+// Accuracy to the attack results. This ability may be used MULTIPLE TIMES per
+// attack." A mods interactive with NO once-per limit — the gate's re-prompt loop
+// re-offers it each pass, so it can be stacked. Detection: the attacking DC
+// carries the [Mortar Trooper] attachment (Squad Upgrade). Gated to stop when the
+// projected attack Damage would drop below 0 (a -1 Damage with 0 damage is a
+// no-op / shouldn't underflow). Resolver: COMBAT_RESOLVERS.guidance_systems.
+// Clobbers the timing-only catalog entry of the same id (per-id last-write).
+export function guidanceSystemsAttached(game, combat) {
+  const msgId = combat.attackerMsgId;
+  if (!msgId) return false;
+  const atts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+  return cardNameIncludes(atts, 'Mortar Trooper');
+}
+/** Projected attack Damage so far (dice + bonus), used to gate the -1 underflow. */
+export function projectedAttackDamage(combat) {
+  return (combat.attackRoll?.dmg || 0) + (combat.bonusHits || 0);
+}
+registerCombatAbility({
+  id: 'guidance_systems', name: 'Guidance Systems', windows: ['mods'], side: 'attacker', kind: 'interactive',
+  // No card/ability/limit params → no once-per mark; offered every pass (multiple/attack).
+  applies: (game, combat) => {
+    if (!guidanceSystemsAttached(game, combat)) return false;
+    // -1 Damage must not push Damage below 0 — only offer while Damage > 0.
+    return projectedAttackDamage(combat) > 0;
   },
 });
 
@@ -198,6 +294,29 @@ registerCombatAbility({
 registerCombatAbility({
   id: 'elusive', name: 'Elusive', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat) => !!combat.elusiveActive && (combat.attackDiceResults?.length || 0) > 0,
+});
+
+// Zillo Technique — Block Boost ([Zillo Technique] upgrade) [defender] — FIX-2
+// spend-resource. Card text: "While a friendly figure is defending, discard 1
+// Command card to apply +1 Block to the defense results (once per attack)." This
+// is DISTINCT from the pierce-cancel exhaust (combat-abilities-zillo.js, 'zillo'
+// window) — it's a mods-window CC discard. `applies` requires the defender's team
+// to hold [Zillo Technique] AND a Command card in hand. Resolver discards 1 CC →
+// +1 Block (COMBAT_RESOLVERS.zillo_technique_discard). Clobbers the timing-only
+// catalog entry of the same id (per-id last-write).
+export function zilloBlockBoostEligible(game, combat) {
+  const defPn = defenderPN(combat);
+  if (defPn == null) return false;
+  if ((getCcHand(game, defPn) || []).length === 0) return false; // a CC to spend
+  return (getDcList(game, defPn) || []).some((dc) => (dc?.dcName || dc || '') === '[Zillo Technique]');
+}
+registerCombatAbility({
+  id: 'zillo_technique_discard', name: 'Zillo Technique (Block Boost)', windows: ['mods'], side: 'defender', kind: 'interactive',
+  params: { card: '[Zillo Technique]', ability: 'Block Boost', limit: 'once per attack' },
+  applies: (game, combat) => {
+    if (combat._abilityUsedThisAttack?.['[Zillo Technique]:Block Boost']) return false;
+    return zilloBlockBoostEligible(game, combat);
+  },
 });
 
 // Dodge auto-conversions (no decision) → passive.

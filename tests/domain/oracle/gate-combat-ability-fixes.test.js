@@ -76,14 +76,23 @@ describe('FIX-1 Shock and Awe (Cara Dune)', () => {
   });
 });
 
-// ── FIX-3: Charge Generators — mods +1 Damage gated on suffered<9 + reroll ─────
-describe('FIX-3 Charge Generators (AT-DP)', () => {
-  it('is registered as a mods interactive attacker ability', () => {
+// ── FIX-1: Charge Generators — SPLIT: +1 Damage at MODS, reroll in REROLLS ─────
+describe('FIX-1 Charge Generators (AT-DP) split across windows', () => {
+  it('is registered as a mods interactive attacker ability (the +1 Damage half)', () => {
     const a = getCombatAbility('charge_generators');
     assert.ok(a);
     assert.deepEqual(a.windows, ['mods']);
     assert.equal(a.side, 'attacker');
     assert.equal(a.kind, 'interactive');
+  });
+
+  it('reroll half lives in the REROLLS window (charge_generators_reroll, pool=attack)', () => {
+    const r = getCombatAbility('charge_generators_reroll');
+    assert.ok(r, 'reroll half registered');
+    assert.deepEqual(r.windows, ['rerolls']);
+    assert.equal(r.side, 'attacker');
+    assert.equal(r.params?.kind, 'reroll');
+    assert.equal(r.params?.pool, 'attack');
   });
 
   it('applies only while the AT-DP has suffered fewer than 9 Damage', () => {
@@ -98,20 +107,12 @@ describe('FIX-3 Charge Generators (AT-DP)', () => {
     assert.equal(a.applies({}, combat, 'attacker', suffered12), false);
   });
 
-  it('resolver: +1 Damage applies exactly once (noreroll, and across the reroll followUp)', async () => {
-    // noreroll branch
-    const c1 = {};
-    const r1 = await COMBAT_RESOLVERS.charge_generators.apply('noreroll', { combat: c1, thread, ctx: {}, gameId: '1', id: 'charge_generators' });
-    assert.equal(c1.bonusHits, 1);
-    assert.equal(r1?.followUp, undefined);
-    // reroll branch: stage 1 applies +1 Damage and posts the die picker (followUp).
-    const c2 = { attackDiceResults: [{ color: 'blue', acc: 1, dmg: 0, surge: 0 }], _rerolledDieIds: new Set() };
-    const r2 = await COMBAT_RESOLVERS.charge_generators.apply('reroll', { combat: c2, thread, ctx: {}, gameId: '1', id: 'charge_generators' });
-    assert.equal(c2.bonusHits, 1);
-    assert.equal(r2.followUp, true);
-    // stage 2 (skip) must NOT re-add the +1 Damage.
-    await COMBAT_RESOLVERS.charge_generators.apply('skip', { combat: c2, thread, ctx: {}, gameId: '1', id: 'charge_generators' });
-    assert.equal(c2.bonusHits, 1, '+1 Damage applied once, not doubled on the followUp');
+  it('mods resolver applies ONLY +1 Damage (the reroll moved to the rerolls window)', async () => {
+    const c = {};
+    const r = await COMBAT_RESOLVERS.charge_generators.apply(null, { combat: c, thread, ctx: {}, gameId: '1', id: 'charge_generators' });
+    assert.equal(c.bonusHits, 1);
+    assert.equal(r?.followUp, undefined);
+    assert.equal(c._chargeGenStage, undefined, 'no reroll sub-stage anymore');
   });
 });
 
