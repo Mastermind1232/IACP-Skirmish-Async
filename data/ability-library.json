@@ -2183,6 +2183,14 @@
       "description": "While attacking within 3 spaces, replace 1 blue die with 1 red die.",
       "wiredStatus": "wired"
     },
+    "front_line_accuracy": {
+      "type": "dcSpecial",
+      "category": "passive-auto",
+      "trigger": "combat-declare",
+      "label": "Front Line (+2 Accuracy)",
+      "description": "Elite-only: while attacking within 3 spaces, +2 Accuracy. Applied inline in combat.js (hasFrontLineAccuracy); this marker distinguishes the Elite from the Regular, which shares front_line for the die-swap only.",
+      "wiredStatus": "wired"
+    },
     "Fuel Upgrade": {
       "type": "ccEffect",
       "label": "Until end of round: +1 Evade when defending (VEHICLES only); +1 Speed for VEHICLES",
@@ -3420,6 +3428,7 @@
       "label": "Order Hit",
       "description": "Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.",
       "chooseFriendlyToFocus": true,
+      "skipFocus": true,
       "choiceRequiresElite": true,
       "autoDeductVp": 2,
       "grantFreeAttackToTarget": true,
@@ -3943,6 +3952,8 @@
       "type": "ccEffect",
       "label": "Adjacent friendly DROID or VEHICLE recovers 3 Damage",
       "recoverDamageToAdjacent": 3,
+      "recoverTargetTraits": ["DROID", "VEHICLE"],
+      "freeActionForTrait": "TECHNICIAN",
       "wiredStatus": "wired"
     },
     "Reposition": {

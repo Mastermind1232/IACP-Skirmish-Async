@@ -17,6 +17,7 @@ import { resumeSequenceAfterInterrupt } from './combat.js';
 import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
+import { getDamageableObjectsAtCoord, applyDamageToObject } from '../game/object-damage-pipeline.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
@@ -246,30 +247,49 @@ export async function handleSelfDestructProbe(interaction, ctx) {
     const _sdpMs = getMapData ? getMapData(_sdpGame.selectedMap?.id) : null;
     const _sdpAdj = _sdpMs?.adjacency?.[String(_sdpPos).toLowerCase()] || [];
     const _sdpAllAdjSpaces = new Set([String(_sdpPos).toLowerCase(), ..._sdpAdj.map(s => String(s).toLowerCase())]);
-    const _sdpHostileNum = opponentPlayerNum(_sdpMeta.playerNum);
-    for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpHostileNum] || {})) {
-      if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
-      let _sdpHMsgId = null;
-      for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _sdpHostileNum && _sdpFk.startsWith(mm.dcName + '-')) { _sdpHMsgId = mid; break; } }
-      if (!_sdpHMsgId) continue;
-      const _sdpHM = dcMessageMeta.get(_sdpHMsgId);
-      const _sdpFkMatch = _sdpFk.match(/^(.+)-(\d+)-(\d+)$/);
-      if (!_sdpFkMatch) continue;
-      const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
-      const _sdpRes = await _applyDamage(_sdpGame, { dcHealthState, logGameAction, client }, {
-        figureKey: _sdpFk, msgId: _sdpHMsgId, figIndex: _sdpHFigIdx,
-        amount: _sdpHits, controllerPlayerNum: _sdpHostileNum,
-        attackerPlayerNum: _sdpMeta.playerNum, source: 'Self-Destruct',
-      });
-      const _hc = _sdpRes.prevHp;
-      const _hnc = _sdpRes.newHp;
-      const _sdpMaxHp = dcHealthState.get(_sdpHMsgId)?.[_sdpHFigIdx]?.[1] ?? 0;
-      if (_sdpMaxHp === 0 || _hc === null || _hc <= 0) continue;
-      const _sdpDefNote = _hnc <= 0 ? ' **(defeated)**' : '';
-      _sdpDamaged.push(`${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})${_sdpDefNote}`);
-      if (_hnc <= 0) _sdpDefeated.push({ figureKey: _sdpFk, playerNum: _sdpHostileNum });
+    const _sdpProbeFk = `${_sdpMeta.dcName}-1-0`;
+    // CSV: "each adjacent figure or object suffers Damage". Hit BOTH players'
+    // figures (excluding the probe itself) AND any adjacent damageable object —
+    // matching IG-11's Self-Destruct Protocol (alexanbv re-audit Jun 19).
+    for (const _sdpPN of [1, 2]) {
+      for (const [_sdpFk, _sdpFkPos] of Object.entries(_sdpGame.figurePositions?.[_sdpPN] || {})) {
+        if (!_sdpFkPos || !_sdpAllAdjSpaces.has(String(_sdpFkPos).toLowerCase())) continue;
+        if (_sdpPN === _sdpMeta.playerNum && _sdpFk === _sdpProbeFk) continue;
+        let _sdpHMsgId = null;
+        for (const [mid, mm] of dcMessageMeta) { if (mm.playerNum === _sdpPN && _sdpFk.startsWith(mm.dcName + '-')) { _sdpHMsgId = mid; break; } }
+        if (!_sdpHMsgId) continue;
+        const _sdpHM = dcMessageMeta.get(_sdpHMsgId);
+        const _sdpFkMatch = _sdpFk.match(/^(.+)-(\d+)-(\d+)$/);
+        if (!_sdpFkMatch) continue;
+        const _sdpHFigIdx = parseInt(_sdpFkMatch[3], 10);
+        const _sdpRes = await _applyDamage(_sdpGame, { dcHealthState, logGameAction, client }, {
+          figureKey: _sdpFk, msgId: _sdpHMsgId, figIndex: _sdpHFigIdx,
+          amount: _sdpHits, controllerPlayerNum: _sdpPN,
+          attackerPlayerNum: _sdpMeta.playerNum, source: 'Self-Destruct',
+        });
+        const _hc = _sdpRes.prevHp;
+        const _hnc = _sdpRes.newHp;
+        const _sdpMaxHp = dcHealthState.get(_sdpHMsgId)?.[_sdpHFigIdx]?.[1] ?? 0;
+        if (_sdpMaxHp === 0 || _hc === null || _hc <= 0) continue;
+        const _sdpDefNote = _hnc <= 0 ? ' **(defeated)**' : '';
+        const _sdpSide = _sdpPN === _sdpMeta.playerNum ? 'friendly' : 'hostile';
+        _sdpDamaged.push(`${_sdpSide} ${_sdpHM?.displayName || _sdpFkMatch[1]} (HP: ${_hc}→${_hnc})${_sdpDefNote}`);
+        if (_hnc <= 0) _sdpDefeated.push({ figureKey: _sdpFk, playerNum: _sdpPN });
+      }
     }
-    _sdpResultLog += _sdpDamaged.length ? _sdpDamaged.join(', ') : 'No adjacent hostiles.';
+    // Adjacent damageable objects (crates / destructible mission objects).
+    for (const _sdpSpace of _sdpAllAdjSpaces) {
+      for (const _sdpObjId of getDamageableObjectsAtCoord(_sdpGame, _sdpSpace)) {
+        const _sdpObjRes = await applyDamageToObject(_sdpGame, { logGameAction, client }, {
+          objectId: _sdpObjId, amount: _sdpHits, attackerPlayerNum: _sdpMeta.playerNum, source: 'Self-Destruct',
+        });
+        if (_sdpObjRes.applied) {
+          const _sdpObjName = _sdpGame.objectMeta?.[_sdpObjId]?.name || _sdpObjId;
+          _sdpDamaged.push(`${_sdpObjName} (HP: ${_sdpObjRes.prevHp}→${_sdpObjRes.newHp})${_sdpObjRes.defeated ? ' **(destroyed)**' : ''}`);
+        }
+      }
+    }
+    _sdpResultLog += _sdpDamaged.length ? _sdpDamaged.join(', ') : 'No adjacent figures or objects.';
   } else {
     _sdpResultLog += 'No hits.';
   }

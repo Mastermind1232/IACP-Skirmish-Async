@@ -882,8 +882,17 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   // Special Action CCs cost 1 action; Double Action CCs cost both actions.
   if (timingLabel === 'Special Action') {
     const data = game.dcActionsData?.[msgId];
+    // Free-action exemption: some Special-Action CCs cost no action when the
+    // playing figure has a given trait (Repair: free for a TECHNICIAN —
+    // CSV row 795, alexanbv 2026-06-19).
+    const _freeTrait = effectData?.freeActionForTrait;
+    let _isFreeAction = false;
+    if (_freeTrait) {
+      const _playerKw = (getDcEffect(meta.dcName)?.keywords || []).map((k) => String(k).toUpperCase());
+      _isFreeAction = _playerKw.includes(String(_freeTrait).toUpperCase());
+    }
     // Per alexanbv 2026-06-13: per-figure consume (1 action from active figure).
-    if (data) consumeActionForCurrentFigure(data, 1, game, msgId);
+    if (data && !_isFreeAction) consumeActionForCurrentFigure(data, 1, game, msgId);
   } else if (timingLabel === 'Double Action') {
     const data = game.dcActionsData?.[msgId];
     // Double Action uses both of the active figure's actions.

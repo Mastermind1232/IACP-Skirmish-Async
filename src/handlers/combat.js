@@ -93,6 +93,7 @@ import {
 } from '../game/exploit-weakness-helpers.js';
 import {
   hasFrontLineAbility,
+  hasFrontLineAccuracy,
   frontLineInRange,
   applyFrontLineDieSwap,
 } from '../game/front-line-helpers.js';
@@ -4645,22 +4646,26 @@ export async function handleAttackTarget(interaction, ctx) {
   // Disposable (Hired Gun Regular) — MOVED to the mods window
   // (combat-abilities-mods.js 'disposable' passive) per alexanbv 2026-06-16.
 
-  // Front Line (Echo Base Trooper): within 3 spaces, +2 Accuracy ALWAYS,
-  // blue→red swap is OPTIONAL (per alexanbv 2026-05-11). +2 Accuracy
-  // applied here; swap is offered via the on-declare die-swap window
-  // (combat._frontLineSwapDecided flag, populated by od_dieswap_f_*).
+  // Front Line (Echo Base Trooper): within 3 spaces. The blue→red swap is
+  // OPTIONAL (per alexanbv 2026-05-11) and applies to BOTH variants. The +2
+  // Accuracy is ELITE-only (CSV row 230 Elite vs row 232 Regular) — gated on the
+  // 'front_line_accuracy' id which only the Elite carries.
   if (hasFrontLineAbility(atkSpecialIds) && frontLineInRange(distanceToTarget)) {
-    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+    const flAccuracy = hasFrontLineAccuracy(atkSpecialIds);
+    if (flAccuracy) {
+      game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+    }
+    const accNote = flAccuracy ? ' + +2 Accuracy' : '';
     if (game.pendingCombat._frontLineSwap) {
       const swap = applyFrontLineDieSwap(game.pendingCombat.attackInfo.dice || []);
       if (swap.applied) {
         game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: swap.dice };
-        await thread.send(`**Front Line** — 1 blue die replaced with red + +2 Accuracy (target within ${distanceToTarget} spaces).`);
+        await thread.send(`**Front Line** — 1 blue die replaced with red${accNote} (target within ${distanceToTarget} spaces).`);
       } else {
-        await thread.send(`**Front Line** — +2 Accuracy applied (no blue die to swap; target within ${distanceToTarget} spaces).`);
+        await thread.send(`**Front Line** — ${flAccuracy ? '+2 Accuracy applied (no blue die to swap; ' : '(no blue die to swap; '}target within ${distanceToTarget} spaces).`);
       }
     } else {
-      await thread.send(`**Front Line** — Target within ${distanceToTarget} spaces: +2 Accuracy applied. (Blue→Red swap skipped.)`);
+      await thread.send(`**Front Line** — Target within ${distanceToTarget} spaces:${flAccuracy ? ' +2 Accuracy applied.' : ''} (Blue→Red swap skipped.)`);
     }
   }
 

@@ -1113,7 +1113,11 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
   assert.strictEqual(result.pendingStrain[0].amount, 4); // round 4
 });
 
-test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if FORCE USER', () => {
+test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if the TARGET is a FORCE USER', () => {
+  // alexanbv 2026-06-19 / CSV row 665: "If THAT figure [the chosen target] is a
+  // FORCE USER, you recover 3 Damage" — the trait gate is on the chosen hostile,
+  // not the casting figure. Here the target (Darth Vader) IS a FORCE USER, so the
+  // caster (Luke) heals 3.
   const msgId = 'msg-fd';
   const hostileMsgId = 'msg-fd-hostile';
   const selfHealth = [[6, 10]];
@@ -1125,27 +1129,55 @@ test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if FO
   const game = {
     gameId: 'g-fd',
     selectedMap: { id: 'mos-eisley-outskirts' },
-    figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Darth Vader-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[6, 10]] }],
     p2DcMessageIds: [hostileMsgId],
-    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[8, 10]] }],
+    p2DcList: [{ dcName: 'Darth Vader', healthState: [[8, 10]] }],
     figureConditions: {},
   };
   const dcMessageMeta = new Map([
     [msgId, { gameId: 'g-fd', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }],
-    [hostileMsgId, { gameId: 'g-fd', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 2]' }],
+    [hostileMsgId, { gameId: 'g-fd', playerNum: 2, dcName: 'Darth Vader', displayName: 'Darth Vader [Group 2]' }],
   ]);
   const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
   assert.deepStrictEqual(hostileHealth[0], [5, 10]); // 8 - 3 = 5
-  const fk = 'Stormtroopers-2-0';
+  const fk = 'Darth Vader-2-0';
   assert.ok(game.figureConditions[fk]?.includes('Stun'));
   assert.ok(game.figureConditions[fk]?.includes('Weaken'));
-  // Luke Skywalker has FORCE USER trait → heals 3: 6 + 3 = 9
+  // Target IS a FORCE USER → caster heals 3: 6 + 3 = 9.
   // Handler uses .slice() so we read back through dcHealthState (the Map was updated)
   assert.deepStrictEqual(dcHealthState.get(msgId)[0], [9, 10]);
+});
+
+test('resolveAbility Force Drain does NOT heal when the target is NOT a FORCE USER', () => {
+  const msgId = 'msg-fd2';
+  const hostileMsgId = 'msg-fd2-hostile';
+  const dcHealthState = new Map([
+    [msgId, [[6, 10]]],
+    [hostileMsgId, [[8, 10]]],
+  ]);
+  const game = {
+    gameId: 'g-fd2',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Nexu-2-0': 'p8' } },
+    dcActionsData: { [msgId]: {} },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[6, 10]] }],
+    p2DcMessageIds: [hostileMsgId],
+    p2DcList: [{ dcName: 'Nexu', healthState: [[8, 10]] }],
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-fd2', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }],
+    [hostileMsgId, { gameId: 'g-fd2', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [Group 2]' }],
+  ]);
+  const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true);
+  // Target (Nexu) is not a FORCE USER → caster does NOT heal (stays at 6).
+  assert.deepStrictEqual(dcHealthState.get(msgId)[0], [6, 10]);
 });
 
 test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hostile', () => {

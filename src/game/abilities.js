@@ -1900,9 +1900,11 @@ export function resolveAbility(abilityId, context) {
     const { game, msgId, meta, playerNum, targetFigureKey, dcMessageMeta, dcHealthState } = context;
     if (!game || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const dcEffects = getDcEffects() || {};
-    // Phase 2: figure chosen → apply Focus
+    // Phase 2: figure chosen → apply Focus (unless the card only borrows the
+    // friendly-picker for another effect — e.g. Order Hit grants an attack + MP
+    // and does NOT Focus the chosen figure; entry.skipFocus suppresses it).
     if (targetFigureKey) {
-      applyCondition(game, targetFigureKey, 'Focus');
+      if (!entry.skipFocus) applyCondition(game, targetFigureKey, 'Focus');
       const dcName = dcNameFromFigureKey(targetFigureKey);
       // autoDeductVp (Order Hit): deduct VP from player's total
       if (entry.autoDeductVp > 0) {
@@ -2370,7 +2372,15 @@ export function resolveAbility(abilityId, context) {
     // posts a "Declare Attack" button after the picker drains.
     let odMpNote = '';
     let _odPmxMsgId = null;
-    if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+    // Move-before-attack: a CC's mpBonus (Close and Personal) OR a dcSpecial's
+    // freeMoveBonus (Tonfa Strike) sets up a Move-X picker whose freeAttackPrompt
+    // continuation posts the Declare Attack button after the move drains. This
+    // makes Tonfa Strike "move 2, THEN attack" (the override block used to return
+    // before the standalone freeMoveBonus block could run — alexanbv 2026-06-19).
+    const _odMoveAmt = (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0)
+      ? entry.mpBonus
+      : (typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 ? entry.freeMoveBonus : 0);
+    if (_odMoveAmt > 0) {
       const _odMeta = dcMessageMeta?.get?.(msgId);
       const _odFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
         .filter(k => k.startsWith((_odMeta?.dcName || '') + '-'));
@@ -2379,15 +2389,16 @@ export function resolveAbility(abilityId, context) {
       if (!_odFigureKey) {
         return { applied: false, manualMessage: `**${entry.label}** — could not locate the activating figure; resolve manually.` };
       }
+      const _odBypass = entry.type === 'ccEffect' ? true : !!entry.freeMoveBypassCosts;
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
-        remaining: entry.mpBonus,
+        remaining: _odMoveAmt,
         source: entry.label || 'Move X',
         playerNum,
         figureKey: _odFigureKey,
         dcName: _odMeta?.dcName || '',
         threadId: null,
-        bypassCosts: true,
+        bypassCosts: _odBypass,
         msgId,
         nextAction: {
           type: 'freeAttackPrompt',
@@ -2398,7 +2409,18 @@ export function resolveAbility(abilityId, context) {
         },
       };
       _odPmxMsgId = msgId;
-      odMpNote = ` May move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} (no bank), then take a free attack.`;
+      odMpNote = ` May move up to ${_odMoveAmt} space${_odMoveAmt !== 1 ? 's' : ''}${_odBypass ? ' (ignore terrain)' : ''}, then take a free attack.`;
+    }
+    // Tonfa Strike: after the first (override-dice) attack resolves, a SECOND
+    // regular-pool attack is granted via the after-attack pipeline
+    // (after-attack-resolve.js → fireTonfaStrike). The override block used to
+    // return before the freeAttackBonus block could set this flag.
+    if (entry.label === 'Tonfa Strike') {
+      const _tsFk = figureKeyForActivation(game, msgId);
+      if (_tsFk) {
+        game.tonfaStrikeSecondAttack = game.tonfaStrikeSecondAttack || {};
+        game.tonfaStrikeSecondAttack[_tsFk] = true;
+      }
     }
     return {
       applied: true,
@@ -5246,15 +5268,27 @@ export function resolveAbility(abilityId, context) {
     if (activatingKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: no map selected.' };
+    // Optional target-trait filter (Repair: only an adjacent friendly DROID or
+    // VEHICLE is a legal target — CSV row 794).
+    const _recoverTraits = Array.isArray(entry.recoverTargetTraits)
+      ? entry.recoverTargetTraits.map((t) => String(t).toUpperCase())
+      : null;
     const adjacentSet = new Set();
     for (const fk of activatingKeys) {
       const adj = getFiguresAdjacentToTarget(game, fk, mapId);
       for (const { figureKey, playerNum: p } of adj) {
-        if (p === playerNum && !activatingKeys.includes(figureKey)) adjacentSet.add(figureKey);
+        if (p !== playerNum || activatingKeys.includes(figureKey)) continue;
+        if (_recoverTraits) {
+          const fkKw = (getDcEffect(dcNameFromFigureKey(figureKey))?.keywords || []).map((k) => String(k).toUpperCase());
+          if (!_recoverTraits.some((t) => fkKw.includes(t))) continue;
+        }
+        adjacentSet.add(figureKey);
       }
     }
     const adjacent = [...adjacentSet];
-    if (adjacent.length === 0) return { applied: true, logMessage: 'No adjacent friendly figures.' };
+    if (adjacent.length === 0) {
+      return { applied: true, logMessage: _recoverTraits ? `No adjacent friendly ${_recoverTraits.join('/')} figure to repair.` : 'No adjacent friendly figures.' };
+    }
     if (adjacent.length > 1 && !context.chosenFigureKey) {
       let nPreview = entry.recoverDamageToAdjacent;
       return {
@@ -7880,15 +7914,20 @@ export function resolveAbility(abilityId, context) {
           selfStrainMsg = ` You suffer ${selfStrain} Strain (queued).`;
         }
       }
-      // Heal self if activating figure has the required trait (e.g. Force Drain: recover 3 if FORCE USER)
+      // Heal self if the CHOSEN TARGET has the required trait (Force Drain:
+      // "If that figure is a FORCE USER, you recover 3 Damage" — CSV row 665;
+      // "that figure" is the chosen hostile, NOT the casting figure). The heal
+      // still goes to the casting figure.
       let selfHealMsg = '';
       const healSIT = cah.healSelfIfTrait;
-      if (healSIT?.trait && typeof healSIT.amount === 'number' && healSIT.amount > 0 && dcHealthState) {
+      const targetHasHealTrait = healSIT?.trait
+        ? (getStatsForDc(dcNameFromFigureKey(targetFk))?.keywords || []).includes(healSIT.trait)
+        : false;
+      if (healSIT?.trait && typeof healSIT.amount === 'number' && healSIT.amount > 0 && dcHealthState && targetHasHealTrait) {
         const healSelfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
         if (healSelfMsgId) {
           const healSelfMeta = dcMessageMeta.get(healSelfMsgId);
-          const selfDcStats = healSelfMeta ? getStatsForDc(healSelfMeta.dcName) : null;
-          if (selfDcStats?.keywords?.includes(healSIT.trait)) {
+          {
             const selfKeys = healSelfMeta ? getFigureKeysForDcMsg(game, playerNum, healSelfMeta) : [];
             const selfHs = (dcHealthState.get(healSelfMsgId) || []).slice();
             let remaining = healSIT.amount;

@@ -65,9 +65,11 @@ describe('PROBE-PD-CC-007: CC special action icons cost 1 or 2 actions', () => {
   it('007d: source — dc-play-area Special Action path decrements remaining by 1', () => {
     // Per alexanbv 2026-06-13: Special Action consumes ONE action from the
     // active figure via consumeActionForCurrentFigure (cost 1).
+    // alexanbv 2026-06-19: ...unless the CC is free-action-for-trait (Repair is
+    // a free action for a TECHNICIAN), in which case no action is consumed.
     assert.match(DCPA_SRC,
-      /if \(timingLabel === 'Special Action'\) \{[\s\S]{0,200}?if \(data\) consumeActionForCurrentFigure\(data, 1, game, msgId\);/,
-      'Special Action CC must consume 1 action from the active figure — CRR-CC-007');
+      /if \(timingLabel === 'Special Action'\) \{[\s\S]{0,800}?if \(data && !_isFreeAction\) consumeActionForCurrentFigure\(data, 1, game, msgId\);/,
+      'Special Action CC must consume 1 action from the active figure (unless free-action-for-trait) — CRR-CC-007');
   });
 
   it('007e: source — dc-play-area Double Action path zeroes remaining (spends both actions)', () => {

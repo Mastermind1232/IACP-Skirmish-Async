@@ -13,11 +13,21 @@
  */
 
 export const FRONT_LINE_ABILITY_ID = 'front_line';
+// The +2 Accuracy half of Front Line is ELITE-only (Echo Base Trooper Elite,
+// combat-spec.csv row 230); the Regular (row 232) only gets the blue→red swap.
+// Both variants share 'front_line' (the swap), so the Elite carries this extra
+// id to gate the accuracy bonus. (alexanbv: CSV is source of truth.)
+export const FRONT_LINE_ACCURACY_ABILITY_ID = 'front_line_accuracy';
 export const FRONT_LINE_MAX_DISTANCE = 3;
 
 export function hasFrontLineAbility(specialAbilityIds) {
   if (!Array.isArray(specialAbilityIds)) return false;
   return specialAbilityIds.includes(FRONT_LINE_ABILITY_ID);
+}
+
+export function hasFrontLineAccuracy(specialAbilityIds) {
+  if (!Array.isArray(specialAbilityIds)) return false;
+  return specialAbilityIds.includes(FRONT_LINE_ACCURACY_ABILITY_ID);
 }
 
 export function frontLineInRange(distanceToTarget) {
