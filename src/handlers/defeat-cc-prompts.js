@@ -201,6 +201,10 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   // runs via the 'defeat_cc' continuation ONLY if the card survives the
   // Negate/Comms window. The captured channelId lets the continuation post the
   // first picker without an interaction.
+  // Capture the defeat context BEFORE clearing — some defeat CCs (Paid in
+  // Beskar) need the defeated figure's position to resolve their effect.
+  const _defeatedPos = pending.defeatedPos ?? null;
+  const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
   clearPendingDefeatCcPrompt(game);
   await runCcPlayTriggers(game, playerPN, { client, logGameAction, dcMessageMeta, saveGames });
   const _dcCost = getCcEffect(cardName)?.cost;
@@ -208,6 +212,7 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
     card: cardName, cost: typeof _dcCost === 'number' ? _dcCost : 0,
     playedBy: playerPN, abilityId: cardName,
     customResolve: 'defeat_cc', channelId: interaction.channel?.id ?? null,
+    defeatedPos: _defeatedPos, defeatedFigureKey: _defeatedFigureKey,
   }, ctx, client);
   if (typeof saveGames === 'function') await saveGames(gameId);
 }
@@ -294,6 +299,7 @@ async function _resolveDefeatCcEffect(game, entry, ctx, client) {
     const result = resolveAbility(cardName, {
       game, playerNum: playerPN, cardName,
       dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
+      defeatedPos: entry.defeatedPos ?? null, defeatedFigureKey: entry.defeatedFigureKey ?? null,
     });
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       const note = result.applied

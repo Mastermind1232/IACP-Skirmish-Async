@@ -1208,19 +1208,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           const _bountyVpK = vpKey(_bountySetterNum);
           await logGameAction(game, client, `**Price on Their Heads** — +${_bountyAmt} VP bounty awarded to P${_bountySetterNum} (${game[_bountyVpK].total} total).`, { phase: 'ROUND', icon: 'card' });
         }
-        // Paid in Beskar: grant Block tokens when hostile is defeated within range
-        if (game.whenDefeatHostileWithin3GainBlockTokens) {
-          const _beskarData = game.whenDefeatHostileWithin3GainBlockTokens;
-          const _beskarDist = combat.distanceToTarget ?? 0;
-          const _beskarRange = _beskarData.range ?? 3;
-          if (_beskarDist <= _beskarRange) {
-            const _beskarTokens = _beskarData.tokens ?? 1;
-            const _beskarFigKey = combat.attackerFigureKey;
-            grantPowerTokens(game, _beskarFigKey, 'Block', _beskarTokens);
-            await logGameAction(game, client, `**Paid in Beskar** — +${_beskarTokens} Block Token${_beskarTokens !== 1 ? 's' : ''} granted to ${combat.attackerDisplayName}.`, { phase: 'ROUND', icon: 'card' });
-          }
-          game.whenDefeatHostileWithin3GainBlockTokens = null;
-        }
+        // Paid in Beskar is resolved via the when_defeated prompt path
+        // (damage-pipeline-hooks paid_in_beskar_prompt → defeat-cc-prompts →
+        // the whenDefeatHostileWithin3GainBlockTokens effect, which grants to the
+        // nearest friendly within 3 of the DEFEATED figure). The old
+        // attacker-only / attacker→target-range / one-shot-via-flag path that
+        // was here is removed (alexanbv 2026-06-19).
         // Worth Every Credit: bonus VP when hostile is defeated this activation
         if (game.nextHostileDefeatVpBonus?.[attackerPlayerNum]) {
           const _wecData = game.nextHostileDefeatVpBonus[attackerPlayerNum];

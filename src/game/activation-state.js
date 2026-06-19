@@ -804,7 +804,6 @@ const ROUND_NULL_FLAGS = [
   'squadSwarmCumulativeCost',
   'fieldTacticsActivationPlayerNum',
   'fieldTacticsActivationMsgId',
-  'whenDefeatHostileWithin3GainBlockTokens',
   'pendingRushPush',
   'pendingMassivePush',
   'pendingMoveXSequence',

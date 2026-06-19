@@ -9214,12 +9214,28 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'This round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and Surge: gain 1 VP when attacking a figure.' };
   }
 
-  // ccEffect: whenDefeatHostileWithin3GainBlockTokens (Paid in Beskar)
+  // ccEffect: whenDefeatHostileWithin3GainBlockTokens (Paid in Beskar) — ONE-SHOT
+  // reactive: when ANY hostile figure is defeated (alexanbv 2026-06-19: not only
+  // by the attacker), the nearest friendly figure within 3 spaces of the defeated
+  // figure gains the Block tokens. Range is measured from the playing side's
+  // figure, NOT the attacker→target distance. The defeated position is threaded
+  // in via context.defeatedPos (the when_defeated prompt path).
   if (entry.type === 'ccEffect' && typeof entry.whenDefeatHostileWithin3GainBlockTokens === 'number') {
-    const { game, playerNum } = context;
+    const { game, playerNum, defeatedPos } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.whenDefeatHostileWithin3GainBlockTokens = { playerNum, tokens: entry.whenDefeatHostileWithin3GainBlockTokens };
-    return { applied: true, logMessage: `When you defeat a hostile figure within 3 spaces, gain ${entry.whenDefeatHostileWithin3GainBlockTokens} Block tokens.` };
+    const tokens = entry.whenDefeatHostileWithin3GainBlockTokens;
+    const range = entry.whenDefeatHostileWithin3Range ?? 3;
+    const dPos = defeatedPos || null;
+    if (!dPos) return { applied: false, manualMessage: `**${entry.label || 'Paid in Beskar'}** — no recently-defeated hostile in context; resolve manually.` };
+    let best = null, bestDist = Infinity;
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (!pos) continue;
+      const dist = countGameSpaces(game, dPos, pos);
+      if (dist <= range && dist < bestDist) { best = fk; bestDist = dist; }
+    }
+    if (!best) return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — no friendly figure within ${range} spaces of the defeated figure.` };
+    grantPowerTokens(game, best, 'Block', tokens);
+    return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — **${dcNameFromFigureKey(best)}** gains ${tokens} Block Token${tokens !== 1 ? 's' : ''}.`, refreshDcEmbed: true };
   }
 
   // ccEffect: overrunThisActivation (Overrun) — per alexanbv 2026-05-13,
