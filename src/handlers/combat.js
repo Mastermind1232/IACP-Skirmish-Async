@@ -226,7 +226,7 @@ import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { runCcPlayTriggers, openCcCounterWindow, registerCcCustomResolve } from './cc-hand.js';
 import { registerCombatGateResume } from '../game/cc-counter-window.js';
-import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
+import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals, rollSingleAttackDie as _rollSingleAttackDie, rollSingleDefenseDie as _rollSingleDefenseDie } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -772,6 +772,15 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
   if (pend.kind === 'after_attack') {
     const { postPostResolveWindow } = await import('./after-attack-resolve.js');
     await postPostResolveWindow(thread, game, combat, pend.effectSide, ctx);
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
+  // Reroll Command card: the reroll (if the card survived) already happened in
+  // the 'reroll_cc' continuation, setting combat._lastRerolledDie. Offer Tough
+  // Luck on that reroll, then drive the gate. If it was cancelled, no die was
+  // rerolled → _driveGateOrOfferToughLuck just drives the gate (no Tough Luck).
+  if (pend.kind === 'reroll_card') {
+    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
     ctx.saveGames?.(game.gameId);
     return;
   }
@@ -1365,15 +1374,28 @@ function _makeCapitalizeResolver() {
         ],
       };
     },
-    apply: async (choice, { game, combat, ctx, thread }) => {
+    apply: async (choice, { game, combat, ctx, thread, side, id, window }) => {
       if (choice === 'skip') { await thread?.send('**Capitalize** — Skipped.').catch(discordCatch); return undefined; }
-      await playCC(game, combat.attackerPlayerNum, combat.attackerFigureKey, 'Capitalize', { ctx, skipExecute: true });
       const p = choice[0] === 'd' ? 'defense' : 'attack';
       const idx = parseInt(choice.slice(1), 10);
-      const res = _rerollDie(combat, ctx, { pool: p, index: idx });
-      if (res.ok) await thread?.send(`**Capitalize** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
-      else await thread?.send(`**Capitalize** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
-      return undefined;
+      // Die chosen → Negate/Comms window FIRST, THEN the reroll. Discard the card,
+      // mark the gate ability used (so it isn't re-offered on resume), and defer
+      // the reroll to the 'reroll_cc' continuation; Tough Luck is then offered on
+      // the new reroll by resumeCombatGateAfterCc (kind 'reroll_card').
+      const pn = combat.attackerPlayerNum;
+      const _h = game[ccHandKey(pn)] || []; const _hi = _h.indexOf('Capitalize');
+      if (_hi >= 0) _h.splice(_hi, 1); game[ccHandKey(pn)] = _h;
+      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat('Capitalize');
+      try { recordModsChoice(combat[_GATE_WINDOWS[window].field], side, id); } catch { /* not pending */ }
+      _markGateAbilityUsed(game, combat, id);
+      _ensureRerollCcResolver();
+      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+      game.pendingCombatCcResolve = { window: 'rerolls', kind: 'reroll_card', gameId: game.gameId };
+      await openCcCounterWindow(game, game.gameId, {
+        card: 'Capitalize', cost: ctx.getCcEffect?.('Capitalize')?.cost ?? 0, playedBy: pn,
+        abilityId: 'Capitalize', customResolve: 'reroll_cc', reroll: { pool: p, idx },
+      }, ctx, ctx.client);
+      return { followUp: true };
     },
   };
 }
@@ -2345,6 +2367,29 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
+// Reroll Command cards (Capitalize, …) — the REROLL is the card's effect, so it
+// lands via this continuation only if the card survives Negate/Comms (alexanbv
+// 2026-06-19: "neg/comms first, THEN the reroll happens, then tough luck"). The
+// die is already chosen (in the resolver's apply, before the window). Tough Luck
+// is offered on the new reroll by the resume (_driveGateOrOfferToughLuck), which
+// reads combat._lastRerolledDie that rerollDie sets here. A countered card never
+// reaches here → no reroll. Registered lazily (avoids load-time cycles).
+let _rerollCcResolverRegistered = false;
+function _ensureRerollCcResolver() {
+  if (_rerollCcResolverRegistered) return;
+  _rerollCcResolverRegistered = true;
+  registerCcCustomResolve('reroll_cc', async (game, entry, _ctx, client) => {
+    const combat = game.pendingCombat;
+    const rr = entry.reroll;
+    if (!combat || !rr) return;
+    const deps = { rollSingleAttackDie: _rollSingleAttackDie, rollSingleDefenseDie: _rollSingleDefenseDie, recalcAttackTotals: _recalcAttackTotals, recalcDefenseTotals: _recalcDefenseTotals };
+    const res = _rerollDie(combat, deps, { pool: rr.pool, index: rr.idx, newColor: rr.newColor });
+    const thread = await fetchCombatThread(client, combat.combatThreadId);
+    if (res.ok) await thread?.send(`**${entry.card}** — rerolled ${rr.pool} die #${rr.idx + 1}.`).catch(discordCatch);
+    else await thread?.send(`**${entry.card}** — die not rerolled (${res.reason}).`).catch(discordCatch);
+  });
+}
+
 // Tough Luck's die-removal is its EFFECT; it lands via this continuation only if
 // the card survives the Negate/Comms window (alexanbv 2026-06-19 "all CCs go
 // through the counter window"). The rerolls-window resume is handled separately
