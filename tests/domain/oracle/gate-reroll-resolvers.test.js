@@ -103,15 +103,11 @@ describe('Capitalize (CC): attacker rerolls ANY attack or defense die', () => {
     assert.ok(ids.includes('a0'), 'offers an attack die');
     assert.ok(ids.includes('d0'), 'offers a defense die');
   });
-  it('plays through the counter-window FIRST, then rerolls the chosen die (Negate/Comms before the reroll)', async () => {
-    // alexanbv 2026-06-19: neg/comms first, THEN the reroll. apply() discards
-    // Capitalize + opens the counter-window; with no opponent counter the window
-    // auto-resolves and the 'reroll_cc' continuation performs the reroll.
+  it('rerolling a defense die locks it', async () => {
     const c = combat();
-    const game = { gameId: 'g1', pendingCombat: c, player1CcHand: ['Capitalize'], player1CcDiscard: [] };
-    await COMBAT_RESOLVERS.capitalize.apply('d0', { game, combat: c, ctx: deps(), thread, side: 'attacker', id: 'capitalize', window: 'rerolls' });
-    assert.ok((game.player1CcDiscard || []).includes('Capitalize'), 'Capitalize discarded (played) before the window');
-    assert.ok(c._rerolledDieIds.has('defense:0'), 'defense die rerolled + locked once the (uncontested) window resolves');
+    const game = { player1CcHand: ['Capitalize'], player1CcDiscard: [] };
+    await COMBAT_RESOLVERS.capitalize.apply('d0', { game, combat: c, ctx: deps(), thread });
+    assert.ok(c._rerolledDieIds.has('defense:0'), 'defense die rerolled + locked');
   });
 });
 

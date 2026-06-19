@@ -226,7 +226,7 @@ import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { runCcPlayTriggers, openCcCounterWindow, registerCcCustomResolve } from './cc-hand.js';
 import { registerCombatGateResume } from '../game/cc-counter-window.js';
-import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals, rollSingleAttackDie as _rollSingleAttackDie, rollSingleDefenseDie as _rollSingleDefenseDie } from '../game/combat.js';
+import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -775,11 +775,24 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
     ctx.saveGames?.(game.gameId);
     return;
   }
-  // Reroll Command card: the reroll (if the card survived) already happened in
-  // the 'reroll_cc' continuation, setting combat._lastRerolledDie. Offer Tough
-  // Luck on that reroll, then drive the gate. If it was cancelled, no die was
-  // rerolled → _driveGateOrOfferToughLuck just drives the gate (no Tough Luck).
-  if (pend.kind === 'reroll_card') {
+  // Reroll Command card: if it SURVIVED (the 'reroll_cc' continuation set
+  // combat._rerollCcSurvivor), NOW run its resolver — post the die-picker. The
+  // normal sub-choice flow (handleModsSubChoice → apply → reroll →
+  // _driveGateOrOfferToughLuck) does the reroll then offers Tough Luck. If it was
+  // cancelled, the flag is unset → fall through to a plain gate re-drive.
+  if (pend.rerollResolverPick && combat._rerollCcSurvivor === pend.rerollResolverPick) {
+    delete combat._rerollCcSurvivor;
+    const pick = pend.rerollResolverPick;
+    const r = _resolverFor(pick);
+    const p = r?.prompt ? await r.prompt({ game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window }) : null;
+    if (p?.buttons) {
+      const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
+        new ButtonBuilder().setCustomId(`combat_modsub_${combat.gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
+      await thread?.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+      ctx.saveGames?.(game.gameId);
+      return; // handleModsSubChoice resolves the die pick → reroll → Tough Luck
+    }
+    if (r?.apply) await r.apply(null, { game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window });
     await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
     ctx.saveGames?.(game.gameId);
     return;
@@ -1046,34 +1059,6 @@ function _makeResourcefulResolver(side) {
   };
 }
 
-// Reroll a die — OR, when the rerolling ability is a Command card the side still
-// holds, play it through the counter-window FIRST and defer the reroll to the
-// 'reroll_cc' continuation (alexanbv 2026-06-19: neg/comms before the reroll).
-// Returns 'deferred' (caller returns {followUp:true}) or the reroll result.
-// DC reroll abilities (params.card is a DC name, never in the CC hand) reroll in
-// place exactly as before — so this is a no-op for them.
-async function _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool, index, newColor }) {
-  const card = getCombatAbility(id)?.params?.card;
-  const pn = side === 'attacker'
-    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
-    : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-  const isCc = card && (getCcHand(game, pn) || []).includes(card);
-  if (!isCc) return _rerollDie(combat, ctx, { pool, index, newColor });
-  const _h = game[ccHandKey(pn)] || []; const _hi = _h.indexOf(card);
-  if (_hi >= 0) _h.splice(_hi, 1); game[ccHandKey(pn)] = _h;
-  game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
-  try { recordModsChoice(combat[_GATE_WINDOWS[window].field], side, id); } catch { /* not pending */ }
-  _markGateAbilityUsed(game, combat, id);
-  _ensureRerollCcResolver();
-  await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-  game.pendingCombatCcResolve = { window, kind: 'reroll_card', gameId: game.gameId };
-  await openCcCounterWindow(game, game.gameId, {
-    card, cost: ctx.getCcEffect?.(card)?.cost ?? 0, playedBy: pn, abilityId: card,
-    customResolve: 'reroll_cc', reroll: { pool, idx: index, newColor },
-  }, ctx, ctx.client);
-  return 'deferred';
-}
-
 function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, dieColor = null, strainCost = 0, stageKey = 'rr' }) {
   // Die-color restriction (Overpower: only RED/BLACK dice selectable). Composed
   // with any passed-in eligibility filter. A SELECTION filter, not a color swap.
@@ -1106,13 +1091,12 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
           ],
         };
       },
-      apply: async (choice, { game, combat, thread, ctx, side, id, window }) => {
+      apply: async (choice, { combat, thread, ctx }) => {
         if (choice === 'skip') { thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
         const p = choice[0] === 'd' ? 'defense' : 'attack';
         const idx = parseInt(choice.slice(1), 10);
-        const res = await _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool: p, index: idx });
-        if (res === 'deferred') return { followUp: true }; // CC: neg/comms first, reroll in the continuation
-        if (res?.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+        const res = _rerollDie(combat, ctx, { pool: p, index: idx });
+        if (res.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
         else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
         return undefined;
       },
@@ -1130,7 +1114,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
       const dice = combat[diceField] || [];
       return { content: `**${name}** — choose a ${pool} die to reroll:`, buttons: [...idxs.map((i) => [String(i), `Die #${i + 1} (${dieLabel(dice[i])})`]), ['skip', 'Skip', 'secondary']] };
     },
-    apply: async (choice, { game, combat, thread, ctx, gameId, id, side, window }) => {
+    apply: async (choice, { game, combat, thread, ctx, gameId, id }) => {
       const sk = `_${stageKey}`;
       if (choice === 'skip') { delete combat[`${sk}Stage`]; delete combat[`${sk}Die`]; thread?.send(`**${name}** — Skipped.`).catch(discordCatch); return undefined; }
       // colorSwap (incl. Lando's Gambit): stage 1 picks the die, stage 2 the color.
@@ -1145,9 +1129,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
       }
       const idx = _cs ? combat[`${sk}Die`] : parseInt(choice, 10);
       const newColor = _cs && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
-      delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
-      const res = await _rerollOrDeferCc({ game, combat, ctx, id, side, window, pool, index: idx, newColor });
-      if (res === 'deferred') return { followUp: true }; // CC: neg/comms first, reroll in the continuation
+      const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
       if (res.ok) {
         thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
         // Strain cost on use (Rancor's Trained: "suffer 1 Strain to reroll"). The
@@ -1405,28 +1387,16 @@ function _makeCapitalizeResolver() {
         ],
       };
     },
-    apply: async (choice, { game, combat, ctx, thread, side, id, window }) => {
+    apply: async (choice, { game, combat, ctx, thread }) => {
       if (choice === 'skip') { await thread?.send('**Capitalize** — Skipped.').catch(discordCatch); return undefined; }
+      // Capitalize is already discarded at gate-pick (Negate/Comms ran first); this
+      // resolver now runs post-window, so it just rerolls — no playCC here.
       const p = choice[0] === 'd' ? 'defense' : 'attack';
       const idx = parseInt(choice.slice(1), 10);
-      // Die chosen → Negate/Comms window FIRST, THEN the reroll. Discard the card,
-      // mark the gate ability used (so it isn't re-offered on resume), and defer
-      // the reroll to the 'reroll_cc' continuation; Tough Luck is then offered on
-      // the new reroll by resumeCombatGateAfterCc (kind 'reroll_card').
-      const pn = combat.attackerPlayerNum;
-      const _h = game[ccHandKey(pn)] || []; const _hi = _h.indexOf('Capitalize');
-      if (_hi >= 0) _h.splice(_hi, 1); game[ccHandKey(pn)] = _h;
-      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat('Capitalize');
-      try { recordModsChoice(combat[_GATE_WINDOWS[window].field], side, id); } catch { /* not pending */ }
-      _markGateAbilityUsed(game, combat, id);
-      _ensureRerollCcResolver();
-      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-      game.pendingCombatCcResolve = { window: 'rerolls', kind: 'reroll_card', gameId: game.gameId };
-      await openCcCounterWindow(game, game.gameId, {
-        card: 'Capitalize', cost: ctx.getCcEffect?.('Capitalize')?.cost ?? 0, playedBy: pn,
-        abilityId: 'Capitalize', customResolve: 'reroll_cc', reroll: { pool: p, idx },
-      }, ctx, ctx.client);
-      return { followUp: true };
+      const res = _rerollDie(combat, ctx, { pool: p, index: idx });
+      if (res.ok) await thread?.send(`**Capitalize** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+      else await thread?.send(`**Capitalize** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      return undefined;
     },
   };
 }
@@ -2276,6 +2246,39 @@ export async function handleModsPick(interaction, ctx) {
         msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
       }, ctx, interaction.client);
     }
+  } else if (_isRerollCcPick(pick, side === 'attacker'
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+    : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)), game)) {
+    // Reroll Command card: Negate/Comms FIRST (before the die-picker). Dispose
+    // the card, mark it used, open the counter-window, and pause; the resolver's
+    // die-picker runs on resolve (resumeCombatGateAfterCc), then the normal flow
+    // does the reroll + Tough Luck. Cancelled → no die-pick, no reroll.
+    const _rReg = getCombatAbility(pick);
+    const _rCard = _rReg.params.card;
+    const _rPn = side === 'attacker'
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const _rFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
+    const _rChk = canPlayCC(game, _rPn, _rFig, _rCard, { allowNotInHand: false });
+    if (!_rChk.ok) {
+      if (thread) await thread.send(`⚠️ Can't play ${_rCard}: ${_rChk.reason}`).catch(discordCatch);
+      await _driveGatePath(window, thread, game, combat, ctx);
+    } else {
+      const _rHand = game[ccHandKey(_rPn)] || [];
+      const _rHi = _rHand.indexOf(_rCard);
+      if (_rHi >= 0) _rHand.splice(_rHi, 1);
+      game[ccHandKey(_rPn)] = _rHand;
+      game[ccDiscardKey(_rPn)] = (game[ccDiscardKey(_rPn)] || []).concat(_rCard);
+      recordModsChoice(gate, side, pick);
+      _markGateAbilityUsed(game, combat, pick);
+      _ensureRerollCcResolver();
+      await runCcPlayTriggers(game, _rPn, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+      game.pendingCombatCcResolve = { window, side, gameId, rerollResolverPick: pick };
+      await openCcCounterWindow(game, gameId, {
+        card: _rCard, cost: ctx.getCcEffect?.(_rCard)?.cost ?? 0, playedBy: _rPn,
+        abilityId: _rCard, customResolve: 'reroll_cc', rerollResolverPick: pick,
+      }, ctx, interaction.client);
+    }
   } else {
     const r = _resolverFor(pick);
     if (r) {
@@ -2398,27 +2401,31 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
-// Reroll Command cards (Capitalize, …) — the REROLL is the card's effect, so it
-// lands via this continuation only if the card survives Negate/Comms (alexanbv
-// 2026-06-19: "neg/comms first, THEN the reroll happens, then tough luck"). The
-// die is already chosen (in the resolver's apply, before the window). Tough Luck
-// is offered on the new reroll by the resume (_driveGateOrOfferToughLuck), which
-// reads combat._lastRerolledDie that rerollDie sets here. A countered card never
-// reaches here → no reroll. Registered lazily (avoids load-time cycles).
+// Reroll Command cards (Capitalize, Double or Nothing, …): the FIRST thing that
+// happens is the Negate/Comms window, THEN the die is picked, THEN the reroll,
+// THEN Tough Luck (alexanbv 2026-06-19). So when such a gate ability is picked,
+// handleModsPick disposes the card + opens the counter-window and pauses BEFORE
+// running the resolver's die-picker. This continuation runs ONLY if the card
+// survives, flagging combat._rerollCcSurvivor; the resume (resumeCombatGateAfterCc,
+// full combat ctx) then posts the resolver's die-picker — and the normal
+// sub-choice flow does the reroll + Tough Luck. A countered card never sets the
+// flag, so the resume just re-drives the gate (no die-pick, no reroll).
 let _rerollCcResolverRegistered = false;
 function _ensureRerollCcResolver() {
   if (_rerollCcResolverRegistered) return;
   _rerollCcResolverRegistered = true;
-  registerCcCustomResolve('reroll_cc', async (game, entry, _ctx, client) => {
+  registerCcCustomResolve('reroll_cc', async (game, entry) => {
     const combat = game.pendingCombat;
-    const rr = entry.reroll;
-    if (!combat || !rr) return;
-    const deps = { rollSingleAttackDie: _rollSingleAttackDie, rollSingleDefenseDie: _rollSingleDefenseDie, recalcAttackTotals: _recalcAttackTotals, recalcDefenseTotals: _recalcDefenseTotals };
-    const res = _rerollDie(combat, deps, { pool: rr.pool, index: rr.idx, newColor: rr.newColor });
-    const thread = await fetchCombatThread(client, combat.combatThreadId);
-    if (res.ok) await thread?.send(`**${entry.card}** — rerolled ${rr.pool} die #${rr.idx + 1}.`).catch(discordCatch);
-    else await thread?.send(`**${entry.card}** — die not rerolled (${res.reason}).`).catch(discordCatch);
+    if (combat) combat._rerollCcSurvivor = entry.rerollResolverPick;
   });
+}
+/** True iff a picked gate ability is a reroll backed by a Command card in hand. */
+function _isRerollCcPick(pick, ccPn, game) {
+  const reg = getCombatAbility(pick);
+  const card = reg?.params?.card;
+  if (!card) return false;
+  const isReroll = reg.params.kind === 'reroll' || reg.params.kind === 'capitalize' || /^reroll:/.test(pick);
+  return isReroll && (getCcHand(game, ccPn) || []).includes(card);
 }
 
 // Tough Luck's die-removal is its EFFECT; it lands via this continuation only if
