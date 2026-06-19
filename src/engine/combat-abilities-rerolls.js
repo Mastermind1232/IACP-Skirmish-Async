@@ -66,6 +66,12 @@ export function registerRerollAbilities() {
       // registered as a die-turn in combat-abilities-special.js. Skip it here so
       // the reroll resolver doesn't shadow the die-turn one (alexanbv 2026-06-16).
       if (card === 'Rapid Recalibration') continue;
+      // Demoralizing Monologue (forced DEFENSE-die reroll + reveal-hand) and
+      // Double or Nothing (reroll + conditional double) have BESPOKE effects
+      // resolved via their ccEffect (resolveAbility), NOT a generic pick-a-die
+      // reroll. Skip them here and register them as kind:'cc' gate buttons below
+      // so the button runs the real effect (alexanbv 2026-06-19).
+      if (card === 'Demoralizing Monologue' || card === 'Double or Nothing') continue;
       // Lasat-Honor Guard (Zeb Orrelios) is a die-TURN that fires AFTER ALL rerolls
       // ("after any rerolls ... turn 1 die showing only a single attack icon to any
       // side") — NOT a reroll. It's registered in the SPECIAL window (die-turn) via
@@ -275,6 +281,31 @@ export function registerCapitalize() {
 }
 
 registerCapitalize();
+
+// Demoralizing Monologue + Double or Nothing — combat-playable reroll CCs whose
+// effect is BESPOKE (resolved via resolveAbility / their ccEffect), not a generic
+// pick-a-die reroll. Offered as kind:'cc' gate buttons so the button runs the real
+// effect through the counter-window → resolveAbility (alexanbv 2026-06-19: every
+// combat-playable CC should have ONE working button). Excluded from the generic
+// reroll loop above so they don't ALSO get a wrong reroll button.
+let _bespokeRerollCcsRegistered = false;
+export function registerBespokeRerollCcs() {
+  if (_bespokeRerollCcsRegistered) return;
+  _bespokeRerollCcsRegistered = true;
+  for (const card of ['Demoralizing Monologue', 'Double or Nothing']) {
+    registerCombatAbility({
+      id: `cc:${slug(card)}:attacker`, name: card, windows: ['rerolls'], side: 'attacker',
+      kind: 'interactive', params: { kind: 'cc', card },
+      applies: (game, combat) => {
+        const pn = combat.attackerPlayerNum;
+        if (!pn) return false;
+        if (!(getCcHand(game, pn) || []).includes(card)) return false;
+        return (combat.attackDiceResults?.length || combat.defenseDiceResults?.length || 0) > 0;
+      },
+    });
+  }
+}
+registerBespokeRerollCcs();
 
 // Charge Generators (AT-DP) — REROLLS half (FIX-1 split). The card's "you may
 // reroll 1 attack die" lives in the rerolls window, gated on the SAME suffered<9
