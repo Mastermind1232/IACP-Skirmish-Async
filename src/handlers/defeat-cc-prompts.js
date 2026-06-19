@@ -25,13 +25,16 @@
  * return manualMessage. That's a separate resolver-side fix; the
  * auto-prompt itself is correct.
  */
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { clearPendingDefeatCcPrompt, setPendingDefeatCcPrompt } from '../game/interrupts.js';
-import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList } from '../game/player-helpers.js';
+import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList, getPlayerId } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getCcEffect } from '../data-loader.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { openCcCounterWindow, registerCcCustomResolve, runCcPlayTriggers } from './cc-hand.js';
 
 /**
  * Enumerate alive friendly DCs for a player, optionally filtering by
@@ -158,11 +161,10 @@ export async function handleSkipDefeatCcPrompt(interaction, ctx) {
 }
 
 export async function handlePlayDefeatCcPrompt(interaction, ctx) {
-  const {
-    getGame, canActAsPlayer, saveGames, client, logGameAction,
-    resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
-    ButtonBuilder, ButtonStyle, ActionRowBuilder,
-  } = ctx;
+  // Play-time: validate + commit + open the counter-window. The effect (picker /
+  // resolveAbility) is deferred to the 'defeat_cc' continuation below.
+  _ensureDefeatCcResolver();
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, dcMessageMeta } = ctx;
   const parts = splitCustomId(interaction.customId, 'defeat_cc_play_');
   const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
@@ -194,17 +196,45 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   game[discardKey] = game[discardKey] || [];
   game[discardKey].push(cardName);
 
-  // Debts Repaid / Retaliation: post a friendly-DC target picker per
-  // alexanbv 2026-05-10. These cards say "your Deployment card" /
-  // "you" — player chooses which DC the effect lands on.
-  //
-  // Unique-figure CCs (Debts Repaid → Chewbacca): the eligible playing
-  // figure is the named figure, plus Mara via Fast Learner if she's in
-  // army and FL not yet used this round. If only one eligible option,
-  // auto-resolve (no picker). If both eligible, post picker.
-  //
-  // Keyword-restricted CCs (Retaliation → GUARDIAN): list all friendly
-  // GUARDIAN figures.
+  // Route through the unified counter-window: ALL CCs are counterable
+  // (alexanbv 2026-06-19). The bespoke target/mode picker (or direct resolve)
+  // runs via the 'defeat_cc' continuation ONLY if the card survives the
+  // Negate/Comms window. The captured channelId lets the continuation post the
+  // first picker without an interaction.
+  clearPendingDefeatCcPrompt(game);
+  await runCcPlayTriggers(game, playerPN, { client, logGameAction, dcMessageMeta, saveGames });
+  const _dcCost = getCcEffect(cardName)?.cost;
+  await openCcCounterWindow(game, gameId, {
+    card: cardName, cost: typeof _dcCost === 'number' ? _dcCost : 0,
+    playedBy: playerPN, abilityId: cardName,
+    customResolve: 'defeat_cc', channelId: interaction.channel?.id ?? null,
+  }, ctx, client);
+  if (typeof saveGames === 'function') await saveGames(gameId);
+}
+
+// WHEN_DEFEATED CCs (Debts Repaid, Retaliation, ...) — post-counter-window
+// continuation. Runs the target/mode picker (or resolves directly) once the
+// card has survived the Negate/Comms window. Mirrors the original inline flow,
+// but posts the first picker to the captured channel (no interaction) and
+// reconstructs the target-pick pending state for the existing
+// defeat_cc_target_/defeat_cc_mode_ sub-handlers (which keep their own
+// interaction). A cancelled card never reaches here.
+// Registered lazily (first play) rather than at module load to avoid a
+// load-time circular-import TDZ with cc-hand.js (which this file imports).
+let _defeatCcResolverRegistered = false;
+function _ensureDefeatCcResolver() {
+  if (_defeatCcResolverRegistered) return;
+  _defeatCcResolverRegistered = true;
+  registerCcCustomResolve('defeat_cc', _resolveDefeatCcEffect);
+}
+
+async function _resolveDefeatCcEffect(game, entry, ctx, client) {
+  const { resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, saveGames } = ctx;
+  const cardName = entry.card;
+  const playerPN = entry.playedBy;
+  const gameId = game.gameId;
+  const channel = entry.channelId ? await fetchGameChannel(client, entry.channelId) : null;
+
   if (_NEEDS_TARGET_PICKER.has(cardName)) {
     const namedFigure = _CARD_UNIQUE_FIGURE[cardName];
     const keyword = _CARD_TARGET_KEYWORD[cardName] || null;
@@ -212,36 +242,23 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
       ? _uniqueFigurePlayers(game, playerPN, namedFigure)
       : _friendlyDcOptions(game, playerPN, keyword);
     if (options.length === 0) {
-      clearPendingDefeatCcPrompt(game);
       if (typeof logGameAction === 'function' && client) {
         const kwNote = keyword ? ` (no friendly ${keyword} on board)` : ' — no eligible playing figure on board.';
         await logGameAction(game, client, `**${cardName}** — no eligible target${kwNote}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
       }
-      if (typeof saveGames === 'function') await saveGames(gameId);
       return;
     }
-    // Unique-figure CC with only the named figure eligible (no Mara
-    // FL): auto-resolve, skip picker. Saves a click in the common case.
+    // Unique-figure CC with only the named figure eligible (no Mara FL): auto-resolve.
     if (namedFigure && options.length === 1) {
       const opt = options[0];
-      clearPendingDefeatCcPrompt(game);
       if (opt.viaFastLearner) {
-        // Defensive — shouldn't auto-resolve via FL (named figure was
-        // missing). Mark FL used since the play is going through.
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         game.roundFigureAbilityUsed[`${opt.dcName}_fast_learner`] = true;
       }
       if (typeof resolveAbility === 'function') {
         const result = resolveAbility(cardName, {
-          game,
-          playerNum: playerPN,
-          cardName,
-          msgId: opt.msgId,
-          chosenFigureKey: opt.figureKey,
-          dcMessageMeta,
-          dcHealthState,
-          dcExhaustedState,
-          combat: game.pendingCombat,
+          game, playerNum: playerPN, cardName, msgId: opt.msgId, chosenFigureKey: opt.figureKey,
+          dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
         });
         if (result?.logMessage && typeof logGameAction === 'function' && client) {
           const note = result.applied
@@ -250,10 +267,9 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
           await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
         }
       }
-      if (typeof saveGames === 'function') await saveGames(gameId);
       return;
     }
-    if (ButtonBuilder && ButtonStyle && ActionRowBuilder && interaction.channel?.send) {
+    if (channel) {
       const buttons = options.slice(0, 5).map((opt, i) =>
         new ButtonBuilder()
           .setCustomId(`defeat_cc_target_${gameId}_${i}`)
@@ -261,37 +277,23 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
           .setStyle(ButtonStyle.Primary),
       );
       const row = new ActionRowBuilder().addComponents(buttons);
-      setPendingDefeatCcPrompt(game, {
-        ...pending,
-        phase: 'target-pick',
-        targetOptions: options,
-      });
+      setPendingDefeatCcPrompt(game, { gameId, playerPN, cardName, phase: 'target-pick', targetOptions: options });
       const targetVerb = keyword
         ? `Choose a friendly **${keyword}** to play the card`
         : namedFigure
           ? `Play with **${namedFigure}** or use **Mara Jade**'s Fast Learner`
           : 'Choose a friendly Deployment card to receive the effect';
-      await interaction.channel.send({
-        content: `📜 **${cardName}** — ${targetVerb}:`,
-        components: [row],
-      }).catch(() => {});
+      await channel.send({ content: `📜 **${cardName}** — ${targetVerb}:`, components: [row] }).catch(() => {});
       if (typeof saveGames === 'function') await saveGames(gameId);
       return;
     }
-    // Discord components missing — fall through to immediate resolve.
+    // No channel to post the picker — fall through to a direct resolve.
   }
-
-  clearPendingDefeatCcPrompt(game);
 
   if (typeof resolveAbility === 'function') {
     const result = resolveAbility(cardName, {
-      game,
-      playerNum: playerPN,
-      cardName,
-      dcMessageMeta,
-      dcHealthState,
-      dcExhaustedState,
-      combat: game.pendingCombat,
+      game, playerNum: playerPN, cardName,
+      dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
     });
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       const note = result.applied
@@ -300,7 +302,6 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
       await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
   }
-  if (typeof saveGames === 'function') await saveGames(gameId);
 }
 
 /**
