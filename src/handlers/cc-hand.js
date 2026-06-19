@@ -946,6 +946,14 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
     // 3. On-play triggers (Hunt Dissent, Adapt) fire for the played card.
     await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
+    // [A New Hope]: if this CC was playable ONLY via the [A New Hope] name-
+    // restriction relaxation, deplete it now (once per game — it enabled the play).
+    if (restriction?.aNewHope) {
+      const { depleteANewHope } = await import('../game/cc-timing.js');
+      if (depleteANewHope(game, playerNum)) {
+        await logGameAction(game, interaction.client, `**[A New Hope]** depleted — enabled **${card}**.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
+      }
+    }
     // 4. Open the recursive counter-window; it resolves the effect or cancels it.
     await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, interaction.client);
     saveGames(game.gameId);

@@ -5,6 +5,30 @@
 import { getCcEffect, getDcKeywords, getDcEffects, getFigureSize, isDcUnique } from '../data-loader.js';
 import { getDcBaseName, dcNameFromFigureKey } from './dc-helpers.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, ccDiscardKey, ccHandKey, opponentPlayerNum } from './player-helpers.js';
+import { isDcDepleted, depleteDc } from './card-state-helpers.js';
+
+/** The msgId of an UN-DEPLETED [A New Hope] in the player's army, or null. */
+function _aNewHopeMsgId(game, playerNum) {
+  const list = getDcList(game, playerNum) || [];
+  const mids = getDcMessageIds(game, playerNum) || [];
+  for (let i = 0; i < list.length; i++) {
+    const n = typeof list[i] === 'object' ? (list[i].dcName || list[i].displayName) : list[i];
+    if ((n === '[A New Hope]' || n === 'A New Hope') && mids[i] && !isDcDepleted(game, mids[i])) return mids[i];
+  }
+  return null;
+}
+/** True iff the player has an UN-DEPLETED [A New Hope] (its deplete lets a figure
+ * play a CC whose name-restriction matches another DC in your army). */
+export function aNewHopeAvailable(game, playerNum) {
+  return _aNewHopeMsgId(game, playerNum) != null;
+}
+/** Deplete the player's [A New Hope] (once-per-game). Returns true if depleted. */
+export function depleteANewHope(game, playerNum) {
+  const mid = _aNewHopeMsgId(game, playerNum);
+  if (!mid) return false;
+  depleteDc(game, mid);
+  return true;
+}
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 import { getUniqueFigureCcEntry } from './unique-figure-ccs.js';
@@ -613,6 +637,24 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
           const altLow = alt.trim();
           if (base === altLow || base.includes(altLow) || altLow.includes(base)) return { legal: true, thereIsAnother: true };
         }
+      }
+    }
+  }
+
+  // [A New Hope] (Rebel hero upgrade): "Deplete this card to have a friendly
+  // figure play a Command card with a restriction matching the name of ANOTHER
+  // Deployment card in your army." So a name-restricted CC is legal if its
+  // restriction matches a DC NAME in your own army, provided an un-depleted
+  // [A New Hope] is in play. The card is depleted on the play (handleCcConfirmPlay
+  // reads the `aNewHope` flag). Only NAME restrictions match a DC name; trait
+  // restrictions never do, so they're unaffected. alexanbv 2026-06-19.
+  if (aNewHopeAvailable(game, playerNum)) {
+    const armyNames = dcList.map((dc) => String((typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc) || '')
+      .replace(/^\[|\]$/g, '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim().toLowerCase()).filter(Boolean);
+    for (const alt of alternatives) {
+      const altLow = alt.trim();
+      if (altLow && armyNames.some((nm) => nm === altLow || nm.includes(altLow) || altLow.includes(nm))) {
+        return { legal: true, aNewHope: true };
       }
     }
   }
