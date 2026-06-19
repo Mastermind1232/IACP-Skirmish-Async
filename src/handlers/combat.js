@@ -2434,7 +2434,10 @@ function _isRerollCcPick(pick, ccPn, game) {
   if (!card) return false;
   const isReroll = reg.params?.kind === 'reroll' || reg.params?.kind === 'capitalize' || /^reroll:/.test(pick)
     || pick === 'rapid_recalibration'
-    || (reg.params?.kind === 'third_party_cc' && reg.params?.specKey === 'Battlefield Awareness');
+    // Reroll third-party CCs (Battlefield Awareness, Guardian Stance, …) are the
+    // ones registered in the 'rerolls' window; the on_declare third-party CCs
+    // (Bodyguard, …) are NOT rerolls and keep their own resolver path.
+    || (reg.params?.kind === 'third_party_cc' && (reg.windows || []).includes('rerolls'));
   if (!isReroll) return false;
   const lc = String(card).toLowerCase();
   return (getCcHand(game, ccPn) || []).some((n) => String(n).toLowerCase() === lc);
