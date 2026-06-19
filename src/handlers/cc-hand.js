@@ -977,11 +977,14 @@ async function resolveCcPlay(game, playerNum, card, ctx) {
   await refreshHandAndDiscard(game, playerNum, client, ctx);
   const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
   await logGameAction(game, client, `Played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card' });
-  if (resolveAbility) {
-    const abilityId = effectData?.abilityId ?? card;
-    const result = resolveAbility(abilityId, { game, playerNum, cardName: card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat });
-    await applyAbilityResult(result, { game, playerNum, client, ctx });
-  }
+  // On-play triggers (Hunt Dissent, Adapt), then route through the unified
+  // counter-window: ALL CCs are counterable (alexanbv 2026-06-19). The effect
+  // resolves (via the deferred path) only if not cancelled. This also covers the
+  // illegal-play-anyway override, which still plays a Command card.
+  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta, saveGames: ctx.saveGames });
+  const abilityId = effectData?.abilityId ?? card;
+  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
+  await openCcCounterWindow(game, game.gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, client);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — space button for pick-a-space CC (e.g. Smoke Grenade, placement). */
