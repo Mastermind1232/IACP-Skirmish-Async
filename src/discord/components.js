@@ -623,6 +623,17 @@ export function getMoveMpButtonRows(msgId, figureIndex, mpRemaining) {
   for (let r = 0; r < btns.length && rows.length < MAX_ROWS_PER_MESSAGE; r += 5) {
     rows.push(new ActionRowBuilder().addComponents(btns.slice(r, r + 5)));
   }
+  // Offer the step-by-step mode toggle if there's room (alexanbv 2026-06-19).
+  // The MP-distance picker is the auto A→B flow, so the toggle switches TO
+  // step-by-step (move one space at a time).
+  if (rows.length < MAX_ROWS_PER_MESSAGE) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`move_stepmode_${msgId}_${figureIndex}`)
+        .setLabel('👣 Step-by-step')
+        .setStyle(ButtonStyle.Secondary)
+    ));
+  }
   return rows;
 }
 

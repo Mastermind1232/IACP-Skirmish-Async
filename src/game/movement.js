@@ -994,6 +994,46 @@ export function getMovementPathAvoiding(cache, board, startCoord, destTopLeft, d
   return (path.length >= 2 && normalizeCoord(path[0]) === startTopLeft) ? path : plain;
 }
 
+/**
+ * Cells the figure can reach in EXACTLY ONE move-step from startCoord (its legal
+ * immediate neighbours), each affordable within mpLimit. Used by step-by-step
+ * movement mode so the player advances one space at a time. Mirrors the per-step
+ * legality guards of computeMovementCache (walls/doors/blocking via
+ * evaluateMovementStep, massive-occupancy, can't-end-on-occupied, MP budget).
+ * Rotations are excluded — a step is a translation.
+ *
+ * @param {string} startCoord
+ * @param {object} board - same board as computeMovementCache
+ * @param {object} profile - movement profile
+ * @param {number} [mpLimit=Infinity] - max MP a single step may cost
+ * @returns {string[]} topLeft coords of reachable adjacent placements
+ */
+export function getImmediateStepSpaces(startCoord, board, profile, mpLimit = Infinity) {
+  const startTopLeft = normalizeCoord(startCoord);
+  if (!board?.spacesSet?.has(startTopLeft)) return [];
+  const startState = {
+    key: movementStateKey(startTopLeft, profile.size),
+    topLeft: startTopLeft,
+    size: profile.size,
+    cost: 0,
+    footprint: getNormalizedFootprint(startTopLeft, profile.size),
+  };
+  const out = new Map();
+  for (const nb of getNeighborStates(startState, board, profile)) {
+    if (nb.type === 'rotate') continue; // step-by-step = translation only
+    const step = evaluateMovementStep(startState, nb, board, profile);
+    if (!step) continue;
+    if (step.cost > mpLimit) continue;
+    if (profile.isMassive && board.massiveOccupiedSet &&
+        step.footprint.some((c) => board.massiveOccupiedSet.has(c))) continue;
+    const occupied = step.footprint.some((c) => board.occupiedSet.has(c));
+    if (occupied && !profile.canEndOnOccupied) continue;
+    const prev = out.get(nb.topLeft);
+    if (prev === undefined || step.cost < prev) out.set(nb.topLeft, step.cost);
+  }
+  return [...out.keys()];
+}
+
 export function ensureMovementCache(moveState, startCoord, mpLimit, board, profile) {
   const cached = moveState.movementCache;
   if (!cached || (moveState.cacheMaxMp || 0) < mpLimit || !(cached.cells instanceof Map)) {

@@ -15,6 +15,7 @@ import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure 
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
+import { getImmediateStepSpaces } from '../game/movement.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { setPendingRushPush, setPendingShoulderRush, setPendingMassivePush, clearPendingMassivePush, setPendingDioFollow, clearPendingDioFollow } from '../game/interrupts.js';
@@ -22,6 +23,20 @@ import { exhaustAttachment } from '../game/card-state-helpers.js';
 
 const BTM_PER_MSG = 5;
 const SPACE_ROWS_ON_FIRST = 4;
+
+/**
+ * Toggle button descriptor for the two movement modes (alexanbv 2026-06-19):
+ *  - default (stepByStep=false): auto A→B path that avoids enemy-adjacent spaces
+ *  - stepByStep=true: move one space at a time (immediate neighbours only)
+ * The label shows the mode you can switch TO.
+ */
+function _stepModeToggleBtn(msgId, figureIndex, stepByStep) {
+  return {
+    customId: `move_stepmode_${msgId}_${figureIndex}`,
+    label: stepByStep ? '🎯 Auto (A→B)' : '👣 Step-by-step',
+    style: ButtonStyle.Secondary,
+  };
+}
 
 /** Clean up all movement-related state flags for a completed/cancelled move. */
 function _cleanupMoveState(game, moveKey, msgId) {
@@ -475,6 +490,7 @@ export async function handleMoveMp(interaction, ctx) {
   const moveHeader = `**Move** — Pick destination (**${mp}** MP):${multiTileNote}`;
   const moveActionBtns = [
     { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Adjust movement points spent', style: ButtonStyle.Secondary },
+    _stepModeToggleBtn(msgId, figureIndex, moveState.stepByStep),
   ];
   if (!game.urgencyMustSpendAll?.[msgId]) {
     moveActionBtns.push(
@@ -545,6 +561,10 @@ export async function handleMoveAdjustMp(interaction, ctx) {
   }
   const { playerNum, mpRemaining } = moveState;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can adjust.')) return;
+  // The MP-distance picker is the auto A→B sub-flow (pick N MP → pick a cell
+  // exactly N away → auto-path); leaving step-by-step mode here keeps the
+  // toggle label consistent.
+  moveState.stepByStep = false;
   // Remove the clicked message from gridIds before clearing so we can transform it in-place
   const currentMsgId = interaction.message.id;
   game.moveGridMessageIds = game.moveGridMessageIds || {};
@@ -570,6 +590,54 @@ export async function handleMoveAdjustMp(interaction, ctx) {
     }).catch(() => null);
     if (newMsg?.id) moveState.distanceMessageId = newMsg.id;
   }
+}
+
+/**
+ * Toggle a move between auto A→B (avoid enemy spaces) and step-by-step.
+ * customId: move_stepmode_<msgId>_<figureIndex>. Flips moveState.stepByStep and
+ * re-renders the destination grid in the new mode (movePick ctx group).
+ * @param {import('discord.js').ButtonInteraction} interaction
+ * @param {object} ctx - movePick group deps (getGame, dcMessageMeta, clearMoveGridMessages, computeMovementCache, getBoardStateForMovement, getMovementProfile, getMovementMinimapAttachment, saveGames, client)
+ */
+export async function handleMoveStepModeToggle(interaction, ctx) {
+  const { getGame, dcMessageMeta, clearMoveGridMessages, saveGames } = ctx;
+  const m = interaction.customId.match(/^move_stepmode_(.+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, msgId, figureIndexStr] = m;
+  const figureIndex = parseInt(figureIndexStr, 10);
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'DC no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const game = await requireGame(interaction, getGame, meta.gameId);
+  if (!game) return;
+  const moveKey = `${msgId}_${figureIndex}`;
+  const moveState = game.moveInProgress?.[moveKey];
+  if (!moveState) {
+    await interaction.followUp({ content: 'Move session expired.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const { figureKey, playerNum } = moveState;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
+  moveState.stepByStep = !moveState.stepByStep;
+  // Drop the current grid (and the distance/MP message) and re-render in the new
+  // mode from the figure's current position with its remaining MP.
+  const currentMsgId = interaction.message?.id;
+  game.moveGridMessageIds = game.moveGridMessageIds || {};
+  if (currentMsgId) {
+    game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
+    try { await interaction.message.delete(); } catch { /* already gone */ }
+  }
+  await clearMoveGridMessages(game, moveKey, interaction.channel);
+  game.moveGridMessageIds[moveKey] = [];
+  const curCoord = moveState.startCoord || game.figurePositions?.[playerNum]?.[figureKey];
+  const remainingMp = typeof moveState.mpRemaining === 'number' ? moveState.mpRemaining : 0;
+  await _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgId, figureKey, figureIndex, moveKey, curCoord, remainingMp);
+  if (saveGames) saveGames(game.gameId);
 }
 
 
@@ -607,7 +675,13 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     } catch { /* already gone */ }
     moveState.distanceMessageId = null;
   }
-  const newButtonSpaces = [...nextCache.cells.keys()];
+  // Step-by-step mode shows only immediate one-step neighbours so the player
+  // advances a single space at a time; auto mode shows every reachable cell
+  // (the pick is then auto-pathed with enemy-space avoidance in handleMovePick).
+  const stepByStep = !!moveState.stepByStep;
+  const newButtonSpaces = stepByStep
+    ? getImmediateStepSpaces(newTopLeft, nextBoard, nextProfile, newMp)
+    : [...nextCache.cells.keys()];
   const newIsMultiTile = nextProfile.size && nextProfile.size !== '1x1';
   const newMultiTileNote = newIsMultiTile ? `\n📐 Buttons show **bottom-left corner** of each valid placement.` : '';
   const newMinimapCells = newIsMultiTile
@@ -622,9 +696,13 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     }
   }
   const newMoveContextKey = `${meta.gameId}_${moveKey}`;
-  const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newMultiTileNote}`;
+  const newModeNote = stepByStep
+    ? `\n👣 **Step-by-step** — pick an adjacent space (one at a time).`
+    : `\n🎯 **Auto** — pick any space; routes A→B avoiding enemy-adjacent spaces when possible.`;
+  const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newModeNote}${newMultiTileNote}`;
   const newMoveActionBtns = [
     { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
+    _stepModeToggleBtn(msgId, figureIndex, stepByStep),
   ];
   if (!game.urgencyMustSpendAll?.[msgId]) {
     newMoveActionBtns.push(

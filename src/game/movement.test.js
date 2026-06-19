@@ -16,6 +16,7 @@ import {
   getPathCost,
   getMovementPath,
   getMovementPathAvoiding,
+  getImmediateStepSpaces,
 } from './movement.js';
 
 /** Build 5x5 grid a1..e5 with orthogonal adjacency. */
@@ -206,6 +207,33 @@ test('getMovementPathAvoiding never costs extra MP (falls back to a shortest pat
   // No danger set → identical to plain getMovementPath length.
   const plain = getMovementPathAvoiding(cache, board, 'a1', 'b2', '1x1', orthProfile, new Set());
   assert.strictEqual(plain.length, 3);
+});
+
+test('getImmediateStepSpaces returns only one-step neighbours (step-by-step mode)', () => {
+  const mapSpaces = buildGrid5x5();
+  const board = buildTempBoardState(mapSpaces, []);
+  // Orthogonal: a1 neighbours are b1 and a2 only.
+  const orthProfile = { ...defaultProfile, allowDiagonal: false };
+  const orth = getImmediateStepSpaces('a1', board, orthProfile, 10).sort();
+  assert.deepStrictEqual(orth, ['a2', 'b1']);
+  // Diagonal: a1 also reaches b2 in one step.
+  const diag = getImmediateStepSpaces('a1', board, defaultProfile, 10).sort();
+  assert.deepStrictEqual(diag, ['a2', 'b1', 'b2']);
+  // Center cell b2 has 4 orthogonal neighbours.
+  const center = getImmediateStepSpaces('b2', board, orthProfile, 10).sort();
+  assert.deepStrictEqual(center, ['a2', 'b1', 'b3', 'c2']);
+});
+
+test('getImmediateStepSpaces respects the single-step MP budget', () => {
+  const mapSpaces = buildGrid5x5({ difficult: ['b1'] });
+  const board = buildTempBoardState(mapSpaces, []);
+  const orthProfile = { ...defaultProfile, allowDiagonal: false };
+  // b1 is difficult (costs 2); with only 1 MP it is unaffordable as a step.
+  const oneMp = getImmediateStepSpaces('a1', board, orthProfile, 1).sort();
+  assert.deepStrictEqual(oneMp, ['a2']);
+  // With 2 MP, b1 becomes reachable in one step.
+  const twoMp = getImmediateStepSpaces('a1', board, orthProfile, 2).sort();
+  assert.deepStrictEqual(twoMp, ['a2', 'b1']);
 });
 
 test('getReachableSpaces mp 0 returns empty', () => {
