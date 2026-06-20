@@ -15,15 +15,31 @@
  *  (a) SCUM grants the correct Personal Combat Shield mechanic (round flag read by
  *      handlers/combat.js applyPersonalCombatShieldOnBlockSpend), not +1 Block.
  *  (b) IMPERIAL no longer grants the WRONG generic free attack
- *      (freeAttackBonusPending); the real per-figure Flamethrower-special grant is
- *      DEFERRED (flagged via roundMobileGarSaxonFlamethrower + manual note).
+ *      (freeAttackBonusPending); it now grants the real per-figure Gar Saxon's
+ *      Flamethrower Special Action (1 action) to OTHER friendly Mobile figures
+ *      this round, surfaced via the round flag roundMobileGarSaxonFlamethrower
+ *      and the shared hasChooseASideFlamethrower eligibility helper (read by the
+ *      render path, the dispatch path, and the AI enumeration).
  *  (c) Self-exclusion: the Choose a Side figure itself is excluded ("OTHER").
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { applyPersonalCombatShieldOnBlockSpend } from '../../../src/handlers/combat.js';
-import { getDcEffects } from '../../../src/data-loader.js';
+import { getDcEffects, hasChooseASideFlamethrower, getDcStats } from '../../../src/data-loader.js';
+import { getDcActionButtons } from '../../../src/discord/components.js';
+
+/** Flatten ActionRow components to their button labels. */
+function collectLabels(rows) {
+  const labels = [];
+  for (const row of rows || []) {
+    for (const comp of row?.components || []) {
+      const data = comp?.data || comp;
+      if (data?.label != null) labels.push(String(data.label));
+    }
+  }
+  return labels;
+}
 
 function buildGame() {
   const dcMessageMeta = new Map();
@@ -74,15 +90,46 @@ describe('PROBE-CHOOSE-A-SIDE-001: SCUM grants Personal Combat Shield (+1 Evade 
   });
 });
 
-describe('PROBE-CHOOSE-A-SIDE-002: IMPERIAL stops the wrong generic free attack; Flamethrower grant deferred', () => {
-  it('does NOT set freeAttackBonusPending; sets the deferred Flamethrower marker', () => {
+describe('PROBE-CHOOSE-A-SIDE-002: IMPERIAL stops the wrong generic free attack; Flamethrower grant is functional', () => {
+  it('does NOT set freeAttackBonusPending; sets the Flamethrower round flag with self excluded', () => {
     const { game, dcMessageMeta } = buildGame();
     const r = resolveAbility('Choose a Side', { game, playerNum: 1, dcMessageMeta, choiceIndex: 1 });
     assert.equal(r.applied, true);
     assert.equal(game.freeAttackBonusPending, undefined, 'the WRONG generic free attack is no longer granted');
-    assert.ok(game.roundMobileGarSaxonFlamethrower?.[1], 'deferred Flamethrower round marker set');
+    assert.ok(game.roundMobileGarSaxonFlamethrower?.[1], 'Flamethrower round flag set');
     assert.equal(game.roundMobileGarSaxonFlamethrower[1].excludeFigureKey, 'Boba Fett-1-0', 'card-player excluded');
-    assert.match(r.logMessage, /manual/i, 'log flags manual resolution for the deferred special');
+    assert.match(r.logMessage, /Special Action/i, 'log describes the granted Special Action');
+  });
+});
+
+describe('PROBE-CHOOSE-A-SIDE-004: IMPERIAL Flamethrower is granted as a Special Action to OTHER Mobile figures', () => {
+  it('eligibility helper: granted to other Mobile figure, NOT to excluded figure, NOT to non-Mobile', () => {
+    const { game, dcMessageMeta } = buildGame();
+    resolveAbility('Choose a Side', { game, playerNum: 1, dcMessageMeta, choiceIndex: 1 });
+    assert.equal(hasChooseASideFlamethrower(game, 1, 'Cad Bane-1-0'), true, 'other Mobile friendly: granted');
+    assert.equal(hasChooseASideFlamethrower(game, 1, 'Boba Fett-1-0'), false, 'excluded card-player: not granted');
+    // Stormtrooper has no Mobile keyword.
+    assert.equal(hasChooseASideFlamethrower(game, 1, 'Stormtrooper-1-0'), false, 'non-Mobile figure: not granted');
+    // Not granted to the enemy player.
+    assert.equal(hasChooseASideFlamethrower(game, 2, 'Cad Bane-1-0'), false, 'enemy player: not granted');
+  });
+
+  it('render path injects the Gar Saxon\'s Flamethrower Special Action button (1 action) for the eligible Mobile figure', () => {
+    const { game, dcMessageMeta } = buildGame();
+    resolveAbility('Choose a Side', { game, playerNum: 1, dcMessageMeta, choiceIndex: 1 });
+    const helpers = {
+      getDcStats: (dcName) => getDcStats(dcName),
+      getPlayerNumForMsgId: () => 1,
+    };
+    // Eligible: Cad Bane (Mobile, not the card-player).
+    const rowsCad = getDcActionButtons('mCad', 'Cad Bane', 'Cad Bane [DG 1]', { selectedFigure: 0, remaining: 2 }, game, helpers);
+    const labelsCad = collectLabels(rowsCad);
+    assert.ok(labelsCad.some((l) => /Gar Saxon's Flamethrower/.test(l)), 'eligible Mobile figure gets the Flamethrower special button');
+
+    // Excluded: Boba Fett (the card-player) — must NOT get the injected button.
+    const rowsBoba = getDcActionButtons('mBoba', 'Boba Fett', 'Boba Fett [DG 1]', { selectedFigure: 0, remaining: 2 }, game, helpers);
+    const labelsBoba = collectLabels(rowsBoba);
+    assert.ok(!labelsBoba.some((l) => /Gar Saxon's Flamethrower/.test(l)), 'excluded card-player does NOT get the special');
   });
 });
 

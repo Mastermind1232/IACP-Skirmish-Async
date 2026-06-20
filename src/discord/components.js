@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
-import { isDcCompanion } from '../data-loader.js';
+import { isDcCompanion, hasChooseASideFlamethrower } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { figureActionsRemaining } from '../game/activation-state.js';
 
@@ -962,6 +962,25 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
           specialCosts = [...specialCosts, _wpAct.actionCost || 1];
         }
       }
+    }
+  }
+  // Choose a Side (IMPERIAL): other friendly Mobile figures gain Gar Saxon's
+  // Flamethrower as an extra Special Action (costs 1 action, NOT MP) for the
+  // round. Injected here so it lines up with the dispatch-side injection in
+  // dc-play-area.js (both append after base specials + attachment specials +
+  // Bomb Drop). Eligibility via the shared hasChooseASideFlamethrower helper so
+  // render + dispatch cannot drift. Assumptions (flagged): once-per-activation
+  // per figure (standard specialsUsedByFig gating), cost = 1 action, "Mobile" =
+  // Mobile keyword, "other" excludes the card-playing figure.
+  if (game?.roundMobileGarSaxonFlamethrower) {
+    const _casDgIdx = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _casPn = getPlayerNumForMsgId(msgId) ?? 1;
+    const _casSelFig = typeof actionsDataOrRemaining === 'object' ? (actionsDataOrRemaining?.selectedFigure ?? 0) : 0;
+    const _casFk = `${dcName}-${_casDgIdx}-${_casSelFig}`;
+    if (hasChooseASideFlamethrower(game, _casPn, _casFk)) {
+      specials = [...specials, "Gar Saxon's Flamethrower"];
+      specialCosts = [...specialCosts, 1];
+      specialMpCosts = [...specialMpCosts, 0];
     }
   }
   const dgIndex = displayName?.match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;

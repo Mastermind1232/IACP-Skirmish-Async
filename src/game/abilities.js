@@ -12494,23 +12494,21 @@ export function resolveAbility(abilityId, context) {
         return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, your **other Mobile** figures gain **Personal Combat Shield** (+1 Evade whenever they spend a Block while defending; ${mobileKeys.length} figure${mobileKeys.length !== 1 ? 's' : ''}).` };
       } else {
         // IMPERIAL: OTHER Mobile friendlies gain Gar Saxon's Flamethrower as a
-        // Special Action this round.
-        // DEFERRED (flagged): granting a temporary per-figure Special Action
-        // (Gar Saxon's Flamethrower: choose space within 2; each other figure
-        // on/adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token)
-        // for the round to a SET of Mobile figures requires the round-scoped
-        // special-action INJECTION infrastructure (components.js specials-list
-        // injection + dc-play-area.js dispatch + once-per-figure gating + EoR
-        // clear), which does not cleanly exist. Rather than fake it with the
-        // WRONG generic free ATTACK (the prior freeAttackBonusPending grant,
-        // which is not the area Flamethrower effect at all), we set a clear
-        // round marker and emit a manual-resolution note. See gar_saxon_flamethrower
-        // (ability-library.json) for the resolver that already implements the area.
+        // Special Action this round (costs 1 ACTION, not MP). The round flag is
+        // read by the shared eligibility helper hasChooseASideFlamethrower
+        // (data-loader.js), which BOTH the render path (components.js
+        // getDcActionButtons — injects the extra Special-Action button for each
+        // eligible Mobile figure) and the dispatch path (dc-play-area.js — routes
+        // the injected special to the gar_saxon_flamethrower resolver with the
+        // eligible figure as activator) consult so they cannot drift. Standard
+        // once-per-activation-per-figure specialsUsedByFig gating applies. The
+        // flag is round-scoped and cleared at round start (ROUND_OBJECT_FLAGS in
+        // activation-state.js → resets to {}). excludeFigureKey enforces "OTHER".
         game.roundMobileGarSaxonFlamethrower = game.roundMobileGarSaxonFlamethrower || {};
         game.roundMobileGarSaxonFlamethrower[playerNum] = { excludeFigureKey: selfFk };
         return {
           applied: true,
-          logMessage: `**Choose a Side (IMPERIAL)** — This round, your **other Mobile** figures gain **Gar Saxon's Flamethrower** as a Special Action (${mobileKeys.length ? mobileKeys.map((fk) => dcNameFromFigureKey(fk)).join(', ') : 'none'}). ⚠️ Resolve the Flamethrower special manually for those figures (area within 2: each other figure on/adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token) — the per-figure Special-Action button grant is not yet automated.`,
+          logMessage: `**Choose a Side (IMPERIAL)** — This round, your **other Mobile** figures gain **Gar Saxon's Flamethrower** as a Special Action (1 action: area within 2 — each other figure on/adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token; ${mobileKeys.length ? mobileKeys.map((fk) => dcNameFromFigureKey(fk)).join(', ') : 'none'}).`,
         };
       }
     }

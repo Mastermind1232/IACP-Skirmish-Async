@@ -17,11 +17,35 @@ import { getBrokenWallEdges } from '../game/movement.js';
 import { dcNameFromFigureKey, isCompanionHostDefeated } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
 import { anyFigureHasActions, figureActionsRemaining } from '../game/activation-state.js';
+
+/**
+ * Count attachment-injected Special Actions for a DC, mirroring
+ * getAttachmentSpecials() in src/discord/components.js. Kept here (Discord-free)
+ * so the engine can compute the injected-special index offset for Choose a Side
+ * (IMPERIAL)'s Gar Saxon's Flamethrower without importing the components module.
+ * MUST stay in sync with getAttachmentSpecials.
+ * @param {string[]} attachments
+ * @returns {number}
+ */
+function countAttachmentSpecials(attachments) {
+  if (!attachments?.length) return 0;
+  const has = (name) => attachments.some((c) => String(c).toLowerCase().includes(String(name).toLowerCase()));
+  let n = 0;
+  if (has("Vader's Finest")) n += 2; // VF: Attack+Move, VF: Focus
+  if (has("Smuggler's Run")) n += 1;
+  if (has('Z-6 Trooper')) n += 1;
+  if (has('Mortar Trooper')) n += 1;
+  if (has('The Darksaber')) n += 1;
+  if (has('Orbital Bombardment')) n += 1;
+  if (has('Overwatch')) n += 1;
+  return n;
+}
+
 /**
  * Get all available actions for a player in the current game state.
  * @param {object} game - The game state
@@ -858,6 +882,43 @@ function getActivationActions(game, playerNum, deps) {
             description: `${specials[si]} (${displayName})`,
             params: { msgId, dcName: meta.dcName, specialIdx: si, specialName: specials[si], specialId: specialIds[si] || null, cost },
           });
+        }
+
+        // Choose a Side (IMPERIAL): inject Gar Saxon's Flamethrower as an extra
+        // Special Action (1 action) for each eligible OTHER friendly Mobile
+        // figure this round. The injected specialIdx must match the render +
+        // dispatch index (base specials + attachment specials + Bomb Drop +
+        // Experimental Weapons, then the flamethrower last). Uses the shared
+        // hasChooseASideFlamethrower helper so the three paths cannot drift.
+        if (game.roundMobileGarSaxonFlamethrower) {
+          const _casDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+          const _casFk = `${meta.dcName}-${_casDgIdx}-${figureIndex}`;
+          if (
+            hasChooseASideFlamethrower(game, playerNum, _casFk) &&
+            !isStunned &&
+            figureActionsRemaining(data, figureIndex) >= 1
+          ) {
+            const _suAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+            // Count attachment-injected specials WITHOUT importing the Discord
+            // components module (engine stays Discord-free). Must stay in sync
+            // with getAttachmentSpecials() in components.js.
+            let _precount = countAttachmentSpecials(_suAtts);
+            if (game?.selectedMission?.name === 'Bomb Drop' && game.figureContraband?.[_casFk]) _precount += 1;
+            if (game?.selectedMission?.name === 'Experimental Weapons' && game.figureContraband?.[_casFk]) {
+              const _wpActs = game?.selectedMission?.rules?.persistent?.weaponPrototypeCarrierActions || [];
+              _precount += _wpActs.filter((a) => a?.label).length;
+            }
+            const _casIdx = specials.length + _precount;
+            const _casUsed = data.specialsUsedByFig?.[figureIndex] || [];
+            if (!_casUsed.includes(_casIdx)) {
+              actions.push({
+                type: ACTION_TYPES.DC_SPECIAL,
+                customId: buildCustomId(ACTION_TYPES.DC_SPECIAL, { msgId, specialIdx: _casIdx }),
+                description: `Gar Saxon's Flamethrower (${displayName})`,
+                params: { msgId, dcName: meta.dcName, specialIdx: _casIdx, specialName: "Gar Saxon's Flamethrower", specialId: 'gar_saxon_flamethrower', cost: 1 },
+              });
+            }
+          }
         }
       }
 

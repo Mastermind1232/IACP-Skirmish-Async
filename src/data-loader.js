@@ -353,6 +353,34 @@ export function getDcKeywords(game) {
 
   return out;
 }
+
+/**
+ * Choose a Side (IMPERIAL) grant check. Returns true when the given friendly
+ * figure currently has the round-scoped "Gar Saxon's Flamethrower" Special
+ * Action granted by Choose a Side: i.e. the round flag is set for `playerNum`,
+ * the figure has the Mobile keyword, and the figure is NOT the excluded
+ * (card-playing) figure. Used by BOTH the render path (components.js, to inject
+ * the extra Special Action button) and the dispatch path (dc-play-area.js, to
+ * route it to the gar_saxon_flamethrower resolver) so the two cannot drift.
+ *
+ * Assumptions (designer not yet ruled — flagged): "Mobile" = the Mobile
+ * keyword; "other" excludes the Choose-a-Side figure (excludeFigureKey).
+ *
+ * @param {object} game
+ * @param {number} playerNum 1 | 2 (controller of the figure)
+ * @param {string} figureKey e.g. "Mando-1-0"
+ * @returns {boolean}
+ */
+export function hasChooseASideFlamethrower(game, playerNum, figureKey) {
+  if (!game || !playerNum || !figureKey) return false;
+  const flag = game.roundMobileGarSaxonFlamethrower?.[playerNum];
+  if (!flag) return false;
+  if (flag.excludeFigureKey && figureKey === flag.excludeFigureKey) return false;
+  const dcName = (figureKey || '').replace(/-\d+-\d+$/, '');
+  const kws = (getDcKeywords(game)?.[dcName] || []).map((k) => String(k).toUpperCase());
+  return kws.includes('MOBILE');
+}
+
 export function getDiceData() {
   return diceData;
 }

@@ -21,7 +21,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
-import { getLoadoutCards, hasMissionFlag } from '../data-loader.js';
+import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower } from '../data-loader.js';
 import { depleteDc } from '../game/card-state-helpers.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -1988,7 +1988,39 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   // Resolve attachment-injected special action names and costs
   const _baseSpecialCount = (getDcStats(meta.dcName).specials || []).length;
   let _effectiveActionCost = 1;
+  // Choose a Side (IMPERIAL): the Gar Saxon's Flamethrower special is injected
+  // LAST in the render path (after attachment specials + Bomb Drop +
+  // Experimental Weapons). Detect it here by eligibility so the index/dispatch
+  // stays aligned with the render-side injection (both gated by the shared
+  // hasChooseASideFlamethrower helper). When matched, action is set to the
+  // library label and the abilityId override below routes to the existing
+  // gar_saxon_flamethrower resolver with the eligible figure as activator.
+  let _isChooseASideFlamethrower = false;
   if (buttonKey === 'dc_special_' && specialIdx >= _baseSpecialCount) {
+    const _casSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _casDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _casFk = `${meta.dcName}-${_casDgIdx}-${_casSelFig}`;
+    if (hasChooseASideFlamethrower(game, meta.playerNum, _casFk)) {
+      // Count all injected specials that precede the flamethrower (which is
+      // always appended last) to locate its slot exactly.
+      const _suAtts2 = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+      const _inj2 = getAttachmentSpecials(_suAtts2, game, msgId);
+      let _precount = _inj2.names.length;
+      if (game?.selectedMission?.name === 'Bomb Drop' && game.figureContraband?.[_casFk]) _precount += 1;
+      if (game?.selectedMission?.name === 'Experimental Weapons') {
+        const _wpActs = game?.selectedMission?.rules?.persistent?.weaponPrototypeCarrierActions || [];
+        if (game.figureContraband?.[_casFk]) _precount += _wpActs.filter((a) => a?.label).length;
+      }
+      if (specialIdx === _baseSpecialCount + _precount) {
+        _isChooseASideFlamethrower = true;
+        action = "Gar Saxon's Flamethrower";
+        _effectiveActionCost = 1;
+      }
+    }
+  }
+  if (_isChooseASideFlamethrower) {
+    // resolved above; skip the attachment-name resolution
+  } else if (buttonKey === 'dc_special_' && specialIdx >= _baseSpecialCount) {
     const _suAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _injected = getAttachmentSpecials(_suAtts, game, msgId);
     const _bdOffset = specialIdx - _baseSpecialCount - _injected.names.length;
@@ -3043,7 +3075,13 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   // D1: Prefer abilityId from dc-effects (specialAbilityIds[specialIdx]) when present; else synthetic id for library lookup
   let abilityId = null;
-  if (buttonKey === 'dc_special_' && specialIdx >= 0) {
+  if (_isChooseASideFlamethrower) {
+    // Choose a Side (IMPERIAL): route the injected special (which is NOT in this
+    // figure's native specialAbilityIds) to Gar Saxon's existing area resolver.
+    // The resolver derives the activating figure from meta + dcActionsData
+    // selectedFigure, so the eligible figure (NOT Gar Saxon) is the source.
+    abilityId = 'gar_saxon_flamethrower';
+  } else if (buttonKey === 'dc_special_' && specialIdx >= 0) {
     const effects = getDcEffects?.() || {};
     const effectEntry = effects[meta.dcName] || effects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
     const ids = effectEntry?.specialAbilityIds;
