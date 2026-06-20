@@ -5,8 +5,11 @@ import {
   registerRoundModifier,
   clearRoundModifiersUntilEor,
   evaluateRoundModifiers,
+  evaluateFigureAuras,
+  buildFigureAuraDescriptors,
   figureMeetsConditions,
 } from './round-modifiers.js';
+import { FIGURE_AURA_DESCRIPTORS } from './figure-auras.js';
 import { resolveAbility } from './abilities.js';
 import { _registerDcMessageMeta } from './activation-state.js';
 import { cleanupRoundStart } from './activation-state.js';
@@ -323,6 +326,93 @@ test('LIVE Take Position (during activation): only the activating figure gets +1
   const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
   assert.strictEqual(blockFor('Gar Saxon-1-0'), 1, 'activating figure gets +1 Block');
   assert.strictEqual(blockFor('Greedo-1-0'), 0, 'a DIFFERENT friendly figure gets nothing');
+});
+
+// ── STANDING FIGURE AURAS (alexanbv 2026-06-20) ─────────────────────────────
+// A figure's passive aura projects a combat-stat bonus onto OTHER nearby
+// friendly figures, evaluated PER-FIGURE (keyword / within-N of the AURA SOURCE
+// figure / attack-type) through the SAME path as played-CC round modifiers.
+// The production FIGURE_AURA_DESCRIPTORS table is intentionally empty (every
+// genuine outward combat-stat aura currently in data is already handled
+// per-figure by dedicated handlers in src/handlers/combat.js — folding them in
+// here would double-count). These tests inject a SYNTHETIC aura descriptor
+// (anchored to a real carrier specialAbilityId) to pin the evaluation hook.
+
+function withSyntheticAura(descriptor, fn) {
+  FIGURE_AURA_DESCRIPTORS.push(descriptor);
+  try { fn(); } finally { FIGURE_AURA_DESCRIPTORS.pop(); }
+}
+
+test('production FIGURE_AURA_DESCRIPTORS table is empty (no double-count of ad-hoc auras)', () => {
+  assert.deepStrictEqual(FIGURE_AURA_DESCRIPTORS, [], 'empty until a pure-additive aura is migrated');
+});
+
+test('figure aura: +1 Block reaches a qualifying OTHER friendly within 2, not the source nor an out-of-range figure', () => {
+  const game = newGame();
+  // Carrier = Gar Saxon (real DC carrying specialAbilityId airborne_commander_gar_saxon).
+  game.figurePositions = { 1: {
+    'Gar Saxon-1-0': 'm17',   // aura SOURCE (excluded — projects onto OTHERS)
+    'Onar Koma-1-0': 'm18',   // friendly within 2 → +1 Block
+    'Boba Fett-1-0': 'r17',   // friendly out of range (dist 7) → nothing
+  } };
+  const aura = {
+    specialAbilityId: 'airborne_commander_gar_saxon',
+    card: 'Synthetic Block Aura',
+    side: 'defense',
+    conditions: { excludeSourceFigure: true, withinSpacesOfSource: 2 },
+    effect: { block: 1 },
+  };
+  withSyntheticAura(aura, () => {
+    const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
+    assert.strictEqual(blockFor('Onar Koma-1-0'), 1, 'OTHER friendly within 2 gets +1 Block');
+    assert.strictEqual(blockFor('Gar Saxon-1-0'), 0, 'the aura source itself is excluded');
+    assert.strictEqual(blockFor('Boba Fett-1-0'), 0, 'out-of-range friendly gets nothing');
+    // evaluateFigureAuras (sibling) yields the same aura-only contribution.
+    assert.strictEqual(evaluateFigureAuras(game, { side: 'defense', figureKey: 'Onar Koma-1-0', playerNum: 1, combat: {} }).block, 1);
+  });
+});
+
+test('figure aura: keyword + attack-type conditions gate per-figure (attack-side reroll aura)', () => {
+  const game = newGame();
+  game.figurePositions = { 1: {
+    'Gar Saxon-1-0': 'm17',                 // carrier/source
+    'Boba Fett-1-0': 'm18',                 // VEHICLE within 3 (qualifies on keyword)
+    'Onar Koma-1-0': 'm18',                 // not VEHICLE → no reroll
+  } };
+  const aura = {
+    specialAbilityId: 'airborne_commander_gar_saxon',
+    card: 'Synthetic Reroll Aura',
+    side: 'attack',
+    conditions: { selfKeyword: 'VEHICLE', withinSpacesOfSource: 3, attackType: 'range' },
+    effect: { rerollAttackDice: 1 },
+  };
+  withSyntheticAura(aura, () => {
+    const rr = (fk, isRanged) => evaluateRoundModifiers(game, { side: 'attack', figureKey: fk, playerNum: 1, combat: { isRanged } }).rerollAttackDice;
+    assert.strictEqual(rr('Boba Fett-1-0', true), 1, 'VEHICLE within 3 on a Ranged attack gets the reroll');
+    assert.strictEqual(rr('Boba Fett-1-0', false), 0, 'Melee attack does not qualify (Ranged-only aura)');
+    assert.strictEqual(rr('Onar Koma-1-0', true), 0, 'non-VEHICLE gets nothing');
+  });
+});
+
+test('figure aura: only applies for the OWNING player (auras are friendly)', () => {
+  const game = newGame();
+  game.figurePositions = {
+    1: { 'Gar Saxon-1-0': 'm17' },           // p1 carrier
+    2: { 'Onar Koma-2-0': 'm18' },           // p2 figure — must NOT receive p1's aura
+  };
+  const aura = {
+    specialAbilityId: 'airborne_commander_gar_saxon',
+    card: 'Synthetic Owner-Scoped Aura',
+    side: 'defense',
+    conditions: {},
+    effect: { evade: 1 },
+  };
+  withSyntheticAura(aura, () => {
+    // Descriptors are built per owning player; p2's evaluation sees no p1 carrier.
+    assert.strictEqual(buildFigureAuraDescriptors(game, 1).length, 1, 'p1 has the carrier');
+    assert.strictEqual(buildFigureAuraDescriptors(game, 2).length, 0, 'p2 has no carrier');
+    assert.strictEqual(evaluateRoundModifiers(game, { side: 'defense', figureKey: 'Onar Koma-2-0', playerNum: 2, combat: {} }).evade, 0);
+  });
 });
 
 test('Just Business (integration): Scum within 3 gets a reroll, non-Scum and out-of-range get nothing', () => {

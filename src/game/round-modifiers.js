@@ -43,6 +43,7 @@
 import { getDcEffect } from './dc-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
+import { FIGURE_AURA_DESCRIPTORS } from './figure-auras.js';
 
 /** Effect keys aggregated by evaluateRoundModifiers. */
 const EFFECT_KEYS = [
@@ -149,6 +150,97 @@ export function figureMeetsConditions(game, descriptor, fk, combat) {
   return true;
 }
 
+/** figureKeys currently on the owning player's board map. */
+function ownerFigureKeys(game, playerNum) {
+  const positions = game?.figurePositions?.[playerNum];
+  return positions ? Object.keys(positions) : [];
+}
+
+/** Uppercased specialAbilityIds for a figureKey's DC. */
+function specialAbilityIdsForFigureKey(figureKey) {
+  const dcName = dcNameFromFigureKey(figureKey);
+  const eff = getDcEffect(dcName);
+  return eff?.specialAbilityIds || [];
+}
+
+/**
+ * Synthesize round-modifier descriptors for every STANDING FIGURE AURA the
+ * owning player currently has on the board, anchored to its carrier figure.
+ * Each carrier figure that has an aura's specialAbilityId contributes one
+ * descriptor with sourceFigureKey = that carrier, so figureMeetsConditions can
+ * apply the aura's per-figure proximity/keyword/attack-type checks against the
+ * acting figure (alexanbv 2026-06-20).
+ *
+ * @param {object} game
+ * @param {number} playerNum  owner of the acting figure (auras are friendly)
+ * @returns {Array} descriptors in the same shape as game.activeRoundModifiers
+ */
+export function buildFigureAuraDescriptors(game, playerNum) {
+  const out = [];
+  if (!game || !Array.isArray(FIGURE_AURA_DESCRIPTORS) || FIGURE_AURA_DESCRIPTORS.length === 0) {
+    return out;
+  }
+  const figureKeys = ownerFigureKeys(game, playerNum);
+  if (figureKeys.length === 0) return out;
+  for (const carrierFk of figureKeys) {
+    const sids = specialAbilityIdsForFigureKey(carrierFk);
+    if (!sids || sids.length === 0) continue;
+    for (const aura of FIGURE_AURA_DESCRIPTORS) {
+      if (!aura || !sids.includes(aura.specialAbilityId)) continue;
+      out.push({
+        id: `aura:${aura.specialAbilityId}:${carrierFk}`,
+        card: aura.card,
+        ownerPlayerNum: playerNum,
+        sourceFigureKey: carrierFk,
+        side: aura.side,
+        duration: 'during-round',
+        conditions: aura.conditions || {},
+        effect: aura.effect || {},
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Aggregate STANDING FIGURE AURAS that apply to a given figure right now. Same
+ * output/aggregation contract as evaluateRoundModifiers; kept as a sibling so a
+ * caller can fetch aura-only contributions if needed. evaluateRoundModifiers
+ * folds these in automatically.
+ */
+export function evaluateFigureAuras(game, { side, figureKey, playerNum, combat }) {
+  const out = {
+    block: 0,
+    evade: 0,
+    accuracyPenalty: 0,
+    hit: 0,
+    surge: 0,
+    rerollAttackDice: 0,
+    blockPerEvade: 0,
+    personalCombatShield: false,
+    sources: [],
+  };
+  if (!game || !figureKey) return out;
+  const descriptors = buildFigureAuraDescriptors(game, playerNum);
+  for (const d of descriptors) {
+    if (!d || d.side !== side) continue;
+    if (!figureMeetsConditions(game, d, figureKey, combat)) continue;
+    const e = d.effect || {};
+    let contributed = false;
+    for (const k of EFFECT_KEYS) {
+      if (e[k] == null) continue;
+      if (k === 'personalCombatShield') {
+        if (e[k]) { out.personalCombatShield = true; contributed = true; }
+      } else if (typeof e[k] === 'number') {
+        out[k] += e[k];
+        contributed = true;
+      }
+    }
+    if (contributed) out.sources.push({ id: d.id, card: d.card });
+  }
+  return out;
+}
+
 /**
  * Aggregate all active round modifiers that apply to a given figure right now.
  * @param {object} game
@@ -173,10 +265,18 @@ export function evaluateRoundModifiers(game, { side, figureKey, playerNum, comba
     personalCombatShield: false,
     sources: [],
   };
-  if (!game || !Array.isArray(game.activeRoundModifiers) || !figureKey) return out;
-  for (const d of game.activeRoundModifiers) {
+  if (!figureKey) return out;
+  // Played-CC round modifiers (de-duped registry) AND standing figure auras
+  // (synthesized per carrier figure) are evaluated through one additive path so
+  // every call site picks both up. Auras apply at the SAME TIME as the player's
+  // other mods (alexanbv 2026-06-20); attacker-before-defender staging is
+  // enforced at the combat-pipeline level, not here.
+  const registered = Array.isArray(game?.activeRoundModifiers)
+    ? game.activeRoundModifiers.filter((d) => d && d.ownerPlayerNum === playerNum)
+    : [];
+  const auras = buildFigureAuraDescriptors(game, playerNum);
+  for (const d of [...registered, ...auras]) {
     if (!d || d.side !== side) continue;
-    if (d.ownerPlayerNum !== playerNum) continue;
     if (!figureMeetsConditions(game, d, figureKey, combat)) continue;
     const e = d.effect || {};
     let contributed = false;

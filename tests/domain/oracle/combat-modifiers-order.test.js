@@ -88,3 +88,46 @@ describe('CRR-COMBAT-MODIFIERS-ORDER: step-4 attacker modifiers fire before defe
       'Negotiate must live in proceedAfterRerolls (step 4 attacker modifier)');
   });
 });
+
+describe('CRR-COMBAT-STAGING: pipeline resolves the ATTACKING player before the DEFENDING player at each stage', () => {
+  // alexanbv 2026-06-20: "the ATTACKING player applies first, then the DEFENDING
+  // player. They apply at the SAME TIME as other mods/rerolls/etc. for that
+  // player." Rerolls and mods stay DISTINCT stages — each stage runs attacker
+  // then defender. These pins guard the phase machine wiring (transitions),
+  // complementing the source-anchor mod-ordering test above.
+
+  it('reroll stage (step 3): step3-attacker → step3-defender → step 4 (attacker bucket first)', () => {
+    // The attacker reroll window is entered first.
+    assert.match(H_CB_SRC, /combat\.currentStep = 'step3-attacker';\s*\n\s*await sendRerollUI\(thread, game, combat, 'attacker'\)/,
+      'reroll stage must open with the ATTACKER window (step3-attacker)');
+    // When the attacker bucket drains, the DEFENDER reroll phase opens (not step 4 directly).
+    assert.match(H_CB_SRC, /if \(activeSidePN === atkPN\) \{\s*\n\s*await _enterDefenderRerollPhase/,
+      'when the attacker reroll bucket empties, the DEFENDER reroll window opens next');
+    // The defender reroll phase is labelled step3-defender.
+    assert.match(H_CB_SRC, /combat\.currentStep = 'step3-defender';/,
+      'defender reroll window is step3-defender (after attacker)');
+  });
+
+  it('mods stage (step 4): _enterStep4 opens attacker mods; attacker-done → defender mods; defender-done → step 5', () => {
+    const enterStep4 = H_CB_SRC.match(/async function _enterStep4\(thread, game, combat, ctx\) \{[\s\S]*?\n}/);
+    assert.ok(enterStep4, '_enterStep4 body must be locatable');
+    assert.match(enterStep4[0], /combat\.currentStep = 'step4-attacker';/,
+      'step 4 begins on the ATTACKER (step4-attacker)');
+    assert.match(enterStep4[0], /await sendModsYn\(thread, game, combat, 'attacker'\)/,
+      'step 4 opens the attacker mods window first');
+    // The sendModsYn advance: attacker done → defender mods; defender done → step 5.
+    assert.match(H_CB_SRC, /if \(isAtk\) \{\s*\n\s*combat\.currentStep = 'step4-defender';\s*\n\s*await sendModsYn\(thread, game, combat, 'defender', ctx\);/,
+      'attacker finishing mods opens the DEFENDER mods window (step4-defender)');
+    assert.match(H_CB_SRC, /\} else \{\s*\n\s*combat\.currentStep = 'step5';\s*\n\s*await proceedAfterRerolls\(thread, game, combat, ctx\);/,
+      'defender finishing mods advances to step 5');
+  });
+
+  it('rerolls and mods are DISTINCT stages (step 3 vs step 4) — not merged', () => {
+    // step3-* (rerolls) and step4-* (mods) are separate currentStep values, and
+    // step 4 entry clears the reroll phase before opening mods.
+    const enterStep4 = H_CB_SRC.match(/async function _enterStep4\(thread, game, combat, ctx\) \{[\s\S]*?\n}/);
+    assert.ok(enterStep4, '_enterStep4 body must be locatable');
+    assert.match(enterStep4[0], /combat\.rerollPhase = null;/,
+      'entering the mods stage clears the reroll phase (stages stay distinct)');
+  });
+});
