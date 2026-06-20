@@ -5165,8 +5165,9 @@
     },
     "Tools for the Job": {
       "type": "ccEffect",
-      "label": "Add 1 attack die to the attack pool",
+      "label": "Add 1 attack die of your choice to the attack pool",
       "attackBonusDice": 1,
+      "attackBonusDiceColorChoice": true,
       "wiredStatus": "wired"
     },
     "Tough Luck": {

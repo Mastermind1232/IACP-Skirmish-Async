@@ -2667,6 +2667,10 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
       consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
+      // All in a Day's Work (CC) timing: a Special Action has been used during
+      // this activation. Set the per-activation flag the card's timing gate reads
+      // ("after you resolve a Special or Interact during your activation").
+      if (buttonKey === 'dc_special_') game.specialOrInteractResolvedThisActivation = true;
       // Per alexanbv 2026-05-10/12: defer the "finished all actions"
       // prompt for any multi-step interactive action button. The action
       // cost is decremented at click time, so remaining can hit 0 before

@@ -11,7 +11,7 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.j
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures } from './board-helpers.js';
+import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone } from './board-helpers.js';
 import { applyDefenseDieRemoval, applyAttackDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
@@ -60,6 +60,7 @@ import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hos
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
+import { getDamageableObjectsAtCoord, isObjectAlive } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
@@ -7087,20 +7088,49 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Furious Charge** — will automatically become Focused if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack.` };
   }
 
-  // ccEffect: nextAttackBonusPierce (Expose Weakness) — next attack gains +N Pierce; consumed when combat declared
+  // ccEffect: nextAttackBonusPierce (Expose Weakness) — CSV row 641/642: "Choose an
+  // ADJACENT HOSTILE figure; the next attack TARGETING that figure gains Pierce 3".
+  // The pierce is keyed to the CHOSEN HOSTILE (defender), not the activator: the buff
+  // applies only when that figure is attacked (by anyone). alexanbv 2026-06-20.
   if (entry.type === 'ccEffect' && typeof entry.nextAttackBonusPierce === 'number' && entry.nextAttackBonusPierce > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const oppNum = opponentPlayerNum(playerNum);
+    const N = entry.nextAttackBonusPierce;
+    // Phase 2: chosen adjacent hostile → store target-keyed pierce.
+    if (chosenFigureKey) {
+      game.nextAttackPierceVsDefender = game.nextAttackPierceVsDefender || {};
+      game.nextAttackPierceVsDefender[chosenFigureKey] = N;
+      return {
+        applied: true,
+        logMessage: `**Expose Weakness** — the next attack targeting **${dcNameFromFigureKey(chosenFigureKey)}** gains Pierce ${N}.`,
+      };
+    }
+    // Phase 1: enumerate adjacent HOSTILE figures.
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    // Per-figure 2026-05-09 (multifigure-independent-activation rule).
-    const _ewFk = figureKeyForActivation(game, msgId);
-    if (!_ewFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
-    game.nextAttackBonusPierce = game.nextAttackBonusPierce || {};
-    game.nextAttackBonusPierce[_ewFk] = entry.nextAttackBonusPierce;
+    const meta = dcMessageMeta.get(msgId);
+    const figureKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+    const _ewFk = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const mapId = game.selectedMap?.id;
+    if (!_ewFk || !mapId) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
+    const adj = getFiguresAdjacentToTarget(game, _ewFk, mapId);
+    const hostileKeys = [];
+    for (const { figureKey: fk, playerNum: p } of adj) {
+      if (p !== oppNum) continue;
+      if (!hostileKeys.includes(fk)) hostileKeys.push(fk);
+    }
+    if (hostileKeys.length === 0) return { applied: false, manualMessage: '**Expose Weakness** — no adjacent hostile figure.' };
+    if (hostileKeys.length === 1) {
+      game.nextAttackPierceVsDefender = game.nextAttackPierceVsDefender || {};
+      game.nextAttackPierceVsDefender[hostileKeys[0]] = N;
+      return { applied: true, logMessage: `**Expose Weakness** — the next attack targeting **${dcNameFromFigureKey(hostileKeys[0])}** gains Pierce ${N}.` };
+    }
     return {
-      applied: true,
-      logMessage: `Your next attack gains +${entry.nextAttackBonusPierce} Pierce.`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: hostileKeys.map((fk) => `Expose: ${dcNameFromFigureKey(fk)}`),
+      choiceValues: hostileKeys,
     };
   }
 
@@ -7711,10 +7741,31 @@ export function resolveAbility(abilityId, context) {
         };
       }
     }
+    // Tools for the Job CSV row 855: "add 1 attack die OF YOUR CHOICE". When the
+    // library marks attackBonusDiceColorChoice and no fixed color is set, prompt the
+    // attacker to pick the die color, then add a die of that color. alexanbv 2026-06-20.
+    let _chosenBonusColor = null;
+    if (entry.attackBonusDiceColorChoice && !entry.attackBonusDiceColor) {
+      const ATTACK_DIE_COLORS = ['red', 'yellow', 'green', 'blue'];
+      const _pick = chosenFigureKey && /^tools_color:/.test(String(chosenFigureKey))
+        ? String(chosenFigureKey).slice('tools_color:'.length).toLowerCase()
+        : null;
+      if (!_pick || !ATTACK_DIE_COLORS.includes(_pick)) {
+        // First call: prompt for the bonus die color.
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions: ATTACK_DIE_COLORS.map((c) => `Add ${c.charAt(0).toUpperCase() + c.slice(1)} die`),
+          choiceValues: ATTACK_DIE_COLORS.map((c) => `tools_color:${c}`),
+        };
+      }
+      _chosenBonusColor = _pick;
+    }
     cbt.attackBonusDice = (cbt.attackBonusDice || 0) + entry.attackBonusDice;
-    if (entry.attackBonusDiceColor) {
+    const _bonusColor = entry.attackBonusDiceColor || _chosenBonusColor;
+    if (_bonusColor) {
       cbt.attackBonusDiceColors = cbt.attackBonusDiceColors || [];
-      const color = String(entry.attackBonusDiceColor).toLowerCase();
+      const color = String(_bonusColor).toLowerCase();
       for (let i = 0; i < entry.attackBonusDice; i++) cbt.attackBonusDiceColors.push(color);
     }
     // applySelfStunAfterAttack (Concentrated Fire): the SUPPORTER (chosen
@@ -7725,7 +7776,8 @@ export function resolveAbility(abilityId, context) {
       game.applySelfStunAfterAttackFigureKey[playerNum] = supporterFigureKey;
     }
     const supporterLabel = supporterFigureKey ? dcNameFromFigureKey(supporterFigureKey) : null;
-    const dieMsg = `Added ${entry.attackBonusDice} attack die to the attack pool.`;
+    const _colorWord = _chosenBonusColor ? ` ${_chosenBonusColor}` : '';
+    const dieMsg = `Added ${entry.attackBonusDice}${_colorWord} attack die to the attack pool.`;
     const stunMsg = supporterLabel
       ? ` **${supporterLabel}** becomes Stunned after this attack resolves.`
       : '';
@@ -9619,16 +9671,19 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: opponentDiscardDeckTop (Shoot the Messenger) — when defender was defeated; or with elseGainVp (Merciless) — no defender required
   if (entry.type === 'ccEffect' && typeof entry.opponentDiscardDeckTop === 'number' && entry.opponentDiscardDeckTop > 0) {
-    const { game, playerNum, defenderDefeated } = context;
+    const { game, playerNum, defenderDefeated, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppNum = opponentPlayerNum(playerNum);
     const deckKey = ccDeckKey(oppNum);
     const discardKey = ccDiscardKey(oppNum);
     const deck = (game[deckKey] || []).slice();
     if (entry.elseGainVp != null) {
-      // Merciless: opponent may discard 2 from deck; if not (or deck has < 2), you gain 3 VP
-      if (deck.length >= entry.opponentDiscardDeckTop) {
-        const n = entry.opponentDiscardDeckTop;
+      // Merciless CSV row 746: "that figure's player MAY discard 2 cards from the
+      // top of his Command deck, OR your player gains 3 VPs" — the OPPONENT chooses.
+      // The choice is routed to the targeted figure's controller via
+      // choiceForControllerPlayerNum. alexanbv 2026-06-20.
+      const n = entry.opponentDiscardDeckTop;
+      const _doDiscard = () => {
         const removed = deck.splice(0, n);
         game[deckKey] = deck;
         game[discardKey] = (game[discardKey] || []).concat(removed);
@@ -9643,16 +9698,35 @@ export function resolveAbility(abilityId, context) {
           : '';
         return {
           applied: true,
-          logMessage: `Opponent discarded top ${n} card(s) of their Command deck.${_prMsg}`,
+          logMessage: `**Merciless** — opponent discarded top ${n} card(s) of their Command deck.${_prMsg}`,
           refreshOpponentDiscard: true,
         };
+      };
+      const _doVp = () => {
+        const vk = vpKey(playerNum);
+        game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+        game[vk].total = (game[vk].total ?? 0) + entry.elseGainVp;
+        return {
+          applied: true,
+          logMessage: `**Merciless** — opponent declined to discard; you gained ${entry.elseGainVp} VP.`,
+        };
+      };
+      // Opponent's choice resolved.
+      if (chosenFigureKey === 'merciless_discard') return _doDiscard();
+      if (chosenFigureKey === 'merciless_vp') return _doVp();
+      // Deck too small to discard 2 → no choice; card-player gains VP directly.
+      if (deck.length < n) {
+        const r = _doVp();
+        r.logMessage = `**Merciless** — opponent had fewer than ${n} cards in deck; you gained ${entry.elseGainVp} VP.`;
+        return r;
       }
-      const vk = vpKey(playerNum);
-      game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
-      game[vk].total = (game[vk].total ?? 0) + entry.elseGainVp;
+      // First call: prompt the OPPONENT to choose discard-2 vs concede VP.
       return {
-        applied: true,
-        logMessage: `Opponent had fewer than ${entry.opponentDiscardDeckTop} cards in deck; you gained ${entry.elseGainVp} VP.`,
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [`Discard 2 from your Command deck`, `Give opponent ${entry.elseGainVp} VP`],
+        choiceValues: ['merciless_discard', 'merciless_vp'],
+        choiceForControllerPlayerNum: oppNum,
       };
     }
     if (!defenderDefeated) return { applied: false, manualMessage: 'Shoot the Messenger: defender was not defeated.' };
@@ -11099,6 +11173,41 @@ export function resolveAbility(abilityId, context) {
         }
       }
     }
+    // CSV row 850: "each other figure AND OBJECT in or adjacent to your space
+    // suffers Damage". Damage damageable mission objects in/adjacent to the self
+    // figure's footprint. Sync path: mutate game.objectHealth directly (the async
+    // applyDamageToObject can't be awaited here), mirroring the figure-HP mutation
+    // above. alexanbv 2026-06-20.
+    if (dmg > 0) {
+      const rawMapSpaces = getMapData(mapId);
+      const adjacency = rawMapSpaces?.adjacency || {};
+      const objSeen = new Set();
+      for (const selfFk of figureKeys) {
+        const selfPos = game.figurePositions?.[playerNum]?.[selfFk];
+        if (!selfPos) continue;
+        const selfSize = game.figureOrientations?.[selfFk] || getFigureSize(dcNameFromFigureKey(selfFk));
+        const selfCells = getFootprintCells(selfPos, selfSize).map((c) => normalizeCoord(c));
+        const coordSet = new Set();
+        for (const c of selfCells) {
+          coordSet.add(c);
+          for (const n of adjacency[c] || []) coordSet.add(normalizeCoord(n));
+        }
+        for (const coord of coordSet) {
+          for (const objId of getDamageableObjectsAtCoord(game, coord)) {
+            if (objSeen.has(objId) || !isObjectAlive(game, objId)) continue;
+            objSeen.add(objId);
+            const hp = game.objectHealth?.[objId];
+            if (!Array.isArray(hp)) continue;
+            const [cur, max] = hp;
+            const newCur = Math.max(0, (cur ?? 0) - dmg);
+            game.objectHealth[objId] = [newCur, max];
+            const objName = game.objectMeta?.[objId]?.name || objId;
+            if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
+            results.push(`**${objName}** ${dmg} Dmg (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`);
+          }
+        }
+      }
+    }
     // Defeat activating figure (set HP to 0)
     const selfHs = dcHealthState.get(msgId) || [];
     const actData = game.dcActionsData?.[msgId];
@@ -11532,39 +11641,74 @@ export function resolveAbility(abilityId, context) {
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal:' };
   }
 
-  // ccEffect: fieldSupplyEffect (Field Supply) — up to 2 friendly figures within 3 each gain 1 Damage Token
+  // ccEffect: fieldSupplyEffect (Field Supply) — CSV row 653: "Up to 2 other
+  // figures within 3 spaces gain 1 Hit Token OR 1 Surge Token". The engine stores
+  // a Hit Token as a 'Damage' power token (per the Hemlock/CRR mapping). This is an
+  // up-to-2 pick loop (mirrors Karabast!): each pick chooses BOTH a figure and a
+  // token type (Hit vs Surge), encoded in the choice value as `<figureKey>|<type>`.
+  // (The attack:rerolls token-spend reroll window, CSV row 654, is a separate deep
+  // gap and is intentionally NOT implemented here.) alexanbv 2026-06-20.
   if (entry.type === 'ccEffect' && entry.fieldSupplyEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: grant Damage Token to chosen figure
-    if (chosenFigureKey) {
-      grantPowerTokens(game, chosenFigureKey, 'Damage', 1);
-      const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Field Supply** — **${dcName}** gained 1 Damage Token. (Surge Token also allowed; for a 2nd figure, apply manually.)` };
-    }
-    // Phase 1: find friendly figures within 3
+    const MAX_PICKS = 2;
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta?.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
-    if (!actPos) {
-      // Auto-grant to nearest friendly if no position data
-      const fks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => !actKeys.includes(fk));
-      if (!fks.length) return { applied: false, manualMessage: 'No friendly figures to grant tokens to.' };
-      const targets = fks.slice(0, 2);
-      const names = targets.map((fk) => { grantPowerTokens(game, fk, 'Damage', 1); return dcNameFromFigureKey(fk); });
-      return { applied: true, logMessage: `**Field Supply** — Damage Token granted to: ${names.join(', ')}.` };
+    // Enumerate eligible OTHER friendly figures within 3 (excluding already-picked).
+    const _enumEligible = () => {
+      const picked = new Set(game._fieldSupplyPicks || []);
+      const out = [];
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (!pos || actKeys.includes(fk) || picked.has(fk)) continue;
+        if (actPos && countGameSpaces(game, actPos, pos) > 3) continue;
+        out.push(fk);
+      }
+      return out;
+    };
+    // Build the per-figure × token-type choice menu (+ a Done button).
+    const _buildPrompt = () => {
+      const elig = _enumEligible();
+      const opts = []; const vals = [];
+      for (const fk of elig) {
+        const n = dcNameFromFigureKey(fk);
+        opts.push(`Hit Token → ${n}`); vals.push(`${fk}|Damage`);
+        opts.push(`Surge Token → ${n}`); vals.push(`${fk}|Surge`);
+      }
+      const chosenCount = (game._fieldSupplyPicks || []).length;
+      opts.push(`Done (${chosenCount}/${MAX_PICKS} chosen)`); vals.push('field_supply_done');
+      return { applied: true, requiresChoice: true, choiceOptions: opts, choiceValues: vals,
+        logMessage: `**Field Supply** — choose figure ${chosenCount + 1} of up to ${MAX_PICKS} (within 3 spaces) and a Hit or Surge Token, or Done.` };
+    };
+    // Done → finalize.
+    if (chosenFigureKey === 'field_supply_done') {
+      const granted = game._fieldSupplyGranted || [];
+      delete game._fieldSupplyPicks;
+      delete game._fieldSupplyGranted;
+      if (!granted.length) return { applied: true, logMessage: '**Field Supply** — No tokens granted.' };
+      return { applied: true, logMessage: `**Field Supply** — ${granted.join(', ')}.` };
     }
-    const nearbyKeys = [];
-    const nearbyLabels = [];
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (!pos || actKeys.includes(fk)) continue;
-      if (countGameSpaces(game, actPos, pos) > 3) continue;
-      nearbyKeys.push(fk);
-      nearbyLabels.push(dcNameFromFigureKey(fk));
+    // A pick: `<figureKey>|<Damage|Surge>`.
+    if (chosenFigureKey) {
+      const sep = chosenFigureKey.lastIndexOf('|');
+      const fk = sep >= 0 ? chosenFigureKey.slice(0, sep) : chosenFigureKey;
+      const tokType = sep >= 0 ? chosenFigureKey.slice(sep + 1) : 'Damage';
+      grantPowerTokens(game, fk, tokType === 'Surge' ? 'Surge' : 'Damage', 1);
+      game._fieldSupplyPicks = game._fieldSupplyPicks || [];
+      game._fieldSupplyPicks.push(fk);
+      game._fieldSupplyGranted = game._fieldSupplyGranted || [];
+      game._fieldSupplyGranted.push(`**${dcNameFromFigureKey(fk)}** gained 1 ${tokType === 'Surge' ? 'Surge' : 'Hit'} Token`);
+      if (game._fieldSupplyPicks.length >= MAX_PICKS || _enumEligible().length === 0) {
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: 'field_supply_done' });
+      }
+      return _buildPrompt();
     }
-    if (!nearbyKeys.length) return { applied: false, manualMessage: 'No friendly figures within 3 spaces.' };
-    return { requiresChoice: true, choiceOptions: nearbyLabels.map((n) => `Damage Token → ${n}`), choiceValues: nearbyKeys };
+    // First call.
+    if (_enumEligible().length === 0) return { applied: false, manualMessage: 'No friendly figures within 3 spaces.' };
+    game._fieldSupplyPicks = [];
+    game._fieldSupplyGranted = [];
+    return _buildPrompt();
   }
 
   // ccEffect: feralSwipesEffect (Feral Swipes) — 1 Melee attack per die in pool, each using 1 red die
@@ -12143,27 +12287,41 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
-  // ccEffect: supportSpecialistEffect (Support Specialist) — choose DROID/TECHNICIAN/TROOPER within 3; grant free move (extra MP)
+  // ccEffect: supportSpecialistEffect (Support Specialist) — CSV: "Choose a friendly
+  // DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform
+  // an ACTION." The chosen figure may interrupt to MOVE or ATTACK (the two
+  // engine-actionable interrupts). The action is encoded in the choice value as
+  // `<figureKey>|move` or `<figureKey>|attack`. A Special Action interrupt is not
+  // generally available via a free-action grant, so it is NOT offered here.
+  // alexanbv 2026-06-20.
   if (entry.type === 'ccEffect' && entry.supportSpecialistEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: grant bonus MP (free move) to chosen figure
+    // Phase 2: chosen `<figureKey>|<action>` → grant the interrupt action.
     if (chosenFigureKey) {
-      const figMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      const _sep = chosenFigureKey.lastIndexOf('|');
+      const fk = _sep >= 0 ? chosenFigureKey.slice(0, _sep) : chosenFigureKey;
+      const action = _sep >= 0 ? chosenFigureKey.slice(_sep + 1) : 'move';
+      const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply action manually.' };
-      const dcName = dcNameFromFigureKey(chosenFigureKey);
+      const dcName = dcNameFromFigureKey(fk);
+      if (action === 'attack') {
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[fk] = { from: 'Support Specialist' };
+        return { applied: true, logMessage: `**Support Specialist** — **${dcName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+      }
       const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
       addMovementPoints(game, figMsgId, figSpeed);
-      return { applied: true, logMessage: `**Support Specialist** — **${dcName}** gains ${figSpeed} MP (free interrupt move). Use their Move button to spend MP.` };
+      return { applied: true, logMessage: `**Support Specialist** — **${dcName}** gains ${figSpeed} MP (free interrupt move). Use their **Move** button to spend MP.` };
     }
-    // Phase 1: find DROID/TECHNICIAN/TROOPER friendlies within 3
+    // Phase 1: find DROID/TECHNICIAN/TROOPER friendlies within 3.
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
     const dcEffects = getDcEffects();
-    const validKeys = [];
-    const validLabels = [];
+    const choiceOptions = [];
+    const choiceValues = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
       if (actPos && countGameSpaces(game, actPos, pos) > 3) continue;
@@ -12171,11 +12329,12 @@ export function resolveAbility(abilityId, context) {
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
       if (kws.includes('DROID') || kws.includes('TECHNICIAN') || kws.includes('TROOPER')) {
-        validKeys.push(fk); validLabels.push(dcN);
+        choiceOptions.push(`Interrupt move: ${dcN}`); choiceValues.push(`${fk}|move`);
+        choiceOptions.push(`Interrupt attack: ${dcN}`); choiceValues.push(`${fk}|attack`);
       }
     }
-    if (!validKeys.length) return { applied: false, manualMessage: 'No DROID/TECHNICIAN/TROOPER friendlies within 3 spaces.' };
-    return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Interrupt move: ${n}`), choiceValues: validKeys };
+    if (!choiceValues.length) return { applied: false, manualMessage: 'No DROID/TECHNICIAN/TROOPER friendlies within 3 spaces.' };
+    return { requiresChoice: true, choiceOptions, choiceValues };
   }
 
   // ccEffect: fieldTacticianEffect (Field Tactician) — choose any friendly within 2; grant them free move
@@ -12366,7 +12525,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: packAlphaEffect (Pack Alpha) — move CREATUREs manually; pick hostile; deal damage = # adjacent CREATUREs
   if (entry.type === 'ccEffect' && entry.packAlphaEffect) {
-    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey, packAlphaCreatureKeys } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const dcEffects = getDcEffects();
     const oppNum = opponentPlayerNum(playerNum);
@@ -12376,8 +12535,16 @@ export function resolveAbility(abilityId, context) {
       const boardState = getBoardStateForMovement(game, null);
       const adjRaw = targetPos ? (boardState?.mapSpaces?.adjacency?.[String(targetPos).toLowerCase()] || []) : [];
       const adjSet = new Set(adjRaw.map((s) => String(s).toLowerCase()));
+      // CSV: damage = number of THOSE figures (the up-to-3 moved CREATUREs) adjacent
+      // to the target — NOT every friendly CREATURE. Restrict to the selected set
+      // threaded from Phase 1 (packAlphaCreatureKeys). Fallback to all friendly
+      // CREATUREs only if the set wasn't threaded (legacy/manual path).
+      const movedSet = Array.isArray(packAlphaCreatureKeys) && packAlphaCreatureKeys.length
+        ? new Set(packAlphaCreatureKeys)
+        : null;
       const adjacentCreatures = Object.entries(game.figurePositions?.[playerNum] || {}).filter(([fk, pos]) => {
         if (!pos || !adjSet.has(String(pos).toLowerCase())) return false;
+        if (movedSet && !movedSet.has(fk)) return false;
         const dcN = dcNameFromFigureKey(fk);
         const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
         return kws.includes('CREATURE');
@@ -12452,7 +12619,10 @@ export function resolveAbility(abilityId, context) {
         source: 'Pack Alpha',
         threadId: null,
         bypassCosts: true,
-        afterAction: { type: 'packAlphaTarget', playerNum },
+        // CSV: damage = "number of THOSE figures adjacent to it" — i.e. only the
+        // up-to-3 CREATUREs moved by this card, not every friendly CREATURE.
+        // Thread the selected set so Phase 2 counts only these. alexanbv 2026-06-20.
+        afterAction: { type: 'packAlphaTarget', playerNum, creatureFigureKeys: seqFigures.map((f) => f.figureKey) },
       },
       logMessage: `**Pack Alpha** — ${seqFigures.length} friendly CREATURE${seqFigures.length === 1 ? '' : 's'} may each move up to 3 spaces; pick order. After all moves, choose a hostile target.`,
     };
@@ -14144,8 +14314,20 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: revealsOpponentDeckTop (Behind Enemy Lines) — ephemeral reveal of top N cards of opponent's deck
   if (entry.type === 'ccEffect' && typeof entry.revealsOpponentDeckTop === 'number' && entry.revealsOpponentDeckTop > 0) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Behind Enemy Lines CSV conditional: "in your opponent's deployment zone".
+    // Gate on the activating figure(s) occupying the opponent's deployment zone.
+    const _belMapId = game.selectedMap?.id;
+    const _belMsgId = dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
+    const _belMeta = _belMsgId ? dcMessageMeta.get(_belMsgId) : null;
+    const _belKeys = _belMeta ? getFigureKeysForDcMsg(game, playerNum, _belMeta) : [];
+    if (_belMapId && _belKeys.length) {
+      const _inOppZone = _belKeys.some((fk) => isFigureInOpponentDeploymentZone(game, playerNum, fk, _belMapId));
+      if (!_inOppZone) {
+        return { applied: false, manualMessage: "**Behind Enemy Lines** — the activating figure is not in your opponent's deployment zone. Cannot play." };
+      }
+    }
     const n = entry.revealsOpponentDeckTop;
     const oppDeckKey = ccDeckKey(3 - playerNum);
     const oppDeck = game[oppDeckKey] || [];

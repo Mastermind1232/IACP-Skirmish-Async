@@ -441,6 +441,9 @@ export async function handleMoveMp(interaction, ctx) {
     profile.ignoreBlocking = true;
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
+    // Force Jump CSV: "cannot end in blocking or impassable terrain". MOBILE lets
+    // the figure pass THROUGH blocking; this flag forbids ENDING on it.
+    profile.cannotEndOnBlocking = true;
   }
   // CRR MOVE-017 / MOVE-020 are now enforced structurally by the
   // Move-X picker (src/handlers/move-x-handler.js): each step costs
@@ -655,6 +658,8 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     nextProfile.ignoreBlocking = true;
     nextProfile.ignoreFigureCost = true;
     nextProfile.ignoreDifficult = true;
+    // Force Jump CSV: "cannot end in blocking or impassable terrain".
+    nextProfile.cannotEndOnBlocking = true;
   }
   // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
   // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.
@@ -887,6 +892,8 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     profile.ignoreBlocking = true;
     profile.ignoreFigureCost = true;
     profile.ignoreDifficult = true;
+    // Force Jump CSV: "cannot end in blocking or impassable terrain".
+    profile.cannotEndOnBlocking = true;
   }
   // CRR MOVE-017: "Move X spaces" effects (freeMoveBonus) ignore MP costs.
   // CRR MOVE-020: during "Move X spaces", a Large figure's base cannot rotate.

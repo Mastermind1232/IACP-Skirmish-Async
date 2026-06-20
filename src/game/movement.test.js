@@ -343,3 +343,48 @@ test('2x2 figure getNormalizedFootprint from different anchor', () => {
   const fp = getNormalizedFootprint('b2', '2x2');
   assert.deepStrictEqual(fp, ['b2', 'c2', 'b3', 'c3']);
 });
+
+test('Force Jump (cannotEndOnBlocking): MOBILE passes through blocking but cannot end on it', () => {
+  // Build a 1x3 corridor a1-a2-a3 where a2 is BLOCKING terrain but still a
+  // traversable space (MOBILE ignores blocking for movement). Force Jump's
+  // profile.cannotEndOnBlocking must forbid ending on a2 while still allowing
+  // a path through a2 to a3.
+  const mapSpaces = {
+    spaces: ['a1', 'a2', 'a3'],
+    adjacency: { a1: ['a2'], a2: ['a1', 'a3'], a3: ['a2'] },
+    terrain: { a1: 'normal', a2: 'normal', a3: 'normal' },
+    blocking: ['a2'],
+    movementBlockingEdges: [],
+    impassableEdges: [],
+  };
+  const board = buildTempBoardState(mapSpaces, []);
+  // MOBILE Force Jump profile: ignoreBlocking (pass-through) + cannotEndOnBlocking.
+  const fjProfile = {
+    ...defaultProfile,
+    isMobile: true,
+    ignoreBlocking: true,
+    ignoreDifficult: true,
+    ignoreFigureCost: true,
+    cannotEndOnBlocking: true,
+  };
+  const cache = computeMovementCache('a1', 3, board, fjProfile);
+  // a2 is blocking → not an endable destination.
+  assert.strictEqual(cache.cells.has('a2'), false, 'cannot end on blocking a2');
+  // a3 is reachable THROUGH a2 → endable.
+  assert.strictEqual(cache.cells.has('a3'), true, 'can end on a3 (path passes through a2)');
+});
+
+test('Force Jump: WITHOUT cannotEndOnBlocking, MOBLIE may end on blocking (baseline keyword MOBILE)', () => {
+  const mapSpaces = {
+    spaces: ['a1', 'a2', 'a3'],
+    adjacency: { a1: ['a2'], a2: ['a1', 'a3'], a3: ['a2'] },
+    terrain: { a1: 'normal', a2: 'normal', a3: 'normal' },
+    blocking: ['a2'],
+    movementBlockingEdges: [],
+    impassableEdges: [],
+  };
+  const board = buildTempBoardState(mapSpaces, []);
+  const mobileProfile = { ...defaultProfile, isMobile: true, ignoreBlocking: true, ignoreDifficult: true, ignoreFigureCost: true };
+  const cache = computeMovementCache('a1', 3, board, mobileProfile);
+  assert.strictEqual(cache.cells.has('a2'), true, 'keyword MOBILE may end on blocking');
+});

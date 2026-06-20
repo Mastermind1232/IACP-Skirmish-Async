@@ -285,8 +285,11 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // the gained MP must be spent immediately (enforced via game flag).
       return ctx.duringActivation || ctx.duringRound;
     case 'afterspecialorinteract':
-      // All in a Day's Work: playable after you resolve a Special Action or Interact during your activation
-      return ctx.duringActivation;
+      // All in a Day's Work: playable after you resolve a Special Action or Interact
+      // during your activation. The per-activation flag is set when a Special Action
+      // is used (dc-play-area.js) or an Interact resolves (interact.js); it is wiped
+      // at activation end (ACTIVATION_SCALAR_FLAGS). alexanbv 2026-06-20.
+      return ctx.duringActivation && !!game.specialOrInteractResolvedThisActivation;
     case 'afteryouresolvecloseandpersonal':
       // Stay Down: playable after you resolve Close and Personal during your activation
       return ctx.duringActivation;

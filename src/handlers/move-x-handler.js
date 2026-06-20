@@ -1049,6 +1049,9 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
         abilityId: 'Pack Alpha',
         choiceOptions,
         choiceValues: hostileKeys,
+        // CSV: damage counts only the up-to-3 CREATUREs moved by THIS card.
+        // Carry the selected set to Phase 2 (packAlphaEffect). alexanbv 2026-06-20.
+        packAlphaCreatureKeys: afterAction.creatureFigureKeys || null,
       };
       const btns = choiceOptions.slice(0, 20).map((label) => new ButtonBuilder()
         .setCustomId(`cc_choice_${game.gameId}_${label}`)

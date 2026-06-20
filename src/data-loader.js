@@ -289,6 +289,30 @@ export function getDcKeywords(game) {
       }
     }
 
+    // ── Programming Override (4-LOM): grants a chosen TRAIT to 4-LOM until end
+    // of round (CSV row113). The granted trait is stored at
+    // game.roundProgrammingOverrideTrait[playerNum]; without injecting it here the
+    // central keyword resolver never sees it, so combat passives / trait-conditional
+    // auras (HUNTER/SMUGGLER etc.) don't recognize 4-LOM as having the trait.
+    // alexanbv 2026-06-20. The flag clears at EOR-phase start (round.js timing fix).
+    const _poTraits = game.roundProgrammingOverrideTrait;
+    if (_poTraits) {
+      for (const pn of [1, 2]) {
+        const trait = _poTraits[pn];
+        if (trait == null || trait === '') continue;
+        const dcList = pn === 1 ? game.p1DcList : game.p2DcList;
+        const has4Lom = Array.isArray(dcList) && dcList.some((e) => {
+          const n = typeof e === 'object' ? (e.dcName || e.displayName) : e;
+          return n === '4-LOM';
+        });
+        if (!has4Lom) continue;
+        if (!out['4-LOM']) out['4-LOM'] = Array.isArray(dcEffects['4-LOM']?.keywords) ? [...dcEffects['4-LOM'].keywords] : [];
+        if (!out['4-LOM'].some((k) => String(k).toUpperCase() === String(trait).toUpperCase())) {
+          out['4-LOM'].push(trait);
+        }
+      }
+    }
+
     // ── Cross Training (DC attachment): grants SPY trait to attached DC ──
     for (const pn of [1, 2]) {
       const dcAtts = pn === 1 ? game.p1DcAttachments : game.p2DcAttachments;

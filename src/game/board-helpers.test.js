@@ -136,3 +136,26 @@ describe('getFiguresOnOrAdjacentToSpace — multi-cell footprint', () => {
     assert.equal(result.length, 0, 'player filter must hold (only playerNum=1 figures returned)');
   });
 });
+
+import { getDcKeywords } from '../data-loader.js';
+
+describe('getDcKeywords — Programming Override (4-LOM) trait injection', () => {
+  it('injects the round-chosen trait into 4-LOM keywords', () => {
+    const game = { roundProgrammingOverrideTrait: { 1: 'HUNTER' }, p1DcList: [{ dcName: '4-LOM' }] };
+    const kw = getDcKeywords(game)['4-LOM'];
+    assert.ok(kw.map((k) => String(k).toUpperCase()).includes('HUNTER'), 'HUNTER injected');
+    assert.ok(kw.map((k) => String(k).toUpperCase()).includes('DROID'), 'base DROID retained');
+  });
+
+  it('does not inject when 4-LOM is not in that player\'s army', () => {
+    const game = { roundProgrammingOverrideTrait: { 2: 'SMUGGLER' }, p1DcList: [{ dcName: '4-LOM' }], p2DcList: [] };
+    const kw = getDcKeywords(game)['4-LOM'] || [];
+    assert.ok(!kw.map((k) => String(k).toUpperCase()).includes('SMUGGLER'), 'no cross-player injection');
+  });
+
+  it('no trait set → 4-LOM keeps only its base keywords', () => {
+    const game = { roundProgrammingOverrideTrait: {}, p1DcList: [{ dcName: '4-LOM' }] };
+    const kw = getDcKeywords(game)['4-LOM'];
+    assert.deepStrictEqual(kw.map((k) => String(k).toUpperCase()).sort(), ['DROID']);
+  });
+});

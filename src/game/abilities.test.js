@@ -611,16 +611,23 @@ test('resolveAbility Honoring the Fallen caps at 3 Hits', () => {
   assert.strictEqual(combat.bonusHits, 3);
 });
 
-test('resolveAbility Tools for the Job adds 1 attack die when declaring attack', () => {
+test('resolveAbility Tools for the Job prompts for die color, then adds 1 die of chosen color', () => {
   const combat = {
     attackerPlayerNum: 1,
     attackInfo: { dice: ['red', 'blue'], range: [1, 3] },
   };
   const game = { gameId: 'g-tfj', pendingCombat: combat };
-  const result = resolveAbility('Tools for the Job', { game, playerNum: 1, combat });
+  // Phase 1: CSV "add 1 attack die OF YOUR CHOICE" — prompts for the die color.
+  const prompt = resolveAbility('Tools for the Job', { game, playerNum: 1, combat });
+  assert.strictEqual(prompt.requiresChoice, true);
+  assert.deepStrictEqual(prompt.choiceValues, ['tools_color:red', 'tools_color:yellow', 'tools_color:green', 'tools_color:blue']);
+  // Phase 2: choosing green adds a green die to the pool.
+  const result = resolveAbility('Tools for the Job', { game, playerNum: 1, combat, chosenFigureKey: 'tools_color:green' });
   assert.strictEqual(result.applied, true);
   assert.ok(result.logMessage?.includes('attack die'));
+  assert.ok(result.logMessage?.includes('green'));
   assert.strictEqual(combat.attackBonusDice, 1);
+  assert.deepStrictEqual(combat.attackBonusDiceColors, ['green']);
 });
 
 test('resolveAbility Spinning Kick adds Cleave 1 and Cleave 2 as surge options', () => {
@@ -1825,4 +1832,91 @@ test('getAttackerSurgeAbilities returns ONLY replacement surges when blocked', a
   assert.deepStrictEqual(getAttackerSurgeAbilities(combat), ['+1 hit', 'pierce 4']);
   // blocked + no replacements → empty (Tusken Cycler / Improvised Weapons).
   assert.deepStrictEqual(getAttackerSurgeAbilities({ attackerDcName: 'Greedo', blockSurgeAbilities: true }), []);
+});
+
+// ── MEDIUM-severity ability-audit fixes (alexanbv 2026-06-20) ──────────────
+
+test('Expose Weakness stores target-keyed pierce on the chosen hostile (Phase 2)', () => {
+  // CSV row 641/642: "next attack TARGETING that figure gains Pierce 3" — keyed to
+  // the chosen hostile (defender), NOT the activator.
+  const game = { gameId: 'g-ew' };
+  const result = resolveAbility('Expose Weakness', {
+    game, playerNum: 1, dcMessageMeta: new Map(), chosenFigureKey: 'Stormtrooper-1-0',
+  });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(game.nextAttackPierceVsDefender?.['Stormtrooper-1-0'], 3);
+});
+
+test('Merciless prompts the OPPONENT to choose discard-2 vs concede VP', () => {
+  // CSV row 746: "that figure's player MAY discard 2... OR your player gains 3 VPs"
+  // — the opponent chooses, routed via choiceForControllerPlayerNum.
+  const game = {
+    gameId: 'g-merc',
+    player2CcDeck: ['A', 'B', 'C'], // opponent (player 2) deck has >= 2 cards
+  };
+  const prompt = resolveAbility('Merciless', { game, playerNum: 1 });
+  assert.strictEqual(prompt.requiresChoice, true);
+  assert.strictEqual(prompt.choiceForControllerPlayerNum, 2);
+  assert.deepStrictEqual(prompt.choiceValues, ['merciless_discard', 'merciless_vp']);
+  // Opponent picks discard-2.
+  const discard = resolveAbility('Merciless', { game, playerNum: 1, chosenFigureKey: 'merciless_discard' });
+  assert.strictEqual(discard.applied, true);
+  assert.strictEqual(game.player2CcDeck.length, 1);
+});
+
+test('Merciless: opponent declining concedes VP to the card player', () => {
+  const game = { gameId: 'g-merc2', player2CcDeck: ['A', 'B', 'C'], player1VP: { total: 0 } };
+  resolveAbility('Merciless', { game, playerNum: 1 }); // prompt
+  const vp = resolveAbility('Merciless', { game, playerNum: 1, chosenFigureKey: 'merciless_vp' });
+  assert.strictEqual(vp.applied, true);
+  assert.strictEqual(game.player2CcDeck.length, 3); // not discarded
+  assert.strictEqual(game.player1VP.total, 3);
+});
+
+test('Merciless: deck too small → no choice, card player gains VP directly', () => {
+  const game = { gameId: 'g-merc3', player2CcDeck: ['only-one'], player1VP: { total: 0 } };
+  const result = resolveAbility('Merciless', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, true);
+  assert.ok(!result.requiresChoice);
+  assert.strictEqual(game.player1VP.total, 3);
+});
+
+test('Support Specialist Phase 2 attack option grants a free interrupt attack', () => {
+  // CSV: "That figure interrupts to perform an action" — now offers attack, not just move.
+  const msgId = 'msg-ss';
+  const figureKey = 'C1-10P-1-0';
+  const game = {
+    gameId: 'g-ss',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'b2' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-ss', playerNum: 1, dcName: 'C1-10P', displayName: 'C1-10P [Group 1]' }]]);
+  const result = resolveAbility('Support Specialist', {
+    game, playerNum: 1, dcMessageMeta, chosenFigureKey: `${figureKey}|attack`,
+  });
+  assert.strictEqual(result.applied, true);
+  assert.ok(game.freeAttackBonusPending?.[figureKey]);
+  assert.match(result.logMessage, /free attack/i);
+});
+
+test('Field Supply: token-type choice (Hit vs Surge) and up to 2 figures', () => {
+  const msgId = 'msg-fs';
+  const f1 = 'Trooper A-1-0';
+  const game = {
+    gameId: 'g-fs',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    // Activating figure omitted from positions → actPos null → the within-3 range
+    // filter is skipped (no map in this unit test), so f1 stays eligible.
+    figurePositions: { 1: { [f1]: 'a2' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-fs', playerNum: 1, dcName: 'Field Tech', displayName: 'Field Tech [Group 1]' }]]);
+  // First call → prompt offering Hit Token + Surge Token per eligible figure.
+  const prompt = resolveAbility('Field Supply', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(prompt.requiresChoice, true);
+  assert.ok(prompt.choiceValues.includes(`${f1}|Damage`));
+  assert.ok(prompt.choiceValues.includes(`${f1}|Surge`));
+  // Pick a Surge token for f1 → grants a Surge token, then re-offers / finalizes.
+  const after = resolveAbility('Field Supply', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: `${f1}|Surge` });
+  assert.ok(after.applied || after.requiresChoice);
+  assert.ok((game.figurePowerTokens?.[f1] || []).includes('Surge'));
 });

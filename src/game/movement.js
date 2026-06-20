@@ -699,10 +699,13 @@ function evaluateMovementStep(current, neighbor, board, profile) {
     let extraCost = 0;
     if (rotateIntoDifficult) extraCost += 1;
     if (rotateIntoHostile && !profile.ignoreFigureCost) extraCost += 1;
+    // Force Jump: cannot END on blocking terrain (see normal-step path below).
+    const rotateEndsOnBlocking = profile.cannotEndOnBlocking
+      && nextFootprint.some((cell) => board.blockingSet.has(cell));
     return {
       cost: 1 + extraCost,
       occupied: overlapping,
-      canEnd: !overlapping || profile.canEndOnOccupied,
+      canEnd: (!overlapping || profile.canEndOnOccupied) && !rotateEndsOnBlocking,
       footprint: nextFootprint,
     };
   }
@@ -746,10 +749,15 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   let extraCost = 0;
   if (enteringDifficult) extraCost += 1;
   if (enteringHostile && !profile.ignoreFigureCost) extraCost += 1;
+  // Force Jump (profile.cannotEndOnBlocking): MOBILE lets the figure pass THROUGH
+  // blocking terrain, but the CSV forbids ENDING on it ("cannot end in blocking or
+  // impassable terrain"). The destination footprint must not overlap a blocking cell.
+  const endsOnBlocking = profile.cannotEndOnBlocking
+    && nextFootprint.some((cell) => board.blockingSet.has(cell));
   return {
     cost: baseCost + extraCost,
     occupied: enteringOccupied,
-    canEnd: !enteringOccupied || profile.canEndOnOccupied,
+    canEnd: (!enteringOccupied || profile.canEndOnOccupied) && !endsOnBlocking,
     footprint: nextFootprint,
   };
 }
@@ -822,7 +830,13 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
       current.footprint.some((cell) => board.massiveOccupiedSet.has(cell));
     if (hitsMassive) continue; // skip entirely — cannot pass through or end here
     const isOccupied = current.footprint.some((cell) => board.occupiedSet.has(cell));
-    const canEnd = !isOccupied || profile.canEndOnOccupied;
+    // Force Jump (profile.cannotEndOnBlocking): MOBILE may pass THROUGH blocking
+    // terrain but cannot END on it (CSV "cannot end in blocking or impassable
+    // terrain"). Forbid recording a blocking destination as endable while still
+    // allowing the path to traverse it. alexanbv 2026-06-20.
+    const endsOnBlocking = profile.cannotEndOnBlocking
+      && current.footprint.some((cell) => board.blockingSet.has(cell));
+    const canEnd = (!isOccupied || profile.canEndOnOccupied) && !endsOnBlocking;
     nodes.set(current.key, { ...current, isOccupied, canEnd });
     // Only record the topLeft cell, never non-topLeft footprint cells.
     // Recording all footprint cells causes permanent poisoning: a cell that is a
@@ -1028,6 +1042,8 @@ export function getImmediateStepSpaces(startCoord, board, profile, mpLimit = Inf
         step.footprint.some((c) => board.massiveOccupiedSet.has(c))) continue;
     const occupied = step.footprint.some((c) => board.occupiedSet.has(c));
     if (occupied && !profile.canEndOnOccupied) continue;
+    // Force Jump: cannot END on blocking terrain (pass-through still allowed).
+    if (profile.cannotEndOnBlocking && step.footprint.some((c) => board.blockingSet.has(c))) continue;
     const prev = out.get(nb.topLeft);
     if (prev === undefined || step.cost < prev) out.set(nb.topLeft, step.cost);
   }

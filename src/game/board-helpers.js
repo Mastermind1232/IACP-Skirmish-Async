@@ -231,6 +231,25 @@ export function isFigureInDeploymentZone(game, playerNum, figureKey, mapId) {
   return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
 }
 
+/** True if `playerNum`'s figure occupies the OPPONENT's deployment zone.
+ *  Used by zone-conditional CCs (Behind Enemy Lines: "in your opponent's
+ *  deployment zone"). The figure position is read from playerNum's own
+ *  positions; the zone color is the OTHER player's. */
+export function isFigureInOpponentDeploymentZone(game, playerNum, figureKey, mapId) {
+  const zoneData = getDeploymentZones()[mapId];
+  if (!zoneData) return false;
+  const initPlayerNum = getInitiativePlayerNum(game);
+  // The opponent's zone color is the inverse of playerNum's own zone.
+  const ownZone = playerNum === initPlayerNum ? game.deploymentZoneChosen : (game.deploymentZoneChosen === 'red' ? 'blue' : 'red');
+  const oppZone = ownZone === 'red' ? 'blue' : 'red';
+  const zoneSpaces = toLowerSet(zoneData[oppZone] || []);
+  const pos = game.figurePositions?.[playerNum]?.[figureKey];
+  if (!pos) return false;
+  const dcName = dcNameFromFigureKey(figureKey);
+  const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
+  return footprint.some((c) => zoneSpaces.has(normalizeCoord(c)));
+}
+
 /** 8-connected geometric neighbors of a coordinate (ignores walls/blocking). */
 function geometricNeighbors(coord) {
   const { col, row } = parseCoord(coord);

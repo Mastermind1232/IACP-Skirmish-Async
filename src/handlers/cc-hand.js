@@ -1162,6 +1162,8 @@ export async function handleCcChoice(interaction, ctx) {
     choiceIndex,
     chosenOption,
     chosenFigureKey: pending.choiceValues?.[choiceIndex] ?? null,
+    // Pack Alpha Phase 2: only the up-to-3 moved CREATUREs count toward damage.
+    packAlphaCreatureKeys: pending.packAlphaCreatureKeys ?? null,
     combat: game.combat || game.pendingCombat,
   });
   clearPendingCcChoice(game);

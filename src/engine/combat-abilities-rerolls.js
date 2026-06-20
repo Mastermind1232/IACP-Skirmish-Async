@@ -17,6 +17,7 @@ import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
 import { stripBrackets } from '../game/card-names.js';
 import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
+import { attachmentsForMsgId } from '../game/squad-upgrades.js';
 import { getMapData } from '../data-loader.js';
 import { isWithinSpaces } from '../game/spatial.js';
 import { chargeGeneratorsActive } from './combat-abilities-mods.js';
@@ -183,6 +184,18 @@ export function registerRerollAbilities() {
       // attacker-has-token condition REPLACES the figure-identity condition that
       // conditionForRow would otherwise derive. alexanbv 2026-06-17.
       const deviceTokenGated = /device token/i.test(r.conditional || '');
+      // ATTACHMENT-SCOPED reroll (Targeting Computer): the CSV reads "figures in
+      // THIS GROUP may reroll 1 attack die" — the reroll belongs to the group
+      // WEARING the attachment, not player-wide. Non-DC attachment rows have no
+      // figure-identity rowCond (isDC=false → rowCond=null below), so without
+      // scoping the reroll falls to player-wide card presence and is over-granted
+      // to every group the owner controls. Scope it to the attacking side's OWN
+      // attachment (combatSelfAttachmentMsgId → that group's attachment list).
+      // Only for non-aura attachment rerolls (auras already gate via auraExhaustOnUse).
+      const isAttachmentScoped = r.card_type === 'Attachment'
+        && !forcesDefenderReroll && !deviceTokenGated
+        && !/another friendly|friendly figure within|within \d/i.test(`${r.effect || ''} ${r.conditional || ''}`);
+      if (isAttachmentScoped) params.attachmentScopedCard = stripBrackets(card);
       let rowCond = forcesDefenderReroll
         ? makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' })
         : deviceTokenGated
@@ -231,6 +244,15 @@ export function registerRerollAbilities() {
             // The ability's figure (or owner-aura) must include the attacker —
             // NOT merely "the player holds the card."
             if (!rowCond(game, combat)) return false;
+          } else if (params.attachmentScopedCard) {
+            // Group-scoped attachment reroll (Targeting Computer): the attacking
+            // side's OWN attachment list must carry the card. This restricts the
+            // reroll to the group wearing the attachment instead of player-wide.
+            const mid = combatSelfAttachmentMsgId(combat, side);
+            const wantLc = params.attachmentScopedCard.toLowerCase();
+            const atts = mid ? attachmentsForMsgId(game, mid) : [];
+            const worn = (atts || []).some((a) => stripBrackets(String(a?.name || a?.cardName || a)).toLowerCase() === wantLc);
+            if (!worn) return false;
           } else if (!getPlayerCardNames(game, pn).some((n) => stripBrackets(String(n)).toLowerCase() === cardLc)) {
             return false;
           }

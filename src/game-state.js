@@ -183,6 +183,7 @@ function ensureGameShape(game) {
     // Combat targeting (keyed by msgId)
     'attackTargets', 'falseOrdersAttackTargets', 'falseOrdersUpgrade',
     'nextAttackBonusSurgeAbilities', 'nextAttackBonusAccuracy', 'nextAttackBonusPierce',
+    'nextAttackPierceVsDefender',
     'nextAttackReach', 'nextAttacksBonusConditions', 'nextAttacksBonusHits',
     'nextAttackIgnoreFigureLOS', 'nextActivationFreeAttack', 'nextHostileDefeatVpBonus',
     // Post-combat / end-of-round containers

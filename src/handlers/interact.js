@@ -103,6 +103,9 @@ export async function handleInteractChoice(interaction, ctx) {
   await interaction.message.edit({ components: [] }).catch(discordCatch);
 
   consumeActionForCurrentFigure(actionsData, 1);
+  // All in a Day's Work (CC) timing: an Interact has now RESOLVED during this
+  // activation. Set the per-activation flag the card's timing gate reads.
+  game.specialOrInteractResolvedThisActivation = true;
   await updateDcActionsMessage(game, msgId, interaction.client);
 
   const stats = getDcStats(meta.dcName);

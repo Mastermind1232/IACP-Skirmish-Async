@@ -3912,7 +3912,13 @@ export async function handleAttackTarget(interaction, ctx) {
     // override (paired with blockSurgeAbilities, which suppresses native surges).
     ...(Array.isArray(overrideDice?.bonusSurgeAbilities) ? overrideDice.bonusSurgeAbilities : []),
   ];
-  const nextPierce = (game.nextAttackBonusPierce?.[attackerFigureKey] || 0) + (overrideDice?.pierce || 0);
+  // Expose Weakness: target-keyed pierce — "the next attack TARGETING that figure
+  // gains Pierce 3". Keyed by the DEFENDER's figureKey (not the attacker), so it
+  // applies only when the chosen hostile is the one being attacked. alexanbv 2026-06-20.
+  const _defKeyForPierce = target?.figureKey || null;
+  const nextPierce = (game.nextAttackBonusPierce?.[attackerFigureKey] || 0)
+    + (_defKeyForPierce ? (game.nextAttackPierceVsDefender?.[_defKeyForPierce] || 0) : 0)
+    + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerFigureKey] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
   const isRanged = attackInfo.type === 'range';
   const distanceToTarget = target.dist ?? 1;
@@ -5127,6 +5133,10 @@ export async function handleAttackTarget(interaction, ctx) {
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerFigureKey];
   if (nextPierce) delete game.nextAttackBonusPierce?.[attackerFigureKey];
   if (nextBonusAcc) delete game.nextAttackBonusAccuracy?.[attackerFigureKey];
+  // Expose Weakness: consume the target-keyed pierce once the chosen defender is attacked.
+  if (_defKeyForPierce && game.nextAttackPierceVsDefender?.[_defKeyForPierce]) {
+    delete game.nextAttackPierceVsDefender[_defKeyForPierce];
+  }
   if (game.nextAttackReach?.[attackerFigureKey]) delete game.nextAttackReach[attackerFigureKey];
   delete game.lastAttackTargetSpacesForRubble;
   delete game.lastAttackAttackerPlayerNum;

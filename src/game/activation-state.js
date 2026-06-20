@@ -371,6 +371,12 @@ const ACTIVATION_SCALAR_FLAGS = [
   // move. Wiped at activation end (and at each new Move action, alongside
   // partingShotTriggered).
   'pendingPartingBlow',
+  // All in a Day's Work (CC): set true once a Special Action OR Interact has
+  // RESOLVED during the active figure's activation, gating the card's
+  // "after you resolve a Special or Interact during your activation" timing.
+  // Scalar (the activating player is implied by currentActivationTurnPlayerId);
+  // wiped at activation end so the next activation starts unset. alexanbv 2026-06-20.
+  'specialOrInteractResolvedThisActivation',
 ];
 
 /**
@@ -810,6 +816,9 @@ const ROUND_NULL_FLAGS = [
   'nextAttacksBonusHits',
   'nextAttackBonusSurgeAbilities',
   'nextAttackBonusPierce',
+  // Expose Weakness: target-keyed pierce on a chosen hostile (keyed by the DEFENDER
+  // figureKey, not the activator). Clears at round end. alexanbv 2026-06-20.
+  'nextAttackPierceVsDefender',
   'nextAttacksBonusConditions',
   'roundDefenderCannotBeTargetedUnlessWithinSpaces',
   'roundDebuffNextHostileActivation',
