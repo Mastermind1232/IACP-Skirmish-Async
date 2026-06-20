@@ -54,6 +54,8 @@ import { getDcKeywords } from '../data-loader.js';
 export const PB_TYPE = 'PB';
 export const DT_TYPE = 'DT';
 export const SD_TYPE = 'SD';
+// Slippery Target: a SMUGGLER/SPY a hostile entered adjacent to gains MP=Speed.
+export const ST_TYPE = 'ST';
 
 function _figureKeywords(game, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
@@ -115,6 +117,17 @@ export function extractMoveInterruptOpportunities(game, mapId, mover, path, opts
         out.push({
           step,
           type: DT_TYPE,
+          triggerFigureKey: fig.figureKey,
+          triggerPlayerNum: fig.playerNum,
+          triggerCell: toCell,
+        });
+      }
+      // Slippery Target: SMUGGLER or SPY — that figure may gain MP=Speed
+      // (alexanbv 2026-06-19). Gated to cards-in-hand by the handler.
+      if (kws.has('SMUGGLER') || kws.has('SPY')) {
+        out.push({
+          step,
+          type: ST_TYPE,
           triggerFigureKey: fig.figureKey,
           triggerPlayerNum: fig.playerNum,
           triggerCell: toCell,

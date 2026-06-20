@@ -198,8 +198,16 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Disengage: playable during your activation (play when hostile entered)
       return ctx.duringActivation;
     case 'whenhostilefigureentersadjacentspace':
-      // Self-Defense, Slippery Target, Dirty Trick: playable during your activation (play when hostile entered adjacent)
-      return ctx.duringActivation;
+      // Self-Defense, Slippery Target, Dirty Trick: reactive. Playable during
+      // your own activation OR during an opponent's move that opened an
+      // interrupt window for one of YOUR figures (the move-interrupt loop —
+      // alexanbv 2026-06-19, Slippery Target wiring).
+      if (ctx.duringActivation) return true;
+      {
+        const ops = game?.pendingMoveInterrupts?.opportunities;
+        if (Array.isArray(ops) && ops.some((o) => o.triggerPlayerNum === playerNum)) return true;
+      }
+      return false;
     case 'whenfriendlyfigurewithin2spacessuffers3plusdamage':
       // Extra Protection: playable during your activation (play when friendly within 2 suffered 3+ Damage)
       return ctx.duringActivation;

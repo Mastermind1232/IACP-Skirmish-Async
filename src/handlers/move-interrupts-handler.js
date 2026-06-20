@@ -62,12 +62,14 @@ const INTERRUPT_CARD_BY_TYPE = {
   PB: 'Parting Blow',
   DT: 'Dirty Trick',
   SD: 'Self-Defense',
+  ST: 'Slippery Target',
 };
 
 const TRIGGER_LABEL_BY_TYPE = {
   PB: 'EXIT adjacency to BRAWLER',
   DT: 'ENTRY adjacency to SMUGGLER/HUNTER',
   SD: 'ENTRY adjacency to opponent figure',
+  ST: 'ENTRY adjacency to your SMUGGLER/SPY (gain MP=Speed)',
 };
 
 /**

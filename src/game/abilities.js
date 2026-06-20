@@ -4282,6 +4282,36 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.mpBonusFromSpeed === 'number') {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    // Slippery Target is REACTIVE (alexanbv 2026-06-19: wired like Self-Defense /
+    // Dirty Trick) — played during the OPPONENT's move when a hostile enters a
+    // space adjacent to your SMUGGLER/SPY. There is no active activation; grant
+    // the MP (=Speed) to that reacting figure, identified by the live move-
+    // interrupt opportunity (type 'ST').
+    if (context.cardName === 'Slippery Target') {
+      const p = game.pendingMoveInterrupts;
+      let reactFk = null;
+      if (p?.opportunities?.length) {
+        const cur = p.opportunities[p.opIndex];
+        if (cur && cur.type === 'ST' && cur.triggerPlayerNum === playerNum) reactFk = cur.triggerFigureKey;
+        if (!reactFk) {
+          const stOp = p.opportunities.find((o) => o.type === 'ST' && o.triggerPlayerNum === playerNum);
+          if (stOp) reactFk = stOp.triggerFigureKey;
+        }
+      }
+      if (reactFk) {
+        const reactDcName = dcNameFromFigureKey(reactFk);
+        const reactMsgId = findMsgIdForFigureKey(game, playerNum, reactFk, dcMessageMeta);
+        const speed = getStatsForDc(reactDcName)?.speed ?? 4;
+        const n = speed + entry.mpBonusFromSpeed;
+        if (reactMsgId && n >= 1) {
+          const _stM = reactFk.match(/-(\d+)-(\d+)$/);
+          const reactFigIdx = _stM ? parseInt(_stM[2], 10) : 0;
+          addMovementPoints(game, reactMsgId, n, { forceImmediate: true, figureIndex: reactFigIdx });
+          return { applied: true, logMessage: `**Slippery Target** — **${reactDcName}** gains ${n} MP (Speed; spend at once on movement or MP-cost abilities, remainder lost).`, refreshMovementBank: true, refreshDcEmbed: true, activeMsgId: reactMsgId };
+        }
+      }
+      // No live interrupt context → fall through to the activation path below.
+    }
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
@@ -9608,10 +9638,24 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Damage Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
   }
 
-  // ccEffect: protectOldWaysBonus (Protect the Old Ways) — +X Block this round (X = 1 + FORCE USER CCs in discard)
+  // ccEffect: protectOldWaysBonus (Protect the Old Ways) — ONE-SHOT reactive
+  // defender modifier (alexanbv 2026-06-19): "+X Block to THE defense results"
+  // for the single figure currently defending, where X = 1 + FORCE USER CCs in
+  // your discard. Applies to the current attack only (combat.bonusBlock), and
+  // only when the defending figure is within 3 spaces of a friendly FORCE USER.
   if (entry.type === 'ccEffect' && entry.protectOldWaysBonus) {
     const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const _combat = context.combat || game?.pendingCombat;
+    if (!game || !playerNum || !_combat) return { applied: false, manualMessage: '**Protect the Old Ways** — play while one of your figures is defending.' };
+    const defenderFk = _combat.target?.figureKey;
+    const defenderPos = defenderFk ? game.figurePositions?.[playerNum]?.[defenderFk] : null;
+    if (!defenderPos) return { applied: false, manualMessage: '**Protect the Old Ways** — could not locate the defending figure.' };
+    // Range: the defending figure must be within 3 spaces of a friendly FORCE USER.
+    const dcEffects = getDcEffects();
+    const _isForceUser = (fk) => (dcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase()).includes('FORCE USER');
+    const within3OfFu = Object.entries(game.figurePositions?.[playerNum] || {}).some(([fk, pos]) =>
+      pos && _isForceUser(fk) && countGameSpaces(game, pos, defenderPos) <= 3);
+    if (!within3OfFu) return { applied: false, manualMessage: '**Protect the Old Ways** — the defending figure is not within 3 spaces of a friendly FORCE USER.' };
     const discardKey = ccDiscardKey(playerNum);
     const discard = game[discardKey] || [];
     const forceUserCount = discard.filter((cardName) => {
@@ -9619,9 +9663,8 @@ export function resolveAbility(abilityId, context) {
       return eff?.playableBy && String(eff.playableBy).toUpperCase().includes('FORCE USER');
     }).length;
     const bonus = 1 + forceUserCount;
-    game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
-    game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + bonus;
-    return { applied: true, logMessage: `**Protect the Old Ways** — +**${bonus}** Block to your defense this round (1 + ${forceUserCount} FORCE USER CC${forceUserCount !== 1 ? 's' : ''} in discard).` };
+    _combat.bonusBlock = (_combat.bonusBlock || 0) + bonus;
+    return { applied: true, logMessage: `**Protect the Old Ways** — +**${bonus}** Block to the defending **${dcNameFromFigureKey(defenderFk)}** (1 + ${forceUserCount} FORCE USER CC${forceUserCount !== 1 ? 's' : ''} in discard).` };
   }
 
   // ccEffect: staticPulseEffect (Static Pulse) — per CRR: for each
