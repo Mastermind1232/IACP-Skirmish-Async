@@ -18,10 +18,16 @@ const deps = {
 };
 
 describe('rerollDie records the last rerolled die for the Tough Luck offer', () => {
-  it('sets combat._lastRerolledDie on success', () => {
+  it('sets combat._lastRerolledDie on success (with symbol counts for Double or Nothing)', () => {
     const combat = { attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }], _rerolledDieIds: new Set() };
     rerollDie(combat, deps, { pool: 'attack', index: 0 });
-    assert.deepEqual(combat._lastRerolledDie, { pool: 'attack', index: 0 });
+    // pool/index drive the Tough Luck offer; prevSymbols/newSymbols (whole-die
+    // counts) drive the Double or Nothing offer. Old die 1a/2d/0s = 3 symbols;
+    // injected new die 1a/1d/0s = 2 symbols.
+    assert.equal(combat._lastRerolledDie.pool, 'attack');
+    assert.equal(combat._lastRerolledDie.index, 0);
+    assert.equal(combat._lastRerolledDie.prevSymbols, 3);
+    assert.equal(combat._lastRerolledDie.newSymbols, 2);
   });
 });
 

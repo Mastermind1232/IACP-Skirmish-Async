@@ -60,6 +60,7 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
   const rollOne = pool === 'attack' ? deps.rollSingleAttackDie : deps.rollSingleDefenseDie;
   const recalc = pool === 'attack' ? deps.recalcAttackTotals : deps.recalcDefenseTotals;
   if (typeof rollOne !== 'function' || typeof recalc !== 'function') return { ok: false, reason: 'no-deps' };
+  const oldDie = dice[index];
   const newDie = rollOne(color);
   dice[index] = newDie;
   if (!specialTurn) markDieRerolled(combat, id);
@@ -67,7 +68,13 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
   combat[totalsField] = totals;
   // Record the most recent reroll so the gate can offer Tough Luck on it
   // (attack die → defender may react; defense die → attacker). alexanbv 2026-06-17.
-  combat._lastRerolledDie = { pool, index };
+  // prevSymbols/newSymbols: the WHOLE-die symbol counts before/after, so the gate
+  // can offer the Double or Nothing reaction ("if the rerolled result has the same
+  // number of symbols, you may double or cancel"). alexanbv 2026-06-20.
+  const _symOf = pool === 'attack'
+    ? (d) => (d ? (d.dmg || 0) + (d.surge || 0) + (d.acc || 0) : 0)
+    : (d) => (d ? (d.block || 0) + (d.evade || 0) + (d.dodge ? (typeof d.dodge === 'number' ? d.dodge : 1) : 0) : 0);
+  combat._lastRerolledDie = { pool, index, prevSymbols: _symOf(oldDie), newSymbols: _symOf(newDie) };
   // A color-swap reroll is Lando's Gambit (or Saska): record a DURABLE marker of
   // the swapped die so Cheat to Win ("change THAT die's result to another result
   // on that die") can identify and constrain to the Gambit die's color even after

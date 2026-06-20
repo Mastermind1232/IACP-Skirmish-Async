@@ -1920,3 +1920,82 @@ test('Field Supply: token-type choice (Hit vs Surge) and up to 2 figures', () =>
   assert.ok(after.applied || after.requiresChoice);
   assert.ok((game.figurePowerTokens?.[f1] || []).includes('Surge'));
 });
+
+test('Collateral Damage: single adjacent damageable OBJECT is auto-damaged for 2 (CSV row 582)', () => {
+  // CSV: "Choose a figure or object other than the defender within 2 spaces of
+  // the target space; it suffers 2 Damage." Only an object is in range → auto-apply.
+  const game = {
+    gameId: 'g-cd-obj',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8' } },
+    lastAttackTargetFigureKey: 'Target-1-0',
+    objectHealth: { 'crate-1': [3, 3] },
+    objectPositions: { 'crate-1': 'o8' },
+    objectMeta: { 'crate-1': { name: 'Crate' } },
+  };
+  const dcMessageMeta = new Map([['m2', { gameId: 'g-cd-obj', playerNum: 2, dcName: 'Target', displayName: 'Target [Group 1]' }]]);
+  const dcHealthState = new Map([['m2', [[5, 5]]]]);
+  const r = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(r.applied, true);
+  assert.deepStrictEqual(game.objectHealth['crate-1'], [1, 3]);
+  assert.ok(/Crate/.test(r.logMessage));
+});
+
+test('Collateral Damage: an object at 0 HP is removed from positions (destroyed)', () => {
+  const game = {
+    gameId: 'g-cd-destroy',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8' } },
+    lastAttackTargetFigureKey: 'Target-1-0',
+    objectHealth: { 'barrel-1': [2, 2] },
+    objectPositions: { 'barrel-1': 'o8' },
+    objectMeta: { 'barrel-1': { name: 'Barrel' } },
+  };
+  const dcMessageMeta = new Map([['m2', { gameId: 'g-cd-destroy', playerNum: 2, dcName: 'Target', displayName: 'Target [Group 1]' }]]);
+  const r = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map([['m2', [[5, 5]]]]) });
+  assert.strictEqual(r.applied, true);
+  assert.deepStrictEqual(game.objectHealth['barrel-1'], [0, 2]);
+  assert.strictEqual(game.objectPositions['barrel-1'], undefined, 'destroyed object removed from positions');
+  assert.ok(/destroyed/.test(r.logMessage));
+});
+
+test('Collateral Damage: figure + object both in range → choice offers both; object pick damages object', () => {
+  const game = {
+    gameId: 'g-cd-multi',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8', 'Bystander-1-0': 'o8' } },
+    lastAttackTargetFigureKey: 'Target-1-0',
+    objectHealth: { 'crate-1': [3, 3] },
+    objectPositions: { 'crate-1': 'o8' },
+    objectMeta: { 'crate-1': { name: 'Crate' } },
+  };
+  const dcMessageMeta = new Map([['m2', { gameId: 'g-cd-multi', playerNum: 2, dcName: 'Target', displayName: 'Target [Group 1]' }]]);
+  const dcHealthState = new Map([['m2', [[5, 5]]]]);
+  const phase1 = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(phase1.requiresChoice, true);
+  // CSV "a figure or OBJECT" — both candidate kinds present.
+  assert.ok(phase1.choiceValues.includes('Bystander-1-0'), 'figure candidate offered');
+  const objVal = phase1.choiceValues.find((v) => String(v).startsWith('obj:'));
+  assert.ok(objVal, 'object candidate offered as obj:<id>');
+  // CC choice re-entry routes the chosen value as chosenFigureKey (cc-hand path).
+  const phase2 = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: objVal });
+  assert.strictEqual(phase2.applied, true);
+  assert.deepStrictEqual(game.objectHealth['crate-1'], [1, 3]);
+});
+
+test('Collateral Damage: figure pick (cc-hand chosenFigureKey route) damages the chosen figure', () => {
+  const game = {
+    gameId: 'g-cd-fig',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8', 'Bystander-1-0': 'o8' } },
+    lastAttackTargetFigureKey: 'Target-1-0',
+    objectHealth: { 'crate-1': [3, 3] },
+    objectPositions: { 'crate-1': 'o8' },
+    objectMeta: { 'crate-1': { name: 'Crate' } },
+  };
+  const dcMessageMeta = new Map([['m2', { gameId: 'g-cd-fig', playerNum: 2, dcName: 'Bystander', displayName: 'Bystander [Group 1]' }]]);
+  const dcHealthState = new Map([['m2', [[6, 6]]]]);
+  const phase2 = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: 'Bystander-1-0' });
+  assert.strictEqual(phase2.applied, true);
+  assert.deepStrictEqual(dcHealthState.get('m2')[0], [4, 6]);
+});

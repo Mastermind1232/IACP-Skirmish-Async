@@ -323,11 +323,122 @@ export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
  */
 async function _driveGateOrOfferToughLuck(window, thread, game, combat, ctx) {
   if (window === 'rerolls' && combat?._lastRerolledDie) {
-    const { pool, index } = combat._lastRerolledDie;
+    const last = combat._lastRerolledDie;
+    const { pool, index } = last;
+    // Double or Nothing reaction (CSV row 625): when the die JUST rerolled by a
+    // Double or Nothing reroll has the SAME number of symbols as before, its
+    // controller MAY double OR cancel that die's results. Offer the interactive
+    // Double/Cancel/Decline prompt FIRST (it modifies the result the opponent
+    // would then react to with Tough Luck). If a window is posted, PAUSE — the
+    // dongate_* handler applies the choice and resumes the rerolls window.
+    if (await _offerDoubleOrNothing(game, combat, ctx, thread, pool, index, last)) return;
     delete combat._lastRerolledDie;
     if (await _offerToughLuck(game, combat, ctx, thread, pool, index)) return;
   }
   await _driveGatePath(window, thread, game, combat, ctx);
+}
+
+/**
+ * Double or Nothing (CC, CSV row 625) post-reroll reaction. When a Double or
+ * Nothing reroll (game.doubleMatchingIconsOnReroll armed for this side) produced
+ * a die with the SAME number of symbols, its CONTROLLER (game.doubleMatchingIconsOnReroll.playerNum)
+ * may DOUBLE or CANCEL that die's whole result (or decline). Mirrors the discrete
+ * Tough Luck gate (_offerToughLuck → tlgate_* → handleToughLuckGate): stash
+ * combat._pendingDoubleOrNothing, post the prompt, PAUSE; handleDonGate applies
+ * the pick and resumes. Returns true iff a window was posted.
+ * alexanbv 2026-06-20 (replaces the auto-double DON-PARTIAL behavior).
+ */
+export async function _offerDoubleOrNothing(game, combat, ctx, thread, pool, idx, last) {
+  if (!combat || idx == null) return false;
+  const don = game.doubleMatchingIconsOnReroll;
+  if (!don) return false;
+  if (combat.doubleOrNothingApplied) return false;
+  // Side must match the rerolled pool (atk → attack die, def → defense die).
+  if ((don.side === 'atk' && pool !== 'attack') || (don.side === 'def' && pool !== 'defense')) return false;
+  // Only when the symbol count matched (per CSV). Symbol counts captured by rerollDie.
+  const prev = last?.prevSymbols ?? null;
+  const cur = last?.newSymbols ?? null;
+  if (prev == null || cur == null || prev !== cur || cur <= 0) {
+    // Count changed (or zero): DON does nothing; consume the arm so it doesn't
+    // re-trigger on a later reroll this attack.
+    game.doubleMatchingIconsOnReroll = null;
+    combat.doubleOrNothingApplied = true;
+    await thread?.send(`**Double or Nothing** — Symbol count changed (${prev ?? '?'} → ${cur ?? '?'}). No double/cancel.`).catch(discordCatch);
+    return false;
+  }
+  const controllerPN = don.playerNum;
+  if (!controllerPN) return false;
+  combat._pendingDoubleOrNothing = { pool, idx, playerNum: controllerPN, symbols: cur };
+  const ownerId = game[`player${controllerPN}Id`] ?? '';
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`dongate_double_${combat.gameId}`).setLabel('Double the result').setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`dongate_cancel_${combat.gameId}`).setLabel('Cancel the result').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`dongate_skip_${combat.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+  );
+  await thread?.send(sanitizeMentions({
+    content: `**Double or Nothing** — Same number of symbols (${cur}). <@${ownerId}> may **double** or **cancel** the rerolled ${pool} die's results.`,
+    components: [row], allowedMentions: { users: [ownerId] },
+  })).catch(discordCatch);
+  return true;
+}
+
+/**
+ * Double or Nothing gate response. The controller doubles, cancels, or declines
+ * the rerolled die's whole result; then offers Tough Luck on the same die (the
+ * opponent may still react), else resumes the rerolls window.
+ * customId: dongate_double_<gameId> | dongate_cancel_<gameId> | dongate_skip_<gameId>.
+ */
+export async function handleDonGate(interaction, ctx) {
+  const { getGame, saveGames, replyIfGameEnded } = ctx;
+  const mode = interaction.customId.startsWith('dongate_double_') ? 'double'
+    : interaction.customId.startsWith('dongate_cancel_') ? 'cancel' : 'skip';
+  const prefix = mode === 'double' ? 'dongate_double_' : mode === 'cancel' ? 'dongate_cancel_' : 'dongate_skip_';
+  const parts = splitCustomId(interaction.customId, prefix);
+  const gameId = parts[0];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded?.(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const don = combat?._pendingDoubleOrNothing;
+  if (!don) { await interaction.followUp({ content: 'No pending Double or Nothing.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, don.playerNum, canActAsPlayer, 'Only the Double or Nothing player may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  const dice = don.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+  const die = dice?.[don.idx];
+  if (die && mode !== 'skip') {
+    if (mode === 'cancel') {
+      if (don.pool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
+      else { die.block = 0; die.evade = 0; die.dodge = false; }
+    } else {
+      if (don.pool === 'attack') {
+        die.acc = (die.acc || 0) * 2; die.dmg = (die.dmg || 0) * 2; die.surge = (die.surge || 0) * 2;
+      } else {
+        die.block = (die.block || 0) * 2; die.evade = (die.evade || 0) * 2;
+        if (die.dodge) die.dodge = (typeof die.dodge === 'number' ? die.dodge : 1) * 2;
+      }
+    }
+    const recalc = don.pool === 'attack' ? _recalcAttackTotals : _recalcDefenseTotals;
+    combat[don.pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
+    const tDesc = don.pool === 'attack'
+      ? `${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge`
+      : `${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade${combat.defenseRoll.dodge ? ' DODGE' : ''}`;
+    await thread?.send(`**Double or Nothing** — **${mode === 'cancel' ? 'Cancelled' : 'Doubled'}** the rerolled ${don.pool} die's results. New totals: ${tDesc}.`).catch(discordCatch);
+  } else if (mode === 'skip') {
+    await thread?.send('**Double or Nothing** — Declined; results unchanged.').catch(discordCatch);
+  }
+  combat.doubleOrNothingApplied = true;
+  game.doubleMatchingIconsOnReroll = null;
+  delete combat._pendingDoubleOrNothing;
+  // Opponent may still react to the (now modified) rerolled die with Tough Luck.
+  const last = combat._lastRerolledDie;
+  if (last) {
+    delete combat._lastRerolledDie;
+    if (await _offerToughLuck(game, combat, ctx, thread, last.pool, last.index)) { saveGames?.(game.gameId); return; }
+  }
+  await _driveGatePath('rerolls', thread, game, combat, ctx);
+  saveGames?.(game.gameId);
 }
 import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
 
@@ -7229,14 +7340,13 @@ export async function handleCombatReroll(interaction, ctx) {
           const _symOld = _attackSymbolCount(oldDie);
           const _symNew = _attackSymbolCount(newDie);
           if (_symNew === _symOld && _symNew > 0) {
-            // DON-PARTIAL (alexanbv 2026-06-20): the "you MAY double OR CANCEL"
-            // OPT-IN + the CANCEL branch require an interactive post-reroll choice
-            // (Double / Cancel / Decline) routed to the CC's CONTROLLER — who may
-            // differ from the rerolling side. That is new combat-reroll-window
-            // prompt infrastructure (a modsub state machine spanning the gate),
-            // deferred here to keep the core reroll path safe. Default action:
-            // DOUBLE (the historical behavior, the more common pick). The mode can
-            // be overridden to 'cancel' via game.doubleMatchingIconsOnReroll.mode.
+            // STALE-BUTTON FALLBACK (alexanbv 2026-06-20): the LIVE reroll path is
+            // the gate (_rerollDie → _driveGateOrOfferToughLuck → _offerDoubleOrNothing
+            // → dongate_* interactive Double/Cancel/Decline). This legacy voluntary
+            // die-pick branch is reached only by stale customIds; it applies the
+            // default (DOUBLE; override 'cancel' via .mode) inline so old buttons
+            // don't strand, and sets doubleOrNothingApplied so the gate offer
+            // early-returns. Both can't double-apply.
             const _donMode = game.doubleMatchingIconsOnReroll?.mode === 'cancel' ? 'cancel' : 'double';
             if (_donMode === 'cancel') {
               dice[idx].dmg = 0; dice[idx].surge = 0; dice[idx].acc = 0;
@@ -7300,10 +7410,10 @@ export async function handleCombatReroll(interaction, ctx) {
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
         // Double or Nothing (CSV row 625): symbol-count comparison over the WHOLE
-        // defense die; "you MAY double OR cancel its results." See the attacker-
-        // side DON-PARTIAL note: the interactive opt-in + the controller-driven
-        // Double/Cancel choice are deferred; default action is DOUBLE (override to
-        // 'cancel' via game.doubleMatchingIconsOnReroll.mode).
+        // defense die. STALE-BUTTON FALLBACK only — the LIVE path is the dongate_*
+        // interactive prompt (see the attacker-side note). Applies the default
+        // inline (DOUBLE; 'cancel' via .mode) + sets doubleOrNothingApplied so the
+        // gate offer early-returns.
         if (game.doubleMatchingIconsOnReroll?.side === 'def' && !combat.doubleOrNothingApplied) {
           const _symOldD = _defenseSymbolCount(oldDie);
           const _symNewD = _defenseSymbolCount(newDie);

@@ -61,7 +61,7 @@ import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hos
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
-import { getDamageableObjectsAtCoord, isObjectAlive } from './object-damage-pipeline.js';
+import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
@@ -7123,12 +7123,34 @@ export function resolveAbility(abilityId, context) {
     const lastTargetFk = game.lastAttackTargetFigureKey;
     const mapId = game.selectedMap?.id;
     if (!lastTargetFk || !mapId) return { applied: false, manualMessage: `Resolve manually: choose a figure within ${range} spaces of the attack target; it suffers ${flatDmg} Damage.` };
+    // CC choice re-entry routes the chosen value as either `targetFigureKey`
+    // (dcSpecial path) or `chosenFigureKey` (cc-hand path). Accept both so the
+    // resolver works regardless of which prompt subsystem posted the buttons.
+    const chosenAny = chosenTargetFk || context.chosenFigureKey || null;
+    // Phase 2a: chosen value is an OBJECT (encoded `obj:<id>`). CSV "a figure or
+    // OBJECT other than the defender within 2 … 2 Damage". Damageable mission
+    // objects are damaged via the SAME sync inline-mutation pattern Terminal
+    // Protocol / IG-11 Self-Destruct use (game.objectHealth mutation; the async
+    // applyDamageToObject pipeline can't be awaited from this sync resolver).
+    if (chosenAny && String(chosenAny).startsWith('obj:')) {
+      const objId = String(chosenAny).slice(4);
+      if (!isObjectAlive(game, objId)) return { applied: false, manualMessage: `**Collateral Damage** — that object is no longer in play.` };
+      const hp = game.objectHealth?.[objId];
+      if (!Array.isArray(hp)) return { applied: false, manualMessage: `**Collateral Damage** — apply ${flatDmg} Damage to the chosen object manually.` };
+      const [cur, max] = hp;
+      const newCur = Math.max(0, (cur ?? 0) - flatDmg);
+      game.objectHealth[objId] = [newCur, max];
+      const objName = game.objectMeta?.[objId]?.name || objId;
+      if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
+      return { applied: true, logMessage: `**Collateral Damage** — **${objName}** suffers **${flatDmg} Damage** (HP: ${cur ?? 0} → ${newCur})${newCur <= 0 ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
+    }
     // Phase 2: apply damage to chosen figure
-    if (chosenTargetFk) {
-      const cftMsgId = (() => { for (const [mid, m] of dcMessageMeta) { if (m.playerNum !== playerNum) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(chosenTargetFk)) return mid; } } return null; })();
+    if (chosenTargetFk || (chosenAny && !String(chosenAny).startsWith('obj:'))) {
+      const _ctFk = chosenTargetFk || chosenAny;
+      const cftMsgId = (() => { for (const [mid, m] of dcMessageMeta) { if (m.playerNum !== playerNum) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(_ctFk)) return mid; } } return null; })();
       if (!cftMsgId) return { applied: false, manualMessage: `Resolve manually: could not locate target DC.` };
       const cftHS = dcHealthState.get(cftMsgId) || [];
-      const cftMatch = chosenTargetFk.match(/-(\d+)-(\d+)$/);
+      const cftMatch = _ctFk.match(/-(\d+)-(\d+)$/);
       const cftIdx = cftMatch ? parseInt(cftMatch[2], 10) : 0;
       const cftEntry = cftHS[cftIdx];
       if (!cftEntry) return { applied: false, manualMessage: `Apply ${flatDmg} Damage to chosen figure manually.` };
@@ -7138,7 +7160,7 @@ export function resolveAbility(abilityId, context) {
       dcHealthState.set(cftMsgId, cftHS);
       const cftP = dcMessageMeta.get(cftMsgId)?.playerNum;
       syncHealthStateToList(game, cftP, cftMsgId, cftHS);
-      const cftName = dcNameFromFigureKey(chosenTargetFk);
+      const cftName = dcNameFromFigureKey(_ctFk);
       return { applied: true, logMessage: `**Collateral Damage** — **${cftName}** suffers **${flatDmg} Damage** (HP: ${cC ?? cM} → ${cNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [cftMsgId] };
     }
     // Phase 1: find all figures (hostile to attacker) within N spaces of last attack target
@@ -7156,28 +7178,59 @@ export function resolveAbility(abilityId, context) {
         // target space" — exclude the attack's defender (the target figure).
         if (fk === lastTargetFk) continue;
         const dcName = dcNameFromFigureKey(fk);
-        targets.push({ figureKey: fk, playerNum: pn, label: dcName });
+        targets.push({ kind: 'figure', value: fk, label: dcName });
       }
     }
-    if (targets.length === 0) return { applied: false, manualMessage: `No figures within ${range} spaces of attack target.` };
-    if (targets.length === 1) {
-      // Auto-apply to single target
-      const solo = targets[0];
-      const soloMsgId = (() => { for (const [mid, m] of dcMessageMeta) { if (m.playerNum === solo.playerNum) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(solo.figureKey)) return mid; } } return null; })();
+    // CSV "a figure or OBJECT … within 2": add damageable mission objects within
+    // `range` of the target space. Encoded as `obj:<id>` choice values so the
+    // CC choice re-entry (cc-hand / dcSpecial / headless) routes them back to the
+    // object-damage Phase-2a branch above. Uses getDamageableObjectsWithinN
+    // (countGameSpaces distance metric — same as figures). alexanbv 2026-06-20.
+    for (const objId of getDamageableObjectsWithinN(game, lastTargetPos, range)) {
+      const objName = game.objectMeta?.[objId]?.name || objId;
+      targets.push({ kind: 'object', value: `obj:${objId}`, label: `Object: ${objName}` });
+    }
+    if (targets.length === 0) return { applied: false, manualMessage: `No figures or objects within ${range} spaces of attack target.` };
+    if (targets.length === 1 && targets[0].kind === 'figure') {
+      // Auto-apply to a single figure target (one candidate, no choice needed).
+      const soloFk = targets[0].value;
+      const soloMsgId = (() => { for (const [mid, m] of dcMessageMeta) { const ks = getFigureKeysForDcMsg(game, m.playerNum, m); if (ks.includes(soloFk)) return mid; } return null; })();
       if (soloMsgId) {
         const sHS = dcHealthState.get(soloMsgId) || [];
-        const sMatch = solo.figureKey.match(/-(\d+)-(\d+)$/);
+        const sMatch = soloFk.match(/-(\d+)-(\d+)$/);
         const sIdx = sMatch ? parseInt(sMatch[2], 10) : 0;
         const sEntry = sHS[sIdx];
+        const soloP = dcMessageMeta.get(soloMsgId)?.playerNum;
         if (sEntry) {
           const [sC, sM] = sEntry; const sNew = Math.max(0, (sC ?? sM) - flatDmg);
           sHS[sIdx] = [sNew, sM ?? sNew]; dcHealthState.set(soloMsgId, sHS);
-          syncHealthStateToList(game, solo.playerNum, soloMsgId, sHS);
-          return { applied: true, logMessage: `**Collateral Damage** — **${solo.label}** suffers **${flatDmg} Damage** (HP: ${sC ?? sM} → ${sNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [soloMsgId] };
+          syncHealthStateToList(game, soloP, soloMsgId, sHS);
+          return { applied: true, logMessage: `**Collateral Damage** — **${targets[0].label}** suffers **${flatDmg} Damage** (HP: ${sC ?? sM} → ${sNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [soloMsgId] };
         }
       }
     }
-    return { applied: false, requiresChoice: true, choiceOptions: targets.map(t => t.label), targetFigureKeys: targets.map(t => t.figureKey) };
+    if (targets.length === 1 && targets[0].kind === 'object') {
+      // Auto-apply to a single object candidate (sync inline mutation).
+      const objId = targets[0].value.slice(4);
+      const hp = game.objectHealth?.[objId];
+      if (Array.isArray(hp)) {
+        const [cur, max] = hp;
+        const newCur = Math.max(0, (cur ?? 0) - flatDmg);
+        game.objectHealth[objId] = [newCur, max];
+        const objName = game.objectMeta?.[objId]?.name || objId;
+        if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
+        return { applied: true, logMessage: `**Collateral Damage** — **${objName}** suffers **${flatDmg} Damage** (HP: ${cur ?? 0} → ${newCur})${newCur <= 0 ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
+      }
+    }
+    // 2+ candidates (figures and/or objects) → choice. Return BOTH choiceValues
+    // (cc-hand path) and targetFigureKeys (dcSpecial / headless path) so the
+    // chosen value routes back regardless of which prompt subsystem is used.
+    return {
+      applied: false, requiresChoice: true,
+      choiceOptions: targets.map(t => t.label),
+      choiceValues: targets.map(t => t.value),
+      targetFigureKeys: targets.map(t => t.value),
+    };
   }
 
   // ccEffect: conditionalFocusIfDamagedGte (Furious Charge) — become Focused if suffered >= N damage from this attack
@@ -13223,7 +13276,7 @@ export function resolveAbility(abilityId, context) {
           source: 'Double or Nothing',
         });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'atk' };
-        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 attack die. If the rerolled die has the **same number of symbols**, its results are **doubled** (you MAY instead CANCEL — currently auto-doubles; choose Cancel manually if preferred)." };
+        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 attack die. If the rerolled die has the **same number of symbols**, you may then **double or cancel** its results (you'll be prompted)." };
       } else {
         const _defPN = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
         combat.forcedRerollQueue.push({
@@ -13233,7 +13286,7 @@ export function resolveAbility(abilityId, context) {
           source: 'Double or Nothing',
         });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'def' };
-        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 defense die. If the rerolled die has the **same number of symbols**, its results are **doubled** (you MAY instead CANCEL — currently auto-doubles; choose Cancel manually if preferred)." };
+        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 defense die. If the rerolled die has the **same number of symbols**, you may then **double or cancel** its results (you'll be prompted)." };
       }
     }
     return { requiresChoice: true, choiceOptions: ['Reroll an attack die', 'Reroll a defense die'] };
