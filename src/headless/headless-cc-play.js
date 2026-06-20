@@ -430,11 +430,12 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     if (!cbt || (cbt.attackCcCount || 0) > 0) return false;
   }
 
-  // Celebration: requires kill during this activation
+  // Celebration: requires a UNIQUE hostile defeat during this activation
+  // (CSV row 573 condition "a unique hostile figure is defeated").
   if (entry.celebrationVp && !entry.increaseArmyCostBy) {
-    const killCounts = game.activationKills || {};
-    const totalKills = Object.values(killCounts).reduce((sum, n) => sum + (n || 0), 0);
-    if (totalKills < 1) return false;
+    const uniqueKillCounts = game.activationUniqueKills || {};
+    const totalUniqueKills = Object.values(uniqueKillCounts).reduce((sum, n) => sum + (n || 0), 0);
+    if (totalUniqueKills < 1) return false;
   }
 
   // placeDefeatedFigure (Reinforcements, Cloned Reinforcements): requires defeated eligible figures

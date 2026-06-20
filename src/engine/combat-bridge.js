@@ -232,9 +232,17 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   //     friendly figure's attack during the activating group's cycle.
   // Per-figure consumed first when both present; group bonus applies
   // to any subsequent attack from any of the player's figures.
+  // SMALL-target check for requiresSmallTarget-gated bonuses (Size Advantage,
+  // CSV row 720). SMALL = not LARGE / MASSIVE per the target's keywords.
+  const _saTargetIsSmall = (() => {
+    const _tFk = combat.target?.figureKey;
+    if (!_tFk) return false;
+    const _tKws = (getDcEffect(dcNameFromFigureKey(_tFk))?.keywords || []).map(k => String(k).toUpperCase());
+    return !(_tKws.includes('LARGE') || _tKws.includes('MASSIVE'));
+  })();
   {
     const pendingFig = game.nextAttacksBonusHits?.[combat.attackerFigureKey];
-    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0) {
+    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0 && (!pendingFig.requiresSmallTarget || _saTargetIsSmall)) {
       combat.bonusHits = (combat.bonusHits || 0) + pendingFig.bonus;
       pendingFig.count -= 1;
       if (pendingFig.count <= 0) delete game.nextAttacksBonusHits[combat.attackerFigureKey];
@@ -249,7 +257,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   }
   {
     const condFig = game.nextAttacksBonusConditions?.[combat.attackerFigureKey];
-    if (condFig && condFig.count > 0 && condFig.conditions?.length) {
+    if (condFig && condFig.count > 0 && condFig.conditions?.length && (!condFig.requiresSmallTarget || _saTargetIsSmall)) {
       combat.bonusConditions = combat.bonusConditions || [];
       combat.bonusConditions.push(...condFig.conditions);
       condFig.count -= 1;
@@ -1186,6 +1194,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           // Per alexanbv 2026-05-13: per-figureKey (kills are per-figure).
           if (combat.attackerFigureKey) {
             game.activationKills[combat.attackerFigureKey] = (game.activationKills[combat.attackerFigureKey] || 0) + 1;
+            // Celebration (CSV row 573): only a UNIQUE hostile defeat counts.
+            if (targetDcName && isDcUnique(targetDcName)) {
+              game.activationUniqueKills = game.activationUniqueKills || {};
+              game.activationUniqueKills[combat.attackerFigureKey] = (game.activationUniqueKills[combat.attackerFigureKey] || 0) + 1;
+            }
           }
           if (isDbConfigured() && achievementsChannelId) {
             const _akUserId = getPlayerId(game, attackerPlayerNum);
@@ -1866,12 +1879,21 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Mandalorian Steel: if defender spent a Block Token this attack, recover 1 Damage on the defending figure
+  // Mandalorian Steel: if a friendly figure WITHIN 4 SPACES of The Armorer spent a
+  // Block Token this attack, recover 1 Damage on the defending figure (CSV row 743
+  // target "a friendly figure within 4 spaces" of The Armorer).
   if (combat.defenderSpentBlock && game.mandaAsteelPlayerNum === defenderPlayerNum && targetMsgId) {
-    const { healed } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
-    if (healed > 0) {
-      embedRefreshMsgIds.add(targetMsgId);
-      await logGameAction(game, client, `**Mandalorian Steel** — **${combat.target.label}** spent a Block Token; recovered 1 Damage`, { phase: 'ROUND', icon: 'card' });
+    // Resolve The Armorer's current position and require the defender to be within 4.
+    const _msArmorerFk = game.mandaAsteelArmorerFigureKey;
+    const _msArmorerPos = _msArmorerFk ? game.figurePositions?.[defenderPlayerNum]?.[_msArmorerFk] : null;
+    const _msDefPos = combat.target?.figureKey ? game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey] : null;
+    const _msWithin4 = !!(_msArmorerPos && _msDefPos && countGameSpaces(game, _msArmorerPos, _msDefPos) <= 4);
+    if (_msWithin4) {
+      const { healed } = healHp(dcHealthState, game, targetMsgId, targetFigIndex, 1, defenderPlayerNum);
+      if (healed > 0) {
+        embedRefreshMsgIds.add(targetMsgId);
+        await logGameAction(game, client, `**Mandalorian Steel** — **${combat.target.label}** spent a Block Token within 4 spaces of The Armorer; recovered 1 Damage`, { phase: 'ROUND', icon: 'card' });
+      }
     }
   }
 
@@ -2381,6 +2403,13 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     if (!defenderHand.includes(name)) continue;
     const targetFigKey = combat.target?.figureKey || '';
     if (!targetFigKey.startsWith(targetDcName + '-')) continue;
+    // Dangerous Prey (CSV row 597): conditional "you are within 4 spaces of the
+    // attacker" — don't offer the reaction if the defender (you) is >4 away.
+    if (name === 'Dangerous Prey') {
+      const _dpDefPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
+      const _dpAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
+      if (!_dpDefPos || !_dpAtkPos || countGameSpaces(game, _dpDefPos, _dpAtkPos) > 4) continue;
+    }
     // Prompt the defender for this reaction
     combat.promptedReactions.add(name);
     const defOwnerId = getPlayerId(game, defenderPlayerNum);

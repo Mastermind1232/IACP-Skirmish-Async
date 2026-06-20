@@ -42,6 +42,7 @@ import { getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
+import { isDcUnique } from '../data-loader.js';
 import { lookupFigureDcIndex } from '../engine/game-readers.js';
 import { applyNpcDamageToFigure } from '../engine/combat-bridge.js';
 import { getFiguresAdjacentToCoord } from '../game/movement.js';
@@ -133,6 +134,11 @@ async function fireBlast(thread, game, combat, effect, ctx) {
         game.activationKills = game.activationKills || {};
         if (combat.attackerFigureKey) {
           game.activationKills[combat.attackerFigureKey] = (game.activationKills[combat.attackerFigureKey] || 0) + 1;
+          // Celebration (CSV row 573): only a UNIQUE hostile defeat counts.
+          if (blastDcName && isDcUnique(blastDcName)) {
+            game.activationUniqueKills = game.activationUniqueKills || {};
+            game.activationUniqueKills[combat.attackerFigureKey] = (game.activationUniqueKills[combat.attackerFigureKey] || 0) + 1;
+          }
         }
       }
     }

@@ -5384,8 +5384,11 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: entry.logMessage || msg, refreshMovementBank: true, activeMsgId: msgId };
   }
 
-  // ccEffect: distributeHitTokensEqualToRound (Combat Resupply) — 1 Power Token + distribute Hit tokens = round# among friendly figures within 3 spaces
-  if (entry.type === 'ccEffect' && entry.distributeHitTokensEqualToRound && typeof entry.powerTokenGain === 'number') {
+  // ccEffect: distributeHitTokensEqualToRound (Combat Resupply) — distribute Hit
+  // tokens = round# among friendly figures within 3 spaces. The official card
+  // (cc-effects.json / CSV note=None) grants ONLY the Hit-token distribution; the
+  // earlier +1 Power Token was a spurious over-implementation (removed 2026-06-20).
+  if (entry.type === 'ccEffect' && entry.distributeHitTokensEqualToRound) {
     const { game, playerNum, dcMessageMeta, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -5433,18 +5436,10 @@ export function resolveAbility(abilityId, context) {
       };
     }
 
-    // Phase 1: initial call — grant Power Token + start Hit token distribution
-    // Grant the 1 Power Token first
-    game.figurePowerTokens = game.figurePowerTokens || {};
-    game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
-    const current = game.figurePowerTokens[fk].length;
-    const ptToAdd = Math.min(entry.powerTokenGain, getMaxPowerTokens(fk) - current);
-    if (ptToAdd > 0) {
-      game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: ptToAdd }], channelId: null, playerNum };
-    }
-
+    // Phase 1: initial call — start Hit token distribution (no Power Token grant;
+    // the card only distributes Hit tokens).
     if (eligible.length === 0) {
-      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd > 0 ? ptToAdd + ' Power Token(s)' : 'no Power Tokens (max)'}. No friendly figures within 3 spaces eligible for Hit tokens.` };
+      return { applied: true, logMessage: `**Combat Resupply** — No friendly figures within 3 spaces eligible for Hit tokens.` };
     }
 
     // Auto-distribute if only 1 eligible figure
@@ -5452,7 +5447,7 @@ export function resolveAbility(abilityId, context) {
       const tokensToAdd = roundNum; // grantPowerTokens handles overflow
       grantPowerTokens(game, eligible[0], 'Damage', tokensToAdd);
       const eName = dcNameFromFigureKey(eligible[0]);
-      return { applied: true, requiresPowerTokenChoice: ptToAdd > 0, logMessage: `Gained ${ptToAdd} Power Token(s). **${eName}** gained ${tokensToAdd} Damage Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Combat Resupply** — **${eName}** gained ${tokensToAdd} Damage Token(s) (round ${roundNum}).`, refreshDcEmbed: true };
     }
 
     // Multiple eligible — start sequential picker
@@ -5461,10 +5456,9 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: false,
       requiresChoice: true,
-      requiresPowerTokenChoice: ptToAdd > 0,
       choiceOptions: figureChoiceLabels(eligible),
       targetFigureKeys: eligible,
-      logMessage: `Gained ${ptToAdd} Power Token(s). Distribute ${roundNum} Damage Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
+      logMessage: `**Combat Resupply** — Distribute ${roundNum} Damage Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
     };
   }
 
@@ -6969,6 +6963,9 @@ export function resolveAbility(abilityId, context) {
     for (const pn of [1, 2]) {
       for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
         if (!validSet.has(String(pos).toLowerCase())) continue;
+        // CSV: "a figure or object OTHER THAN THE DEFENDER within 2 of the
+        // target space" — exclude the attack's defender (the target figure).
+        if (fk === lastTargetFk) continue;
         const dcName = dcNameFromFigureKey(fk);
         targets.push({ figureKey: fk, playerNum: pn, label: dcName });
       }
@@ -7094,10 +7091,13 @@ export function resolveAbility(abilityId, context) {
       const _nbFk = figureKeyForActivation(game, msgId);
       if (!_nbFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
       game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-      game.nextAttacksBonusHits[_nbFk] = { count: nb.count, bonus: nb.bonus };
+      // requiresSmallTarget (Size Advantage, CSV row 720 conditional "target is a
+      // Small figure"): carry the gate onto the pending entry so consumption in
+      // combat-bridge.js only applies the +2 Hit / Weaken vs a SMALL target.
+      game.nextAttacksBonusHits[_nbFk] = { count: nb.count, bonus: nb.bonus, ...(nb.requiresSmallTarget ? { requiresSmallTarget: true } : {}) };
       if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
         game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
-        game.nextAttacksBonusConditions[_nbFk] = { count: nbc.count, conditions: nbc.conditions };
+        game.nextAttacksBonusConditions[_nbFk] = { count: nbc.count, conditions: nbc.conditions, ...(nbc.requiresSmallTarget ? { requiresSmallTarget: true } : {}) };
       }
     }
     const condPart = (nbc?.conditions?.length) ? ` and ${nbc.conditions.join(', ')}` : '';
@@ -7540,12 +7540,28 @@ export function resolveAbility(abilityId, context) {
       const dcEffectsMap = getDcEffects() || {};
       const friendlyPositions = game.figurePositions?.[playerNum] || {};
       const attackerKey = cbt.attackerFigureKey;
+      // CSV conditional: "...targeting a target in your line of sight" — the
+      // supporter playing the card must have LOS to the attack's target. Resolve
+      // the target's space and require LOS from each candidate supporter.
+      const _cfMs = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+      const _cfGfs = context.getFigureSize;
+      const _cfDefPN = opponentPlayerNum(playerNum);
+      const _cfTargetPos = cbt.target?.figureKey
+        ? game.figurePositions?.[_cfDefPN]?.[cbt.target.figureKey]
+        : null;
+      const _cfCanCheckLos = !!(_cfTargetPos && _cfMs && typeof _cfGfs === 'function');
       const eligibleSupporters = Object.keys(friendlyPositions).filter((fk) => {
         if (fk === attackerKey) return false;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkStats = dcEffectsMap[fkDcName];
         const fkKws = (fkStats?.keywords || []).map(k => String(k).toUpperCase());
-        return fkStats?.attack?.type === 'range' && fkKws.includes('TROOPER');
+        if (!(fkStats?.attack?.type === 'range' && fkKws.includes('TROOPER'))) return false;
+        // LOS from the supporter to the target space.
+        if (_cfCanCheckLos) {
+          const sPos = friendlyPositions[fk];
+          if (!sPos || !hasLineOfSightByCoord(game, sPos, _cfTargetPos, _cfMs, _cfGfs)) return false;
+        }
+        return true;
       });
       if (eligibleSupporters.length === 0) {
         // No eligible supporter — die bonus and Stun both skip.
@@ -8946,6 +8962,32 @@ export function resolveAbility(abilityId, context) {
       }
       return mainResult;
     }
+    // targetAttacker (Counter Attack, CSV row 589): target is forced to be
+    // THE ATTACKER of the attack that just resolved on you — not a free choice
+    // among adjacent hostiles. Conditional: "you were not defeated and are
+    // adjacent to the attacker". This is a defender reaction (no active
+    // activation), so resolve directly off the combat context.
+    if (cah.targetAttacker) {
+      const _caCbt = context.combat || game.combat || game.pendingCombat;
+      const _caAttackerFk = _caCbt?.attackerFigureKey;
+      if (!_caCbt || !_caAttackerFk) {
+        return { applied: false, manualMessage: 'Counter Attack: no attacker context.' };
+      }
+      const _caAttackerPN = _caCbt.attackerPlayerNum ?? oppNum;
+      const _caAttackerPos = game.figurePositions?.[_caAttackerPN]?.[_caAttackerFk];
+      // "you" = the defender of the resolved attack (the figure that was attacked).
+      const _caDefenderFk = _caCbt.target?.figureKey;
+      const _caDefenderPos = _caDefenderFk ? game.figurePositions?.[playerNum]?.[_caDefenderFk] : null;
+      // "you were not defeated": the defender must still be on the board.
+      if (!_caDefenderPos) {
+        return { applied: false, manualMessage: 'Counter Attack: you were defeated.' };
+      }
+      // "are adjacent to the attacker"
+      if (!_caAttackerPos || countGameSpaces(game, _caDefenderPos, _caAttackerPos) > 1) {
+        return { applied: false, manualMessage: 'Counter Attack: not adjacent to the attacker.' };
+      }
+      return applyToFigureKey(_caAttackerFk);
+    }
     // First pass: find valid hostile targets (adjacent, or range+LOS if specified)
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
@@ -9011,6 +9053,16 @@ export function resolveAbility(abilityId, context) {
       hostiles = hostiles.filter(fk => {
         const conds = game.figureConditions?.[fk] || [];
         return conds.some(c => BENEFICIAL.includes(c));
+      });
+    }
+    // requiresSmall (Crush, CSV row 594 "a SMALL figure"): restrict to SMALL
+    // targets (not LARGE / MASSIVE), mirroring pushTargetWithinRange's SMALL
+    // filter. NPC slot keys (Thug/Krykna) are Small by default.
+    if (cah.requiresSmall) {
+      hostiles = hostiles.filter(fk => {
+        if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) return true;
+        const kwds = (getStatsForDc(dcNameFromFigureKey(fk))?.keywords || []).map(k => String(k).toUpperCase());
+        return !(kwds.includes('LARGE') || kwds.includes('MASSIVE'));
       });
     }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No valid hostile figure in range.' };
@@ -9530,6 +9582,22 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, defenderDefeated } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
+    // CSV row 652 condition: "your affiliation is REBEL or IMPERIAL". Compute
+    // the army's primary affiliation (most common non-"Any" across the DC list,
+    // mirroring playerArmyAffiliationIsScum / cc-timing army-affiliation logic).
+    const _fpDcEffects = getDcEffects() || {};
+    const _fpDcList = getDcList(game, playerNum) || [];
+    const _fpCounts = {};
+    for (const dc of _fpDcList) {
+      const name = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+      if (!name) continue;
+      const aff = String(_fpDcEffects?.[name]?.affiliation || '').toLowerCase();
+      if (aff && aff !== 'any') _fpCounts[aff] = (_fpCounts[aff] || 0) + 1;
+    }
+    const _fpPrimary = Object.entries(_fpCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    if (_fpPrimary !== 'rebel' && _fpPrimary !== 'imperial') {
+      return { applied: false, manualMessage: 'Field Promotion: your affiliation is not Rebel or Imperial.' };
+    }
     const vk = vpKey(playerNum);
     game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
     game[vk].total = (game[vk].total ?? 0) + entry.celebrationVp;
@@ -9545,10 +9613,13 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && !entry.increaseArmyCostBy) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    // Validate: at least one hostile was defeated this activation
-    const killCounts = game.activationKills || {};
-    const totalKills = Object.values(killCounts).reduce((sum, n) => sum + (n || 0), 0);
-    if (totalKills < 1) {
+    // Validate: at least one UNIQUE hostile was defeated this activation
+    // (CSV row 573 condition "a unique hostile figure is defeated"). The
+    // unique-defeat tracker is keyed by attackerFigureKey at the two defeat
+    // write sites (combat-bridge.js + after-attack-fire.js).
+    const uniqueKillCounts = game.activationUniqueKills || {};
+    const totalUniqueKills = Object.values(uniqueKillCounts).reduce((sum, n) => sum + (n || 0), 0);
+    if (totalUniqueKills < 1) {
       return { applied: false, manualMessage: 'Celebration: No unique hostile defeated this activation.' };
     }
     const vk = vpKey(playerNum);
@@ -10031,9 +10102,16 @@ export function resolveAbility(abilityId, context) {
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const _pummelFk = figureKeyForActivation(game, msgId);
     if (!_pummelFk) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
+    // CSV row 783 / cc-effects condition: "If you have the MELEE attack type,
+    // perform 2 attacks." A RANGED figure gets no attacks — gate the grant on
+    // the activating figure's attack type (dcEffects.attack.type === 'melee').
+    const _pummelStats = getStatsForDc(dcNameFromFigureKey(_pummelFk));
+    if (_pummelStats?.attack?.type !== 'melee') {
+      return { applied: false, manualMessage: 'Pummel: you do not have the MELEE attack type — no attacks granted.' };
+    }
     game.pummelTwoAttacksThisActivation = game.pummelTwoAttacksThisActivation || {};
     game.pummelTwoAttacksThisActivation[_pummelFk] = true;
-    return { applied: true, logMessage: 'If you have MELEE attack type, perform 2 attacks.' };
+    return { applied: true, logMessage: 'You have the MELEE attack type — perform 2 attacks.' };
   }
 
   // ccEffect: vanishImmunityUntilNextActivation + nextActivationMpBonus (Vanish)
@@ -13609,14 +13687,23 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setsMandaAsteel (Mandalorian Steel — recover 1 Damage when friendly spends a Block Token)
+  // ccEffect: setsMandaAsteel (Mandalorian Steel — recover 1 Damage when a friendly
+  // figure WITHIN 4 SPACES of The Armorer spends a Block Token). CSV row 743 target
+  // = "a friendly figure within 4 spaces" (of The Armorer, the playing figure).
+  // Track The Armorer's figure key so the proximity check can be resolved against
+  // its CURRENT position at attack-resolution time (figures move during the round).
   if (entry.type === 'ccEffect' && entry.setsMandaAsteel) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.mandaAsteelPlayerNum = playerNum;
+    // The Armorer is a unique DC; find its on-board figure key for this player.
+    game.mandaAsteelArmorerFigureKey = null;
+    const _maArmorerFk = Object.keys(game.figurePositions?.[playerNum] || {})
+      .find((fk) => dcNameFromFigureKey(fk) === 'The Armorer') || null;
+    if (_maArmorerFk) game.mandaAsteelArmorerFigureKey = _maArmorerFk;
     return {
       applied: true,
-      logMessage: 'This round, when a friendly figure spends a Block Token during defense, recover 1 Damage on that figure.',
+      logMessage: 'This round, when a friendly figure within 4 spaces of The Armorer spends a Block Token during defense, recover 1 Damage on that figure.',
     };
   }
 
@@ -13779,6 +13866,18 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.revealsOpponentHand) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // CSV conditional: "you have 1 or more SPIES on the map". Count friendly
+    // figures whose DC carries the SPY keyword that are actually deployed
+    // (present in figurePositions). Mirrors the Comm Disruption SPY check.
+    const _ciDcEffects = getDcEffects() || {};
+    const _ciFigPos = game.figurePositions?.[playerNum] || {};
+    const _ciHasSpyOnMap = Object.keys(_ciFigPos).some((fk) => {
+      const kws = (_ciDcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase());
+      return kws.includes('SPY');
+    });
+    if (!_ciHasSpyOnMap) {
+      return { applied: false, manualMessage: 'Collect Intel: you have no SPIES on the map.' };
+    }
     const oppHandKey = ccHandKey(3 - playerNum);
     const oppHand = game[oppHandKey] || [];
     const handText = oppHand.length > 0 ? oppHand.map((c) => `**${c}**`).join(', ') : '*(empty)*';

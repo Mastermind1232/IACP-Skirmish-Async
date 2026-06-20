@@ -10,6 +10,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { getMapData, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey, ccDeckKey, getPlayerId, getHandChannelId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 import { dcNameFromFigureKey, grantMovementBank } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
@@ -94,31 +95,39 @@ export async function handleReactionUse(interaction, ctx) {
     // during attacker's turn).
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
     const bosskPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
-    const ms = getMapData(game.selectedMap?.id);
-    const adjSet = new Set((ms?.adjacency?.[String(bosskPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
-    const isAdj = attackerPos && bosskPos && adjSet.has(String(attackerPos).toLowerCase());
-    const dmg = isAdj ? 3 : 1;
-    const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
-    const attackerName = dcNameFromFigureKey(attackerFigKey);
-    const defenderName = dcNameFromFigureKey(targetFigKey);
-    if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ` (adjacent to ${defenderName})` : ''}. ${defenderName} may move up to 2 spaces.`).catch(discordCatch);
-    await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, null, 'Dangerous Prey');
-    // Stamp Move-X picker: 2 spaces, bypassCosts=true (per CRR MOVE-017)
-    const defMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
-    if (defMsgId) {
-      try {
-        const { setupPendingMoveX } = await import('./move-x-handler.js');
-        await setupPendingMoveX(game, { client, logGameAction: ctx.logGameAction, saveGames }, {
-          msgId: defMsgId,
-          figureKey: targetFigKey,
-          playerNum: defenderPlayerNum,
-          spaces: 2,
-          source: 'Dangerous Prey',
-          threadId: thread?.id || null,
-          bypassCosts: true,
-        });
-      } catch (err) {
-        console.error('[post-combat] Dangerous Prey Move-X stamp failed:', err?.message ?? err);
+    // CSV row 597 conditional "you are within 4 spaces of the attacker" — if the
+    // defender is >4 from the attacker, the card does nothing (defense-in-depth;
+    // the offer in combat-bridge.js already filters on this). Fall through to the
+    // finish/cleanup logic below either way.
+    if (!attackerPos || !bosskPos || countGameSpaces(game, bosskPos, attackerPos) > 4) {
+      if (thread) await thread.send(`**Dangerous Prey** — no effect (not within 4 spaces of the attacker).`).catch(discordCatch);
+    } else {
+      const ms = getMapData(game.selectedMap?.id);
+      const adjSet = new Set((ms?.adjacency?.[String(bosskPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
+      const isAdj = attackerPos && bosskPos && adjSet.has(String(attackerPos).toLowerCase());
+      const dmg = isAdj ? 3 : 1;
+      const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
+      const attackerName = dcNameFromFigureKey(attackerFigKey);
+      const defenderName = dcNameFromFigureKey(targetFigKey);
+      if (thread) await thread.send(`**Dangerous Prey** — ${attackerName} suffers **${dmg} Damage**${isAdj ? ` (adjacent to ${defenderName})` : ''}. ${defenderName} may move up to 2 spaces.`).catch(discordCatch);
+      await applyDirectDamageToFigure(game, attackerPlayerNum, attackerFigKey, atkMsgId, dmg, client, null, 'Dangerous Prey');
+      // Stamp Move-X picker: 2 spaces, bypassCosts=true (per CRR MOVE-017)
+      const defMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, targetFigKey);
+      if (defMsgId) {
+        try {
+          const { setupPendingMoveX } = await import('./move-x-handler.js');
+          await setupPendingMoveX(game, { client, logGameAction: ctx.logGameAction, saveGames }, {
+            msgId: defMsgId,
+            figureKey: targetFigKey,
+            playerNum: defenderPlayerNum,
+            spaces: 2,
+            source: 'Dangerous Prey',
+            threadId: thread?.id || null,
+            bypassCosts: true,
+          });
+        } catch (err) {
+          console.error('[post-combat] Dangerous Prey Move-X stamp failed:', err?.message ?? err);
+        }
       }
     }
   } else if (cardName === "Right Back At Ya!") {

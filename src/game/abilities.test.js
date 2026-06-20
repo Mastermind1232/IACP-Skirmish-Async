@@ -805,8 +805,9 @@ test('resolveAbility Size Advantage sets nextAttacksBonusHits and nextAttacksBon
   const result = resolveAbility('Size Advantage', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   // Per-figure 2026-05-09 (multifigure-independent-activation rule).
-  assert.deepStrictEqual(game.nextAttacksBonusHits['Nexu-1-0'], { count: 1, bonus: 2 });
-  assert.deepStrictEqual(game.nextAttacksBonusConditions['Nexu-1-0'], { count: 1, conditions: ['Weaken'] });
+  // requiresSmallTarget carried on both entries (CSV row 720 SMALL-target gate).
+  assert.deepStrictEqual(game.nextAttacksBonusHits['Nexu-1-0'], { count: 1, bonus: 2, requiresSmallTarget: true });
+  assert.deepStrictEqual(game.nextAttacksBonusConditions['Nexu-1-0'], { count: 1, conditions: ['Weaken'], requiresSmallTarget: true });
 });
 
 test('resolveAbility Maximum Firepower sets nextAttacksBonusHits', () => {
@@ -1448,8 +1449,8 @@ test('resolveAbility Celebration grants VP', () => {
     gameId: 'g-cel',
     player1VP: { total: 2, kills: 0, objectives: 0 },
     // Card text: "Use after a unique hostile figure is defeated." Code gates on
-    // activationKills having at least one kill before applying the VP grant.
-    activationKills: { 'defeated-fk': 1 },
+    // activationUniqueKills having at least one UNIQUE kill before granting VP.
+    activationUniqueKills: { 'defeated-fk': 1 },
   };
   const result = resolveAbility('Celebration', { game, playerNum: 1 });
   assert.strictEqual(result.applied, true);
@@ -1457,7 +1458,149 @@ test('resolveAbility Celebration grants VP', () => {
   assert.ok(result.logMessage?.includes('4 VP'));
 });
 
+test('Celebration: non-unique hostile kill does NOT satisfy condition', () => {
+  const game = {
+    gameId: 'g-cel-nonuniq',
+    player1VP: { total: 2, kills: 0, objectives: 0 },
+    // A non-unique hostile was defeated (counted in activationKills) but NOT
+    // in activationUniqueKills — Celebration must not fire (CSV row 573).
+    activationKills: { 'defeated-fk': 1 },
+  };
+  const result = resolveAbility('Celebration', { game, playerNum: 1 });
+  assert.strictEqual(result.applied, false);
+  assert.strictEqual(game.player1VP.total, 2);
+});
+
 // ── MEDIUM-batch ability fixes (behavioral) ──────────────────────────────
+
+test('Counter Attack: damages the attacker (not a free adjacent hostile) when adjacent and not defeated', () => {
+  const atkMsgId = 'msg-ca-atk';
+  const dcMessageMeta = new Map([
+    [atkMsgId, { gameId: 'g-ca', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
+  const game = {
+    gameId: 'g-ca',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: {
+      1: { 'Royal Guard-1-0': 'a1' }, // defender (you)
+      2: { 'Stormtrooper-1-0': 'a2' }, // attacker (adjacent)
+    },
+    p2DcList: [{ dcName: 'Stormtrooper', healthState: [6, 6] }],
+    p2DcMessageIds: [atkMsgId],
+  };
+  const combat = { attackerPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Royal Guard-1-0' } };
+  const r = resolveAbility('Counter Attack', { game, playerNum: 1, combat, dcMessageMeta, dcHealthState });
+  assert.strictEqual(r.applied, true);
+  // The attacker (Stormtrooper) took 2 damage.
+  assert.deepStrictEqual(dcHealthState.get(atkMsgId), [[4, 6]]);
+});
+
+test('Counter Attack: no effect when defender is not adjacent to the attacker', () => {
+  const atkMsgId = 'msg-ca-atk2';
+  const dcMessageMeta = new Map([
+    [atkMsgId, { gameId: 'g-ca2', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
+  const game = {
+    gameId: 'g-ca2',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: {
+      1: { 'Royal Guard-1-0': 'a1' },
+      2: { 'Stormtrooper-1-0': 'c3' }, // 2 spaces away
+    },
+    p2DcList: [{ dcName: 'Stormtrooper', healthState: [6, 6] }],
+    p2DcMessageIds: [atkMsgId],
+  };
+  const combat = { attackerPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Royal Guard-1-0' } };
+  const r = resolveAbility('Counter Attack', { game, playerNum: 1, combat, dcMessageMeta, dcHealthState });
+  assert.strictEqual(r.applied, false);
+  assert.deepStrictEqual(dcHealthState.get(atkMsgId), [[6, 6]]);
+});
+
+test('Counter Attack: no effect when defender was defeated (no longer on board)', () => {
+  const atkMsgId = 'msg-ca-atk3';
+  const dcMessageMeta = new Map([
+    [atkMsgId, { gameId: 'g-ca3', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
+  const game = {
+    gameId: 'g-ca3',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: {
+      1: {}, // defender removed from board (defeated)
+      2: { 'Stormtrooper-1-0': 'a2' },
+    },
+    p2DcList: [{ dcName: 'Stormtrooper', healthState: [6, 6] }],
+    p2DcMessageIds: [atkMsgId],
+  };
+  const combat = { attackerPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Royal Guard-1-0' } };
+  const r = resolveAbility('Counter Attack', { game, playerNum: 1, combat, dcMessageMeta, dcHealthState });
+  assert.strictEqual(r.applied, false);
+  assert.deepStrictEqual(dcHealthState.get(atkMsgId), [[6, 6]]);
+});
+
+test('Crush: only SMALL adjacent hostiles are eligible (LARGE/MASSIVE excluded)', () => {
+  const actMsgId = 'msg-crush-act';
+  const massiveMsgId = 'msg-crush-massive';
+  const dcMessageMeta = new Map([
+    [actMsgId, { gameId: 'g-crush', playerNum: 1, dcName: 'Royal Guard', displayName: 'Royal Guard [DG 1]' }],
+    [massiveMsgId, { gameId: 'g-crush', playerNum: 2, dcName: 'AT-ST', displayName: 'AT-ST [DG 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const dcHealthState = new Map([
+    [actMsgId, [[8, 8]]],
+    [massiveMsgId, [[11, 11]]],
+  ]);
+  const game = {
+    gameId: 'g-crush',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: {
+      1: { 'Royal Guard-1-0': 'a1' },
+      2: { 'AT-ST-1-0': 'a2' }, // adjacent but MASSIVE → not eligible
+    },
+    dcActionsData: { [actMsgId]: { selectedFigure: 0 } },
+    p1DcMessageIds: [actMsgId],
+    p2DcMessageIds: [massiveMsgId],
+    p1DcList: [{ dcName: 'Royal Guard', healthState: [8, 8] }],
+    p2DcList: [{ dcName: 'AT-ST', healthState: [11, 11] }],
+    activatingPlayerNum: 1,
+    activatingDcMsgId: actMsgId,
+  };
+  const r = resolveAbility('Crush', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  // No SMALL hostile in range → applied:true with "no valid hostile" message,
+  // and the MASSIVE AT-ST takes no damage.
+  assert.strictEqual(r.applied, true);
+  assert.deepStrictEqual(dcHealthState.get(massiveMsgId), [[11, 11]]);
+});
+
+test('Combat Resupply: does NOT grant the activator a Power Token (only Hit-token distribution)', () => {
+  const msgId = 'msg-cr';
+  const dcMessageMeta = new Map([
+    [msgId, { gameId: 'g-cr', playerNum: 1, dcName: 'Royal Guard', displayName: 'Royal Guard [DG 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const game = {
+    gameId: 'g-cr',
+    currentRound: 1,
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { 'Royal Guard-1-0': 'a1' } },
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    p1DcMessageIds: [msgId],
+    p1DcList: [{ dcName: 'Royal Guard', healthState: [8, 8] }],
+    figurePowerTokens: {},
+    activatingPlayerNum: 1,
+    activatingDcMsgId: msgId,
+  };
+  const r = resolveAbility('Combat Resupply', { game, playerNum: 1, dcMessageMeta });
+  // No spurious Power Token grant queued, and the result does not request a
+  // power-token-type choice.
+  assert.ok(!r.requiresPowerTokenChoice, 'must not request a power token choice');
+  assert.ok(!game.pendingPowerTokenGrant, 'must not queue a power token grant');
+});
 
 test('Deathblow: +1 Hit on a Melee attack vs non-Ranged defender', () => {
   const combat = { attackerPlayerNum: 1, isRanged: false, attackerDcName: 'Ahsoka Tano', target: { figureKey: 'Wampa (Elite)-2-0' }, bonusHits: 0 };

@@ -257,6 +257,11 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // alexanbv 2026-05-13 eleventh-wave: activation-kills counter (already
   // keyed by attackerFigureKey at both write sites; was miscategorized).
   'activationKills',
+  // Unique-hostile-defeat tracker for Celebration (CSV row 573 condition
+  // "a unique hostile figure is defeated"). Keyed by attackerFigureKey at
+  // the two defeat write sites (combat-bridge.js + after-attack-fire.js),
+  // mirroring activationKills.
+  'activationUniqueKills',
   // alexanbv 2026-05-13 twelfth-wave: forced-attack-target lock. The
   // lock is per-figure (Mandalorian Whip, Focus Fire, Battlefield
   // Leadership, Shoulder Rush, Leia/Jyn Hair Trigger). Firing Squad's
@@ -859,6 +864,10 @@ const ROUND_NULL_FLAGS = [
   'thereIsNoTryPlayerNum',
   'youWillNotDenyMeActive',
   'mandaAsteelPlayerNum',
+  // Mandalorian Steel: The Armorer's figure key, captured at play so the
+  // within-4-spaces proximity check (CSV row 743) can resolve the Armorer's
+  // current position at attack-resolution time.
+  'mandaAsteelArmorerFigureKey',
   'stillFasterPlayerNum',
   'signalJammerActive',
   'terminalControlPlayerNum',

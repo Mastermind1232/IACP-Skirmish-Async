@@ -168,7 +168,7 @@ function ensureGameShape(game) {
     // CC/DC attachments (keyed by msgId)
     'p1CcAttachments', 'p2CcAttachments', 'p1DcAttachments', 'p2DcAttachments',
     // Activation tracking (keyed by msgId or figureKey, reset each activation)
-    'activationStartPositions', 'activationStartAllPositions', 'activationDamagedFigures', 'activationKills',
+    'activationStartPositions', 'activationStartAllPositions', 'activationDamagedFigures', 'activationKills', 'activationUniqueKills',
     'activationDoubleSpecialAction', 'activationExtraActionThenStun',
     'attackPerformedThisActivation',
     // Round-scoped containers (keyed by msgId/figureKey, reset each round).

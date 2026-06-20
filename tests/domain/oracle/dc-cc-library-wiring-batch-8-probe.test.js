@@ -51,7 +51,7 @@ const BATCH = [
   ['Choose a Side',           ['chooseASideEffect']],
   ['Cloned Reinforcements',   ['placeDefeatedFigure']],
   ['Collateral Damage',       ['flatDamageToFigureWithin']],
-  ['Combat Resupply',         ['powerTokenGain', 'distributeHitTokensEqualToRound']],
+  ['Combat Resupply',         ['distributeHitTokensEqualToRound']],
   ['Corrupting Force',        ['corruptingForceEffect']],
   ['Dangerous Bargains',      ['vpCondition', 'vpGainSelf', 'vpGainOpponent']],
   ['Dangerous Prey',          ['dangerousPreyEffect']],

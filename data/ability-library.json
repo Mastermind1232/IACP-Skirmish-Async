@@ -839,10 +839,9 @@
     },
     "Combat Resupply": {
       "type": "ccEffect",
-      "label": "Distribute Damage Tokens = round number to friendly figures within 3 + gain 1 Power Token",
-      "powerTokenGain": 1,
+      "label": "Distribute Damage Tokens = round number to friendly figures within 3",
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. Distribute Damage tokens equal to the current round number among friendly figures within 3 spaces.",
+      "logMessage": "Distribute Damage tokens equal to the current round number among friendly figures within 3 spaces.",
       "distributeHitTokensEqualToRound": true
     },
     "Comm Disruption": {
@@ -938,9 +937,10 @@
     },
     "Counter Attack": {
       "type": "ccEffect",
-      "label": "After attack on you resolved: if adjacent to attacker, attacker suffers 2 Damage",
+      "label": "After attack on you resolved: if not defeated and adjacent to attacker, attacker suffers 2 Damage",
       "chooseAdjacentHostileThen": {
-        "damage": 2
+        "damage": 2,
+        "targetAttacker": true
       },
       "wiredStatus": "wired"
     },
@@ -998,7 +998,8 @@
       "type": "ccEffect",
       "label": "When you end movement in space with figures: one SMALL suffers 4 Damage",
       "chooseAdjacentHostileThen": {
-        "damage": 4
+        "damage": 4,
+        "requiresSmall": true
       },
       "wiredStatus": "wired"
     },
@@ -4468,13 +4469,15 @@
       "label": "Perform attack vs SMALL: +2 Damage, Weaken",
       "nextAttacksBonusHits": {
         "count": 1,
-        "bonus": 2
+        "bonus": 2,
+        "requiresSmallTarget": true
       },
       "nextAttacksBonusConditions": {
         "count": 1,
         "conditions": [
           "Weaken"
-        ]
+        ],
+        "requiresSmallTarget": true
       },
       "wiredStatus": "wired"
     },
