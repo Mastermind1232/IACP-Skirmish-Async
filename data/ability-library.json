@@ -3642,11 +3642,9 @@
     },
     "Prepared for Battle": {
       "type": "ccEffect",
-      "label": "Gain 2 Power Tokens (+1 if adjacent to LEADER)",
-      "powerTokenGain": 2,
-      "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens**. If adjacent to a friendly LEADER, gain 1 additional Power Token.",
-      "conditionalAdjacentLeaderPowerToken": 1
+      "label": "Gain 1 Hit + 1 Block; if LEADER, adjacent friendly gains 1 Hit + 1 Block",
+      "preparedForBattle": true,
+      "wiredStatus": "wired"
     },
     "Preservation Protocol": {
       "type": "ccEffect",
@@ -3948,7 +3946,10 @@
       "type": "ccEffect",
       "label": "Adjacent friendly DROID or VEHICLE recovers 3 Damage",
       "recoverDamageToAdjacent": 3,
-      "recoverTargetTraits": ["DROID", "VEHICLE"],
+      "recoverTargetTraits": [
+        "DROID",
+        "VEHICLE"
+      ],
       "freeActionForTrait": "TECHNICIAN",
       "wiredStatus": "wired"
     },

@@ -20,7 +20,7 @@ const BATCH = [
   ['Personal Energy Shield', ['roundDefenderBonusBlockPerEvade', 'evadeTokenGain']],
   ['Pickpocket',             ['pickpocketVpByAccuracy']],
   ['Positioning Advantage',  ['attackBonusHits']],
-  ['Prepared for Battle',    ['powerTokenGain', 'conditionalAdjacentLeaderPowerToken']],
+  ['Prepared for Battle',    ['preparedForBattle']],
   ['Preservation Protocol',  ['recoverDamage']],
   ['Protect the Old Ways',   ['protectOldWaysBonus']],
   ['Provoke',                ['provokeNextActivation']],

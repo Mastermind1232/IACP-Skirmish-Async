@@ -5295,6 +5295,58 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, requiresPowerTokenChoice: true, logMessage: msg, refreshBoard: true };
   }
 
+  // ccEffect: preparedForBattle (Prepared for Battle) — the activating figure
+  // gains 1 Hit Token (Damage) + 1 Block Token. IF that figure is a LEADER, an
+  // adjacent friendly figure also gains 1 Hit + 1 Block. (alexanbv audit Jun
+  // 2026: the old powerTokenGain:2 + conditionalAdjacentLeaderPowerToken impl
+  // had both the gate and recipient inverted.) Self is granted exactly once —
+  // only on a terminal (applied) return — so the requiresChoice re-entry for a
+  // multi-adjacent recipient does not double-grant.
+  if (entry.type === 'ccEffect' && entry.preparedForBattle) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const _pfbMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!_pfbMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const _pfbSelf = figureKeyForActivation(game, _pfbMsgId);
+    if (!_pfbSelf) return { applied: false, manualMessage: 'Resolve manually: cannot resolve activating figure.' };
+    const _pfbGrant = (fk) => { grantPowerTokens(game, fk, 'Damage', 1); grantPowerTokens(game, fk, 'Block', 1); };
+    // Phase 2: a recipient was chosen from the multi-adjacent prompt.
+    if (chosenFigureKey) {
+      _pfbGrant(_pfbSelf);
+      _pfbGrant(chosenFigureKey);
+      return { applied: true, refreshBoard: true, logMessage: `**Prepared for Battle** — you gained 1 Hit + 1 Block Token; **${dcNameFromFigureKey(chosenFigureKey)}** gained 1 Hit + 1 Block Token (LEADER).` };
+    }
+    // Phase 1. Is the activating figure a LEADER?
+    const _pfbEff = getDcEffect(dcNameFromFigureKey(_pfbSelf));
+    const _pfbIsLeader = (_pfbEff?.keywords || []).map(k => String(k).toUpperCase()).includes('LEADER');
+    if (!_pfbIsLeader) {
+      _pfbGrant(_pfbSelf);
+      return { applied: true, refreshBoard: true, logMessage: '**Prepared for Battle** — you gained 1 Hit + 1 Block Token.' };
+    }
+    // LEADER: an adjacent friendly figure also gains 1 Hit + 1 Block.
+    const _pfbAdj = (game.selectedMap?.id ? getFiguresAdjacentToTarget(game, _pfbSelf, game.selectedMap.id) : [])
+      .filter(({ figureKey: afk, playerNum: apn }) => apn === playerNum && afk !== _pfbSelf)
+      .map(({ figureKey }) => figureKey);
+    const _pfbAdjUniq = [...new Set(_pfbAdj)];
+    if (_pfbAdjUniq.length === 0) {
+      _pfbGrant(_pfbSelf);
+      return { applied: true, refreshBoard: true, logMessage: '**Prepared for Battle** — you gained 1 Hit + 1 Block Token (LEADER, but no adjacent friendly figure).' };
+    }
+    if (_pfbAdjUniq.length === 1) {
+      _pfbGrant(_pfbSelf);
+      _pfbGrant(_pfbAdjUniq[0]);
+      return { applied: true, refreshBoard: true, logMessage: `**Prepared for Battle** — you gained 1 Hit + 1 Block Token; **${dcNameFromFigureKey(_pfbAdjUniq[0])}** gained 1 Hit + 1 Block Token (LEADER).` };
+    }
+    // Multiple adjacent friendlies — prompt for the recipient (self granted in Phase 2).
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: _pfbAdjUniq.map(fk => `1 Hit + 1 Block: ${dcNameFromFigureKey(fk)}`),
+      choiceValues: _pfbAdjUniq,
+      manualMessage: '**Prepared for Battle** — choose the adjacent friendly figure to gain 1 Hit + 1 Block Token.',
+    };
+  }
+
   // ccEffect: focusGainToAdjacentUpToN (Inspiring Speech) — Focus up to N friendly figures adjacent to activating figure(s)
   if (entry.type === 'ccEffect' && typeof entry.focusGainToAdjacentUpToN === 'number' && entry.focusGainToAdjacentUpToN > 0) {
     const { game, playerNum, dcMessageMeta } = context;
