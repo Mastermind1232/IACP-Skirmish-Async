@@ -1764,7 +1764,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Hit: Damage Token, Surge: Surge Token
+  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Damage result: Block Token, Surge: Surge Token (CSV row 223)
   if (abilityId === 'neurostim_hemlock') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Neurostim** manually.' };
@@ -1783,8 +1783,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, targetFigureKey, 'Damage', 1);
-        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
+        grantPowerTokens(game, targetFigureKey, 'Block', 1);
+        effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, targetFigureKey, 'Surge', 1);
@@ -1821,8 +1821,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, tFk, 'Damage', 1);
-        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
+        grantPowerTokens(game, tFk, 'Block', 1);
+        effectParts.push(`**${tName}** gained 1 **Block Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, tFk, 'Surge', 1);
@@ -3214,6 +3214,12 @@ export function resolveAbility(abilityId, context) {
             for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
               if (!coord || !affectedSpaces.has(String(coord).toLowerCase())) continue;
               if (!entry.includeSelf && _rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
+              // rollOneDieHostileOnly (Neurotoxin): only OPPONENT figures are
+              // affected — friendlies in the blast are untouched (CSV row 222).
+              if (entry.rollOneDieHostileOnly && pn === playerNum) continue;
+              // rollOneDieAreaCondition (Neurotoxin: Weaken): each affected
+              // figure gains the condition (independent of the damage rolled).
+              if (entry.rollOneDieAreaCondition) applyCondition(game, fk, entry.rollOneDieAreaCondition);
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               // Fireproof — skip Flame Trooper attached figures from
               // any ability whose label contains "Flamethrower".
@@ -9416,7 +9422,9 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Efficient Travel** — Until end of round, your figures ignore Difficult Terrain and hostile figure entry costs.` };
   }
 
-  // ccEffect: applyBlockAndHideToIsolatedFriendlies (Guerilla Warfare) — figures with no adjacent friendly gain Block Token + Hidden
+  // ccEffect: applyBlockAndHideToIsolatedFriendlies (Guerilla Warfare) — figures
+  // with NO other friendly figure within 2 spaces gain Block Token + Hidden
+  // (CSV row 682; was wrongly using orthogonal-distance-exactly-1 — alexanbv 2026-06-20).
   if (entry.type === 'ccEffect' && entry.applyBlockAndHideToIsolatedFriendlies) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -9426,17 +9434,14 @@ export function resolveAbility(abilityId, context) {
     for (const fk of friendlyKeys) {
       const pos = allFriendlyPositions[fk];
       if (!pos) continue;
-      const hasAdjacentFriendly = friendlyKeys.some((otherFk) => {
+      const hasNearbyFriendly = friendlyKeys.some((otherFk) => {
         if (otherFk === fk) return false;
         const otherPos = allFriendlyPositions[otherFk];
         if (!otherPos) return false;
-        try {
-          const pa = parseCoord(pos);
-          const pb = parseCoord(otherPos);
-          return Math.abs(pa.col - pb.col) + Math.abs(pa.row - pb.row) === 1;
-        } catch { return false; }
+        const d = countGameSpaces(game, pos, otherPos);
+        return typeof d === 'number' && d >= 0 && d <= 2;
       });
-      if (!hasAdjacentFriendly) qualified.push(fk);
+      if (!hasNearbyFriendly) qualified.push(fk);
     }
     for (const fk of qualified) {
       grantPowerTokens(game, fk, 'Block', 1);

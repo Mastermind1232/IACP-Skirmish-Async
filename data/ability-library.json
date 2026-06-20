@@ -1896,16 +1896,15 @@
       "type": "dcSpecial",
       "category": "dc-special",
       "label": "Flamethrower",
-      "description": "Choose a space within 2 and adjacent to a hostile. Each figure in/adjacent to that space suffers 2 damage, 1 strain, and becomes Weakened.",
+      "description": "Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain, then becomes Weakened.",
       "fixedAreaEffect": true,
       "fixedAreaRange": 2,
-      "fixedAreaRequiresAdjacentHostile": true,
-      "fixedAreaDamage": 2,
+      "fixedAreaDamage": 1,
       "fixedAreaStrain": 1,
       "fixedAreaConditions": [
         "Weaken"
       ],
-      "logMessage": "**Flamethrower** — Each figure on or adjacent to the chosen space suffers 2 Damage + 1 Strain and becomes Weakened.",
+      "logMessage": "**Flamethrower** — Each figure on or adjacent to the chosen space suffers 1 Damage + 1 Strain and becomes Weakened.",
       "wiredStatus": "wired"
     },
     "flawless_execution": {
@@ -3319,6 +3318,8 @@
       "rollOneDie": "yellow",
       "rollOneDieTarget": "spaceWithin",
       "rollOneDieRange": 3,
+      "rollOneDieHostileOnly": true,
+      "rollOneDieAreaCondition": "Weaken",
       "rollOneDieNote": "All hostile figures on or adjacent to that space become **Weakened** and suffer Damage results.",
       "wiredStatus": "wired"
     },
