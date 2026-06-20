@@ -214,6 +214,12 @@ export function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
     const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
     if (keywords.includes('VEHICLE')) base += game.roundVehicleSpeedBonus[playerNum];
   }
+  // Utinni! (roundUtinniJawaBuffs): each friendly Jawa Scavenger gains +1 Speed
+  // this round (the matching +1 Accuracy is applied at attack-declare in
+  // handlers/combat.js). Mirrors the bare-flag + Jawa-name check used there.
+  if (game?.roundUtinniJawaBuffs && String(dcName || '').toLowerCase().includes('jawa scavenger')) {
+    base += 1;
+  }
   return base;
 }
 

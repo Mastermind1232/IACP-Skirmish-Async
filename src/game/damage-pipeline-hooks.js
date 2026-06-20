@@ -1098,44 +1098,58 @@ WHEN_DEFEATED_HOOKS.push({
 });
 
 /**
- * Apex Predator (CC effect): when this attacker defeats a hostile
- * within range, recover N HP. State carrier is `game.recoverOnHostileDefeat[playerNum] = { msgId, range, amount }`,
- * set by resolveAbility when Apex Predator is played. Today this is
- * combat-only — non-combat defeats (Bleed, Blast splash) don't pass
- * the attacker figure index needed for the heal target. Probe
- * requires an active combat-style attack frame.
+ * Apex Predator (CC effect): "The next time a hostile figure within 2 spaces
+ * is defeated during this activation, recover 2 Damage" (CSV row 534). State
+ * carrier is `game.recoverOnHostileDefeat[playerNum] = { msgId, range, amount,
+ * figureKey, figIndex }`, set by resolveAbility when Apex Predator is played.
+ *
+ * Triggers on ANY defeat of a hostile figure within `range` of the Apex figure
+ * — not only the Apex player's own attack. The defeated figure's owner is
+ * `opts.controllerPlayerNum`; it is hostile to the Apex player when their
+ * playerNums differ. Range is measured from the Apex figure (figureKey) to the
+ * defeated figure's position (opts.defeatedPos), so Bleed/strain/another
+ * friendly's kill/Blast splash all qualify.
  */
 WHEN_DEFEATED_HOOKS.push({
   id: 'apex_predator_recover',
   sync: true,
   probe: (game, opts) => {
-    if (!opts.attackerPlayerNum) return false;
-    const apData = game.recoverOnHostileDefeat?.[opts.attackerPlayerNum];
+    if (!opts.controllerPlayerNum) return false;
+    // The Apex player is hostile to the defeated figure's owner: check the
+    // opponent's apData. (recoverOnHostileDefeat is keyed by the Apex player.)
+    const apexPN = opponentPlayerNum(opts.controllerPlayerNum);
+    const apData = game.recoverOnHostileDefeat?.[apexPN];
     if (!apData) return false;
-    if (!opts.combat) return false;
+    const defeatedPos = opts.defeatedPos
+      ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!defeatedPos) return false;
+    const apexPos = apData.figureKey
+      ? game.figurePositions?.[apexPN]?.[apData.figureKey]
+      : null;
+    if (!apexPos) return false;
     const range = apData.range ?? 2;
-    const dist = opts.combat.distanceToTarget ?? 0;
-    return dist <= range;
+    return countGameSpaces(game, defeatedPos, apexPos) <= range;
   },
   apply: (game, opts, ctx) => {
-    const apData = game.recoverOnHostileDefeat?.[opts.attackerPlayerNum];
+    const apexPN = opponentPlayerNum(opts.controllerPlayerNum);
+    const apData = game.recoverOnHostileDefeat?.[apexPN];
     if (!apData) return;
-    const apMsgId = apData.msgId ?? opts.combat?.attackerMsgId;
+    const apMsgId = apData.msgId;
     const apAmt = apData.amount ?? 2;
     if (apMsgId && ctx?.dcHealthState) {
-      const figIdx = opts.combat?.attackerFigureIndex ?? 0;
-      const { healed } = healHp(ctx.dcHealthState, game, apMsgId, figIdx, apAmt, opts.attackerPlayerNum);
+      const figIdx = apData.figIndex ?? 0;
+      const { healed } = healHp(ctx.dcHealthState, game, apMsgId, figIdx, apAmt, apexPN);
       if (healed > 0 && typeof ctx?.logGameAction === 'function' && ctx?.client) {
         const range = apData.range ?? 2;
         ctx.logGameAction(
           game,
           ctx.client,
-          `**Apex Predator** — Recovered ${apAmt} HP after defeating hostile within ${range}.`,
+          `**Apex Predator** — Recovered ${apAmt} HP after a hostile was defeated within ${range}.`,
           { phase: 'ROUND', icon: 'card' },
         ).catch(() => {});
       }
     }
-    delete game.recoverOnHostileDefeat[opts.attackerPlayerNum];
+    delete game.recoverOnHostileDefeat[apexPN];
   },
 });
 

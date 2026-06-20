@@ -39,13 +39,13 @@
   },
   "roundFlagsCompleteness": {
     "bucketSizes": {
-      "ROUND_OBJECT_FLAGS": 109,
+      "ROUND_OBJECT_FLAGS": 113,
       "ROUND_NULL_FLAGS": 135,
       "ROUND_ARRAY_FLAGS": 7,
       "ROUND_FALSE_FLAGS": 3,
       "ROUND_DELETE_FLAGS": 29
     },
-    "totalUniqueKeys": 283,
+    "totalUniqueKeys": 287,
     "baselineDuplicates": [],
     "baselineUnused": [
       "deviceRerollGranted",

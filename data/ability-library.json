@@ -3411,7 +3411,8 @@
       "freeMoveBonus": 2,
       "nextAttacksBonusHits": {
         "count": 1,
-        "bonus": 1
+        "bonus": 1,
+        "requiresUniqueHostileTarget": true
       },
       "label": "On the Hunt",
       "logMessage": "On the Hunt: Gained 2 free movement points — use the Move button. Your next attack automatically gains +1 Damage (tracked by the bot). Target must be a unique hostile figure.",

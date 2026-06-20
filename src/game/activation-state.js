@@ -69,6 +69,7 @@ const ACTIVATION_MSGID_FLAGS = [
   // attack handler skipped its own delete on an error path).
   'pendingCombatResupply',
   'pendingTransmitPlans',
+  'transmitPlansVpAwarded',
   // pendingPostAttackConditions DROPPED 2026-05-13 — only consumer was
   // gated by `if (false && ...)`; no live writers anywhere. Dead code.
   // pendingMpBonus retained — no live writers in main, but the
@@ -191,6 +192,10 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // its own complete activation; a figure's pending free attack must not
   // be consumed by another figure in the group.
   'freeAttackBonusPending',
+  // Jundland Terror: rides alongside freeAttackBonusPending — the granted
+  // interrupt may be an attack OR a Special Action (CSV row 706). Same
+  // per-figure scoping and cleanup as the free-attack flag.
+  'jundlandTerrorSpecialOption',
   // Migrated 2026-05-13 from ACTIVATION_MSGID_FLAGS — same rule. The
   // standard "1 attack per activation" cap is PER FIGURE, not per group.
   // Without Assault, each figure in a multifigure group can still
@@ -665,6 +670,7 @@ const ROUND_OBJECT_FLAGS = [
   'deflectionPending',
   'deflectionUnconditional',
   'freeAttackBonusPending',
+  'jundlandTerrorSpecialOption',
   'freeAttackDifferentTargets',
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).
@@ -725,6 +731,12 @@ const ROUND_OBJECT_FLAGS = [
   // Murne Rin "Field Report" — sequential up-to-2 friendly-figure picker
   // continuation (msgId-keyed); transient within an activation.
   'pendingFieldReport',
+  // Covering Fire — sequential up-to-3 TROOPER Hide picker continuation
+  // ({chosen, candidates}); start-of-round play, resolved immediately.
+  'pendingCoveringFire',
+  // Built on Hope — top-vs-bottom placement choice for the non-chosen
+  // cards (player-keyed {remaining}); transient within a single CC play.
+  'pendingBuiltOnHope',
   'closeQuartersActive',
   'selfDestructProtocolTriggered',
   'mobileMovementActive',
@@ -740,6 +752,7 @@ const ROUND_OBJECT_FLAGS = [
   'postActivationConditions',
   'pendingCombatResupply',
   'pendingTransmitPlans',
+  'transmitPlansVpAwarded',
   'pendingPostAttackConditions',
   'nextActivationFreeAttack',
   // vetInstinctsActiveThisActivation REMOVED 2026-05-09 (one-time

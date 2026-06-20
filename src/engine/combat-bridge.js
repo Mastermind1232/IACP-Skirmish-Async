@@ -16,6 +16,7 @@ import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js'
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { isDcUnique } from '../data-loader.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 /**
@@ -240,9 +241,16 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     const _tKws = (getDcEffect(dcNameFromFigureKey(_tFk))?.keywords || []).map(k => String(k).toUpperCase());
     return !(_tKws.includes('LARGE') || _tKws.includes('MASSIVE'));
   })();
+  // On the Hunt (CSV row 396): +1 Damage only when targeting a unique hostile
+  // figure. The attack target (combat.target) is always hostile; check uniqueness.
+  const _othTargetIsUnique = (() => {
+    const _tFk = combat.target?.figureKey;
+    if (!_tFk) return false;
+    return isDcUnique(dcNameFromFigureKey(_tFk));
+  })();
   {
     const pendingFig = game.nextAttacksBonusHits?.[combat.attackerFigureKey];
-    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0 && (!pendingFig.requiresSmallTarget || _saTargetIsSmall)) {
+    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0 && (!pendingFig.requiresSmallTarget || _saTargetIsSmall) && (!pendingFig.requiresUniqueHostileTarget || _othTargetIsUnique)) {
       combat.bonusHits = (combat.bonusHits || 0) + pendingFig.bonus;
       pendingFig.count -= 1;
       if (pendingFig.count <= 0) delete game.nextAttacksBonusHits[combat.attackerFigureKey];

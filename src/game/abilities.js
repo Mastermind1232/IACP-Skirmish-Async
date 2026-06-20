@@ -11,9 +11,10 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.j
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone } from './board-helpers.js';
+import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone, isFigureAdjacentOrOnAny } from './board-helpers.js';
 import { applyDefenseDieRemoval, applyAttackDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
+import { exhaustAttachment, isAttachmentExhausted } from './card-state-helpers.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
 
@@ -4057,8 +4058,10 @@ export function resolveAbility(abilityId, context) {
     const nb = entry.nextAttacksBonusHits;
     if (_othFigureKey) {
       // Per-figure 2026-05-09 (multifigure-independent-activation rule).
+      // On the Hunt: the +1 Damage applies only when the attack targets a unique
+      // hostile figure (CSV row 396) — carry the gate to the combat consumer.
       game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-      game.nextAttacksBonusHits[_othFigureKey] = { count: nb.count, bonus: nb.bonus };
+      game.nextAttacksBonusHits[_othFigureKey] = { count: nb.count, bonus: nb.bonus, requiresUniqueHostileTarget: !!nb.requiresUniqueHostileTarget };
     }
     const logMsg = entry.logMessage || `**${entry.label || 'On the Hunt'}** — May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}. Next ${nb.count} attack${nb.count !== 1 ? 's' : ''} gain +${nb.bonus} Damage.`;
     return { applied: true, logMessage: logMsg, pendingMoveXMsgId: _pmxMsgId };
@@ -4883,10 +4886,14 @@ export function resolveAbility(abilityId, context) {
     if (toAdd > 0) {
       game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: meta?.displayName || fk, count: toAdd }], channelId: null, playerNum };
     }
-    // Apex Predator: set activation-long recover-on-defeat flag
+    // Apex Predator: set activation-long recover-on-defeat flag. Store the Apex
+    // figure's key + index so the WHEN_DEFEATED hook can measure range from the
+    // Apex figure to ANY hostile defeated this activation (by any cause), per
+    // CSV row 534 — not only attacker→target during the Apex player's own attack.
     if (typeof entry.recoverOnHostileDefeat === 'number' && entry.recoverOnHostileDefeat > 0) {
       game.recoverOnHostileDefeat = game.recoverOnHostileDefeat || {};
-      game.recoverOnHostileDefeat[playerNum] = { amount: entry.recoverOnHostileDefeat, range: entry.recoverOnHostileDefeatRange ?? 2, msgId };
+      const _apFigIndex = parseFigureKey(fk)?.figureIndex ?? 0;
+      game.recoverOnHostileDefeat[playerNum] = { amount: entry.recoverOnHostileDefeat, range: entry.recoverOnHostileDefeatRange ?? 2, msgId, figureKey: fk, figIndex: _apFigIndex };
     }
     const apParts = ['Became Focused', 'Hidden', toAdd > 0 ? `gained ${toAdd} Power Token(s) — choose type` : null, `gained ${entry.mpBonus} MP`];
     if (typeof entry.recoverOnHostileDefeat === 'number' && entry.recoverOnHostileDefeat > 0) apParts.push(`recover ${entry.recoverOnHostileDefeat} Damage if hostile within ${entry.recoverOnHostileDefeatRange ?? 2} is defeated this activation`);
@@ -6854,8 +6861,38 @@ export function resolveAbility(abilityId, context) {
   // ccEffect: coveringFireEffect — start of round: up to 3 friendly TROOPERs become Hidden;
   // this round, each of your TROOPERs gains Surge: Stun (+2 Damage if target already Stunned).
   if (entry.type === 'ccEffect' && entry.coveringFireEffect) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, targetFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const _cfMax = 3;
+    const _cfSurgeMsg = 'This round, your TROOPERs gain Surge: Stun (if already Stunned, +2 Damage instead).';
+    const _cfApplyHide = (fks) => {
+      const hidden = [];
+      for (const fk of fks) {
+        if (applyCondition(game, fk, 'Hide')) hidden.push(dcNameFromFigureKey(fk));
+      }
+      const hideMsg = hidden.length > 0 ? `${hidden.join(', ')} became Hidden. ` : '';
+      return { applied: true, logMessage: `**Covering Fire** — ${hideMsg}${_cfSurgeMsg}`, refreshDcEmbed: true };
+    };
+    // Phase 2+: sequential pick of WHICH TROOPERs (and how many, up to 3) to
+    // Hide. CSV target: "up to 3 friendly TROOPERS" — the player chooses, not
+    // the first 3. Mirrors Field Report's up-to-N picker. The Surge: Stun round
+    // flag was already set in Phase 1 so the choice never blocks it.
+    if (targetFigureKey && game.pendingCoveringFire) {
+      const pendCF = game.pendingCoveringFire;
+      if (targetFigureKey === '__done__') {
+        delete game.pendingCoveringFire;
+        return _cfApplyHide(pendCF.chosen);
+      }
+      pendCF.chosen.push(targetFigureKey);
+      if (pendCF.chosen.length >= _cfMax) {
+        delete game.pendingCoveringFire;
+        return _cfApplyHide(pendCF.chosen);
+      }
+      const remaining = pendCF.candidates.filter((fk) => !pendCF.chosen.includes(fk));
+      const opts = [...remaining.map(dcNameFromFigureKey), 'Done selecting'];
+      const fKeys = [...remaining, '__done__'];
+      return { applied: false, requiresChoice: true, choiceOptions: opts, targetFigureKeys: fKeys, choicePrompt: `**Covering Fire** — Selected ${pendCF.chosen.length}/${_cfMax}. Choose another TROOPER to Hide or Done:` };
+    }
     const dcEffectsMap = getDcEffects() || {};
     // Find all friendly TROOPER figure keys
     const trooperFks = [];
@@ -6867,18 +6904,19 @@ export function resolveAbility(abilityId, context) {
         trooperFks.push(fk);
       }
     }
-    // Apply Hide to up to 3 friendly TROOPERs
-    const toHide = trooperFks.slice(0, 3);
-    const hiddenNames = [];
-    for (const fk of toHide) {
-      applyCondition(game, fk, 'Hide');
-      hiddenNames.push(dcNameFromFigureKey(fk));
-    }
-    // Set round-scoped flag: friendly TROOPERs gain Surge: Stun (+2 Damage if already Stunned)
+    // Set round-scoped flag immediately (independent of the Hide picks):
+    // friendly TROOPERs gain Surge: Stun (+2 Damage if target already Stunned).
     game.roundTrooperSurgeStun = game.roundTrooperSurgeStun || {};
     game.roundTrooperSurgeStun[playerNum] = true;
-    const hideMsg = toHide.length > 0 ? `${hiddenNames.join(', ')} became Hidden. ` : '';
-    return { applied: true, logMessage: `**Covering Fire** — ${hideMsg}This round, your TROOPERs gain Surge: Stun (if already Stunned, +2 Damage instead).`, refreshDcEmbed: true };
+    // ≤3 TROOPERs: Hide all (no meaningful choice). >3: offer a player pick of
+    // which (and how many) up to 3 become Hidden.
+    if (trooperFks.length <= _cfMax) {
+      return _cfApplyHide(trooperFks);
+    }
+    game.pendingCoveringFire = { chosen: [], candidates: trooperFks };
+    const choices = [...trooperFks.map(dcNameFromFigureKey), 'Done selecting'];
+    const fKeysDone = [...trooperFks, '__done__'];
+    return { applied: false, requiresChoice: true, choiceOptions: choices, targetFigureKeys: fKeysDone, choicePrompt: `**Covering Fire** — Choose up to ${_cfMax} friendly TROOPERS to become Hidden (${_cfSurgeMsg}):` };
   }
 
   // ccEffect: blendInAttach (Blend In) — played at start of round by K-2SO.
@@ -10882,7 +10920,27 @@ export function resolveAbility(abilityId, context) {
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const count = entry.grantHitTokensToActivating;
-    const vpNote = entry.vpNoteIfAdjacentTerminal ? ` If adjacent to a terminal, use \`/editvp +${entry.vpNoteIfAdjacentTerminal}\` to gain ${entry.vpNoteIfAdjacentTerminal} VP.` : '';
+    // CSV row 860 (automatic): "If you are adjacent to a terminal, gain 2 VPs."
+    // Award automatically — exactly once per play (the resolution spans multiple
+    // calls for the Hit-token distribution picker) — when the activating figure
+    // is adjacent to any active terminal. The one-shot guard is keyed by msgId.
+    let vpNote = '';
+    game.transmitPlansVpAwarded = game.transmitPlansVpAwarded || {};
+    if (entry.vpNoteIfAdjacentTerminal && !game.transmitPlansVpAwarded[msgId]) {
+      const _ttpMapId = game.selectedMap?.id;
+      const _ttpTerminals = _ttpMapId ? getActiveTerminals(game, _ttpMapId) : [];
+      const _ttpTermSet = new Set((_ttpTerminals || []).map((t) => String(t).toLowerCase()));
+      const _ttpFigKeys = getFigureKeysForDcMsg(game, playerNum, meta) || [];
+      const _ttpSelIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _ttpFigKey = _ttpFigKeys[_ttpSelIdx] || _ttpFigKeys[0] || null;
+      const _ttpAdjacent = _ttpFigKey && _ttpTermSet.size > 0 &&
+        isFigureAdjacentOrOnAny(game, playerNum, _ttpFigKey, _ttpMapId, _ttpTermSet);
+      if (_ttpAdjacent) {
+        awardObjectiveVp(game, playerNum, entry.vpNoteIfAdjacentTerminal);
+        game.transmitPlansVpAwarded[msgId] = true;
+        vpNote = ` Adjacent to a terminal — gained **${entry.vpNoteIfAdjacentTerminal} VP** (total: ${game[vpKey(playerNum)]?.total}).`;
+      }
+    }
     // Eligible = all friendly figures in play not already at max power tokens.
     const eligibleAll = () => Object.entries(game.figurePositions?.[playerNum] || {})
       .filter(([efk, pos]) => pos && (game.figurePowerTokens?.[efk] || []).length < getMaxPowerTokens(efk))
@@ -11248,6 +11306,16 @@ export function resolveAbility(abilityId, context) {
       }
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[chosenFigureKey] = true;
+      // CSV row 706: the chosen figure may interrupt to perform an attack OR a
+      // Special Action. The attack half rides on freeAttackBonusPending. For the
+      // Special-Action half: Bantha Rider already substitutes Trample via Wild
+      // Beast when the granted attack is offered; Tusken Raider's Tusken Cycler
+      // (its only Special Action) is itself an attack, so the granted-attack path
+      // already covers it in practice. Record the option as a per-figure flag so
+      // the prompt advertises it (full generic special-action-interrupt routing
+      // is not yet wired — flagged for follow-up).
+      game.jundlandTerrorSpecialOption = game.jundlandTerrorSpecialOption || {};
+      game.jundlandTerrorSpecialOption[chosenFigureKey] = true;
       // Out-of-activation 2-MP grant on a non-activating friendly →
       // setupPendingMoveX, bypassCosts: false. Free attack stays
       // banked for the figure's next activation interrupt.
@@ -11267,7 +11335,7 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         pendingMoveXMsgId: targetMsgId,
         activeMsgId: targetMsgId,
-        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and may interrupt to perform an attack on their next activation.`,
+        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and may interrupt to perform an attack **or a Special Action** on their next activation.`,
       };
     }
     // Phase 1: enumerate friendly Tusken / Bantha figures on the board.
@@ -11351,30 +11419,52 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: builtOnHopeEffect (Built on Hope) — look at top 3 of own deck, put 1 in hand, others returned to top
+  // ccEffect: builtOnHopeEffect (Built on Hope) — look at top 3 of own deck,
+  // put 1 in hand, the others on TOP or BOTTOM in any order (CSV row 560).
   if (entry.type === 'ccEffect' && entry.builtOnHopeEffect) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const deckKey = ccDeckKey(playerNum);
     const handKey = ccHandKey(playerNum);
+    // Phase 3: top-vs-bottom placement of the non-chosen cards. The deck was
+    // already drained + the chosen card added to hand in Phase 2; the remaining
+    // cards are stashed on game.pendingBuiltOnHope.
+    if (game.pendingBuiltOnHope?.[playerNum] && (choiceIndex === 0 || choiceIndex === 1)) {
+      const pend = game.pendingBuiltOnHope[playerNum];
+      const deck = [...(game[deckKey] || [])];
+      // (top of deck = end of array). 0 = top, 1 = bottom. Ordering within the
+      // group preserves the order shown to the player (top-of-deck-first).
+      if (choiceIndex === 0) deck.push(...[...pend.remaining].reverse());
+      else deck.unshift(...pend.remaining);
+      game[deckKey] = deck;
+      delete game.pendingBuiltOnHope[playerNum];
+      return { applied: true, logMessage: `**Built on Hope** — Drew 1 Command card from top 3. Other card(s) placed on ${choiceIndex === 0 ? 'top' : 'bottom'} of deck.` };
+    }
     const deck = [...(game[deckKey] || [])];
     if (deck.length === 0) return { applied: true, logMessage: '**Built on Hope** — Your deck is empty.' };
     const top3 = deck.slice(-Math.min(3, deck.length));
     if (top3.length === 1 || (choiceIndex !== undefined && choiceIndex !== null)) {
       const chosen = top3[choiceIndex ?? 0];
       if (!chosen) return { applied: false, manualMessage: 'Invalid choice for Built on Hope.' };
-      // Remove the top 3 from deck (they may be at end), put chosen in hand, others back on top
+      // Remove the top 3 from deck (they may be at end), put chosen in hand.
       deck.splice(deck.length - top3.length, top3.length);
-      const remaining = top3.filter((c) => c !== chosen || (() => { const i = top3.indexOf(chosen); top3.splice(i, 1); return false; })());
       const remaining2 = top3.filter((c) => c !== chosen);
-      if (remaining2.length) deck.push(...remaining2); // put non-chosen back on top (end of array)
       const hand = [...(game[handKey] || [])];
       hand.push(chosen);
       game[deckKey] = deck;
       game[handKey] = hand;
-      // Per alexanbv 2026-05-13: Command cards are SECRET. Don't leak
-      // the chosen card name in the public log.
-      return { applied: true, logMessage: `**Built on Hope** — Drew 1 Command card from top 3. Other card(s) returned to top of deck.` };
+      // No non-chosen cards left → done (only 1 card was in the top 3).
+      if (remaining2.length === 0) {
+        // Per alexanbv 2026-05-13: Command cards are SECRET — don't leak names.
+        return { applied: true, logMessage: '**Built on Hope** — Drew 1 Command card.' };
+      }
+      // Phase 3: offer top-vs-bottom placement for the non-chosen cards.
+      game.pendingBuiltOnHope = game.pendingBuiltOnHope || {};
+      game.pendingBuiltOnHope[playerNum] = { remaining: remaining2 };
+      return {
+        requiresChoice: true,
+        choiceOptions: [`Place ${remaining2.length} card(s) on TOP of deck`, `Place ${remaining2.length} card(s) on BOTTOM of deck`],
+      };
     }
     return {
       requiresChoice: true,
@@ -12447,8 +12537,11 @@ export function resolveAbility(abilityId, context) {
         for (const fk of movedFigKeys) {
           const dPos = game.figurePositions?.[playerNum]?.[fk];
           if (!dPos) continue;
-          // Range: within 5 spaces.
-          if (countGameSpaces(game, dPos, targetPos) > 5) continue;
+          // CSV row 862: damage = "the number of those friendly DROIDS who have
+          // line of sight to it" — no per-DROID range qualifier. The within-5
+          // restriction applies only to TARGET selection (enforced when the
+          // hostile is chosen), not to this damage count. A moved DROID with
+          // LOS but >5 spaces away still contributes.
           // LOS: from this DROID's current position to the target.
           if (typeof losCheck === 'function') {
             if (!losCheck(game, dPos, targetPos, mapSpaces, gfs)) continue;
@@ -12463,7 +12556,7 @@ export function resolveAbility(abilityId, context) {
       }
       if (game.pendingTriangulate) delete game.pendingTriangulate;
       if (!droidCount) {
-        return { applied: true, logMessage: `**Triangulate** — **${dcNameFromFigureKey(chosenFigureKey)}**: 0 DROIDs have LOS within 5 — no damage applied.` };
+        return { applied: true, logMessage: `**Triangulate** — **${dcNameFromFigureKey(chosenFigureKey)}**: 0 DROIDs have LOS to the target — no damage applied.` };
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const figMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
@@ -12481,7 +12574,7 @@ export function resolveAbility(abilityId, context) {
           dmgNote = `${droidCount} Dmg (HP: ${cur ?? max}→${newCur})`;
         }
       }
-      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (${droidCount} DROID${droidCount === 1 ? '' : 's'} with LOS within 5.)`, refreshDcEmbed: !!figMsgId };
+      return { applied: true, logMessage: `**Triangulate** — **${dcName}**: ${dmgNote}. (${droidCount} DROID${droidCount === 1 ? '' : 's'} with LOS to the target.)`, refreshDcEmbed: !!figMsgId };
     }
     // Phase 1: stamp a Move-X sequence for up to 3 friendly DROIDs
     // (each picker grants 1 space, bypassCosts: true per MOVE-017).
@@ -13522,6 +13615,15 @@ export function resolveAbility(abilityId, context) {
       };
     })();
     if (choiceIndex !== undefined && choiceIndex !== null) {
+      // Reusable exhaust-based attachment (CSV row 750: "Exhaust this card during
+      // a friendly DROID's activation; that figure gains 1 movement point"). The
+      // card is placed in the Play Area as an Attachment (keyed by the placing
+      // DROID's DC msgId) and re-arms at the start of each round (round.js clears
+      // exhaustedSkirmishUpgrades). Gate the +1 MP on the attachment being READY,
+      // then exhaust it so it can't grant MP again until the next round.
+      if (msgId && isAttachmentExhausted(game, msgId, 'Navigation Upgrade')) {
+        return { applied: false, manualMessage: '**Navigation Upgrade** is exhausted — it readies at the start of your next round.' };
+      }
       let mpNote = '';
       if (chosenFigureKey) {
         const droidMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
@@ -13530,9 +13632,10 @@ export function resolveAbility(abilityId, context) {
           mpNote = ` **${dcNameFromFigureKey(chosenFigureKey)}** gains 1 MP.`;
         }
       }
+      if (msgId) exhaustAttachment(game, msgId, 'Navigation Upgrade');
       return {
         applied: true,
-        logMessage: `**Navigation Upgrade** — 1 Strain (queued).${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP.`,
+        logMessage: `**Navigation Upgrade** — 1 Strain (queued).${mpNote} Placed as Attachment — exhaust during any friendly DROID's activation for +1 MP. (Exhausted — readies at the start of your next round.)`,
         refreshDcEmbed: true,
         ...(_navStrainPayload ? { pendingStrainCost: _navStrainPayload } : {}),
       };
@@ -13585,9 +13688,18 @@ export function resolveAbility(abilityId, context) {
     if (!_bmMsgId) return { applied: false, manualMessage: entry.label || 'Resolve manually: no activation in progress.' };
     const _bmFk = figureKeyForActivation(game, _bmMsgId);
     if (!_bmFk) return { applied: false, manualMessage: entry.label || 'Resolve manually: cannot resolve activating figure.' };
+    // Reusable exhaust-based attachment (CSV row 541: "Exhaust this card before
+    // you declare an attack"). The card is placed on its DC as an Attachment and
+    // re-arms at the start of each round (round.js clears exhaustedSkirmishUpgrades).
+    // Gate firing on the attachment being READY, then exhaust it so it can't fire
+    // again until the next round.
+    if (isAttachmentExhausted(game, _bmMsgId, 'Ballistics Matrix')) {
+      return { applied: false, manualMessage: '**Ballistics Matrix** is exhausted — it readies at the start of your next round.' };
+    }
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
     game.nextAttackIgnoreFigureLOS[_bmFk] = true;
-    return { applied: true, logMessage: `**Ballistics Matrix** — For your next attack, intervening figures do **not** block line of sight. Declare your attack normally.` };
+    exhaustAttachment(game, _bmMsgId, 'Ballistics Matrix');
+    return { applied: true, logMessage: `**Ballistics Matrix** — For your next attack, intervening figures do **not** block line of sight. Declare your attack normally. (Exhausted — readies at the start of your next round.)` };
   }
 
   // ccEffect: etiquetteAndProtocolEffect (Etiquette and Protocol) — block attacks between one hostile and one friendly this round

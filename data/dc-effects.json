@@ -6815,7 +6815,8 @@
       "health": 12,
       "speed": 3,
       "passives": [
-        "Reach"
+        "Reach",
+        "Efficient Travel"
       ],
       "figures": 1,
       "attack": {
@@ -6848,6 +6849,9 @@
       "cost": 5,
       "health": 9,
       "speed": 3,
+      "passives": [
+        "Efficient Travel"
+      ],
       "figures": 1,
       "attack": {
         "dice": [

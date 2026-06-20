@@ -443,8 +443,15 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
   );
   // Wasskah breakable walls: filter out edges that are passable due to difficult terrain
   const effectiveImpassable = getEffectiveImpassableEdges(game, mapSpaces);
+  // Track impassable-terrain edges separately so a Thrusters (profile.ignoreImpassable)
+  // figure can waive ONLY these — without also waiving doors/walls that share the set.
+  const impassableEdgeSet = new Set();
   for (const edge of effectiveImpassable) {
-    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
+    if (edge?.length >= 2) {
+      const ek = edgeKey(edge[0], edge[1]);
+      movementBlockingSet.add(ek);
+      impassableEdgeSet.add(ek);
+    }
   }
   const mapData = getMapTokensData()[game.selectedMap.id];
   const openedSet = new Set((game.openedDoors || []).map((k) => String(k).toLowerCase()));
@@ -471,7 +478,7 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
   // Wall Run (Cal Kestis): cells edge/corner-adjacent to any impassable wall.
   // Consumed by evaluateMovementStep when profile.wallRunActive is set.
   const wallAdjacentSet = buildWallAdjacentSet(effectiveImpassable);
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, spacesSet, massiveOccupiedSet, wallAdjacentSet };
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet };
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
@@ -481,6 +488,11 @@ export function getMovementProfile(dcName, figureKey, game) {
   const keywords = getMovementKeywords(dcName, game);
   const isMassive = keywords.has('massive');
   const isMobile = keywords.has('mobile');
+  // Thrusters (74-Z Speeder Bike): "While moving, ignore impassable terrain."
+  // Thrusters lives in the DC effect's `passives` (not promoted to a keyword),
+  // so read it directly. The footprint-overlap half is enforced separately in
+  // handlers/movement.js.
+  const hasThrusters = (getDcEffects()?.[dcName]?.passives || []).includes('Thrusters');
   let hasEfficientTravel = keywords.has('efficient travel');
   // Check round flag from Efficient Travel CC card
   if (!hasEfficientTravel && figureKey) {
@@ -540,6 +552,7 @@ export function getMovementProfile(dcName, figureKey, game) {
     isMobile,
     ignoreDifficult: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     ignoreBlocking: isMassive || isMobile,
+    ignoreImpassable: hasThrusters,
     ignoreFigureCost: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     canEndOnOccupied: isMassive,
     treatBlockingAsDifficult: hasMortarHaul,
@@ -565,8 +578,14 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
   );
   // Wasskah breakable walls: filter out edges passable due to difficult terrain
   const effectiveImpassable = game ? getEffectiveImpassableEdges(game, mapSpaces) : (mapSpaces.impassableEdges || []);
+  // Track impassable edges separately so Thrusters (profile.ignoreImpassable) can waive them.
+  const impassableEdgeSet = new Set();
   for (const edge of effectiveImpassable) {
-    if (edge?.length >= 2) movementBlockingSet.add(edgeKey(edge[0], edge[1]));
+    if (edge?.length >= 2) {
+      const ek = edgeKey(edge[0], edge[1]);
+      movementBlockingSet.add(ek);
+      impassableEdgeSet.add(ek);
+    }
   }
   const board = {
     mapSpaces,
@@ -575,6 +594,7 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
     blockingSet,
     occupiedSet: new Set((occupiedSet || []).map((s) => normalizeCoord(s))),
     movementBlockingSet,
+    impassableEdgeSet,
     spacesSet,
     wallAdjacentSet: buildWallAdjacentSet(effectiveImpassable),
   };
@@ -720,7 +740,13 @@ function evaluateMovementStep(current, neighbor, board, profile) {
       const { col, row } = parseCoord(cell);
       const prevCoord = colRowToCoord(col + backDx, row + backDy);
       if (!prevSet.has(normalizeCoord(prevCoord))) continue;
-      if (board.movementBlockingSet.has(edgeKey(cell, prevCoord))) return null;
+      const ek = edgeKey(cell, prevCoord);
+      if (board.movementBlockingSet.has(ek)) {
+        // Thrusters (profile.ignoreImpassable): waive impassable-terrain edges
+        // only — doors/walls (movementBlockingSet but not impassableEdgeSet) still block.
+        if (profile.ignoreImpassable && board.impassableEdgeSet?.has(ek)) continue;
+        return null;
+      }
     }
   }
   // Wall Run (Cal Kestis): per card text "ignore terrain in spaces that
