@@ -102,7 +102,7 @@ function buildCtx(game, dcHealthState, ctxOverrides = {}) {
 
 describe('B-I-OD: Overdrive', () => {
 
-  it('B-I-OD-001: grants +1 action when remaining=0 and applies 1 self-damage', async () => {
+  it('B-I-OD-001: grants +1 action when remaining=0 and applies 2 self-damage', async () => {
     const dcHealthState = new Map([['3001', [[5, 6]]]]);
     const game = makeGame({
       dcActionsData: { '3001': { remaining: 0, total: 2 } },
@@ -116,9 +116,9 @@ describe('B-I-OD: Overdrive', () => {
     // Action: remaining should go from 0 → 1
     assert.strictEqual(game.dcActionsData['3001'].remaining, 1, 'remaining = 1 after Overdrive from 0');
 
-    // Self-damage: HP 5 → 4
+    // Self-damage: HP 5 → 3 (2 Damage)
     const hp = dcHealthState.get('3001')[0];
-    assert.strictEqual(hp[0], 4, 'HP reduced by 1 (5→4)');
+    assert.strictEqual(hp[0], 3, 'HP reduced by 2 (5→3)');
     assert.strictEqual(hp[1], 6, 'maxHp unchanged');
 
     // No defeat (HP > 0)
@@ -190,7 +190,7 @@ describe('B-I-OD: Overdrive', () => {
     const { ctx, calls } = buildCtx(game, dcHealthState);
     await handleOverdrive(mockInteraction('overdrive_use_3001', 'player1'), ctx);
 
-    assert.strictEqual(dcHealthState.get('3001')[0][0], 2, 'HP = 2 (3-1)');
+    assert.strictEqual(dcHealthState.get('3001')[0][0], 1, 'HP = 1 (3-2)');
     assert.strictEqual(calls.processFigureDefeat.length, 0, 'no defeat call');
   });
 

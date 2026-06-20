@@ -3900,20 +3900,54 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: placeRubbleOnTargetAndAdjacent (Reduce to Rubble — after attack that hit)
   if (entry.type === 'ccEffect' && entry.placeRubbleOnTargetAndAdjacent) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const spaces = game.lastAttackTargetSpacesForRubble;
     const attackerNum = game.lastAttackAttackerPlayerNum;
     if (!spaces?.length || playerNum !== attackerNum) {
       return { applied: false, manualMessage: 'Play Reduce to Rubble after you resolve an attack that did not miss. No recent attack target stored.' };
     }
+    // Damage clause (CSV row 791): each figure AND object within 2 spaces of the
+    // target space suffers 1 Damage, THEN rubble is placed (alexanbv 2026-06-20:
+    // the damage was previously not applied).
+    const _rrTargetCells = game.lastAttackTargetCellsForRubble || [];
+    const _rrDamaged = [];
+    const _rrWithin2 = (coord) => _rrTargetCells.some((tc) => {
+      const d = countGameSpaces(game, tc, String(coord).toLowerCase());
+      return typeof d === 'number' && d >= 0 && d <= 2;
+    });
+    if (_rrTargetCells.length && dcHealthState && dcMessageMeta) {
+      for (const pn of [1, 2]) {
+        for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+          if (!coord || !_rrWithin2(coord)) continue;
+          const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+          if (!figMsgId) continue;
+          const m = fk.match(/-(\d+)-(\d+)$/);
+          const fi = m ? parseInt(m[2], 10) : 0;
+          const r = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, fi, 1, pn, { sourceLabel: 'Reduce to Rubble', attackerPlayerNum: attackerNum });
+          if (r.maxHp > 0) _rrDamaged.push(`${dcNameFromFigureKey(fk)} -1 (→${r.newHp})`);
+        }
+      }
+      // Objects within 2 (crates / destructible objects): minimal sync HP decrement.
+      for (const [objId, objPos] of Object.entries(game.objectPositions || {})) {
+        if (!objPos || !_rrWithin2(objPos)) continue;
+        const hp = game.objectHealth?.[objId];
+        if (!Array.isArray(hp) || (hp[0] ?? 0) <= 0) continue;
+        hp[0] = Math.max(0, hp[0] - 1);
+        const _objName = game.objectMeta?.[objId]?.name || objId;
+        if (hp[0] <= 0 && game.objectPositions) delete game.objectPositions[objId];
+        _rrDamaged.push(`${_objName} -1${hp[0] <= 0 ? ' (destroyed)' : ''}`);
+      }
+    }
     game.ancillaryTokens = game.ancillaryTokens || {};
     game.ancillaryTokens.rubble = [...(game.ancillaryTokens.rubble || []), ...spaces];
     delete game.lastAttackTargetSpacesForRubble;
+    delete game.lastAttackTargetCellsForRubble;
     delete game.lastAttackAttackerPlayerNum;
+    const _rrDmgNote = _rrDamaged.length ? ` Within 2 of the target: ${_rrDamaged.join(', ')}.` : '';
     return {
       applied: true,
-      logMessage: `Placed rubble tokens on target space and adjacent spaces (${spaces.length} total).`,
+      logMessage: `**Reduce to Rubble** —${_rrDmgNote} Placed rubble tokens on the target space and adjacent spaces (${spaces.length} total).`,
       refreshBoard: true,
     };
   }
@@ -10548,7 +10582,7 @@ export function resolveAbility(abilityId, context) {
       const blueFaces = diceData?.attack?.blue || [];
       const faceIdx = Math.floor(Math.random() * Math.max(blueFaces.length, 1));
       const face = blueFaces[faceIdx] || {};
-      const hitsFromDie = (face.hits || 0) + (face.surge ? 1 : 0);
+      const hitsFromDie = (face.dmg || 0) + (face.surge ? 1 : 0);
       const dieLabel = face.label || JSON.stringify(face);
       const boardState = getBoardStateForMovement(game, null);
       const spaceNorm = String(chosenSpace).toLowerCase();

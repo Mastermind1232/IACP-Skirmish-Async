@@ -385,6 +385,9 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
           for (const n of board.adjacency[c] || []) rubbleSet.add(normalizeCoord(n));
         }
         game.lastAttackTargetSpacesForRubble = [...rubbleSet];
+        // Target footprint cells (for Reduce to Rubble's "within 2 of the
+        // target space" damage clause — alexanbv 2026-06-20).
+        game.lastAttackTargetCellsForRubble = [...targetCells];
         game.lastAttackAttackerPlayerNum = attackerPlayerNum;
       }
     }

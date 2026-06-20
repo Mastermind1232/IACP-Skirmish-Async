@@ -183,9 +183,11 @@ export async function handleOverdrive(interaction, ctx) {
   if (!await requirePlayer(interaction, _odGame, interaction.user.id, _odMeta.playerNum, canActAsPlayer, 'Only the DC owner can use Overdrive.')) return;
   const _odActionsData = _odGame.dcActionsData?.[_odMsgId];
   if (!_odActionsData) { await interaction.followUp({ content: 'No active activation found.', ephemeral: true }).catch(discordCatch); return; }
+  // Overdrive: suffer 2 Damage to gain 1 additional action (CSV row 761;
+  // was hardcoded to 1 — alexanbv 2026-06-20).
   const _odRes = await _applyDamage(_odGame, { dcHealthState, logGameAction, client: interaction.client }, {
     figureKey: `${_odMeta.dcName}-1-0`, msgId: _odMsgId, figIndex: 0,
-    amount: 1, controllerPlayerNum: _odMeta.playerNum,
+    amount: 2, controllerPlayerNum: _odMeta.playerNum,
     source: 'Overdrive',
   });
   const _odPrevHp = _odRes.prevHp;
@@ -201,7 +203,7 @@ export async function handleOverdrive(interaction, ctx) {
   _odGame.overdriveUsedThisActivation = _odGame.overdriveUsedThisActivation || {};
   _odGame.overdriveUsedThisActivation[`${_odMeta.dcName}-${_odDgIdx}-0`] = true;
   const _odDefeatNote = _odNewHp <= 0 ? ' **(defeated)**' : '';
-  await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 1 Damage${_odHpNote}${_odDefeatNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
+  await logGameAction(_odGame, client, `**Overdrive** — **${_odMeta.displayName || _odMeta.dcName}** took 2 Damage${_odHpNote}${_odDefeatNote}; +1 Action granted.`, { phase: 'ROUND', icon: 'activate' });
   if (_odNewHp <= 0 && processFigureDefeat) {
     const _odFigKey = `${_odMeta.dcName}-${_odDgIdx}-0`;
     await processFigureDefeat(_odGame, {
