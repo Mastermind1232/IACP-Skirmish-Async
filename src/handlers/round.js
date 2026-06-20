@@ -505,6 +505,9 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         if (!(eff?.specialAbilityIds || []).includes('whats_yours_is_mine_hondo')) continue;
         const mid = msgIds[i];
         if (!mid) continue;
+        // Once per MISSION (CSV row 283) — alexanbv 2026-06-20. Skip if Hondo
+        // has already stolen VP this game (this flag is never reset).
+        if (game.whatsYoursIsMineUsed?.[mid]) continue;
         const ownerId = getPlayerId(game, pn);
         const oppNum = opponentPlayerNum(pn);
         // Auto-check if any figure of this DC is in the opponent's deployment zone
@@ -530,6 +533,9 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
             const _wymSteal = Math.min(2, game[_wymOppVpKey]?.total || 0);
             deductVp(game, oppNum, _wymSteal);
             awardObjectiveVp(game, pn, _wymSteal);
+            // Consume the once-per-mission use.
+            game.whatsYoursIsMineUsed = game.whatsYoursIsMineUsed || {};
+            game.whatsYoursIsMineUsed[mid] = true;
             await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is in the opponent's deployment zone! Stole **${_wymSteal} VP** from Player ${oppNum}.`, { phase: 'ROUND', icon: 'round' });
             await checkWinConditions(game, client);
           } else {

@@ -1566,8 +1566,15 @@ export function resolveAbility(abilityId, context) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[targetFigureKey] = { from: 'Coordinated Raid' };
       }
+      // Once per group per round (CSV row 299).
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`coordinated_raid_${msgId}`] = true;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+    }
+    // Once per group per round gate (CSV row 299) — alexanbv 2026-06-20.
+    if (game.roundFigureAbilityUsed?.[`coordinated_raid_${msgId}`]) {
+      return { applied: false, manualMessage: '**Coordinated Raid** — already used this round (once per group per round).' };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
