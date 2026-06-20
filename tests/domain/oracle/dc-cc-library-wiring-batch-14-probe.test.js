@@ -46,7 +46,7 @@ const BATCH = [
   ['Survival Instincts',    ['roundDefenseBonusBlock', 'roundDefenseBonusEvade']],
   ['Take Cover',            ['roundDefenseBonusBlock', 'roundDefenseAccuracyPenalty']],
   ['Take Initiative',       ['claimInitiative', 'exhaustOneDeploymentCard']],
-  ['Take it Down',          ['nextAttacksBonusHits']],
+  ['Take it Down',          ['nextAttacksBonusHits', 'chooseAdjacentFriendlyFreeAttackBonusHits']],
   ['Take Position',         ['roundDefenseBonusBlock']],
   ['There is Another',      ['draw']],
   ['There Is No Try',       ['setsTherIsNoTry']],

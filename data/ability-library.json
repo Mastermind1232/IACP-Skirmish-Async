@@ -4973,6 +4973,7 @@
     "Take it Down": {
       "type": "ccEffect",
       "label": "Special: choose adjacent friendly; that figure performs an attack with +2 Damage",
+      "chooseAdjacentFriendlyFreeAttackBonusHits": true,
       "nextAttacksBonusHits": {
         "count": 1,
         "bonus": 2

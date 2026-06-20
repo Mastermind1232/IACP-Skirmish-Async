@@ -84,7 +84,7 @@ test('resolveAbility Planning with non-LEADER discards 1 of drawn', () => {
   assert.ok(result.logMessage?.includes('not LEADER'));
 });
 
-test('resolveAbility Black Market Prices draws 2, discards 1, gains VP = cost', () => {
+test('resolveAbility Black Market Prices draws 2, then player-chooses a hand card to discard, gains VP = cost', () => {
   const game = {
     player1CcDeck: ['Planning', 'Blitz'],
     player1CcHand: [],
@@ -92,13 +92,24 @@ test('resolveAbility Black Market Prices draws 2, discards 1, gains VP = cost', 
     player1VP: { total: 0 },
     gameId: 'g-bmp',
   };
-  const result = resolveAbility('Black Market Prices', { game, playerNum: 1 });
-  assert.strictEqual(result.applied, true);
+  // Phase 1: draw 2, then prompt the player to choose a hand card to discard.
+  const phase1 = resolveAbility('Black Market Prices', { game, playerNum: 1 });
+  assert.strictEqual(phase1.applied, false);
+  assert.strictEqual(phase1.requiresChoice, true);
+  assert.deepStrictEqual(phase1.choiceOptions, ['Planning', 'Blitz']);
+  assert.deepStrictEqual(phase1.choiceValues, ['Planning', 'Blitz']);
+  // Drawn cards are already in hand.
+  assert.deepStrictEqual(game.player1CcHand, ['Planning', 'Blitz']);
+  // Phase 2: the player chooses to discard Blitz (the chosen value comes
+  // back via chosenFigureKey, carrying the card NAME).
+  const phase2 = resolveAbility('Black Market Prices', { game, playerNum: 1, chosenFigureKey: 'Blitz' });
+  assert.strictEqual(phase2.applied, true);
   assert.strictEqual(game.player1CcHand.length, 1);
+  assert.strictEqual(game.player1CcHand[0], 'Planning');
   assert.strictEqual((game.player1CcDiscard || []).length, 1);
   assert.strictEqual(game.player1CcDiscard[0], 'Blitz');
-  assert.strictEqual(game.player1CcHand[0], 'Planning');
-  assert.ok(game.player1VP.total >= 0);
+  // VP awarded equals the discarded card's cost (Blitz = 1).
+  assert.strictEqual(game.player1VP.total, 1);
 });
 
 test('resolveAbility draw with empty deck: draws what is available', () => {

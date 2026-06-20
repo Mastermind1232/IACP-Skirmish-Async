@@ -1640,33 +1640,82 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // bartered_information (Bib Fortuna): choose a friendly SCUM figure within 2 → Focus
+  // bartered_information (Bib Fortuna): choose another friendly SCUM
+  // figure within 2 → Focus. Then, you MAY spend 1 VP to choose another
+  // such figure; that figure also becomes Focused.
+  // CSV row 148: "Choose another friendly SCUM figure within 2 spaces.
+  // Then, you may spend 1 VP to choose another such figure. Each chosen
+  // figure becomes Focused." (ACS attached extends "within 2" → 3.)
   if (abilityId === 'bartered_information') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bartered Information** manually.' };
-    if (choiceIndex != null && targetFigureKey) {
-      applyCondition(game, targetFigureKey, 'Focus');
-      const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**. *(You may also spend 1 VP to Focus another friendly SCUM within 2.)*`, refreshDcEmbed: true };
-    }
+    const dcEffects = typeof getEff === 'function' ? getEff() : null;
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
     const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
-    if (!activatingPos) return { applied: false, manualMessage: '**Bartered Information** — No position. Resolve manually.' };
-    const dcEffects = typeof getEff === 'function' ? getEff() : null;
     // ACS extends "within 2" → "within 3" when attached to this DC.
     const _biAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
     const _biMaxRange = cardNameIncludes(_biAtts, 'Advanced Com Systems') ? 3 : 2;
-    const validTargets = [];
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (fk === activatingKey || !pos) continue;
-      if (countGameSpaces(game, activatingPos, pos) > _biMaxRange) continue;
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = dcEffects?.[fkDcName];
-      if (!fkEff) continue;
-      if (fkEff.affiliation !== 'Scum') continue;
-      validTargets.push(fk);
+    // Enumerate eligible friendly SCUM within range, optionally excluding
+    // already-Focused figures from a prior pick this resolution.
+    const enumerateTargets = (exclude) => {
+      const out = [];
+      if (!activatingPos) return out;
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (fk === activatingKey || !pos) continue;
+        if (exclude && exclude.includes(fk)) continue;
+        if (countGameSpaces(game, activatingPos, pos) > _biMaxRange) continue;
+        const fkDcName = dcNameFromFigureKey(fk);
+        const fkEff = dcEffects?.[fkDcName];
+        if (!fkEff) continue;
+        if (fkEff.affiliation !== 'Scum') continue;
+        out.push(fk);
+      }
+      return out;
+    };
+
+    if (choiceIndex != null && targetFigureKey) {
+      const firstFocused = game.pendingBarteredInfoFocused;
+      // Phase 3: VP-spend resolution (a first figure was already Focused).
+      if (Array.isArray(firstFocused)) {
+        delete game.pendingBarteredInfoFocused;
+        if (targetFigureKey === 'skip') {
+          return { applied: true, logMessage: `**Bartered Information** — declined to spend a VP for a second figure.`, refreshDcEmbed: true };
+        }
+        // Spend 1 VP, then Focus the second figure.
+        const vk = vpKey(playerNum);
+        game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+        if ((game[vk].total ?? 0) < 1) {
+          return { applied: false, manualMessage: '**Bartered Information** — not enough VP to Focus a second figure.' };
+        }
+        game[vk].total = (game[vk].total ?? 0) - 1;
+        applyCondition(game, targetFigureKey, 'Focus');
+        const secondName = dcNameFromFigureKey(targetFigureKey);
+        return { applied: true, logMessage: `**Bartered Information** — spent **1 VP**; **${secondName}** is now **Focused** (VP total: ${game[vk].total}).`, refreshDcEmbed: true };
+      }
+      // Phase 2: first figure chosen → Focus it, then offer the optional
+      // VP-spend for a second figure (only if VP ≥ 1 and another eligible
+      // SCUM figure remains within range).
+      applyCondition(game, targetFigureKey, 'Focus');
+      const chosenName = dcNameFromFigureKey(targetFigureKey);
+      const vk = vpKey(playerNum);
+      const vp = game[vk]?.total ?? 0;
+      const remaining = enumerateTargets([targetFigureKey]);
+      if (vp >= 1 && remaining.length > 0) {
+        game.pendingBarteredInfoFocused = [targetFigureKey];
+        return {
+          applied: false,
+          requiresChoice: true,
+          choicePrompt: `**Bartered Information** — **${chosenName}** is now **Focused**. You may spend **1 VP** to Focus another friendly SCUM figure:`,
+          choiceOptions: [...remaining.map((fk) => `Spend 1 VP: Focus ${dcNameFromFigureKey(fk)}`), 'Skip (no VP spent)'],
+          targetFigureKeys: [...remaining, 'skip'],
+        };
+      }
+      return { applied: true, logMessage: `**Bartered Information** — **${chosenName}** is now **Focused**.${vp < 1 ? ' *(No VP to spend for a second figure.)*' : ''}`, refreshDcEmbed: true };
     }
+
+    if (!activatingPos) return { applied: false, manualMessage: '**Bartered Information** — No position. Resolve manually.' };
+    const validTargets = enumerateTargets(null);
     if (validTargets.length === 0) return { applied: false, manualMessage: `**Bartered Information** — No friendly SCUM figure within ${_biMaxRange} spaces.` };
     return {
       applied: false,
@@ -4119,30 +4168,55 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: Draw N, then discard 1, gain VP = cost of discarded (Black Market Prices)
+  // ccEffect: Draw N, then PLAYER-CHOOSE 1 card from hand to discard,
+  // gain VP = cost of the discarded card (Black Market Prices).
+  // CSV row 547: "Draw 2 Command cards, then discard 1 card from your
+  // hand; gain VPs equal to the cost of the discarded card."
+  // Two-phase via the CC choiceValues / chosenFigureKey re-entry
+  // (mirrors Jundland Terror's choose-then-resolve pattern), with the
+  // chosen value carrying the card NAME instead of a figureKey.
   if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && entry.drawThenDiscardOneGainVp) {
-    const { game, playerNum } = context;
+    const { game, playerNum, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const drew = drawCcCards(game, playerNum, entry.draw);
-    if (drew.length === 0) return { applied: true, logMessage: 'No cards to draw.' };
-    const toDiscard = drew[drew.length - 1];
     const handKey = ccHandKey(playerNum);
     const discardKey = ccDiscardKey(playerNum);
+    // Phase 2: a card was chosen → discard it, award VP = its cost.
+    // chosenFigureKey carries the chosen card NAME (choiceValues entry).
+    if (chosenFigureKey) {
+      const toDiscard = chosenFigureKey;
+      const hand = (game[handKey] || []).slice();
+      const idx = hand.indexOf(toDiscard);
+      if (idx < 0) return { applied: false, manualMessage: `**Black Market Prices** — **${toDiscard}** is no longer in hand. Resolve manually.` };
+      hand.splice(idx, 1);
+      game[handKey] = hand;
+      game[discardKey] = (game[discardKey] || []).concat(toDiscard);
+      const eff = getCcEffect(toDiscard);
+      const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
+      const vk = vpKey(playerNum);
+      game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
+      game[vk].total = (game[vk].total ?? 0) + cost;
+      return {
+        applied: true,
+        refreshHand: true,
+        refreshDiscard: true,
+        logMessage: `**Black Market Prices** — discarded **${toDiscard}** (cost ${cost}), gained ${cost} VP.`,
+      };
+    }
+    // Phase 1: draw, then prompt the player to choose which hand card
+    // to discard. Drawn cards are already in hand (drawCcCards mutates
+    // game state); the choice buttons list the full hand (incl. the new
+    // draws), and Phase 2 refreshes the hand/discard visuals.
+    const drew = drawCcCards(game, playerNum, entry.draw);
     const hand = (game[handKey] || []).slice();
-    const idx = hand.indexOf(toDiscard);
-    if (idx >= 0) hand.splice(idx, 1);
-    game[handKey] = hand;
-    game[discardKey] = (game[discardKey] || []).concat(toDiscard);
-    const eff = getCcEffect(toDiscard);
-    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
-    const vk = vpKey(playerNum);
-    game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
-    game[vk].total = (game[vk].total ?? 0) + cost;
-    const kept = drew.slice(0, -1);
+    if (hand.length === 0) {
+      return { applied: true, drewCards: drew.length ? drew : undefined, logMessage: '**Black Market Prices** — no cards in hand to discard.' };
+    }
     return {
-      applied: true,
-      drewCards: kept,
-      logMessage: `Drew 2, discarded **${toDiscard}** (cost ${cost}), gained ${cost} VP.`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: hand.slice(),
+      choiceValues: hand.slice(),
+      manualMessage: '**Black Market Prices** — choose 1 card from your hand to discard (gain VP equal to its cost).',
     };
   }
 
@@ -6747,6 +6821,51 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: chooseAdjacentFriendlyFreeAttackBonusHits (Take it Down) —
+  // choose an adjacent friendly figure; THAT figure performs a free
+  // attack whose results gain +N Damage (NOT the activating/card-player
+  // figure). Mirrors the dcSpecial "choose adjacent friendly → free
+  // attack" pattern (Bombardment / Coordinated Raid): set
+  // freeAttackBonusPending + nextAttacksBonusHits on the CHOSEN figure
+  // and route via the CC choiceValues/chosenFigureKey re-entry.
+  if (entry.type === 'ccEffect' && entry.chooseAdjacentFriendlyFreeAttackBonusHits) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually: play during your activation.' };
+    const nbCfg = entry.nextAttacksBonusHits || { count: 1, bonus: 2 };
+    // Phase 2: a figure was chosen → grant the free attack + bonus.
+    if (chosenFigureKey) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[chosenFigureKey] = { from: 'Take it Down' };
+      game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
+      game.nextAttacksBonusHits[chosenFigureKey] = { count: nbCfg.count, bonus: nbCfg.bonus };
+      const chosenName = dcNameFromFigureKey(chosenFigureKey);
+      return {
+        applied: true,
+        logMessage: `**Take it Down** — **${chosenName}** may interrupt to perform a free attack; its results gain **+${nbCfg.bonus} Damage**. Use their **Attack** button.`,
+      };
+    }
+    // Phase 1: enumerate adjacent friendly figures (excluding the activating figure).
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: '**Take it Down** — no activation in progress. Resolve manually.' };
+    const activatingKey = figureKeyForActivation(game, msgId);
+    const activatingPos = activatingKey ? game.figurePositions?.[playerNum]?.[activatingKey] : null;
+    if (!activatingPos) return { applied: false, manualMessage: '**Take it Down** — activating figure has no position. Resolve manually.' };
+    const validTargets = [];
+    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+      if (fk === activatingKey || !pos) continue;
+      if (countGameSpaces(game, activatingPos, pos) > 1) continue;
+      validTargets.push(fk);
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Take it Down** — no adjacent friendly figure. Resolve manually.' };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: figureChoiceLabels(validTargets),
+      choiceValues: validTargets,
+      manualMessage: '**Take it Down** — choose an adjacent friendly figure to perform the attack.',
+    };
+  }
+
   // ccEffect: nextAttacksBonusHits — +N Hit to next M attacks.
   //
   // Two scoped variants share the structural field but route to
@@ -6758,7 +6877,8 @@ export function resolveAbility(abilityId, context) {
   //   default (Size Advantage, Maximum Firepower) →
   //     nextAttacksBonusHits[figureKey]; applies only to that
   //     figure's next attack. Cleaned via ACTIVATION_FIGKEY_FLAGS.
-  const nb = entry.type === 'ccEffect' && entry.nextAttacksBonusHits;
+  // (Take it Down is excluded — it has its own dedicated handler above.)
+  const nb = entry.type === 'ccEffect' && !entry.chooseAdjacentFriendlyFreeAttackBonusHits && entry.nextAttacksBonusHits;
   if (nb && typeof nb.count === 'number' && nb.count > 0 && typeof nb.bonus === 'number' && nb.bonus > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
