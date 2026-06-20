@@ -1543,6 +1543,11 @@ async function fireDistractingFire(thread, game, combat, effect, ctx) {
 async function fireDeflection(thread, game, combat, effect, ctx) {
   const { dcHealthState, logGameAction, client, deps } = ctx;
   if (!combat.attackerMsgId) return;
+  // Deflection fires only after a RANGED attack targeting the defender (CSV
+  // "when a Ranged attack targeting you is declared"). For a Melee attack we
+  // do NOT consume the pending counter — it remains armed for a later Ranged
+  // attack this round.
+  if (!combat.isRanged) return;
   const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
   const deflectDmg = game.deflectionPending?.[defPN];
   if (!deflectDmg || deflectDmg <= 0) return;

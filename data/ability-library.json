@@ -1163,8 +1163,10 @@
     },
     "Deathblow": {
       "type": "ccEffect",
-      "label": "+1 Damage (or +2 if defender has Ranged)",
+      "label": "+1 Damage (or +2 if defender has Ranged); Melee only",
       "attackBonusHits": 1,
+      "requiresMeleeAttack": true,
+      "bonusHitVsRangedDefender": 1,
       "wiredStatus": "wired"
     },
     "Debts Repaid": {
@@ -1238,10 +1240,11 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "Until end of round: -2 Accuracy when defending; after attack resolves, attacker suffers 1 Damage",
-      "roundDefenseAccuracyPenalty": 2,
+      "label": "Until end of round: -2 Accuracy vs Ranged attacks targeting you; after a Ranged attack resolves, attacker suffers 1 Damage",
+      "roundDeflectionAccuracyPenalty": 2,
       "deflectionCounterDamage": 1,
       "deflectionCounterUnconditional": true,
+      "deflectionRangedOnly": true,
       "wiredStatus": "wired"
     },
     "demolish": {
@@ -1276,7 +1279,7 @@
     },
     "Desperate Escape": {
       "type": "ccEffect",
-      "label": "At end of round: move up to 6 spaces (or, if your Kuiil is defeated, discard to distribute 2 Power Tokens among friendlies)",
+      "label": "At end of round: move up to 6 spaces (or, if your Kuiil is defeated, discard to distribute 2 Hit Tokens among friendlies)",
       "kuilSplitMode": true,
       "mpBonus": 6,
       "isMoveX": true,
@@ -1996,7 +1999,7 @@
     },
     "Force Lightning": {
       "type": "ccEffect",
-      "label": "Hostile within 2: 2 Damage + Stun; all adjacent also 2 Damage + Stun",
+      "label": "Hostile in LOS within 2: 2 Damage + Stun; all adjacent also 2 Damage + Stun",
       "chooseAdjacentHostileThen": {
         "damage": 2,
         "stun": true,
@@ -2004,7 +2007,8 @@
         "splashConditions": [
           "Stun"
         ],
-        "range": 2
+        "range": 2,
+        "requiresLos": true
       },
       "wiredStatus": "wired"
     },
@@ -2190,7 +2194,7 @@
     "Fuel Upgrade": {
       "type": "ccEffect",
       "label": "Until end of round: +1 Evade when defending (VEHICLES only); +1 Speed for VEHICLES",
-      "roundDefenseBonusEvade": 1,
+      "vehicleDefenseBonusEvadeRound": 1,
       "vehicleSpeedBonusRound": 1,
       "wiredStatus": "wired"
     },
@@ -2317,6 +2321,7 @@
       "type": "ccEffect",
       "label": "If defender was defeated, recover 3 Damage",
       "recoverDamage": 3,
+      "requiresDefenderDefeated": true,
       "wiredStatus": "wired"
     },
     "Grenadier": {
@@ -3324,6 +3329,8 @@
       "type": "ccEffect",
       "label": "Choose 1 adjacent friendly figure; ready that figure's Deployment card",
       "readyAdjacentFriendlyDeploymentCard": true,
+      "readyRequireWithinSpaces": 1,
+      "readyAllowSameDc": true,
       "wiredStatus": "wired"
     },
     "non_combatant_c3po": {
@@ -3512,8 +3519,8 @@
     },
     "Parry": {
       "type": "ccEffect",
-      "label": "+1 Block or +1 Evade when defending (default: +1 Block)",
-      "applyDefenseBonusBlock": 1,
+      "label": "Apply +1 Block OR +1 Evade when defending (your choice)",
+      "defenseBonusBlockOrEvadeChoice": 1,
       "wiredStatus": "wired"
     },
     "Parting Blow": {

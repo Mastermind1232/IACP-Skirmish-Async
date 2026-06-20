@@ -15,7 +15,7 @@ const lib = JSON.parse(readFileSync(LIB_PATH, 'utf8'));
 
 const BATCH = [
   ['Pack Alpha',             ['packAlphaEffect']],
-  ['Parry',                  ['applyDefenseBonusBlock']],
+  ['Parry',                  ['defenseBonusBlockOrEvadeChoice']],
   ['Payback',                ['paybackEffect']],
   ['Personal Energy Shield', ['roundDefenderBonusBlockPerEvade', 'evadeTokenGain']],
   ['Pickpocket',             ['pickpocketVpByAccuracy']],

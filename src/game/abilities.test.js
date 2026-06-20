@@ -635,16 +635,27 @@ test('resolveAbility Spinning Kick adds Cleave 1 and Cleave 2 as surge options',
   assert.deepStrictEqual(combat.bonusSurgeAbilities, ['cleave 1', 'cleave 2']);
 });
 
-test('resolveAbility Parry adds +1 Block when defending', () => {
+test('resolveAbility Parry offers +1 Block OR +1 Evade choice when defending', () => {
   const combat = {
     attackerPlayerNum: 1,
     defenderPlayerNum: 2,
     target: { figureKey: 'Wookiee-2-0' },
   };
   const game = { gameId: 'g-parry', pendingCombat: combat };
-  const result = resolveAbility('Parry', { game, playerNum: 2, combat });
-  assert.strictEqual(result.applied, true);
+  // Phase 1: no chosenOption → presents the Block-or-Evade choice.
+  const r1 = resolveAbility('Parry', { game, playerNum: 2, combat });
+  assert.strictEqual(r1.requiresChoice, true);
+  assert.deepStrictEqual(r1.choiceOptions, ['+1 Block', '+1 Evade']);
+  // Phase 2a: choose Block.
+  const rBlock = resolveAbility('Parry', { game, playerNum: 2, combat, chosenOption: '+1 Block' });
+  assert.strictEqual(rBlock.applied, true);
   assert.strictEqual(combat.bonusBlock, 1);
+  // Phase 2b: choose Evade (fresh combat).
+  const combat2 = { attackerPlayerNum: 1, defenderPlayerNum: 2, target: { figureKey: 'Wookiee-2-0' } };
+  const game2 = { gameId: 'g-parry2', pendingCombat: combat2 };
+  const rEvade = resolveAbility('Parry', { game: game2, playerNum: 2, combat: combat2, chosenOption: '+1 Evade' });
+  assert.strictEqual(rEvade.applied, true);
+  assert.strictEqual(combat2.bonusEvade, 1);
 });
 
 test('resolveAbility Brace Yourself applies +2 Block when not attacker activation', () => {
@@ -1431,4 +1442,82 @@ test('resolveAbility Celebration grants VP', () => {
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.player1VP.total, 6); // 2 + 4
   assert.ok(result.logMessage?.includes('4 VP'));
+});
+
+// ── MEDIUM-batch ability fixes (behavioral) ──────────────────────────────
+
+test('Deathblow: +1 Hit on a Melee attack vs non-Ranged defender', () => {
+  const combat = { attackerPlayerNum: 1, isRanged: false, attackerDcName: 'Ahsoka Tano', target: { figureKey: 'Wampa (Elite)-2-0' }, bonusHits: 0 };
+  const game = { gameId: 'g-db1', pendingCombat: combat };
+  const r = resolveAbility('Deathblow', { game, playerNum: 1, combat });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusHits, 1);
+});
+
+test('Deathblow: +2 Hit on Melee attack vs Ranged defender', () => {
+  const combat = { attackerPlayerNum: 1, isRanged: false, attackerDcName: 'Ahsoka Tano', target: { figureKey: '4-LOM-2-0' }, bonusHits: 0 };
+  const game = { gameId: 'g-db2', pendingCombat: combat };
+  const r = resolveAbility('Deathblow', { game, playerNum: 1, combat });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusHits, 2);
+});
+
+test('Deathblow: does NOT apply on a Ranged attack', () => {
+  const combat = { attackerPlayerNum: 1, isRanged: true, attackerDcName: '4-LOM', target: { figureKey: 'Ahsoka Tano-2-0' }, bonusHits: 0 };
+  const game = { gameId: 'g-db3', pendingCombat: combat };
+  const r = resolveAbility('Deathblow', { game, playerNum: 1, combat });
+  assert.strictEqual(r.applied, false);
+  assert.strictEqual(combat.bonusHits, 0);
+});
+
+test('Deflection: stores Ranged-only accuracy penalty + deflection counter (not shared all-attack penalty)', () => {
+  const game = { gameId: 'g-defl' };
+  const r = resolveAbility('Deflection', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.roundDeflectionAccuracyPenalty?.[1], 2);
+  // Must NOT write to the shared all-attacks penalty (used by Take Cover).
+  assert.ok(!game.roundDefenseAccuracyPenalty?.[1]);
+  assert.strictEqual(game.deflectionPending?.[1], 1);
+});
+
+test('Fuel Upgrade: stores VEHICLE-scoped Evade + Speed, not the shared all-figure Evade', () => {
+  const game = { gameId: 'g-fuel' };
+  const r = resolveAbility('Fuel Upgrade', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.roundVehicleDefenseBonusEvade?.[1], 1);
+  assert.strictEqual(game.roundVehicleSpeedBonus?.[1], 1);
+  // Must NOT write the shared all-figure evade (used by Armed Escort, etc.).
+  assert.ok(!game.roundDefenseBonusEvade?.[1]);
+});
+
+test('Glory of the Kill: no recover when the defender was not defeated', () => {
+  const meta = { playerNum: 1, dcName: 'Ahsoka Tano' };
+  const dcMessageMeta = new Map([['m1', meta]]);
+  const dcHealthState = new Map([['m1', [[3, 5]]]]);
+  const game = {
+    gameId: 'g-glory0',
+    pendingCombat: { attackerPlayerNum: 1, target: { figureKey: 'Onar Koma-2-0' } },
+    dcActionsData: { m1: { selectedFigure: 0 } },
+    p1ActivatedDcIndices: [],
+    currentActivationTurnPlayerId: undefined,
+  };
+  // No lastDefeatInfo → not defeated → must not recover.
+  const r = resolveAbility('Glory of the Kill', { game, playerNum: 1, dcMessageMeta, dcHealthState, msgId: 'm1', combat: game.pendingCombat });
+  assert.strictEqual(r.applied, false);
+  assert.strictEqual(dcHealthState.get('m1')[0][0], 3); // unchanged
+});
+
+test('Glory of the Kill: recovers when the defender was defeated', () => {
+  const meta = { playerNum: 1, dcName: 'Ahsoka Tano' };
+  const dcMessageMeta = new Map([['m1', meta]]);
+  const dcHealthState = new Map([['m1', [[1, 5]]]]);
+  const game = {
+    gameId: 'g-glory1',
+    pendingCombat: { attackerPlayerNum: 1, target: { figureKey: 'Onar Koma-2-0' } },
+    lastDefeatInfo: { figureKey: 'Onar Koma-2-0', playerNum: 2 },
+    dcActionsData: { m1: { selectedFigure: 0 } },
+  };
+  const r = resolveAbility('Glory of the Kill', { game, playerNum: 1, dcMessageMeta, dcHealthState, msgId: 'm1', combat: game.pendingCombat });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(dcHealthState.get('m1')[0][0], 4); // 1 + 3
 });

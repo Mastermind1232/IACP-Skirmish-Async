@@ -643,6 +643,12 @@ const ROUND_OBJECT_FLAGS = [
   'namedCcsPlayedPerTiming',
   'roundDefenseBonusEvade',
   'roundDefenseAccuracyPenalty',
+  // Deflection: Ranged-only accuracy penalty (separate from the all-attacks
+  // Take Cover penalty above so Melee attacks are unaffected).
+  'roundDeflectionAccuracyPenalty',
+  // Fuel Upgrade: +1 Evade scoped to VEHICLES only (separate from the shared
+  // all-figure roundDefenseBonusEvade above).
+  'roundVehicleDefenseBonusEvade',
   'roundMobilePersonalCombatShield',
   'roundMobileGarSaxonFlamethrower',
   'roundDefenderBonusBlockPerEvade',

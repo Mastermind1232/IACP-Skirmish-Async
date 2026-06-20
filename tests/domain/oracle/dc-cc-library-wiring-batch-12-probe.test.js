@@ -39,10 +39,10 @@ const BATCH = [
   ['Cruel Strike',         ['nextAttackBonusSurgeAbilities']],
   ['Crush',                ['chooseAdjacentHostileThen']],
   ['Cut Lines',            ['noCommandDrawThisRound']],
-  ['Deathblow',            ['attackBonusHits']],
+  ['Deathblow',            ['attackBonusHits', 'requiresMeleeAttack', 'bonusHitVsRangedDefender']],
   ['Debts Repaid',         ['applyFocus', 'readyActiveDc']],
   ["Definition: 'Love'",   ['freeAttackBonus', 'attackOverrideOpts']],
-  ['Deflection',           ['roundDefenseAccuracyPenalty', 'deflectionCounterDamage', 'deflectionCounterUnconditional']],
+  ['Deflection',           ['roundDeflectionAccuracyPenalty', 'deflectionCounterDamage', 'deflectionCounterUnconditional', 'deflectionRangedOnly']],
   ['Desperate Escape',     ['mpBonus']],
   ['Dirty Trick',          ['chooseAdjacentHostileThen']],
 ];

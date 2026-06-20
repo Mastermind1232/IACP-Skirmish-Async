@@ -37,7 +37,7 @@ const BATCH = [
   ['Miracle Worker',         ['recoverDamage']],
   ['Mitigate',               ['rerollOneAttackDie']],
   ['Navigation Upgrade',     ['navigationUpgradeEffect']],
-  ['New Orders',             ['readyAdjacentFriendlyDeploymentCard']],
+  ['New Orders',             ['readyAdjacentFriendlyDeploymentCard', 'readyRequireWithinSpaces', 'readyAllowSameDc']],
   // 'No Cheating' (Asajj-only CC) removed 2026-05-06 — Asajj Ventress removed
   // from game per destruct 2026-05-05; Session 8.1-8.3 of combat-rebuild plan.
   ['One in a Million',       ['defensePoolRemoveAll', 'defensePoolRemoveOnlyWhenNotAttackerActivation']],

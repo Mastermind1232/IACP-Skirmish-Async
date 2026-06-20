@@ -35,7 +35,7 @@ const BATCH = [
   ['Force Push',              ['forcePushEffect']],
   ['Foresee',                 ['foreseeEffect']],
   ['Forward March',           ['grantMpToFriendliesWithin2']],
-  ['Glory of the Kill',       ['recoverDamage']],
+  ['Glory of the Kill',       ['recoverDamage', 'requiresDefenderDefeated']],
   ['Grenadier',               ['rollOneDie', 'rollOneDieTarget', 'rollOneDieRange']],
   ['Guardian Stance',         ['defenderRerollDiceMax']],
   ['Guerilla Warfare',        ['applyBlockAndHideToIsolatedFriendlies']],

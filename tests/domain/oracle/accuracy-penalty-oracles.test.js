@@ -1,15 +1,21 @@
 /**
- * Oracle tests for roundDefenseAccuracyPenalty (Take Cover / Deflection).
+ * Oracle tests for round accuracy penalties (Take Cover / Deflection).
  *
- * Rule: Take Cover and Deflection each apply −2 Accuracy to attacking figures
- *       when the defender's player has played the CC this round.
- *       This is an ACCURACY penalty (affects ranged hit/miss via distance check),
- *       NOT Evade (which cancels surges).
+ * Rule:
+ *   - Take Cover applies −2 Accuracy to ALL attacks targeting the defender
+ *     ("During this round while defending"). Stored on the shared
+ *     game.roundDefenseAccuracyPenalty counter.
+ *   - Deflection applies −2 Accuracy ONLY to a RANGED attack targeting the
+ *     defender (CSV "when a Ranged attack targeting you is declared"). Stored on
+ *     a SEPARATE game.roundDeflectionAccuracyPenalty counter so Melee attacks
+ *     are unaffected (combat-bridge consumes it only when combat.isRanged).
+ *   This is an ACCURACY penalty (affects ranged hit/miss via distance check),
+ *   NOT Evade (which cancels surges).
  *
  * Confirmed-safe core:
- *   - Take Cover: +1 Block, −2 Accuracy (not +2 Evade)
- *   - Deflection: −2 Accuracy (not +2 Evade), plus unconditional 1 counter-damage after attack
- *   - Penalties accumulate additively across multiple CCs in the same round
+ *   - Take Cover: +1 Block, −2 Accuracy (all attacks; not +2 Evade)
+ *   - Deflection: −2 Accuracy (Ranged-only; not +2 Evade), plus unconditional
+ *     1 counter-damage after a Ranged attack
  *   - Accuracy penalty feeds into totalAccuracy formula (combat.js) — can cause ranged miss
  *   - Melee attacks have no distance check — accuracy penalty is cosmetic only
  */
@@ -52,25 +58,35 @@ describe('ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade)', () =
   });
 });
 
-// ── ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy (Not Evade) ──────────
+// ── ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy vs RANGED (Not Evade) ──
 //
-// Rule: Deflection — "Until end of round, apply −2 Accuracy when defending.
-//        After the attack is resolved, the attacker suffers 1 Damage."
-// Verifies: resolveAbility sets game.roundDefenseAccuracyPenalty (not roundDefenseBonusEvade)
-//           AND sets deflectionPending for the counter-damage mechanic.
+// Rule: Deflection — CSV "when a Ranged attack targeting you is declared, apply
+//        −2 Accuracy" + "after the attack is resolved, the attacker suffers 1
+//        Damage". The −2 is Ranged-only, so it lives on the dedicated
+//        roundDeflectionAccuracyPenalty counter (NOT the all-attacks
+//        roundDefenseAccuracyPenalty used by Take Cover).
+// Verifies: resolveAbility sets game.roundDeflectionAccuracyPenalty (Ranged-only),
+//           does NOT touch the shared all-attacks penalty or evade, and sets
+//           deflectionPending for the counter-damage mechanic.
 
-describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy (Not Evade)', () => {
-  it('002: Deflection sets roundDefenseAccuracyPenalty and deflectionPending, not roundDefenseBonusEvade', () => {
+describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy vs Ranged (Not Evade)', () => {
+  it('002: Deflection sets roundDeflectionAccuracyPenalty + deflectionPending, not the shared penalty or evade', () => {
     const game = {};
     const playerNum = 2;
     const result = resolveAbility('Deflection', { game, playerNum });
 
     assert.equal(result.applied, true, 'Deflection should resolve successfully');
 
-    // Must set accuracy penalty
+    // Must set the Ranged-only accuracy penalty
     assert.equal(
-      game.roundDefenseAccuracyPenalty?.[playerNum], 2,
-      'Deflection should set roundDefenseAccuracyPenalty[2] = 2'
+      game.roundDeflectionAccuracyPenalty?.[playerNum], 2,
+      'Deflection should set roundDeflectionAccuracyPenalty[2] = 2 (Ranged-only)'
+    );
+
+    // Must NOT touch the shared all-attacks penalty (that is Take Cover's).
+    assert.equal(
+      game.roundDefenseAccuracyPenalty?.[playerNum] || 0, 0,
+      'Deflection must NOT write the shared all-attacks roundDefenseAccuracyPenalty'
     );
 
     // Must NOT set evade bonus
@@ -93,24 +109,34 @@ describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy (Not Evade)', () =
   });
 });
 
-// ── ORACLE-ACCPEN-003: Stacking — Both CCs = −4 Accuracy Cumulative ────────
+// ── ORACLE-ACCPEN-003: Take Cover (all attacks) + Deflection (Ranged-only) ──
 //
-// Rule: Round-scoped CC effects accumulate additively. If a player plays
-//       Take Cover (−2 Accuracy) AND Deflection (−2 Accuracy) in one round,
-//       the combined penalty is −4 Accuracy.
+// Rule: The two penalties live on SEPARATE counters. Against a RANGED attack
+//       both apply (effective −4); against a MELEE attack only Take Cover's
+//       −2 applies (Deflection's Ranged-only penalty does not).
 
-describe('ORACLE-ACCPEN-003: Stacking — Take Cover + Deflection = −4 Accuracy', () => {
-  it('003: Both CCs in same round produce cumulative −4 accuracy penalty', () => {
+describe('ORACLE-ACCPEN-003: Take Cover (all) + Deflection (Ranged-only) live on separate counters', () => {
+  it('003: Take Cover writes the shared −2; Deflection writes a separate Ranged-only −2', () => {
     const game = {};
     const playerNum = 1;
 
     resolveAbility('Take Cover', { game, playerNum });
     resolveAbility('Deflection', { game, playerNum });
 
+    // Take Cover's −2 applies to ALL attacks.
     assert.equal(
-      game.roundDefenseAccuracyPenalty?.[playerNum], 4,
-      'Combined accuracy penalty should be 2 + 2 = 4'
+      game.roundDefenseAccuracyPenalty?.[playerNum], 2,
+      'Take Cover contributes −2 on the shared all-attacks counter'
     );
+    // Deflection's −2 applies only to RANGED attacks (separate counter).
+    assert.equal(
+      game.roundDeflectionAccuracyPenalty?.[playerNum], 2,
+      'Deflection contributes −2 on the separate Ranged-only counter'
+    );
+    // Effective penalty vs a Ranged attack = 2 + 2 = 4 (summed in combat-bridge).
+    const effectiveVsRanged = (game.roundDefenseAccuracyPenalty[playerNum] || 0)
+      + (game.roundDeflectionAccuracyPenalty[playerNum] || 0);
+    assert.equal(effectiveVsRanged, 4, 'Combined Ranged-attack penalty should be 4');
 
     // Evade must still be 0
     assert.equal(

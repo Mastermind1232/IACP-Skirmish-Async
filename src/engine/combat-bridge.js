@@ -272,8 +272,24 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
   if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
+  // Fuel Upgrade: +1 Evade applies ONLY to VEHICLE defenders (CSV "Each of your
+  // VEHICLES"). Kept on a separate counter from the all-figure roundDefenseBonusEvade.
+  const roundVehEvade = game.roundVehicleDefenseBonusEvade?.[defenderPlayerNum] || 0;
+  if (roundVehEvade && combat.target?.figureKey) {
+    const _defDcName = dcNameFromFigureKey(combat.target.figureKey);
+    const _defKws = (getDcEffect(_defDcName)?.keywords || []).map((k) => String(k).toUpperCase());
+    if (_defKws.includes('VEHICLE')) combat.bonusEvade = (combat.bonusEvade || 0) + roundVehEvade;
+  }
   const roundAccPenalty = game.roundDefenseAccuracyPenalty?.[defenderPlayerNum] || 0;
   if (roundAccPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundAccPenalty;
+  // Deflection: -2 Accuracy applies ONLY to Ranged attacks targeting the
+  // defender (CSV "when a Ranged attack targeting you is declared"). Kept on a
+  // separate counter from the all-attacks Take Cover penalty so Melee attacks
+  // are unaffected.
+  const roundDeflectAccPenalty = game.roundDeflectionAccuracyPenalty?.[defenderPlayerNum] || 0;
+  if (roundDeflectAccPenalty && combat.isRanged) {
+    combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundDeflectAccPenalty;
+  }
   // Choose a Side (SCUM) now grants Personal Combat Shield (+1 Evade per Block
   // spent) — applied at Block-spend time in handlers/combat.js
   // (applyPersonalCombatShieldOnBlockSpend reading game.roundMobilePersonalCombatShield),

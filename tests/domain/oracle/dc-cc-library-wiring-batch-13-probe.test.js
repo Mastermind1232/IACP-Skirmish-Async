@@ -35,7 +35,7 @@ const BATCH = [
   ['Force Lightning',       ['chooseAdjacentHostileThen']],
   ['Force Rush',            ['mpBonus']],
   ['Force Surge',           ['mpBonus', 'chooseAdjacentHostileThen']],
-  ['Fuel Upgrade',          ['roundDefenseBonusEvade', 'vehicleSpeedBonusRound']],
+  ['Fuel Upgrade',          ['vehicleDefenseBonusEvadeRound', 'vehicleSpeedBonusRound']],
   ['Furious Charge',        ['applyFocus', 'conditionalFocusIfDamagedGte']],
   ['Get Behind Me!',        ['mpBonus', 'attackTargetSwap', 'getsBehindMe']],
   ['Grisly Contest',        ['chooseAdjacentHostileThen']],

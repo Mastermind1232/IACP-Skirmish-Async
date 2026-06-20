@@ -5196,32 +5196,35 @@ export function resolveAbility(abilityId, context) {
           delete game.pendingKuilTokenSplitState;
           return { applied: true, logMessage: `**${_deCardName}** — distribution already complete.` };
         }
-        // Grant 1 Power Token (type to be picked via pendingPowerTokenGrant flow).
-        game.pendingPowerTokenGrant = {
-          grants: [{ figureKey: chosenFigureKey, figName: dcNameFromFigureKey(chosenFigureKey), count: 1 }],
-          channelId: null,
-          playerNum,
-        };
+        // Grant 1 HIT (Damage) Token specifically — CSV "distribute 2 Hit
+        // Tokens". The player does NOT choose the token type (no Block/Evade).
+        grantPowerTokens(game, chosenFigureKey, 'Damage', 1);
         state.distributed.push(chosenFigureKey);
         state.remaining -= 1;
         if (state.remaining > 0) {
-          // Re-prompt for the next recipient AFTER the type pick fires.
-          // Stash pending state; the powerTokenChoice handler will see
-          // it and route back to a fresh figure-pick prompt via the
-          // `kuilSplit-next` continuation. For minimal coupling,
-          // we surface the next-pick choice through requiresChoice in
-          // the same return — handlePowerTokenChoice resolves the
-          // type, then the second invocation comes from the player
-          // re-clicking the (still-in-hand) card or via the chained
-          // requiresChoice flow.
+          // More Hit Tokens to assign — re-prompt for the next recipient.
+          const _nextKeys = [];
+          const _nextLabels = [];
+          for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+            if (!pos) continue;
+            _nextKeys.push(fk);
+            _nextLabels.push(dcNameFromFigureKey(fk));
+          }
           game.pendingKuilTokenSplitState = state;
-        } else {
-          delete game.pendingKuilTokenSplitState;
+          return {
+            applied: false,
+            requiresChoice: true,
+            choiceOptions: _nextLabels.map(n => `Hit Token recipient: ${n}`),
+            choiceValues: _nextKeys,
+            refreshDcEmbed: true,
+            logMessage: `**${_deCardName}** — granted 1 Hit Token to **${dcNameFromFigureKey(chosenFigureKey)}**. ${state.remaining} remaining.`,
+          };
         }
+        delete game.pendingKuilTokenSplitState;
         return {
           applied: true,
-          logMessage: `**${_deCardName}** — granted 1 Power Token to **${dcNameFromFigureKey(chosenFigureKey)}** (choose type). ${state.remaining > 0 ? `${state.remaining} remaining; play again to grant the next.` : 'Distribution complete.'}`,
-          requiresPowerTokenChoice: true,
+          logMessage: `**${_deCardName}** — granted 1 Hit Token to **${dcNameFromFigureKey(chosenFigureKey)}**. Distribution complete.`,
+          refreshDcEmbed: true,
         };
       }
       // Phase 1: present friendly-figure picker (any non-defeated friendly).
@@ -5233,16 +5236,16 @@ export function resolveAbility(abilityId, context) {
         friendlyLabels.push(dcNameFromFigureKey(fk));
       }
       if (friendlyKeys.length === 0) {
-        return { applied: false, manualMessage: `**${_deCardName}** — no friendly figures in play to distribute Power Tokens to.` };
+        return { applied: false, manualMessage: `**${_deCardName}** — no friendly figures in play to distribute Hit Tokens to.` };
       }
       const state = game.pendingKuilTokenSplitState || { remaining: tokensTotal, distributed: [] };
       game.pendingKuilTokenSplitState = state;
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: friendlyLabels.map(n => `Token recipient: ${n}`),
+        choiceOptions: friendlyLabels.map(n => `Hit Token recipient: ${n}`),
         choiceValues: friendlyKeys,
-        manualMessage: `**${_deCardName}** — Kuiil is defeated. Discard to distribute ${state.remaining} Power Token${state.remaining === 1 ? '' : 's'} among friendly figures (1 per click).`,
+        manualMessage: `**${_deCardName}** — Kuiil is defeated. Discard to distribute ${state.remaining} Hit Token${state.remaining === 1 ? '' : 's'} among friendly figures (1 per click).`,
       };
     }
   }
@@ -5812,6 +5815,18 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.recoverDamage === 'number' && entry.recoverDamage > 0) {
     const { game, playerNum, dcMessageMeta, dcHealthState, msgId } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
+    // Glory of the Kill: only recover if the defender of the just-resolved
+    // attack was defeated (CSV "the defender was defeated"). lastDefeatInfo is
+    // set in combat-bridge when the attack target drops to 0 HP.
+    if (entry.requiresDefenderDefeated) {
+      const cbt = context.combat || game.pendingCombat || game.combat;
+      const _defeatedFk = game.lastDefeatInfo?.figureKey;
+      const _attackTargetFk = cbt?.target?.figureKey || game.lastAttackTargetFigureKey;
+      const _defenderDefeated = !!_defeatedFk && (!_attackTargetFk || _defeatedFk === _attackTargetFk);
+      if (!_defenderDefeated) {
+        return { applied: false, manualMessage: '**Glory of the Kill** — play only after an attack in which the defender was defeated.' };
+      }
+    }
     const actMsgId = msgId || findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!actMsgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: recovery requires health state.' };
@@ -7107,6 +7122,46 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `+${bonus} Damage (${defeated} defeated friendly figure${defeated === 1 ? '' : 's'}).` };
   }
 
+  // ccEffect: attackBonusHits + requiresMeleeAttack / bonusHitVsRangedDefender (Deathblow)
+  // CSV: "when you declare a MELEE attack — Apply +1 Hit" plus a second row
+  // "Apply an additional +1 Hit if defender has the Ranged attack type".
+  // Gate: attacker must be making a Melee attack (combat.isRanged falsy, with
+  // a fallback to the attacker's DC attack type). Defender-Ranged check reads
+  // the target figure's DC attack.type === 'range'.
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusHits === 'number' && entry.attackBonusHits > 0 && entry.requiresMeleeAttack) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    // Determine the attack type. Prefer the combat flag; fall back to the
+    // attacker's DC base attack type when the flag is not yet populated.
+    let attackerIsRanged = cbt.isRanged;
+    if (attackerIsRanged == null) {
+      const _atkType = (getStatsForDc(cbt.attackerDcName)?.attack?.type || '').toLowerCase();
+      attackerIsRanged = _atkType === 'range' || _atkType === 'ranged';
+    }
+    if (attackerIsRanged) {
+      return { applied: false, manualMessage: '**Deathblow** — only applies when you declare a Melee attack.' };
+    }
+    let bonus = entry.attackBonusHits;
+    let rangedNote = '';
+    if (typeof entry.bonusHitVsRangedDefender === 'number' && entry.bonusHitVsRangedDefender > 0) {
+      const _defFk = cbt.target?.figureKey;
+      const _defDcName = _defFk ? dcNameFromFigureKey(_defFk) : (cbt.targetStats ? null : null);
+      const _defType = _defDcName ? (getStatsForDc(_defDcName)?.attack?.type || '').toLowerCase() : '';
+      if (_defType === 'range' || _defType === 'ranged') {
+        bonus += entry.bonusHitVsRangedDefender;
+        rangedNote = ` (+${entry.bonusHitVsRangedDefender} vs Ranged defender)`;
+      }
+    }
+    cbt.bonusHits = (cbt.bonusHits || 0) + bonus;
+    return {
+      applied: true,
+      logMessage: `+${bonus} Damage added to this Melee attack.${rangedNote}`,
+    };
+  }
+
   // ccEffect: attackBonusHits (Positioning Advantage) — +N Hit to this attack; attacker only
   if (entry.type === 'ccEffect' && typeof entry.attackBonusHits === 'number' && entry.attackBonusHits > 0) {
     const { game, playerNum, combat } = context;
@@ -7560,6 +7615,28 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: defenseBonusBlockOrEvadeChoice (Parry) — defender chooses +N Block OR +N Evade.
+  if (entry.type === 'ccEffect' && typeof entry.defenseBonusBlockOrEvadeChoice === 'number' && entry.defenseBonusBlockOrEvadeChoice > 0) {
+    const { game, playerNum, combat, chosenOption } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    const defenderPlayerNum = cbt?.attackerPlayerNum ? opponentPlayerNum(cbt.attackerPlayerNum) : null;
+    if (!game || !playerNum || !cbt || defenderPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when an attack targeting you is declared (as the defender).' };
+    }
+    const n = entry.defenseBonusBlockOrEvadeChoice;
+    const blockLabel = `+${n} Block`;
+    const evadeLabel = `+${n} Evade`;
+    if (chosenOption == null) {
+      return { applied: false, requiresChoice: true, choiceOptions: [blockLabel, evadeLabel], logMessage: `**Parry** — choose ${blockLabel} or ${evadeLabel}.` };
+    }
+    if (String(chosenOption).toLowerCase().includes('evade')) {
+      cbt.bonusEvade = (cbt.bonusEvade || 0) + n;
+      return { applied: true, logMessage: `${evadeLabel} added to defense results.` };
+    }
+    cbt.bonusBlock = (cbt.bonusBlock || 0) + n;
+    return { applied: true, logMessage: `${blockLabel} added to defense results.` };
+  }
+
   // ccEffect: applyDefenseBonusBlock and/or applyDefenseBonusEvade (Brace Yourself, Stroke of Brilliance)
   if (entry.type === 'ccEffect' && ((typeof entry.applyDefenseBonusBlock === 'number' && entry.applyDefenseBonusBlock > 0) || (typeof entry.applyDefenseBonusEvade === 'number' && entry.applyDefenseBonusEvade > 0))) {
     const { game, playerNum, combat } = context;
@@ -7601,7 +7678,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade / roundDefenseAccuracyPenalty (Take Position, Survival Instincts, Cavalry Charge, Take Cover, Deflection) — until end of round
-  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0) || (typeof entry.roundDefenseAccuracyPenalty === 'number' && entry.roundDefenseAccuracyPenalty > 0)) && !entry.roundDefenderBonusBlockPerEvade) {
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0) || (typeof entry.roundDefenseAccuracyPenalty === 'number' && entry.roundDefenseAccuracyPenalty > 0) || (typeof entry.roundDeflectionAccuracyPenalty === 'number' && entry.roundDeflectionAccuracyPenalty > 0) || entry.deflectionCounterDamage || entry.vehicleSpeedBonusRound || entry.vehicleDefenseBonusEvadeRound) && !entry.roundDefenderBonusBlockPerEvade) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
@@ -7610,16 +7687,25 @@ export function resolveAbility(abilityId, context) {
     const evade = entry.roundDefenseBonusEvade || 0;
     if (block) game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + block;
     if (evade) game.roundDefenseBonusEvade[playerNum] = (game.roundDefenseBonusEvade[playerNum] || 0) + evade;
-    // Accuracy penalty (Take Cover, Deflection) — accumulates additively
+    // Accuracy penalty (Take Cover) — accumulates additively, applies to ALL attacks.
     const accPenalty = entry.roundDefenseAccuracyPenalty || 0;
     if (accPenalty) {
       game.roundDefenseAccuracyPenalty = game.roundDefenseAccuracyPenalty || {};
       game.roundDefenseAccuracyPenalty[playerNum] = (game.roundDefenseAccuracyPenalty[playerNum] || 0) + accPenalty;
     }
+    // Deflection: Ranged-only accuracy penalty — separate per-player counter so
+    // it is NOT applied to Melee attacks (CSV: "when a Ranged attack targeting
+    // you is declared"). Consumed only when combat.isRanged (combat-bridge.js).
+    const deflectAccPenalty = entry.roundDeflectionAccuracyPenalty || 0;
+    if (deflectAccPenalty) {
+      game.roundDeflectionAccuracyPenalty = game.roundDeflectionAccuracyPenalty || {};
+      game.roundDeflectionAccuracyPenalty[playerNum] = (game.roundDeflectionAccuracyPenalty[playerNum] || 0) + deflectAccPenalty;
+    }
     const parts = [];
     if (block) parts.push(`+${block} Block`);
     if (evade) parts.push(`+${evade} Evade`);
     if (accPenalty) parts.push(`-${accPenalty} Accuracy`);
+    if (deflectAccPenalty) parts.push(`-${deflectAccPenalty} Accuracy vs Ranged`);
     // Cavalry Charge: friendly TROOPERs get +N Hit when attacking this round
     if (entry.trooperRoundAttackHitBonus) {
       game.roundTrooperAttackHitBonus = game.roundTrooperAttackHitBonus || {};
@@ -7631,6 +7717,14 @@ export function resolveAbility(abilityId, context) {
       game.roundVehicleSpeedBonus = game.roundVehicleSpeedBonus || {};
       game.roundVehicleSpeedBonus[playerNum] = (game.roundVehicleSpeedBonus[playerNum] || 0) + entry.vehicleSpeedBonusRound;
       parts.push(`+${entry.vehicleSpeedBonusRound} Speed for friendly VEHICLEs`);
+    }
+    // Fuel Upgrade: friendly VEHICLEs apply +N Evade this round (VEHICLE-scoped;
+    // separate from the shared all-figure roundDefenseBonusEvade so non-VEHICLE
+    // figures do not get the bonus — CSV "Each of your VEHICLES").
+    if (entry.vehicleDefenseBonusEvadeRound) {
+      game.roundVehicleDefenseBonusEvade = game.roundVehicleDefenseBonusEvade || {};
+      game.roundVehicleDefenseBonusEvade[playerNum] = (game.roundVehicleDefenseBonusEvade[playerNum] || 0) + entry.vehicleDefenseBonusEvadeRound;
+      parts.push(`+${entry.vehicleDefenseBonusEvadeRound} Evade for friendly VEHICLEs when defending`);
     }
     // Deflection: after attack resolves, attacker suffers N damage
     if (entry.deflectionCounterDamage) {
@@ -9069,13 +9163,13 @@ export function resolveAbility(abilityId, context) {
       const dcList = getDcList(game, playerNum) || [];
       const _reqTrait = entry.readyRequireTrait ? String(entry.readyRequireTrait).toUpperCase() : null;
       const _reqWithin = typeof entry.readyRequireWithinSpaces === 'number' ? entry.readyRequireWithinSpaces : null;
-      let _activPos = null, _activDcName = null;
+      let _activPos = null, _activDcName = null, _activFk = null;
       if ((_reqTrait || _reqWithin != null) && dcMessageMeta) {
         const _activMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
         const _activMeta = _activMsgId ? dcMessageMeta.get(_activMsgId) : null;
         _activDcName = _activMeta?.dcName || null;
         const _activKeys = _activMeta ? getFigureKeysForDcMsg(game, playerNum, _activMeta) : [];
-        const _activFk = _activKeys[game.dcActionsData?.[_activMsgId]?.selectedFigure ?? 0] || _activKeys[0];
+        _activFk = _activKeys[game.dcActionsData?.[_activMsgId]?.selectedFigure ?? 0] || _activKeys[0];
         _activPos = _activFk ? game.figurePositions?.[playerNum]?.[_activFk] : null;
       }
       const opts = dcList
@@ -9087,9 +9181,14 @@ export function resolveAbility(abilityId, context) {
             if (!kws.includes(_reqTrait)) return false;
           }
           if (_reqWithin != null && _activPos) {
-            if (dcName === _activDcName) return false; // "another" friendly figure
+            // Rally the Troops says "another friendly TROOPER"; New Orders says
+            // "1 adjacent friendly figure" (may be a groupmate on the same DC).
+            // readyAllowSameDc suppresses the same-DC self-exclusion. In both
+            // cases the LEADER figure itself never counts toward the range
+            // check (distance 0), so exclude the activating figure key.
+            if (!entry.readyAllowSameDc && dcName === _activDcName) return false; // "another" friendly figure
             const _near = Object.entries(game.figurePositions?.[playerNum] || {})
-              .some(([fk, pos]) => fk.startsWith(`${dcName}-`) && pos && (() => { const d = countGameSpaces(game, _activPos, pos); return typeof d === 'number' && d >= 0 && d <= _reqWithin; })());
+              .some(([fk, pos]) => fk !== _activFk && fk.startsWith(`${dcName}-`) && pos && (() => { const d = countGameSpaces(game, _activPos, pos); return typeof d === 'number' && d >= 1 && d <= _reqWithin; })());
             if (!_near) return false;
           }
           return true;
@@ -9514,36 +9613,63 @@ export function resolveAbility(abilityId, context) {
       }
     }
     const oppNum = opponentPlayerNum(playerNum);
+    // CSV "up to 3 ADJACENT hostile figures": compute the set of hostile figures
+    // adjacent to any of the activating figures. Only those are eligible.
+    const mapId = game.selectedMap?.id;
+    const adjacentHostileFks = new Set();
+    if (mapId) {
+      const meta = dcMessageMeta.get(msgId);
+      const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
+      for (const afk of actKeys) {
+        const adj = getFiguresAdjacentToTarget(game, afk, mapId);
+        for (const { figureKey: hfk, playerNum: hp } of adj) {
+          if (hp === oppNum) adjacentHostileFks.add(hfk);
+        }
+      }
+    }
     if (!chosenFigureKey) {
-      // Build choice list from opponent DCs (player picks an adjacent hostile DC)
+      // Build choice list from opponent DCs that have at least one ADJACENT
+      // figure (per-DC selection; up to 3 of that DC's adjacent figures Stun).
       const choiceOptions = [];
       const choiceValues = [];
       for (const [dcMsgId, meta] of dcMessageMeta) {
         if (meta.playerNum !== oppNum) continue;
         const name = meta.displayName || meta.dcName;
         if (!name) continue;
+        // Only offer the DC if at least one of its figures is adjacent.
+        if (mapId) {
+          const dcFks = getFigureKeysForDcMsg(game, oppNum, meta) || [];
+          if (!dcFks.some((fk) => adjacentHostileFks.has(fk))) continue;
+        }
         choiceOptions.push(name);
         choiceValues.push(dcMsgId);
       }
-      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No hostile figures found. Resolve manually.' };
+      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No adjacent hostile figure to Roar at. Resolve manually.' };
       return { applied: false, requiresChoice: true, choiceOptions, choiceValues };
     }
-    // Apply Stun to all figures of the chosen hostile DC
+    // Apply Stun to up to N ADJACENT figures of the chosen hostile DC.
     const targetMeta = dcMessageMeta.get(chosenFigureKey);
     if (!targetMeta) return { applied: false, manualMessage: `Could not find hostile DC. Resolve manually.` };
     const figureKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
+    // Restrict to adjacent figures when we have map context.
+    const eligibleKeys = mapId
+      ? figureKeys.filter((fk) => adjacentHostileFks.has(fk))
+      : figureKeys;
     let stunned = 0;
     let skipped = 0;
-    for (const fk of figureKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
+    for (const fk of eligibleKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
       if (isConditionImmune(game, fk)) { skipped++; continue; }
       applyCondition(game, fk, 'Stun');
       stunned++;
     }
     const label = targetMeta.displayName || targetMeta.dcName || 'hostile figure(s)';
     const immuneNote = skipped > 0 ? ` (${skipped} immune)` : '';
+    if (stunned === 0 && skipped === 0) {
+      return { applied: false, manualMessage: `**${label}** — no adjacent figure to Stun.` };
+    }
     return {
       applied: true,
-      logMessage: `**${label}** — ${stunned} figure(s) became Stunned.${immuneNote}`,
+      logMessage: `**${label}** — ${stunned} adjacent figure(s) became Stunned.${immuneNote}`,
     };
   }
 
@@ -9594,17 +9720,33 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, requiresSpaceChoice: true, validSpaces, chosenFigureKey: targetFigureKey, spaceChoiceLabel: `**Reposition** — Pick a landing space for **${dcNameFromFigureKey(targetFigureKey)}** (up to ${pushDist} spaces):` };
     }
 
-    // Phase 1: enumerate valid SMALL friendly figures
+    // Phase 1: enumerate valid SMALL friendly figures WITHIN 3 spaces of the
+    // activating figure (CSV "a SMALL friendly figure within 3 spaces").
     const dcEffects = getDcEffects() || {};
+    // Locate the activating figure (the card player) to anchor the range check.
+    let _rpActPos = null, _rpActFk = null;
+    if (dcMessageMeta) {
+      const _rpMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      const _rpMeta = _rpMsgId ? dcMessageMeta.get(_rpMsgId) : null;
+      const _rpKeys = _rpMeta ? getFigureKeysForDcMsg(game, playerNum, _rpMeta) : [];
+      _rpActFk = _rpKeys[game.dcActionsData?.[_rpMsgId]?.selectedFigure ?? 0] || _rpKeys[0] || null;
+      _rpActPos = _rpActFk ? game.figurePositions?.[playerNum]?.[_rpActFk] : null;
+    }
     const validTargets = [];
     for (const [fk, coord] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!coord) continue;
       const dcN = dcNameFromFigureKey(fk);
       const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
       if (kws.includes('LARGE') || kws.includes('MASSIVE')) continue; // SMALL only
+      // Within-3 range from the activator (skip the activator's own anchor only
+      // if you cannot push yourself — IACP allows targeting yourself, so keep it).
+      if (_rpActPos) {
+        const d = countGameSpaces(game, _rpActPos, coord);
+        if (typeof d !== 'number' || d < 0 || d > 3) continue;
+      }
       validTargets.push(fk);
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: 'No SMALL friendly figures to push.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: 'No SMALL friendly figure within 3 spaces to push.' };
     const choiceOptions = figureChoiceLabels(validTargets);
     return { applied: false, requiresChoice: true, choiceOptions, choiceValues: validTargets };
   }
@@ -10948,21 +11090,19 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: `**Hidden Trap** — Terminal at **${String(chosenSpace).toUpperCase()}**. ${results.length ? results.join('; ') : 'No figures adjacent.'}`, refreshDcEmbed: results.length > 0 };
     }
-    // Phase 1: space picker — show all spaces within 8 of activating figure
+    // Phase 1: space picker — CSV "Choose a terminal". Offer ONLY active
+    // terminal spaces (getActiveTerminals respects Terminal-Slicing discards),
+    // not all spaces within 8.
     const boardState = getBoardStateForMovement(game, null);
     const adj = boardState?.mapSpaces?.adjacency;
     if (!adj) return { applied: true, logMessage: '**Hidden Trap** — Choose a terminal space; each adjacent figure suffers 2 Damage. Resolve manually (no map data).' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
-    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
-    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
-    const allSpaces = Object.keys(adj);
-    let validSpaces = allSpaces;
-    if (actPos) {
-      validSpaces = allSpaces.filter((sp) => countGameSpaces(game, actPos, sp) <= 8);
+    const mapId = game.selectedMap?.id;
+    const terminals = mapId ? getActiveTerminals(game, mapId) : [];
+    const validSpaces = (terminals || []).map((t) => String(t).toLowerCase());
+    if (!validSpaces.length) {
+      return { applied: false, manualMessage: '**Hidden Trap** — no terminals on this map. Resolve manually.' };
     }
-    if (!validSpaces.length) validSpaces = allSpaces.slice(0, 25);
-    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal space:' };
+    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Hidden Trap** — Choose the terminal:' };
   }
 
   // ccEffect: fieldSupplyEffect (Field Supply) — up to 2 friendly figures within 3 each gain 1 Damage Token
@@ -13351,14 +13491,41 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: disablesFigure (Disable — chosen hostile cannot use Surge or Special Actions this round)
+  // ccEffect: disablesFigure (Disable — chosen ADJACENT hostile cannot use Surge or Special Actions this round)
   if (entry.type === 'ccEffect' && entry.disablesFigure) {
-    const { game, playerNum, chosenOption } = context;
+    const { game, playerNum, chosenOption, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppDcList = getDcList(game, 3 - playerNum) || [];
     if (chosenOption == null) {
-      const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
-      if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to disable.' };
+      // CSV "an adjacent hostile figure" — only offer hostile DCs that have at
+      // least one figure adjacent to one of the activating figures. disabledFigures
+      // is keyed by DC displayName (consumed by combat/dc-play-area), so we keep
+      // DC-level tracking but gate the offered list on per-figure adjacency.
+      const oppNum = 3 - playerNum;
+      const mapId = game.selectedMap?.id;
+      const adjacentHostileDcNames = new Set();
+      if (mapId && dcMessageMeta) {
+        const actMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        const actMeta = actMsgId ? dcMessageMeta.get(actMsgId) : null;
+        const actKeys = actMeta ? getFigureKeysForDcMsg(game, playerNum, actMeta) : [];
+        for (const fk of actKeys) {
+          const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+          for (const { figureKey: hfk, playerNum: hp } of adj) {
+            if (hp === oppNum) adjacentHostileDcNames.add(dcNameFromFigureKey(hfk));
+          }
+        }
+      }
+      const options = oppDcList
+        .filter((dc) => dc && !dc.defeated)
+        .filter((dc) => {
+          // No map/meta context → fall back to all hostiles (resolve manually).
+          if (adjacentHostileDcNames.size === 0 && !mapId) return true;
+          const dcName = dc.dcName || dc.displayName;
+          return adjacentHostileDcNames.has(dcName);
+        })
+        .map((dc) => dc.displayName || dc.dcName)
+        .filter(Boolean);
+      if (options.length === 0) return { applied: false, manualMessage: 'No adjacent hostile figure to Disable.' };
       return { requiresChoice: true, choiceOptions: options };
     }
     game.disabledFigures = game.disabledFigures || [];

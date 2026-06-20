@@ -179,8 +179,11 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
     case 'afterattackdice':
       // Escalating Hostility: "Use after you resolve an attack that DID NOT MISS"
       // — gate on a confirmed hit (alexanbv 2026-06-19). Other afterAttack CCs
-      // (Collateral Damage, Glory of the Kill) may be played after a miss.
+      // (Collateral Damage) may be played after a miss.
       if (cardName === 'Escalating Hostility') return ctx.duringAttack && ctx.isAttacker && ctx.combatHit === true;
+      // Glory of the Kill: "the defender was defeated" — only playable (by the
+      // attacker) when the just-resolved attack defeated a figure.
+      if (cardName === 'Glory of the Kill') return ctx.duringAttack && ctx.isAttacker && ctx.recentDefeat === true;
       return ctx.duringAttack;
     case 'afteryouresolveattackthatdidnotmissduetoaccuracy':
       // Reduce to Rubble: playable ONLY when the attack has resolved AND
