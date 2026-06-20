@@ -480,6 +480,10 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         for (const [_fk, _fp] of Object.entries(_friendlyPos)) {
           if (!_fp || _fk === _rFk) continue;
           if (countGameSpaces(game, _rPos, _fp) > 2) continue;
+          // NON-companion only (CSV row 402): companion figures carry
+          // companion === true on their dc effect. Mirror the fire-time
+          // filter so the descriptor isn't offered for companions alone.
+          if (getDcEffects()?.[dcNameFromFigureKey(_fk)]?.companion === true) continue;
           _anyTarget = true;
           break;
         }
@@ -596,18 +600,19 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
 
   // Long-Laid Plans (Thrawn): SoA player-driven trigger. Per destruct
   // 2026-05-07: distribute N DIFFERENT power tokens (max 1 of each
-  // type) among friendly figures within 3 of Thrawn, where N = current
-  // round number, capped at 4 (the number of distinct token types:
-  // Damage, Block, Surge, Evade). Multi-step sub-prompt: each click
+  // type) among friendly figures, where N = current round number,
+  // capped at 4 (the number of distinct token types: Damage, Block,
+  // Surge, Evade). CSV row 479 has conditional=None/range=None — there
+  // is NO range restriction, so ALL friendly figures are eligible (not
+  // just those within 3 of Thrawn). Multi-step sub-prompt: each click
   // grants 1 token and re-prompts with the remaining types until done.
   if (_abilityIds.includes('long_laid_plans_thrawn') && game) {
     const _llpRound = Math.max(1, game.currentRound || 1);
     const _llpDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _llpSelfFk = `${dcName}-${_llpDgIdx}-0`;
-    const _llpSelfPos = game.figurePositions?.[playerNum]?.[_llpSelfFk];
-    if (_llpSelfPos) {
+    {
       const _llpFriendlies = Object.entries(game.figurePositions?.[playerNum] || {})
-        .filter(([fk, fp]) => fp && countGameSpaces(game, _llpSelfPos, fp) <= 3)
+        .filter(([fk, fp]) => fp)
         .map(([fk]) => fk);
       if (_llpFriendlies.length > 0) {
         descriptors.push({

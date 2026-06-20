@@ -550,7 +550,8 @@
       "targetHostileFigure": {
         "damage": 3,
         "strain": 0,
-        "range": 3
+        "range": 3,
+        "allowFriendly": true
       },
       "wiredStatus": "wired"
     },
@@ -4934,7 +4935,8 @@
         "range": 99,
         "requiresLos": false,
         "activatorMustBeAdjacentToToken": "terminal",
-        "targetMustBeAdjacentToToken": "terminal"
+        "targetMustBeAdjacentToToken": "terminal",
+        "allowFriendly": true
       },
       "logMessage": "**System Shock** — Terminal adjacency enforced for both activator and target.",
       "wiredStatus": "wired"

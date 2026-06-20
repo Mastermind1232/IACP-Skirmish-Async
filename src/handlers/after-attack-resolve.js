@@ -187,8 +187,12 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   // window, not auto-applied out of sequence (alexanbv 2026-06-16: "any ability
   // that requires movement, player choice, etc. should be fixed").
   const _atkPassives = _atkEff?.passives || [];
-  // Fly-By (Jet Trooper Elite): gain 2 MP if the target was within 2 spaces.
-  if (_atkPassives.includes('Fly-By') && combat.distanceToTarget != null && combat.distanceToTarget <= 2 && combat.attackerMsgId) {
+  // Fly-By (Jet Trooper Elite): gain 2 MP after the attack resolves. CSV row 313
+  // (after_resolves) is conditional=None — the "within 2 spaces" qualifier belongs
+  // to the SEPARATE on_declare blue-die row (312), NOT the +2 MP. So the MP is
+  // always granted, regardless of distance. (Contrast Jets, row 315, whose
+  // after_resolves row DOES carry the within-2 condition.)
+  if (_atkPassives.includes('Fly-By') && combat.attackerMsgId) {
     enqueueAfterAttackEffect(combat, { side: 'attacker', type: 'fly_by', label: 'Fly-By: gain 2 MP' });
   }
   // Jets (Jet Trooper Regular): gain 1 MP if the target was within 2 spaces.

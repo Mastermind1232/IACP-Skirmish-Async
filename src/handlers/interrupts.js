@@ -14,7 +14,7 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { resolveStartOfRoundEffect } from './round.js';
 import { resumeSequenceAfterInterrupt } from './combat.js';
-import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
+import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW, clearPendingSuppressiveFireMp, clearPendingSuppressiveFireOptin, clearPendingAssassinsBlade, clearPendingStillFaster, clearPendingSelfDestruct, clearPendingExecutorInterrupt, clearPendingBELReorder } from '../game/interrupts.js';
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getDamageableObjectsAtCoord, applyDamageToObject } from '../game/object-damage-pipeline.js';
@@ -952,6 +952,38 @@ export async function handleSuppressiveFireMpPick(interaction, ctx) {
   }
   await interaction.message.edit({ content: `**Suppressive Fire** — **${dcName}** gains **2 MP** — spend at once, no bank.`, components: [] }).catch(discordCatch);
   await logGameAction(game, client, `**Suppressive Fire** — **${dcName}** gains 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
+  saveGames(game.gameId); return;
+}
+
+// ── 11b. Suppressive Fire opt-in (Exhaust… may) ─────────────────────────────
+// NEW PREFIXES: sf_optin_yes_, sf_optin_no_
+export async function handleSuppressiveFireOptin(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isYes = interaction.customId.startsWith('sf_optin_yes_');
+  const gameId = parseCustomId(interaction.customId, isYes ? 'sf_optin_yes_' : 'sf_optin_no_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingSuppressiveFireOptin;
+  if (!pending) { await interaction.followUp({ content: 'No pending Suppressive Fire.', ephemeral: true }).catch(discordCatch); return; }
+  const { attackerPlayerNum, targetName } = pending;
+  if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the attacker may choose.')) return;
+  clearPendingSuppressiveFireOptin(game);
+  if (!isYes) {
+    await interaction.message.edit({ content: `**Suppressive Fire** — skipped (not exhausted).`, components: [] }).catch(discordCatch);
+    saveGames(game.gameId); return;
+  }
+  await interaction.message.edit({ content: `**Suppressive Fire** — exhausting… **${targetName}** becomes Weakened.`, components: [] }).catch(discordCatch);
+  const channel = interaction.channel;
+  const send = async (content, components) => {
+    await channel?.send(components ? { content, components } : content).catch(discordCatch);
+  };
+  try {
+    const { applySuppressiveFireEffect } = await import('../engine/combat-bridge.js');
+    await applySuppressiveFireEffect(game, { send, client, logGameAction, saveGames }, pending);
+  } catch (err) {
+    console.error('[interrupts] Suppressive Fire opt-in apply failed:', err?.message ?? err);
+  }
   saveGames(game.gameId); return;
 }
 

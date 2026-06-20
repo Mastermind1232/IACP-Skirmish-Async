@@ -103,6 +103,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   YHSIW:                 'yhsiw',
   TRUSTED_ALLY:          'trusted-ally',
   SUPPRESSIVE_FIRE_MP:   'suppressive-fire-mp',
+  SUPPRESSIVE_FIRE_OPTIN: 'suppressive-fire-optin',
   STRIKE_ME_DOWN:        'strike-me-down',
   SLOW_ON_THE_DRAW:      'slow-on-the-draw',
   FORCE_IS_WITH_ME:      'force-is-with-me',
@@ -591,6 +592,9 @@ export function clearPendingTrustedAlly(game) { _clearDual(game, 'pendingTrusted
 
 export function setPendingSuppressiveFireMp(game, payload) { _setDual(game, 'pendingSuppressiveFireMp', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_MP, payload); }
 export function clearPendingSuppressiveFireMp(game) { _clearDual(game, 'pendingSuppressiveFireMp', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_MP); }
+
+export function setPendingSuppressiveFireOptin(game, payload) { _setDual(game, 'pendingSuppressiveFireOptin', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_OPTIN, payload); }
+export function clearPendingSuppressiveFireOptin(game) { _clearDual(game, 'pendingSuppressiveFireOptin', INTERRUPT_TYPES.SUPPRESSIVE_FIRE_OPTIN); }
 
 export function setPendingStrikeMeDown(game, payload) { _setDual(game, 'pendingStrikeMeDown', INTERRUPT_TYPES.STRIKE_ME_DOWN, payload); }
 export function clearPendingStrikeMeDown(game) { _clearDual(game, 'pendingStrikeMeDown', INTERRUPT_TYPES.STRIKE_ME_DOWN); }

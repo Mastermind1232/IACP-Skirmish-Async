@@ -58,7 +58,7 @@ import {
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingSuppressiveFireMp, setPendingSuppressiveFireOptin, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -1641,69 +1641,31 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       }
     }
   }
-  // Suppressive Fire (Skirmish Upgrade): exhaust after Ranged attack → Weaken target + 2 MP to SMALL friendly within 3
+  // Suppressive Fire (Skirmish Upgrade): "Exhaust… (may)" after a Ranged attack
+  // that did not miss → Weaken target + 2 MP to a SMALL friendly within 3.
+  // Gate on the non-miss `hit` flag, NOT damage>0: a fully-blocked hit (damage 0)
+  // is still "not a miss". The effect is opt-in — present a Yes/Skip prompt and
+  // only apply on opt-in (see applySuppressiveFireEffect / sf_optin handler).
   const _sfUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
   const _sfExh = game.exhaustedSkirmishUpgrades?.[combat.attackerMsgId] || [];
-  if (cardNameIncludes(_sfUpgrades, 'Suppressive Fire') && !cardNameIncludes(_sfExh, 'Suppressive Fire') && combat.isRanged && damage > 0) {
-    // Apply Weaken to the target, then exhaust Suppressive Fire (effect resolves)
-    const _sfTargetFk = combat.target?.figureKey;
-    if (_sfTargetFk && !isConditionImmune(game, _sfTargetFk)) {
-      _applyCondition(game, _sfTargetFk, 'Weaken');
-    }
-    exhaustAttachment(game, combat.attackerMsgId, 'Suppressive Fire');
+  if (cardNameIncludes(_sfUpgrades, 'Suppressive Fire') && !cardNameIncludes(_sfExh, 'Suppressive Fire') && combat.isRanged && hit) {
     const _sfTargetName = dcNameFromFigureKey(combat.target?.figureKey) || combat.defenderDcName;
-    // Find SMALL friendly figures within 3 spaces of attacker for MP grant
-    const _sfAttackerPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
-    const _sfSmallFriendlies = [];
-    if (_sfAttackerPos) {
-      const _sfEffects = getDcEffects();
-      for (const [_sfFk, _sfPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
-        if (!_sfPos || _sfFk === combat.attackerFigureKey) continue;
-        if (countGameSpaces(game, _sfAttackerPos, _sfPos) > 3) continue;
-        // SMALL check: skip LARGE and MASSIVE figures
-        const _sfDcName = dcNameFromFigureKey(_sfFk);
-        const _sfKwds = (_sfEffects[_sfDcName]?.keywords || []).map(k => String(k).toUpperCase());
-        if (_sfKwds.includes('LARGE') || _sfKwds.includes('MASSIVE')) continue;
-        // Find msgId for this figure's DC
-        const _sfFigMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, _sfFk);
-        if (_sfFigMsgId) _sfSmallFriendlies.push({ fk: _sfFk, msgId: _sfFigMsgId, dcName: _sfDcName });
-      }
-    }
-    if (_sfSmallFriendlies.length === 1) {
-      // Auto-stamp picker on the only eligible friendly. Recipient
-      // ≠ attacker (filter excludes the attacker) → spend at once,
-      // no bank, bypassCosts: false.
-      const _sfF = _sfSmallFriendlies[0];
-      try {
-        const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
-        await setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
-          msgId: _sfF.msgId,
-          figureKey: _sfF.fk,
-          playerNum: attackerPlayerNum,
-          spaces: 2,
-          source: 'Suppressive Fire',
-          threadId: combat.combatThreadId,
-          bypassCosts: false,
-        });
-        await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP** — spend at once, no bank.`).catch(discordCatch);
-      } catch (err) {
-        console.error('[combat-bridge] Suppressive Fire auto-grant picker stamp failed:', err?.message ?? err);
-      }
-      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
-    } else if (_sfSmallFriendlies.length > 1) {
-      // Show picker buttons
-      setPendingSuppressiveFireMp(game, { attackerPlayerNum });
-      const _sfBtns = _sfSmallFriendlies.map(({ fk, dcName }) =>
-        new ButtonBuilder().setCustomId(`sf_mp_pick_${game.gameId}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
-      );
-      const _sfRows = [];
-      for (let _r = 0; _r < _sfBtns.length; _r += 5) _sfRows.push(new ActionRowBuilder().addComponents(_sfBtns.slice(_r, _r + 5)));
-      await thread.send({ content: `**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. Choose a SMALL friendly figure within 3 spaces to gain 2 MP:`, components: _sfRows }).catch(discordCatch);
-      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
-    } else {
-      await thread.send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. No eligible SMALL friendly figures within 3 spaces for MP grant.`).catch(discordCatch);
-      await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
-    }
+    setPendingSuppressiveFireOptin(game, {
+      attackerPlayerNum,
+      attackerMsgId: combat.attackerMsgId,
+      attackerFigureKey: combat.attackerFigureKey,
+      targetFigureKey: combat.target?.figureKey || null,
+      targetName: _sfTargetName,
+      combatThreadId: combat.combatThreadId,
+    });
+    await thread.send(sanitizeMentions({
+      content: `**Suppressive Fire** — <@${ownerId}> You may exhaust **Suppressive Fire**: Weaken **${_sfTargetName}**, then a SMALL friendly figure within 3 gains 2 MP.`,
+      allowedMentions: { users: [ownerId] },
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`sf_optin_yes_${game.gameId}`).setLabel('Exhaust Suppressive Fire').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`sf_optin_no_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      )],
+    })).catch(discordCatch);
   }
   // Flame Trooper Incinerate: after attacking, each figure that suffered damage suffers 1 Strain (HP loss). Place Rubble in target space.
   const _ftAtkUpgrades = combat.attackerMsgId ? (game.p1DcAttachments?.[combat.attackerMsgId] || game.p2DcAttachments?.[combat.attackerMsgId] || []) : [];
@@ -2007,8 +1969,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         // Don't return — the Block token choice is async but we continue combat resolution
       }
     }
-    // If hit and damage > 0, offer to discard a condition or power token from the target
-    if (hit && damage > 0 && combat.target?.figureKey) {
+    // If the attack did not miss (a fully-blocked hit, damage 0, still
+    // counts — only a Miss disqualifies), offer to discard a condition or
+    // power token from the target.
+    if (hit && combat.target?.figureKey) {
       const _cfTargetConds = (game.figureConditions?.[combat.target.figureKey] || []).filter(c => c !== 'Bleed' || c); // all conditions
       const _cfTargetTokens = game.figurePowerTokens?.[combat.target.figureKey] || [];
       const _cfRemovables = [..._cfTargetConds.map(c => ({ type: 'condition', value: c })), ..._cfTargetTokens.map(t => ({ type: 'token', value: t }))];
@@ -2083,6 +2047,68 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // calls the bound runAfterResolveWindow. Legacy path (_seqActive unset) is
   // byte-for-byte unchanged.
   await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
+}
+
+/**
+ * Apply the Suppressive Fire effect once the attacker has opted in: Weaken the
+ * attack target, exhaust the attachment, then grant 2 MP to a SMALL friendly
+ * figure within 3 spaces (auto-grant if exactly one, picker if many). Shared by
+ * combat-bridge (legacy) and the sf_optin Yes handler. `send(content[, components])`
+ * is an injected channel/thread sender; `logGameAction`/`client`/`saveGames` are deps.
+ */
+export async function applySuppressiveFireEffect(game, { send, client, logGameAction, saveGames }, { attackerPlayerNum, attackerMsgId, attackerFigureKey, targetFigureKey, targetName, combatThreadId }) {
+  // Apply Weaken to the target, then exhaust Suppressive Fire (effect resolves).
+  if (targetFigureKey && !isConditionImmune(game, targetFigureKey)) {
+    _applyCondition(game, targetFigureKey, 'Weaken');
+  }
+  exhaustAttachment(game, attackerMsgId, 'Suppressive Fire');
+  const _sfTargetName = targetName || dcNameFromFigureKey(targetFigureKey);
+  // Find SMALL friendly figures within 3 spaces of attacker for MP grant.
+  const _sfAttackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
+  const _sfSmallFriendlies = [];
+  if (_sfAttackerPos) {
+    const _sfEffects = getDcEffects();
+    for (const [_sfFk, _sfPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
+      if (!_sfPos || _sfFk === attackerFigureKey) continue;
+      if (countGameSpaces(game, _sfAttackerPos, _sfPos) > 3) continue;
+      const _sfDcName = dcNameFromFigureKey(_sfFk);
+      const _sfKwds = (_sfEffects[_sfDcName]?.keywords || []).map(k => String(k).toUpperCase());
+      if (_sfKwds.includes('LARGE') || _sfKwds.includes('MASSIVE')) continue;
+      const _sfFigMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, _sfFk);
+      if (_sfFigMsgId) _sfSmallFriendlies.push({ fk: _sfFk, msgId: _sfFigMsgId, dcName: _sfDcName });
+    }
+  }
+  if (_sfSmallFriendlies.length === 1) {
+    const _sfF = _sfSmallFriendlies[0];
+    try {
+      const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
+      await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
+        msgId: _sfF.msgId,
+        figureKey: _sfF.fk,
+        playerNum: attackerPlayerNum,
+        spaces: 2,
+        source: 'Suppressive Fire',
+        threadId: combatThreadId,
+        bypassCosts: false,
+      });
+      await send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. **${_sfF.dcName}** gains **2 MP** — spend at once, no bank.`);
+    } catch (err) {
+      console.error('[combat-bridge] Suppressive Fire auto-grant picker stamp failed:', err?.message ?? err);
+    }
+    await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened; **${_sfF.dcName}** gains 2 MP (spend immediately, no bank).`, { phase: 'ROUND', icon: 'card' });
+  } else if (_sfSmallFriendlies.length > 1) {
+    setPendingSuppressiveFireMp(game, { attackerPlayerNum });
+    const _sfBtns = _sfSmallFriendlies.map(({ fk, dcName }) =>
+      new ButtonBuilder().setCustomId(`sf_mp_pick_${game.gameId}_${fk}`).setLabel(dcName).setStyle(ButtonStyle.Primary)
+    );
+    const _sfRows = [];
+    for (let _r = 0; _r < _sfBtns.length; _r += 5) _sfRows.push(new ActionRowBuilder().addComponents(_sfBtns.slice(_r, _r + 5)));
+    await send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. Choose a SMALL friendly figure within 3 spaces to gain 2 MP:`, _sfRows);
+    await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+  } else {
+    await send(`**Suppressive Fire** — Exhausted: **${_sfTargetName}** becomes Weakened. No eligible SMALL friendly figures within 3 spaces for MP grant.`);
+    await logGameAction(game, client, `**Suppressive Fire** — **${_sfTargetName}** Weakened after Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+  }
 }
 
 /**

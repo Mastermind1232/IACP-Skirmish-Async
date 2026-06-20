@@ -1207,8 +1207,19 @@ export function resolveAbility(abilityId, context) {
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
-    const validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tactical Maneuver** — No other friendly figures on the board.' };
+    let validTargets = Object.keys(game.figurePositions?.[playerNum] || {}).filter(fk => fk !== activatingKey && game.figurePositions[playerNum][fk]);
+    // "another friendly figure IN YOUR LINE OF SIGHT" (CSV row 260) — filter to
+    // targets the activating figure can see, mirroring On My Mark above.
+    const _tmActPos = game.figurePositions?.[playerNum]?.[activatingKey];
+    const _tmMs = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+    const _tmGfs = context.getFigureSize;
+    if (_tmActPos && _tmMs && typeof _tmGfs === 'function') {
+      validTargets = validTargets.filter((fk) => {
+        const tPos = game.figurePositions[playerNum][fk];
+        return tPos && hasLineOfSightByCoord(game, _tmActPos, tPos, _tmMs, _tmGfs);
+      });
+    }
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Tactical Maneuver** — No friendly figure in your line of sight.' };
     return {
       applied: false,
       requiresChoice: true,
@@ -1505,7 +1516,8 @@ export function resolveAbility(abilityId, context) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = dcEffects?.[fkDcName];
         if (!fkEff?.elite) continue;
-        if (fkEff.affiliation !== 'Scum') continue;
+        // CSV row 303 "an elite figure of your choice" has NO affiliation
+        // condition — any elite figure (either player) is eligible.
         validTargets.push(fk);
       }
     }
@@ -5944,15 +5956,15 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const playerNum = meta.playerNum;
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Apply Focus to all figures in group (auto, before/with the move).
-    for (const fk of figureKeys) {
-      applyCondition(game, fk, 'Focus');
-    }
     // isMoveX (Get into Position): Move-X picker per CRR MOVE-017 — no
-    // banking, bypassCosts true. Focus is applied immediately above.
+    // banking, bypassCosts true.
     if (entry.isMoveX) {
       const _gipSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _gipFigureKey = figureKeys[_gipSelectedIdx] || figureKeys[0] || null;
+      // CSV row 409 "...become Focused" = YOU only. Focus solely the activating
+      // figure that performed the special action, NOT the whole multi-figure
+      // group (the sibling Get Ready uses "another figure in your group").
+      if (_gipFigureKey) applyCondition(game, _gipFigureKey, 'Focus');
       if (!_gipFigureKey) {
         return { applied: true, logMessage: `Became Focused. (Could not locate activating figure for the move; resolve movement manually.)`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
       }
@@ -5978,6 +5990,10 @@ export function resolveAbility(abilityId, context) {
         refreshBoard: true,
       };
     }
+    // Non-isMoveX fall-through: Focus only the activating figure ("you").
+    const _gipSelIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _gipActFk = figureKeys[_gipSelIdx] || figureKeys[0] || null;
+    if (_gipActFk) applyCondition(game, _gipActFk, 'Focus');
     addMovementPoints(game, msgId, entry.mpBonus);
     return { applied: true, logMessage: `Gained ${entry.mpBonus} movement point${entry.mpBonus !== 1 ? 's' : ''}. Became Focused.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
   }

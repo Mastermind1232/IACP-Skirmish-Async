@@ -322,9 +322,15 @@ export async function handleSoaPick(interaction, ctx) {
       const friendlyPos = game.figurePositions?.[rPn] || {};
       const { countGameSpaces } = await import('../game/board-helpers.js');
       const { isImmuneToDirectDefeat } = await import('../game/damage-pipeline.js');
+      const { getDcEffects } = await import('../data-loader.js');
+      const _vrEff = getDcEffects();
       for (const [fk, fp] of Object.entries(friendlyPos)) {
         if (!fp || fk === rFk) continue;
         if (countGameSpaces(game, rPos, fp) > 2) continue;
+        // CSV row 402: "a friendly NON-COMPANION figure within 2". A companion
+        // figure's own dc effect carries companion === true (see effective-los);
+        // exclude those — companions may not be sacrificed to Voracious.
+        if (_vrEff?.[dcNameFromFigureKey(fk)]?.companion === true) continue;
         // Per IACP, "cannot be defeated" effects (Maul/SBR while no
         // activation, Fifth Brother/YWNDM while attached) override
         // direct-defeat ability text — skip those targets.
