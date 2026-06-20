@@ -280,6 +280,12 @@ async function _resolveHeadhunterAndStrainChoice(game, ctx, { figureKey, control
   if (udMsgIds.length > 0) {
     ev.udPrompted = true;
     ev.udMsgId = udMsgIds[0]; // first eligible UD attachment
+    // Under Duress part 1 (CSV row 98) is ALWAYS-ON: while it is attached, the
+    // controlling player must discard 2 cards per prevented Damage instead of 1,
+    // regardless of whether the deplete (part 2 — who chooses) is used. So the
+    // cost doubles as soon as an eligible Under Duress is in play (alexanbv
+    // 2026-06-20; previously only the deplete path set the multiplier).
+    ev.costMultiplier = 2;
     return _postUdPrompt(game, ctx, ev);
   }
 
