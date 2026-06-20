@@ -2503,6 +2503,12 @@ export async function handleScFigPick(interaction, ctx) {
   // immediately, no bank. bypassCosts: false so terrain/figure
   // adders apply unless the figure's profile bypasses them.
   if (targetMsgId) {
+    // "...and may interrupt to perform an attack" (CSV row 83): the chosen
+    // figure also gets a free attack after the 2-MP move (alexanbv 2026-06-20;
+    // the interrupt attack was text-only). freeAttackBonusPending marks it free;
+    // the freeAttackPrompt continuation posts the Declare Attack button.
+    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+    game.freeAttackBonusPending[targetFk] = true;
     try {
       const { setupPendingMoveX } = await import('./move-x-handler.js');
       await setupPendingMoveX(game, { client, logGameAction, saveGames }, {
@@ -2513,6 +2519,7 @@ export async function handleScFigPick(interaction, ctx) {
         source: '[Spectre Cell]',
         threadId: null,
         bypassCosts: false,
+        nextAction: { type: 'freeAttackPrompt', payload: { msgId: targetMsgId, playerNum: meta.playerNum, figureKey: targetFk, sourceLabel: '[Spectre Cell]' } },
       });
     } catch (err) {
       console.error('[activation] Spectre Cell picker stamp failed:', err?.message ?? err);
