@@ -5,6 +5,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'disc
 import { getDcEffects, getMapData, getFormCards, getCcEffectsData, getMapTokensData as _getMapTokensData } from '../data-loader.js';
 import { getConfig, getFormsChosenByTeamClawdites } from '../game/figure-config.js';
 import { cleanupRoundStart } from '../game/activation-state.js';
+import { clearRoundModifiersUntilEor } from '../game/round-modifiers.js';
 import { reduceHp, healHp, healHpDistributed, applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, awardKillVp, awardObjectiveVp, deductVp, grantPowerTokens, grantMovementBank, buildFigureButtonLabel, getMaxPowerTokens } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -158,13 +159,16 @@ export async function runStatusPhaseAfterEndOfRound(game, ctx) {
  * that round-start reset is a harmless safety net. The point of clearing here is
  * that these effects must be GONE before EOR effects evaluate.
  *
- * NOTE — flags deliberately NOT cleared here (left to round-boundary):
- *   - roundDefenseBonusBlock / roundDefenseBonusEvade / roundDefenseAccuracyPenalty
- *     and roundAttackSurgeBonus are SHARED additive per-player counters fed by a
- *     MIX of "during this round" cards (Take Position, Cavalry Charge, Take Cover)
- *     and "until end of round" cards (Survival Instincts, Smuggled Supplies) /
- *     immediate-attack bonuses (Payback, Reverse Engineer). They cannot be split
- *     cleanly, so they are flagged needs-ruling and left at round-start clearing.
+ * NOTE — the old SHARED per-player combat counters (roundDefenseBonusBlock /
+ * roundDefenseBonusEvade / roundDefenseAccuracyPenalty / roundAttackSurgeBonus
+ * etc.) were REMOVED 2026-06-20 and replaced by the per-figure activeRoundModifiers
+ * registry. Each descriptor now carries its own duration: 'until-eor' descriptors
+ * (Survival Instincts, Fuel Upgrade, Deflection, Smuggled Supplies) are cleared
+ * here via clearRoundModifiersUntilEor(game); 'during-round' descriptors persist
+ * through the EOR phase and clear at the round boundary. Payback / Reverse
+ * Engineer +Surge are now per-figure IMMEDIATE attack bonuses (paybackBonusSurge),
+ * not round-scoped at all.
+ *
  *   - roundEfficientTravel is "until end of round" but is a movement-only effect
  *     that cannot be read during EOR scoring, so re-bucketing has no effect.
  */
@@ -181,6 +185,11 @@ export function clearUntilEndOfRoundFlags(game) {
   // round." TRAIT grants can gate EOR scoring/triggers, so the grant must be
   // gone before EOR effects evaluate. Isolated flag; moved 2026-06-20.
   game.roundProgrammingOverrideTrait = {};
+  // Active round-modifier registry (alexanbv 2026-06-20): drop 'until-eor'
+  // descriptors (Survival Instincts, Fuel Upgrade, Deflection, Smuggled
+  // Supplies) so they are GONE before EOR effects evaluate. 'during-round'
+  // descriptors persist through the EOR phase and clear at the round boundary.
+  clearRoundModifiersUntilEor(game);
 }
 
 async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {

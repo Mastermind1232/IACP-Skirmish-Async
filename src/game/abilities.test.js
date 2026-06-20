@@ -897,23 +897,33 @@ test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
   assert.deepStrictEqual(game.figureConditions['Trooper-1-0'] ?? [], []);
 });
 
-test('resolveAbility Take Position sets roundDefenseBonusBlock', () => {
+test('resolveAbility Take Position registers a +1 Block defense round-modifier', () => {
   const msgId = 'msg-tp';
   const game = { gameId: 'g-tp', dcActionsData: { [msgId]: {} } };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp', playerNum: 1, dcName: 'Guardian', displayName: 'Guard [Group 1]' }]]);
   const result = resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
+  // Per-figure registry (alexanbv 2026-06-20): army-wide +1 Block defense.
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Take Position' && m.side === 'defense');
+  assert.ok(d, 'Take Position defense descriptor registered');
+  assert.strictEqual(d.ownerPlayerNum, 1);
+  assert.strictEqual(d.effect.block, 1);
+  assert.deepStrictEqual(d.conditions, {}, 'army-wide (no figure condition)');
+  assert.strictEqual(d.duration, 'during-round');
 });
 
-test('resolveAbility Survival Instincts sets roundDefenseBonusBlock and Evade', () => {
+test('resolveAbility Survival Instincts registers +1 Block and +1 Evade (until-eor)', () => {
   const msgId = 'msg-si';
   const game = { gameId: 'g-si', dcActionsData: { [msgId]: {} } };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-si', playerNum: 2, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
   const result = resolveAbility('Survival Instincts', { game, playerNum: 2, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.strictEqual(game.roundDefenseBonusBlock?.[2], 1);
-  assert.strictEqual(game.roundDefenseBonusEvade?.[2], 1);
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Survival Instincts' && m.side === 'defense');
+  assert.ok(d);
+  assert.strictEqual(d.ownerPlayerNum, 2);
+  assert.strictEqual(d.effect.block, 1);
+  assert.strictEqual(d.effect.evade, 1);
+  assert.strictEqual(d.duration, 'until-eor');
 });
 
 test('resolveAbility Hour of Need recovers round number damage', () => {
@@ -934,15 +944,18 @@ test('resolveAbility Hour of Need recovers round number damage', () => {
   assert.ok(result.logMessage?.includes('3'));
 });
 
-test('resolveAbility Take Cover sets roundDefenseBonusBlock and accuracy penalty', () => {
+test('resolveAbility Take Cover registers +1 Block and -2 Accuracy defense modifier', () => {
   const msgId = 'msg-tc';
   const game = { gameId: 'g-tc', dcActionsData: { [msgId]: {} } };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-tc', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
   const result = resolveAbility('Take Cover', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   // Card text: "apply +1 Block and -2 Accuracy to the results."
-  assert.strictEqual(game.roundDefenseBonusBlock?.[1], 1);
-  assert.strictEqual(game.roundDefenseAccuracyPenalty?.[1], 2);
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Take Cover' && m.side === 'defense');
+  assert.ok(d);
+  assert.strictEqual(d.effect.block, 1);
+  assert.strictEqual(d.effect.accuracyPenalty, 2);
+  assert.deepStrictEqual(d.conditions, {});
 });
 
 test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
@@ -1470,24 +1483,31 @@ test('Deathblow: does NOT apply on a Ranged attack', () => {
   assert.strictEqual(combat.bonusHits, 0);
 });
 
-test('Deflection: stores Ranged-only accuracy penalty + deflection counter (not shared all-attack penalty)', () => {
+test('Deflection: registers a Ranged-only, self-figure accuracy-penalty modifier + deflection counter', () => {
   const game = { gameId: 'g-defl' };
   const r = resolveAbility('Deflection', { game, playerNum: 1 });
   assert.strictEqual(r.applied, true);
-  assert.strictEqual(game.roundDeflectionAccuracyPenalty?.[1], 2);
-  // Must NOT write to the shared all-attacks penalty (used by Take Cover).
-  assert.ok(!game.roundDefenseAccuracyPenalty?.[1]);
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Deflection' && m.side === 'defense');
+  assert.ok(d, 'Deflection defense descriptor registered');
+  assert.strictEqual(d.effect.accuracyPenalty, 2);
+  // CSV "when a Ranged attack targeting YOU is declared" → self figure + range.
+  assert.strictEqual(d.conditions.selfIsSourceFigure, true);
+  assert.strictEqual(d.conditions.attackType, 'range');
+  assert.strictEqual(d.duration, 'until-eor');
+  // Deflection counter-damage still flows through deflectionPending.
   assert.strictEqual(game.deflectionPending?.[1], 1);
 });
 
-test('Fuel Upgrade: stores VEHICLE-scoped Evade + Speed, not the shared all-figure Evade', () => {
+test('Fuel Upgrade: registers a VEHICLE-scoped Evade defense modifier + Speed (movement) flag', () => {
   const game = { gameId: 'g-fuel' };
   const r = resolveAbility('Fuel Upgrade', { game, playerNum: 1 });
   assert.strictEqual(r.applied, true);
-  assert.strictEqual(game.roundVehicleDefenseBonusEvade?.[1], 1);
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Fuel Upgrade' && m.side === 'defense');
+  assert.ok(d, 'Fuel Upgrade defense descriptor registered');
+  assert.strictEqual(d.effect.evade, 1);
+  assert.strictEqual(d.conditions.selfKeyword, 'VEHICLE', 'Evade applies only to VEHICLES');
+  // Speed bonus is a movement effect — stays on the per-player flag.
   assert.strictEqual(game.roundVehicleSpeedBonus?.[1], 1);
-  // Must NOT write the shared all-figure evade (used by Armed Escort, etc.).
-  assert.ok(!game.roundDefenseBonusEvade?.[1]);
 });
 
 test('Glory of the Kill: no recover when the defender was not defeated', () => {

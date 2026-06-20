@@ -28,6 +28,7 @@ import { resolveAbility } from '../../../src/game/abilities.js';
 import { applyPersonalCombatShieldOnBlockSpend } from '../../../src/handlers/combat.js';
 import { getDcEffects, hasChooseASideFlamethrower, getDcStats } from '../../../src/data-loader.js';
 import { getDcActionButtons } from '../../../src/discord/components.js';
+import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 
 /** Flatten ActionRow components to their button labels. */
 function collectLabels(rows) {
@@ -54,17 +55,29 @@ function buildGame() {
     p1DcMessageIds: ['mBoba', 'mCad'],
     p1DcList: [{ dcName: 'Boba Fett' }, { dcName: 'Cad Bane' }],
   };
+  // figureKeyForActivation resolves the source figure from the module-global
+  // meta registry (registered at startup in production via game-state.js).
+  _registerDcMessageMeta(dcMessageMeta);
   return { game, dcMessageMeta };
 }
 
 describe('PROBE-CHOOSE-A-SIDE-001: SCUM grants Personal Combat Shield (+1 Evade per Block spent), self-excluded', () => {
-  it('sets roundMobilePersonalCombatShield with the activating figure excluded; no flat +1 Block', () => {
+  it('registers a per-figure Personal Combat Shield modifier (MOBILE, self-excluded); no flat +1 Block', () => {
     const { game, dcMessageMeta } = buildGame();
     const r = resolveAbility('Choose a Side', { game, playerNum: 1, dcMessageMeta, choiceIndex: 0 });
     assert.equal(r.applied, true);
-    assert.ok(game.roundMobilePersonalCombatShield?.[1], 'PCS round flag set for player 1');
-    assert.equal(game.roundMobilePersonalCombatShield[1].excludeFigureKey, 'Boba Fett-1-0', 'card-player excluded');
-    // The old WRONG proxy must NOT be set.
+    // Per-figure registry (alexanbv 2026-06-20): a defense descriptor that grants
+    // personalCombatShield to OTHER friendly MOBILE figures.
+    const d = (game.activeRoundModifiers || []).find(
+      (m) => m.card === 'Choose a Side (SCUM)' && m.effect?.personalCombatShield
+    );
+    assert.ok(d, 'Choose a Side SCUM shield descriptor registered');
+    assert.equal(d.ownerPlayerNum, 1);
+    assert.equal(d.side, 'defense');
+    assert.equal(d.conditions.selfKeyword, 'MOBILE');
+    assert.equal(d.conditions.excludeSourceFigure, true);
+    assert.equal(d.sourceFigureKey, 'Boba Fett-1-0', 'card-player is the source (excluded)');
+    // No flat +1 Block proxy.
     assert.equal(game.roundMobileDefenseBonusBlock, undefined, 'no flat +1 Block proxy');
   });
 

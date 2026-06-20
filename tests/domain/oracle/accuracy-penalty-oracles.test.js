@@ -1,14 +1,14 @@
 /**
  * Oracle tests for round accuracy penalties (Take Cover / Deflection).
  *
- * Rule:
+ * Rule (per-figure registry, alexanbv 2026-06-20):
  *   - Take Cover applies −2 Accuracy to ALL attacks targeting the defender
- *     ("During this round while defending"). Stored on the shared
- *     game.roundDefenseAccuracyPenalty counter.
- *   - Deflection applies −2 Accuracy ONLY to a RANGED attack targeting the
- *     defender (CSV "when a Ranged attack targeting you is declared"). Stored on
- *     a SEPARATE game.roundDeflectionAccuracyPenalty counter so Melee attacks
- *     are unaffected (combat-bridge consumes it only when combat.isRanged).
+ *     ("During this round while defending"). Registered as an army-wide defense
+ *     descriptor (no figure condition) in game.activeRoundModifiers.
+ *   - Deflection applies −2 Accuracy ONLY to a RANGED attack targeting the figure
+ *     that played it (CSV "when a Ranged attack targeting you is declared").
+ *     Registered with conditions { selfIsSourceFigure, attackType: 'range' } so
+ *     Melee attacks and other figures are unaffected.
  *   This is an ACCURACY penalty (affects ranged hit/miss via distance check),
  *   NOT Evade (which cancels surges).
  *
@@ -23,38 +23,34 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeCombatResult } from '../../../src/game/combat.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { evaluateRoundModifiers } from '../../../src/game/round-modifiers.js';
+import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 
 // ── ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade) ──────────
 //
 // Rule: Take Cover — "Until end of round, apply +1 Block and −2 Accuracy
 //        when defending."
-// Verifies: resolveAbility sets game.roundDefenseAccuracyPenalty (not roundDefenseBonusEvade)
+// Verifies: resolveAbility registers a Take Cover defense modifier (accuracyPenalty, not evade)
 
 describe('ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade)', () => {
-  it('001: Take Cover sets roundDefenseAccuracyPenalty, not roundDefenseBonusEvade', () => {
+  it('001: Take Cover registers a +1 Block / −2 Accuracy defense modifier (not Evade)', () => {
+    // Per-figure registry (alexanbv 2026-06-20): Take Cover registers an
+    // army-wide defense descriptor with block:1 and accuracyPenalty:2.
     const game = {};
     const playerNum = 1;
     const result = resolveAbility('Take Cover', { game, playerNum });
 
     assert.equal(result.applied, true, 'Take Cover should resolve successfully');
 
-    // Must set accuracy penalty
-    assert.equal(
-      game.roundDefenseAccuracyPenalty?.[playerNum], 2,
-      'Take Cover should set roundDefenseAccuracyPenalty[1] = 2'
+    const d = (game.activeRoundModifiers || []).find(
+      (m) => m.card === 'Take Cover' && m.side === 'defense'
     );
-
-    // Must NOT set evade bonus
-    assert.equal(
-      game.roundDefenseBonusEvade?.[playerNum] || 0, 0,
-      'Take Cover must NOT set roundDefenseBonusEvade'
-    );
-
-    // Must also set block bonus
-    assert.equal(
-      game.roundDefenseBonusBlock?.[playerNum], 1,
-      'Take Cover should still set +1 Block'
-    );
+    assert.ok(d, 'Take Cover defense descriptor registered');
+    assert.equal(d.effect.accuracyPenalty, 2, 'Take Cover applies −2 Accuracy');
+    assert.equal(d.effect.block, 1, 'Take Cover still applies +1 Block');
+    assert.equal(d.effect.evade || 0, 0, 'Take Cover must NOT apply Evade');
+    // Army-wide (CSV "to the results" while defending) — no figure condition.
+    assert.deepEqual(d.conditions, {});
   });
 });
 
@@ -63,45 +59,35 @@ describe('ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade)', () =
 // Rule: Deflection — CSV "when a Ranged attack targeting you is declared, apply
 //        −2 Accuracy" + "after the attack is resolved, the attacker suffers 1
 //        Damage". The −2 is Ranged-only, so it lives on the dedicated
-//        roundDeflectionAccuracyPenalty counter (NOT the all-attacks
-//        roundDefenseAccuracyPenalty used by Take Cover).
-// Verifies: resolveAbility sets game.roundDeflectionAccuracyPenalty (Ranged-only),
+//        self-figure, Ranged-only descriptor (NOT the all-attacks Take Cover
+//        penalty).
+// Verifies: resolveAbility registers a Ranged-only, self-figure Deflection modifier,
 //           does NOT touch the shared all-attacks penalty or evade, and sets
 //           deflectionPending for the counter-damage mechanic.
 
 describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy vs Ranged (Not Evade)', () => {
-  it('002: Deflection sets roundDeflectionAccuracyPenalty + deflectionPending, not the shared penalty or evade', () => {
+  it('002: Deflection registers a Ranged-only, self-figure −2 Accuracy modifier + deflectionPending', () => {
     const game = {};
     const playerNum = 2;
     const result = resolveAbility('Deflection', { game, playerNum });
 
     assert.equal(result.applied, true, 'Deflection should resolve successfully');
 
-    // Must set the Ranged-only accuracy penalty
-    assert.equal(
-      game.roundDeflectionAccuracyPenalty?.[playerNum], 2,
-      'Deflection should set roundDeflectionAccuracyPenalty[2] = 2 (Ranged-only)'
+    const d = (game.activeRoundModifiers || []).find(
+      (m) => m.card === 'Deflection' && m.side === 'defense'
     );
+    assert.ok(d, 'Deflection defense descriptor registered');
+    assert.equal(d.effect.accuracyPenalty, 2, 'Deflection applies −2 Accuracy');
+    // CSV "when a Ranged attack targeting YOU is declared" → self figure + range.
+    assert.equal(d.conditions.selfIsSourceFigure, true);
+    assert.equal(d.conditions.attackType, 'range');
+    assert.equal(d.effect.evade || 0, 0, 'Deflection must NOT apply Evade');
 
-    // Must NOT touch the shared all-attacks penalty (that is Take Cover's).
-    assert.equal(
-      game.roundDefenseAccuracyPenalty?.[playerNum] || 0, 0,
-      'Deflection must NOT write the shared all-attacks roundDefenseAccuracyPenalty'
-    );
-
-    // Must NOT set evade bonus
-    assert.equal(
-      game.roundDefenseBonusEvade?.[playerNum] || 0, 0,
-      'Deflection must NOT set roundDefenseBonusEvade'
-    );
-
-    // Must set deflection counter-damage
+    // Must set deflection counter-damage (still on its own flags).
     assert.equal(
       game.deflectionPending?.[playerNum], 1,
       'Deflection should set deflectionPending[2] = 1'
     );
-
-    // Must set unconditional flag
     assert.equal(
       game.deflectionUnconditional?.[playerNum], true,
       'Deflection should set deflectionUnconditional[2] = true'
@@ -115,40 +101,41 @@ describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy vs Ranged (Not Eva
 //       both apply (effective −4); against a MELEE attack only Take Cover's
 //       −2 applies (Deflection's Ranged-only penalty does not).
 
-describe('ORACLE-ACCPEN-003: Take Cover (all) + Deflection (Ranged-only) live on separate counters', () => {
-  it('003: Take Cover writes the shared −2; Deflection writes a separate Ranged-only −2', () => {
-    const game = {};
+describe('ORACLE-ACCPEN-003: Take Cover (all) + Deflection (Ranged-only) evaluate per-figure', () => {
+  it('003: Take Cover penalty applies to any defender; Deflection only to its self figure vs Ranged', () => {
+    // Both played by the same player. Take Cover is army-wide; Deflection is
+    // self-figure + Ranged-only. The two descriptors are evaluated per-figure
+    // by evaluateRoundModifiers — against the playing figure vs a Ranged attack
+    // both apply (effective −4); against a Melee attack only Take Cover's −2.
+    const game = { gameId: 'g-accpen', activeRoundModifiers: [] };
     const playerNum = 1;
+    // Both CCs anchor on the same activating figure via dcMessageMeta.
+    const msgId = 'm-accpen';
+    game.dcActionsData = { [msgId]: {} };
+    const dcMessageMeta = new Map([[msgId, { gameId: 'g-accpen', playerNum, dcName: 'Greedo', displayName: 'Greedo [Group 1]' }]]);
+    // figureKeyForActivation resolves the source figure from the module-global
+    // meta registry (registered at startup in production via game-state.js).
+    _registerDcMessageMeta(dcMessageMeta);
 
-    resolveAbility('Take Cover', { game, playerNum });
-    resolveAbility('Deflection', { game, playerNum });
+    resolveAbility('Take Cover', { game, playerNum, dcMessageMeta });
+    resolveAbility('Deflection', { game, playerNum, dcMessageMeta });
 
-    // Take Cover's −2 applies to ALL attacks.
-    assert.equal(
-      game.roundDefenseAccuracyPenalty?.[playerNum], 2,
-      'Take Cover contributes −2 on the shared all-attacks counter'
-    );
-    // Deflection's −2 applies only to RANGED attacks (separate counter).
-    assert.equal(
-      game.roundDeflectionAccuracyPenalty?.[playerNum], 2,
-      'Deflection contributes −2 on the separate Ranged-only counter'
-    );
-    // Effective penalty vs a Ranged attack = 2 + 2 = 4 (summed in combat-bridge).
-    const effectiveVsRanged = (game.roundDefenseAccuracyPenalty[playerNum] || 0)
-      + (game.roundDeflectionAccuracyPenalty[playerNum] || 0);
-    assert.equal(effectiveVsRanged, 4, 'Combined Ranged-attack penalty should be 4');
+    const sourceFk = 'Greedo-1-0';
+    const otherFk = 'Onar Koma-1-0';
 
-    // Evade must still be 0
-    assert.equal(
-      game.roundDefenseBonusEvade?.[playerNum] || 0, 0,
-      'Neither CC should contribute to roundDefenseBonusEvade'
-    );
+    const evalForRanged = (fk) => evaluateRoundModifiers(game, {
+      side: 'defense', figureKey: fk, playerNum, combat: { isRanged: true },
+    }).accuracyPenalty;
+    const evalForMelee = (fk) => evaluateRoundModifiers(game, {
+      side: 'defense', figureKey: fk, playerNum, combat: { isRanged: false },
+    }).accuracyPenalty;
 
-    // Block should be 1 (only Take Cover contributes block)
-    assert.equal(
-      game.roundDefenseBonusBlock?.[playerNum], 1,
-      'Only Take Cover contributes +1 Block'
-    );
+    // Source figure vs Ranged: Take Cover (−2) + Deflection (−2) = −4.
+    assert.equal(evalForRanged(sourceFk), 4, 'Source figure vs Ranged: combined −4');
+    // Source figure vs Melee: only Take Cover (−2); Deflection is Ranged-only.
+    assert.equal(evalForMelee(sourceFk), 2, 'Source figure vs Melee: only Take Cover −2');
+    // OTHER figure vs Ranged: only Take Cover (army-wide); Deflection is self-only.
+    assert.equal(evalForRanged(otherFk), 2, 'Other figure vs Ranged: only Take Cover −2');
   });
 });
 

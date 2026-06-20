@@ -16,6 +16,7 @@ import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js'
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 /**
  * Send a "you have N reaction card(s) playable now" notice to the player's
@@ -268,35 +269,33 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   if (combat.target?.figureKey && !combat._savedTargetPos) {
     combat._savedTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey] || null;
   }
-  const roundBlock = game.roundDefenseBonusBlock?.[defenderPlayerNum] || 0;
-  const roundEvade = game.roundDefenseBonusEvade?.[defenderPlayerNum] || 0;
-  if (roundBlock) combat.bonusBlock = (combat.bonusBlock || 0) + roundBlock;
-  if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
-  // Fuel Upgrade: +1 Evade applies ONLY to VEHICLE defenders (CSV "Each of your
-  // VEHICLES"). Kept on a separate counter from the all-figure roundDefenseBonusEvade.
-  const roundVehEvade = game.roundVehicleDefenseBonusEvade?.[defenderPlayerNum] || 0;
-  if (roundVehEvade && combat.target?.figureKey) {
-    const _defDcName = dcNameFromFigureKey(combat.target.figureKey);
-    const _defKws = (getDcEffect(_defDcName)?.keywords || []).map((k) => String(k).toUpperCase());
-    if (_defKws.includes('VEHICLE')) combat.bonusEvade = (combat.bonusEvade || 0) + roundVehEvade;
+  // Per-figure active round-modifier registry (alexanbv 2026-06-20). Replaces the
+  // old per-player round-scoped defense flags (roundDefenseBonusBlock /
+  // roundDefenseBonusEvade / roundDefenseAccuracyPenalty / roundDeflectionAccuracyPenalty
+  // / roundVehicleDefenseBonusEvade / roundDefenderBonusBlockPerEvade). Each card
+  // is now evaluated against THIS defending figure's conditions at the moment it
+  // defends, so e.g. an EOR-phase attack against a non-VEHICLE figure gets no
+  // Fuel Upgrade Evade, and Deflection's penalty applies only to a Ranged attack
+  // targeting the figure that played it.
+  const _defFk = combat.target?.figureKey || null;
+  if (_defFk) {
+    const _defMods = evaluateRoundModifiers(game, {
+      side: 'defense',
+      figureKey: _defFk,
+      playerNum: defenderPlayerNum,
+      combat,
+    });
+    if (_defMods.block) combat.bonusBlock = (combat.bonusBlock || 0) + _defMods.block;
+    if (_defMods.evade) combat.bonusEvade = (combat.bonusEvade || 0) + _defMods.evade;
+    if (_defMods.accuracyPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + _defMods.accuracyPenalty;
+    // Personal Energy Shield: +N Block per Evade result (self figure only).
+    if (_defMods.blockPerEvade && combat.defenseRoll) {
+      combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * _defMods.blockPerEvade;
+    }
+    // Choose a Side (SCUM) Personal Combat Shield (+1 Evade per Block spent) is
+    // applied at Block-spend time in handlers/combat.js
+    // (applyPersonalCombatShieldOnBlockSpend, which re-evaluates the registry).
   }
-  const roundAccPenalty = game.roundDefenseAccuracyPenalty?.[defenderPlayerNum] || 0;
-  if (roundAccPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundAccPenalty;
-  // Deflection: -2 Accuracy applies ONLY to Ranged attacks targeting the
-  // defender (CSV "when a Ranged attack targeting you is declared"). Kept on a
-  // separate counter from the all-attacks Take Cover penalty so Melee attacks
-  // are unaffected.
-  const roundDeflectAccPenalty = game.roundDeflectionAccuracyPenalty?.[defenderPlayerNum] || 0;
-  if (roundDeflectAccPenalty && combat.isRanged) {
-    combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundDeflectAccPenalty;
-  }
-  // Choose a Side (SCUM) now grants Personal Combat Shield (+1 Evade per Block
-  // spent) — applied at Block-spend time in handlers/combat.js
-  // (applyPersonalCombatShieldOnBlockSpend reading game.roundMobilePersonalCombatShield),
-  // NOT a flat +1 Block here. The old roundMobileDefenseBonusBlock proxy was the
-  // wrong card text and has been removed.
-  const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
-  if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
   // Inside Job (Hoth Battle Station A): persistent defenseModifierByZone.
   // Defender in own zone: +ownZone.blockBonus (negative on this card → −1).
   // Defender in opponent's zone: +opponentZone.evadeBonus (+1).
@@ -353,12 +352,22 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
       }
     }
   }
-  // Cavalry Charge: round TROOPER attack hit bonus
-  const trooperHitBonus = game.roundTrooperAttackHitBonus?.[combat.attackerPlayerNum] || 0;
-  if (trooperHitBonus) {
-    const attackerEff = getDcEffect(combat.attackerDcName);
-    const attackerKws = (attackerEff?.keywords || []).map((k) => String(k).toUpperCase());
-    if (attackerKws.includes('TROOPER')) combat.bonusHits = (combat.bonusHits || 0) + trooperHitBonus;
+  // Per-figure attacker round-modifier evaluation (alexanbv 2026-06-20). Replaces
+  // the old per-player roundTrooperAttackHitBonus. Cavalry Charge's +1 Hit now
+  // applies only when THIS attacking figure is a TROOPER within 3 spaces of the
+  // card-playing figure. Surge (Smuggled Supplies) and reroll (Just Business /
+  // Battlefield Awareness) eligibility are evaluated PER-FIGURE at their own
+  // consumption points (handlers/combat.js) via the same evaluator, so an
+  // ineligible attacking figure (wrong keyword / out of range / not Scum) gets
+  // nothing — including EOR-phase attacks.
+  if (combat.attackerFigureKey) {
+    const _atkMods = evaluateRoundModifiers(game, {
+      side: 'attack',
+      figureKey: combat.attackerFigureKey,
+      playerNum: combat.attackerPlayerNum,
+      combat,
+    });
+    if (_atkMods.hit) combat.bonusHits = (combat.bonusHits || 0) + _atkMods.hit;
   }
   // Query (HK-47): if +1 Hit was applied but defender became Bleeding from surges, remove the bonus
   if (combat.queryBonusHitApplied && (combat.surgeConditions || []).includes('Bleed')) {

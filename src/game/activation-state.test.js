@@ -237,11 +237,16 @@ describe('flag list completeness', () => {
   it('all game-state.js round-scoped container keys appear in round cleanup lists', () => {
     // These 10 keys are the "Round-scoped containers" from ensureGameShape (game-state.js:166-170).
     // If a key is added there, it MUST also appear in a ROUND_*_FLAGS list or it will leak across rounds.
+    // Per-player COMBAT bonus flags removed 2026-06-20 (migrated to the
+    // per-figure activeRoundModifiers registry — see ROUND_ARRAY_FLAGS):
+    // roundAttackRerollDice, roundAttackSurgeBonus, roundDefenseBonusBlock,
+    // roundDefenseBonusEvade, roundDefenderBonusBlockPerEvade,
+    // roundTrooperAttackHitBonus.
     const ROUND_SCOPED_CONTAINERS = [
-      'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
-      'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenderBonusBlockPerEvade',
+      'roundFigureAbilityUsed',
       'roundEfficientTravel', 'roundProgrammingOverrideTrait',
-      'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
+      'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
+      'activeRoundModifiers',
     ];
     const allRoundFlags = new Set([
       ...ROUND_OBJECT_FLAGS, ...ROUND_NULL_FLAGS, ...ROUND_ARRAY_FLAGS,

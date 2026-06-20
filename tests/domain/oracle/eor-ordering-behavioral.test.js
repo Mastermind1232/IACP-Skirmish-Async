@@ -257,7 +257,7 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
     // - Pending state: pendingPowerTokenGrant is set
     dcHealthState.set(bosskMsgId, [[4, 7]]);
     const game = makeGame({
-      roundDefenseAccuracyPenalty: { 2: -2 },
+      roundVehicleSpeedBonus: { 2: -2 },
       pendingPowerTokenGrant: { grants: [], channelId: null, playerNum: 1 },
     });
     applyCondition(game, bosskFk, 'Bleed');
@@ -271,7 +271,7 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
     // Intermediate check: Bossk healed, Bleed removed, round state still present
     assert.strictEqual(dcHealthState.get(bosskMsgId)[0][0], 6, 'Bossk 4 → 6 HP');
     assert.ok(!game.figureConditions[bosskFk]?.includes('Bleed'), 'Bossk Bleed removed');
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[2], -2,
+    assert.strictEqual(game.roundVehicleSpeedBonus[2], -2,
       'round penalty still present (not yet cleaned)');
     assert.ok(game.pendingPowerTokenGrant,
       'pending state still present (not yet cleaned)');
@@ -300,7 +300,7 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
     assert.ok(!game.figureConditions[bosskFk]?.includes('Bleed'),
       'Bossk Bleed still gone after cleanup');
     // Round-scoped state cleaned
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {},
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {},
       'round penalty wiped by cleanup');
     assert.strictEqual(game.pendingPowerTokenGrant, null,
       'pending state wiped by cleanup');
@@ -313,7 +313,7 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
     // Prove that if cleanupRoundStart were called BEFORE Hardy, Hardy would still
     // work (conditions are not in round cleanup). This is a safety-net test.
     const game = makeGame({
-      roundDefenseAccuracyPenalty: { 1: -2 },
+      roundVehicleSpeedBonus: { 1: -2 },
     });
     const dcName = 'Trandoshan Hunter (Elite)';
     const fk = `${dcName}-1-0`;
@@ -332,17 +332,17 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
   });
 
   it('003c: round-scoped state IS erased by cleanup — effects must read it before', () => {
-    // Demonstrates that round-scoped data (e.g., roundDefenseAccuracyPenalty)
+    // Demonstrates that round-scoped data (e.g., roundVehicleSpeedBonus)
     // would be lost if an effect needed it after cleanup. The ordering contract
     // requires effects to fire first.
     const game = makeGame({
-      roundDefenseAccuracyPenalty: { 1: -4 },
+      roundVehicleSpeedBonus: { 1: -4 },
       deflectionPending: { 1: 2 },
       crippledFigures: ['Trooper'],
     });
 
     // Capture pre-cleanup state that EoR effects could depend on
-    const penaltyBefore = game.roundDefenseAccuracyPenalty[1];
+    const penaltyBefore = game.roundVehicleSpeedBonus[1];
     const deflectionBefore = game.deflectionPending[1];
     assert.strictEqual(penaltyBefore, -4, 'penalty available before cleanup');
     assert.strictEqual(deflectionBefore, 2, 'deflection available before cleanup');
@@ -350,7 +350,7 @@ describe('B-EOR-003: Ordering invariant — EoR effects before cleanupRoundStart
     cleanupRoundStart(game);
 
     // After cleanup, this data is gone — any EoR effect that needed it would fail
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], undefined,
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], undefined,
       'penalty erased — effects MUST read before cleanup');
     assert.strictEqual(game.deflectionPending[1], undefined,
       'deflection erased — effects MUST read before cleanup');

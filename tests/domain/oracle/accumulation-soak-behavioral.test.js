@@ -53,13 +53,16 @@ function makeGame(overrides = {}) {
 }
 
 /**
- * Simulate setting a round defense accuracy penalty for a player.
- * In production this happens inside ability resolution (e.g. Take Cover, Deflection).
+ * Generic per-player round-scoped flag stack/reset invariant helper. Uses
+ * roundVehicleSpeedBonus (a still-live per-player round flag) as the exemplar.
+ * NOTE: the COMBAT bonus flags this used to exercise (roundDefenseAccuracyPenalty
+ * etc.) were migrated 2026-06-20 to the per-figure activeRoundModifiers registry;
+ * this test now exercises the surviving per-player round-flag cleanup contract.
  */
-function addRoundDefenseAccuracyPenalty(game, playerNum, amount) {
-  game.roundDefenseAccuracyPenalty = game.roundDefenseAccuracyPenalty || {};
-  game.roundDefenseAccuracyPenalty[playerNum] =
-    (game.roundDefenseAccuracyPenalty[playerNum] || 0) + amount;
+function addRoundVehicleSpeedBonus(game, playerNum, amount) {
+  game.roundVehicleSpeedBonus = game.roundVehicleSpeedBonus || {};
+  game.roundVehicleSpeedBonus[playerNum] =
+    (game.roundVehicleSpeedBonus[playerNum] || 0) + amount;
 }
 
 // ── B-SOAK-001: Round-scoped penalty stacking + reset ──────────────────────
@@ -69,48 +72,48 @@ describe('B-SOAK-001: Round-scoped penalty stacking + reset', () => {
     const game = makeGame();
 
     // Take Cover: −2 accuracy penalty for player 1
-    addRoundDefenseAccuracyPenalty(game, 1, -2);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -2);
+    addRoundVehicleSpeedBonus(game, 1, -2);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -2);
 
     // Deflection: another −2
-    addRoundDefenseAccuracyPenalty(game, 1, -2);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -4,
+    addRoundVehicleSpeedBonus(game, 1, -2);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -4,
       'stacked: −2 + −2 = −4 within round');
   });
 
   it('001b: cleanupRoundStart resets penalty to empty object', () => {
     const game = makeGame();
-    addRoundDefenseAccuracyPenalty(game, 1, -4);
+    addRoundVehicleSpeedBonus(game, 1, -4);
 
     cleanupRoundStart(game);
 
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {},
-      'roundDefenseAccuracyPenalty reset to {} after round boundary');
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {},
+      'roundVehicleSpeedBonus reset to {} after round boundary');
   });
 
   it('001c: fresh penalty in Round 2 does not carry Round 1 residue', () => {
     const game = makeGame();
 
     // Round 1
-    addRoundDefenseAccuracyPenalty(game, 1, -4);
+    addRoundVehicleSpeedBonus(game, 1, -4);
     cleanupRoundStart(game);
 
     // Round 2: fresh −2
-    addRoundDefenseAccuracyPenalty(game, 1, -2);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -2,
+    addRoundVehicleSpeedBonus(game, 1, -2);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -2,
       'Round 2 penalty is −2, not −6 (no Round 1 residue)');
   });
 
   it('001d: per-player isolation — P1 penalty does not affect P2', () => {
     const game = makeGame();
-    addRoundDefenseAccuracyPenalty(game, 1, -2);
-    addRoundDefenseAccuracyPenalty(game, 2, -4);
+    addRoundVehicleSpeedBonus(game, 1, -2);
+    addRoundVehicleSpeedBonus(game, 2, -4);
 
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -2);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[2], -4);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -2);
+    assert.strictEqual(game.roundVehicleSpeedBonus[2], -4);
 
     cleanupRoundStart(game);
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {},
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {},
       'both players cleared at round boundary');
   });
 
@@ -513,19 +516,19 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     const game = makeGame();
 
     // ── Round 1 ──
-    addRoundDefenseAccuracyPenalty(game, 1, -4);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -4);
+    addRoundVehicleSpeedBonus(game, 1, -4);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -4);
 
     cleanupRoundStart(game);
 
     // ── Round 2 ──
-    addRoundDefenseAccuracyPenalty(game, 1, -2);
-    assert.strictEqual(game.roundDefenseAccuracyPenalty[1], -2,
+    addRoundVehicleSpeedBonus(game, 1, -2);
+    assert.strictEqual(game.roundVehicleSpeedBonus[1], -2,
       'Round 2 penalty is −2, not −6 — no accumulation from Round 1');
 
     cleanupRoundStart(game);
 
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {},
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {},
       'clean after Round 2');
   });
 
@@ -626,7 +629,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     game.nextAttacksBonusHits = { [fkA]: [{ source: 'son_of_skywalker', hits: 2 }] };
     game.commsJammerActivePlayerNum = 2;
     // Set round flags
-    addRoundDefenseAccuracyPenalty(game, 2, -2);
+    addRoundVehicleSpeedBonus(game, 2, -2);
     game.deflectionPending = { 2: 1 };
     // Apply conditions to target
     applyCondition(game, fkB, 'Weaken');
@@ -636,7 +639,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
 
     // Verify activation state cleaned, round state + conditions preserved
     assert.strictEqual(game.figureMoved?.[fkA], undefined, 'R1A1: activation flag cleaned');
-    assert.strictEqual(game.roundDefenseAccuracyPenalty?.[2], -2, 'R1A1: round penalty preserved');
+    assert.strictEqual(game.roundVehicleSpeedBonus?.[2], -2, 'R1A1: round penalty preserved');
     assert.deepStrictEqual(game.deflectionPending, { 2: 1 }, 'R1A1: deflection preserved');
     assert.ok(game.figureConditions[fkB]?.includes('Weaken'), 'R1A1: Weaken preserved');
 
@@ -644,7 +647,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     cleanupRoundStart(game);
 
     // Round state gone, conditions persist
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {}, 'R1→R2: penalty gone');
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {}, 'R1→R2: penalty gone');
     assert.deepStrictEqual(game.deflectionPending, {}, 'R1→R2: deflection gone');
     assert.ok(game.figureConditions[fkB]?.includes('Weaken'), 'R1→R2: Weaken persists');
 
@@ -669,7 +672,7 @@ describe('B-SOAK-005: Repeated 2-round / multi-activation cycle invariant', () =
     cleanupRoundStart(game);
 
     // Final invariants
-    assert.deepStrictEqual(game.roundDefenseAccuracyPenalty, {}, 'final: penalty clean');
+    assert.deepStrictEqual(game.roundVehicleSpeedBonus, {}, 'final: penalty clean');
     assert.deepStrictEqual(game.moveInProgress, {}, 'final: moveInProgress clean');
     assert.ok(game.figureConditions[fkB]?.includes('Weaken'),
       'final: Weaken persists through entire 2-round cycle — correct by rules');

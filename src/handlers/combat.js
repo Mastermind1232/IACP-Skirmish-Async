@@ -9,6 +9,7 @@ import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { consumeActionForCurrentFigure } from '../game/activation-state.js';
 import { getDcEffect, figureHasInTheShadows } from '../game/dc-helpers.js';
+import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
@@ -6023,9 +6024,17 @@ export async function handleCombatRoll(interaction, ctx) {
       for (let _i = 0; _i < (combat.rerollOneAttackDie || 0); _i++) {
         _pushVoluntary(attackerPlayerNum, 'attack', 'Targeting Computer (attachment)');
       }
-      // Round-scoped CC effect that grants attack rerolls.
-      for (let _i = 0; _i < (game.roundAttackRerollDice?.[attackerPlayerNum] || 0); _i++) {
-        _pushVoluntary(attackerPlayerNum, 'attack', 'Round CC Reroll');
+      // Round-scoped CC effect that grants attack rerolls (Just Business,
+      // Battlefield Awareness). Evaluated PER-FIGURE (alexanbv 2026-06-20): an
+      // attacking figure gets the reroll only IF it meets the card's conditions
+      // (Scum within 3 / the chosen figure), replacing roundAttackRerollDice[pn].
+      {
+        const _rerollMods = combat.attackerFigureKey
+          ? evaluateRoundModifiers(game, { side: 'attack', figureKey: combat.attackerFigureKey, playerNum: attackerPlayerNum, combat })
+          : { rerollAttackDice: 0 };
+        for (let _i = 0; _i < (_rerollMods.rerollAttackDice || 0); _i++) {
+          _pushVoluntary(attackerPlayerNum, 'attack', 'Round CC Reroll');
+        }
       }
       // Self-Augmentation attachment.
       if (game.selfAugmentationMsgId?.[combat.attackerMsgId]) {
@@ -9474,7 +9483,14 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   // surge total isn't double-credited. (Audit 2026-05-05 fix.)
   // Fury (Wookiee Warriors): +1 surge if 5+ damage (set at attack declare time)
   const furyBonus = combat.furyBonus || 0;
-  const surgeBonus = (combat.surgeBonus || 0) + (game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0) + perDefDieSurge + furyBonus;
+  // Per-figure attacker round-surge (Smuggled Supplies). Evaluated against THIS
+  // attacking figure's conditions (alexanbv 2026-06-20) — replaces the per-player
+  // roundAttackSurgeBonus flag, so an ineligible figure gets nothing.
+  const _atkSurgeMods = combat.attackerFigureKey
+    ? evaluateRoundModifiers(game, { side: 'attack', figureKey: combat.attackerFigureKey, playerNum: attackerPlayerNum, combat })
+    : { surge: 0 };
+  const roundAtkSurge = _atkSurgeMods.surge || 0;
+  const surgeBonus = (combat.surgeBonus || 0) + roundAtkSurge + perDefDieSurge + furyBonus;
   // Weakened on attacker: -1 to Surge results (canonical Weakened condition
   // card — destruct 2026-05-07: "Weakened affects surges and evades.")
   // Skipped if condition effects are suppressed (YWNDM-on-Fifth-Brother).
@@ -9488,7 +9504,13 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     && !combat.attackerCondEffectsSuppressed;
   const _hiddenSurgeBonus = _attackerHiddenSurge ? 1 : 0;
   const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty + _hiddenSurgeBonus);
-  const roundEvade = game.roundDefenseBonusEvade?.[defPlayerNum] || 0;
+  // Per-figure defender round-Evade for the surge-cancel step (Survival
+  // Instincts, Armed Escort, Fuel Upgrade, etc.). Evaluated against THIS
+  // defending figure (alexanbv 2026-06-20) — replaces roundDefenseBonusEvade[pn].
+  const _defEvadeMods = combat.target?.figureKey
+    ? evaluateRoundModifiers(game, { side: 'defense', figureKey: combat.target.figureKey, playerNum: defPlayerNum, combat })
+    : { evade: 0 };
+  const roundEvade = _defEvadeMods.evade || 0;
   // Overwhelming Impact (destruct 2026-05-06): "OI ignores non-die bonuses."
   // Passive +Evade and round-of-defense +Evade aren't on the rolled die, so
   // they're dropped under OI. Mirror of the bonusBlock gate at game/combat.js:322.
@@ -9557,7 +9579,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
         .setStyle(ButtonStyle.Primary)
     );
     const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
-    const roundSurge = game.roundAttackSurgeBonus?.[attackerPlayerNum] || 0;
+    const roundSurge = roundAtkSurge;
     const ccSurge = (combat.surgeBonus || 0);
     const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || furyBonus > 0)
       ? `${roll.surge}${ccSurge ? ` + ${ccSurge} (CC)` : ''}${roundSurge ? ` + ${roundSurge} (round)` : ''}${furyBonus ? ` + ${furyBonus} (Fury)` : ''} = **${totalSurge}**`
@@ -10019,16 +10041,15 @@ export function applyPersonalCombatShieldOnBlockSpend(game, combat, ctx) {
     combat.bonusEvade = (combat.bonusEvade || 0) + 1;
     return '**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.';
   }
-  // Choose a Side (SCUM) round grant to OTHER friendly MOBILE figures.
+  // Choose a Side (SCUM) round grant to OTHER friendly MOBILE figures. Evaluated
+  // PER-FIGURE (alexanbv 2026-06-20): the defending figure gets the shield only IF
+  // it is MOBILE and is not the card-playing figure (excludeSourceFigure), via the
+  // active round-modifier registry — replaces roundMobilePersonalCombatShield[pn].
   const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-  const grant = game?.roundMobilePersonalCombatShield?.[defPN];
-  if (grant) {
-    const excluded = grant.excludeFigureKey || null;
-    const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
-    if (kws.includes('MOBILE') && defFk !== excluded) {
-      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
-      return '**Personal Combat Shield** (Choose a Side) — Mobile figure spent a Block token: +1 Evade.';
-    }
+  const _shieldMods = evaluateRoundModifiers(game, { side: 'defense', figureKey: defFk, playerNum: defPN, combat });
+  if (_shieldMods.personalCombatShield) {
+    combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+    return '**Personal Combat Shield** (Choose a Side) — Mobile figure spent a Block token: +1 Evade.';
   }
   return '';
 }

@@ -162,7 +162,7 @@ e('the_darksaber_reroll', 'The Darksaber (reroll, attachment)', 'attacker', 'int
 e('self_augmentation', 'Self-Augmentation (attachment)', 'attacker', 'interactive', RR, 'selfAugmentationMsgId');
 e('doubt', '[Doubt] (SU)', 'defender', 'interactive', RR, 'forces 1 atk die, lazy-deplete');
 e('guardian_stance', 'Guardian Stance', 'defender', 'interactive', RR, 'defenderRerollDiceMax > 0 (CC grant)');
-e('round_cc_reroll', 'Round CC Reroll', 'attacker', 'interactive', RR, 'roundAttackRerollDice');
+e('round_cc_reroll', 'Round CC Reroll', 'attacker', 'interactive', RR, 'activeRoundModifiers rerollAttackDice (per-figure)');
 e('innate_attack_reroll', 'Innate Attack Reroll (card text)', 'attacker', 'interactive', RR, 'getInnateRerollAbilities atk');
 e('innate_defense_reroll', 'Innate Defense Reroll (card text)', 'defender', 'interactive', RR, 'getInnateRerollAbilities def');
 e('twin_sabers', 'Twin Sabers (Ahsoka)', 'attacker', 'interactive', RR, 'reroll all atk / force all def');

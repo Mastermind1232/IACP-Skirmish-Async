@@ -18,6 +18,7 @@ import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from 
 
 
 import { getDcEffect } from './dc-helpers.js';
+import { registerRoundModifier } from './round-modifiers.js';
 /**
  * Decrement a figure's HP in a healthState array.
  * @param {Array} hs - healthState array for the DC (from dcHealthState.get(msgId))
@@ -7677,53 +7678,109 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Became Hidden.' };
   }
 
-  // ccEffect: roundDefenseBonusBlock / roundDefenseBonusEvade / roundDefenseAccuracyPenalty (Take Position, Survival Instincts, Cavalry Charge, Take Cover, Deflection) — until end of round
-  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0) || (typeof entry.roundDefenseAccuracyPenalty === 'number' && entry.roundDefenseAccuracyPenalty > 0) || (typeof entry.roundDeflectionAccuracyPenalty === 'number' && entry.roundDeflectionAccuracyPenalty > 0) || entry.deflectionCounterDamage || entry.vehicleSpeedBonusRound || entry.vehicleDefenseBonusEvadeRound) && !entry.roundDefenderBonusBlockPerEvade) {
+  // ccEffect: round-scoped DEFENSE / attack-hit modifiers (Take Position,
+  // Survival Instincts, Take Cover, Cavalry Charge, Armed Escort, Fuel Upgrade,
+  // Deflection). MIGRATED 2026-06-20 (alexanbv) to the per-figure active
+  // round-modifier registry: instead of writing a per-player counter, each card
+  // registers a descriptor that is evaluated PER-FIGURE at the combat MODIFIERS
+  // stage (src/engine/combat-bridge.js) so a bonus applies to a figure only IF
+  // that figure meets the card's conditions at the moment it attacks/defends.
+  if (entry.type === 'ccEffect' && ((typeof entry.roundDefenseBonusBlock === 'number' && entry.roundDefenseBonusBlock > 0) || (typeof entry.roundDefenseBonusEvade === 'number' && entry.roundDefenseBonusEvade > 0) || (typeof entry.roundDefenseAccuracyPenalty === 'number' && entry.roundDefenseAccuracyPenalty > 0) || (typeof entry.roundDeflectionAccuracyPenalty === 'number' && entry.roundDeflectionAccuracyPenalty > 0) || entry.deflectionCounterDamage || entry.vehicleSpeedBonusRound || entry.vehicleDefenseBonusEvadeRound || entry.trooperRoundAttackHitBonus) && !entry.roundDefenderBonusBlockPerEvade) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundDefenseBonusBlock = game.roundDefenseBonusBlock || {};
-    game.roundDefenseBonusEvade = game.roundDefenseBonusEvade || {};
+    const cardName = abilityId || entry.label || 'CC';
+    // Resolve the card-playing figure (the "you"/anchor). These CCs are played
+    // during the controller's activation, so figureKeyForActivation resolves the
+    // active figure. Army-wide cards ("your defense results") leave conditions
+    // empty so every friendly figure qualifies; figure-scoped cards anchor on it.
+    let sourceFigureKey = null;
+    if (context.dcMessageMeta) {
+      const _srcMsgId = findActiveActivationMsgId(game, playerNum, context.dcMessageMeta);
+      if (_srcMsgId) sourceFigureKey = figureKeyForActivation(game, _srcMsgId);
+    }
     const block = entry.roundDefenseBonusBlock || 0;
     const evade = entry.roundDefenseBonusEvade || 0;
-    if (block) game.roundDefenseBonusBlock[playerNum] = (game.roundDefenseBonusBlock[playerNum] || 0) + block;
-    if (evade) game.roundDefenseBonusEvade[playerNum] = (game.roundDefenseBonusEvade[playerNum] || 0) + evade;
-    // Accuracy penalty (Take Cover) — accumulates additively, applies to ALL attacks.
     const accPenalty = entry.roundDefenseAccuracyPenalty || 0;
-    if (accPenalty) {
-      game.roundDefenseAccuracyPenalty = game.roundDefenseAccuracyPenalty || {};
-      game.roundDefenseAccuracyPenalty[playerNum] = (game.roundDefenseAccuracyPenalty[playerNum] || 0) + accPenalty;
-    }
-    // Deflection: Ranged-only accuracy penalty — separate per-player counter so
-    // it is NOT applied to Melee attacks (CSV: "when a Ranged attack targeting
-    // you is declared"). Consumed only when combat.isRanged (combat-bridge.js).
     const deflectAccPenalty = entry.roundDeflectionAccuracyPenalty || 0;
-    if (deflectAccPenalty) {
-      game.roundDeflectionAccuracyPenalty = game.roundDeflectionAccuracyPenalty || {};
-      game.roundDeflectionAccuracyPenalty[playerNum] = (game.roundDeflectionAccuracyPenalty[playerNum] || 0) + deflectAccPenalty;
-    }
     const parts = [];
-    if (block) parts.push(`+${block} Block`);
-    if (evade) parts.push(`+${evade} Evade`);
-    if (accPenalty) parts.push(`-${accPenalty} Accuracy`);
-    if (deflectAccPenalty) parts.push(`-${deflectAccPenalty} Accuracy vs Ranged`);
-    // Cavalry Charge: friendly TROOPERs get +N Hit when attacking this round
-    if (entry.trooperRoundAttackHitBonus) {
-      game.roundTrooperAttackHitBonus = game.roundTrooperAttackHitBonus || {};
-      game.roundTrooperAttackHitBonus[playerNum] = (game.roundTrooperAttackHitBonus[playerNum] || 0) + entry.trooperRoundAttackHitBonus;
-      parts.push(`+${entry.trooperRoundAttackHitBonus} Damage for friendly TROOPERs attacking`);
+    // "until end of round" cards clear at EOR-phase start; "during this round"
+    // cards persist through the EOR phase. Per CSV durationText.
+    const eorCards = new Set(['Survival Instincts', 'Fuel Upgrade', 'Deflection', 'Smuggled Supplies']);
+    const duration = eorCards.has(cardName) ? 'until-eor' : 'during-round';
+    // Smuggled Supplies "+1 Evade to YOUR defense results" applies only to the
+    // single figure that played it (CSV "your"), unlike the army-wide CCs.
+    // Armed Escort: "OTHER friendly figures within 2 of you gain +1 Evade" →
+    // excludeSourceFigure + withinSpacesOfSource 2 (CSV row 2).
+    let defConditions = {};
+    if (cardName === 'Smuggled Supplies') defConditions = { selfIsSourceFigure: true };
+    else if (cardName === 'Armed Escort') defConditions = { excludeSourceFigure: true, withinSpacesOfSource: 2 };
+    // Take Position / Survival Instincts / Take Cover: "+N Block (/Evade /
+    // -Accuracy) to your defense results" — army-wide (no figure condition).
+    if (block || evade || accPenalty) {
+      registerRoundModifier(game, {
+        id: `${cardName}:${playerNum}:def`,
+        card: cardName,
+        ownerPlayerNum: playerNum,
+        sourceFigureKey,
+        side: 'defense',
+        duration,
+        conditions: defConditions,
+        effect: { ...(block ? { block } : {}), ...(evade ? { evade } : {}), ...(accPenalty ? { accuracyPenalty: accPenalty } : {}) },
+      });
+      if (block) parts.push(`+${block} Block`);
+      if (evade) parts.push(`+${evade} Evade`);
+      if (accPenalty) parts.push(`-${accPenalty} Accuracy`);
     }
-    // Fuel Upgrade: friendly VEHICLEs get +N Speed this round
+    // Deflection: -N Accuracy ONLY vs a Ranged attack TARGETING YOU (CSV "when a
+    // Ranged attack targeting you is declared") → selfIsSourceFigure + range.
+    if (deflectAccPenalty) {
+      registerRoundModifier(game, {
+        id: `${cardName}:${playerNum}:def-deflect`,
+        card: cardName,
+        ownerPlayerNum: playerNum,
+        sourceFigureKey,
+        side: 'defense',
+        duration,
+        conditions: { selfIsSourceFigure: true, attackType: 'range' },
+        effect: { accuracyPenalty: deflectAccPenalty },
+      });
+      parts.push(`-${deflectAccPenalty} Accuracy vs Ranged`);
+    }
+    // Cavalry Charge: friendly TROOPER within 3 spaces of the playing figure gets
+    // +N Hit when attacking (CSV "Apply +1 Hit ... of a friendly TROOPER within 3").
+    if (entry.trooperRoundAttackHitBonus) {
+      registerRoundModifier(game, {
+        id: `${cardName}:${playerNum}:atk-trooper-hit`,
+        card: cardName,
+        ownerPlayerNum: playerNum,
+        sourceFigureKey,
+        side: 'attack',
+        duration,
+        conditions: { selfKeyword: 'TROOPER', withinSpacesOfSource: 3 },
+        effect: { hit: entry.trooperRoundAttackHitBonus },
+      });
+      parts.push(`+${entry.trooperRoundAttackHitBonus} Damage for friendly TROOPERs within 3 attacking`);
+    }
+    // Fuel Upgrade: friendly VEHICLEs get +N Speed this round (movement effect —
+    // NOT a combat modifier; stays on the per-player roundVehicleSpeedBonus flag).
     if (entry.vehicleSpeedBonusRound) {
       game.roundVehicleSpeedBonus = game.roundVehicleSpeedBonus || {};
       game.roundVehicleSpeedBonus[playerNum] = (game.roundVehicleSpeedBonus[playerNum] || 0) + entry.vehicleSpeedBonusRound;
       parts.push(`+${entry.vehicleSpeedBonusRound} Speed for friendly VEHICLEs`);
     }
-    // Fuel Upgrade: friendly VEHICLEs apply +N Evade this round (VEHICLE-scoped;
-    // separate from the shared all-figure roundDefenseBonusEvade so non-VEHICLE
-    // figures do not get the bonus — CSV "Each of your VEHICLES").
+    // Fuel Upgrade: "Each of your VEHICLES ... applies +1 Evade to defense
+    // results" → VEHICLE-keyword condition, defense side.
     if (entry.vehicleDefenseBonusEvadeRound) {
-      game.roundVehicleDefenseBonusEvade = game.roundVehicleDefenseBonusEvade || {};
-      game.roundVehicleDefenseBonusEvade[playerNum] = (game.roundVehicleDefenseBonusEvade[playerNum] || 0) + entry.vehicleDefenseBonusEvadeRound;
+      registerRoundModifier(game, {
+        id: `${cardName}:${playerNum}:def-vehicle-evade`,
+        card: cardName,
+        ownerPlayerNum: playerNum,
+        sourceFigureKey,
+        side: 'defense',
+        duration,
+        conditions: { selfKeyword: 'VEHICLE' },
+        effect: { evade: entry.vehicleDefenseBonusEvadeRound },
+      });
       parts.push(`+${entry.vehicleDefenseBonusEvadeRound} Evade for friendly VEHICLEs when defending`);
     }
     // Deflection: after attack resolves, attacker suffers N damage
@@ -7755,12 +7812,28 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: roundDefenderBonusBlockPerEvade + optional evadeTokenGain (Personal Energy Shield)
+  // ccEffect: roundDefenderBonusBlockPerEvade + optional evadeTokenGain (Personal
+  // Energy Shield). CSV: "While defending during this round, apply +1 Block to
+  // YOUR defense results for each Evade result" → self figure only. MIGRATED
+  // 2026-06-20 to the per-figure registry (blockPerEvade, selfIsSourceFigure).
   if (entry.type === 'ccEffect' && typeof entry.roundDefenderBonusBlockPerEvade === 'number' && entry.roundDefenderBonusBlockPerEvade > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundDefenderBonusBlockPerEvade = game.roundDefenderBonusBlockPerEvade || {};
-    game.roundDefenderBonusBlockPerEvade[playerNum] = (game.roundDefenderBonusBlockPerEvade[playerNum] || 0) + entry.roundDefenderBonusBlockPerEvade;
+    let _pesSourceFk = null;
+    if (dcMessageMeta) {
+      const _pesMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (_pesMsgId) _pesSourceFk = figureKeyForActivation(game, _pesMsgId);
+    }
+    registerRoundModifier(game, {
+      id: `Personal Energy Shield:${playerNum}:def-block-per-evade`,
+      card: 'Personal Energy Shield',
+      ownerPlayerNum: playerNum,
+      sourceFigureKey: _pesSourceFk,
+      side: 'defense',
+      duration: 'during-round',
+      conditions: { selfIsSourceFigure: true },
+      effect: { blockPerEvade: entry.roundDefenderBonusBlockPerEvade },
+    });
     if (entry.evadeTokenGain && dcMessageMeta) {
       const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
       if (msgId) {
@@ -7778,13 +7851,28 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: roundAttackSurgeBonus (e.g. Smuggled Supplies) — until end of round, +N Surge when attacking
+  // ccEffect: roundAttackSurgeBonus (Smuggled Supplies) — CSV: "apply +1 Surge to
+  // YOUR attack results until end of round" → self figure only. MIGRATED
+  // 2026-06-20 to the per-figure registry (attack side, selfIsSourceFigure).
   if (entry.type === 'ccEffect' && typeof entry.roundAttackSurgeBonus === 'number' && entry.roundAttackSurgeBonus > 0) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
     const n = entry.roundAttackSurgeBonus;
-    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + n;
+    let _ssSourceFk = null;
+    if (dcMessageMeta) {
+      const _ssMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (_ssMsgId) _ssSourceFk = figureKeyForActivation(game, _ssMsgId);
+    }
+    registerRoundModifier(game, {
+      id: `Smuggled Supplies:${playerNum}:atk-surge`,
+      card: 'Smuggled Supplies',
+      ownerPlayerNum: playerNum,
+      sourceFigureKey: _ssSourceFk,
+      side: 'attack',
+      duration: 'until-eor',
+      conditions: { selfIsSourceFigure: true },
+      effect: { surge: n },
+    });
     return {
       applied: true,
       logMessage: `Until end of round, apply +${n} Surge to your attack results.`,
@@ -9472,15 +9560,31 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: roundAttackRerollDice (Just Business) — until end of round, may reroll 1 attack die when attacking
+  // ccEffect: roundAttackRerollDice (Just Business) — CSV: "During this round,
+  // friendly Scum figures within 3 spaces of you gain Professional (may reroll 1
+  // attack die while attacking)" → affiliationScum + withinSpacesOfSource 3.
+  // MIGRATED 2026-06-20 to the per-figure registry (attack side, rerollAttackDice).
   if (entry.type === 'ccEffect' && typeof entry.roundAttackRerollDice === 'number' && entry.roundAttackRerollDice > 0) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundAttackRerollDice = game.roundAttackRerollDice || {};
-    game.roundAttackRerollDice[playerNum] = (game.roundAttackRerollDice[playerNum] || 0) + entry.roundAttackRerollDice;
+    let _jbSourceFk = null;
+    if (dcMessageMeta) {
+      const _jbMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (_jbMsgId) _jbSourceFk = figureKeyForActivation(game, _jbMsgId);
+    }
+    registerRoundModifier(game, {
+      id: `Just Business:${playerNum}:atk-reroll`,
+      card: 'Just Business',
+      ownerPlayerNum: playerNum,
+      sourceFigureKey: _jbSourceFk,
+      side: 'attack',
+      duration: 'during-round',
+      conditions: { affiliationScum: true, withinSpacesOfSource: 3 },
+      effect: { rerollAttackDice: entry.roundAttackRerollDice },
+    });
     return {
       applied: true,
-      logMessage: `Until end of round, friendly figures may reroll up to ${entry.roundAttackRerollDice} attack die when attacking.`,
+      logMessage: `During this round, friendly Scum figures within 3 spaces may reroll up to ${entry.roundAttackRerollDice} attack die when attacking.`,
     };
   }
 
@@ -12307,9 +12411,21 @@ export function resolveAbility(abilityId, context) {
         });
         return { applied: true, logMessage: `**Battlefield Awareness** — Added 1 reroll for **${dcName}** in the current attack.` };
       }
-      // Otherwise: grant +1 to round attack reroll pool for this player
-      game.roundAttackRerollDice = game.roundAttackRerollDice || {};
-      game.roundAttackRerollDice[playerNum] = (game.roundAttackRerollDice[playerNum] || 0) + 1;
+      // Otherwise (no live combat): grant the reroll to the chosen figure's next
+      // attack this round via the per-figure registry. CSV: "another friendly
+      // figure within 3" → the chosen figure benefits (anchored as the source so
+      // selfIsSourceFigure restricts the reroll to exactly that figure).
+      // MIGRATED 2026-06-20 off the per-player roundAttackRerollDice flag.
+      registerRoundModifier(game, {
+        id: `Battlefield Awareness:${playerNum}:${chosenFigureKey}:atk-reroll`,
+        card: 'Battlefield Awareness',
+        ownerPlayerNum: playerNum,
+        sourceFigureKey: chosenFigureKey,
+        side: 'attack',
+        duration: 'during-round',
+        conditions: { selfIsSourceFigure: true },
+        effect: { rerollAttackDice: 1 },
+      });
       return { applied: true, logMessage: `**Battlefield Awareness** — +1 attack reroll granted (for **${dcName}**'s next attack this round).` };
     }
     // Phase 1: pick friendly within 3
@@ -12643,8 +12759,16 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     const _pbkFk = figureKeyForActivation(game, msgId);
     if (_pbkFk) game.freeAttackBonusPending[_pbkFk] = true;
-    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
-    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 2;
+    // Payback's +2 Surge is an IMMEDIATE free-attack bonus (CSV: "interrupt to
+    // perform an attack ... applying +2 Surge to THE ATTACK RESULTS"), NOT a
+    // round-long bonus. Tie it to that one figure's next attack via the existing
+    // per-figure paybackBonusSurge mechanism (consumed at attack-declare in
+    // handlers/combat.js → combat.surgeBonus). MIGRATED 2026-06-20 off the
+    // per-player roundAttackSurgeBonus flag (matches the live post-combat.js path).
+    if (_pbkFk) {
+      game.paybackBonusSurge = game.paybackBonusSurge || {};
+      game.paybackBonusSurge[_pbkFk] = (game.paybackBonusSurge[_pbkFk] || 0) + 2;
+    }
     const meta = dcMessageMeta.get(msgId);
     return { applied: true, logMessage: `**Payback** — **${meta?.dcName || 'Dengar'}** may perform 1 free attack against the attacker. +2 Surge applied to that attack.` };
   }
@@ -12812,11 +12936,21 @@ export function resolveAbility(abilityId, context) {
       if (choiceIndex === 0) {
         // SCUM: Personal Combat Shield — "Whenever you spend a Block while
         // defending, apply +1 Evade." Round-scoped grant to OTHER Mobile
-        // friendlies. The +1-Evade-on-Block-spend hook lives in
-        // handlers/combat.js (applyPersonalCombatShieldOnBlockSpend), which
-        // reads this flag and honors the self-exclusion via excludeFigureKey.
-        game.roundMobilePersonalCombatShield = game.roundMobilePersonalCombatShield || {};
-        game.roundMobilePersonalCombatShield[playerNum] = { excludeFigureKey: selfFk };
+        // friendlies. MIGRATED 2026-06-20 to the per-figure registry: a
+        // descriptor evaluated per defending figure (selfKeyword MOBILE +
+        // excludeSourceFigure). The +1-Evade-on-Block-spend hook in
+        // handlers/combat.js (applyPersonalCombatShieldOnBlockSpend) now reads
+        // the evaluated personalCombatShield flag instead of the old map.
+        registerRoundModifier(game, {
+          id: `Choose a Side:${playerNum}:def-mobile-shield`,
+          card: 'Choose a Side (SCUM)',
+          ownerPlayerNum: playerNum,
+          sourceFigureKey: selfFk,
+          side: 'defense',
+          duration: 'during-round',
+          conditions: { selfKeyword: 'MOBILE', excludeSourceFigure: true },
+          effect: { personalCombatShield: true },
+        });
         return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, your **other Mobile** figures gain **Personal Combat Shield** (+1 Evade whenever they spend a Block while defending; ${mobileKeys.length} figure${mobileKeys.length !== 1 ? 's' : ''}).` };
       } else {
         // IMPERIAL: OTHER Mobile friendlies gain Gar Saxon's Flamethrower as a
@@ -12850,8 +12984,14 @@ export function resolveAbility(abilityId, context) {
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
     const _reFk = figureKeyForActivation(game, msgId);
     if (_reFk) game.freeAttackBonusPending[_reFk] = true;
-    game.roundAttackSurgeBonus = game.roundAttackSurgeBonus || {};
-    game.roundAttackSurgeBonus[playerNum] = (game.roundAttackSurgeBonus[playerNum] || 0) + 1;
+    // Reverse Engineer's +1 Surge is an IMMEDIATE bonus to THE granted attack
+    // (CSV: "Perform an attack ... apply +1 Surge to the attack results"), NOT a
+    // round-long bonus. Tie it to that figure's next attack via the per-figure
+    // paybackBonusSurge mechanism. MIGRATED 2026-06-20 off roundAttackSurgeBonus.
+    if (_reFk) {
+      game.paybackBonusSurge = game.paybackBonusSurge || {};
+      game.paybackBonusSurge[_reFk] = (game.paybackBonusSurge[_reFk] || 0) + 1;
+    }
     // Flag: swap to defender's surge abilities when attack resolves
     game.reverseEngineerActive = game.reverseEngineerActive || {};
     game.reverseEngineerActive[playerNum] = true;

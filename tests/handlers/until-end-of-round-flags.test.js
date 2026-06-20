@@ -52,31 +52,34 @@ describe('clearUntilEndOfRoundFlags (start-of-EOR-phase clearing)', () => {
     );
   });
 
-  it('leaves "during this round" / shared-mixed flags untouched', () => {
+  it('partitions activeRoundModifiers by duration: drops until-eor, keeps during-round', () => {
+    // The old shared per-player combat counters were migrated 2026-06-20 to the
+    // per-figure activeRoundModifiers registry. clearUntilEndOfRoundFlags now
+    // drops 'until-eor' descriptors (Survival Instincts, Fuel Upgrade, Deflection,
+    // Smuggled Supplies) but leaves 'during-round' descriptors (Take Position,
+    // Cavalry Charge, Take Cover, etc.) for the round-boundary clear.
     const game = {
-      // shared additive defense counters (mixed during-round / until-EOR feeders)
-      roundDefenseBonusBlock: { 1: 2 },
-      roundDefenseBonusEvade: { 1: 1 },
-      roundDefenseAccuracyPenalty: { 1: 2 },
-      // attack-surge shared counter (Smuggled Supplies + Payback/Reverse Engineer)
-      roundAttackSurgeBonus: { 1: 1 },
-      // movement-only "until end of round" (cannot matter during EOR)
+      activeRoundModifiers: [
+        { id: 'si:1:def', card: 'Survival Instincts', ownerPlayerNum: 1, side: 'defense', duration: 'until-eor', conditions: {}, effect: { block: 1, evade: 1 } },
+        { id: 'tp:1:def', card: 'Take Position', ownerPlayerNum: 1, side: 'defense', duration: 'during-round', conditions: {}, effect: { block: 1 } },
+        { id: 'ss:1:atk-surge', card: 'Smuggled Supplies', ownerPlayerNum: 1, side: 'attack', duration: 'until-eor', conditions: { selfIsSourceFigure: true }, effect: { surge: 1 } },
+      ],
+      // movement-only "until end of round" flag (left to round boundary).
       roundEfficientTravel: { 1: true },
-      // pure "during this round" effects
+      // pure "during this round" effects.
       roundTrooperSurgeStun: { 1: true },
-      roundUtinniJawaBuffs: true,
       roundPushImmuneUnlessMassive: { 'Tank-1': true },
     };
 
     clearUntilEndOfRoundFlags(game);
 
-    assert.deepEqual(game.roundDefenseBonusBlock, { 1: 2 });
-    assert.deepEqual(game.roundDefenseBonusEvade, { 1: 1 });
-    assert.deepEqual(game.roundDefenseAccuracyPenalty, { 1: 2 });
-    assert.deepEqual(game.roundAttackSurgeBonus, { 1: 1 });
+    // until-eor descriptors removed; during-round retained.
+    const ids = game.activeRoundModifiers.map((m) => m.id);
+    assert.deepEqual(ids, ['tp:1:def'], 'only the during-round descriptor remains');
+
+    // Non-registry round flags left untouched (clear at round boundary).
     assert.deepEqual(game.roundEfficientTravel, { 1: true });
     assert.deepEqual(game.roundTrooperSurgeStun, { 1: true });
-    assert.equal(game.roundUtinniJawaBuffs, true);
     assert.deepEqual(game.roundPushImmuneUnlessMassive, { 'Tank-1': true });
   });
 });

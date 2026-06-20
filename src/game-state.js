@@ -171,12 +171,15 @@ function ensureGameShape(game) {
     'activationStartPositions', 'activationStartAllPositions', 'activationDamagedFigures', 'activationKills',
     'activationDoubleSpecialAction', 'activationExtraActionThenStun',
     'attackPerformedThisActivation',
-    // Round-scoped containers (keyed by msgId/figureKey, reset each round)
-    'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
-    'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenseAccuracyPenalty', 'roundDefenderBonusBlockPerEvade',
-    'roundMobilePersonalCombatShield', 'roundMobileGarSaxonFlamethrower',
+    // Round-scoped containers (keyed by msgId/figureKey, reset each round).
+    // The per-player COMBAT bonus flags (roundDefenseBonusBlock/Evade/
+    // AccuracyPenalty, roundDefenderBonusBlockPerEvade, roundMobilePersonalCombatShield,
+    // roundTrooperAttackHitBonus, roundAttackSurgeBonus, roundAttackRerollDice)
+    // were REMOVED 2026-06-20 and replaced by the per-figure activeRoundModifiers
+    // registry (see ARR below + round-modifiers.js).
+    'roundFigureAbilityUsed', 'roundMobileGarSaxonFlamethrower',
     'roundEfficientTravel', 'roundProgrammingOverrideTrait',
-    'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
+    'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
     // Combat targeting (keyed by msgId)
     'attackTargets', 'falseOrdersAttackTargets', 'falseOrdersUpgrade',
     'nextAttackBonusSurgeAbilities', 'nextAttackBonusAccuracy', 'nextAttackBonusPierce',
@@ -217,6 +220,8 @@ function ensureGameShape(game) {
     'initiativeDeployMessageIds', 'nonInitiativeDeployMessageIds',
     'nonInitiativeDeployedConfirmIds', 'attachRedoNoticeIds',
     'setupLogMessageIds',
+    // Per-figure active round-modifier registry (alexanbv 2026-06-20).
+    'activeRoundModifiers',
   ];
   for (const k of ARR) {
     if (!Array.isArray(game[k])) game[k] = [];

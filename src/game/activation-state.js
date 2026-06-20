@@ -635,29 +635,23 @@ const ROUND_OBJECT_FLAGS = [
   // Wild Beast (Bantha Rider) status-phase swap gate. Cleared at round
   // start; status-phase context = once per round-scoped status phase.
   'wildBeastUsedThisStatusPhase',
-  'roundDefenseBonusBlock',
+  // Per-player round COMBAT bonus flags REMOVED 2026-06-20 (alexanbv) — migrated
+  // to the per-figure activeRoundModifiers registry (ROUND_ARRAY_FLAGS, see
+  // round-modifiers.js): roundDefenseBonusBlock, roundDefenseBonusEvade,
+  // roundDefenseAccuracyPenalty, roundDeflectionAccuracyPenalty,
+  // roundVehicleDefenseBonusEvade, roundMobilePersonalCombatShield,
+  // roundDefenderBonusBlockPerEvade, roundTrooperAttackHitBonus,
+  // roundAttackRerollDice, roundAttackSurgeBonus.
   // Generic named-CC per-timing-instance tracker (destruct 2026-05-07).
   // Reset to {} at round start so SOR/EOR/status buckets clear naturally;
   // 'activation' bucket clears explicitly in cleanupActivation; 'attack'
   // bucket clears when pendingCombat resolves (resolvePendingCombat).
   'namedCcsPlayedPerTiming',
-  'roundDefenseBonusEvade',
-  'roundDefenseAccuracyPenalty',
-  // Deflection: Ranged-only accuracy penalty (separate from the all-attacks
-  // Take Cover penalty above so Melee attacks are unaffected).
-  'roundDeflectionAccuracyPenalty',
-  // Fuel Upgrade: +1 Evade scoped to VEHICLES only (separate from the shared
-  // all-figure roundDefenseBonusEvade above).
-  'roundVehicleDefenseBonusEvade',
-  'roundMobilePersonalCombatShield',
   'roundMobileGarSaxonFlamethrower',
-  'roundDefenderBonusBlockPerEvade',
   'roundPushImmuneUnlessMassive',
-  'roundTrooperAttackHitBonus',
   'roundVehicleSpeedBonus',
   'deflectionPending',
   'deflectionUnconditional',
-  'roundAttackRerollDice',
   'freeAttackBonusPending',
   'freeAttackDifferentTargets',
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
@@ -692,7 +686,6 @@ const ROUND_OBJECT_FLAGS = [
   'adaptBlaiseResolvedThisRound',
   // Hunt Dissent active distribution state (when picker is open).
   'pendingHuntDissent',
-  'roundAttackSurgeBonus',
   'overrunThisActivation',
   'roundFigureAbilityUsed',
   'roundEfficientTravel',
@@ -970,6 +963,14 @@ const ROUND_ARRAY_FLAGS = [
   // and owe an end-of-round draw. Consumed + emptied in _runDcEorForPlayer;
   // reset to [] at round boundary as a safety net. (alexanbv 2026-06-18.)
   'restInPeacePending',
+  // Active round-modifier registry (alexanbv 2026-06-20): array of per-figure
+  // combat-bonus descriptors (Take Position, Survival Instincts, Take Cover,
+  // Cavalry Charge, Armed Escort, Fuel Upgrade, Deflection, Personal Energy
+  // Shield, Choose a Side SCUM, Smuggled Supplies, Just Business, Battlefield
+  // Awareness). Reset to [] at the round boundary clears the 'during-round'
+  // descriptors; 'until-eor' descriptors are cleared earlier at EOR-phase start
+  // (clearRoundModifiersUntilEor in handlers/round.js). See round-modifiers.js.
+  'activeRoundModifiers',
 ];
 
 const ROUND_FALSE_FLAGS = [
