@@ -57,7 +57,7 @@ import { applyCondition, resetCondition, filterCondition, isConditionImmune, HAR
 import { parseSurgeEffect } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
 import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
-import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, armyCostModifierKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
@@ -9737,9 +9737,34 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: celebrationVp + increaseArmyCostBy (Field Promotion)
+  // CSV row 652: "Gain 4 VPs and increase your figure cost by 2". timing
+  // attack:after_resolves (attacker); conditional "attack defeated the figure
+  // and your affiliation is REBEL or IMPERIAL". Per alexanbv ruling: the figure
+  // cost increase applies to the FIGURE THAT PLAYED the card (the attacker /
+  // activating figure), and is read by DEFEAT-VP scoring when THAT figure is
+  // later defeated. Duration: CSV duration column = "None" → no expiry, i.e.
+  // PERMANENT for the rest of the game (the figure carries the +2 until it is
+  // defeated, at which point the opponent scores it). Stored per-figure in the
+  // game-persistent game.figureCostModifier (NOT round-scoped; not registered in
+  // the ROUND_*_FLAGS lists, mirroring other game-persistent per-figure maps like
+  // figureNicknames / figureContraband).
   if (entry.type === 'ccEffect' && typeof entry.celebrationVp === 'number' && typeof entry.increaseArmyCostBy === 'number') {
-    const { game, playerNum, defenderDefeated } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Derive defender-defeated from game.lastDefeatInfo (set in combat-bridge
+    // when the attack target drops to 0 HP), mirroring Glory of the Kill —
+    // context.defenderDefeated is only supplied by tests, so we must not rely on
+    // it in production. context.defenderDefeated, when explicitly provided, takes
+    // precedence (lets tests assert the negative path).
+    let defenderDefeated;
+    if (typeof context.defenderDefeated === 'boolean') {
+      defenderDefeated = context.defenderDefeated;
+    } else {
+      const cbt = context.combat || game.pendingCombat || game.combat;
+      const _defeatedFk = game.lastDefeatInfo?.figureKey;
+      const _attackTargetFk = cbt?.target?.figureKey || game.lastAttackTargetFigureKey;
+      defenderDefeated = !!_defeatedFk && (!_attackTargetFk || _defeatedFk === _attackTargetFk);
+    }
     if (!defenderDefeated) return { applied: false, manualMessage: 'Field Promotion: defender was not defeated.' };
     // CSV row 652 condition: "your affiliation is REBEL or IMPERIAL". Compute
     // the army's primary affiliation (most common non-"Any" across the DC list,
@@ -9760,11 +9785,25 @@ export function resolveAbility(abilityId, context) {
     const vk = vpKey(playerNum);
     game[vk] = game[vk] || { total: 0, kills: 0, objectives: 0 };
     game[vk].total = (game[vk].total ?? 0) + entry.celebrationVp;
-    const costKey = armyCostModifierKey(playerNum);
-    game[costKey] = (game[costKey] || 0) + entry.increaseArmyCostBy;
+    // Resolve the PLAYING figure: during your own attack the attacker IS the
+    // active activation figure, so findActiveActivationMsgId + figureKeyForActivation
+    // yields the figure that played Field Promotion. Fall back to context.figureKey
+    // (forwarded by the cc-timing playCard path) if no activation is resolvable.
+    let _fpFigureKey = null;
+    if (dcMessageMeta) {
+      const _fpMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (_fpMsgId) _fpFigureKey = figureKeyForActivation(game, _fpMsgId);
+    }
+    if (!_fpFigureKey) _fpFigureKey = context.figureKey || null;
+    if (_fpFigureKey) {
+      game.figureCostModifier = game.figureCostModifier || {};
+      game.figureCostModifier[_fpFigureKey] = (game.figureCostModifier[_fpFigureKey] || 0) + entry.increaseArmyCostBy;
+    }
     return {
       applied: true,
-      logMessage: `Defender defeated. Gained ${entry.celebrationVp} VP and increased your figure cost by ${entry.increaseArmyCostBy}.`,
+      logMessage: _fpFigureKey
+        ? `Defender defeated. Gained ${entry.celebrationVp} VP and increased the playing figure's cost by ${entry.increaseArmyCostBy} (scores extra VP for the opponent if it is later defeated).`
+        : `Defender defeated. Gained ${entry.celebrationVp} VP (could not resolve the playing figure to apply the +${entry.increaseArmyCostBy} cost increase — resolve manually).`,
     };
   }
 

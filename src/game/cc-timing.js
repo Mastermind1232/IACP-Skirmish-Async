@@ -218,7 +218,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Final Stand: playable during your activation (play when friendly at 0 health)
       return ctx.duringActivation;
     case 'whenyouendmovementinspaceswithotherfigures':
-      // Crush: playable during your activation (play when you end movement in space with figures)
+      // Crush: playable during your activation. Per alexanbv ruling, Crush's
+      // EFFECT now resolves inside the MASSIVE end-of-move pipeline (before the
+      // push, same timing as Stampede) — see _applyCrushBeforePush in
+      // handlers/move-x-handler.js. This playability gate keeps it offerable
+      // during the controller's activation (the window in which the MASSIVE
+      // figure moves).
       return ctx.duringActivation;
     case 'whenhostilefigureinyourlineofsightattacking':
       // Force Illusion: playable while defending (play when hostile in LOS is attacking)

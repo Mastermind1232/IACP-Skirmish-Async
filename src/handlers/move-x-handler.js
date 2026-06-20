@@ -31,7 +31,7 @@ import { markMapDirty } from '../game/game-helpers.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
 import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
 import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
-import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
+import { getPlayerId, opponentPlayerNum, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows, buildRowPickerButtons } from '../discord/components.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -1243,6 +1243,80 @@ export async function handleMoveXSeqPick(interaction, ctx) {
 export async function runMassiveDisplacement(game, ctx, pending) {
   return _runMassiveDisplacement(game, ctx, pending);
 }
+
+/**
+ * Crush (CC) end-of-massive-move resolution. Called from within
+ * _runMassiveDisplacement at the SAME pre-push point as Stampede (after the
+ * enemyQueue is gathered, before resolveNextDisplacements runs the push). When
+ * the MASSIVE figure's controller holds the Crush CC and there is a SMALL enemy
+ * figure in the ending footprint, Crush is played: one SMALL enemy in the
+ * footprint suffers 4 Damage, and the card is moved to the discard pile.
+ *
+ * Per alexanbv ruling, Crush shares Stampede's timing. The card is consumed here
+ * (one copy per qualifying end-of-move). Target selection: the FIRST SMALL enemy
+ * in the enemyQueue (the interactive "Choose a SMALL figure" picker across
+ * multiple SMALL targets is DEFERRED — see report). No-op (and no card consumed)
+ * when the moving figure is not MASSIVE, the controller has no Crush in hand, or
+ * there is no SMALL enemy in the footprint.
+ */
+export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
+  const { client, logGameAction } = ctx;
+  const movingPN = pending.playerNum;
+  // 1. Controller must hold Crush in hand.
+  const handKey = ccHandKey(movingPN);
+  const hand = game[handKey];
+  if (!Array.isArray(hand) || !hand.includes('Crush')) return;
+  // 2. Moving figure must be MASSIVE (only a MASSIVE figure ends movement in
+  //    spaces "containing other figures" via the displacement framework).
+  const dcEffects = getDcEffects() || {};
+  const moverKw = (dcEffects[dcNameFromFigureKey(pending.figureKey)]?.keywords || [])
+    .map((k) => String(k).toUpperCase());
+  if (!moverKw.includes('MASSIVE')) return;
+  // 3. Find the first SMALL enemy figure in the ending footprint (enemyQueue).
+  const oppPN = movingPN === 1 ? 2 : 1;
+  const _isSmall = (fk) => {
+    const kw = (dcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase());
+    return !(kw.includes('LARGE') || kw.includes('MASSIVE'));
+  };
+  const target = (dispPending.enemyQueue || []).find((e) => e?.figureKey && _isSmall(e.figureKey));
+  if (!target) return;
+  // 4. Resolve the target's msgId + figIndex (same lookup Stampede uses).
+  const { dcMessageMeta } = ctx;
+  const fkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
+  if (!fkMatch) return;
+  const figIdx = parseInt(fkMatch[2], 10);
+  const tDcName = dcNameFromFigureKey(target.figureKey);
+  let tMsgId = null;
+  for (const [mId, mMeta] of (dcMessageMeta || [])) {
+    if (mMeta.gameId !== game.gameId || mMeta.playerNum !== oppPN || mMeta.dcName !== tDcName) continue;
+    const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIdx = dgM ? dgM[1] : '1';
+    if (String(dgIdx) === String(fkMatch[1])) { tMsgId = mId; break; }
+  }
+  if (!tMsgId) return;
+  // 5. Apply 4 Damage BEFORE the push, then consume the card from hand → discard.
+  const { applyDamage: _crApplyDamage } = await import('../game/damage-pipeline.js');
+  try {
+    await _crApplyDamage(game, { dcHealthState: ctx.dcHealthState, logGameAction, client }, {
+      figureKey: target.figureKey, msgId: tMsgId, figIndex: figIdx,
+      amount: 4, controllerPlayerNum: oppPN,
+      attackerPlayerNum: movingPN,
+      source: 'Crush',
+    });
+  } catch (err) {
+    console.error('[crush] applyDamage failed:', err?.message ?? err);
+    return;
+  }
+  // Consume the card (first copy) from hand → discard.
+  const idx = hand.indexOf('Crush');
+  if (idx >= 0) hand.splice(idx, 1);
+  const discKey = ccDiscardKey(movingPN);
+  game[discKey] = game[discKey] || [];
+  game[discKey].push('Crush');
+  await logGameAction?.(game, client,
+    `💥 **Crush** — **${tDcName}** in **${pending.dcName || dcNameFromFigureKey(pending.figureKey)}**'s ending space: 4 Damage before push.`,
+    { phase: 'ROUND', icon: 'attack' });
+}
 async function _runMassiveDisplacement(game, ctx, pending) {
   const { client, logGameAction } = ctx;
   const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
@@ -1288,6 +1362,22 @@ async function _runMassiveDisplacement(game, ctx, pending) {
         console.error('[stampede] applyDamage failed:', err?.message ?? err);
       }
     }
+  }
+  // Crush (CC, row 594) per alexanbv ruling: "Crush should be applied as part of
+  // the massive figure end movement pipeline — BEFORE figures are pushed. Same
+  // timing as Bantha Rider's Stampede ability." CSV: conditional "you end
+  // movement in spaces containing one or more other figures"; effect "Choose a
+  // SMALL figure in those spaces; it suffers 4 Damage".
+  //
+  // Interpretation: this fires when a MASSIVE figure whose controller holds the
+  // Crush CC ends its move overlapping a SMALL enemy figure (the "ending space
+  // contains other figures" condition is exactly the MASSIVE-overlap that
+  // triggers displacement). The 4 Damage resolves HERE — at the same pre-push
+  // point as Stampede, over the same enemyQueue — and the card is consumed from
+  // the controller's hand. Only SMALL enemy figures in the ending footprint are
+  // eligible (the CSV "SMALL figure" filter, mirroring abilities.js requiresSmall).
+  if (dispPending) {
+    await _applyCrushBeforePush(game, ctx, pending, dispPending);
   }
   if (dispPending) {
     // Per CRR (2026-05-09 user clarification): once a MASSIVE figure

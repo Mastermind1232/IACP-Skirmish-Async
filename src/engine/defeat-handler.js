@@ -134,6 +134,15 @@ export async function processFigureDefeat(game, opts, deps) {
     const _suNick = game.figureNicknames?.[figureKey];
     const _vpCard = (_suNick && isSquadUpgradeCard(_suNick)) ? _suNick : dcName;
     vp = calculateKillVp(_vpCard);
+    // Field Promotion (CC): a figure that played Field Promotion has its figure
+    // cost permanently increased (CSV "increase your figure cost by 2"), stored
+    // per-figure in game.figureCostModifier. The opponent scores VP equal to the
+    // defeated figure's cost, so the modifier is added to the defeat VP here.
+    // alexanbv ruling: "Field Promotion increases the figure cost of the figure
+    // that played it." Only applied when this figure earns base VP (vp > 0) — a
+    // 0-VP figure (companion) does not score, matching calculateKillVp semantics.
+    const _figCostBump = game.figureCostModifier?.[figureKey] || 0;
+    if (vp > 0 && _figCostBump > 0) vp += _figCostBump;
     if (vp > 0) awardKillVp(game, attackerPlayerNum, vp);
 
     // 2b. Attachment VP: when last figure in group defeated, award attachment deployment cost
