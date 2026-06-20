@@ -447,25 +447,21 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: `Spread the Pain: apply ${combat.spreadThePainConditions.length} condition${combat.spreadThePainConditions.length > 1 ? 's' : ''}`,
     });
   }
-  // Distracting Fire (Rebel Pathfinder Elite passive): hostile with LOS
-  // to attacker deals 1 damage to attacker. Per user 2026-05-09 this is
-  // categorized as ATTACKER step-8 (the outcome targets the attacker so
-  // the attacker's window owns the click). Eligibility re-checked at
-  // fire time.
-  if (combat.attackerFigureKey && game?.selectedMap?.id) {
-    const oppPN = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
-    const friendlyFigs = game.figurePositions?.[oppPN] || {};
-    let hasDistr = false;
-    for (const fk of Object.keys(friendlyFigs)) {
-      const dcN = deps?.dcNameFromFigureKey?.(fk);
-      const e = dcN ? deps?.getDcEffects?.()?.[dcN] : null;
-      if ((e?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder')) { hasDistr = true; break; }
-    }
-    if (hasDistr) {
+  // Distracting Fire (Rebel Pathfinder, ATTACKER passive): after the Pathfinder
+  // resolves an attack that did not miss, it may force the DEFENDER's group to
+  // activate next (CSV row 405). Once per group per round (alexanbv 2026-06-20 —
+  // the prior code did the wrong effect [1 damage to attacker] and detected the
+  // Pathfinder on the defender side).
+  if (combat.attackerFigureKey) {
+    const _dfAtkDcName = combat.attackerDcName || deps?.dcNameFromFigureKey?.(combat.attackerFigureKey);
+    const _dfEff = _dfAtkDcName ? deps?.getDcEffects?.()?.[_dfAtkDcName] : null;
+    const _dfHit = combat._step7Hit ?? combat.hit;
+    const _dfRoundKey = `distracting_fire_${combat.attackerMsgId}`;
+    if (_dfHit && (_dfEff?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder') && !game?.roundFigureAbilityUsed?.[_dfRoundKey]) {
       enqueueAfterAttackEffect(combat, {
         side: 'attacker',
         type: 'distracting_fire',
-        label: 'Distracting Fire: 1 Damage to attacker',
+        label: "Distracting Fire: force the defender's group to activate next",
       });
     }
   }

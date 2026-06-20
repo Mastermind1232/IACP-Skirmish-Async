@@ -126,7 +126,9 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
       const isInteractive = leaders.length > 1;
       abilities.push({ abilityId: 'security_detail', label: 'Security Detail', dcName, figureKey: fk, playerNum, interactive: isInteractive, type: 'token', leaders });
     }
-    if (passives.includes('Infiltration')) {
+    // Rebel Pathfinder's Infiltration lives in specialAbilityIds, not passives
+    // (alexanbv 2026-06-20 — the passive check alone never enumerated it).
+    if (passives.includes('Infiltration') || sIds.includes('infiltration_rebel_pathfinder')) {
       const dgMatch = fk.match(/^(.+)-(\d+)-(\d+)$/);
       if (dgMatch) {
         const [, baseName, dgIdx] = dgMatch;

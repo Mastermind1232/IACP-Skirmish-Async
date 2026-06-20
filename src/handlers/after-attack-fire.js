@@ -1525,6 +1525,11 @@ async function fireDistractingFire(thread, game, combat, effect, ctx) {
   const targetDcName = combat.target?.figureKey ? dcNameFromFigureKey(combat.target.figureKey) : null;
   if (!targetDcName) return;
   game.forceVisionNextActivation = { playerNum: defPN, dcName: targetDcName };
+  // Once per group per round (CSV row 405) — mark the Pathfinder group's key.
+  if (combat.attackerMsgId) {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    game.roundFigureAbilityUsed[`distracting_fire_${combat.attackerMsgId}`] = true;
+  }
   if (logGameAction) {
     await logGameAction(game, client, `🎯 **Distracting Fire** — **${combat.attackerDcName}** forces **${targetDcName}**'s group to activate next, if able.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   }
