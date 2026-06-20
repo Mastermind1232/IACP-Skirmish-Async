@@ -792,7 +792,6 @@ const ROUND_NULL_FLAGS = [
   'roundInTheShadowsPlayerNum',
   'strengthInNumbersPlayerNum',
   'strengthInNumbersData',
-  'provokeNextActivation',
   'agitateNextActivation',
   'forceVisionNextActivation',
   'forceVisionPending',

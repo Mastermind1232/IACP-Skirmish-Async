@@ -9260,12 +9260,37 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `You may immediately activate another group (combined deployment cost of the two groups cannot exceed 12). Triggering group: **${sinTriggerName}** (cost ${sinTriggerCost}).` };
   }
 
-  // ccEffect: provokeNextActivation (Provoke)
+  // ccEffect: provokeNextActivation (Provoke) — choose a hostile figure adjacent
+  // to a friendly TROOPER/GUARDIAN; that figure's GROUP must activate next (CSV
+  // row 782). Uses the live forceVisionNextActivation mechanism (consumed in
+  // dc-play-area.js:143; same as Distracting Fire) — the old provokeNextActivation
+  // flag was never read (alexanbv 2026-06-20).
   if (entry.type === 'ccEffect' && entry.provokeNextActivation) {
-    const { game, playerNum } = context;
+    const { game, playerNum, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.provokeNextActivation = { playerNum };
-    return { applied: true, logMessage: "Choose a hostile figure adjacent to your TROOPER or GUARDIAN; that figure's group must activate next if able." };
+    const oppNum = opponentPlayerNum(playerNum);
+    const dcEffects = getDcEffects();
+    // Phase 2: chosen hostile → force its group to activate next.
+    if (chosenFigureKey) {
+      const chosenDcName = dcNameFromFigureKey(chosenFigureKey);
+      game.forceVisionNextActivation = { playerNum: oppNum, dcName: chosenDcName };
+      return { applied: true, logMessage: `**Provoke** — **${chosenDcName}**'s group must activate next (if able).` };
+    }
+    // Phase 1: enumerate hostile figures adjacent to a friendly TROOPER/GUARDIAN.
+    const validKeys = []; const validLabels = [];
+    for (const [hfk, hpos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+      if (!hpos) continue;
+      const adjToTG = Object.entries(game.figurePositions?.[playerNum] || {}).some(([ffk, fpos]) => {
+        if (!fpos) return false;
+        const d = countGameSpaces(game, fpos, hpos);
+        if (d !== 1) return false;
+        const kws = (dcEffects[dcNameFromFigureKey(ffk)]?.keywords || []).map((k) => String(k).toUpperCase());
+        return kws.includes('TROOPER') || kws.includes('GUARDIAN');
+      });
+      if (adjToTG) { validKeys.push(hfk); validLabels.push(dcNameFromFigureKey(hfk)); }
+    }
+    if (!validKeys.length) return { applied: false, manualMessage: '**Provoke** — No hostile figure adjacent to your TROOPER or GUARDIAN.' };
+    return { applied: false, requiresChoice: true, choiceOptions: validLabels.map((n) => `Provoke: ${n}`), choiceValues: validKeys };
   }
 
   // ccEffect: pummelTwoAttacksThisActivation (Pummel) — per-figureKey
