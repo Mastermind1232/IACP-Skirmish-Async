@@ -4369,8 +4369,9 @@
       "label": "Shock Lance",
       "description": "Choose a figure within 2 spaces and roll 1 green die. That figure suffers Damage equal to the Damage results. If you rolled a Surge, it becomes Weakened.",
       "rollOneDie": "green",
-      "rollOneDieTarget": "spaceWithin",
-      "rollOneDieRange": 2,
+      "rollOneDieTarget": "hostileWithinRange",
+      "rollOneDieTargetRange": 2,
+      "rollOneDieRequiresLos": false,
       "rollOneDieSurgeCondition": "Weaken",
       "rollOneDieNote": "Deal Damage results to the chosen figure. If Surge rolled, that figure becomes **Weakened**.",
       "wiredStatus": "wired"

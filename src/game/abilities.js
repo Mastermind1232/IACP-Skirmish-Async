@@ -3163,6 +3163,13 @@ export function resolveAbility(abilityId, context) {
             resultParts.push(`apply ${totalDmg} Damage manually`);
           }
         }
+        // rollOneDieSurgeCondition (Dewback Shock Lance: Weaken on a Surge) —
+        // apply the condition to the chosen target if a Surge was rolled.
+        if (entry.rollOneDieSurgeCondition && surges >= 1) {
+          if (applyCondition(game, targetFigureKey, entry.rollOneDieSurgeCondition)) {
+            resultParts.push(`becomes **${entry.rollOneDieSurgeCondition}**`);
+          }
+        }
         const targetName = dcNameFromFigureKey(targetFigureKey);
         const mpNote = mpCost > 0 ? ` Spent ${mpCost} MP.` : '';
         return {
