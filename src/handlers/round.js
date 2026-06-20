@@ -202,6 +202,13 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   // Disarm permanent Weakened lock: clear at end of round (Disarm card leaves play at end of round).
   game.disarmPermanentWeakened = {};
 
+  // In the Shadows (CC) — "until the end of the round" timing (alexanbv
+  // 2026-06-20): the LOS effect falls off at the START of the EOR/status
+  // phase, BEFORE end-of-round scoring/triggers. (Distinct from "during this
+  // round" effects, which persist through the EOR phase and clear at round
+  // start.) cleanupRoundStart also nulls it as a safety net at round start.
+  game.roundInTheShadows = null;
+
   // ══ STEP 1: Ready Cards (rules: STATUS PHASE IN A SKIRMISH L2714-2715) ══
   // SU ready already done above (L170-176). Now ready all DCs (un-exhaust).
   for (const [msgId, meta] of dcMessageMeta) {

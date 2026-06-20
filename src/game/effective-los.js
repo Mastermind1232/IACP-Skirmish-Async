@@ -26,7 +26,7 @@
  */
 import { hasLineOfSight, countSpaces } from './spatial.js';
 import { getBrokenWallEdges } from './movement.js';
-import { dcNameFromFigureKey } from './dc-helpers.js';
+import { dcNameFromFigureKey, figureHasInTheShadows } from './dc-helpers.js';
 import { edgeKey } from './coords.js';
 
 import { getDcEffect } from './dc-helpers.js';
@@ -107,6 +107,14 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
   const toFp = _getFp(toPos, toSize);
   const effMs = _buildLosEffectiveMs(game, ctx);
   if (!effMs) return false;
+  // In the Shadows (CC): a HOSTILE source 4+ spaces from an In-the-Shadows
+  // destination has NO LOS to it (does not apply to same-team LOS — the
+  // source must be a "hostile figure" per the card). alexanbv 2026-06-20.
+  if (fromPN && toPN && fromPN !== toPN && figureHasInTheShadows(game, toFigureKey)) {
+    const itsDist = Math.min(...fromFp.map((ac) => Math.min(...toFp.map((tc) =>
+      countSpaces(effMs, String(ac).toLowerCase(), String(tc).toLowerCase())))));
+    if (itsDist >= 4) return false;
+  }
   // Build figure-blocking-coords using the picker's canonical helper
   // (Camo reciprocal, MASSIVE, companion exemptions, marksman, ignore-blocking).
   // Imported lazily to avoid circular handler→game import.
@@ -135,7 +143,9 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
         // from the source. For same-team source/destination (friendly
         // LoS), Camo doesn't apply since the source isn't a "hostile
         // figure" per the card text.
-        if (pn !== fromPN && (fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id))) {
+        // In the Shadows (CC) rides the same reciprocal blocking exclusion.
+        if (pn !== fromPN
+            && ((fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
           const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase())));
           if (dist >= 4) continue;
         }

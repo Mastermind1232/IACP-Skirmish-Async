@@ -1390,49 +1390,15 @@ export async function handleFindsmanMeditation(interaction, ctx) {
 }
 
 // ── Submit or Fight (Paz Vizsla) ────────────────────────────────────────────
-export async function handleSubmitOrFight(interaction, ctx) {
-  await interaction.deferUpdate().catch(discordCatch);
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, dcHealthState, logGameAction } = ctx;
-  const isUse = interaction.customId.startsWith('submit_fight_use_');
-  const prefix = isUse ? 'submit_fight_use_' : 'submit_fight_skip_';
-  const suffix = parseCustomId(interaction.customId, prefix);
-  const parts = suffix.split('_');
-  const gameId = parts[0];
-  const figureIndex = parseInt(parts[parts.length - 1], 10);
-  const msgId = parts.slice(1, -1).join('_');
-
-  const game = await requireGame(interaction, getGame, gameId, { silent: true });
-  if (!game) return;
-  const meta = dcMessageMeta?.get(msgId);
-
-  if (isUse) {
-    const playerNum = meta?.playerNum || (game.player1Id === interaction.user.id ? 1 : 2);
-    if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
-    // Rest in Peace: block discard-pile access
-    if (game.restInPeaceActive) {
-      await interaction.message.edit({ content: '**Submit or Fight** — Blocked by **Rest in Peace** (cannot access discard piles this round).', components: [] }).catch(discordCatch);
-      return;
-    }
-    const discardKey = `p${playerNum}CcDiscard`;
-    const discard = game[discardKey] || [];
-    if (discard.length === 0) {
-      await interaction.followUp({ content: 'No CCs in discard pile.', ephemeral: true }).catch(discordCatch);
-      return;
-    }
-    // Return last CC from discard to game box (permanently removed)
-    const returnedCc = discard.pop();
-    // Heal 1 HP (reverse the strain damage) — uses healHp for Map+dcList sync
-    if (dcHealthState) healHp(dcHealthState, game, msgId, figureIndex, 1, playerNum);
-    const dcName = meta?.dcName || 'Paz Vizsla';
-    await interaction.message.edit({ content: `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to game box to heal 1 Strain damage.`, components: [] }).catch(discordCatch);
-    if (logGameAction) {
-      await logGameAction(game, client, `🛡️ **Submit or Fight** — **${dcName}** returned **${returnedCc}** to prevent Strain damage.`, { phase: 'ROUND', icon: 'defend' });
-    }
-  } else {
-    await interaction.message.edit({ content: '**Submit or Fight** — Skipped.', components: [] }).catch(discordCatch);
-  }
-  saveGames(game.gameId);
-}
+// REMOVED 2026-06-20 (alexanbv): the old damage-based handleSubmitOrFight
+// (pop 1 CC + heal 1 HP) modeled Submit or Fight as post-damage healing. Per
+// the ruling it is a STRAIN-prevention option — "return any number of Command
+// cards from your discard pile to prevent that much Strain" — so it is now the
+// canonical THIRD strain option (PAZ_RETURN_FROM_DISCARD) in the applyStrain
+// pipeline (strain-handler.js / strain-resolver.js: pazReturnAvailable +
+// handleStrainChoicePaz), applied BEFORE strain converts to HP loss and
+// overridable by the opponent depleting Under Duress (which flips the chooser
+// to the opponent, removing Paz's discard-return option for that event).
 
 // ── [Black Market] SU ────────────────────────────────────────────────────────
 /**

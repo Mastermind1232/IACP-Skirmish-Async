@@ -809,7 +809,7 @@ const ROUND_NULL_FLAGS = [
   'roundDebuffNextHostileActivation',
   'roundDroidExtraActionCostDamage',
   'sitTightPlayerNum',
-  'roundInTheShadowsPlayerNum',
+  'roundInTheShadows',
   'strengthInNumbersPlayerNum',
   'strengthInNumbersData',
   'agitateNextActivation',

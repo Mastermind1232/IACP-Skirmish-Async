@@ -254,9 +254,11 @@ describe('CC: Sit Tight', () => {
 
 describe('CC: In the Shadows', () => {
   it('exists in data', () => assertCCExists('In the Shadows'));
-  it('roundInTheShadowsPlayerNum tracks active player', () => {
-    const game = { roundInTheShadowsPlayerNum: 2 };
-    assert.strictEqual(game.roundInTheShadowsPlayerNum, 2);
+  it('roundInTheShadows tracks active player + figureKey', () => {
+    // alexanbv 2026-06-20: now scoped to the one figure that plays it.
+    const game = { roundInTheShadows: { playerNum: 2, figureKey: 'Boba Fett-0-0' } };
+    assert.strictEqual(game.roundInTheShadows.playerNum, 2);
+    assert.strictEqual(game.roundInTheShadows.figureKey, 'Boba Fett-0-0');
   });
 });
 

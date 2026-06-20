@@ -8,7 +8,7 @@ import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-pr
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { consumeActionForCurrentFigure } from '../game/activation-state.js';
-import { getDcEffect } from '../game/dc-helpers.js';
+import { getDcEffect, figureHasInTheShadows } from '../game/dc-helpers.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
@@ -3090,26 +3090,13 @@ async function applyStrainToFigure(game, playerNum, figureKey, amount, abilityLa
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered 1 Strain.`, { phase: 'ROUND', icon: 'attack' });
   }
-  // Submit or Fight (Paz Vizsla): after suffering Strain damage, may return CCs from discard to heal
-  {
-    const _sofEff = getDcEffects?.()?.[dcName] || getDcEffects?.()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0 && !game.restInPeaceActive) {
-      const _sofDiscardKey = ccDiscardKey(playerNum);
-      const _sofDiscard = game[_sofDiscardKey] || [];
-      if (_sofDiscard.length > 0) {
-        const _sofOwnerId = getPlayerId(game, playerNum);
-        const _sofBtns = [
-          new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        ];
-        await withDiscordRetry(() => thread.send(sanitizeMentions({
-          content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
-          components: [new ActionRowBuilder().addComponents(_sofBtns)],
-          allowedMentions: { users: [_sofOwnerId] },
-        })));
-      }
-    }
-  }
+  // Submit or Fight (Paz Vizsla) REMOVED 2026-06-20 (alexanbv): Submit or Fight
+  // is a STRAIN-prevention option (return any number of CCs from discard to
+  // prevent that much Strain), not a post-damage heal. It is now the canonical
+  // third strain option (PAZ_RETURN_FROM_DISCARD) in strain-handler.js /
+  // strain-resolver.js, offered BEFORE strain converts to damage. This legacy
+  // damage-based path is dead (applyStrainToFigure is unreachable — all strain
+  // routes through applyStrain), so the trigger is dropped.
   if (newCur <= 0) {
     if (ctxProcessFigureDefeat) {
       await ctxProcessFigureDefeat(game, {
@@ -3145,26 +3132,9 @@ async function resolveStrainDamage(game, hpDamage, pending, ctx, thread) {
   if (logGameAction) {
     await logGameAction(game, client, `⚡ **${abilityLabel}** — **${dcName}** suffered ${hpDamage} Strain as damage.`, { phase: 'ROUND', icon: 'attack' });
   }
-  // Submit or Fight (Paz Vizsla)
-  {
-    const _sofEff = getDcEffects?.()?.[dcName] || getDcEffects?.()?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((_sofEff?.specialAbilityIds || []).includes('submit_or_fight_paz') && newCur > 0 && !game.restInPeaceActive) {
-      const _sofDiscardKey = ccDiscardKey(playerNum);
-      const _sofDiscard = game[_sofDiscardKey] || [];
-      if (_sofDiscard.length > 0) {
-        const _sofOwnerId = getPlayerId(game, playerNum);
-        const _sofBtns = [
-          new ButtonBuilder().setCustomId(`submit_fight_use_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Use Submit or Fight').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId(`submit_fight_skip_${game.gameId}_${msgId}_${figureIndex}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        ];
-        await withDiscordRetry(() => thread.send(sanitizeMentions({
-          content: `🛡️ **Submit or Fight** — <@${_sofOwnerId}>, **${dcName}** may return a CC from discard to game box to heal 1 Strain damage (${_sofDiscard.length} CC${_sofDiscard.length > 1 ? 's' : ''} in discard).`,
-          components: [new ActionRowBuilder().addComponents(_sofBtns)],
-          allowedMentions: { users: [_sofOwnerId] },
-        })));
-      }
-    }
-  }
+  // Submit or Fight (Paz Vizsla) REMOVED 2026-06-20 — now the canonical
+  // PAZ_RETURN_FROM_DISCARD strain-prevention option in the applyStrain
+  // pipeline (see strain-handler.js). Legacy damage-based trigger dropped.
   if (newCur <= 0) {
     if (ctxProcessFigureDefeat) {
       await ctxProcessFigureDefeat(game, {
@@ -4900,6 +4870,17 @@ export async function handleAttackTarget(interaction, ctx) {
   if (defSpecialIds.some(id => camouflageIds.includes(id)) && isRanged && distanceToTarget >= 4) {
     const camName = defSpecialIds.includes('camouflage_mak') ? 'Mak' : 'Scout Trooper';
     await thread.send(`**Camouflage** (${camName}) — Hostile figures 4+ spaces away cannot target this figure. Attack cancelled.`);
+    resolvePendingCombat(game);
+    saveGames(game.gameId);
+    return;
+  }
+
+  // In the Shadows (CC): hostile figures 4+ spaces away have NO line of sight
+  // to this figure (alexanbv 2026-06-20). Unlike Camouflage this is a pure LOS
+  // denial (not ranged-only) — though at 4+ spaces a melee attack can't reach
+  // anyway. Post-declare safety net mirroring the target-picker filter.
+  if (figureHasInTheShadows(game, target.figureKey) && distanceToTarget >= 4) {
+    await thread.send('**In the Shadows** — Hostile figures 4+ spaces away have no line of sight to this figure. Attack cancelled.');
     resolvePendingCombat(game);
     saveGames(game.gameId);
     return;

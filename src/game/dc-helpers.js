@@ -38,6 +38,28 @@ export function getDcEffect(dcName) {
 }
 
 /**
+ * True when `figureKey` currently has the In the Shadows (CC) effect active.
+ * In the Shadows scopes to the single figure that played it (game.roundInTheShadows
+ * = { playerNum, figureKey }). The effect is mechanically identical to
+ * Camouflage: hostile figures 4+ spaces away lose LOS to this figure, and this
+ * figure does not block LOS for those hostiles. Used by the LOS/targeting
+ * sites that already special-case Camouflage so In the Shadows rides the same
+ * reciprocal-LOS path. alexanbv 2026-06-20.
+ *
+ * @param {object} game
+ * @param {string} figureKey
+ * @returns {boolean}
+ */
+export function figureHasInTheShadows(game, figureKey) {
+  const its = game?.roundInTheShadows;
+  if (!its || !figureKey) return false;
+  // figureKey present → scope to that figure. If figureKey couldn't be
+  // resolved at play time (null), the effect doesn't apply to any figure
+  // (rather than silently applying player-wide, which was the old bug).
+  return its.figureKey === figureKey;
+}
+
+/**
  * Strip deployment-group and Elite/Regular variant suffixes from a DC
  * name. Used by CC-playable-by matching, hand display, etc.
  *   "Rebel Trooper [DG 2] (Elite)" → "Rebel Trooper"

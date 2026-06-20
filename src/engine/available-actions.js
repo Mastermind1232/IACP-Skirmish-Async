@@ -14,7 +14,7 @@ import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
 import { clearPendingCelebration } from '../game/interrupts.js';
 import { getBrokenWallEdges } from '../game/movement.js';
-import { dcNameFromFigureKey, isCompanionHostDefeated } from '../game/dc-helpers.js';
+import { dcNameFromFigureKey, isCompanionHostDefeated, figureHasInTheShadows } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
 import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower } from '../data-loader.js';
@@ -2283,7 +2283,10 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
         const fkEff = getDcEffect(fkDcName);
         if (fkEff?.companion === true) continue;
         if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
-        if (thisPn === enemyPn && (fkEff?.specialAbilityIds || []).some(id => _AA_CAMO_IDS.has(id))) {
+        // In the Shadows (CC) rides the same reciprocal: the In-the-Shadows
+        // figure does not block LOS for hostiles 4+ away.
+        if (thisPn === enemyPn
+            && ((fkEff?.specialAbilityIds || []).some(id => _AA_CAMO_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
           const fkPosLc = String(pos).toLowerCase();
           const dist = Math.min(..._aaAttackerFpCells.map(ac => countSpaces(ms, ac, fkPosLc, _aaClosedDoorEdges)));
           if (dist >= 4) continue;
@@ -2324,11 +2327,18 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     // stays a legal target; the immunity blocks Damage/conditions in the
     // pipelines, not the target list. (Unlike Blend In, which affects targeting.)
 
-    // I Must Go Alone CC (parity with dc-play-area.js:1012-1013):
-    // when game.roundDefenderCannotBeTargetedUnlessWithinSpaces protects the
-    // enemy player, targets beyond the spaces cap are filtered.
+    // I Must Go Alone CC (parity with dc-play-area.js). alexanbv 2026-06-20:
+    // shields ONLY the one figure that played it (figureKey), not every
+    // friendly figure — filter beyond the spaces cap only when this target IS
+    // that figure.
     const _iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
-    if (_iMustGoAlone?.playerNum === enemyPn && dist > _iMustGoAlone.spaces) continue;
+    if (_iMustGoAlone?.playerNum === enemyPn
+        && (!_iMustGoAlone.figureKey || _iMustGoAlone.figureKey === fk)
+        && dist > _iMustGoAlone.spaces) continue;
+
+    // In the Shadows (CC) — hostiles 4+ away have no LOS to this figure, so it
+    // isn't a legal target for them (parity with dc-play-area.js).
+    if (figureHasInTheShadows(game, fk) && dist >= 4) continue;
 
     // Blend In (K-2SO): the attached figure cannot be the target of an attack.
     if (game.blendInUntargetable?.[fk]) continue;

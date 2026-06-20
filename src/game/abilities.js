@@ -60,6 +60,84 @@ import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHand
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
+import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
+
+/**
+ * Resolve the figureKey of the specific figure that "plays" a unique-figure
+ * "you"-scoped CC (e.g. I Must Go Alone → Obi-Wan, or Mara Jade via Fast
+ * Learner). These CCs are played at start-of-round (no active activation), so
+ * the figure is identified from the unique-figure registry + the player's
+ * on-board figures rather than from activation state.
+ *
+ * Preference order:
+ *   1. A named figure for the CC (registry) that is on the board.
+ *   2. The Fast Learner figure (Mara Jade) if she's on the board — she may
+ *      substitute via Fast Learner when the named figure is absent.
+ *
+ * Returns the matching figureKey, or null if none can be resolved.
+ *
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} cardName
+ */
+function resolveUniqueFigureCcFigureKey(game, playerNum, cardName) {
+  if (!game || !playerNum || !cardName) return null;
+  const positions = game.figurePositions?.[playerNum] || {};
+  const liveKeys = Object.keys(positions).filter(fk => positions[fk]);
+  if (liveKeys.length === 0) return null;
+  const named = getUniqueFiguresForCc(cardName).map(n => String(n || '').toLowerCase());
+  // 1. Prefer a named figure on the board.
+  if (named.length > 0) {
+    for (const fk of liveKeys) {
+      const dn = String(dcNameFromFigureKey(fk) || '').toLowerCase();
+      if (named.some(n => dn.includes(n) || n.includes(dn))) return fk;
+    }
+  }
+  // 2. Fall back to a Fast Learner figure (Mara Jade) on the board.
+  const dcEffects = getDcEffects() || {};
+  for (const fk of liveKeys) {
+    const dn = dcNameFromFigureKey(fk);
+    const eff = dcEffects[dn] || dcEffects[String(dn || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((eff?.specialAbilityIds || []).includes(ADAPTIVE_SKILLS_ABILITY_ID)) return fk;
+  }
+  return null;
+}
+
+/**
+ * Resolve the figureKey of the figure that "plays" a keyword-restricted
+ * "you"-scoped CC (e.g. In the Shadows → "SMUGGLER or HUNTER"). The CC text
+ * is singular ("hostile figures ... do not have line of sight to YOU"), so the
+ * effect scopes to ONE figure. The CC play flow does not (currently) prompt for
+ * which keyword-figure plays it, so we pick the first on-board figure of the
+ * player whose DC carries one of the required keywords (deterministic by
+ * figureKey iteration order). If none match the keywords (e.g. data gap), fall
+ * back to the first live figure.
+ *
+ * NOTE (alexanbv 2026-06-20): a faithful long-term implementation would add a
+ * figure-picker when multiple eligible keyword-figures are on the board. This
+ * deterministic pick scopes the effect to a single figure (matching the CSV
+ * "you" singular) rather than the whole player, which was the prior bug.
+ *
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string[]} requiredKeywords - uppercase keyword list (any-of)
+ */
+function resolveKeywordCcFigureKey(game, playerNum, requiredKeywords) {
+  if (!game || !playerNum) return null;
+  const positions = game.figurePositions?.[playerNum] || {};
+  const liveKeys = Object.keys(positions).filter(fk => positions[fk]);
+  if (liveKeys.length === 0) return null;
+  const wanted = (requiredKeywords || []).map(k => String(k || '').toUpperCase());
+  if (wanted.length > 0) {
+    for (const fk of liveKeys) {
+      const dn = dcNameFromFigureKey(fk);
+      const kws = (getDcEffect(dn)?.keywords || []).map(k => String(k).toUpperCase());
+      if (kws.some(k => wanted.includes(k))) return fk;
+    }
+  }
+  return liveKeys[0] || null;
+}
 
 
 /**
@@ -9308,13 +9386,19 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: roundDefenderCannotBeTargetedUnlessWithinSpaces (I Must Go Alone)
+  // alexanbv 2026-06-20: I Must Go Alone shields ONLY the ONE figure that
+  // plays it (Obi-Wan, or Mara Jade via Fast Learner) — not every friendly
+  // figure. CSV: "hostile figures cannot declare attacks targeting YOU"
+  // (singular). Resolve + store the specific figureKey so the targeting
+  // filters scope to it.
   if (entry.type === 'ccEffect' && typeof entry.roundDefenderCannotBeTargetedUnlessWithinSpaces === 'number') {
-    const { game, playerNum } = context;
+    const { game, playerNum, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundDefenderCannotBeTargetedUnlessWithinSpaces = { playerNum, spaces: entry.roundDefenderCannotBeTargetedUnlessWithinSpaces };
+    const figureKey = resolveUniqueFigureCcFigureKey(game, playerNum, cardName || 'I Must Go Alone');
+    game.roundDefenderCannotBeTargetedUnlessWithinSpaces = { playerNum, spaces: entry.roundDefenderCannotBeTargetedUnlessWithinSpaces, figureKey: figureKey || null };
     return {
       applied: true,
-      logMessage: `Until end of round, hostiles cannot attack you unless within ${entry.roundDefenderCannotBeTargetedUnlessWithinSpaces} spaces.`,
+      logMessage: `Until end of round, hostiles cannot attack ${figureKey ? dcNameFromFigureKey(figureKey) : 'the playing figure'} unless within ${entry.roundDefenderCannotBeTargetedUnlessWithinSpaces} spaces.`,
     };
   }
 
@@ -9554,12 +9638,20 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: roundInTheShadowsPlayerNum (In the Shadows)
+  // ccEffect: roundInTheShadows (In the Shadows)
+  // alexanbv 2026-06-20: scopes to the ONE figure that plays it (CSV "you"
+  // singular). In the Shadows is playableBy "SMUGGLER or HUNTER" (a keyword,
+  // not a named figure), so resolve the playing figure from those keywords.
+  // The effect is mechanically identical to Camouflage: hostile figures 4+
+  // spaces away lose LOS to this figure, and this figure does not block LOS
+  // for those hostiles. Clears at the START of the EOR phase (until-end-of-
+  // round timing — see round.js _runStatusPhaseLogic).
   if (entry.type === 'ccEffect' && entry.roundInTheShadowsPlayerNum) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundInTheShadowsPlayerNum = playerNum;
-    return { applied: true, logMessage: 'Until end of round, hostiles 4+ spaces away do not have line of sight to you.' };
+    const figureKey = resolveKeywordCcFigureKey(game, playerNum, ['SMUGGLER', 'HUNTER']);
+    game.roundInTheShadows = { playerNum, figureKey: figureKey || null };
+    return { applied: true, logMessage: `Until end of round, hostiles 4+ spaces away do not have line of sight to ${figureKey ? dcNameFromFigureKey(figureKey) : 'the playing figure'} (and that figure does not block LOS for them).` };
   }
 
   // ccEffect: activationExtraActionThenStun (To the Limit)

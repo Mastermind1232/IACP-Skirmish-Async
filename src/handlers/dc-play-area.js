@@ -23,7 +23,7 @@ import { clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, 
 import { getConfig } from '../game/figure-config.js';
 import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower } from '../data-loader.js';
 import { depleteDc } from '../game/card-state-helpers.js';
-import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels } from '../game/index.js';
+import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels, figureHasInTheShadows } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getPlayAreaId, getHandChannelId,
@@ -1048,7 +1048,10 @@ export function buildFigureBlockingCoords(game, playerNum, attackerPos, attacker
       if (fkEff?.companion === true) continue;
       if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
       // Camo reciprocal: skip hostile Camo figures 4+ from attacker.
-      if (thisPn === enemyPlayerNum && _camoMs && (fkEff?.specialAbilityIds || []).some(id => CAMO_IDS.has(id))) {
+      // In the Shadows (CC) rides the same reciprocal: the In-the-Shadows
+      // figure does not block LOS for hostiles 4+ away.
+      if (thisPn === enemyPlayerNum && _camoMs
+          && ((fkEff?.specialAbilityIds || []).some(id => CAMO_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
         const fkPosLc = String(pos).toLowerCase();
         const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc)));
         if (dist >= 4) continue;
@@ -1176,8 +1179,17 @@ async function buildAndSendAttackTargets(
     const cells = getFootprintCells(coord, size);
     const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => countSpaces(ms, ac, tc, closedDoorEdges))));
     if (dist < minRange || dist > effectiveMaxRange) continue;
+    // I Must Go Alone (alexanbv 2026-06-20): shields ONLY the one figure that
+    // played it (figureKey), not every friendly figure. Filter beyond `spaces`
+    // only when this target IS that figure.
     const iMustGoAlone = game.roundDefenderCannotBeTargetedUnlessWithinSpaces;
-    if (iMustGoAlone?.playerNum === enemyPlayerNum && dist > iMustGoAlone.spaces) continue;
+    if (iMustGoAlone?.playerNum === enemyPlayerNum
+        && (!iMustGoAlone.figureKey || iMustGoAlone.figureKey === k)
+        && dist > iMustGoAlone.spaces) continue;
+
+    // In the Shadows (CC) — hostile figures 4+ spaces away have no LOS to this
+    // figure, so it isn't a legal target for them. (alexanbv 2026-06-20.)
+    if (figureHasInTheShadows(game, k) && dist >= 4) continue;
 
     // Blend In (K-2SO): the attached figure cannot be the target of an attack.
     if (game.blendInUntargetable?.[k]) continue;

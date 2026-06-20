@@ -169,7 +169,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleForceExhaustionDiePick, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleAdaptBlaisePick } from './blaise-adapt.js';
 import { handleDefeatPick } from './defeat-pick.js';
@@ -620,8 +620,8 @@ register('last_resort_use_', handleLastResort, 'interrupts');
 register('last_resort_skip_', handleLastResort, 'interrupts');
 register('yhsiw_transfer_', handleYHSIW, 'interrupts');
 register('yhsiw_damage_', handleYHSIW, 'interrupts');
-register('submit_fight_use_', handleSubmitOrFight, 'interrupts');
-register('submit_fight_skip_', handleSubmitOrFight, 'interrupts');
+// submit_fight_* handlers removed 2026-06-20 — Submit or Fight is now the
+// canonical PAZ_RETURN_FROM_DISCARD strain option (strain_resolve_paz_).
 register('scavenged_walker_attack_', handleScavengedWalker, 'interrupts');
 register('scavenged_walker_skip_', handleScavengedWalker, 'interrupts');
 register('mortar_eor_use_', handleMortarEor, 'interrupts');
@@ -934,7 +934,7 @@ export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 export { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll, handleForceIsWithMe } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
-export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleSubmitOrFight, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
+export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';
 export { applyStrain, handleStrainUdDeplete, handleStrainUdSkip, handleStrainChoiceDamage, handleStrainChoiceDiscard, handleStrainChoicePaz } from './strain-handler.js';
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';

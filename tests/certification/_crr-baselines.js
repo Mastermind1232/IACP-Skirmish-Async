@@ -129,6 +129,8 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'overdriveUsedThisActivation',
   'diplomaticMissionEvade',
   'sitTightPlayerNum',
+  // entry property name still 'roundInTheShadowsPlayerNum' in ability-library
+  // (the runtime game flag was renamed to roundInTheShadows 2026-06-20).
   'roundInTheShadowsPlayerNum',
   'roundUtinniJawaBuffs',
   'roundSmugglersTricksPlayerNum',
