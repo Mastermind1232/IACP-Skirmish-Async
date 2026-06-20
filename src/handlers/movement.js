@@ -1303,18 +1303,25 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   if (moveState.pendingBleed) {
     moveState.pendingBleed = false; // discard legacy flag without firing
   }
-  // Rush (Onar): after all movement MP exhausted, offer push on adjacent SMALL hostile
+  // Rush (Onar): after all movement MP exhausted, offer push on adjacent
+  // SMALL figure. CSV "an adjacent SMALL figure" — no hostile qualifier,
+  // so friendly SMALL figures are eligible push targets too (the activator
+  // itself is excluded below).
   if (newMp <= 0 && game.rushPending?.[msgId]) {
     delete game.rushPending[msgId];
     const rushMapId = game.selectedMap?.id;
     const rushAdjSpaces = rushMapId ? (getMapData(rushMapId)?.adjacency?.[newTopLeft] || []) : [];
     const rushEffects = getDcEffects();
     const rushOppNum = opponentPlayerNum(playerNum);
-    const rushOppPos = game.figurePositions?.[rushOppNum] || {};
+    const rushCandidates = {
+      ...(game.figurePositions?.[rushOppNum] || {}),
+      ...(game.figurePositions?.[playerNum] || {}),
+    };
     const rushAdjSet = new Set(rushAdjSpaces);
     const rushTargets = [];
-    for (const [fk, pos] of Object.entries(rushOppPos)) {
+    for (const [fk, pos] of Object.entries(rushCandidates)) {
       if (!pos || !rushAdjSet.has(pos)) continue;
+      if (fk === figureKey) continue; // never push the rushing figure itself
       const rDcName = dcNameFromFigureKey(fk);
       const rEff = rushEffects?.[rDcName];
       const rKw = (rEff?.keywords || []).map(k => String(k).toUpperCase());

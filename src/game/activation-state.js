@@ -711,6 +711,9 @@ const ROUND_OBJECT_FLAGS = [
   'barrageTargetSpace',
   'barrageDefenseBonus',
   'pendingMultiTargetRoll',
+  // Murne Rin "Field Report" — sequential up-to-2 friendly-figure picker
+  // continuation (msgId-keyed); transient within an activation.
+  'pendingFieldReport',
   'closeQuartersActive',
   'selfDestructProtocolTriggered',
   'mobileMovementActive',
@@ -769,6 +772,9 @@ const ROUND_OBJECT_FLAGS = [
   'pendingEe3Carbine',
   'pendingVanguardSwap',
   'emperorInterruptUsedThisActivation',
+  // Moff Gideon "You Have Something I Want" — "Once during your
+  // activation". msgId-keyed used flag mirroring emperorInterrupt above.
+  'yhsiwUsedThisActivation',
   // pendingVoracious removed 2026-05-07 — Voracious migrated to SoA
   // orchestrator (slice 6); replaced by game.voraciousUsed.
   'massiveMovementLocked',
@@ -786,6 +792,8 @@ const ROUND_OBJECT_FLAGS = [
   'executorTriggered',
   'pendingSoaResolution',
   'voraciousUsed',
+  // Yoda "Calming Presence" — once per round, keyed on Yoda's card msgId.
+  'calmingPresenceUsed',
   'jynHairTriggerUsed',
   'chirrutOneWithForceUsed',
 ];

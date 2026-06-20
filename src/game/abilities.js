@@ -869,8 +869,38 @@ export function resolveAbility(abilityId, context) {
   // dcSpecial: applyHideToFriendlyWithinRange (Field Report) — apply Hide condition to qualifying friendly figures within range
   if (entry.type === 'dcSpecial' && entry.applyHideToFriendlyWithinRange && typeof entry.applyHideToFriendlyWithinRange === 'object') {
     const { range: maxRange = 4, maxDiceCount = 2, maxTargets = 2 } = entry.applyHideToFriendlyWithinRange;
-    const { game, playerNum, meta, msgId } = context;
+    const { game, playerNum, meta, msgId, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
+    const _frApplyHide = (fks) => {
+      const hidden = [];
+      for (const fk of fks) {
+        if (applyCondition(game, fk, 'Hide')) hidden.push(dcNameFromFigureKey(fk));
+      }
+      if (hidden.length === 0) return { applied: true, logMessage: `**${entry.label}** — Chosen figures already Hidden.` };
+      return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.`, refreshDcEmbed: true };
+    };
+    const _frPendingKey = msgId || 'fieldReport';
+    // Phase 2+: accumulate sequential picks (only entered when >maxTargets
+    // candidates existed at Phase 1). Mirrors the Trample multi-target
+    // sequential picker (abilities.js ~2966).
+    if (targetFigureKey && game.pendingFieldReport?.[_frPendingKey]) {
+      const pendFR = game.pendingFieldReport[_frPendingKey];
+      if (targetFigureKey === '__done__') {
+        delete game.pendingFieldReport[_frPendingKey];
+        if (pendFR.chosen.length === 0) return { applied: true, logMessage: `**${entry.label}** — No figures chosen.` };
+        return _frApplyHide(pendFR.chosen);
+      }
+      pendFR.chosen.push(targetFigureKey);
+      if (pendFR.chosen.length >= maxTargets) {
+        delete game.pendingFieldReport[_frPendingKey];
+        return _frApplyHide(pendFR.chosen);
+      }
+      const remaining = pendFR.candidates.filter((fk) => !pendFR.chosen.includes(fk));
+      const opts = [...remaining.map(dcNameFromFigureKey), 'Done selecting'];
+      const fKeys = [...remaining, '__done__'];
+      return { applied: false, requiresChoice: true, choiceOptions: opts, targetFigureKeys: fKeys, choicePrompt: `**${entry.label}** — Selected ${pendFR.chosen.length}/${maxTargets}. Choose another or Done:` };
+    }
+    // Phase 1: enumerate qualifying friendly candidates within range.
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const attackerKey = activatingKeys.find((k) => k.endsWith(`-${selectedFig}`)) || activatingKeys[0];
@@ -891,14 +921,16 @@ export function resolveAbility(abilityId, context) {
       candidates.push(fk);
     }
     if (candidates.length === 0) return { applied: true, logMessage: `**${entry.label}** — No qualifying friendly figures within ${maxRange} spaces (≤${maxDiceCount} attack dice).` };
-    const toHide = candidates.slice(0, maxTargets);
-    const skipped = candidates.length > maxTargets ? ` (${candidates.length - maxTargets} additional candidates not hidden — choose manually if needed)` : '';
-    const hidden = [];
-    for (const fk of toHide) {
-      if (applyCondition(game, fk, 'Hide')) { hidden.push(dcNameFromFigureKey(fk)); }
-    }
-    if (hidden.length === 0) return { applied: true, logMessage: `**${entry.label}** — Qualifying figures already Hidden.` };
-    return { applied: true, logMessage: `**${entry.label}** — **${hidden.join('**, **')}** became **Hidden**.${skipped}`, refreshDcEmbed: true };
+    // ≤maxTargets candidates: auto-apply (the player would Hide all of
+    // them anyway — "up to 2" with exactly ≤2 eligible leaves no choice).
+    if (candidates.length <= maxTargets) return _frApplyHide(candidates);
+    // >maxTargets candidates: CSV "Choose up to 2 friendly figures" —
+    // offer a sequential player pick rather than auto-selecting the first 2.
+    game.pendingFieldReport = game.pendingFieldReport || {};
+    game.pendingFieldReport[_frPendingKey] = { chosen: [], candidates };
+    const choices = [...candidates.map(dcNameFromFigureKey), 'Done selecting'];
+    const fKeysDone = [...candidates, '__done__'];
+    return { applied: false, requiresChoice: true, choiceOptions: choices, targetFigureKeys: fKeysDone, choicePrompt: `**${entry.label}** — Choose up to ${maxTargets} friendly figures to become Hidden:` };
   }
 
   // battlefield_leadership (Leia Organa): Special Action button. Per
@@ -982,6 +1014,14 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, meta, msgId, dcMessageMeta, dcHealthState, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta || !msgId) return { applied: false, manualMessage: 'Resolve **You Have Something I Want** manually.' };
 
+    // Once-per-activation gate (CSV/lib "Once during your activation").
+    // Mirrors game.emperorInterruptUsedThisActivation. Only blocks a fresh
+    // Phase-1 entry (choiceIndex == null); an in-flight Phase-2 commit
+    // resolves normally and stamps the used flag below.
+    if (game.yhsiwUsedThisActivation?.[msgId] && choiceIndex == null) {
+      return { applied: false, manualMessage: '**You Have Something I Want** — Already used this activation.' };
+    }
+
     // Phase 2: target+token chosen → set up opponent decision
     if (choiceIndex != null) {
       const options = game.yhsiwOptions || [];
@@ -1002,6 +1042,9 @@ export function resolveAbility(abilityId, context) {
         msgId, gameId: game.gameId,
       });
       delete game.yhsiwOptions;
+      // Mark used so the next click in the same activation is rejected.
+      game.yhsiwUsedThisActivation = game.yhsiwUsedThisActivation || {};
+      game.yhsiwUsedThisActivation[msgId] = true;
 
       return {
         applied: true,
@@ -1961,7 +2004,11 @@ export function resolveAbility(abilityId, context) {
       if (!pos) continue;
       const targetDcName = dcNameFromFigureKey(fk);
       const targetStats = getStatsForDc(targetDcName);
-      if ((targetStats?.cost ?? 99) > foMaxCost) continue;
+      // CSV "figure cost 4 or less" = the PER-FIGURE cost. Multi-figure
+      // DCs carry a subCost (single-figure cost) distinct from the group
+      // `cost`; prefer it. Mirrors coordinated_raid (abilities.js:1615).
+      const foFigCost = targetStats?.subCost ?? targetStats?.cost ?? 99;
+      if (foFigCost > foMaxCost) continue;
       if (countGameSpaces(game, activatingPos, pos) > foMaxRange) continue;
       validTargets.push(fk);
     }
@@ -3328,6 +3375,13 @@ export function resolveAbility(abilityId, context) {
               // rollOneDieAreaCondition (Neurotoxin: Weaken): each affected
               // figure gains the condition (independent of the damage rolled).
               if (entry.rollOneDieAreaCondition) applyCondition(game, fk, entry.rollOneDieAreaCondition);
+              // rollOneDieSurgeCondition (Shock Grenade: Weaken on a Surge):
+              // each affected figure gains the condition only if a Surge was
+              // rolled. Mirrors the hostileWithinRange branch (abilities.js
+              // ~3244) but applies area-wide.
+              if (entry.rollOneDieSurgeCondition && surges >= 1) {
+                applyCondition(game, fk, entry.rollOneDieSurgeCondition);
+              }
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               // Fireproof — skip Flame Trooper attached figures from
               // any ability whose label contains "Flamethrower".
@@ -3405,10 +3459,32 @@ export function resolveAbility(abilityId, context) {
           }
           resultParts.push(affected.length ? affected.join(', ') : 'no figures in blast area');
         }
+        // Surge-only roll (0 Hits): the figure loop above is gated on
+        // hits>0, so a pure-Surge result would otherwise skip the
+        // on-Surge area condition (Shock Grenade: Weaken on a Surge).
+        // Apply the condition to each affected figure here.
+        let _condOnlyApplied = false;
+        if (hits === 0 && entry.rollOneDieSurgeCondition && surges >= 1) {
+          const boardStateC = getBoardStateForMovement(game, null);
+          const adjC = boardStateC?.mapSpaces?.adjacency?.[spaceUpper.toLowerCase()] || [];
+          const affectedSpacesC = new Set([spaceUpper.toLowerCase(), ...adjC.map((s) => String(s).toLowerCase())]);
+          const condAffected = [];
+          for (const pn of [1, 2]) {
+            for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+              if (!coord || !affectedSpacesC.has(String(coord).toLowerCase())) continue;
+              if (!entry.includeSelf && _rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
+              if (entry.rollOneDieHostileOnly && pn === playerNum) continue;
+              if (applyCondition(game, fk, entry.rollOneDieSurgeCondition)) {
+                condAffected.push(`${dcNameFromFigureKey(fk)} becomes **${entry.rollOneDieSurgeCondition}**`);
+              }
+            }
+          }
+          if (condAffected.length) { resultParts.push(condAffected.join(', ')); _condOnlyApplied = true; }
+        }
         return {
           applied: true,
           logMessage: `**${entry.label}** — Space **${spaceUpper}** targeted. Rolled 1 ${entry.rollOneDie} die: **${diceResult}**. ${resultParts.join('. ') || 'No effect.'}`,
-          refreshDcEmbed: hits > 0,
+          refreshDcEmbed: hits > 0 || _condOnlyApplied,
           ...(_hadDefeats ? { refreshBoard: true } : {}),
         };
       }
@@ -3661,6 +3737,18 @@ export function resolveAbility(abilityId, context) {
     const occArr = occ instanceof Set ? [...occ] : (occ || []);
     const reachable = getReachableSpaces(activatingPos, range, boardState.mapSpaces, occArr);
     let validSet = new Set([String(activatingPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    // LOS gate (Demolish, Boulder Barrage): the target space must be in
+    // line of sight of the activating figure (CSV "within N spaces AND
+    // line of sight"). Mirrors the per-space LOS check at abilities.js:3268.
+    if (entry.requiresLos) {
+      const { hasLineOfSightByCoord: _faeLosCheck, getMapData: _faeGetMs, getFigureSize: _faeGfs } = context;
+      const _faeMs = _faeGetMs ? _faeGetMs(game.selectedMap?.id) : null;
+      if (typeof _faeLosCheck === 'function' && _faeMs) {
+        validSet = new Set([...validSet].filter((sp) =>
+          sp === String(activatingPos).toLowerCase()
+          || _faeLosCheck(game, activatingPos, sp, _faeMs, _faeGfs)));
+      }
+    }
     if (entry.fixedAreaRequiresAdjacentHostile) {
       const hostilePlayer = playerNum === 1 ? 2 : 1;
       const hostileSpaces = new Set(Object.values(game.figurePositions?.[hostilePlayer] || {}).filter(Boolean).map((s) => String(s).toLowerCase()));

@@ -1314,6 +1314,12 @@ export async function handleSoaFire(interaction, ctx) {
       } else {
         const { filterCondition } = await import('../game/conditions.js');
         filterCondition(game, targetFk, condName);
+        // Once per round (CSV): mark Yoda's card used so the SoA gate at
+        // soa-orchestrator.js stops offering it for the rest of the round.
+        if (desc.extras?.yodaMsgId) {
+          game.calmingPresenceUsed = game.calmingPresenceUsed || {};
+          game.calmingPresenceUsed[desc.extras.yodaMsgId] = true;
+        }
         const targetDcName = dcNameFromFigureKey(targetFk);
         await interaction.message.edit({ content: `\u{1F9D8} **Calming Presence** — Removed **${condName}** from **${targetDcName}**. **${displayName}** suffers **1 Strain**...`, components: [] }).catch(discordCatch);
         if (logGameAction) await logGameAction(game, client, `\u{1F9D8} **Calming Presence** — Removed ${condName} from ${targetDcName}; ${displayName} suffered 1 Strain.`, { phase: 'ROUND', icon: 'condition' });

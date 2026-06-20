@@ -199,7 +199,8 @@ import {
   hasSlowOnTheDrawAbility,
 } from '../game/slow-on-the-draw-helpers.js';
 import {
-  isIllicitArmsEligibleFigure,
+  figureHasIllicitArms,
+  playerArmyAffiliationIsScum,
 } from '../game/illicit-arms-helpers.js';
 import {
   hasDisposableAbility,
@@ -8544,12 +8545,18 @@ export async function sendModsYn(thread, game, combat, role, ctx) {
     // handleIllicitArms re-enters sendModsYn(attacker) after resolution.
     if (!combat.illicitArmsResolved && !game.pendingIllicitArms) {
       const _iaDcEff = getDcEffectsGlobal() || {};
-      const _iaFriendlyPos = game.figurePositions?.[combat.attackerPlayerNum] || {};
+      // Illicit Arms' Scum restriction belongs to the controlling player's
+      // ARMY (primary affiliation), not to Bib the figure (always Scum).
+      const _iaArmyDcList = getDcList(game, combat.attackerPlayerNum) || [];
+      const _iaArmyIsScum = playerArmyAffiliationIsScum(_iaArmyDcList, _iaDcEff);
+      const _iaFriendlyPos = _iaArmyIsScum
+        ? (game.figurePositions?.[combat.attackerPlayerNum] || {})
+        : {};
       for (const [_iaFk, _iaPos] of Object.entries(_iaFriendlyPos)) {
         if (!_iaPos) continue;
         const _iaFkDcName = dcNameFromFigureKey(_iaFk);
         const _iaFkEff = _iaDcEff[_iaFkDcName] || _iaDcEff[_iaFkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if (!isIllicitArmsEligibleFigure(_iaFkEff)) continue;
+        if (!figureHasIllicitArms(_iaFkEff)) continue;
         const _iaHand = getCcHand(game, combat.attackerPlayerNum) || [];
         if (_iaHand.length === 0) { combat.illicitArmsResolved = true; break; }
         setPendingIllicitArms(game, {

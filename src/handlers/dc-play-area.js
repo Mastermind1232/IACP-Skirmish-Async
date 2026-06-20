@@ -4303,7 +4303,12 @@ export async function handleRushPushFig(interaction, ctx) {
   const targetFk = pending.targets?.[choiceIndex];
   if (!targetFk) { await interaction.followUp({ content: 'Invalid target.', ephemeral: true }).catch(discordCatch); return; }
   pending.chosenTarget = targetFk;
-  const oppNum = opponentPlayerNum(pending.playerNum);
+  // Rush may push a friendly OR hostile SMALL figure; resolve the target's
+  // actual owning player rather than assuming it's the opponent.
+  const oppNum = game.figurePositions?.[pending.playerNum]?.[targetFk]
+    ? pending.playerNum
+    : opponentPlayerNum(pending.playerNum);
+  pending.targetPlayerNum = oppNum;
   const targetPos = game.figurePositions?.[oppNum]?.[targetFk];
   if (!targetPos) {
     clearPendingRushPush(game);
@@ -4387,7 +4392,10 @@ export async function handleRushPushSpace(interaction, ctx) {
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer, 'Only the activating player can choose.')) return;
   const targetFk = pending.chosenTarget;
-  const oppNum = opponentPlayerNum(pending.playerNum);
+  // Rush target may be friendly; use the resolved owner (set in
+  // handleRushPushFig), falling back to a fresh lookup.
+  const oppNum = pending.targetPlayerNum
+    ?? (game.figurePositions?.[pending.playerNum]?.[targetFk] ? pending.playerNum : opponentPlayerNum(pending.playerNum));
   const { prevPos } = pushFigure(game, oppNum, targetFk, chosenSpace) || { prevPos: null };
   const targetName = dcNameFromFigureKey(targetFk);
   const pushed = chosenSpace !== (prevPos ? String(prevPos).toLowerCase() : null);

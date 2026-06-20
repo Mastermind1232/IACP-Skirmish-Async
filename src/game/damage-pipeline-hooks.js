@@ -1238,6 +1238,9 @@ WHEN_DEFEATED_HOOKS.push({
     if (!opts.attackerPlayerNum) return false;
     if (!opts.combat?.attackerFigureKey) return false;
     if (opts.combat?.noFriendliesActive) return false;
+    // CSV "When ANOTHER friendly figure resolves an attack" — The Armorer
+    // does not self-grant when it is itself the attacker.
+    if (String(opts.combat.attackerFigureKey).startsWith('The Armorer-')) return false;
     return Object.keys(game.figurePositions?.[opts.attackerPlayerNum] || {})
       .some(fk => fk.startsWith('The Armorer-'));
   },

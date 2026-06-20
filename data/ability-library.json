@@ -1257,6 +1257,7 @@
       "fixedAreaDamage": 1,
       "fixedSelfStrain": 1,
       "placesRubble": true,
+      "requiresLos": true,
       "includeSelf": true
     },
     "Demoralizing Monologue": {

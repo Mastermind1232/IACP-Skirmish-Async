@@ -380,10 +380,15 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       });
     }
   }
-  // Boltslinger (Vinto Hreeda): always enqueued when the ability is on
-  // the attacker DC; eligibility (within-3 hostiles) is re-checked at
-  // fire time and the fire handler returns early if no targets.
-  if (_atkIds.includes('boltslinger') && combat.attackerFigureKey) {
+  // Boltslinger (Vinto Hreeda): CSV "After you resolve an attack DURING
+  // YOUR ACTIVATION". Gated on the attacker's OWN activation (mirrors
+  // _bcOwnActivation for Brutal Cleave) so it does not fire on an
+  // out-of-activation reaction attack. Eligibility (within-3 hostiles)
+  // is re-checked at fire time and the fire handler returns early if no
+  // targets.
+  const _vboOwnActivation = game?.currentActivationTurnPlayerId
+    && game.currentActivationTurnPlayerId === (combat.attackerPlayerNum === 1 ? game.player1Id : game.player2Id);
+  if (_atkIds.includes('boltslinger') && combat.attackerFigureKey && _vboOwnActivation) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'boltslinger',

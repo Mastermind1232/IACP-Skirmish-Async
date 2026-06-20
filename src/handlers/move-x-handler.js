@@ -658,7 +658,9 @@ function _computeAdjacentFigures(game, pending, sideFilter /* 'hostile' | 'frien
  */
 async function _runRushPostMoveContinuation(game, ctx, pending) {
   const { client, logGameAction } = ctx;
-  const adj = _computeAdjacentFigures(game, pending, 'hostile');
+  // CSV "an adjacent SMALL figure" — no hostile qualifier, so a friendly
+  // SMALL figure may also be chosen as the push target.
+  const adj = _computeAdjacentFigures(game, pending, 'any');
   const dcEffects = getDcEffects() || {};
   const rushTargets = [];
   for (const t of adj) {
@@ -669,7 +671,7 @@ async function _runRushPostMoveContinuation(game, ctx, pending) {
     rushTargets.push(t);
   }
   if (rushTargets.length === 0) {
-    await logGameAction?.(game, client, `**Rush** — **${pending.dcName}** ends movement; no adjacent SMALL hostile to push.`, { phase: 'ROUND', icon: 'attack' });
+    await logGameAction?.(game, client, `**Rush** — **${pending.dcName}** ends movement; no adjacent SMALL figure to push.`, { phase: 'ROUND', icon: 'attack' });
     return;
   }
   const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
@@ -689,7 +691,7 @@ async function _runRushPostMoveContinuation(game, ctx, pending) {
     .setLabel('Skip Rush Push')
     .setStyle(ButtonStyle.Secondary));
   const rows = chunkButtonsToRows(btns).slice(0, 5);
-  const content = `**Rush** — Push an adjacent SMALL hostile 1 space? Both suffer 1 Damage.`;
+  const content = `**Rush** — Push an adjacent SMALL figure 1 space? Both suffer 1 Damage.`;
   if (pending.threadId) {
     const thread = await fetchCombatThread(client, pending.threadId);
     if (thread) {

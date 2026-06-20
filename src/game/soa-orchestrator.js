@@ -565,13 +565,23 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
   // and at least one HARMFUL condition exists on activator's figures.
   if (game) {
     const _cpDcList = getDcList(game, playerNum) || [];
-    const _cpYoda = _cpDcList.find((dc) => {
+    const _cpDcMsgIds = getDcMessageIds(game, playerNum) || [];
+    const _cpYodaIdx = _cpDcList.findIndex((dc) => {
       if (!dc?.dcName || dc.dcName === dcName) return false;
       const eff = getDcEffects()?.[dc.dcName];
       return (eff?.specialAbilityIds || []).includes('calming_presence_yoda');
     });
+    const _cpYoda = _cpYodaIdx >= 0 ? _cpDcList[_cpYodaIdx] : null;
+    const _cpYodaMsgId = _cpYodaIdx >= 0 ? _cpDcMsgIds[_cpYodaIdx] : null;
     const _cpActEff = getDcEffects()?.[dcName];
-    if (_cpYoda && _cpActEff?.affiliation === 'Rebel') {
+    // CSV "REBEL FORCE USER": the activating figure must be a REBEL AND
+    // carry the FORCE USER keyword (mirrors do_or_do_not_yoda's
+    // keyword gate at abilities.js:1566).
+    const _cpActKw = (_cpActEff?.keywords || []).map((k) => String(k).toUpperCase());
+    const _cpActIsRebelForceUser = _cpActEff?.affiliation === 'Rebel' && _cpActKw.includes('FORCE USER');
+    // Once per round (CSV), tracked on Yoda's card msgId.
+    const _cpUsed = _cpYodaMsgId ? game.calmingPresenceUsed?.[_cpYodaMsgId] : false;
+    if (_cpYoda && _cpActIsRebelForceUser && !_cpUsed) {
       const dgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
       // Per destruct 2026-05-07: Calming Presence is a per-figure check.
       // For multi-figure groups, fire once per figure; the descriptor
@@ -592,7 +602,7 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
           sourceMsgId: msgId,
           sourceLabel: 'Calming Presence',
           subPromptKey: 'calming_presence',
-          extras: { dcName, yodaDcName: _cpYoda.dcName, harmfulPairs: _cpPairs, activatingFigureIndex: figureIndex },
+          extras: { dcName, yodaDcName: _cpYoda.dcName, yodaMsgId: _cpYodaMsgId, harmfulPairs: _cpPairs, activatingFigureIndex: figureIndex },
         });
       }
     }
