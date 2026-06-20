@@ -1430,11 +1430,8 @@
     },
     "Draw!": {
       "type": "ccEffect",
-      "label": "Perform attack without using an action",
-      "nextAttacksBonusHits": {
-        "count": 1,
-        "bonus": 0
-      },
+      "label": "Perform an attack without using an action",
+      "freeAttackBonus": true,
       "wiredStatus": "wired"
     },
     "Droid Mastery": {
@@ -1919,10 +1916,8 @@
     "Flurry of Blades": {
       "type": "ccEffect",
       "label": "Perform 3 attacks",
-      "nextAttacksBonusHits": {
-        "count": 3,
-        "bonus": 0
-      },
+      "freeAttackBonus": true,
+      "freeAttackBonusCount": 3,
       "wiredStatus": "wired"
     },
     "fly_by": {

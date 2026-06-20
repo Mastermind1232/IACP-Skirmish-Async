@@ -2678,7 +2678,7 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
     await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
   } else if (id === 'lucky') {
-    await thread.send('🍀 **Lucky** — R2-D2 rolled a Dodge (recover 2 damage handled at resolution).').catch(discordCatch);
+    await thread.send('🍀 **Lucky** — if R2-D2 rolled a blank, +1 Dodge is added at resolution.').catch(discordCatch);
   } else if (id === 'soresu') {
     const dr = combat.defenseRoll || {};
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
@@ -9071,24 +9071,20 @@ export async function proceedAfterRerolls(thread, game, combat, ctx) {
     combat.soresuFormFigKey = null;
   }
 
-  // Lucky (R2-D2): while defending, if Dodge rolled, recover 2 damage
-  if (combat.defenseRoll.dodge && combat.target?.figureKey) {
+  // Lucky (R2-D2): while defending, if you roll a BLANK result, add +1 Dodge to
+  // the defense results (CSV row 399). A blank defense die has no block/evade/
+  // dodge. Runs before computeCombatResult's dodge check (alexanbv 2026-06-20:
+  // corrected from the prior "recover 2 on a rolled Dodge" — wrong effect).
+  if (combat.target?.figureKey && combat.defenseRoll && !combat.defenseRoll.dodge) {
     const _luckyDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
     const _luckyDefDcName = dcNameFromFigureKey(combat.target.figureKey);
     const _luckyDefEff = _luckyDcEff[_luckyDefDcName] || _luckyDcEff[(_luckyDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((_luckyDefEff?.specialAbilityIds || []).includes('lucky_r2d2') && ctx.dcHealthState) {
-      const _luckyFkMatch = combat.target.figureKey.match(/^(.+)-(\d+)-(\d+)$/);
-      if (_luckyFkMatch) {
-        const targetMsgId = combat.target.msgId;
-        if (targetMsgId) {
-          const _luckyFi = parseInt(_luckyFkMatch[3], 10);
-          const _luckyDefPn = combat.target.playerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-          const { healed: _luckyHealed, newHp: _lNew } = healHp(ctx.dcHealthState, game, targetMsgId, _luckyFi, 2, _luckyDefPn);
-          if (_luckyHealed > 0) {
-            const _lPrev = _lNew - _luckyHealed;
-            await thread.send(`🍀 **Lucky** — R2-D2 rolled a Dodge! Recovered 2 damage (HP: ${_lPrev}→${_lNew}).`);
-          }
-        }
+    if ((_luckyDefEff?.specialAbilityIds || []).includes('lucky_r2d2')) {
+      const _luckyDice = combat.defenseDiceResults || [];
+      const _luckyBlank = _luckyDice.some((d) => d && (d.block || 0) === 0 && (d.evade || 0) === 0 && !d.dodge);
+      if (_luckyBlank) {
+        combat.defenseRoll.dodge = true;
+        await thread.send('🍀 **Lucky** — R2-D2 rolled a blank → +1 Dodge added to the defense results (attack dodged).');
       }
     }
   }
