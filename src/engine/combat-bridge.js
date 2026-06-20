@@ -274,13 +274,11 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   if (roundEvade) combat.bonusEvade = (combat.bonusEvade || 0) + roundEvade;
   const roundAccPenalty = game.roundDefenseAccuracyPenalty?.[defenderPlayerNum] || 0;
   if (roundAccPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + roundAccPenalty;
-  // Choose a Side (SCUM): +1 Block only for defenders with MOBILE keyword
-  const mobileBlock = game.roundMobileDefenseBonusBlock?.[defenderPlayerNum] || 0;
-  if (mobileBlock && combat.target?.figureKey) {
-    const _defDcName = dcNameFromFigureKey(combat.target.figureKey);
-    const _defKws = (getDcEffects()?.[_defDcName]?.keywords || []).map((k) => String(k).toUpperCase());
-    if (_defKws.includes('MOBILE')) combat.bonusBlock = (combat.bonusBlock || 0) + mobileBlock;
-  }
+  // Choose a Side (SCUM) now grants Personal Combat Shield (+1 Evade per Block
+  // spent) — applied at Block-spend time in handlers/combat.js
+  // (applyPersonalCombatShieldOnBlockSpend reading game.roundMobilePersonalCombatShield),
+  // NOT a flat +1 Block here. The old roundMobileDefenseBonusBlock proxy was the
+  // wrong card text and has been removed.
   const perEvade = game.roundDefenderBonusBlockPerEvade?.[defenderPlayerNum] || 0;
   if (perEvade && combat.defenseRoll) combat.bonusBlock = (combat.bonusBlock || 0) + (combat.defenseRoll.evade || 0) * perEvade;
   // Inside Job (Hoth Battle Station A): persistent defenseModifierByZone.

@@ -12,7 +12,7 @@ import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures } from './board-helpers.js';
-import { applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
+import { applyDefenseDieRemoval, applyAttackDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
@@ -7171,6 +7171,94 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: feintEffect (Feint) — CSV: "Choose 1 attack die and 1 defense die
+  // and remove their results." Use-condition: "attacking a figure within 2 spaces."
+  // Timing: attack:modifiers / attacker side, AFTER both pools are rolled (same
+  // window as Heightened Reflexes). Two-step interactive pick over the ROLLED
+  // results (NOT pool dice): step 1 chooses the attack die to zero, step 2 the
+  // defense die. Mirrors removeDefenseDieResults but acts on BOTH pools and uses
+  // the chained-requiresChoice flow (cc-hand.js) for the second pick.
+  if (entry.type === 'ccEffect' && entry.feintEffect) {
+    const { game, choiceIndex, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: not in an attack.' };
+    // Use-condition: target within 2 spaces of the attacker.
+    if ((cbt.distanceToTarget ?? 0) > 2) {
+      return { applied: false, manualMessage: `**Feint** — target is ${cbt.distanceToTarget} spaces away (> 2); cannot play. Override if incorrect.` };
+    }
+    const atkDice = cbt.attackDiceResults || [];
+    const defDice = cbt.defenseDiceResults || [];
+    // Step 2: attack die already removed (flag set) — this choiceIndex is the
+    // DEFENSE die. Remove it and finish.
+    if (cbt._feintAttackRemoved != null) {
+      if (choiceIndex == null) {
+        // Re-prompt the defense-die pick (no attack dice left to choose, or chained entry).
+        if (defDice.length === 0) {
+          const _atkR = cbt.attackRoll || {};
+          delete cbt._feintAttackRemoved;
+          return { applied: true, refreshDcEmbed: true, logMessage: `**Feint** — removed attack die #${cbt._feintAttackRemovedIdx + 1 || ''}; no defense dice to remove. Attack now ${_atkR.dmg || 0} dmg / ${_atkR.surge || 0} surge / ${_atkR.acc || 0} acc.` };
+        }
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions: defDice.map((d, i) => `Defense die #${i + 1} (${d.block || 0}b/${d.evade || 0}e${d.dodge ? '/dodge' : ''})`),
+        };
+      }
+      const dIdx = parseInt(choiceIndex, 10);
+      if (!defDice[dIdx]) return { applied: false, manualMessage: 'Invalid defense die choice for Feint.' };
+      const defRoll = applyDefenseDieRemoval(cbt, dIdx);
+      const atkRoll = cbt.attackRoll || {};
+      const aIdx = cbt._feintAttackRemovedIdx;
+      delete cbt._feintAttackRemoved;
+      delete cbt._feintAttackRemovedIdx;
+      return {
+        applied: true,
+        refreshDcEmbed: true,
+        logMessage: `**Feint** — removed attack die #${(aIdx ?? 0) + 1} and defense die #${dIdx + 1}. Attack now ${atkRoll.dmg || 0} dmg / ${atkRoll.surge || 0} surge / ${atkRoll.acc || 0} acc; Defense now ${defRoll?.block || 0}b/${defRoll?.evade || 0}e${defRoll?.dodge ? '/dodge' : ''}.`,
+      };
+    }
+    // Step 1: choose the ATTACK die.
+    if (choiceIndex == null) {
+      if (atkDice.length === 0) {
+        // No attack dice — go straight to the defense-die pick (set flag as -1).
+        cbt._feintAttackRemoved = true;
+        cbt._feintAttackRemovedIdx = -1;
+        if (defDice.length === 0) {
+          delete cbt._feintAttackRemoved;
+          delete cbt._feintAttackRemovedIdx;
+          return { applied: true, logMessage: '**Feint** — no attack or defense dice to remove.' };
+        }
+        return {
+          applied: false,
+          requiresChoice: true,
+          choiceOptions: defDice.map((d, i) => `Defense die #${i + 1} (${d.block || 0}b/${d.evade || 0}e${d.dodge ? '/dodge' : ''})`),
+        };
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: atkDice.map((d, i) => `Attack die #${i + 1} (${d.dmg || 0}dmg/${d.surge || 0}srg/${d.acc || 0}acc)`),
+      };
+    }
+    const aIdx = parseInt(choiceIndex, 10);
+    if (!atkDice[aIdx]) return { applied: false, manualMessage: 'Invalid attack die choice for Feint.' };
+    applyAttackDieRemoval(cbt, aIdx);
+    cbt._feintAttackRemoved = true;
+    cbt._feintAttackRemovedIdx = aIdx;
+    // Chain into the defense-die pick.
+    if (defDice.length === 0) {
+      const _atkR = cbt.attackRoll || {};
+      delete cbt._feintAttackRemoved;
+      delete cbt._feintAttackRemovedIdx;
+      return { applied: true, refreshDcEmbed: true, logMessage: `**Feint** — removed attack die #${aIdx + 1}; no defense dice to remove. Attack now ${_atkR.dmg || 0} dmg / ${_atkR.surge || 0} surge / ${_atkR.acc || 0} acc.` };
+    }
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: defDice.map((d, i) => `Defense die #${i + 1} (${d.block || 0}b/${d.evade || 0}e${d.dodge ? '/dodge' : ''})`),
+    };
+  }
+
   // ccEffect: defenseBonusDiceFromAttacker + optional attackBonusDice (Wild Attack) — must run before attackBonusDice when both exist
   if (entry.type === 'ccEffect' && typeof entry.defenseBonusDiceFromAttacker === 'number' && entry.defenseBonusDiceFromAttacker > 0 && entry.defenseBonusDiceFromAttackerColor) {
     const { game, playerNum, combat } = context;
@@ -12362,45 +12450,55 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: chooseASideEffect (Choose a Side) — SCUM: round defense block +1 for Mobile friendlies; IMPERIAL: free flamethrower-style attack
+  // ccEffect: chooseASideEffect (Choose a Side) — CSV: "During this round OTHER
+  // friendly Mobile figures gain Personal Combat Shield (SCUM) or Gar Saxon's
+  // Flamethrower (IMPERIAL)." The Choose a Side figure itself is EXCLUDED ("other").
   if (entry.type === 'ccEffect' && entry.chooseASideEffect) {
     const { game, playerNum, dcMessageMeta, choiceIndex } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    // The activating (card-playing) figure — excluded by "OTHER friendly Mobile".
+    const selfFigureKeys = msgId ? getFigureKeysForDcMsg(game, playerNum, dcMessageMeta?.get(msgId)) : [];
+    const selfFk = figureKeyForActivation(game, msgId) || selfFigureKeys[0] || null;
     if (choiceIndex !== undefined && choiceIndex !== null) {
       const dcEffects = getDcEffects();
       const mobileKeys = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => {
         const dcN = dcNameFromFigureKey(fk);
         const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
-        return kws.includes('MOBILE') && (msgId ? !getFigureKeysForDcMsg(game, playerNum, dcMessageMeta?.get(msgId)).includes(fk) : true);
+        return kws.includes('MOBILE') && !selfFigureKeys.includes(fk);
       });
       if (choiceIndex === 0) {
-        // SCUM: Personal Combat Shield — +1 Block per attack for Mobile friendlies only
-        game.roundMobileDefenseBonusBlock = game.roundMobileDefenseBonusBlock || {};
-        game.roundMobileDefenseBonusBlock[playerNum] = (game.roundMobileDefenseBonusBlock[playerNum] || 0) + 1;
-        return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, **+1 Block** when defending for your **Mobile** figures (${mobileKeys.length} figure${mobileKeys.length !== 1 ? 's' : ''}).` };
+        // SCUM: Personal Combat Shield — "Whenever you spend a Block while
+        // defending, apply +1 Evade." Round-scoped grant to OTHER Mobile
+        // friendlies. The +1-Evade-on-Block-spend hook lives in
+        // handlers/combat.js (applyPersonalCombatShieldOnBlockSpend), which
+        // reads this flag and honors the self-exclusion via excludeFigureKey.
+        game.roundMobilePersonalCombatShield = game.roundMobilePersonalCombatShield || {};
+        game.roundMobilePersonalCombatShield[playerNum] = { excludeFigureKey: selfFk };
+        return { applied: true, logMessage: `**Choose a Side (SCUM)** — This round, your **other Mobile** figures gain **Personal Combat Shield** (+1 Evade whenever they spend a Block while defending; ${mobileKeys.length} figure${mobileKeys.length !== 1 ? 's' : ''}).` };
       } else {
-        // IMPERIAL: Gar Saxon Flamethrower — grant free Flamethrower attack to ALL Mobile friendlies
-        const dcMsgIds = getDcMessageIds(game, playerNum) || [];
-        const dcListAll = getDcList(game, playerNum) || [];
-        let grantedNames = [];
-        for (let i = 0; i < dcMsgIds.length; i++) {
-          const mid = dcMsgIds[i];
-          const dcObj = dcListAll[i];
-          if (!dcObj || dcObj.defeated) continue;
-          const dcN = typeof dcObj === 'object' ? (dcObj.dcName || dcObj.displayName) : dcObj;
-          const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
-          if (kws.includes('MOBILE')) {
-            game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-            const _csFk = figureKeyForActivation(game, mid);
-            if (_csFk) game.freeAttackBonusPending[_csFk] = { from: 'Choose a Side (Flamethrower)' };
-            grantedNames.push(dcN);
-          }
-        }
-        return { applied: true, logMessage: `**Choose a Side (IMPERIAL)** — This round, all **Mobile** friendlies gain a free Flamethrower attack: ${grantedNames.length ? grantedNames.join(', ') : 'none found'}.` };
+        // IMPERIAL: OTHER Mobile friendlies gain Gar Saxon's Flamethrower as a
+        // Special Action this round.
+        // DEFERRED (flagged): granting a temporary per-figure Special Action
+        // (Gar Saxon's Flamethrower: choose space within 2; each other figure
+        // on/adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token)
+        // for the round to a SET of Mobile figures requires the round-scoped
+        // special-action INJECTION infrastructure (components.js specials-list
+        // injection + dc-play-area.js dispatch + once-per-figure gating + EoR
+        // clear), which does not cleanly exist. Rather than fake it with the
+        // WRONG generic free ATTACK (the prior freeAttackBonusPending grant,
+        // which is not the area Flamethrower effect at all), we set a clear
+        // round marker and emit a manual-resolution note. See gar_saxon_flamethrower
+        // (ability-library.json) for the resolver that already implements the area.
+        game.roundMobileGarSaxonFlamethrower = game.roundMobileGarSaxonFlamethrower || {};
+        game.roundMobileGarSaxonFlamethrower[playerNum] = { excludeFigureKey: selfFk };
+        return {
+          applied: true,
+          logMessage: `**Choose a Side (IMPERIAL)** — This round, your **other Mobile** figures gain **Gar Saxon's Flamethrower** as a Special Action (${mobileKeys.length ? mobileKeys.map((fk) => dcNameFromFigureKey(fk)).join(', ') : 'none'}). ⚠️ Resolve the Flamethrower special manually for those figures (area within 2: each other figure on/adjacent suffers 1 Damage + 1 Strain and discards 1 Power Token) — the per-figure Special-Action button grant is not yet automated.`,
+        };
       }
     }
-    return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Block for Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (area attack)"] };
+    return { requiresChoice: true, choiceOptions: ['SCUM: Personal Combat Shield (+1 Evade per Block spent, other Mobile figures)', "IMPERIAL: Gar Saxon's Flamethrower (other Mobile figures, manual)"] };
   }
 
   // ccEffect: reverseEngineerEffect (Reverse Engineer) — free attack with +1 Surge using defender's surge abilities

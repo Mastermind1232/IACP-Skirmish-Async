@@ -1762,8 +1762,8 @@
     },
     "Feint": {
       "type": "ccEffect",
-      "label": "Remove 1 attack and 1 defense die results (1 defense auto)",
-      "defensePoolRemoveMax": 1,
+      "label": "Choose 1 attack die and 1 defense die and remove their results (within 2 spaces)",
+      "feintEffect": true,
       "wiredStatus": "wired"
     },
     "fell_swoop": {

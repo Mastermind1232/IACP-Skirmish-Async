@@ -62,3 +62,21 @@ export function applyDefenseDieRemoval(combat, dieIdx) {
   combat.defenseRoll = { block, evade, dodge };
   return combat.defenseRoll;
 }
+
+/**
+ * Remove an ATTACK die's RESULTS (Feint: "choose 1 attack die and remove its
+ * results from the attack results"). Zeroes the chosen die's dmg/surge/acc and
+ * recomputes combat.attackRoll from all attack dice. Mutates combat in place;
+ * returns the new attackRoll. Mirrors applyDefenseDieRemoval for the attack pool.
+ */
+export function applyAttackDieRemoval(combat, dieIdx) {
+  const dice = combat?.attackDiceResults;
+  if (!Array.isArray(dice) || !dice[dieIdx]) return combat?.attackRoll;
+  dice[dieIdx] = { ...dice[dieIdx], dmg: 0, surge: 0, acc: 0, _removed: true };
+  let acc = 0;
+  let dmg = 0;
+  let surge = 0;
+  for (const d of dice) { acc += d?.acc || 0; dmg += d?.dmg || 0; surge += d?.surge || 0; }
+  combat.attackRoll = { acc, dmg, surge };
+  return combat.attackRoll;
+}

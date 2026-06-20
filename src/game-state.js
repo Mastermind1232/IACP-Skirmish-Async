@@ -174,6 +174,7 @@ function ensureGameShape(game) {
     // Round-scoped containers (keyed by msgId/figureKey, reset each round)
     'roundFigureAbilityUsed', 'roundAttackRerollDice', 'roundAttackSurgeBonus',
     'roundDefenseBonusBlock', 'roundDefenseBonusEvade', 'roundDefenseAccuracyPenalty', 'roundDefenderBonusBlockPerEvade',
+    'roundMobilePersonalCombatShield', 'roundMobileGarSaxonFlamethrower',
     'roundEfficientTravel', 'roundProgrammingOverrideTrait',
     'roundTrooperAttackHitBonus', 'roundVehicleSpeedBonus', 'roundTrooperSurgeStun',
     // Combat targeting (keyed by msgId)

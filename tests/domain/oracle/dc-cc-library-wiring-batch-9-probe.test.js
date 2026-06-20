@@ -24,7 +24,7 @@ const BATCH = [
   ['Evacuate',                ['evacuateEffect']],
   ['Explosive Weaponry',      ['attackBonusBlast']],
   ['Face Me!',                ['faceMeEffect']],
-  ['Feint',                   ['defensePoolRemoveMax']],
+  ['Feint',                   ['feintEffect']],
   ['Feral Swipes',            ['feralSwipesEffect']],
   ['Ferocity',                ['ferocityEffect']],
   ['Field Promotion',         ['celebrationVp', 'increaseArmyCostBy']],

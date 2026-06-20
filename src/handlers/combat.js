@@ -10010,6 +10010,38 @@ export async function handleCombatSurge(interaction, ctx) {
 }
 
 /**
+ * Personal Combat Shield: "Whenever you spend a Block while defending, apply +1
+ * Evade to the defense results." Applies to (a) Gar Saxon natively (the
+ * personal_combat_shield_gar_saxon DC special) and (b) any friendly MOBILE figure
+ * granted the shield this round via Choose a Side (SCUM) — excluding the figure
+ * that played Choose a Side. Returns a note string if +1 Evade was applied, else ''.
+ */
+export function applyPersonalCombatShieldOnBlockSpend(game, combat, ctx) {
+  const defFk = combat?.target?.figureKey || '';
+  if (!defFk) return '';
+  const dcEff = ctx?.getDcEffects ? ctx.getDcEffects() : {};
+  const defDcName = dcNameFromFigureKey(defFk);
+  const eff = dcEff[defDcName] || dcEff[(defDcName || '').replace(/\s*\[.*\]\s*$/, '')];
+  // Native Gar Saxon.
+  if ((eff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
+    combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+    return '**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.';
+  }
+  // Choose a Side (SCUM) round grant to OTHER friendly MOBILE figures.
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+  const grant = game?.roundMobilePersonalCombatShield?.[defPN];
+  if (grant) {
+    const excluded = grant.excludeFigureKey || null;
+    const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (kws.includes('MOBILE') && defFk !== excluded) {
+      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+      return '**Personal Combat Shield** (Choose a Side) — Mobile figure spent a Block token: +1 Evade.';
+    }
+  }
+  return '';
+}
+
+/**
  * Handle power token spending buttons (combat_token_).
  * Custom ID patterns:
  *   combat_token_{gameId}_att_{n|skip}  — attacker spends token index n, or skips
@@ -10122,13 +10154,8 @@ export async function handleCombatToken(interaction, ctx) {
     // Track Block spending for Mandalorian Steel / Personal Combat Shield
     if (combat.pendingWildRole === 'defender' && resolvedType === 'Block') {
       combat.defenderSpentBlock = true;
-      const _pcsWDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-      const _pcsWDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
-      const _pcsWDefEff = _pcsWDcEff[_pcsWDefDcName] || _pcsWDcEff[(_pcsWDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      if ((_pcsWDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
-        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
-        await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
-      }
+      const _pcsNote = applyPersonalCombatShieldOnBlockSpend(game, combat, ctx);
+      if (_pcsNote) await thread.send(_pcsNote);
     }
     const completedRole = combat.pendingWildRole;
     combat.pendingWildRole = null;
@@ -10193,15 +10220,10 @@ export async function handleCombatToken(interaction, ctx) {
     if (isAttacker) combat.attackerSpentPowerToken = true;
     // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
     if (!isAttacker) combat.defenderRerolledOrModified = true;
-    if (!isAttacker && scTokenType === 'Block') combat.defenderSpentBlock = true;
     if (!isAttacker && scTokenType === 'Block') {
-      const _pcsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-      const _pcsDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
-      const _pcsDefEff = _pcsDcEff[_pcsDefDcName] || _pcsDcEff[(_pcsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-      if ((_pcsDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
-        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
-        await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
-      }
+      combat.defenderSpentBlock = true;
+      const _pcsNote = applyPersonalCombatShieldOnBlockSpend(game, combat, ctx);
+      if (_pcsNote) await thread.send(_pcsNote);
     }
     await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
     saveGames(game.gameId);
@@ -10245,17 +10267,12 @@ export async function handleCombatToken(interaction, ctx) {
   // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
   // Track defender modifications for Quick Strike (Electrostaff loadout)
   if (!isAttacker) combat.defenderRerolledOrModified = true;
-  // Track Block token spending for Mandalorian Steel
-  if (!isAttacker && tokenType === 'Block') combat.defenderSpentBlock = true;
-  // Personal Combat Shield (Gar Saxon): when spending a Block token while defending, +1 Evade
+  // Track Block token spending for Mandalorian Steel + Personal Combat Shield
+  // (Gar Saxon natively, or Mobile figures granted it via Choose a Side this round).
   if (!isAttacker && tokenType === 'Block') {
-    const _pcsDcEff = ctx.getDcEffects ? ctx.getDcEffects() : {};
-    const _pcsDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
-    const _pcsDefEff = _pcsDcEff[_pcsDefDcName] || _pcsDcEff[(_pcsDefDcName || '').replace(/\s*\[.*\]\s*$/, '')];
-    if ((_pcsDefEff?.specialAbilityIds || []).includes('personal_combat_shield_gar_saxon')) {
-      combat.bonusEvade = (combat.bonusEvade || 0) + 1;
-      await thread.send('**Personal Combat Shield** — Gar Saxon spent a Block token: +1 Evade.');
-    }
+    combat.defenderSpentBlock = true;
+    const _pcsNote = applyPersonalCombatShieldOnBlockSpend(game, combat, ctx);
+    if (_pcsNote) await thread.send(_pcsNote);
   }
   await advanceTokenPhase(thread, game, combat, expectedPhase, ctx);
   saveGames(game.gameId);
