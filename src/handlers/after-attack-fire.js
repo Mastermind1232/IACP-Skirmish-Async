@@ -1415,18 +1415,31 @@ async function fireWantonDestruction(thread, game, combat, effect, ctx) {
 // ── DEFENDER-SIDE FIRE HANDLERS ─────────────────────────────────────────────
 
 /**
- * Furious Charge (CC, defender side): defender becomes Focused on the
- * attack that triggered the threshold. Damage threshold is gate at
- * enqueue time; this handler just applies + clears the queued state.
+ * Furious Charge (CC, defender side): "Ready your Deployment card" when the
+ * defender suffered 3+ Damage from the attack (CSV row 675 — alexanbv 2026-06-20,
+ * was wrongly applying Focus). The 3+-damage threshold is gated at enqueue time.
  */
 async function fireFuriousCharge(thread, game, combat, effect, ctx) {
-  const { logGameAction, client } = ctx;
+  const { logGameAction, client, dcExhaustedState } = ctx;
   const fk = combat.target?.figureKey;
   if (!fk) return;
   if (game.conditionalFocusIfDamagedGte) game.conditionalFocusIfDamagedGte = null;
-  if (isConditionImmune(game, fk)) return;
-  if (applyCondition(game, fk, 'Focus') && logGameAction) {
-    await logGameAction(game, client, `**Furious Charge** — **${combat.target.label || dcNameFromFigureKey(fk)}** is now **Focused** (suffered ${combat._step7Damage || 0} Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  // Ready the DEFENDER's Deployment card: un-exhaust it and remove it from the
+  // activated-DC indices so it can activate again this round.
+  const defPn = combat.defenderPlayerNum;
+  let defMsgId = combat.target?.msgId || null;
+  if (!defMsgId && ctx.findDcMessageIdForFigure) defMsgId = ctx.findDcMessageIdForFigure(game.gameId, defPn, fk);
+  if (!defMsgId) return;
+  dcExhaustedState?.set?.(defMsgId, false);
+  const msgIds = (defPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
+  const idx = msgIds.indexOf(defMsgId);
+  if (idx >= 0) {
+    const activated = (defPn === 1 ? game.p1ActivatedDcIndices : game.p2ActivatedDcIndices) || [];
+    const filtered = activated.filter((i) => i !== idx);
+    if (defPn === 1) game.p1ActivatedDcIndices = filtered; else game.p2ActivatedDcIndices = filtered;
+  }
+  if (logGameAction) {
+    await logGameAction(game, client, `**Furious Charge** — **${combat.target.label || dcNameFromFigureKey(fk)}**'s Deployment card is readied (suffered ${combat._step7Damage || 0} Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   }
 }
 
