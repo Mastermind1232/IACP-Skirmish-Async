@@ -327,6 +327,18 @@ export async function applyDamage(game, ctx, opts) {
     return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false, vanishImmune: true };
   }
 
+  // Clan of Two (The Child): "The Child cannot suffer Damage unless it is being
+  // attacked." Block all non-attack Damage (Bleed, terrain, direct-CC, adjacent
+  // Self-Destruct splash, etc.). Attack damage — opts.combat / opts.fromAttack,
+  // the same discriminator the attacker-resolution path uses — still applies.
+  // (alexanbv audit Jun 2026.)
+  if (dcNameFromFigureKey(opts.figureKey) === 'The Child' && !(opts.fromAttack || opts.combat)) {
+    if (ctx?.logGameAction && ctx?.client) {
+      await ctx.logGameAction(game, ctx.client, `**Clan of Two** — **The Child** cannot suffer Damage unless it is being attacked (${amount} prevented).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+    return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false, childImmune: true };
+  }
+
   // Order per destruct 2026-05-08:
   //   1. reduceHp first — HP fully applies. On-damage abilities
   //      trigger because the figure "took damage to become defeated".
