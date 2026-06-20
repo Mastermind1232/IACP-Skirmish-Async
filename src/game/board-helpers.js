@@ -581,6 +581,12 @@ export function getSpaceController(game, mapId, coord) {
   if (!mapSpaces?.adjacency) return null;
   const adjacency = mapSpaces.adjacency || {};
   const t = normalizeCoord(coord);
+  // Terminal Network: the playing player controls all TERMINALS regardless of
+  // adjacency (scoped to terminals — launch panels etc. are unaffected).
+  if (game.terminalControlPlayerNum) {
+    const _tnTerminals = getActiveTerminals(game, mapId).map((x) => normalizeCoord(x));
+    if (_tnTerminals.includes(t)) return game.terminalControlPlayerNum;
+  }
   const graphNeighbors = (adjacency[t] || []).map((n) => normalizeCoord(n));
   // Geometric fallback for blocking-terrain spaces (e.g. mission panels) with no graph neighbors
   const neighbors = graphNeighbors.length > 0 ? graphNeighbors : geometricNeighbors(t);
@@ -654,6 +660,12 @@ export function getFiguresOnOrAdjacentToSpace(game, playerNum, coord, mapId) {
 export function countTerminalsControlledByPlayer(game, playerNum, mapId) {
   const terminals = getActiveTerminals(game, mapId);
   if (!terminals.length) return 0;
+  // Terminal Network (CSV row 848): until start of next round, the player who
+  // played it controls ALL terminals regardless of figure adjacency (alexanbv
+  // 2026-06-20; the flag was set but never consulted).
+  if (game.terminalControlPlayerNum) {
+    return game.terminalControlPlayerNum === playerNum ? terminals.length : 0;
+  }
   const mapSpaces = getBoundedMapSpaces(mapId);
   if (!mapSpaces?.adjacency) return 0;
   const adjacency = mapSpaces.adjacency || {};
