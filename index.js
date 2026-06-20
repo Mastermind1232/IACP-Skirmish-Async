@@ -3552,7 +3552,7 @@ function buildAllDeps() {
     getPlayableCcEndOfActivationForDc, getPlayableCcDoubleActionsForDc,
     getDcStats, getEffectiveSpeed, getMovementMinimapAttachment,
     clearMoveGridMessages, getLegalInteractOptions, sendBleedingPrompt,
-    getCommandCardImagePath, findDcMessageIdForFigure, isGroupDefeated,
+    getCommandCardImagePath, findDcMessageIdForFigure, findFigureheadFigure, isGroupDefeated,
     checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
     checkPostCombatSurges, resolveCombatAfterRolls, runAfterResolveWindow, hasActionsRemainingInGame,
     getPlayerZoneLabel, updateHandChannelMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage, repostRoundActivationMessage,

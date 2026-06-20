@@ -1204,7 +1204,7 @@ function getCombatActions(game, playerNum, deps) {
     const fh = game.pendingFigurehead;
     if (playerNum === fh.defenderPlayerNum) {
       return [
-        { type: 'figurehead_use', customId: `figurehead_use_${gameId}`, description: 'Use Figurehead (redirect attack)' },
+        { type: 'figurehead_use', customId: `figurehead_use_${gameId}`, description: 'Use Figurehead (Murne suffers 1 Strain to prevent 1)' },
         { type: 'figurehead_skip', customId: `figurehead_skip_${gameId}`, description: 'Skip Figurehead' },
       ];
     }

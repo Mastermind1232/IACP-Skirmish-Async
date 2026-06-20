@@ -606,6 +606,7 @@ export function buildHeadlessDeps(options = {}) {
     isGroupDefeated: _isGroupDefeated,
     isDepletedRemovedFromGame: (game, msgId) => _isDepletedRemovedFromGameRaw(game, msgId),
     findDcMessageIdForFigure: _findDcMessageIdForFigure,
+    findFigureheadFigure: _findFigureheadFigure,
     getFigureLabel: _getFigureLabel,
     getPlayerZoneLabel: (game, playerId) => _getPlayerZoneLabelRaw(game, playerId),
     countActiveGamesForPlayer: (playerId) => _countActiveGamesForPlayerRaw(playerId, gamesMap),

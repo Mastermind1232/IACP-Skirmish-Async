@@ -30,6 +30,10 @@ const COMBAT_DEPS = [
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
   'sendBleedingPrompt', 'processFigureDefeat',
   'getMapData', 'getEffectiveMapSpaces', 'isWithinN', 'getFigureLabel',
+  // findFigureheadFigure: applyStrain (called from combat-path strain like
+  // Heavy Repeater / weapon strain costs) consults it to fire the Figurehead
+  // STRAIN reaction (alexanbv 2026-06-20).
+  'findFigureheadFigure',
   'computeCleaveEligibleTargets', 'getCleaveTargetButtons',
   // CC play from the combat gate (playCC) needs the ability resolver, else gate
   // CCs discard with no effect (alexanbv 2026-06-16 re-audit). dcMessageMeta/
@@ -85,6 +89,9 @@ const CONTEXT_GROUPS = {
     'getMapAttachmentForSpaces',
     'getMapTokensData', 'getDeploymentZones',
     'processFigureDefeat',
+    // SoA-handler strain (e.g. Channel the Force) flows through applyStrain,
+    // which consults findFigureheadFigure for the Figurehead STRAIN reaction.
+    'findFigureheadFigure',
   ],
 
   move: [
@@ -319,6 +326,11 @@ const CONTEXT_GROUPS = {
   interrupts: [
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'dcMessageMeta',
     'dcHealthState', 'logGameAction', 'getDiceData', 'getMapData',
+    // findDcMessageIdForFigure + findFigureheadFigure: needed by the
+    // applyStrain pipeline when a strain prompt (Figurehead / per-strain
+    // choice) resolves in this ctx — Fireproof lookup, strain→damage, and the
+    // Figurehead strain reaction (alexanbv 2026-06-20).
+    'findDcMessageIdForFigure', 'findFigureheadFigure',
     'applyDamageAndFinishCombat', 'checkWinConditions', 'awardObjectiveVp',
     'updateDcActionsMessage', 'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
     'getDcPlayAreaComponents', 'getDcStats', 'DC_ACTIONS_PER_ACTIVATION',
@@ -456,6 +468,9 @@ const CONTEXT_GROUPS = {
     'filterCondition', 'isConditionImmune', 'applyCondition', 'HARMFUL_CONDITIONS',
     'updateDcActionsMessage', 'updateHandVisualMessage', 'updateDiscardPileMessage',
     'processFigureDefeat',
+    // applyStrain (Bleed / special-effect strain) consults findFigureheadFigure
+    // to fire the Figurehead STRAIN reaction (alexanbv 2026-06-20).
+    'findFigureheadFigure',
   ],
 };
 

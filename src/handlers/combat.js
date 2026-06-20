@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingFigurehead, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingStrainChoice, clearPendingStrainChoice, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -10784,95 +10784,10 @@ async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
   }).catch(discordCatch);
 }
 
-/**
- * Handle Figurehead ability decision (use or skip).
- * @param {import('discord.js').ButtonInteraction} interaction
- * @param {object} ctx - combat context
- */
-export async function handleFigureheadDecision(interaction, ctx) {
-  const { getGame, client, saveGames, applyDamageAndFinishCombat, isDcUnique, getCelebrationButtons, dcHealthState, logGameAction, getDcStats, getDcEffects, processFigureDefeat: ctxProcessFigureDefeat } = ctx;
-  const isUse = interaction.customId.startsWith('figurehead_use_');
-  const gameId = parseCustomId(interaction.customId, isUse ? 'figurehead_use_' : 'figurehead_skip_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  await interaction.deferUpdate().catch(discordCatch);
-  const pending = game.pendingFigurehead;
-  if (!pending) {
-    await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  clearPendingFigurehead(game);
-  const combat = game.pendingCombat;
-  if (!combat) {
-    await interaction.followUp({ content: 'Combat data missing.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex, fhFigKey, fhMsgId, fhFigIndex, fhLabel } = pending;
-  const thread = await fetchCombatThread(client, combat.combatThreadId);
-
-  if (isUse) {
-    // Figurehead PREVENTS 1 of the target's Damage: Murne suffers 1, and the
-    // target suffers (damage − 1). Was inverted — Murne took (damage − 1) and
-    // the target took 0 (alexanbv 2026-06-20).
-    const fhDamage = 1;
-    const fhTargetDamage = Math.max(0, damage - 1);
-    let fhResultText = '';
-    if (fhMsgId && fhFigKey && dcHealthState) {
-      const _fhRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
-        figureKey: fhFigKey, msgId: fhMsgId, figIndex: fhFigIndex,
-        amount: fhDamage, controllerPlayerNum: defenderPlayerNum,
-        attackerPlayerNum, source: 'Figurehead',
-      });
-      const fhNew = _fhRes.newHp;
-      const fhPrev = _fhRes.prevHp;
-      const fhMaxHp = dcHealthState.get(fhMsgId)?.[fhFigIndex]?.[1] ?? 0;
-      if (fhMaxHp > 0) {
-        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers ${fhTargetDamage}.`;
-        if (fhNew <= 0) {
-          // Murne Rin defeated — centralized defeat pipeline
-          const fhDcName = dcNameFromFigureKey(fhFigKey);
-          if (ctxProcessFigureDefeat) {
-            const defeatResult = await ctxProcessFigureDefeat(game, {
-              defeatedPlayerNum: defenderPlayerNum,
-              figureKey: fhFigKey,
-              attackerPlayerNum,
-              msgId: fhMsgId,
-              dcName: fhDcName,
-              displayName: fhLabel || fhDcName,
-              source: 'Figurehead',
-            });
-            fhResultText += ` — **${fhLabel || 'Murne Rin'} defeated!** +${defeatResult?.vp ?? 0} VP`;
-          }
-          // Post-defeat: Celebration (unique figure defeated → offer Celebration CC play)
-          const fhAtkerOwnerId = getPlayerId(game, attackerPlayerNum);
-          if (!game.pendingCelebration && isDcUnique?.(fhDcName)) {
-            setPendingCelebration(game, { attackerPlayerNum, combatThreadId: combat.combatThreadId });
-            await thread.send(sanitizeMentions({
-              content: `<@${fhAtkerOwnerId}> — You defeated a unique figure (Figurehead). Play **Celebration** to gain 4 VP?`,
-              components: [getCelebrationButtons(game.gameId)],
-              allowedMentions: { users: [fhAtkerOwnerId] },
-            })).catch(discordCatch);
-          }
-        }
-      }
-    }
-    if (fhResultText) await thread.send(fhResultText);
-    await applyDamageAndFinishCombat(game, combat, { damage: fhTargetDamage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
-  } else {
-    await thread.send('**Figurehead** skipped.');
-    await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
-  }
-  // Interrupts route through the sequence (alexanbv 2026-06-15): if this attack
-  // is walking the gate sequence, the resume above stashed combat._afterResolveArgs
-  // instead of finishing — advance into the after_resolve gate so the attack
-  // continues IN sequence. No-op for legacy (non-_seqActive) attacks.
-  await resumeSequenceAfterInterrupt(game, combat, ctx, thread);
-  if (isUse && fhMsgId && ctx.updateAttachmentMessageForDc) {
-    await ctx.updateAttachmentMessageForDc(game, defenderPlayerNum, fhMsgId, client).catch(discordCatch);
-  }
-  await interaction.editReply({ components: [] }).catch(discordCatch);
-  saveGames(game.gameId);
-}
+// handleFigureheadDecision (combat-DAMAGE redirect) REMOVED 2026-06-20.
+// Figurehead is a STRAIN reaction now (alexanbv: "Figurehead is for STRAIN not
+// damage"). The trigger lives in the applyStrain pipeline and the decision is
+// handled by handleFigureheadStrainDecision in strain-handler.js.
 
 // ─── Lasat Honor Guard helpers ────────────────────────────────────────────────
 

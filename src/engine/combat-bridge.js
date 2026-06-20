@@ -58,7 +58,7 @@ import {
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingFigurehead, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingSuppressiveFireMp, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.
@@ -205,7 +205,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     logGameAction, dcNameFromFigureKey, parseFigureKey, opponentPlayerNum,
     getDcEffects, getDcEffect, getMapData, computeCombatResult,
     getBoardStateForMovement, getEffectiveFigureSize, getFootprintCells, normalizeCoord,
-    getPlayerId, findDcMessageIdForFigure, findFigureheadFigure,
+    getPlayerId, findDcMessageIdForFigure,
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
     applyDamageAndFinishCombat: _applyDamageAndFinishCombat,
     discordCatch,
@@ -396,30 +396,12 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   const targetMsgId = findDcMessageIdForFigure(game.gameId, defenderPlayerNum, combat.target.figureKey);
   const { figureIndex: targetFigIndex } = parseFigureKey(combat.target.figureKey);
 
-  // Figurehead (Murne Rin): before friendly figure suffers damage, may redirect to self (prevent 1)
-  if (damage > 0 && hit) {
-    const fhResult = findFigureheadFigure(game, defenderPlayerNum, combat.target.figureKey);
-    if (fhResult) {
-      const fhOwnerId = getPlayerId(game, defenderPlayerNum);
-      const fhThread = await fetchCombatThread(client, combat.combatThreadId);
-      setPendingFigurehead(game, {
-        damage, hit, resultText, totalBlast,
-        defenderPlayerNum, attackerPlayerNum, ownerId,
-        targetMsgId, targetFigIndex,
-        fhFigKey: fhResult.figureKey, fhMsgId: fhResult.msgId, fhFigIndex: fhResult.figIndex,
-        fhLabel: fhResult.label,
-      });
-      await fhThread.send(sanitizeMentions({
-        content: `<@${fhOwnerId}> — **Figurehead**: **${combat.target.label}** is about to suffer **${damage} damage**. Murne Rin suffers **${Math.max(0, damage - 1)} damage** instead (prevents 1)?`,
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`figurehead_use_${game.gameId}`).setLabel('Use Figurehead').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`figurehead_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
-        )],
-        allowedMentions: { users: [fhOwnerId] },
-      }));
-      return;
-    }
-  }
+  // Figurehead (Murne Rin) is a STRAIN reaction, NOT a Damage reaction
+  // (alexanbv 2026-06-20: "Figurehead is for STRAIN not damage"; the CSV is
+  // wrong). The combat-DAMAGE interrupt that used to live here was removed —
+  // Figurehead does not intercept attack Damage. The Strain reaction (Murne may
+  // suffer 1 Strain to prevent 1 of a friendly-within-4's Strain) is wired in
+  // the strain pipeline (strain-handler.js).
   // Combat-pipeline rebuild (slice 3.7-3.8): we're about to apply damage and
   // run after-attack-resolves effects. Advance currentStep through step7
   // (damage) and step8 (after attack resolves). _applyDamageAndFinishCombat
@@ -1364,7 +1346,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // Supercharge / Sustained by Rage post-attack strain: route through
       // the canonical applyStrain pipeline (Fireproof / Headhunter /
       // per-strain choice / Under Duress / Paz).
-      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
         figureKey: combat.attackerFigureKey,
         controllerPlayerNum: combat.attackerPlayerNum,
         amount: combat.superchargeStrainAfterAttackCount || 0,
@@ -1743,7 +1725,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // strain pipeline (applyStrain → _applyDamageFromStrain).
       const _ftHsBefore = dcHealthState.get(targetMsgId);
       if (_ftHsBefore?.[targetFigIndex]?.[0] > 0) {
-        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
           figureKey: combat.target.figureKey,
           controllerPlayerNum: defenderPlayerNum,
           amount: 1,
@@ -1768,7 +1750,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         if (!_ftBlastHsBefore?.[parseFigureKey(_ftBlastFk).figureIndex] || _ftBlastHsBefore[parseFigureKey(_ftBlastFk).figureIndex][0] <= 0) continue;
         // Strain via the canonical applyStrain pipeline (Fireproof /
         // Headhunter / per-strain choice / Under Duress / Paz).
-        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
           figureKey: _ftBlastFk,
           controllerPlayerNum: _ftBlastPn,
           amount: 1,
@@ -1875,7 +1857,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Duress / Paz all gate correctly.
   if (hit && targetMsgId) {
     if ((combat.surgeHarass || 0) > 0) {
-      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+      await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
         figureKey: combat.target.figureKey,
         controllerPlayerNum: defenderPlayerNum,
         amount: combat.surgeHarass,
@@ -1888,7 +1870,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const supRoll = combat.defenseRoll || {};
       const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
       if (supAmt > 0) {
-        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+        await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
           figureKey: combat.target.figureKey,
           controllerPlayerNum: defenderPlayerNum,
           amount: supAmt,
@@ -2596,7 +2578,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // damage/discard choice all fire correctly.
   if (combat.isLure && combat.lurePostAttackStrain > 0 && combat.attackerFigureKey) {
     await thread.send(`**Lure of the Dark Side** — **${combat.attackerDcName}** suffers ${combat.lurePostAttackStrain} Strain.`).catch(discordCatch);
-    await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat }, {
+    await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
       figureKey: combat.attackerFigureKey,
       controllerPlayerNum: combat.attackerPlayerNum,
       amount: combat.lurePostAttackStrain,

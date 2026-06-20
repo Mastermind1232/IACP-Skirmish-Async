@@ -164,6 +164,58 @@ export async function applyStrain(game, ctx, opts) {
     }
   }
 
+  // ── Figurehead (Murne Rin): STRAIN reaction (alexanbv 2026-06-20 —
+  //    "Figurehead is for STRAIN not damage"). When a friendly figure within
+  //    4 spaces of Murne Rin suffers Strain, Murne's controller MAY have Murne
+  //    suffer 1 Strain to prevent 1 of that figure's Strain. Optional, interactive.
+  //
+  //    Fires BEFORE the strain amount is committed (before Headhunter / SC /
+  //    the per-strain choice cascade). `opts._noFigurehead` guards against
+  //    re-entrancy: Murne suffering her own 1 Strain (the prevention cost) must
+  //    NOT offer Figurehead again. findFigureheadFigure already excludes the
+  //    strained figure itself, so a lone Murne can't shield her own strain.
+  if (!opts._noFigurehead && amount > 0 && !game.pendingFigurehead
+      && typeof ctx.findFigureheadFigure === 'function') {
+    const fh = ctx.findFigureheadFigure(game, controllerPN, figureKey);
+    if (fh && fh.figureKey) {
+      const { setPendingFigurehead } = await import('../game/interrupts.js');
+      const targetDcName = dcNameFromFigureKey(figureKey);
+      setPendingFigurehead(game, {
+        gameId: game.gameId,
+        defenderPlayerNum: controllerPN,
+        // strained figure (the one whose strain may be reduced):
+        targetFigureKey: figureKey,
+        targetDcName,
+        amount,
+        source,
+        followup: opts.followup || null,
+        // Murne (the shielding Figurehead figure):
+        fhFigKey: fh.figureKey,
+        fhMsgId: fh.msgId,
+        fhFigIndex: fh.figIndex,
+        fhLabel: fh.label || 'Murne Rin',
+      });
+      const ownerId = game[`player${controllerPN}Id`];
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`figurehead_use_${game.gameId}`)
+          .setLabel('Use Figurehead (Murne suffers 1 Strain → prevent 1)')
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(`figurehead_skip_${game.gameId}`)
+          .setLabel('Skip Figurehead')
+          .setStyle(ButtonStyle.Secondary),
+      );
+      await ctx.logGameAction?.(
+        game, ctx.client,
+        `<@${ownerId}> 🛡️ **Figurehead** — **${targetDcName}** is about to suffer ${amount} Strain (${source}). You may have **${fh.label || 'Murne Rin'}** suffer **1 Strain** to prevent **1** of it.`,
+        { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card' },
+      );
+      ctx.saveGames?.(game.gameId);
+      return;
+    }
+  }
+
   // [Smuggling Compartment] vs [Headhunter]: Headhunter forces a RANDOM CC
   // discard from the controller's hand. If one will fire and the controller
   // owns an un-exhausted Smuggling Compartment, offer the set-aside first, then
@@ -518,6 +570,68 @@ export async function handleStrainChoiceDiscard(interaction, ctx) {
 
 export async function handleStrainChoicePaz(interaction, ctx) {
   return _resolveStrainChoiceCommon(interaction, ctx, STRAIN_OPTIONS.PAZ_RETURN_FROM_DISCARD, 'strain_resolve_paz_');
+}
+
+// ─── Figurehead (Murne Rin) — STRAIN reaction ──────────────────────────────
+// alexanbv 2026-06-20: "Figurehead is for STRAIN not damage." When a friendly
+// figure within 4 of Murne Rin suffers Strain, Murne's controller MAY have
+// Murne suffer 1 Strain to prevent 1 of it. Prompt is posted from applyStrain
+// (pendingFigurehead). On USE: Murne suffers 1 Strain (guarded so Murne's own
+// strain doesn't re-trigger Figurehead) and the original figure's strain is
+// reduced by 1, then the remainder resolves. On SKIP: the full amount resolves.
+
+export async function handleFigureheadStrainDecision(interaction, ctx) {
+  const { getGame, canActAsPlayer, client, logGameAction, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isUse = interaction.customId.startsWith('figurehead_use_');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'figurehead_use_' : 'figurehead_skip_');
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game?.pendingFigurehead) {
+    await interaction.followUp({ content: 'No pending Figurehead decision.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const pend = game.pendingFigurehead;
+  const defenderPN = pend.defenderPlayerNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, defenderPN, canActAsPlayer, 'Only the Figurehead controller may respond.')) return;
+
+  const { clearPendingFigurehead } = await import('../game/interrupts.js');
+  clearPendingFigurehead(game);
+  await interaction.editReply({ components: [] }).catch(discordCatch);
+
+  const { targetFigureKey, targetDcName, amount, source, followup, fhFigKey, fhLabel } = pend;
+
+  if (isUse) {
+    const remaining = Math.max(0, amount - 1);
+    await logGameAction?.(
+      game, client,
+      `🛡️ **Figurehead** — **${fhLabel || 'Murne Rin'}** suffers **1 Strain** to prevent **1** of **${targetDcName}**'s Strain (${amount} → ${remaining}).`,
+      { phase: 'ROUND', icon: 'card' },
+    );
+    // Murne suffers 1 Strain. Guard against Figurehead re-triggering on Murne's
+    // own strain (_noFigurehead) so a lone Murne cannot shield herself.
+    await applyStrain(game, ctx, {
+      figureKey: fhFigKey,
+      controllerPlayerNum: defenderPN,
+      amount: 1,
+      source: 'Figurehead',
+      _noFigurehead: true,
+    });
+    saveGames?.(game.gameId);
+    // Resume the original figure's strain with the reduced amount. _noFigurehead
+    // prevents another Figurehead prompt on the same event (only 1 prevention).
+    if (remaining > 0) {
+      return _resolveHeadhunterAndStrainChoice(game, ctx, {
+        figureKey: targetFigureKey, controllerPN: defenderPN, amount: remaining, source, followup: followup || null,
+      });
+    }
+    return _runStrainFollowup(game, ctx, followup || null);
+  }
+
+  await logGameAction?.(game, client, `**Figurehead** skipped — **${targetDcName}** suffers the full ${amount} Strain.`, { phase: 'ROUND', icon: 'card' });
+  saveGames?.(game.gameId);
+  return _resolveHeadhunterAndStrainChoice(game, ctx, {
+    figureKey: targetFigureKey, controllerPN: defenderPN, amount, source, followup: followup || null,
+  });
 }
 
 // Helpers
