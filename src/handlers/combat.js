@@ -4967,12 +4967,15 @@ export async function handleAttackTarget(interaction, ctx) {
       await thread.send(`**+${overrideDice.bonusHits} Hit** applied to attack results.`).catch(discordCatch);
     }
   }
-  // Optimal Bombardment: apply +Blast bonus if this figure was granted one
-  if (game.optimalBombardmentBlastBonus?.[msgId]) {
-    const _obBlast = game.optimalBombardmentBlastBonus[msgId];
+  // Optimal Bombardment: apply +Blast bonus if this figure was granted one.
+  // Keyed by the attacker's figureKey (matching the setter at abilities.js:10464)
+  // — was wrongly read by msgId so the bonus never applied (alexanbv 2026-06-20).
+  const _obFk = game.pendingCombat?.attackerFigureKey;
+  if (_obFk && game.optimalBombardmentBlastBonus?.[_obFk]) {
+    const _obBlast = game.optimalBombardmentBlastBonus[_obFk];
     game.pendingCombat.bonusBlast = (game.pendingCombat.bonusBlast || 0) + _obBlast;
     await thread.send(`**Optimal Bombardment** — +${_obBlast} Blast added to this attack.`).catch(discordCatch);
-    delete game.optimalBombardmentBlastBonus[msgId];
+    delete game.optimalBombardmentBlastBonus[_obFk];
   }
 
   // The Force is With Me (Chirrut Imwe): when a Ranged attack targeting
