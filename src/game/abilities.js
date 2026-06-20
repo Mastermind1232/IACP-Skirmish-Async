@@ -1764,7 +1764,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Damage result: Block Token, Surge: Surge Token (CSV row 223)
+  // neurostim_hemlock (Hemlock): choose adjacent friendly, roll 1 yellow die → Damage result: Damage Token, Surge: Surge Token (alexanbv 2026-06-20: Damage token, not Block; CSV row 223 wording is stale)
   if (abilityId === 'neurostim_hemlock') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey } = context;
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: 'Resolve **Neurostim** manually.' };
@@ -1783,8 +1783,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, targetFigureKey, 'Block', 1);
-        effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, targetFigureKey, 'Surge', 1);
@@ -1821,8 +1821,8 @@ export function resolveAbility(abilityId, context) {
       const diceResult = parts.length ? parts.join(', ') : 'blank';
       const effectParts = [];
       if (hits > 0) {
-        grantPowerTokens(game, tFk, 'Block', 1);
-        effectParts.push(`**${tName}** gained 1 **Block Token**`);
+        grantPowerTokens(game, tFk, 'Damage', 1);
+        effectParts.push(`**${tName}** gained 1 **Damage Token**`);
       }
       if (surges > 0) {
         grantPowerTokens(game, tFk, 'Surge', 1);
@@ -2480,8 +2480,11 @@ export function resolveAbility(abilityId, context) {
       game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};
       if (_afkActivating) game.stayDownPendingMsgId[_afkActivating] = true;
     }
-    // Burst Fire: mark so adjacent Stun is applied when the free attack resolves with damage
-    if (entry.label === 'Burst Fire') {
+    // Burst Fire: mark so adjacent Stun is applied when the free attack resolves
+    // with damage. Match on abilityId (the card name) — the library entry's
+    // `label` is a long descriptive string, so the old `label==='Burst Fire'`
+    // guard never armed it (alexanbv 2026-06-20).
+    if (entry.label === 'Burst Fire' || abilityId === 'Burst Fire') {
       game.burstFirePendingMsgId = game.burstFirePendingMsgId || {};
       if (_afkActivating) game.burstFirePendingMsgId[_afkActivating] = true;
     }
@@ -2611,6 +2614,36 @@ export function resolveAbility(abilityId, context) {
         addMovementPoints(game, msgId, entry.mpBonus);
         fabMpNote = ` Gained ${entry.mpBonus} MP.`;
         fabMpRefresh = true;
+      }
+    }
+    // freeMoveBonus + freeAttackBonus (Leaping Slash: "Move up to 2 spaces, then
+    // perform an attack"). This block returns before the standalone freeMoveBonus
+    // handler below could run, so set up the Move-X picker → freeAttackPrompt here
+    // (alexanbv 2026-06-20; the 2-space move was previously dropped).
+    if (!_fabPmxMsgId && !_fabRequiresTokenChoice && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0) {
+      const _fmMeta = dcMessageMeta?.get?.(msgId);
+      const _fmFigureKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+        .filter(k => k.startsWith((_fmMeta?.dcName || '') + '-'));
+      const _fmSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+      const _fmFigureKey = _fmFigureKeys[_fmSelectedIdx] || _fmFigureKeys[0] || null;
+      if (_fmFigureKey) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: entry.freeMoveBonus,
+          source: entry.label || 'Move X',
+          playerNum,
+          figureKey: _fmFigureKey,
+          dcName: _fmMeta?.dcName || '',
+          threadId: null,
+          bypassCosts: !!entry.freeMoveBypassCosts,
+          msgId,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: { msgId, playerNum, figureKey: _fmFigureKey, sourceLabel: entry.label || 'Free Attack' },
+          },
+        };
+        _fabPmxMsgId = msgId;
+        fabMpNote += ` May move up to ${entry.freeMoveBonus} space${entry.freeMoveBonus !== 1 ? 's' : ''}, then take a free attack.`;
       }
     }
     const label = entry.label || 'Heroic';

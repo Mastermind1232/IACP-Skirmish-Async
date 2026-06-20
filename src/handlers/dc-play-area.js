@@ -2576,9 +2576,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
         // pendingPostAttackConditions + the after-attack apply were
         // both wrong-timing per CRR + user clarification.
       }
-      // Stay Down: apply Stun to the attacker figure when the free attack is consumed
-      if (game.stayDownPendingMsgId?.[msgId]) {
-        delete game.stayDownPendingMsgId[msgId];
+      // Stay Down: apply Stun to the attacker figure when the free attack is
+      // consumed. Keyed by the activating figureKey (matching the setter at
+      // abilities.js:2481) — was wrongly read by msgId so it never fired
+      // (alexanbv 2026-06-20).
+      if (game.stayDownPendingMsgId?.[_ahFigureKey]) {
+        delete game.stayDownPendingMsgId[_ahFigureKey];
         const _sdDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
         const _sdFigKey = `${meta.dcName}-${_sdDgIdx}-${figureIndex}`;
         // Condition Immunity: skip Stun for immune figures
