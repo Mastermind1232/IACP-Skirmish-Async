@@ -2456,7 +2456,7 @@
     "Hide in Plain Sight": {
       "type": "ccEffect",
       "label": "Until end of round you cannot be the target of an attack",
-      "applyHide": true,
+      "untargetableUntilRoundEnd": true,
       "wiredStatus": "wired"
     },
     "Hit and Run": {

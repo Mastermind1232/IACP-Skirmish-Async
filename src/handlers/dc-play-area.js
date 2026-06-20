@@ -1181,6 +1181,8 @@ async function buildAndSendAttackTargets(
 
     // Blend In (K-2SO): the attached figure cannot be the target of an attack.
     if (game.blendInUntargetable?.[k]) continue;
+    // Hide in Plain Sight: untargetable until end of round.
+    if (game.untargetableUntilRoundEnd?.[k]) continue;
     let losCoords = allFigureBlockingCoords;
     if (allFigureBlockingCoords) {
       const targetEff = getDcEffect(dcName);

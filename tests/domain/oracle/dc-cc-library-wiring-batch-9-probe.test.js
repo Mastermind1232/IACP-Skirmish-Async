@@ -44,7 +44,7 @@ const BATCH = [
   ['Heavy Ordnance',          ['attackBonusHits']],
   ['Heightened Reflexes',     ['removeDefenseDieResults']],
   ['Hidden Trap',             ['hiddenTrapEffect']],
-  ['Hide in Plain Sight',     ['applyHide']],
+  ['Hide in Plain Sight',     ['untargetableUntilRoundEnd']],
   ['Hit and Run',             ['mpAfterAttack']],
   ['Honoring the Fallen',     ['attackBonusHitsFromDefeatedFriendly', 'attackBonusHitsFromDefeatedMax']],
 ];

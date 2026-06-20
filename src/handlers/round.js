@@ -1084,6 +1084,8 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   // Hold Ground (CC): "until the end of the round" — clear the holder each round
   // (alexanbv 2026-06-19; previously persisted across rounds).
   game.holdGroundPlayerNum = null;
+  // Hide in Plain Sight (CC): "cannot be targeted until end of round" — clear it.
+  game.untargetableUntilRoundEnd = {};
   // Brutal Tactics (Saw): once-per-round trigger limit — reset each round.
   game.brutalTacticsUsedThisRound = {};
 

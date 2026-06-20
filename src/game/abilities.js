@@ -6504,7 +6504,27 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: applyHide only (Hide in Plain Sight, Guerilla Warfare) — apply Hide to activating figures during activation
+  // ccEffect: untargetableUntilRoundEnd (Hide in Plain Sight) — "Until the end of
+  // the round, you cannot be the target of an attack" (CSV row 692). This is a
+  // TARGETING immunity (like Blend In), NOT the Hide condition — alexanbv
+  // 2026-06-20. Cleared at round start (round.js) + filtered in both target
+  // enumerators (available-actions.js, dc-play-area.js).
+  if (entry.type === 'ccEffect' && entry.untargetableUntilRoundEnd) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found for activation.' };
+    const _hpsFk = figureKeyForActivation(game, msgId) || figureKeys[0];
+    game.untargetableUntilRoundEnd = game.untargetableUntilRoundEnd || {};
+    game.untargetableUntilRoundEnd[_hpsFk] = { playerNum };
+    return { applied: true, logMessage: `**Hide in Plain Sight** — **${dcNameFromFigureKey(_hpsFk)}** cannot be the target of an attack until the end of the round.` };
+  }
+
+  // ccEffect: applyHide only (Guerilla Warfare etc.) — apply Hide to activating figures during activation
   if (entry.type === 'ccEffect' && entry.applyHide && !entry.applyFocus) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
