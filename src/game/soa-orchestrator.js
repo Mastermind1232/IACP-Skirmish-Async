@@ -521,6 +521,9 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         if (!_cadPos) continue;
         const _cadMsgId = _imrnDcMsgIds[_ii];
         if (!_cadMsgId) continue;
+        // Once per round (CSV row 171) — gate per Cad Bane; the flag is set when
+        // the MP is granted (soa-handler imrn resolver). alexanbv 2026-06-20.
+        if (game.roundFigureAbilityUsed?.[`imrn_${_cadMsgId}`]) continue;
         // Pre-check: at least one eligible friendly HUNTER must exist
         // within 4 spaces, otherwise the descriptor never enters the
         // bucket. The full candidate list is recomputed at fire time.

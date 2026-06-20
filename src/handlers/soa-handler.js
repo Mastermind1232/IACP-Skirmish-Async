@@ -1195,6 +1195,12 @@ export async function handleSoaFire(interaction, ctx) {
         }
       }
       const activatorMsgId = desc.extras?.activatorMsgId;
+      // Consume the once-per-round use when a HUNTER is actually granted MP
+      // (CSV row 171; skipping does not burn it). alexanbv 2026-06-20.
+      if (targetMsgId && desc.sourceMsgId) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`imrn_${desc.sourceMsgId}`] = true;
+      }
       if (!targetMsgId) {
         await interaction.message.edit({ content: `\u{1F3AF} **I Make the Rules Now** — could not locate **${targetDcName}**'s movement bank; resolve manually.`, components: [] }).catch(discordCatch);
       } else if (targetMsgId === activatorMsgId) {
