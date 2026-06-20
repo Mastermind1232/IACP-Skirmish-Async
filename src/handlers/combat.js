@@ -10811,7 +10811,11 @@ export async function handleFigureheadDecision(interaction, ctx) {
   const thread = await fetchCombatThread(client, combat.combatThreadId);
 
   if (isUse) {
-    const fhDamage = Math.max(0, damage - 1);
+    // Figurehead PREVENTS 1 of the target's Damage: Murne suffers 1, and the
+    // target suffers (damage − 1). Was inverted — Murne took (damage − 1) and
+    // the target took 0 (alexanbv 2026-06-20).
+    const fhDamage = 1;
+    const fhTargetDamage = Math.max(0, damage - 1);
     let fhResultText = '';
     if (fhMsgId && fhFigKey && dcHealthState) {
       const _fhRes = await _applyDamage(game, { dcHealthState, logGameAction, client }, {
@@ -10823,7 +10827,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
       const fhPrev = _fhRes.prevHp;
       const fhMaxHp = dcHealthState.get(fhMsgId)?.[fhFigIndex]?.[1] ?? 0;
       if (fhMaxHp > 0) {
-        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers 0.`;
+        fhResultText = `**Figurehead** — ${fhLabel || 'Murne Rin'} suffers **${fhDamage} damage** (${fhPrev} — ${fhNew} HP); ${combat.target.label} suffers ${fhTargetDamage}.`;
         if (fhNew <= 0) {
           // Murne Rin defeated — centralized defeat pipeline
           const fhDcName = dcNameFromFigureKey(fhFigKey);
@@ -10853,7 +10857,7 @@ export async function handleFigureheadDecision(interaction, ctx) {
       }
     }
     if (fhResultText) await thread.send(fhResultText);
-    await applyDamageAndFinishCombat(game, combat, { damage: 0, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+    await applyDamageAndFinishCombat(game, combat, { damage: fhTargetDamage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
   } else {
     await thread.send('**Figurehead** skipped.');
     await applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
