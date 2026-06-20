@@ -2401,6 +2401,22 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       }
     }
 
+    // Sniper Configuration: "draw line of sight from any FRIENDLY figure" (range
+    // still measured from the attacker — dist unchanged). Mirrors Fire Mission,
+    // but over ALL friendly figures, not just the acting group.
+    if (!los && game.sniperConfigLosAnyFriendly?.[figureKey]) {
+      scRetry: for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (!otherPos || otherFk === figureKey) continue;
+        const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(dcNameFromFigureKey(otherFk));
+        const otherFpCells = getFootprintCells(otherPos, otherSize);
+        for (const oac of otherFpCells) {
+          for (const tc of _aaTargetFpCells) {
+            if (hasLineOfSight(oac, tc, _aaEffectiveMs, losBlockingCoords)) { los = true; break scRetry; }
+          }
+        }
+      }
+    }
+
     if (!los) continue;
 
     // Insignificant (Dio): can't be targeted if in same space as a friendly figure

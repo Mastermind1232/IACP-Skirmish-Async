@@ -54,7 +54,7 @@ const PROMOTIONS_13 = [
   ['CC-I-CAN-FEEL-IT',        'I Can Feel It',         ['chooseOne']],
   ['CC-IMPROVISED-WEAPONS',   'Improvised Weapons',    ['overrideAttackDice', 'overrideAttackType', 'freeAttackBonus']],
   ['CC-IN-THE-SHADOWS',       'In the Shadows',        ['roundInTheShadowsPlayerNum']],
-  ['CC-JUMP-JETS',            'Jump Jets',             ['mpBonus']],
+  ['CC-JUMP-JETS',            'Jump Jets',             ['placeSelfWithin']],
   ['CC-KARABAST',             'Karabast!',             ['chooseAdjacentHostileThen']],
   ['CC-LIGHTBOW',             'Lightbow',              ['freeAttackBonus', 'overrideAttackDice', 'overrideAttackType', 'overrideBonusAccuracy']],
   ['CC-LOCK-ON',              'Lock On',               ['attackAccuracyBonus']],

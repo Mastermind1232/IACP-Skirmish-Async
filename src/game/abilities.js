@@ -55,7 +55,7 @@ function getStatsForDc(dcName) {
   })();
 }
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
-import { parseSurgeEffect } from './combat.js';
+import { parseSurgeEffect, recalcAttackTotals, recalcDefenseTotals } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
 import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
@@ -5337,6 +5337,68 @@ export function resolveAbility(abilityId, context) {
     }
   }
 
+  // ccEffect: placeSelfWithin (Jump Jets) — Place the activating figure in an
+  // EMPTY space within N spaces. CSV row 705 pipeline=companion_place: this is a
+  // PLACE (no pathing/terrain cost), not a Move. Modeled previously as mpBonus:5
+  // which forced terrain/pathing payment and could not cross blocking terrain a
+  // place ignores. Phase 1: enumerate empty spaces within N → requiresSpaceChoice;
+  // Phase 2 (chosenSpace): write the figure's new position directly.
+  // Range is measured by countGameSpaces (Manhattan/board distance), which a
+  // place still respects; LOS is NOT required per CSV.
+  if (entry.type === 'ccEffect' && typeof entry.placeSelfWithin === 'number' && entry.placeSelfWithin > 0) {
+    const { game, playerNum, dcMessageMeta, chosenSpace } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually: play during your activation.` };
+    const range = entry.placeSelfWithin;
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: `**${entry.label}** — no activation in progress; resolve manually.` };
+    const meta = dcMessageMeta?.get?.(msgId);
+    const _jjFigKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+      .filter((k) => k.startsWith((meta?.dcName || '') + '-'));
+    const _jjSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _jjFigKey = _jjFigKeys[_jjSelectedIdx] || _jjFigKeys[0] || null;
+    if (!_jjFigKey) return { applied: false, manualMessage: `**${entry.label}** — could not locate the activating figure; resolve manually.` };
+    const _jjOrigin = game.figurePositions?.[playerNum]?.[_jjFigKey];
+    const _jjMapId = game.selectedMap?.id;
+    const _jjMs = _jjMapId ? getMapData(_jjMapId) : null;
+    if (!_jjMs) return { applied: false, manualMessage: `**${entry.label}** — no map data; resolve manually.` };
+
+    // Phase 2: apply placement.
+    if (chosenSpace) {
+      const _jjDest = String(chosenSpace).toLowerCase();
+      game.figurePositions[playerNum][_jjFigKey] = _jjDest;
+      return {
+        applied: true,
+        logMessage: `**${entry.label}** — **${dcNameFromFigureKey(_jjFigKey)}** placed at **${_jjDest.toUpperCase()}**${_jjOrigin ? ` (from ${String(_jjOrigin).toUpperCase()})` : ''}.`,
+        refreshBoard: true,
+        refreshDcEmbed: true,
+        activeMsgId: msgId,
+      };
+    }
+
+    // Phase 1: enumerate empty spaces within range.
+    const _jjOccupied = new Set();
+    for (const pn of [1, 2]) {
+      for (const pos of Object.values(game.figurePositions?.[pn] || {})) {
+        if (pos) _jjOccupied.add(String(pos).toLowerCase());
+      }
+    }
+    const _jjAllCoords = _jjMs.spaces || Object.keys(_jjMs.adjacency || {});
+    const _jjValid = [];
+    for (const coord of _jjAllCoords) {
+      const sp = String(coord).toLowerCase();
+      if (_jjOccupied.has(sp)) continue;
+      if (_jjOrigin && countGameSpaces(game, _jjOrigin, sp) > range) continue;
+      _jjValid.push(sp);
+    }
+    if (_jjValid.length === 0) return { applied: false, manualMessage: `**${entry.label}** — no empty spaces within ${range}. Resolve manually.` };
+    return {
+      applied: false,
+      requiresSpaceChoice: true,
+      validSpaces: _jjValid,
+      spaceChoiceLabel: `**${entry.label}** — Choose an empty space within ${range} to place your figure:`,
+    };
+  }
+
   // ccEffect: +N MP (Fleet Footed, Rank and File, Opportunistic, etc.)
   // Per alexanbv 2026-05-10: honor explicit context.msgId so out-of-
   // activation plays (Retaliation→Move via defeat-CC picker) target the
@@ -7400,9 +7462,20 @@ export function resolveAbility(abilityId, context) {
     }
     if (entry.attackAccuracyBonus > 0) cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
     if (entry.attackBonusPierce > 0) cbt.bonusPierce = (cbt.bonusPierce || 0) + entry.attackBonusPierce;
+    // Sniper Configuration: "draw line of sight from any friendly figure but
+    // still measure range from this figure." Arm a per-figureKey flag the target
+    // enumerators honor (mirrors Fire Mission's group-LOS extension, but over ALL
+    // friendly figures). Range continues to be measured from the attacker (the
+    // enumerators only extend LOS, not range). The flag also unlocks a target
+    // whose LOS comes only from a friendly when the attack is declared.
+    const _scFk = cbt.attackerFigureKey || null;
+    if (_scFk) {
+      game.sniperConfigLosAnyFriendly = game.sniperConfigLosAnyFriendly || {};
+      game.sniperConfigLosAnyFriendly[_scFk] = true;
+    }
     return {
       applied: true,
-      logMessage: `+${entry.attackAccuracyBonus} Accuracy and +${entry.attackBonusPierce} Pierce added to this attack.`,
+      logMessage: `+${entry.attackAccuracyBonus} Accuracy and +${entry.attackBonusPierce} Pierce added to this attack. Line of sight may be drawn from **any friendly figure** (range still measured from the attacker).`,
     };
   }
 
@@ -9397,7 +9470,13 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.initiativePlayerId = getPlayerId(game, playerNum);
-    if (entry.firstActivationFigureName) game.firstActivationFigureName = entry.firstActivationFigureName;
+    if (entry.firstActivationFigureName) {
+      game.firstActivationFigureName = entry.firstActivationFigureName;
+      // Store the owning playerNum so the activation-order gate in
+      // handleDcActivate only constrains this player (I Make My Own Luck:
+      // "Han Solo must activate first this round").
+      game.firstActivationPlayerNum = playerNum;
+    }
     return {
       applied: true,
       logMessage: `Claimed the initiative token.${entry.firstActivationFigureName ? ` ${entry.firstActivationFigureName} must activate first this round.` : ''}`,
@@ -12046,7 +12125,17 @@ export function resolveAbility(abilityId, context) {
       const adjacentSpaces = mapSpaces?.adjacency?.[activatorPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
       const targetCurrentPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
-      const validSpaces = adjacentSpaces.filter((s) => !occupiedSet.has(s) || s === targetCurrentPos);
+      // CSV row 646: "Push that figure spaces equal to its speed". The landing
+      // space must be adjacent to the activator (the push destination per card)
+      // AND no farther than the target's Speed from its current space (push
+      // distance limit). Without this cap, a target could be teleported to any
+      // adjacent-to-activator space regardless of its speed.
+      const _fmTargetSpeed = getStatsForDc(dcNameFromFigureKey(chosenFigureKey))?.speed ?? 4;
+      const validSpaces = adjacentSpaces.filter((s) => {
+        if (occupiedSet.has(s) && s !== targetCurrentPos) return false;
+        if (targetCurrentPos && countGameSpaces(game, targetCurrentPos, s) > _fmTargetSpeed) return false;
+        return true;
+      });
       if (!validSpaces.length) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         if (activatorFk) game.freeAttackBonusPending[activatorFk] = true;
@@ -12056,16 +12145,27 @@ export function resolveAbility(abilityId, context) {
       const nm = dcNameFromFigureKey(chosenFigureKey);
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Face Me!** — Push **${nm}** to which adjacent space?` };
     }
-    // Phase 1: hostile figure picker (unique figures only)
+    // Phase 1: hostile figure picker (unique figures with line of sight to you)
+    // CSV row 646 conditional: "a unique hostile figure with line of sight to you".
     const dcEffects = getDcEffects();
+    const _fmMapId = game.selectedMap?.id;
+    const _fmMs = _fmMapId ? getMapData(_fmMapId) : null;
+    const _fmGfs = context.getFigureSize || getFigureSize;
+    const _fmMetaP1 = dcMessageMeta.get(msgId);
+    const _fmActKeys = _fmMetaP1 ? getFigureKeysForDcMsg(game, playerNum, _fmMetaP1) : [];
+    const _fmActFk = _fmActKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || _fmActKeys[0];
+    const _fmActPos = _fmActFk ? game.figurePositions?.[playerNum]?.[_fmActFk] : null;
     const hostileKeys = [];
     const hostileLabels = [];
-    for (const [fk] of Object.entries(game.figurePositions?.[oppNum] || {})) {
+    for (const [fk, hPos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
       const dcN = dcNameFromFigureKey(fk);
       const eff = dcEffects[dcN] || {};
-      if (eff.unique) { hostileKeys.push(fk); hostileLabels.push(dcN); }
+      if (!eff.unique) continue;
+      // Line-of-sight-to-you filter (skip only when map/positions unavailable).
+      if (_fmMs && _fmActPos && hPos && !hasLineOfSightByCoord(game, _fmActPos, hPos, _fmMs, _fmGfs)) continue;
+      hostileKeys.push(fk); hostileLabels.push(dcN);
     }
-    if (!hostileKeys.length) return { applied: false, manualMessage: 'No unique hostile figures in play. Resolve manually.' };
+    if (!hostileKeys.length) return { applied: false, manualMessage: 'No unique hostile figures in line of sight. Resolve manually.' };
     return { requiresChoice: true, choiceOptions: hostileLabels.map((n) => `Push & attack: ${n}`), choiceValues: hostileKeys };
   }
 
@@ -12742,11 +12842,14 @@ export function resolveAbility(abilityId, context) {
       if (_caFk) game.nextAttackIgnoreFigureLOS[_caFk] = true;
       game.nextAttackIgnoreFigureLOS[chosenFigureKey] = true;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      // NOTE: the "same target" constraint is not auto-enforced — it would need
-      // capturing the first attacker's chosen target and forcing it onto the
-      // second via game.forcedAttackTarget (dynamic plumbing). Surfaced in the
-      // log so players self-enforce; the mechanical LOS-ignore clause IS wired.
-      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure (player-enforced). LOS: figures don't block for these attacks (automated).` };
+      // "Same target" constraint (CSV row 587): stash the attacker pair so the
+      // resolve-time hook in combat-bridge captures the first attacker's chosen
+      // target and forces it onto the second (whichever attacks second). The
+      // declare-time forcedAttackTarget gate then enforces the lock. Auto-wired.
+      if (_caFk) {
+        game.coordinatedAttackPair = { figA: _caFk, figB: chosenFigureKey };
+      }
+      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack, both targeting the **same** hostile figure (auto-enforced: the second attack is locked to the first's target). LOS: figures don't block for these attacks (automated).` };
     }
     // Phase 1: friendly figure picker within 3
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -13120,7 +13223,7 @@ export function resolveAbility(abilityId, context) {
           source: 'Double or Nothing',
         });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'atk' };
-        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
+        return { applied: true, logMessage: "**Double or Nothing** — Attacker rerolls 1 attack die. If the rerolled die has the **same number of symbols**, its results are **doubled** (you MAY instead CANCEL — currently auto-doubles; choose Cancel manually if preferred)." };
       } else {
         const _defPN = combat.defenderPlayerNum ?? (combat.attackerPlayerNum === 1 ? 2 : 1);
         combat.forcedRerollQueue.push({
@@ -13130,7 +13233,7 @@ export function resolveAbility(abilityId, context) {
           source: 'Double or Nothing',
         });
         game.doubleMatchingIconsOnReroll = { playerNum, side: 'def' };
-        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 die; if dominant icon type matches, that icon is doubled automatically." };
+        return { applied: true, logMessage: "**Double or Nothing** — Defender rerolls 1 defense die. If the rerolled die has the **same number of symbols**, its results are **doubled** (you MAY instead CANCEL — currently auto-doubles; choose Cancel manually if preferred)." };
       }
     }
     return { requiresChoice: true, choiceOptions: ['Reroll an attack die', 'Reroll a defense die'] };
@@ -13786,27 +13889,66 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
-  // ccEffect: cheatToWinEffect (Cheat to Win) — after Gambit die rolled, choose its new result
+  // ccEffect: cheatToWinEffect (Cheat to Win) — triggered by Gambit (Lando's
+  // color-swap reroll). CSV row 576: "Change THAT die's result to another result
+  // of your choice on THAT die." So the choice is constrained to the faces of the
+  // actually-rolled Gambit die (same color), and the chosen face is WRITTEN back
+  // into combat dice state (not advisory). The Gambit die is identified via the
+  // durable combat._lastGambitDie marker (set in rerollDie when a color-swap
+  // reroll occurs), falling back to combat._lastRerolledDie within the rerolls
+  // window.
   if (entry.type === 'ccEffect' && entry.cheatToWinEffect) {
     const { game, playerNum, choiceIndex, chosenOption } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    if (choiceIndex !== undefined && choiceIndex !== null) {
-      return { applied: true, logMessage: `**Cheat to Win** — Gambit die changed to: **${chosenOption}**. Apply this result in the combat thread.` };
+    const combat = context.combat || game.combat || game.pendingCombat;
+    if (!combat) return { applied: false, manualMessage: '**Cheat to Win** — no active combat; resolve manually.' };
+    const _ctwMarker = combat._lastGambitDie || combat._lastRerolledDie;
+    if (!_ctwMarker || (_ctwMarker.pool !== 'attack' && _ctwMarker.pool !== 'defense') || typeof _ctwMarker.index !== 'number') {
+      return { applied: false, manualMessage: '**Cheat to Win** — could not identify the Gambit die (no recent Gambit reroll). Resolve manually.' };
     }
-    // Show all die face results grouped by color (25 options max, 5 per row)
-    const opts = [
-      // Red attack die faces
-      'Red: 3 Hits + Surge', 'Red: 3 Hits', 'Red: 2 Hits + Surge', 'Red: 2 Hits', 'Red: 1 Hit',
-      // Blue attack die faces
-      'Blue: 2 Hits + 1 Acc', 'Blue: 1 Hit + Surge', 'Blue: 2 Hits', 'Blue: 1 Hit', 'Blue: 1 Acc',
-      // Green attack die faces
-      'Green: 2 Hits', 'Green: 1 Hit + Surge', 'Green: 1 Hit', 'Green: 2 Acc', 'Green: Surge',
-      // Black defense die faces
-      'Black: 1 Evade + 1 Block', 'Black: 2 Blocks', 'Black: 1 Block', 'Black: 1 Evade', 'Black: Blank',
-      // White defense die faces
-      'White: 2 Acc', 'White: 1 Acc + Surge', 'White: 1 Hit + Surge', 'White: Surge', 'White: 1 Acc',
-    ];
-    return { requiresChoice: true, choiceOptions: opts };
+    const { pool, index } = _ctwMarker;
+    const diceField = pool === 'attack' ? 'attackDiceResults' : 'defenseDiceResults';
+    const dice = combat[diceField];
+    if (!Array.isArray(dice) || !dice[index]) {
+      return { applied: false, manualMessage: '**Cheat to Win** — Gambit die no longer present. Resolve manually.' };
+    }
+    const color = (_ctwMarker.color || dice[index].color || '').toLowerCase();
+    const faces = getDiceData()?.[pool]?.[color] || [];
+    if (!faces.length) return { applied: false, manualMessage: `**Cheat to Win** — no face data for ${color} ${pool} die. Resolve manually.` };
+    // Build human-readable labels from the canonical face data (same color only).
+    const _ctwLabel = (f) => {
+      const parts = [];
+      if (pool === 'attack') {
+        if (f.dmg) parts.push(`${f.dmg} Hit${f.dmg !== 1 ? 's' : ''}`);
+        if (f.acc) parts.push(`${f.acc} Acc`);
+        if (f.surge) parts.push(`${f.surge} Surge`);
+      } else {
+        if (f.block) parts.push(`${f.block} Block`);
+        if (f.evade) parts.push(`${f.evade} Evade`);
+        if (f.dodge) parts.push('Dodge');
+      }
+      return parts.length ? parts.join(' + ') : 'Blank';
+    };
+    // Phase 2: chosen face index → write the chosen result into combat dice state.
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const fIdx = Number(choiceIndex);
+      const face = faces[fIdx];
+      if (!face) return { applied: false, manualMessage: '**Cheat to Win** — invalid face choice. Resolve manually.' };
+      const newDie = pool === 'attack'
+        ? { color, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0, faceIdx: fIdx }
+        : { color, block: face.block ?? 0, evade: face.evade ?? 0, dodge: !!face.dodge, faceIdx: fIdx };
+      dice[index] = newDie;
+      const totalsField = pool === 'attack' ? 'attackRoll' : 'defenseRoll';
+      combat[totalsField] = pool === 'attack' ? recalcAttackTotals(dice) : recalcDefenseTotals(dice);
+      return {
+        applied: true,
+        logMessage: `**Cheat to Win** — ${color} ${pool} die #${index + 1} changed to **${chosenOption || _ctwLabel(face)}**.`,
+        refreshCombat: true,
+      };
+    }
+    // Phase 1: offer only the faces of the rolled Gambit die's color.
+    const choiceOptions = faces.map((f, i) => `${color}: ${_ctwLabel(f)}`);
+    return { requiresChoice: true, choiceOptions };
   }
 
   // ccEffect: commDisruptionEffect (Comm Disruption) — cancel an opponent CC play (cost ≤ friendly SPY groups)

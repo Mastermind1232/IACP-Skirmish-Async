@@ -2835,8 +2835,8 @@
     },
     "Jump Jets": {
       "type": "ccEffect",
-      "label": "Place your figure in an empty space within 5 spaces (treat as 5 MP)",
-      "mpBonus": 5,
+      "label": "Place your figure in an empty space within 5 spaces",
+      "placeSelfWithin": 5,
       "wiredStatus": "wired"
     },
     "Jundland Terror": {
@@ -5468,7 +5468,8 @@
         "requiresLos": true
       },
       "pushLandingEffect": {
-        "mustAdjacentToActivator": true
+        "mustAdjacentToActivator": true,
+        "maxDistanceFromTarget": 3
       },
       "wiredStatus": "wired"
     },

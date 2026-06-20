@@ -47,7 +47,7 @@ const BATCH = [
   ['I Can Feel It',         ['chooseOne']],
   ['Improvised Weapons',    ['overrideAttackDice', 'overrideAttackType', 'freeAttackBonus', 'blockSurgeAbilities']],
   ['In the Shadows',        ['roundInTheShadowsPlayerNum']],
-  ['Jump Jets',             ['mpBonus']],
+  ['Jump Jets',             ['placeSelfWithin']],
   ['Karabast!',             ['karabastEffect']],
   ['Lightbow',              ['freeAttackBonus', 'overrideAttackDice', 'overrideAttackType', 'overrideBonusAccuracy', 'blockSurgeAbilities', 'bonusSurgeAbilities']],
   ['Lock On',               ['chooseOne']],

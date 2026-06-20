@@ -783,6 +783,9 @@ const ROUND_OBJECT_FLAGS = [
   'roundProgrammingOverrideTrait',
   'autofireActive',
   'fireMissionActive',
+  // Sniper Configuration: LOS-from-any-friendly per-figureKey flag (consumed at
+  // attack-declare; round reset is the backstop).
+  'sniperConfigLosAnyFriendly',
   'autofireChainTargetSpace',
   'darksaberSecondAttack',
   'saberOrbitAttacksRemaining',
@@ -843,6 +846,13 @@ const ROUND_NULL_FLAGS = [
   'agitateNextActivation',
   'forceVisionNextActivation',
   'forceVisionPending',
+  // I Make My Own Luck: "Han Solo must activate first THIS ROUND" — the
+  // activation-order constraint and its owning player clear at round end.
+  'firstActivationFigureName',
+  'firstActivationPlayerNum',
+  // Coordinated Attack: same-target lock pair (self-clears after the second
+  // attack; round reset is the backstop if only one attack is taken).
+  'coordinatedAttackPair',
   'stillFasterExcludeMsgId',
   'pendingStillFaster',
   'roundUtinniJawaBuffs',

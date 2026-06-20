@@ -68,5 +68,10 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
   // Record the most recent reroll so the gate can offer Tough Luck on it
   // (attack die → defender may react; defense die → attacker). alexanbv 2026-06-17.
   combat._lastRerolledDie = { pool, index };
+  // A color-swap reroll is Lando's Gambit (or Saska): record a DURABLE marker of
+  // the swapped die so Cheat to Win ("change THAT die's result to another result
+  // on that die") can identify and constrain to the Gambit die's color even after
+  // the transient _lastRerolledDie is cleared when the rerolls window drains.
+  if (newColor) combat._lastGambitDie = { pool, index, color };
   return { ok: true, newDie, totals };
 }

@@ -3287,6 +3287,22 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       delete game.focusFireActive[combat.attackerFigureKey];
     }
   }
+  // Coordinated Attack: the two granted free attacks must target the SAME figure
+  // (CSV row 587: "targeting the same figure"). The target isn't known until the
+  // first of the pair declares, so we capture it here at resolve-time and force
+  // the OTHER pair member onto the same defender. Mirrors Focus Fire's capture-
+  // then-force, but cross-figure (the partner, not the same attacker). Clears
+  // after locking so only the second attack is constrained.
+  if (game.coordinatedAttackPair && (game.coordinatedAttackPair.figA === combat.attackerFigureKey || game.coordinatedAttackPair.figB === combat.attackerFigureKey)) {
+    const _cap = game.coordinatedAttackPair;
+    const _capPartner = _cap.figA === combat.attackerFigureKey ? _cap.figB : _cap.figA;
+    if (_capPartner && combat.defenderFigureKey) {
+      game.forcedAttackTarget = game.forcedAttackTarget || {};
+      game.forcedAttackTarget[_capPartner] = combat.defenderFigureKey;
+      await thread.send(`**Coordinated Attack** — the second attack must target the **same figure**. Use the Attack button.`).catch(discordCatch);
+    }
+    delete game.coordinatedAttackPair;
+  }
   // Multi-Fire: after first attack, enforce different target + apply -1 Hit for second attack
   if (game.multiFireActive?.[combat.attackerFigureKey]) {
     const mf = game.multiFireActive[combat.attackerFigureKey];

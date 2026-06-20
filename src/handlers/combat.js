@@ -4291,6 +4291,11 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.fireMissionActive[attackerFigureKey]; // consumed
     await thread.send('**Fire Mission** — +Blast 1 applied to this attack.').catch(discordCatch);
   }
+  // Sniper Configuration: LOS-from-any-friendly is a one-attack effect — consume
+  // the flag once this attack is declared so it does not bleed into later attacks.
+  if (game.sniperConfigLosAnyFriendly?.[attackerFigureKey]) {
+    delete game.sniperConfigLosAnyFriendly[attackerFigureKey];
+  }
 
   // Spectre Cell (attacker) — MOVED to the mods window
   // (combat-abilities-mods.js 'spectre_cell_atk' passive).
@@ -7012,6 +7017,11 @@ export async function handleCombatReroll(interaction, ctx) {
     if (_ds >= _dd && _ds >= _da) return 'surge';
     return 'acc';
   };
+  // Double or Nothing (CSV row 625) compares the TOTAL NUMBER OF SYMBOLS on the
+  // die before vs after the reroll — NOT the dominant icon type. A symbol is any
+  // damage/surge/accuracy pip (attack) or block/evade/dodge pip (defense).
+  const _attackSymbolCount = (d) => (d ? (d.dmg || 0) + (d.surge || 0) + (d.acc || 0) : 0);
+  const _defenseSymbolCount = (d) => (d ? (d.block || 0) + (d.evade || 0) + (d.dodge ? (typeof d.dodge === 'number' ? d.dodge : 1) : 0) : 0);
 
   // --- Sub-picker for an attacker/defender bucket controlled ability ---
   // (Modern path: user clicked "Use {ability}", now picking a pool die.)
@@ -7212,17 +7222,37 @@ export async function handleCombatReroll(interaction, ctx) {
         // G12: mark this die index as rerolled
         combat.attackerRerolledIndices = [..._atkAlreadyRerolled, idx];
         await thread.send(`**Rerolled** attack ${oldDie.color} #${idx + 1}: ${oldDie.acc}a/${oldDie.dmg}d/${oldDie.surge}s → **${newDie.acc}a/${newDie.dmg}d/${newDie.surge}s** | New totals: ${totals.acc} acc, ${totals.dmg} dmg, ${totals.surge} surge`);
-        // Double or Nothing: if DON flag is set for attack side, check dominant icon match
+        // Double or Nothing (CSV row 625): "if the rerolled result has the same
+        // NUMBER OF SYMBOLS as the original, you MAY DOUBLE OR CANCEL its results."
+        // Symbol-count comparison (not dominant-icon); applies to the WHOLE die.
         if (game.doubleMatchingIconsOnReroll?.side === 'atk' && !combat.doubleOrNothingApplied) {
-          const _domOld = _getDomIcon(oldDie);
-          const _domNew = _getDomIcon(newDie);
-          if (_domOld && _domOld === _domNew) {
-            dice[idx][_domNew] = (newDie[_domNew] || 0) * 2;
-            const t2 = recalcAttackTotals(dice);
-            combat.attackRoll = { acc: t2.acc, dmg: t2.dmg, surge: t2.surge };
-            await thread.send(`**Double or Nothing** — Dominant icon matched (${_domNew})! Doubled to ${dice[idx][_domNew]}. New totals: ${t2.acc} acc, ${t2.dmg} dmg, ${t2.surge} surge.`);
+          const _symOld = _attackSymbolCount(oldDie);
+          const _symNew = _attackSymbolCount(newDie);
+          if (_symNew === _symOld && _symNew > 0) {
+            // DON-PARTIAL (alexanbv 2026-06-20): the "you MAY double OR CANCEL"
+            // OPT-IN + the CANCEL branch require an interactive post-reroll choice
+            // (Double / Cancel / Decline) routed to the CC's CONTROLLER — who may
+            // differ from the rerolling side. That is new combat-reroll-window
+            // prompt infrastructure (a modsub state machine spanning the gate),
+            // deferred here to keep the core reroll path safe. Default action:
+            // DOUBLE (the historical behavior, the more common pick). The mode can
+            // be overridden to 'cancel' via game.doubleMatchingIconsOnReroll.mode.
+            const _donMode = game.doubleMatchingIconsOnReroll?.mode === 'cancel' ? 'cancel' : 'double';
+            if (_donMode === 'cancel') {
+              dice[idx].dmg = 0; dice[idx].surge = 0; dice[idx].acc = 0;
+              const t2 = recalcAttackTotals(dice);
+              combat.attackRoll = { acc: t2.acc, dmg: t2.dmg, surge: t2.surge };
+              await thread.send(`**Double or Nothing** — Same number of symbols (${_symNew}). **Cancelled** the die's results. New totals: ${t2.acc} acc, ${t2.dmg} dmg, ${t2.surge} surge.`);
+            } else {
+              dice[idx].dmg = (newDie.dmg || 0) * 2;
+              dice[idx].surge = (newDie.surge || 0) * 2;
+              dice[idx].acc = (newDie.acc || 0) * 2;
+              const t2 = recalcAttackTotals(dice);
+              combat.attackRoll = { acc: t2.acc, dmg: t2.dmg, surge: t2.surge };
+              await thread.send(`**Double or Nothing** — Same number of symbols (${_symNew}). **Doubled** the die's results. New totals: ${t2.acc} acc, ${t2.dmg} dmg, ${t2.surge} surge.`);
+            }
           } else {
-            await thread.send(`**Double or Nothing** — Icon changed (${_domOld ?? 'blank'} → ${_domNew ?? 'blank'}). No doubling.`);
+            await thread.send(`**Double or Nothing** — Symbol count changed (${_symOld} → ${_symNew}). No double/cancel.`);
           }
           combat.doubleOrNothingApplied = true;
           game.doubleMatchingIconsOnReroll = null;
@@ -7269,18 +7299,31 @@ export async function handleCombatReroll(interaction, ctx) {
         combat.defenderRerolledOrModified = true; // Track for Quick Strike (Electrostaff loadout)
         const dodgeTag = newDie.dodge ? '/DODGE' : '';
         await thread.send(`**Rerolled** defense ${oldDie.color} #${idx + 1}: ${oldDie.block}b/${oldDie.evade}e${oldDie.dodge ? '/dodge' : ''} → **${newDie.block}b/${newDie.evade}e${dodgeTag}** | New totals: ${totals.block} block, ${totals.evade} evade${totals.dodge ? ' DODGE' : ''}`);
-        // Double or Nothing: if DON flag is set for defense side, check dominant icon match
+        // Double or Nothing (CSV row 625): symbol-count comparison over the WHOLE
+        // defense die; "you MAY double OR cancel its results." See the attacker-
+        // side DON-PARTIAL note: the interactive opt-in + the controller-driven
+        // Double/Cancel choice are deferred; default action is DOUBLE (override to
+        // 'cancel' via game.doubleMatchingIconsOnReroll.mode).
         if (game.doubleMatchingIconsOnReroll?.side === 'def' && !combat.doubleOrNothingApplied) {
-          const _domOldD = _getDomIcon({ dmg: oldDie.block, surge: oldDie.evade, acc: oldDie.dodge ? 1 : 0 });
-          const _domNewD = _getDomIcon({ dmg: newDie.block, surge: newDie.evade, acc: newDie.dodge ? 1 : 0 });
-          if (_domOldD && _domOldD === _domNewD) {
-            if (_domNewD === 'dmg') { dice[idx].block = (newDie.block || 0) * 2; }
-            else if (_domNewD === 'surge') { dice[idx].evade = (newDie.evade || 0) * 2; }
-            const t2d = recalcDefenseTotals(dice);
-            combat.defenseRoll = { block: t2d.block, evade: t2d.evade, dodge: t2d.dodge };
-            await thread.send(`**Double or Nothing** — Dominant defense icon matched (${_domNewD === 'dmg' ? 'Block' : 'Evade'})! Doubled. New totals: ${t2d.block} block, ${t2d.evade} evade.`);
+          const _symOldD = _defenseSymbolCount(oldDie);
+          const _symNewD = _defenseSymbolCount(newDie);
+          if (_symNewD === _symOldD && _symNewD > 0) {
+            const _donModeD = game.doubleMatchingIconsOnReroll?.mode === 'cancel' ? 'cancel' : 'double';
+            if (_donModeD === 'cancel') {
+              dice[idx].block = 0; dice[idx].evade = 0; dice[idx].dodge = false;
+              const t2d = recalcDefenseTotals(dice);
+              combat.defenseRoll = { block: t2d.block, evade: t2d.evade, dodge: t2d.dodge };
+              await thread.send(`**Double or Nothing** — Same number of symbols (${_symNewD}). **Cancelled** the die's results. New totals: ${t2d.block} block, ${t2d.evade} evade.`);
+            } else {
+              dice[idx].block = (newDie.block || 0) * 2;
+              dice[idx].evade = (newDie.evade || 0) * 2;
+              if (newDie.dodge) dice[idx].dodge = (typeof newDie.dodge === 'number' ? newDie.dodge : 1) * 2;
+              const t2d = recalcDefenseTotals(dice);
+              combat.defenseRoll = { block: t2d.block, evade: t2d.evade, dodge: t2d.dodge };
+              await thread.send(`**Double or Nothing** — Same number of symbols (${_symNewD}). **Doubled** the die's results. New totals: ${t2d.block} block, ${t2d.evade} evade${t2d.dodge ? ' DODGE' : ''}.`);
+            }
           } else {
-            await thread.send(`**Double or Nothing** — Icon changed. No doubling.`);
+            await thread.send(`**Double or Nothing** — Symbol count changed (${_symOldD} → ${_symNewD}). No double/cancel.`);
           }
           combat.doubleOrNothingApplied = true;
           game.doubleMatchingIconsOnReroll = null;

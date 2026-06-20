@@ -164,6 +164,49 @@ export async function handleDcActivate(interaction, ctx) {
       game.forceVisionNextActivation = null;
     }
   }
+  // I Make My Own Luck (Han Solo): "Han Solo must activate first this round".
+  // The named figure's group must be the player's FIRST activation this round.
+  // Modeled on Force Vision above: refuse clicks on any other group while the
+  // named group is still alive and has not yet activated; clear the flag once
+  // the named group activates, is defeated, or has already activated. Matches
+  // the figure name by prefix so DC-name bracket suffixes (e.g. "Han Solo
+  // [Scoundrel]") still resolve.
+  if (game.firstActivationFigureName && game.firstActivationPlayerNum === playerNum) {
+    const _imlName = game.firstActivationFigureName;
+    // Match a DC name to the named figure, tolerating bracket suffixes
+    // (e.g. "Han Solo [Scoundrel]"). The name is dynamic game state, not a
+    // hardcoded DC string.
+    const _imlNameMatch = (nm) => {
+      const s = String(nm || '');
+      return s === _imlName || s.indexOf(_imlName + ' ') === 0;
+    };
+    const _imlMatchesClicked = _imlNameMatch(dcName);
+    if (!_imlMatchesClicked) {
+      const _imlActivatedKey = `p${playerNum}ActivatedDcIndices`;
+      const _imlActivated = game[_imlActivatedKey] || [];
+      const _imlForcedIdx = dcList.findIndex((d) => _imlNameMatch(d.dcName));
+      if (_imlForcedIdx >= 0 && !_imlActivated.includes(_imlForcedIdx)) {
+        // Forced group still ready — is it alive on the board?
+        const _imlFigs = game.figurePositions?.[playerNum] || {};
+        const _imlAlive = Object.entries(_imlFigs).some(([fk, pos]) => fk.startsWith(_imlName + '-') && pos);
+        if (_imlAlive) {
+          await interaction.followUp({ content: `🍀 **I Make My Own Luck** — **${_imlName}** must activate first this round.`, ephemeral: true }).catch(discordCatch);
+          return;
+        }
+        // Named group defeated — restriction discharged.
+        game.firstActivationFigureName = null;
+        game.firstActivationPlayerNum = null;
+      } else {
+        // Already activated or not found — clear.
+        game.firstActivationFigureName = null;
+        game.firstActivationPlayerNum = null;
+      }
+    } else {
+      // Player is activating the named group — restriction satisfied.
+      game.firstActivationFigureName = null;
+      game.firstActivationPlayerNum = null;
+    }
+  }
   // Force Slow: per destruct 2026-05-07, "next activation opportunity" means
   // the player's NEXT activation click cannot land on the chosen DC. The
   // restriction is satisfied as soon as the player clicks any OTHER group:
@@ -1244,6 +1287,21 @@ async function buildAndSendAttackTargets(
         for (const oac of otherFpCells) {
           for (const tc of cells) {
             if (hasLineOfSight(oac, tc, effectiveMs, losCoords)) { los = true; break outer2; }
+          }
+        }
+      }
+    }
+    // Sniper Configuration: "draw line of sight from any FRIENDLY figure" (range
+    // still measured from the attacker — dist is unchanged). Mirrors Fire Mission
+    // above, but iterates ALL friendly figures, not just the acting group.
+    if (!los && game.sniperConfigLosAnyFriendly?.[figureKey]) {
+      scOuter: for (const [otherFk, otherPos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+        if (!otherPos || otherFk === figureKey) continue;
+        const otherSize = game.figureOrientations?.[otherFk] || getFigureSize(dcNameFromFigureKey(otherFk));
+        const otherFpCells = getFootprintCells(otherPos, otherSize);
+        for (const oac of otherFpCells) {
+          for (const tc of cells) {
+            if (hasLineOfSight(oac, tc, effectiveMs, losCoords)) { los = true; break scOuter; }
           }
         }
       }
