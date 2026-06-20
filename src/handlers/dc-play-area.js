@@ -2033,8 +2033,19 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const _suFigIdx = actionsData?.selectedFigure ?? 0;
     const _suByFig = actionsData?.specialsUsedByFig?.[_suFigIdx] ?? [];
     if (_suByFig.includes(specialIdx)) {
-      await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(discordCatch);
-      return;
+      // Single Purpose (ccEffect activationDoubleSpecialAction): the activating
+      // figure may use the SAME special action up to twice this activation.
+      // Allow a second use if the grant is set for this figure and this special
+      // has been used only once so far, then consume the grant (one special
+      // may be doubled per activation). A third use is still rejected.
+      const _spDouble = game.activationDoubleSpecialAction?.[_curActFigKey];
+      const _spUsedCount = _suByFig.filter((x) => x === specialIdx).length;
+      if (_spDouble && _spUsedCount < 2) {
+        game.activationDoubleSpecialAction[_curActFigKey] = false;
+      } else {
+        await interaction.followUp({ content: "That special has already been used this activation (each special once per activation unless a card says otherwise).", ephemeral: true }).catch(discordCatch);
+        return;
+      }
     }
     // Disable: cannot use Special Actions this round
     const dispNameForDisable = meta.displayName || meta.dcName;

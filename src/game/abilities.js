@@ -3665,7 +3665,11 @@ export function resolveAbility(abilityId, context) {
   }
 
   // dcSpecial: freeMoveBonus standalone (I'm One With the Force, Executor, etc.) — Move-X picker; optionally also grant free attack
-  if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits) {
+  // NOTE: recover+move combos (Evasive Maneuver: recoverSelf:2 + freeMoveBonus:2)
+  // are handled by the purpose-built recoverSelf block below, which stamps the
+  // Move-X picker AND applies the heal — so exclude recoverSelf here, else the
+  // 'then recover N Damage' half is silently dropped (alexanbv audit Jun 2026).
+  if (entry.type === 'dcSpecial' && typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.nextAttacksBonusHits && !(entry.recoverSelf > 0)) {
     const { game, msgId, meta, playerNum } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     // Resolve the active figure key for the picker (selectedFigure
