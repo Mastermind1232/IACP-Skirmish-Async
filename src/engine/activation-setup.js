@@ -580,6 +580,30 @@ export async function finalizeActivation({
     }
   }
 
+  // C1b. Overcharged Weapons (CC): same timing as Hair Trigger — at the start
+  // of a hostile figure's activation, the holder may interrupt to perform an
+  // attack with one of their Readied VEHICLE figures targeting the activating
+  // figure (+Pierce 2, then exhaust that DC + become Weakened). Per alexanbv:
+  // "Overcharged Weapons has the same timing as Jyn Hair Trigger." This is a
+  // CC played from hand, so we only stash the activating-figure context here;
+  // the cc-timing gate (whenEnemyFigureActivates) surfaces the card in the
+  // holder's hand and the overchargedWeaponsEffect resolver reads this stash.
+  {
+    const _owHolderPN = opponentPlayerNum(playerNum);
+    const _owHand = getCcHand(game, _owHolderPN) || [];
+    if (_owHand.includes('Overcharged Weapons')) {
+      const _owActDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+      const _owActFk = `${dcName}-${_owActDgIdx}-${figureIndex}`;
+      if (game.figurePositions?.[playerNum]?.[_owActFk]) {
+        game.pendingOverchargedWeapons = {
+          holderPlayerNum: _owHolderPN,
+          activatingPlayerNum: playerNum,
+          activatingFigureKey: _owActFk,
+        };
+      }
+    }
+  }
+
   // C2. Swipe (Salacious B. Crumb): activation in shared space deals 1 Damage
   if (dcName === 'Salacious B. Crumb') {
     const _swDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';

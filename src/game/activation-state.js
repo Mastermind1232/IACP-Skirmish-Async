@@ -354,6 +354,17 @@ const ACTIVATION_SCALAR_FLAGS = [
   'pendingStaticPulse',
   'pendingForceCardPick',
   'yhsiwOptions',
+  // Overcharged Weapons (CC): activating-hostile context stashed at the
+  // start of a hostile activation (activation-setup.js). The
+  // overchargedWeaponsEffect resolver reads it to resolve the forced
+  // target. Cleared at activation end so it never leaks to a later one.
+  'pendingOverchargedWeapons',
+  // Parting Blow (CC): reacting-BRAWLER + exiting-hostile context stashed by
+  // the move-interrupt posting paths (movement.js / move-interrupts-handler.js)
+  // so the partingBlowEffect resolver targets correctly during the opponent's
+  // move. Wiped at activation end (and at each new Move action, alongside
+  // partingShotTriggered).
+  'pendingPartingBlow',
 ];
 
 /**

@@ -119,6 +119,16 @@ async function postNextMoveInterruptPrompt(game, ctx) {
   }
   const op = pending.opportunities[pending.opIndex];
   const cardName = INTERRUPT_CARD_BY_TYPE[op.type];
+  // Parting Blow: stash reacting BRAWLER + exiting hostile so the
+  // partingBlowEffect resolver targets correctly when the card is played
+  // from hand during the opponent's move.
+  if (op.type === 'PB') {
+    game.pendingPartingBlow = {
+      brawlerFigureKey: op.triggerFigureKey,
+      brawlerPlayerNum: op.triggerPlayerNum,
+      exitingHostileFigureKey: pending.mover.figureKey,
+    };
+  }
   const triggerLabel = TRIGGER_LABEL_BY_TYPE[op.type] || op.type;
   const oppPN = op.triggerPlayerNum;
   const ownerId = game[`player${oppPN}Id`];

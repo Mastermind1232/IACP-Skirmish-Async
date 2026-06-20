@@ -2068,6 +2068,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     const isSpendMp = action === 'SpendMp';
     // G36: Parting Blow / Parting Shot — reset once-per-move flag at the start of each new Move action
     if (!isSpendMp && game.partingShotTriggered) game.partingShotTriggered = {};
+    // Stale Parting Blow stash is for a prior move's exit window — clear it so a
+    // new move re-stashes fresh adjacency context.
+    if (!isSpendMp && game.pendingPartingBlow) delete game.pendingPartingBlow;
     try {
       const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;

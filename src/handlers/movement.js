@@ -1538,6 +1538,17 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
           allowedMentions: { users: oppId ? [oppId] : [] },
         }).catch(discordCatch);
       } else {
+        // Parting Blow: stash the reacting BRAWLER + exiting hostile so the
+        // partingBlowEffect resolver can target correctly during the
+        // opponent's move (findActiveActivationMsgId(holder) is null then).
+        // candidateFigureKey is the holder's BRAWLER; figureKey is the mover.
+        if (trigger.type === 'partingBlow') {
+          game.pendingPartingBlow = {
+            brawlerFigureKey: trigger.candidateFigureKey,
+            brawlerPlayerNum: trigger.candidatePlayerNum,
+            exitingHostileFigureKey: figureKey,
+          };
+        }
         const triggerBtns = new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId(`mvint_play_${game.gameId}_${trigger.type}_${trigger.candidateFigureKey}`)

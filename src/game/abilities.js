@@ -12219,58 +12219,147 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**Payback** — **${meta?.dcName || 'Dengar'}** may perform 1 free attack against the attacker. +2 Surge applied to that attack.` };
   }
 
-  // ccEffect: overchargedWeaponsEffect (Overcharged Weapons) — interrupt: free attack with Pierce 2 + exhaust + Weaken self
+  // ccEffect: overchargedWeaponsEffect (Overcharged Weapons) — interrupt at the
+  // START OF A HOSTILE ACTIVATION (same timing as Jyn "Hair Trigger", per
+  // alexanbv). The holder picks one of their Readied VEHICLE figures to perform
+  // a free attack targeting the activating hostile (forced target); that attack
+  // gains Pierce 2; then the chosen VEHICLE's DC is exhausted and that figure
+  // becomes Weakened.
+  //
+  // Reacting-figure resolution does NOT use findActiveActivationMsgId(holder)
+  // (null on the opponent's turn). Instead the activating hostile is read from
+  // game.pendingOverchargedWeapons (stashed in activation-setup.js), and the
+  // reacting VEHICLE is the holder's own choice among readied VEHICLE figures.
+  // The declare-attack is surfaced via result.grantedAttackButtonStandalone
+  // (posts to the game-log channel — works when it is NOT the holder's turn).
   if (entry.type === 'ccEffect' && entry.overchargedWeaponsEffect) {
-    const { game, playerNum, dcMessageMeta, dcExhaustedState } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
-    const meta = dcMessageMeta.get(msgId);
-    // Grant free attack with Pierce 2
+    const _owPending = game.pendingOverchargedWeapons;
+    const _owTargetFk = _owPending?.activatingFigureKey;
+    const _owTargetPN = _owPending?.activatingPlayerNum;
+    if (!_owTargetFk || !_owTargetPN || !game.figurePositions?.[_owTargetPN]?.[_owTargetFk]) {
+      return { applied: false, manualMessage: 'Overcharged Weapons: no activating hostile figure to target right now. Play it at the start of a hostile figure\'s activation.' };
+    }
+    // Enumerate the holder's READIED VEHICLE figures (a VEHICLE whose DC is not
+    // exhausted). The attacking VEHICLE must be readied (the card exhausts it).
+    const _owEff = getDcEffects() || {};
+    const _owPositions = game.figurePositions?.[playerNum] || {};
+    const _owCandidates = [];
+    for (const fk of Object.keys(_owPositions)) {
+      if (!_owPositions[fk]) continue;
+      const _dcN = dcNameFromFigureKey(fk);
+      const _kws = (_owEff[_dcN]?.keywords || []).map((k) => String(k).toUpperCase());
+      if (!_kws.includes('VEHICLE')) continue;
+      const _mid = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+      if (!_mid) continue;
+      // Readied = not already exhausted (round-activation OR ability-exhaust).
+      if ((game.abilityExhaustedMsgIds || []).includes(_mid)) continue;
+      _owCandidates.push({ figureKey: fk, dcName: _dcN, msgId: _mid });
+    }
+    if (_owCandidates.length === 0) {
+      return { applied: false, manualMessage: 'Overcharged Weapons requires a Readied VEHICLE figure. None available.' };
+    }
+    // If the holder has more than one eligible VEHICLE and hasn't picked yet,
+    // surface a picker (requiresChoice → choiceValues = figure keys).
+    let _owChosen = null;
+    if (chosenFigureKey) {
+      _owChosen = _owCandidates.find((c) => c.figureKey === chosenFigureKey) || null;
+      if (!_owChosen) return { applied: false, manualMessage: 'That figure is not an eligible Readied VEHICLE.' };
+    } else if (_owCandidates.length === 1) {
+      _owChosen = _owCandidates[0];
+    } else {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: _owCandidates.map((c) => c.dcName),
+        choiceValues: _owCandidates.map((c) => c.figureKey),
+      };
+    }
+    const _owFk = _owChosen.figureKey;
+    const _owMsgId = _owChosen.msgId;
+    // Grant free attack, force the target to the activating hostile, +Pierce 2.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    const _ocwFk = figureKeyForActivation(game, msgId);
-    if (_ocwFk) {
-      game.freeAttackBonusPending[_ocwFk] = true;
-      // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
-      game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-      game.pendingOverrideAttackDice[_ocwFk] = { ...(game.pendingOverrideAttackDice[_ocwFk] || {}), pierce: (game.pendingOverrideAttackDice[_ocwFk]?.pierce || 0) + 2 };
-    }
-    // Apply Weaken to activating figure (respects immunity)
-    const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    actKeys.forEach((fk) => { if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Weaken'); });
-    // Exhaust the DC card (persist for restart survival)
-    if (dcExhaustedState) dcExhaustedState.set(msgId, true);
-    if (game) {
-      game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
-      if (!game.abilityExhaustedMsgIds.includes(msgId)) game.abilityExhaustedMsgIds.push(msgId);
-    }
-    return { applied: true, logMessage: `**Overcharged Weapons** — **${meta?.dcName || 'VEHICLE'}** gains 1 free attack (+Pierce 2). ${meta?.dcName || 'Vehicle'} is exhausted and Weakened.` };
+    game.freeAttackBonusPending[_owFk] = true;
+    game.forcedAttackTarget = game.forcedAttackTarget || {};
+    game.forcedAttackTarget[_owFk] = _owTargetFk;
+    // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
+    game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
+    game.pendingOverrideAttackDice[_owFk] = { ...(game.pendingOverrideAttackDice[_owFk] || {}), pierce: (game.pendingOverrideAttackDice[_owFk]?.pierce || 0) + 2 };
+    // Exhaust the chosen VEHICLE's DC (persist for restart survival).
+    game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+    if (!game.abilityExhaustedMsgIds.includes(_owMsgId)) game.abilityExhaustedMsgIds.push(_owMsgId);
+    // Weaken the attacking figure (respects immunity).
+    if (!isConditionImmune(game, _owFk)) applyCondition(game, _owFk, 'Weaken');
+    const _owTgtName = dcNameFromFigureKey(_owTargetFk);
+    return {
+      applied: true,
+      grantedAttackButtonStandalone: {
+        granteeMsgId: _owMsgId,
+        granteeFigureKey: _owFk,
+        granteeName: _owChosen.dcName,
+        granteePlayerNum: playerNum,
+        sourceLabel: 'Overcharged Weapons',
+      },
+      logMessage: `**Overcharged Weapons** — **${_owChosen.dcName}** interrupts to perform a free attack (+Pierce 2) targeting **${_owTgtName}**. ${_owChosen.dcName}'s Deployment card is exhausted and it becomes Weakened.`,
+    };
   }
 
-  // ccEffect: partingBlowEffect (Parting Blow) — interrupt: free attack on hostile exiting adjacent + become Stunned (once per move)
+  // ccEffect: partingBlowEffect (Parting Blow) — interrupt when a hostile
+  // figure EXITS a space adjacent to the holder's BRAWLER. Per alexanbv:
+  // "Parting Blow is played during opponent's move." Before the hostile
+  // finishes moving, the BRAWLER performs a free attack targeting the exiting
+  // hostile; then the BRAWLER becomes Stunned.
+  //
+  // The reacting figure is the holder's BRAWLER (NOT findActiveActivationMsgId,
+  // which is null during the opponent's move). Both move-interrupt posting
+  // paths stash game.pendingPartingBlow = { brawlerFigureKey, brawlerPlayerNum,
+  // exitingHostileFigureKey } when the opportunity is offered; this resolver
+  // reads it, arms the free attack + forced target on the BRAWLER, and surfaces
+  // the declare-attack via grantedAttackButtonStandalone.
   if (entry.type === 'ccEffect' && entry.partingBlowEffect) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
-    // Once per move: check if already used this move
+    const _pbPending = game.pendingPartingBlow;
+    const _pbBrawlerFk = _pbPending?.brawlerFigureKey;
+    const _pbTargetFk = _pbPending?.exitingHostileFigureKey;
+    if (!_pbBrawlerFk || !game.figurePositions?.[playerNum]?.[_pbBrawlerFk]) {
+      return { applied: false, manualMessage: 'Parting Blow: no adjacent BRAWLER reaction available. Play it when a hostile exits a space adjacent to your BRAWLER.' };
+    }
+    if (!_pbTargetFk || (!game.figurePositions?.[1]?.[_pbTargetFk] && !game.figurePositions?.[2]?.[_pbTargetFk])) {
+      return { applied: false, manualMessage: 'Parting Blow: the exiting hostile figure is no longer on the board.' };
+    }
+    // Once per move guard, keyed by the BRAWLER's DC msgId.
+    const _pbMsgId = findMsgIdForFigureKey(game, playerNum, _pbBrawlerFk, dcMessageMeta);
     game.partingShotTriggered = game.partingShotTriggered || {};
-    if (game.partingShotTriggered[msgId]) {
+    if (_pbMsgId && game.partingShotTriggered[_pbMsgId]) {
       return { applied: false, manualMessage: 'Parting Blow already used this move.' };
     }
-    const meta = dcMessageMeta.get(msgId);
-    // Grant free attack
+    // Arm the free attack + force the target to the exiting hostile.
     game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    const _pbFk = figureKeyForActivation(game, msgId);
-    if (_pbFk) game.freeAttackBonusPending[_pbFk] = true;
-    // Mark as used this move (cleared when a new Move action starts — G36)
-    game.partingShotTriggered[msgId] = true;
-    // Apply Stun to activating figure (respects immunity)
-    const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    const _pbImmune = actKeys.length > 0 && actKeys.every(fk => isConditionImmune(game, fk));
-    if (!_pbImmune) actKeys.forEach((fk) => { if (!isConditionImmune(game, fk)) applyCondition(game, fk, 'Stun'); });
+    game.freeAttackBonusPending[_pbBrawlerFk] = true;
+    game.forcedAttackTarget = game.forcedAttackTarget || {};
+    game.forcedAttackTarget[_pbBrawlerFk] = _pbTargetFk;
+    if (_pbMsgId) game.partingShotTriggered[_pbMsgId] = true;
+    // The BRAWLER becomes Stunned (respects immunity).
+    const _pbBrawlerName = dcNameFromFigureKey(_pbBrawlerFk);
+    const _pbImmune = isConditionImmune(game, _pbBrawlerFk);
+    if (!_pbImmune) applyCondition(game, _pbBrawlerFk, 'Stun');
+    const _pbTgtName = dcNameFromFigureKey(_pbTargetFk);
     const stunNote = _pbImmune ? ' (immune to Stun)' : ' becomes Stunned';
-    return { applied: true, logMessage: `**Parting Blow** — **${meta?.dcName || 'BRAWLER'}** gains 1 free attack before the hostile finishes exiting. ${meta?.dcName || 'Figure'}${stunNote}.` };
+    return {
+      applied: true,
+      ...(_pbMsgId ? {
+        grantedAttackButtonStandalone: {
+          granteeMsgId: _pbMsgId,
+          granteeFigureKey: _pbBrawlerFk,
+          granteeName: _pbBrawlerName,
+          granteePlayerNum: playerNum,
+          sourceLabel: 'Parting Blow',
+        },
+      } : {}),
+      logMessage: `**Parting Blow** — **${_pbBrawlerName}** interrupts to perform a free attack targeting the exiting **${_pbTgtName}**${_pbMsgId ? '' : ' (use the Attack button on the DC card)'}. ${_pbBrawlerName}${stunNote}.`,
+    };
   }
 
   // ccEffect: chooseASideEffect (Choose a Side) — SCUM: round defense block +1 for Mobile friendlies; IMPERIAL: free flamethrower-style attack

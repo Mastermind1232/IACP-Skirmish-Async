@@ -359,6 +359,44 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // Standalone granted-attack button: like grantedAttackButton, but posted to
+  // the GAME-LOG channel (not the source's activation thread). Used by
+  // opponent-turn interrupt CCs (Overcharged Weapons, Parting Blow) where the
+  // holder has NO active activation thread — there is no game.dcActionsData
+  // entry for the grantee. The figure-level free-attack flags
+  // (freeAttackBonusPending / forcedAttackTarget / pendingOverrideAttackDice)
+  // are already armed by the resolver; clicking the button rewrites to
+  // dc_attack_ via handleGrantedAttack and combat.js consumes those flags.
+  if (result.applied && result.grantedAttackButtonStandalone) {
+    const sa = result.grantedAttackButtonStandalone;
+    if (sa.granteeMsgId && sa.granteeFigureKey) {
+      try {
+        const _saModule = await import('discord.js');
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = _saModule;
+        const _saFkMatch = String(sa.granteeFigureKey).match(/-(\d+)-(\d+)$/);
+        const _saFigIdx = _saFkMatch ? _saFkMatch[2] : '0';
+        const _saBtn = new ButtonBuilder()
+          .setCustomId(`granted_attack_${game.gameId}_${sa.granteeMsgId}_f${_saFigIdx}`)
+          .setLabel(`Declare Attack (${sa.granteeName || 'grantee'})`)
+          .setStyle(ButtonStyle.Danger);
+        const _saRow = new ActionRowBuilder().addComponents(_saBtn);
+        const { getPlayerId } = await import('../game/player-helpers.js');
+        const _saOwnerId = sa.granteePlayerNum ? getPlayerId(game, sa.granteePlayerNum) : null;
+        if (logGameAction) {
+          await logGameAction(game, client, enforceContentLimit(
+            `${_saOwnerId ? `<@${_saOwnerId}> ` : ''}\u{2694}\u{FE0F} **${sa.sourceLabel || 'Granted Attack'}** — click below to declare the free attack with **${sa.granteeName || 'the grantee'}**. A new combat thread will open.`
+          ), {
+            phase: 'ROUND', icon: 'attack',
+            components: [_saRow],
+            ...(_saOwnerId ? { allowedMentions: { users: [_saOwnerId] } } : {}),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to post standalone granted-attack button:', err);
+      }
+    }
+  }
+
   // Granted Move-X button: companion to grantedAttackButton for cards
   // (Executive Order, etc.) that also offer the grantee a free move.
   // Posts in the source's activation thread alongside the attack

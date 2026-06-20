@@ -306,8 +306,13 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // that fire when the trigger occurs. Returning false here keeps them out of the hand dropdown.
       return false;
     case 'whenenemyfigureactivates':
-      // Overcharged Weapons: playable during your activation (play when hostile activates)
-      return ctx.duringActivation;
+      // Overcharged Weapons: interrupt at the start of a hostile figure's
+      // activation (same timing as Jyn "Hair Trigger", per alexanbv). Playable
+      // during the opponent's turn whenever a hostile activation has stashed
+      // the targeting context for THIS holder (game.pendingOverchargedWeapons),
+      // or during the holder's own activation (defensive fallback).
+      if (ctx.duringActivation) return true;
+      return ctx.duringRound && game?.pendingOverchargedWeapons?.holderPlayerNum === playerNum;
     case 'whenfigurewithin3spacesdefending':
       // Protect the Old Ways: playable during an attack (play when figure within 3 defends)
       return ctx.duringAttack;
@@ -315,8 +320,18 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // There Is No Try: playable during an attack (play when REBEL FORCE USER rolls dice)
       return ctx.duringAttack;
     case 'whenhostilefigureexitsadjacentspace':
-      // Parting Blow: playable during your activation (play when hostile exits adjacent space)
-      return ctx.duringActivation;
+      // Parting Blow: interrupt during the OPPONENT's move when a hostile exits
+      // a space adjacent to the holder's BRAWLER (alexanbv: "Parting Blow is
+      // played during opponent's move"). Playable when a move-interrupt posting
+      // path has stashed the reacting BRAWLER context for THIS holder, or during
+      // the holder's own activation (defensive fallback).
+      if (ctx.duringActivation) return true;
+      if (game?.pendingPartingBlow?.brawlerPlayerNum === playerNum) return true;
+      {
+        const ops = game?.pendingMoveInterrupts?.opportunities;
+        if (Array.isArray(ops) && ops.some((o) => o.type === 'PB' && o.triggerPlayerNum === playerNum)) return true;
+      }
+      return false;
     case 'whenyoudeclareattacktargetinghostilewithhighestfigurecost':
       // Primary Target: playable while attacking (as attacker, targeting highest-cost hostile)
       return ctx.duringAttack && ctx.isAttacker;
