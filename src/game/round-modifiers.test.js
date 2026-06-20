@@ -187,23 +187,31 @@ test('Cavalry Charge (integration): +1 Hit reaches a TROOPER within 3, nothing t
   assert.strictEqual(hitFor('Jet Trooper (Regular)-1-0'), 1, 'TROOPER at dist 3 gets +1 Hit');
   assert.strictEqual(hitFor('Greedo-1-0'), 0, 'non-TROOPER gets nothing');
 
-  // Cavalry Charge also grants army-wide +1 Block defense.
+  // Cavalry Charge's "+1 Block when defending" is FIGURE-SCOPED to the playing
+  // figure (alexanbv 2026-06-20: "'you' = ONLY the figure that played the
+  // card"). The anchor resolves to the named unique figure (Captain Terro) via
+  // resolveUniqueFigureCcFigureKey when there's no activation, but in this
+  // integration the activating figure (Gar Saxon) is the anchor.
   const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
-  assert.strictEqual(blockFor('Greedo-1-0'), 1, 'army-wide +1 Block when defending');
+  assert.strictEqual(blockFor('Gar Saxon-1-0'), 1, 'playing figure gets +1 Block when defending');
+  assert.strictEqual(blockFor('Greedo-1-0'), 0, 'a different friendly figure gets NO Block (figure-scoped)');
 });
 
 test('EOR-stage attack: until-eor bonus is GONE, during-round bonus still applies per-figure', () => {
   const game = integrationGame('g-eor-int');
-  // Survival Instincts (until-eor, defense +1 Block/+1 Evade, army-wide).
+  // Survival Instincts (until-eor, defense +1 Block/+1 Evade, FIGURE-SCOPED to
+  // the playing figure Greedo). We register figure positions so Greedo is the
+  // resolvable anchor for both cards.
+  game.figurePositions[1] = { 'Greedo-1-0': 'm17' };
   const siMsg = 'm-si';
   game.dcActionsData[siMsg] = { selectedFigure: 0 };
   const siMeta = new Map([[siMsg, { gameId: 'g-eor-int', playerNum: 1, dcName: 'Greedo', displayName: 'Greedo [Group 1]' }]]);
   _registerDcMessageMeta(siMeta);
   resolveAbility('Survival Instincts', { game, playerNum: 1, dcMessageMeta: siMeta });
-  // Take Position (during-round, defense +1 Block, army-wide).
+  // Take Position (during-round, defense +1 Block, FIGURE-SCOPED to Greedo).
   resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta: siMeta });
 
-  // Mid-round: both apply (block 1+1 = 2, evade 1).
+  // Mid-round: both apply to the playing figure Greedo (block 1+1 = 2, evade 1).
   let mid = evaluateRoundModifiers(game, { side: 'defense', figureKey: 'Greedo-1-0', playerNum: 1, combat: {} });
   assert.strictEqual(mid.block, 2);
   assert.strictEqual(mid.evade, 1);
@@ -218,6 +226,103 @@ test('EOR-stage attack: until-eor bonus is GONE, during-round bonus still applie
   // Round boundary clears the rest.
   cleanupRoundStart(game);
   assert.deepStrictEqual(game.activeRoundModifiers, [], 'all modifiers cleared at round boundary');
+});
+
+// ── LIVE-SCENARIO anchor resolution (alexanbv 2026-06-20 ruling) ────────────
+// These tests exercise each card under its REAL play timing with NO manual
+// sourceFigureKey injection — they prove resolveRoundModifierAnchor resolves a
+// correct NON-NULL anchor through the real code path:
+//   - Deflection (defender reaction, no activation): anchor = the DEFENDER being
+//     attacked (game.pendingCombat.target.figureKey).
+//   - Cavalry Charge (start_of_round, no activation, no combat): anchor = the
+//     card's named unique figure (Captain Terro) via the unique-figure-cc map.
+//   - Take Position (during activation): anchor = the ACTIVATING figure only; a
+//     DIFFERENT friendly figure gets nothing.
+// Before this fix Deflection and Cavalry Charge resolved a NULL anchor at real
+// play time (no activation present), so selfIsSourceFigure / the TROOPER
+// position check silently never matched — REGRESSED. These prove the fix.
+
+test('LIVE Deflection (defender reaction, no activation): anchor = attacked defender, −2 Acc vs Ranged', () => {
+  // Player 2 is the DEFENDER. Player 1 (attacker) is mid-attack: there is NO
+  // activation for player 2, so the OLD findActiveActivationMsgId path returned
+  // null and Deflection's selfIsSourceFigure descriptor never matched. The new
+  // anchor falls back to pendingCombat.target.figureKey (the defender).
+  const game = integrationGame('g-defl-live');
+  game.figurePositions[2] = { 'Onar Koma-2-0': 'm17' };
+  game.pendingCombat = {
+    attackerPlayerNum: 1,
+    isRanged: true,
+    target: { figureKey: 'Onar Koma-2-0' },
+  };
+  // NO dcMessageMeta / dcActionsData for player 2 → no activation. The anchor
+  // must come from the combat defender.
+  const r = resolveAbility('Deflection', { game, playerNum: 2 });
+  assert.strictEqual(r.applied, true);
+
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Deflection' && m.side === 'defense');
+  assert.ok(d, 'Deflection descriptor registered');
+  assert.strictEqual(d.sourceFigureKey, 'Onar Koma-2-0', 'anchor = the attacked defender (NOT null)');
+
+  // The defending figure gets −2 Accuracy vs the Ranged attack.
+  const accFor = (fk, isRanged) => evaluateRoundModifiers(game, {
+    side: 'defense', figureKey: fk, playerNum: 2, combat: { isRanged },
+  }).accuracyPenalty;
+  assert.strictEqual(accFor('Onar Koma-2-0', true), 2, 'defender gets −2 Acc vs Ranged');
+  assert.strictEqual(accFor('Onar Koma-2-0', false), 0, 'no penalty vs Melee (Ranged-only)');
+  // A different friendly figure of player 2 gets nothing.
+  assert.strictEqual(accFor('Greedo-2-0', true), 0, 'a different figure gets nothing');
+});
+
+test('LIVE Cavalry Charge (start_of_round, no activation): anchor = named figure Captain Terro', () => {
+  // start_of_round: NO activation and NO combat. The OLD path returned a null
+  // anchor → the +1 Block (selfIsSourceFigure) and the TROOPER-position check
+  // silently never applied. The new anchor resolves to the named unique figure
+  // (Captain Terro) via the unique-figure-cc registry.
+  const game = integrationGame('g-cc-live');
+  game.figurePositions[1] = {
+    'Captain Terro-1-0': 'm17',          // named figure = the anchor ("you")
+    'Gar Saxon-1-0': 'm18',              // friendly TROOPER within 3
+    'Greedo-1-0': 'm17',                 // non-TROOPER within range
+    'Boba Fett-1-0': 'r17',              // out of range (dist 7)
+  };
+  // NO dcMessageMeta and NO pendingCombat → anchor must come from the named-figure registry.
+  const r = resolveAbility('Cavalry Charge', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+
+  const blockD = (game.activeRoundModifiers || []).find((m) => m.card === 'Cavalry Charge' && m.side === 'defense');
+  assert.ok(blockD, 'Cavalry Charge defense descriptor registered');
+  assert.strictEqual(blockD.sourceFigureKey, 'Captain Terro-1-0', 'anchor = Captain Terro (NOT null)');
+
+  // +1 Block is figure-scoped to Captain Terro.
+  const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
+  assert.strictEqual(blockFor('Captain Terro-1-0'), 1, 'Captain Terro gets +1 Block');
+  assert.strictEqual(blockFor('Gar Saxon-1-0'), 0, 'a different figure gets no Block');
+
+  // +1 Hit reaches a friendly TROOPER within 3 of Captain Terro (position-anchored).
+  const hitFor = (fk) => evaluateRoundModifiers(game, { side: 'attack', figureKey: fk, playerNum: 1, combat: {} }).hit;
+  assert.strictEqual(hitFor('Gar Saxon-1-0'), 1, 'TROOPER within 3 of Captain Terro gets +1 Hit');
+  assert.strictEqual(hitFor('Greedo-1-0'), 0, 'non-TROOPER gets nothing');
+  assert.strictEqual(hitFor('Boba Fett-1-0'), 0, 'TROOPER out of range gets nothing');
+});
+
+test('LIVE Take Position (during activation): only the activating figure gets +1 Block', () => {
+  // During the controller's activation the anchor = the activating figure.
+  // A DIFFERENT friendly figure must NOT benefit (figure-scoped "you").
+  const game = integrationGame('g-tp-live');
+  const msgId = 'm-tp-live';
+  game.dcActionsData[msgId] = { selectedFigure: 0 };
+  game.figurePositions[1] = { 'Gar Saxon-1-0': 'm17', 'Greedo-1-0': 'm18' };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp-live', playerNum: 1, dcName: 'Gar Saxon', displayName: 'Gar Saxon [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const r = resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(r.applied, true);
+
+  const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Take Position' && m.side === 'defense');
+  assert.strictEqual(d.sourceFigureKey, 'Gar Saxon-1-0', 'anchor = the activating figure');
+
+  const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
+  assert.strictEqual(blockFor('Gar Saxon-1-0'), 1, 'activating figure gets +1 Block');
+  assert.strictEqual(blockFor('Greedo-1-0'), 0, 'a DIFFERENT friendly figure gets nothing');
 });
 
 test('Just Business (integration): Scum within 3 gets a reroll, non-Scum and out-of-range get nothing', () => {

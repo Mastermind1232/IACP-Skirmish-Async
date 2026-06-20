@@ -2,9 +2,10 @@
  * Oracle tests for round accuracy penalties (Take Cover / Deflection).
  *
  * Rule (per-figure registry, alexanbv 2026-06-20):
- *   - Take Cover applies −2 Accuracy to ALL attacks targeting the defender
- *     ("During this round while defending"). Registered as an army-wide defense
- *     descriptor (no figure condition) in game.activeRoundModifiers.
+ *   - "'you' refers to ONLY the figure that played the card." Take Cover applies
+ *     +1 Block / −2 Accuracy "while defending" to ONLY the figure that played it
+ *     (FIGURE-SCOPED). Registered with conditions { selfIsSourceFigure: true } in
+ *     game.activeRoundModifiers — NOT army-wide.
  *   - Deflection applies −2 Accuracy ONLY to a RANGED attack targeting the figure
  *     that played it (CSV "when a Ranged attack targeting you is declared").
  *     Registered with conditions { selfIsSourceFigure, attackType: 'range' } so
@@ -49,8 +50,9 @@ describe('ORACLE-ACCPEN-001: Take Cover Applies −2 Accuracy (Not Evade)', () =
     assert.equal(d.effect.accuracyPenalty, 2, 'Take Cover applies −2 Accuracy');
     assert.equal(d.effect.block, 1, 'Take Cover still applies +1 Block');
     assert.equal(d.effect.evade || 0, 0, 'Take Cover must NOT apply Evade');
-    // Army-wide (CSV "to the results" while defending) — no figure condition.
-    assert.deepEqual(d.conditions, {});
+    // Figure-scoped (alexanbv 2026-06-20: "'you' = ONLY the figure that played
+    // the card") — applies to the playing figure only.
+    assert.deepEqual(d.conditions, { selfIsSourceFigure: true });
   });
 });
 
@@ -101,12 +103,14 @@ describe('ORACLE-ACCPEN-002: Deflection Applies −2 Accuracy vs Ranged (Not Eva
 //       both apply (effective −4); against a MELEE attack only Take Cover's
 //       −2 applies (Deflection's Ranged-only penalty does not).
 
-describe('ORACLE-ACCPEN-003: Take Cover (all) + Deflection (Ranged-only) evaluate per-figure', () => {
-  it('003: Take Cover penalty applies to any defender; Deflection only to its self figure vs Ranged', () => {
-    // Both played by the same player. Take Cover is army-wide; Deflection is
-    // self-figure + Ranged-only. The two descriptors are evaluated per-figure
-    // by evaluateRoundModifiers — against the playing figure vs a Ranged attack
-    // both apply (effective −4); against a Melee attack only Take Cover's −2.
+describe('ORACLE-ACCPEN-003: Take Cover + Deflection are both figure-scoped (per-figure)', () => {
+  it('003: both penalties apply only to the playing figure; Deflection only vs Ranged', () => {
+    // alexanbv 2026-06-20: "'you' = ONLY the figure that played the card." Both
+    // Take Cover (+1 Block / −2 Acc) and Deflection (−2 Acc vs Ranged) are
+    // FIGURE-SCOPED on the playing figure. Against the playing figure vs a
+    // Ranged attack both apply (effective −4); vs a Melee attack only Take
+    // Cover's −2 (Deflection is Ranged-only). A DIFFERENT friendly figure gets
+    // NOTHING from either card.
     const game = { gameId: 'g-accpen', activeRoundModifiers: [] };
     const playerNum = 1;
     // Both CCs anchor on the same activating figure via dcMessageMeta.
@@ -134,8 +138,9 @@ describe('ORACLE-ACCPEN-003: Take Cover (all) + Deflection (Ranged-only) evaluat
     assert.equal(evalForRanged(sourceFk), 4, 'Source figure vs Ranged: combined −4');
     // Source figure vs Melee: only Take Cover (−2); Deflection is Ranged-only.
     assert.equal(evalForMelee(sourceFk), 2, 'Source figure vs Melee: only Take Cover −2');
-    // OTHER figure vs Ranged: only Take Cover (army-wide); Deflection is self-only.
-    assert.equal(evalForRanged(otherFk), 2, 'Other figure vs Ranged: only Take Cover −2');
+    // OTHER figure vs Ranged: NOTHING — both cards are figure-scoped to the
+    // playing figure ("you" = only the figure that played it).
+    assert.equal(evalForRanged(otherFk), 0, 'Other figure vs Ranged: nothing (both figure-scoped)');
   });
 });
 

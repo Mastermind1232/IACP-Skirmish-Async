@@ -140,6 +140,69 @@ function resolveKeywordCcFigureKey(game, playerNum, requiredKeywords) {
   return liveKeys[0] || null;
 }
 
+/**
+ * Resolve the "you"/anchor figureKey for a round-modifier CC at PLAY time.
+ *
+ * The per-figure round-modifier registry anchors every "you/your" descriptor on
+ * a single sourceFigureKey. But the figure that "plays" a card is resolved
+ * DIFFERENTLY depending on the card's CSV timing (alexanbv 2026-06-20 ruling:
+ * "'you' refers to ONLY the figure that played the card"):
+ *
+ *   - during_activation / start_of_activation / special_action: the card is
+ *     played during the controller's own activation, so the anchor is the
+ *     ACTIVATING figure (figureKeyForActivation of the in-progress activation).
+ *     Cards: Take Position, Survival Instincts, Take Cover, Smuggled Supplies,
+ *     Personal Energy Shield, Armed Escort.
+ *
+ *   - attack:modifiers / defender reaction: the card is played as the DEFENDER
+ *     during the OPPONENT's attack — there is no active activation for the
+ *     controller, so the anchor is the figure being attacked
+ *     (game.pendingCombat.target.figureKey, the defender).
+ *     Cards: Deflection.
+ *
+ *   - start_of_round: there is no activation and no combat. The anchor is the
+ *     card's associated unique figure (named-figure CC registry), e.g. Cavalry
+ *     Charge → Captain Terro. Resolved via resolveUniqueFigureCcFigureKey.
+ *     Cards: Cavalry Charge.
+ *
+ * Priority order (first non-null wins):
+ *   1. Active activation figure (figureKeyForActivation)
+ *   2. Active combat DEFENDER (pendingCombat.target.figureKey) when this player
+ *      is the defender
+ *   3. Named-figure CC registry (Captain Terro for Cavalry Charge, etc.)
+ *
+ * @param {object} game
+ * @param {number} playerNum   the controller playing the card
+ * @param {string} cardName
+ * @param {object} [opts]
+ * @param {Map} [opts.dcMessageMeta]
+ * @returns {string|null} the anchor figureKey, or null if none resolvable
+ */
+function resolveRoundModifierAnchor(game, playerNum, cardName, opts = {}) {
+  if (!game || !playerNum) return null;
+  const { dcMessageMeta } = opts;
+  // 1. Activating figure (during/start-of-activation, special_action cards).
+  if (dcMessageMeta) {
+    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (msgId) {
+      const fk = figureKeyForActivation(game, msgId);
+      if (fk) return fk;
+    }
+  }
+  // 2. Active-combat DEFENDER (defender-reaction cards like Deflection played
+  //    during the opponent's attack — no activation for this player).
+  const cbt = game.pendingCombat || game.combat;
+  if (cbt?.target?.figureKey && cbt.attackerPlayerNum) {
+    const defenderPlayerNum = opponentPlayerNum(cbt.attackerPlayerNum);
+    if (defenderPlayerNum === playerNum) return cbt.target.figureKey;
+  }
+  // 3. Named-figure CC registry (start_of_round cards like Cavalry Charge →
+  //    Captain Terro). Also covers Mara Jade Fast Learner fallback.
+  const named = resolveUniqueFigureCcFigureKey(game, playerNum, cardName);
+  if (named) return named;
+  return null;
+}
+
 
 /**
  * Compute BFS shortest path between two spaces, then detect hostile figures
@@ -7705,15 +7768,19 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const cardName = abilityId || entry.label || 'CC';
-    // Resolve the card-playing figure (the "you"/anchor). These CCs are played
-    // during the controller's activation, so figureKeyForActivation resolves the
-    // active figure. Army-wide cards ("your defense results") leave conditions
-    // empty so every friendly figure qualifies; figure-scoped cards anchor on it.
-    let sourceFigureKey = null;
-    if (context.dcMessageMeta) {
-      const _srcMsgId = findActiveActivationMsgId(game, playerNum, context.dcMessageMeta);
-      if (_srcMsgId) sourceFigureKey = figureKeyForActivation(game, _srcMsgId);
-    }
+    // Resolve the card-playing figure (the "you"/anchor) per the card's REAL
+    // play timing — NOT just the activating figure. alexanbv 2026-06-20 ruled
+    // "'you' refers to ONLY the figure that played the card", and the CSV
+    // timings differ: during/start-of-activation cards anchor on the activating
+    // figure, defender reactions (Deflection) anchor on the attacked figure
+    // (no activation in progress), and start_of_round cards (Cavalry Charge)
+    // anchor on the card's named unique figure (Captain Terro). The shared
+    // helper resolveRoundModifierAnchor handles all three in priority order so
+    // these previously-regressed cards (Deflection, Cavalry Charge) get a
+    // correct NON-NULL anchor in real play instead of a silent no-op.
+    const sourceFigureKey = resolveRoundModifierAnchor(game, playerNum, cardName, {
+      dcMessageMeta: context.dcMessageMeta,
+    });
     const block = entry.roundDefenseBonusBlock || 0;
     const evade = entry.roundDefenseBonusEvade || 0;
     const accPenalty = entry.roundDefenseAccuracyPenalty || 0;
@@ -7723,15 +7790,16 @@ export function resolveAbility(abilityId, context) {
     // cards persist through the EOR phase. Per CSV durationText.
     const eorCards = new Set(['Survival Instincts', 'Fuel Upgrade', 'Deflection', 'Smuggled Supplies']);
     const duration = eorCards.has(cardName) ? 'until-eor' : 'during-round';
-    // Smuggled Supplies "+1 Evade to YOUR defense results" applies only to the
-    // single figure that played it (CSV "your"), unlike the army-wide CCs.
-    // Armed Escort: "OTHER friendly figures within 2 of you gain +1 Evade" →
-    // excludeSourceFigure + withinSpacesOfSource 2 (CSV row 2).
-    let defConditions = {};
-    if (cardName === 'Smuggled Supplies') defConditions = { selfIsSourceFigure: true };
-    else if (cardName === 'Armed Escort') defConditions = { excludeSourceFigure: true, withinSpacesOfSource: 2 };
-    // Take Position / Survival Instincts / Take Cover: "+N Block (/Evade /
-    // -Accuracy) to your defense results" — army-wide (no figure condition).
+    // alexanbv 2026-06-20: "'you' refers to ONLY the figure that played the
+    // card." So every "you/your defense results" CC (Take Position, Survival
+    // Instincts, Take Cover, Cavalry Charge's +1 Block) is FIGURE-SCOPED via
+    // selfIsSourceFigure — NOT army-wide. The default is now selfIsSourceFigure.
+    //   - Armed Escort: "OTHER friendly figures within 2 of you gain +1 Evade"
+    //     → excludeSourceFigure + withinSpacesOfSource 2 (CSV row 2).
+    //   - Fuel Upgrade: "each of your VEHICLES" → selfKeyword VEHICLE (set below).
+    let defConditions = { selfIsSourceFigure: true };
+    if (cardName === 'Armed Escort') defConditions = { excludeSourceFigure: true, withinSpacesOfSource: 2 };
+    else if (cardName === 'Fuel Upgrade') defConditions = { selfKeyword: 'VEHICLE' };
     if (block || evade || accPenalty) {
       registerRoundModifier(game, {
         id: `${cardName}:${playerNum}:def`,
@@ -7835,11 +7903,11 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.roundDefenderBonusBlockPerEvade === 'number' && entry.roundDefenderBonusBlockPerEvade > 0) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    let _pesSourceFk = null;
-    if (dcMessageMeta) {
-      const _pesMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-      if (_pesMsgId) _pesSourceFk = figureKeyForActivation(game, _pesMsgId);
-    }
+    // Personal Energy Shield is played during_activation, so the anchor is the
+    // activating figure. Use the shared robust resolver (activation → combat
+    // defender → named figure) so the selfIsSourceFigure descriptor never gets a
+    // silent null anchor.
+    const _pesSourceFk = resolveRoundModifierAnchor(game, playerNum, 'Personal Energy Shield', { dcMessageMeta });
     registerRoundModifier(game, {
       id: `Personal Energy Shield:${playerNum}:def-block-per-evade`,
       card: 'Personal Energy Shield',
@@ -7874,11 +7942,9 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const n = entry.roundAttackSurgeBonus;
-    let _ssSourceFk = null;
-    if (dcMessageMeta) {
-      const _ssMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-      if (_ssMsgId) _ssSourceFk = figureKeyForActivation(game, _ssMsgId);
-    }
+    // Smuggled Supplies is played start_of_activation → anchor = activating
+    // figure. Shared robust resolver guards against a silent null anchor.
+    const _ssSourceFk = resolveRoundModifierAnchor(game, playerNum, 'Smuggled Supplies', { dcMessageMeta });
     registerRoundModifier(game, {
       id: `Smuggled Supplies:${playerNum}:atk-surge`,
       card: 'Smuggled Supplies',

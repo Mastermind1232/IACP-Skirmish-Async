@@ -904,12 +904,13 @@ test('resolveAbility Take Position registers a +1 Block defense round-modifier',
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-tp', playerNum: 1, dcName: 'Guardian', displayName: 'Guard [Group 1]' }]]);
   const result = resolveAbility('Take Position', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  // Per-figure registry (alexanbv 2026-06-20): army-wide +1 Block defense.
+  // Per-figure registry (alexanbv 2026-06-20: "'you' = ONLY the figure that
+  // played the card"): figure-scoped +1 Block defense.
   const d = (game.activeRoundModifiers || []).find((m) => m.card === 'Take Position' && m.side === 'defense');
   assert.ok(d, 'Take Position defense descriptor registered');
   assert.strictEqual(d.ownerPlayerNum, 1);
   assert.strictEqual(d.effect.block, 1);
-  assert.deepStrictEqual(d.conditions, {}, 'army-wide (no figure condition)');
+  assert.deepStrictEqual(d.conditions, { selfIsSourceFigure: true }, 'figure-scoped to the playing figure');
   assert.strictEqual(d.duration, 'during-round');
 });
 
@@ -956,7 +957,8 @@ test('resolveAbility Take Cover registers +1 Block and -2 Accuracy defense modif
   assert.ok(d);
   assert.strictEqual(d.effect.block, 1);
   assert.strictEqual(d.effect.accuracyPenalty, 2);
-  assert.deepStrictEqual(d.conditions, {});
+  // Figure-scoped (alexanbv 2026-06-20: "'you' = ONLY the figure that played it").
+  assert.deepStrictEqual(d.conditions, { selfIsSourceFigure: true });
 });
 
 test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
