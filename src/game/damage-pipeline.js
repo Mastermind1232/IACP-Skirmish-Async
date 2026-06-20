@@ -42,6 +42,7 @@ import { getPlayableReactionCardsForTiming } from './cc-timing.js';
 import { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 import { markMapDirty } from './game-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { isFigureVanished } from './conditions.js';
 
 /**
  * Canonical "X suffers N Damage (HP A→B)" message emitter (per
@@ -315,6 +316,15 @@ export async function applyDamage(game, ctx, opts) {
   const amount = Math.max(0, parseInt(opts.amount || 0, 10));
   if (amount === 0) {
     return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false };
+  }
+  // Vanish: the figure cannot suffer Damage until its next activation
+  // (alexanbv 2026-06-19). All damage sources are blocked; the figure is still
+  // targetable (Vanish only prevents the Damage/condition, not targeting).
+  if (isFigureVanished(game, opts.figureKey)) {
+    if (ctx?.logGameAction && ctx?.client) {
+      await ctx.logGameAction(game, ctx.client, `**Vanish** — **${dcNameFromFigureKey(opts.figureKey)}** cannot suffer Damage (${amount} prevented).`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+    return { amount: 0, prevHp: 0, newHp: 0, wasDefeated: false, preventDefeat: false, vanishImmune: true };
   }
 
   // Order per destruct 2026-05-08:

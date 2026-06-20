@@ -214,6 +214,7 @@ export const SURGE_LABELS = {
   'cleave 1': 'Cleave 1', 'cleave 2': 'Cleave 2', 'cleave X': 'Cleave X', 'recover X': 'Recover X',
   '+1 hit': '+1 Damage', '+2 hits': '+2 Damage', '+1 hit, stun': '+1 Damage, Stun', '+1 hit, pierce 1': '+1 Damage, Pierce 1',
   'accuracy 2, surge 1': '+2 Accuracy, +1 Surge', 'damage 2, hide': '+2 Damage, Hide',
+  'damage 2, accuracy 1': '+2 Damage, +1 Accuracy', 'pierce 1, hide': 'Pierce 1, Hide',
   'agitate': 'Agitate', 'fell_swoop': 'Fell Swoop', 'mastery': 'Mastery', 'interrogate': 'Interrogate',
   'open_minded': 'Open-Minded (1 MP or Power Token)',
   'utinni_vp_1': 'Utinni! (+1 VP)',

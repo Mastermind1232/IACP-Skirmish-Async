@@ -606,9 +606,11 @@ export const PARITY_SCENARIOS = [
     reason: 'Closed 2026-04-17 at available-actions.js:2297-2318 — engine now mirrors handler dc-play-area.js:1032-1050 by retrying LOS from every other figure in the attacker group when game.fireMissionActive[msgId] is set. Attachment-aware figure count adjusts for Z-6/Mortar/Riot Trooper upgrades. Uses same _aaEffectiveMs and losBlockingCoords as primary LOS, so doors/shields/figure-blocking rules stay consistent. Blast 1 is a combat-resolution concern and out of scope for target enumeration parity. Positive control: this scenario fails if either side removes the group-LOS retry.',
   },
 
-  // 11. Vanish immunity — handler-only exclusion by matching DC name prefix
+  // 11. Vanish does NOT prevent targeting (alexanbv 2026-06-19) — a Vanished
+  // figure stays a legal target in BOTH handler and engine; the immunity blocks
+  // Damage/conditions in the pipelines, not target enumeration. Parity: []/[].
   {
-    name: 'Vanish immunity — handler filters target whose DC name matches vanished entry; engine does not',
+    name: 'Vanish immunity — does NOT filter targets (figure stays targetable in handler and engine)',
     setup() {
       const built = createTestGame()
         .withPlayer1Army([{ dcName: 'Bossk' }])
@@ -634,7 +636,7 @@ export const PARITY_SCENARIOS = [
     },
     expectedHandlerOnly: [],
     expectedEngineOnly: [],
-    reason: 'Closed 2026-04-17 at available-actions.js:2267-2274 — engine now mirrors handler dc-play-area.js:1002-1006 by reading game.vanishImmunityUntilNextActivation[enemyPn], looking up the protected dcName via deps.dcMessageMeta, and skipping figureKeys that start with that dcName (covers all group/figure indices). Positive control: this scenario fails if either side removes the check.',
+    reason: 'alexanbv 2026-06-19: Vanish does NOT prevent targeting (unlike Blend In) — it blocks Damage (damage-pipeline isFigureVanished) and new conditions (applyCondition), not target enumeration. Both handler and engine now KEEP the Vanished figure in the target list, so parity is []/[]. The old handler/engine target-filter was removed.',
   },
 
   // 12. Fury of Kashyyyk — attachment-granted Reach for WOOKIEE attackers

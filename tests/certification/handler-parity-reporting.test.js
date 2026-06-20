@@ -146,20 +146,14 @@ function enumerateHandlerTargets(game, playerNum, attackerFigureKey, deps, dcMes
   const iMustGoAloneSpaces =
     iMustGoAlone && iMustGoAlone.playerNum === enemyPn ? iMustGoAlone.spaces : null;
 
-  // Vanish immunity — filter targets whose figure key matches vanished DC name
-  const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPn];
-  const vanishMeta = vanishImmunity && dcMessageMeta?.get
-    ? dcMessageMeta.get(vanishImmunity.msgId)
-    : null;
-  const vanishedDcPrefix = vanishMeta ? `${vanishMeta.dcName}-` : null;
+  // Vanish does NOT prevent targeting (alexanbv 2026-06-19): a Vanished figure
+  // is still a legal target. The handler no longer filters it from the list, so
+  // the simulation no longer filters it either (the immunity blocks the
+  // Damage/conditions in the pipelines, not target enumeration).
 
   const targets = [];
   for (const [fk, coord] of Object.entries(enemies)) {
     if (!coord) continue;
-
-    // Vanish immunity (handler-only): skip figures whose key starts with the
-    // vanished DC's dcName.
-    if (vanishedDcPrefix && fk.startsWith(vanishedDcPrefix)) continue;
 
     // Target footprint (multi-cell LOS)
     const targetDcName = dcNameFromFigureKey(fk);

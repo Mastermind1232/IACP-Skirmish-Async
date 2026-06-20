@@ -2239,15 +2239,9 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     }
     if (dist < minRange || dist > maxRange) continue;
 
-    // Vanish immunity (parity with dc-play-area.js:1002-1006): if the enemy
-    // player has just used Vanish, filter targets whose figureKey starts with
-    // the protected DC's dcName (covers all group/figure indices of that DC)
-    // until the vanisher's next activation.
-    const _vanish = game.vanishImmunityUntilNextActivation?.[enemyPn];
-    if (_vanish) {
-      const _vanishMeta = deps.dcMessageMeta?.get(_vanish.msgId);
-      if (_vanishMeta && fk.startsWith(`${_vanishMeta.dcName}-`)) continue;
-    }
+    // Vanish does NOT prevent targeting (alexanbv 2026-06-19): a Vanished figure
+    // stays a legal target; the immunity blocks Damage/conditions in the
+    // pipelines, not the target list. (Unlike Blend In, which affects targeting.)
 
     // I Must Go Alone CC (parity with dc-play-area.js:1012-1013):
     // when game.roundDefenderCannotBeTargetedUnlessWithinSpaces protects the

@@ -1167,11 +1167,10 @@ async function buildAndSendAttackTargets(
         if (_insigHasFriendly) continue;
       }
     }
-    const vanishImmunity = game.vanishImmunityUntilNextActivation?.[enemyPlayerNum];
-    if (vanishImmunity) {
-      const vanishMeta = dcMessageMeta.get(vanishImmunity.msgId);
-      if (vanishMeta && k.startsWith(`${vanishMeta.dcName}-`)) continue;
-    }
+    // Vanish does NOT prevent targeting (alexanbv 2026-06-19): a Vanished figure
+    // is still a legal target (the player may want to attack it anyway). The
+    // immunity blocks the Damage/conditions in the pipelines, not the target
+    // list. (This is unlike Blend In, which affects targeting.)
     const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     const cells = getFootprintCells(coord, size);

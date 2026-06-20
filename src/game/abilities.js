@@ -9162,11 +9162,25 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation (Special Action).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const _vMeta = dcMessageMeta.get(msgId);
+    const _vKeys = _vMeta ? getFigureKeysForDcMsg(game, playerNum, _vMeta) : [];
+    const _vSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _vFigureKey = _vKeys[_vSelFig] || _vKeys[0] || null;
     game.vanishImmunityUntilNextActivation = game.vanishImmunityUntilNextActivation || {};
-    game.vanishImmunityUntilNextActivation[playerNum] = { msgId, nextMp: entry.nextActivationMpBonus || 0 };
+    // alexanbv 2026-06-19: Vanish prevents ALL Damage and ALL new conditions
+    // (harmful AND beneficial) on the figure until its next activation, but does
+    // NOT remove conditions already present and does NOT prevent targeting
+    // (unlike Blend In). Store the figure identity so the damage / condition
+    // pipelines can recognise it.
+    game.vanishImmunityUntilNextActivation[playerNum] = {
+      msgId,
+      dcName: _vMeta?.dcName || null,
+      figureKey: _vFigureKey,
+      nextMp: entry.nextActivationMpBonus || 0,
+    };
     return {
       applied: true,
-      logMessage: `You cannot suffer Damage or receive conditions until your next activation. At the start of your next activation, gain ${entry.nextActivationMpBonus || 0} movement points.`,
+      logMessage: `**${dcNameFromFigureKey(_vFigureKey) || 'This figure'}** cannot suffer Damage or receive new conditions until its next activation (existing conditions remain; it can still be targeted). At the start of its next activation, gain ${entry.nextActivationMpBonus || 0} movement points.`,
     };
   }
 
