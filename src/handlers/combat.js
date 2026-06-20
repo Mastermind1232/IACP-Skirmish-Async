@@ -500,9 +500,11 @@ export async function handleCombatGateReady(interaction, ctx) {
   // (alexanbv ruling: an incap forces the attack to miss with no dice rolled, so
   // the decision is always resolved before any dice roll). Refuse the on_declare
   // Ready ack until the force_exhaustion_yes_/no_ buttons clear pendingForceExhaustion.
-  if (gate.phase === 'on_declare' && game.pendingForceExhaustion) {
+  if (gate.phase === 'on_declare' && (game.pendingForceExhaustion || game.pendingForceExhaustionDiePick)) {
     await interaction.followUp({
-      content: '**Force Exhaustion** is pending — The Child\'s owner must resolve the incapacitate decision before this attack can proceed.',
+      content: game.pendingForceExhaustionDiePick
+        ? '**Force Exhaustion** — the attacker must choose which attack die to remove before this attack can proceed.'
+        : '**Force Exhaustion** is pending — The Child\'s owner must resolve the incapacitate decision before this attack can proceed.',
       ephemeral: true,
     }).catch(discordCatch);
     return;
@@ -5272,9 +5274,11 @@ export async function handleCombatRoll(interaction, ctx) {
   // dice are rolled (alexanbv ruling: an incap forces the attack to miss with no
   // dice rolled). Refuse the roll while the FE decision is still pending — the
   // force_exhaustion_yes_/no_ buttons drive resolution; "No" lets the gate roll.
-  if (game.pendingForceExhaustion) {
+  if (game.pendingForceExhaustion || game.pendingForceExhaustionDiePick) {
     await interaction.followUp({
-      content: '**Force Exhaustion** — The Child\'s owner must resolve the incapacitate decision first (button in combat thread).',
+      content: game.pendingForceExhaustionDiePick
+        ? '**Force Exhaustion** — the attacker must choose which attack die to remove first (button in combat thread).'
+        : '**Force Exhaustion** — The Child\'s owner must resolve the incapacitate decision first (button in combat thread).',
       ephemeral: true,
     }).catch(discordCatch);
     return;

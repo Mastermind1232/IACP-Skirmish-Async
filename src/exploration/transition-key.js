@@ -29,6 +29,7 @@ export const PENDING_STATE_KEYS = [
   'pendingStrikeMeDown',
   'pendingSlowOnTheDraw',
   'pendingForceExhaustion',
+  'pendingForceExhaustionDiePick',
   'pendingIllicitArms',
   'pendingPowerConverter',
   'pendingThereIsNoTry',

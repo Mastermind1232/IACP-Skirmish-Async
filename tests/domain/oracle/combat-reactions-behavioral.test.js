@@ -15,7 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   handleThereIsNoTry, handleVetInstincts,
-  handlePowerConverter, handleDoubtReroll, handleForceExhaustion,
+  handlePowerConverter, handleDoubtReroll, handleForceExhaustion, handleForceExhaustionDiePick,
   handleHunterProtocol, handleSlowOnTheDraw, handleSlowOnTheDrawResume,
   handleStrikeMeDown, handleIllicitArms,
 } from '../../../src/handlers/combat-reactions.js';
@@ -639,13 +639,16 @@ describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
 
 // ── B-CR-FE: Force Exhaustion ───────────────────────────────────────────────
 
-describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)', () => {
-  // Per alexanbv's refined ruling: incapacitating The Child ALWAYS removes 1
-  // attack die (weakest-first) AND Weakens the attacker. ADDITIONALLY, only
-  // when The Child ITSELF is the target, the attack also MISSES with no dice
-  // (forceMiss, skip to "after resolving an attack"; attacker loses Focus +
-  // Hidden). When a Clan-of-Two-attached figure is the target, the die removal
-  // + Weaken happen but the attack PROCEEDS (no forceMiss).
+describe('B-CR-FE: Force Exhaustion (incap → attacker picks die + Weaken, two cases)', () => {
+  // Per alexanbv's refined ruling (2026-06-19): incapacitating The Child ALWAYS
+  // removes 1 attack die AND Weakens the attacker — but the die removed is now
+  // the ATTACKER's CHOICE, not an auto weakest-first pick. The flow is two-step:
+  //   1) defender clicks force_exhaustion_yes_ → Child incapacitated + conditions
+  //      cleared, pendingForceExhaustionDiePick set, picker posted to attacker.
+  //      No die removed / no Weaken / no forceMiss yet (the gate stays blocked).
+  //   2) attacker clicks fe_die_pick_<g>_<idx> → THAT die removed, attacker
+  //      Weakened, then: target-is-child → forceMiss (Focus+Hidden stripped);
+  //      clan-of-two → attack PROCEEDS with reduced pool.
   function feCombat(overrides = {}) {
     const c = makeCombat();
     c.gameId = 'g1';
@@ -664,6 +667,7 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
       figureConditions: {},
       pendingForceExhaustion: {
         defenderPlayerNum: 2,
+        attackerPlayerNum: 1,
         attackerFigureKey: 'Stormtrooper-1-0',
         childFigureKey: 'The Child-1-0',
         targetIsChild,
@@ -674,26 +678,47 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
     };
   }
 
-  // ── Case A: The Child ITSELF is the target (targetIsChild) ──
-  it('B-CR-FE-001: target=Child → incap, removes weakest die, forces miss', async () => {
+  // ── Step 1 (defender Yes): incap + picker handoff, no die/Weaken/miss yet ──
+  it('B-CR-FE-000: yes → incap + die-pick pending posted to attacker (no die removed yet)', async () => {
     const combat = feCombat();
     const game = feGame(combat, { targetIsChild: true });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
 
+    assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated immediately');
+    assert.ok(game.pendingForceExhaustionDiePick, 'die-pick pending posted to attacker');
+    assert.strictEqual(game.pendingForceExhaustionDiePick.attackerPlayerNum, 1, 'pending targets the attacker');
+    assert.strictEqual(game.pendingForceExhaustionDiePick.targetIsChild, true, 'targetIsChild carried forward');
+    assert.ok(!('pendingForceExhaustion' in game), 'Yes/No decision replaced by die-pick');
+    // Nothing else resolved until the attacker picks.
+    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'yellow', 'red'], 'no die removed yet');
+    assert.ok(!(game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'), 'no Weaken yet');
+    assert.notStrictEqual(combat.forceMiss, true, 'no forced miss yet');
+  });
+
+  // ── Case A: The Child ITSELF is the target (targetIsChild) ──
+  it('B-CR-FE-001: target=Child → attacker picks die → that die removed, forces miss', async () => {
+    const combat = feCombat();
+    const game = feGame(combat, { targetIsChild: true });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+    // Attacker chooses the RED die (index 2) — a non-default pick proves choice.
+    await handleForceExhaustionDiePick(mockInteraction('fe_die_pick_g1_2', 'player1'), ctx);
+
     assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated');
-    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'red'], 'yellow die removed (weakest)');
+    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'yellow'], 'attacker-chosen red die removed');
     assert.strictEqual(combat.forceMiss, true, 'attack flagged as a forced miss');
     assert.strictEqual(combat._step7Hit, false, 'synthesized miss (no hit)');
     assert.strictEqual(combat._step7Damage, 0, 'no damage on a forced miss');
-    assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion cleared');
+    assert.ok(!('pendingForceExhaustionDiePick' in game), 'die-pick pending cleared');
   });
 
-  it('B-CR-FE-002: target=Child → attacker becomes Weakened', async () => {
+  it('B-CR-FE-002: target=Child → attacker becomes Weakened after pick', async () => {
     const combat = feCombat();
     const game = feGame(combat, { targetIsChild: true });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+    await handleForceExhaustionDiePick(mockInteraction('fe_die_pick_g1_1', 'player1'), ctx);
 
     assert.ok((game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'),
       'attacker Weakened via figureConditions');
@@ -701,7 +726,7 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
       'Weaken added to combat.attackerConds');
   });
 
-  it('B-CR-FE-003: target=Child → attacker still loses Focus and Hidden', async () => {
+  it('B-CR-FE-003: target=Child → attacker still loses Focus and Hidden after pick', async () => {
     const combat = feCombat();
     combat.attackerConds = ['Focus', 'Hide'];
     const game = feGame(combat, {
@@ -710,6 +735,7 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
     });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+    await handleForceExhaustionDiePick(mockInteraction('fe_die_pick_g1_1', 'player1'), ctx);
 
     assert.ok(!(game.figureConditions['Stormtrooper-1-0'] || []).includes('Focus'),
       'Focus consumed on the attacker');
@@ -726,6 +752,7 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
       figureConditions: { 'The Child-1-0': ['Focus'] },
     });
     const { ctx } = buildCtx(game);
+    // Conditions clear at incap (step 1) — before any die pick.
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
 
     assert.ok(!('The Child-1-0' in game.figureConditions),
@@ -733,25 +760,27 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
   });
 
   // ── Case B: a Clan-of-Two-attached figure is the target ──
-  it('B-CR-FE-005: target=clan-of-two figure → die removed + Weaken, but attack PROCEEDS', async () => {
+  it('B-CR-FE-005: target=clan-of-two figure → attacker picks die + Weaken, but attack PROCEEDS', async () => {
     const combat = feCombat();
     const game = feGame(combat, { targetIsChild: false });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+    // Attacker chooses the BLUE die (index 0).
+    await handleForceExhaustionDiePick(mockInteraction('fe_die_pick_g1_0', 'player1'), ctx);
 
     assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated');
-    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'red'], 'yellow die removed (weakest)');
+    assert.deepStrictEqual(combat.attackInfo.dice, ['yellow', 'red'], 'attacker-chosen blue die removed');
     assert.ok((game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'),
       'attacker Weakened');
     assert.ok((combat.attackerConds || []).includes('Weaken'), 'Weaken on combat.attackerConds');
     assert.notStrictEqual(combat.forceMiss, true, 'NO forced miss — attack proceeds');
     assert.notStrictEqual(combat._step7Hit, false, 'not synthesized as a miss');
-    assert.ok(!('pendingForceExhaustion' in game),
-      'pendingForceExhaustion cleared so the gate can resume to roll');
+    assert.ok(!('pendingForceExhaustionDiePick' in game),
+      'die-pick pending cleared so the gate can resume to roll');
   });
 
   // ── Decline ──
-  it('B-CR-FE-006: no → attack proceeds, dice untouched, not incapacitated', async () => {
+  it('B-CR-FE-006: no → attack proceeds, dice untouched, no incap, no die-pick', async () => {
     const combat = feCombat();
     const origDice = [...combat.attackInfo.dice];
     const game = feGame(combat, { targetIsChild: true });
@@ -762,6 +791,21 @@ describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)'
     assert.strictEqual(combat.forceMiss, undefined, 'no forced miss on decline');
     assert.strictEqual(game.childIncapacitated, undefined, 'not incapacitated');
     assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion cleared');
+    assert.ok(!('pendingForceExhaustionDiePick' in game), 'no die-pick on decline');
+  });
+
+  // ── Fallback: single-die pool resolves immediately (no interactive pick) ──
+  it('B-CR-FE-007: yes with ≤1 die in pool → auto-resolves without a picker', async () => {
+    const combat = feCombat({ attackInfo: { dice: ['red'] } });
+    const game = feGame(combat, { targetIsChild: false });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+
+    assert.strictEqual(game.childIncapacitated, true, 'Child incapacitated');
+    assert.deepStrictEqual(combat.attackInfo.dice, [], 'sole die removed via fallback');
+    assert.ok((game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'), 'attacker Weakened');
+    assert.ok(!('pendingForceExhaustionDiePick' in game), 'no picker posted (≤1 die)');
+    assert.ok(!('pendingForceExhaustion' in game), 'Yes/No decision cleared');
   });
 });
 

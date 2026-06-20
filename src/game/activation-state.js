@@ -927,6 +927,7 @@ const ROUND_NULL_FLAGS = [
   'pendingForceIsWithMe',
   'pendingFlawlessExecution',
   'pendingForceExhaustion',
+  'pendingForceExhaustionDiePick',
   'slowOnTheDrawInterrupt',
   // Movement/activation pendings — safety net
   'pendingFalseOrders',

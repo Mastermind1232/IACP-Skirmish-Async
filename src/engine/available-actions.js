@@ -993,6 +993,26 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
+  // Force Exhaustion die pick: after The Child is incapacitated, the ATTACKER
+  // chooses which attack pool die to remove. Emit one action per pool die,
+  // weakest-first so first-action selection (self-play) picks the sensible
+  // default. Keyed by index so duplicate colors remove the exact slot.
+  if (game.pendingForceExhaustionDiePick) {
+    const fdp = game.pendingForceExhaustionDiePick;
+    if (playerNum === fdp.attackerPlayerNum) {
+      const dice = game.pendingCombat?.attackInfo?.dice || [];
+      const ORDER = { yellow: 0, green: 1, blue: 2, red: 3 };
+      const indexed = dice.map((color, idx) => ({ color, idx }))
+        .sort((a, b) => ((ORDER[a.color] ?? 99) - (ORDER[b.color] ?? 99)) || (a.idx - b.idx));
+      return indexed.map(({ color, idx }) => ({
+        type: 'fe_die_pick',
+        customId: `fe_die_pick_${gameId}_${idx}`,
+        description: `Force Exhaustion: remove ${color} die`,
+      }));
+    }
+    return [];
+  }
+
   if (game.pendingIllicitArms) {
     const ia = game.pendingIllicitArms;
     if (playerNum === ia.playerNum) {

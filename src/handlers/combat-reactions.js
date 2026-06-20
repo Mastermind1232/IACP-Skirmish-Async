@@ -960,66 +960,68 @@ export async function handleForceExhaustion(interaction, ctx) {
 
     const combat = game.pendingCombat;
 
-    // BOTH cases: remove 1 attack die (weakest first: yellow > green > blue > red)
-    // and Weaken the attacker (respecting condition immunity).
-    if (combat?.attackInfo) {
-      const { dice, removedColor } = removeForceExhaustionDie(combat.attackInfo.dice);
-      combat.attackInfo = { ...combat.attackInfo, dice };
-      if (removedColor && thread) {
-        await thread.send(`**Force Exhaustion** — Removed 1 **${removedColor}** attack die.`).catch(discordCatch);
-      }
-    }
-    const atkFk = combat?.attackerFigureKey ?? fe.attackerFigureKey;
-    if (atkFk && !isConditionImmune(game, atkFk)) {
-      applyCondition(game, atkFk, 'Weaken');
-      if (combat && Array.isArray(combat.attackerConds) && !combat.attackerConds.includes('Weaken')) {
-        combat.attackerConds.push('Weaken');
-      }
-    }
+    // alexanbv 2026-06-19: the die removed is now the ATTACKER's choice (not an
+    // auto weakest-first pick). Hand off to the attacker via a per-die picker.
+    // The incap has already happened; the FE pending decision is replaced by a
+    // pendingForceExhaustionDiePick that the gate roll/Ready guards also block on,
+    // so no dice are rolled between the incap and the attacker's die pick.
+    const poolDice = combat?.attackInfo?.dice || [];
 
-    if (fe.targetIsChild) {
-      // The Child ITSELF is the target: ALSO skip the attack (force a miss).
-      // "Attacker still loses Focus and Hidden if relevant." On a normal attack
-      // these are consumed in the after-resolve window's Focus/Hide discard
-      // (combat-bridge.js runAfterResolveWindow). The forced-miss drain below
-      // uses postPostResolveWindow, which does NOT run that discard — so strip
-      // the attacker's Focus + Hidden explicitly here, mirroring a resolved attack.
-      if (combat?.attackerFigureKey) {
-        filterCondition(game, combat.attackerFigureKey, 'Focus');
-        filterCondition(game, combat.attackerFigureKey, 'Hide');
-        if (Array.isArray(combat.attackerConds)) {
-          combat.attackerConds = combat.attackerConds.filter((c) => c !== 'Focus' && c !== 'Hide');
+    // Fallback: if there is no live combat or no die to pick (≤1 die — nothing to
+    // choose between), skip the interactive picker and resolve immediately using
+    // the weakest-first default (removeForceExhaustionDie). This also guards the
+    // empty-pool edge case.
+    if (!combat || poolDice.length <= 1) {
+      clearPendingForceExhaustion(game);
+      let removedColor = null;
+      if (combat?.attackInfo) {
+        const r = removeForceExhaustionDie(combat.attackInfo.dice);
+        removedColor = r.removedColor;
+        combat.attackInfo = { ...combat.attackInfo, dice: r.dice };
+        if (removedColor && thread) {
+          await thread.send(`**Force Exhaustion** — Removed 1 **${removedColor}** attack die.`).catch(discordCatch);
         }
       }
-
-      if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened, and the attack misses (no dice rolled).', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-
-      // Clear the pending decision BEFORE driving the forced-miss drain so the
-      // roll/gate guards (which refuse to advance while pendingForceExhaustion is
-      // set) don't trip during the after-resolve re-entry.
-      clearPendingForceExhaustion(game);
-
-      // Abort the attack as a MISS using the On the Lam mechanism: synthesize a
-      // miss state (forceMiss=true, no dice), then run the after-resolve drain for
-      // both sides so step-8 / "after resolving an attack" effects still fire.
-      if (combat) {
-        combat.forceMiss = true;
-        await _forceMissAndStep8(
-          thread, game, combat, ctx,
-          `**Force Exhaustion** — **The Child** is now **Incapacitated**. The attack **misses** — no dice are rolled.`,
-        );
-      }
+      await _resolveForceExhaustionAfterDiePick(game, combat, fe, thread, ctx, removedColor);
       saveGames(game.gameId);
       return;
     }
 
-    // Clan-of-Two-attached figure is the target: die removed + attacker Weakened,
-    // but the attack PROCEEDS. Clear the pending decision so the on_declare gate's
-    // roll/Ready guards (which refuse while pendingForceExhaustion is set) no longer
-    // block — the player can now proceed to roll with the reduced dice.
-    if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**. The attack proceeds with the reduced dice.`).catch(discordCatch);
-    if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened. Attack proceeds.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    // Replace the Yes/No decision with the attacker's die-pick decision.
     clearPendingForceExhaustion(game);
+    const attackerPlayerNum = combat.attackerPlayerNum ?? fe.attackerPlayerNum;
+    game.pendingForceExhaustionDiePick = {
+      gameId: game.gameId,
+      attackerPlayerNum,
+      defenderPlayerNum: defPN,
+      targetIsChild: !!fe.targetIsChild,
+      attackerFigureKey: combat.attackerFigureKey ?? fe.attackerFigureKey,
+      combatThreadId: fe.combatThreadId,
+    };
+
+    // Build one button per attack pool die, keyed by INDEX so duplicate colors
+    // remove the exact slot picked. List weakest-first (yellow>green>blue>red)
+    // so the first option is the sensible default (matches removeForceExhaustionDie),
+    // which is what self-play / first-action selection will choose.
+    const indexed = poolDice.map((color, idx) => ({ color, idx }));
+    indexed.sort((a, b) => {
+      const ra = FE_DIE_ORDER_INDEX[a.color] ?? 99;
+      const rb = FE_DIE_ORDER_INDEX[b.color] ?? 99;
+      return ra !== rb ? ra - rb : a.idx - b.idx;
+    });
+    const feBtns = indexed.map(({ color, idx }) => new ButtonBuilder()
+      .setCustomId(`fe_die_pick_${game.gameId}_${idx}`)
+      .setLabel(`${color.charAt(0).toUpperCase() + color.slice(1)} die`)
+      .setStyle(ButtonStyle.Primary));
+    const atkOwnerId = getPlayerId(game, attackerPlayerNum);
+    if (thread) {
+      await thread.send(sanitizeMentions({
+        content: `<@${atkOwnerId}> **Force Exhaustion** — **The Child** is now **Incapacitated**. You must remove 1 die from your attack pool — choose which. (You cannot roll until you pick.)`,
+        components: chunkButtonsToRows(feBtns),
+        allowedMentions: { users: [atkOwnerId] },
+      })).catch(discordCatch);
+    }
+    if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. Attacker must choose 1 attack die to remove.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
     saveGames(game.gameId);
     return;
   }
@@ -1027,6 +1029,112 @@ export async function handleForceExhaustion(interaction, ctx) {
   if (thread) await thread.send('**Force Exhaustion** — Declined.').catch(discordCatch);
   clearPendingForceExhaustion(game);
   saveGames(game.gameId);
+}
+
+/** Weakest-first priority used to order/default the FE die picker. */
+const FE_DIE_ORDER_INDEX = Object.freeze({ yellow: 0, green: 1, blue: 2, red: 3 });
+
+/**
+ * Handle fe_die_pick_<gameId>_<dieIndex>: the ATTACKER chooses which attack pool
+ * die Force Exhaustion removes. customId carries the pool index so the exact slot
+ * is removed even with duplicate colors. Applies Weaken to the attacker, then
+ * branches: target-is-child → forceMiss drain (Focus+Hidden stripped); clan-of-two
+ * → attack proceeds with the reduced pool. Clears pendingForceExhaustionDiePick
+ * so the gate's roll/Ready guards release.
+ */
+export async function handleForceExhaustionDiePick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^fe_die_pick_(.+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pick = game.pendingForceExhaustionDiePick;
+  if (!pick) {
+    await interaction.followUp({ content: 'No pending Force Exhaustion die pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pick.attackerPlayerNum, canActAsPlayer, 'Only the attacker may choose the die to remove.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+
+  const thread = await fetchCombatThread(client, pick.combatThreadId);
+  const combat = game.pendingCombat;
+  const idx = Number(idxStr);
+  const dice = [...(combat?.attackInfo?.dice || [])];
+  let removedColor = null;
+  if (combat?.attackInfo && idx >= 0 && idx < dice.length) {
+    removedColor = dice[idx];
+    dice.splice(idx, 1);
+    combat.attackInfo = { ...combat.attackInfo, dice };
+  }
+
+  // Clear the picker buttons.
+  await interaction.message.edit({
+    content: removedColor
+      ? `**Force Exhaustion** — Removed 1 **${removedColor}** attack die. Pool is now: ${dice.length ? dice.join(', ') : '(empty)'}.`
+      : interaction.message.content,
+    components: [],
+  }).catch(discordCatch);
+
+  delete game.pendingForceExhaustionDiePick;
+  await _resolveForceExhaustionAfterDiePick(game, combat, pick, thread, ctx, removedColor);
+  saveGames(game.gameId);
+}
+
+/**
+ * Shared tail for Force Exhaustion once the die (if any) is removed: Weaken the
+ * attacker (respecting condition immunity), then branch on targetIsChild.
+ *  - target-is-child → strip attacker Focus+Hidden, forceMiss drain (no dice).
+ *  - clan-of-two     → attack proceeds with the reduced pool.
+ * `fe` is the FE/diePick payload (carries targetIsChild + attackerFigureKey).
+ */
+async function _resolveForceExhaustionAfterDiePick(game, combat, fe, thread, ctx, removedColor) {
+  const { client, logGameAction } = ctx;
+
+  const atkFk = combat?.attackerFigureKey ?? fe.attackerFigureKey;
+  if (atkFk && !isConditionImmune(game, atkFk)) {
+    applyCondition(game, atkFk, 'Weaken');
+    if (combat && Array.isArray(combat.attackerConds) && !combat.attackerConds.includes('Weaken')) {
+      combat.attackerConds.push('Weaken');
+    }
+  }
+
+  if (fe.targetIsChild) {
+    // The Child ITSELF is the target: ALSO skip the attack (force a miss).
+    // "Attacker still loses Focus and Hidden if relevant." On a normal attack
+    // these are consumed in the after-resolve window's Focus/Hide discard
+    // (combat-bridge.js runAfterResolveWindow). The forced-miss drain below
+    // uses postPostResolveWindow, which does NOT run that discard — so strip
+    // the attacker's Focus + Hidden explicitly here, mirroring a resolved attack.
+    if (combat?.attackerFigureKey) {
+      filterCondition(game, combat.attackerFigureKey, 'Focus');
+      filterCondition(game, combat.attackerFigureKey, 'Hide');
+      if (Array.isArray(combat.attackerConds)) {
+        combat.attackerConds = combat.attackerConds.filter((c) => c !== 'Focus' && c !== 'Hide');
+      }
+    }
+
+    if (logGameAction) await logGameAction(game, client, `**Force Exhaustion** — The Child became Incapacitated.${removedColor ? ` 1 ${removedColor} attack die removed,` : ''} attacker Weakened, and the attack misses (no dice rolled).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+
+    // Abort the attack as a MISS using the On the Lam mechanism: synthesize a
+    // miss state (forceMiss=true, no dice), then run the after-resolve drain for
+    // both sides so step-8 / "after resolving an attack" effects still fire.
+    if (combat) {
+      combat.forceMiss = true;
+      await _forceMissAndStep8(
+        thread, game, combat, ctx,
+        `**Force Exhaustion** — **The Child** is now **Incapacitated**. The attack **misses** — no dice are rolled.`,
+      );
+    }
+    return;
+  }
+
+  // Clan-of-Two-attached figure is the target: die removed + attacker Weakened,
+  // but the attack PROCEEDS. The pending die-pick has already been cleared so the
+  // on_declare gate's roll/Ready guards no longer block — the player can roll the
+  // reduced pool.
+  if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**. The attack proceeds with the reduced dice.`).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `**Force Exhaustion** — The Child became Incapacitated.${removedColor ? ` 1 ${removedColor} attack die removed,` : ''} attacker Weakened. Attack proceeds.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
 }
 
 /**

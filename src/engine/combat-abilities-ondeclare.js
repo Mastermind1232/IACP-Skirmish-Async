@@ -131,7 +131,15 @@ atkAbility('much_to_learn', 'Much to Learn', ['much_to_learn'], 'muchToLearnReso
 // ── Defender interactive on-declare DC abilities ─────────────────────────────
 defAbility('the_force_is_with_me', 'The Force is With Me', ['the_force_is_with_me_chirrut'], 'forceIsWithMeResolved');
 defAbility('strike_me_down', 'Strike Me Down', ['strike_me_down_obiwan'], 'strikeMeDownResolved');
-defAbility('force_exhaustion', 'Force Exhaustion', ['force_exhaustion'], 'forceExhaustionResolved');
+// Force Exhaustion (The Child / Clan of Two) is NOT registered as an executable
+// on_declare gate ability. It is offered as direct Yes/No buttons at attack
+// declare (handlers/combat.js → setPendingForceExhaustion + force_exhaustion_yes_/
+// no_), and the gate's roll/Ready guards block on game.pendingForceExhaustion /
+// game.pendingForceExhaustionDiePick. The catalog (combat-ability-timing-catalog.js)
+// keeps a timing-only 'force_exhaustion' indicator for completeness. A dormant
+// executable registration here (keyed on a never-set forceExhaustionResolved flag)
+// was removed per alexanbv 2026-06-19 — it could have surfaced a redundant second
+// "Force Exhaustion" button in the on_declare window.
 
 // ── Two-timing split-effect abilities (alexanbv 2026-06-18) ───────────────────
 // Negotiate (Hondo) + Query (HK-47): PLAY timing = on_declare — the OPPONENT

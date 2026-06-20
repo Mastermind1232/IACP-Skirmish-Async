@@ -213,6 +213,7 @@ const PENDING_KEYS = [
   // Combat sub-states
   'pendingCoverFire', 'pendingPowerTokenOverflow', 'pendingStrainChoice', 'pendingStillFaster',
   'pendingStrikeMeDown', 'pendingSlowOnTheDraw', 'pendingForceExhaustion',
+  'pendingForceExhaustionDiePick',
   'pendingIllicitArms', 'pendingPowerConverter', 'pendingThereIsNoTry',
   'pendingHunterProtocol',
   // Ability / activation sub-states
