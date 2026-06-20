@@ -3906,7 +3906,12 @@ export async function handleAttackTarget(interaction, ctx) {
   if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
   // (multifigure-independent-activation rule).
-  const nextSurge = game.nextAttackBonusSurgeAbilities?.[attackerFigureKey] || [];
+  const nextSurge = [
+    ...(game.nextAttackBonusSurgeAbilities?.[attackerFigureKey] || []),
+    // Close and Personal / Lightbow: replacement surge abilities granted by the
+    // override (paired with blockSurgeAbilities, which suppresses native surges).
+    ...(Array.isArray(overrideDice?.bonusSurgeAbilities) ? overrideDice.bonusSurgeAbilities : []),
+  ];
   const nextPierce = (game.nextAttackBonusPierce?.[attackerFigureKey] || 0) + (overrideDice?.pierce || 0);
   const nextBonusAcc = (game.nextAttackBonusAccuracy?.[attackerFigureKey] || 0) + (overrideDice?.bonusAccuracy || 0) + (game._closeQuartersBonusAcc || 0);
   const isRanged = attackInfo.type === 'range';

@@ -1686,3 +1686,143 @@ test('Glory of the Kill: recovers when the defender was defeated', () => {
   assert.strictEqual(r.applied, true);
   assert.strictEqual(dcHealthState.get('m1')[0][0], 4); // 1 + 3
 });
+
+// ── Lock On: +3 Accuracy OR -1 Dodge OR -1 Evade (player choice) ─────────────
+
+test('Lock On offers three options and applies +3 Accuracy', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-lockon' };
+  const game = { gameId: 'g-lockon', pendingCombat: combat };
+  const prompt = resolveAbility('Lock On', { game, playerNum: 1, combat });
+  assert.strictEqual(prompt.requiresChoice, true);
+  assert.strictEqual(prompt.choiceOptions.length, 3);
+  const r = resolveAbility('Lock On', { game, playerNum: 1, combat, choiceIndex: 0 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusAccuracy, 3);
+});
+
+test('Lock On option 2 applies -1 Dodge', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-lockon2' };
+  const game = { gameId: 'g-lockon2', pendingCombat: combat };
+  const r = resolveAbility('Lock On', { game, playerNum: 1, combat, choiceIndex: 1 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusDodge, -1);
+});
+
+test('Lock On option 3 applies -1 Evade', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-lockon3' };
+  const game = { gameId: 'g-lockon3', pendingCombat: combat };
+  const r = resolveAbility('Lock On', { game, playerNum: 1, combat, choiceIndex: 2 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusEvade, -1);
+});
+
+// ── Heavy Ordnance: +1 Hit normally, +2 Hit + Pierce 2 vs object (crate) ─────
+
+test('Heavy Ordnance applies +1 Hit vs a normal defender', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-ho1', target: { figureKey: 'Stormtroopers-2-0' } };
+  const game = { gameId: 'g-ho1', pendingCombat: combat };
+  const r = resolveAbility('Heavy Ordnance', { game, playerNum: 1, combat });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusHits, 1);
+  assert.ok(!combat.bonusPierce);
+});
+
+test('Heavy Ordnance applies +2 Hit + Pierce 2 vs an object (crate)', () => {
+  const combat = { attackerPlayerNum: 1, gameId: 'g-ho2', target: { isNpc: true, npcType: 'crate' } };
+  const game = { gameId: 'g-ho2', pendingCombat: combat };
+  const r = resolveAbility('Heavy Ordnance', { game, playerNum: 1, combat });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(combat.bonusHits, 2);
+  assert.strictEqual(combat.bonusPierce, 2);
+});
+
+// ── Cruel Strike: grants the free attack AND the surge buff ──────────────────
+
+test('Cruel Strike grants a free attack and arms the surge buff', () => {
+  const msgId = 'msg-cs2';
+  const game = {
+    gameId: 'g-cs2',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    nextAttackBonusSurgeAbilities: {},
+    freeAttackBonusPending: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-cs2', playerNum: 1, dcName: 'Trandoshan Hunter', displayName: 'Trandoshan Hunter [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const r = resolveAbility('Cruel Strike', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(r.applied, true);
+  assert.deepStrictEqual(game.nextAttackBonusSurgeAbilities['Trandoshan Hunter-1-0'], ['pierce 1, weaken']);
+  assert.strictEqual(game.freeAttackBonusPending['Trandoshan Hunter-1-0'], true);
+});
+
+// ── Take Initiative: mandatory exhaust of a Deployment card ──────────────────
+
+test('Take Initiative auto-exhausts the only readied DC', () => {
+  const game = {
+    gameId: 'g-ti1', player1Id: 'P1', player2Id: 'P2',
+    p1DcList: [{ dcName: 'Stormtroopers' }],
+    p1DcMessageIds: ['dc-st'],
+  };
+  const dcExhaustedState = new Map([['dc-st', false]]);
+  const dcMessageMeta = new Map([['dc-st', { dcName: 'Stormtroopers', playerNum: 1 }]]);
+  const r = resolveAbility('Take Initiative', { game, playerNum: 1, dcExhaustedState, dcMessageMeta });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.initiativePlayerId, 'P1');
+  assert.strictEqual(dcExhaustedState.get('dc-st'), true);
+  assert.deepStrictEqual(r.exhaustDcMsgIds, ['dc-st']);
+});
+
+test('Take Initiative prompts to choose among multiple readied DCs', () => {
+  const game = {
+    gameId: 'g-ti2', player1Id: 'P1', player2Id: 'P2',
+    p1DcList: [{ dcName: 'Stormtroopers' }, { dcName: 'Royal Guard' }],
+    p1DcMessageIds: ['dc-a', 'dc-b'],
+  };
+  const dcExhaustedState = new Map([['dc-a', false], ['dc-b', false]]);
+  const dcMessageMeta = new Map([['dc-a', { dcName: 'Stormtroopers', playerNum: 1 }], ['dc-b', { dcName: 'Royal Guard', playerNum: 1 }]]);
+  const r = resolveAbility('Take Initiative', { game, playerNum: 1, dcExhaustedState, dcMessageMeta });
+  assert.strictEqual(r.requiresChoice, true);
+  assert.strictEqual(r.choiceValues.length, 2);
+  // Initiative is still claimed even though exhaust choice is pending.
+  assert.strictEqual(game.initiativePlayerId, 'P1');
+  // Resolve the choice → second DC exhausted.
+  const r2 = resolveAbility('Take Initiative', { game, playerNum: 1, dcExhaustedState, dcMessageMeta, choiceIndex: 1, chosenFigureKey: 'dc-b' });
+  assert.strictEqual(r2.applied, true);
+  assert.strictEqual(dcExhaustedState.get('dc-b'), true);
+});
+
+// ── Transmit the Plans: distribute 2 Hit Tokens among friendly figures ──────
+
+test('Transmit the Plans distributes 2 Hit Tokens among friendly figures', () => {
+  const msgId = 'msg-ttp';
+  const game = {
+    gameId: 'g-ttp',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1', 'Rebel Trooper-1-1': 'a2' } },
+    figurePowerTokens: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-ttp', playerNum: 1, dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const prompt = resolveAbility('Transmit the Plans', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(prompt.requiresChoice, true);
+  assert.ok(prompt.targetFigureKeys.length >= 2);
+  // Assign first token to figure 0.
+  const r1 = resolveAbility('Transmit the Plans', { game, playerNum: 1, dcMessageMeta, choiceIndex: 0, targetFigureKey: 'Rebel Trooper-1-0' });
+  assert.strictEqual(r1.requiresChoice, true); // one more to assign
+  // Assign second token to figure 1.
+  const r2 = resolveAbility('Transmit the Plans', { game, playerNum: 1, dcMessageMeta, choiceIndex: 0, targetFigureKey: 'Rebel Trooper-1-1' });
+  assert.strictEqual(r2.applied, true);
+  const tok0 = (game.figurePowerTokens['Rebel Trooper-1-0'] || []).length;
+  const tok1 = (game.figurePowerTokens['Rebel Trooper-1-1'] || []).length;
+  assert.strictEqual(tok0 + tok1, 2);
+});
+
+// ── Lightbow / Close and Personal: replacement surges via blockSurgeAbilities ─
+
+test('getAttackerSurgeAbilities returns ONLY replacement surges when blocked', async () => {
+  const { getAttackerSurgeAbilities } = await import('./combat.js');
+  // blocked + replacement surges supplied → only the replacements come through.
+  const combat = { attackerDcName: 'Greedo', blockSurgeAbilities: true, bonusSurgeAbilities: ['+1 hit', 'pierce 4'] };
+  assert.deepStrictEqual(getAttackerSurgeAbilities(combat), ['+1 hit', 'pierce 4']);
+  // blocked + no replacements → empty (Tusken Cycler / Improvised Weapons).
+  assert.deepStrictEqual(getAttackerSurgeAbilities({ attackerDcName: 'Greedo', blockSurgeAbilities: true }), []);
+});

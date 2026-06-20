@@ -233,8 +233,11 @@ export const SURGE_LABELS = {
 /** Get attacker's surge abilities from dc-effects + combat.bonusSurgeAbilities (CCs like Spinning Kick).
  *  Double-surge abilities (cost 2) are tagged with the "double:" prefix. */
 export function getAttackerSurgeAbilities(combat) {
-  // Tusken Cycler: no abilities (including surge abilities) during this attack
-  if (combat.blockSurgeAbilities) return [];
+  // Tusken Cycler: no abilities (including surge abilities) during this attack.
+  // Close and Personal / Lightbow suppress the figure's NATIVE surge abilities
+  // but explicitly grant replacement surges (e.g. "using only Surge: +1 Hit,
+  // Surge: Pierce 4"), supplied via combat.bonusSurgeAbilities — keep those.
+  if (combat.blockSurgeAbilities) return [...(combat?.bonusSurgeAbilities || [])];
   // Reverse Engineer: use the defender's DC surge abilities instead of the attacker's
   const surgeDcName = combat.reverseEngineerActive ? (combat.defenderDcName ?? combat.attackerDcName) : combat.attackerDcName;
   const card = getDcEffect(surgeDcName);

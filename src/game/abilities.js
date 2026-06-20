@@ -2607,6 +2607,10 @@ export function resolveAbility(abilityId, context) {
         bonusAccuracy: entry.overrideBonusAccuracy || 0,
         mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
         blockSurgeAbilities: entry.blockSurgeAbilities || false,
+        // Replacement surge abilities (Close and Personal, Lightbow): when the
+        // CC text says "using only Surge: X / Surge: Y" the native surges are
+        // suppressed (blockSurgeAbilities) and these injected instead.
+        bonusSurgeAbilities: Array.isArray(entry.bonusSurgeAbilities) ? entry.bonusSurgeAbilities : undefined,
       };
     }
     // strainCostToSelf (Brutal Cleave / Trained / etc.): figure pays N
@@ -2703,7 +2707,11 @@ export function resolveAbility(abilityId, context) {
   }
 
   // dcSpecial/ccEffect: freeAttackBonus (Heroic, Rapid Fire, Brutality, etc.) — next attack this activation costs no action
-  if ((entry.type === 'dcSpecial' || entry.type === 'ccEffect') && entry.freeAttackBonus) {
+  // Cruel Strike also carries freeAttackBonus but owns a dedicated handler
+  // (nextAttackBonusSurgeAbilities, below) that grants the attack AND the surge
+  // buff — let it fall through rather than be intercepted here.
+  if ((entry.type === 'dcSpecial' || entry.type === 'ccEffect') && entry.freeAttackBonus
+      && !(Array.isArray(entry.nextAttackBonusSurgeAbilities) && entry.nextAttackBonusSurgeAbilities.length > 0)) {
     const { game, playerNum, dcMessageMeta } = context;
     const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -4174,6 +4182,13 @@ export function resolveAbility(abilityId, context) {
     const spaceUpper = String(chosenSpace).toUpperCase();
     game.ancillaryTokens = game.ancillaryTokens || {};
     game.ancillaryTokens.smoke = [...(game.ancillaryTokens.smoke || []), chosenSpace];
+    // CSV row 721: "discard the smoke token at the end of the NEXT round". A
+    // token placed in round N persists through round N+1 and is discarded at the
+    // end of round N+1 — record expiresAfterRound = currentRound + 1. The
+    // start-of-round sweep (cleanupRoundStart) clears tokens once that round has
+    // fully elapsed. smoke[] stays a plain coord array for the LOS consumer.
+    game.ancillaryTokens.smokeExpiry = game.ancillaryTokens.smokeExpiry || {};
+    game.ancillaryTokens.smokeExpiry[chosenSpace] = (game.currentRound || 1) + 1;
     // Compute friendlies within 2 spaces (graph distance) of the smoke
     // space. Use countGameSpaces for distance — same helper Looking
     // for a Fight, etc. use.
@@ -6957,7 +6972,17 @@ export function resolveAbility(abilityId, context) {
     game.nextAttackBonusSurgeAbilities = game.nextAttackBonusSurgeAbilities || {};
     game.nextAttackBonusSurgeAbilities[_csFk] = entry.nextAttackBonusSurgeAbilities;
     const labels = entry.nextAttackBonusSurgeAbilities.join(', ');
-    return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.` };
+    // Cruel Strike: the CC text is "Perform an attack that gains Surge: …",
+    // so the special action must also GRANT the free attack (not merely buff a
+    // later one). Arm freeAttackBonusPending on the same figure so a no-action
+    // attack is available (mirrors the freeAttackBonus block at ~2710).
+    let _csAttackNote = '';
+    if (entry.freeAttackBonus) {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      game.freeAttackBonusPending[_csFk] = true;
+      _csAttackNote = ' Perform an attack (no action) — click Attack.';
+    }
+    return { applied: true, logMessage: `Your next attack gains surge abilities: ${labels}.${_csAttackNote}` };
   }
 
   // ccEffect: vpGain (Reactive Loyalties SCUM, I Can Feel It VP option) — award VP to this player
@@ -7236,6 +7261,20 @@ export function resolveAbility(abilityId, context) {
     if (entry.mutualExcludeAttackCc && (cbt.attackCcCount || 0) > 1) {
       return { applied: false, manualMessage: 'Assassinate must be the first Command card played this attack. Another CC was already played.' };
     }
+    // Heavy Ordnance: "if the defender is an object apply +2 Hit and Pierce 2
+    // instead". The only attackable object modelled in the combat pipeline is a
+    // crate (target.npcType === 'crate', see handlers/combat.js ~3783), so use
+    // that as the object-defender signal.
+    const _hoObjectDefender = cbt.target?.npcType === 'crate';
+    if (_hoObjectDefender && typeof entry.objectDefenderBonusHits === 'number') {
+      cbt.bonusHits = (cbt.bonusHits || 0) + entry.objectDefenderBonusHits;
+      if (entry.objectDefenderBonusPierce) cbt.bonusPierce = (cbt.bonusPierce || 0) + entry.objectDefenderBonusPierce;
+      if (entry.mutualExcludeAttackCc) cbt.ccLockedOut = true;
+      return {
+        applied: true,
+        logMessage: `Defender is an object: +${entry.objectDefenderBonusHits} Damage${entry.objectDefenderBonusPierce ? ` and Pierce ${entry.objectDefenderBonusPierce}` : ''} added to this attack.`,
+      };
+    }
     cbt.bonusHits = (cbt.bonusHits || 0) + entry.attackBonusHits;
     if (entry.mutualExcludeAttackCc) cbt.ccLockedOut = true;
     return {
@@ -7349,6 +7388,25 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `+${entry.attackAccuracyBonus} Accuracy added to this attack.`,
     };
+  }
+
+  // ccEffect: attackDodgeReduction / attackEvadeReduction (Lock On choice) —
+  // apply -N Dodge or -N Evade to the defender's results. Flow through the same
+  // combat.bonusDodge / combat.bonusEvade (negative) fields used by Conclusion /
+  // Dead Precise / Disposable; consumed in src/game/combat.js resolveCombat.
+  if (entry.type === 'ccEffect'
+      && (typeof entry.attackDodgeReduction === 'number' || typeof entry.attackEvadeReduction === 'number')) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play while attacking (as the attacker).' };
+    }
+    if (entry.attackDodgeReduction > 0) {
+      cbt.bonusDodge = (cbt.bonusDodge || 0) - entry.attackDodgeReduction;
+      return { applied: true, logMessage: `−${entry.attackDodgeReduction} Dodge applied to the defense results.` };
+    }
+    cbt.bonusEvade = (cbt.bonusEvade || 0) - entry.attackEvadeReduction;
+    return { applied: true, logMessage: `−${entry.attackEvadeReduction} Evade applied to the defense results.` };
   }
 
   // ccEffect: attackSurgeBonus (Blitz) — +N Surge during attack; attacker only
@@ -9257,13 +9315,48 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: claimInitiative + exhaustOneDeploymentCard (Take Initiative)
+  // CSV row 724 (mandatory): "Claim the initiative token, then exhaust 1 of your
+  // Deployment cards". The exhaust is a non-skippable cost — enforce it by
+  // exhausting a chosen DC (mirrors Change of Plans' dcExhaustedState path).
   if (entry.type === 'ccEffect' && entry.claimInitiative && entry.exhaustOneDeploymentCard) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcMessageMeta, dcExhaustedState, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const _exhaustOne = (exhaustMsgId, exhaustName) => {
+      if (dcExhaustedState && exhaustMsgId) dcExhaustedState.set(exhaustMsgId, true);
+      // Persist ability-driven exhaustion for restart survival (as Change of Plans does).
+      game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
+      if (exhaustMsgId && !game.abilityExhaustedMsgIds.includes(exhaustMsgId)) game.abilityExhaustedMsgIds.push(exhaustMsgId);
+      return {
+        applied: true,
+        exhaustDcMsgIds: exhaustMsgId ? [exhaustMsgId] : [],
+        logMessage: `Claimed the initiative token, then exhausted **${exhaustName || exhaustMsgId}** (mandatory cost).`,
+      };
+    };
+    // Phase 2: a DC was chosen to exhaust (chosenFigureKey encodes its msgId).
+    if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
+      game.initiativePlayerId = getPlayerId(game, playerNum);
+      return _exhaustOne(chosenFigureKey, dcMessageMeta?.get?.(chosenFigureKey)?.dcName);
+    }
+    // Phase 1: enumerate the player's READIED (non-exhausted) Deployment cards.
+    const dcIds = getDcMessageIds(game, playerNum) || [];
+    const dcList = getDcList(game, playerNum) || [];
+    const readied = dcIds
+      .map((id, i) => ({ msgId: id, dcName: dcList[i]?.dcName || dcMessageMeta?.get?.(id)?.dcName }))
+      .filter((d) => d.msgId && d.dcName && dcExhaustedState?.get(d.msgId) === false);
+    // Always claim initiative first (the upside) regardless of exhaust availability.
     game.initiativePlayerId = getPlayerId(game, playerNum);
+    if (readied.length === 0) {
+      // No readied DC to exhaust — the cost cannot be paid; surface it.
+      return { applied: true, logMessage: 'Claimed the initiative token. No readied Deployment card available to exhaust.' };
+    }
+    if (readied.length === 1) {
+      return _exhaustOne(readied[0].msgId, readied[0].dcName);
+    }
+    // Multiple readied DCs — player must choose which to exhaust (non-skippable).
     return {
-      applied: true,
-      logMessage: 'Claimed the initiative token. Exhaust one of your Deployment cards (use the Exhaust button on your DC).',
+      requiresChoice: true,
+      choiceOptions: readied.map((d) => `Exhaust ${d.dcName}`),
+      choiceValues: readied.map((d) => d.msgId),
     };
   }
 
@@ -10665,20 +10758,61 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: grantHitTokensToActivating (Transmit the Plans) — grant N Damage Tokens to activating figure
+  // ccEffect: grantHitTokensToActivating (Transmit the Plans) — CSV row 859:
+  // "distribute 2 Hit Tokens AMONG friendly figures". Sequential picker (mirrors
+  // Combat Resupply): the player assigns one Hit token at a time to any friendly
+  // figure. The vpNoteIfAdjacentTerminal reminder rides along on the first call.
   if (entry.type === 'ccEffect' && typeof entry.grantHitTokensToActivating === 'number') {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, choiceIndex, targetFigureKey } = context;
     const msgId = playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null;
     if (!game || !msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
-    const fk = figureKeys[0];
     const count = entry.grantHitTokensToActivating;
-    grantPowerTokens(game, fk, 'Damage', count);
     const vpNote = entry.vpNoteIfAdjacentTerminal ? ` If adjacent to a terminal, use \`/editvp +${entry.vpNoteIfAdjacentTerminal}\` to gain ${entry.vpNoteIfAdjacentTerminal} VP.` : '';
-    return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Damage Token${count !== 1 ? 's' : ''}** to ${meta.dcName}.${vpNote}` };
+    // Eligible = all friendly figures in play not already at max power tokens.
+    const eligibleAll = () => Object.entries(game.figurePositions?.[playerNum] || {})
+      .filter(([efk, pos]) => pos && (game.figurePowerTokens?.[efk] || []).length < getMaxPowerTokens(efk))
+      .map(([efk]) => efk);
+
+    // Phase 2+: sequential allocation — assign 1 Hit token to the chosen figure.
+    const pending = game.pendingTransmitPlans?.[msgId];
+    if (pending && choiceIndex != null && targetFigureKey) {
+      grantPowerTokens(game, targetFigureKey, 'Damage', 1);
+      pending.remaining -= 1;
+      const tName = dcNameFromFigureKey(targetFigureKey);
+      const stillEligible = eligibleAll();
+      if (pending.remaining <= 0 || stillEligible.length === 0) {
+        delete game.pendingTransmitPlans[msgId];
+        return { applied: true, logMessage: `**${entry.label}** — **${tName}** gained 1 Hit Token. Distribution complete.${vpNote}`, refreshDcEmbed: true };
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: figureChoiceLabels(stillEligible),
+        targetFigureKeys: stillEligible,
+        logMessage: `**${tName}** gained 1 Hit Token. ${pending.remaining} more to assign.`,
+      };
+    }
+
+    // Phase 1: start the distribution.
+    const eligible = eligibleAll();
+    if (eligible.length === 0) {
+      return { applied: true, logMessage: `**${entry.label}** — No friendly figures eligible for Hit Tokens.${vpNote}` };
+    }
+    if (eligible.length === 1) {
+      grantPowerTokens(game, eligible[0], 'Damage', count);
+      return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Hit Token${count !== 1 ? 's' : ''}** to ${dcNameFromFigureKey(eligible[0])}.${vpNote}`, refreshDcEmbed: true };
+    }
+    game.pendingTransmitPlans = game.pendingTransmitPlans || {};
+    game.pendingTransmitPlans[msgId] = { remaining: count };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: figureChoiceLabels(eligible),
+      targetFigureKeys: eligible,
+      logMessage: `**${entry.label}** — Distribute ${count} Hit Token${count !== 1 ? 's' : ''} among friendly figures. Pick a figure:${vpNote}`,
+    };
   }
 
   // ccEffect: protectOldWaysBonus (Protect the Old Ways) — ONE-SHOT reactive
@@ -11287,7 +11421,13 @@ export function resolveAbility(abilityId, context) {
     // Find J4X-7 figure
     const j4xFk = Object.keys(game.figurePositions?.[playerNum] || {}).find((fk) => fk.startsWith('J4X-7-'));
     if (!j4xFk) {
-      return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play. Deploy J4X-7 to Jarrod Kelvin\'s space manually, then apply this card again.' };
+      // CSV companion_place: "if not in play, put J4X-7 into your space". Auto-
+      // placing the companion requires the full companion-deploy pipeline
+      // (post-deploy.js companion_deploy: Discord DC message + banks + host map +
+      // board image) — heavy infra not safely reusable from a sync ccEffect. The
+      // companion is re-deployed via the in-game Deploy J4X-7 button at Jarrod
+      // Kelvin's space; this surfaces that step. DEFERRED: full auto-placement.
+      return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play. Put J4X-7 into play in **Jarrod Kelvin\'s space** (use the **Deploy J4X-7** companion button), then apply this card again.' };
     }
     applyCondition(game, j4xFk, 'Focus');
     // Grant free attack to J4X-7's DC
@@ -12294,8 +12434,17 @@ export function resolveAbility(abilityId, context) {
       const _caFk = figureKeyForActivation(game, msgId);
       if (_caFk) game.freeAttackBonusPending[_caFk] = true;
       if (friendlyMsgId) game.freeAttackBonusPending[chosenFigureKey] = true;
+      // "figures do not block line of sight for these attacks" — arm
+      // nextAttackIgnoreFigureLOS (same flag Marksman uses) on BOTH attackers.
+      game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
+      if (_caFk) game.nextAttackIgnoreFigureLOS[_caFk] = true;
+      game.nextAttackIgnoreFigureLOS[chosenFigureKey] = true;
       const dcName = dcNameFromFigureKey(chosenFigureKey);
-      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure. LOS: figures don't block for these attacks.` };
+      // NOTE: the "same target" constraint is not auto-enforced — it would need
+      // capturing the first attacker's chosen target and forcing it onto the
+      // second via game.forcedAttackTarget (dynamic plumbing). Surfaced in the
+      // log so players self-enforce; the mechanical LOS-ignore clause IS wired.
+      return { applied: true, logMessage: `**Coordinated Attack** — **${meta.dcName}** and **${dcName}** each gain 1 free attack. Both must target the same hostile figure (player-enforced). LOS: figures don't block for these attacks (automated).` };
     }
     // Phase 1: friendly figure picker within 3
     const actKeys = getFigureKeysForDcMsg(game, playerNum, meta);

@@ -799,7 +799,13 @@
           "color": "yellow"
         }
       ],
-      "overrideAttackType": "Melee"
+      "overrideAttackType": "Melee",
+      "overrideAttackPierce": 1,
+      "blockSurgeAbilities": true,
+      "bonusSurgeAbilities": [
+        "+1 hit",
+        "stun"
+      ]
     },
     "Close the Gap": {
       "type": "ccEffect",
@@ -989,6 +995,7 @@
     "Cruel Strike": {
       "type": "ccEffect",
       "label": "Perform attack; it gains Surge: Pierce 1, Weaken",
+      "freeAttackBonus": true,
       "nextAttackBonusSurgeAbilities": [
         "pierce 1, weaken"
       ],
@@ -2432,6 +2439,8 @@
       "type": "ccEffect",
       "label": "+1 Damage (or +2 Damage and Pierce 2 vs object)",
       "attackBonusHits": 1,
+      "objectDefenderBonusHits": 2,
+      "objectDefenderBonusPierce": 2,
       "wiredStatus": "wired"
     },
     "Heightened Reflexes": {
@@ -2653,13 +2662,14 @@
     },
     "Improvised Weapons": {
       "type": "ccEffect",
-      "label": "Ranged attack using 1 green + 1 yellow die",
+      "label": "Ranged attack using 1 green + 1 yellow die (no abilities)",
       "overrideAttackDice": [
         "green",
         "yellow"
       ],
       "overrideAttackType": "Ranged",
       "freeAttackBonus": true,
+      "blockSurgeAbilities": true,
       "wiredStatus": "wired"
     },
     "improvised_cover_verena": {
@@ -2961,6 +2971,11 @@
       ],
       "overrideAttackType": "Ranged",
       "overrideBonusAccuracy": 2,
+      "blockSurgeAbilities": true,
+      "bonusSurgeAbilities": [
+        "+1 hit",
+        "pierce 4"
+      ],
       "wiredStatus": "wired"
     },
     "lightsaber_throw_gi": {
@@ -2977,7 +2992,11 @@
     "Lock On": {
       "type": "ccEffect",
       "label": "+3 Accuracy (or -1 Dodge/-1 Evade — player choice)",
-      "attackAccuracyBonus": 3,
+      "chooseOne": [
+        { "label": "+3 Accuracy", "attackAccuracyBonus": 3 },
+        { "label": "-1 Dodge", "attackDodgeReduction": 1 },
+        { "label": "-1 Evade", "attackEvadeReduction": 1 }
+      ],
       "wiredStatus": "wired"
     },
     "locked_and_loaded": {

@@ -41,7 +41,7 @@ const BATCH = [
   ['Guerilla Warfare',        ['applyBlockAndHideToIsolatedFriendlies']],
   ['Hard to Hit',             ['applyDefenseBonusEvade']],
   ['Harsh Environment',       ['informational', 'setsHarshEnvironment']],
-  ['Heavy Ordnance',          ['attackBonusHits']],
+  ['Heavy Ordnance',          ['attackBonusHits', 'objectDefenderBonusHits', 'objectDefenderBonusPierce']],
   ['Heightened Reflexes',     ['removeDefenseDieResults']],
   ['Hidden Trap',             ['hiddenTrapEffect']],
   ['Hide in Plain Sight',     ['untargetableUntilRoundEnd']],

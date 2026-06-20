@@ -68,6 +68,7 @@ const ACTIVATION_MSGID_FLAGS = [
   // the msgId-cleanup loop never matched, leaving stale state if the
   // attack handler skipped its own delete on an error path).
   'pendingCombatResupply',
+  'pendingTransmitPlans',
   // pendingPostAttackConditions DROPPED 2026-05-13 — only consumer was
   // gated by `if (false && ...)`; no live writers anywhere. Dead code.
   // pendingMpBonus retained — no live writers in main, but the
@@ -732,6 +733,7 @@ const ROUND_OBJECT_FLAGS = [
   'applySelfStunAfterAttackFigureKey',
   'postActivationConditions',
   'pendingCombatResupply',
+  'pendingTransmitPlans',
   'pendingPostAttackConditions',
   'nextActivationFreeAttack',
   // vetInstinctsActiveThisActivation REMOVED 2026-05-09 (one-time
@@ -1054,6 +1056,28 @@ export function cleanupRoundStart(game) {
   }
   for (const key of ROUND_DELETE_FLAGS) {
     delete game[key];
+  }
+  // Smoke Grenade tokens: "discard the smoke token at the end of the next
+  // round". Each smoke token records an expiresAfterRound (the round it must be
+  // discarded at the END of). This runs at start-of-round AFTER game.currentRound
+  // has been incremented, so any token whose expiry round has already elapsed
+  // (expiresAfterRound < currentRound) is now cleared.
+  const _smokeExpiry = game.ancillaryTokens?.smokeExpiry;
+  if (_smokeExpiry && typeof _smokeExpiry === 'object') {
+    const _curRound = game.currentRound || 1;
+    const _smokeArr = game.ancillaryTokens.smoke || [];
+    const _survivors = [];
+    const _newExpiry = {};
+    for (const space of _smokeArr) {
+      const exp = _smokeExpiry[space];
+      // Keep tokens with no recorded expiry (defensive) or not yet expired.
+      if (exp == null || exp >= _curRound) {
+        _survivors.push(space);
+        if (exp != null) _newExpiry[space] = exp;
+      }
+    }
+    game.ancillaryTokens.smoke = _survivors;
+    game.ancillaryTokens.smokeExpiry = _newExpiry;
   }
 }
 

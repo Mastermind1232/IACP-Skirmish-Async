@@ -138,6 +138,24 @@ describe('cleanupRoundStart', () => {
     assert.strictEqual(game.player1Id, 'abc');
     assert.deepStrictEqual(game.p1DcList, [{ dcName: 'Trooper' }]);
   });
+
+  it('Smoke Grenade: keeps unexpired smoke, clears smoke whose round has elapsed', () => {
+    // Smoke placed in round 2 → expiresAfterRound 3. At start of round 3 it must
+    // still be present (active through "the next round"); at start of round 4 gone.
+    const baseGame = () => ({
+      ancillaryTokens: {
+        smoke: ['c4', 'd5'],
+        smokeExpiry: { c4: 3, d5: 3 },
+      },
+    });
+    const g3 = { ...baseGame(), currentRound: 3 };
+    cleanupRoundStart(g3);
+    assert.deepStrictEqual(g3.ancillaryTokens.smoke.sort(), ['c4', 'd5']);
+    const g4 = { ...baseGame(), currentRound: 4 };
+    cleanupRoundStart(g4);
+    assert.deepStrictEqual(g4.ancillaryTokens.smoke, []);
+    assert.deepStrictEqual(g4.ancillaryTokens.smokeExpiry, {});
+  });
 });
 
 describe('stale-state cleanup: pendingMissileSalvo', () => {

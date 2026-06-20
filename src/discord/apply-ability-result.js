@@ -110,6 +110,14 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Exhaust DCs: mark exhausted and rebuild DC embed (Take Initiative cost) ---
+  if (result.applied && result.exhaustDcMsgIds?.length && dcExhaustedState) {
+    for (const id of result.exhaustDcMsgIds) {
+      dcExhaustedState.set(id, true);
+      await refreshDcEmbedAndComponents(client, game, id, ctx, { exhausted: true, errorContext: 'Failed to update DC embed after exhaust:' });
+    }
+  }
+
   // --- Drew cards (refresh both players' hands since draw effects can affect either) ---
   // Per alexanbv 2026-05-13: Command cards are SECRET. Never list drawn
   // card names in the public game log — they only become visible to the

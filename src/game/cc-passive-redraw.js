@@ -317,6 +317,14 @@ export function fireCcDiscarded(game, ownerPlayerNum, cardName, { fromDeck = fal
   // 1. Re-draw passives (deck vs hand).
   if (fromDeck) {
     out.redrawn = checkDeckDiscardPassiveRedraws(game, ownerPlayerNum, cardName).redrawn || [];
+    // De Wanna Wanga: CSV "when this card is discarded from your hand OR DECK
+    // you may shuffle it into your Command deck". Built on Hope (above) RE-DRAWS
+    // a deck discard to hand; De Wanna Wanga instead RESHUFFLES into the deck, so
+    // it routes through the same reshuffle path used for a hand discard.
+    if (HAND_DISCARD_RESHUFFLE_CARDS.has(cardName)
+        && checkHandDiscardPassiveReshuffle(game, ownerPlayerNum, cardName).reshuffled) {
+      if (!out.redrawn.includes(cardName)) out.redrawn.push(cardName);
+    }
   } else if (checkHandDiscardPassiveReshuffle(game, ownerPlayerNum, cardName).reshuffled) {
     out.redrawn = [cardName];
   }

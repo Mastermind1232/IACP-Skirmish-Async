@@ -38,8 +38,11 @@ describe('PROBE-PD-ATK-004: alternate-pool attacks retain the attacker DC surge 
   });
 
   it('004b: source — the ONLY full opt-out is combat.blockSurgeAbilities (no dice-pool predicate)', () => {
+    // blockSurgeAbilities suppresses the figure's NATIVE surges; Close and
+    // Personal / Lightbow attach explicit replacement surges via
+    // combat.bonusSurgeAbilities, which are the only thing returned when blocked.
     assert.match(G_CB_SRC,
-      /if \(combat\.blockSurgeAbilities\) return \[\];/,
+      /if \(combat\.blockSurgeAbilities\) return \[\.\.\.\(combat\?\.bonusSurgeAbilities \|\| \[\]\)\];/,
       'blocking surge abilities must require the explicit blockSurgeAbilities flag — CRR-ATK-004');
     // There must be NO guard that returns an empty surge list based on alternate-pool / override state
     const fnBody = G_CB_SRC.match(/export function getAttackerSurgeAbilities\(combat\) \{[\s\S]*?^}/m);

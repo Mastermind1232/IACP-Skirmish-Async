@@ -9,7 +9,49 @@ import {
   checkDeckDiscardPassiveRedraws,
   checkFriendlyDefeatedPassiveRedraws,
   checkStartOfRoundPassiveRedraws,
+  fireCcDiscarded,
 } from './cc-passive-redraw.js';
+
+// ── De Wanna Wanga: reshuffle on HAND or DECK discard ───────────────────────
+
+describe('De Wanna Wanga passive reshuffle (hand or deck)', () => {
+  it('reshuffles into deck when discarded from the DECK (not just hand)', () => {
+    const game = {
+      player1CcDiscard: ['De Wanna Wanga'],
+      player1CcDeck: ['Other A', 'Other B'],
+      player1CcHand: [],
+    };
+    const out = fireCcDiscarded(game, 1, 'De Wanna Wanga', { fromDeck: true });
+    // Moved out of discard, into deck — NOT into hand (reshuffle, not redraw).
+    assert.ok(!game.player1CcDiscard.includes('De Wanna Wanga'));
+    assert.ok(game.player1CcDeck.includes('De Wanna Wanga'));
+    assert.ok(!game.player1CcHand.includes('De Wanna Wanga'));
+    assert.ok(out.redrawn.includes('De Wanna Wanga'));
+  });
+
+  it('still reshuffles when discarded from the HAND', () => {
+    const game = {
+      player2CcDiscard: ['De Wanna Wanga'],
+      player2CcDeck: ['Z'],
+      player2CcHand: [],
+    };
+    const out = fireCcDiscarded(game, 2, 'De Wanna Wanga', { fromDeck: false });
+    assert.ok(game.player2CcDeck.includes('De Wanna Wanga'));
+    assert.ok(out.redrawn.includes('De Wanna Wanga'));
+  });
+
+  it('honors the once-per-round limit on the deck path', () => {
+    const game = {
+      player1CcDiscard: ['De Wanna Wanga'],
+      player1CcDeck: [],
+      player1CcHand: [],
+      deWannaWangaUsedThisRound: { 1: true },
+    };
+    const out = fireCcDiscarded(game, 1, 'De Wanna Wanga', { fromDeck: true });
+    assert.ok(game.player1CcDiscard.includes('De Wanna Wanga'));
+    assert.ok(!out.redrawn.includes('De Wanna Wanga'));
+  });
+});
 
 // ── moveDiscardToHand ────────────────────────────────────────────────────────
 
