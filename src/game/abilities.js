@@ -6779,9 +6779,17 @@ export function resolveAbility(abilityId, context) {
       if (key && !cbt.bonusSurgeAbilities.includes(key)) cbt.bonusSurgeAbilities.push(key);
     }
     const labels = entry.attackBonusSurgeAbilities.join(', ');
+    // Some CCs grant surge abilities AND a flat Accuracy bonus in one card
+    // (e.g. Hunt Them Down: "+2 Accuracy and the attack gains Cleave 2").
+    // Apply the Accuracy here too so the surge branch doesn't swallow it.
+    let accNote = '';
+    if (typeof entry.attackAccuracyBonus === 'number' && entry.attackAccuracyBonus > 0) {
+      cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
+      accNote = ` and +${entry.attackAccuracyBonus} Accuracy`;
+    }
     return {
       applied: true,
-      logMessage: `This attack gains surge abilities: ${labels}.`,
+      logMessage: `This attack gains surge abilities: ${labels}${accNote}.`,
     };
   }
 
