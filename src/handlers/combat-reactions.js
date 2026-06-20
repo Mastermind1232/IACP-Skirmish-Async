@@ -17,6 +17,7 @@ function _countUnusedAttackerRerollAbilitiesShim(combat) {
 import { resolvePendingCombat, pushNestedCombat } from '../game/combat-stack.js';
 import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
+import { filterCondition } from '../game/conditions.js';
 import { getDcEffect } from '../game/dc-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
@@ -25,7 +26,7 @@ import { discordCatch } from '../error-handling.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchCombatThread, sanitizeMentions } from '../discord/channel-helpers.js';
-import { sendPowerTokenOverflowUI, sendModsYn, resumeGateAfterRollInterrupt } from './combat.js';
+import { sendPowerTokenOverflowUI, sendModsYn, resumeGateAfterRollInterrupt, _forceMissAndStep8 } from './combat.js';
 import { clearPendingIllicitArms, clearPendingThereIsNoTry, clearPendingPowerConverter, clearPendingStrikeMeDown, clearPendingSlowOnTheDraw, clearPendingForceExhaustion, clearPendingHunterProtocol, clearPendingForceIsWithMe } from '../game/interrupts.js';
 import { getDcMessageIds as _getDcMessageIdsFiwm } from '../game/player-helpers.js';
 
@@ -901,8 +902,25 @@ export async function handleIllicitArms(interaction, ctx) {
 
 /**
  * Handle force_exhaustion_yes_ / force_exhaustion_no_ buttons.
- * Force Exhaustion (The Child): when attack declared targeting The Child or a Clan of Two figure,
- * The Child may become Incapacitated to remove 1 attack die and Weaken the attacker.
+ *
+ * Force Exhaustion (The Child / Clan of Two) — per alexanbv's refined ruling:
+ * when an attack targeting The Child (or a Clan-of-Two-attached figure) is
+ * declared, The Child's owner may have The Child become **Incapacitated**.
+ *
+ * On incap (BOTH cases): remove 1 attack die (weakest-first) AND the attacker
+ * becomes **Weakened** (respecting condition immunity).
+ *
+ * ADDITIONALLY, only when The Child ITSELF is the target (fe.targetIsChild):
+ * the attack also MISSES with NO dice rolled — the pipeline skips directly to
+ * the "after resolving an attack" step, exactly like On the Lam forcing a miss.
+ * The attacker still loses Focus and Hidden (the forced-miss drain does NOT
+ * consume them, so we strip them explicitly here).
+ *
+ * When a Clan-of-Two-ATTACHED figure is the target (not fe.targetIsChild): only
+ * the die-removal + Weaken happen; the attack PROCEEDS normally with the reduced
+ * dice. We clear pendingForceExhaustion so the on_declare gate resumes to roll.
+ *
+ * "No" (decline): the attack proceeds as normal (gate continues to roll).
  */
 export async function handleForceExhaustion(interaction, ctx) {
   const {
@@ -940,30 +958,73 @@ export async function handleForceExhaustion(interaction, ctx) {
       delete game.figureConditions[fe.childFigureKey];
     }
 
-    // Remove 1 attack die (weakest first: yellow > green > blue > red)
-    if (game.pendingCombat) {
-      const { dice, removedColor } = removeForceExhaustionDie(game.pendingCombat.attackInfo.dice);
+    const combat = game.pendingCombat;
+
+    // BOTH cases: remove 1 attack die (weakest first: yellow > green > blue > red)
+    // and Weaken the attacker (respecting condition immunity).
+    if (combat?.attackInfo) {
+      const { dice, removedColor } = removeForceExhaustionDie(combat.attackInfo.dice);
+      combat.attackInfo = { ...combat.attackInfo, dice };
       if (removedColor && thread) {
         await thread.send(`**Force Exhaustion** — Removed 1 **${removedColor}** attack die.`).catch(discordCatch);
       }
-      game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice };
-
-      // Apply Weakened to the attacker (respects immunity)
-      const atkFk = fe.attackerFigureKey;
-      if (!isConditionImmune(game, atkFk)) {
-        applyCondition(game, atkFk, 'Weaken');
-        if (!game.pendingCombat.attackerConds.includes('Weaken')) {
-          game.pendingCombat.attackerConds.push('Weaken');
-        }
+    }
+    const atkFk = combat?.attackerFigureKey ?? fe.attackerFigureKey;
+    if (atkFk && !isConditionImmune(game, atkFk)) {
+      applyCondition(game, atkFk, 'Weaken');
+      if (combat && Array.isArray(combat.attackerConds) && !combat.attackerConds.includes('Weaken')) {
+        combat.attackerConds.push('Weaken');
       }
     }
 
-    if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**.`).catch(discordCatch);
-    if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
-  } else {
-    if (thread) await thread.send('**Force Exhaustion** — Declined.').catch(discordCatch);
+    if (fe.targetIsChild) {
+      // The Child ITSELF is the target: ALSO skip the attack (force a miss).
+      // "Attacker still loses Focus and Hidden if relevant." On a normal attack
+      // these are consumed in the after-resolve window's Focus/Hide discard
+      // (combat-bridge.js runAfterResolveWindow). The forced-miss drain below
+      // uses postPostResolveWindow, which does NOT run that discard — so strip
+      // the attacker's Focus + Hidden explicitly here, mirroring a resolved attack.
+      if (combat?.attackerFigureKey) {
+        filterCondition(game, combat.attackerFigureKey, 'Focus');
+        filterCondition(game, combat.attackerFigureKey, 'Hide');
+        if (Array.isArray(combat.attackerConds)) {
+          combat.attackerConds = combat.attackerConds.filter((c) => c !== 'Focus' && c !== 'Hide');
+        }
+      }
+
+      if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened, and the attack misses (no dice rolled).', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+
+      // Clear the pending decision BEFORE driving the forced-miss drain so the
+      // roll/gate guards (which refuse to advance while pendingForceExhaustion is
+      // set) don't trip during the after-resolve re-entry.
+      clearPendingForceExhaustion(game);
+
+      // Abort the attack as a MISS using the On the Lam mechanism: synthesize a
+      // miss state (forceMiss=true, no dice), then run the after-resolve drain for
+      // both sides so step-8 / "after resolving an attack" effects still fire.
+      if (combat) {
+        combat.forceMiss = true;
+        await _forceMissAndStep8(
+          thread, game, combat, ctx,
+          `**Force Exhaustion** — **The Child** is now **Incapacitated**. The attack **misses** — no dice are rolled.`,
+        );
+      }
+      saveGames(game.gameId);
+      return;
+    }
+
+    // Clan-of-Two-attached figure is the target: die removed + attacker Weakened,
+    // but the attack PROCEEDS. Clear the pending decision so the on_declare gate's
+    // roll/Ready guards (which refuse while pendingForceExhaustion is set) no longer
+    // block — the player can now proceed to roll with the reduced dice.
+    if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**. The attack proceeds with the reduced dice.`).catch(discordCatch);
+    if (logGameAction) await logGameAction(game, client, '**Force Exhaustion** — The Child became Incapacitated. 1 attack die removed, attacker Weakened. Attack proceeds.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    clearPendingForceExhaustion(game);
+    saveGames(game.gameId);
+    return;
   }
 
+  if (thread) await thread.send('**Force Exhaustion** — Declined.').catch(discordCatch);
   clearPendingForceExhaustion(game);
   saveGames(game.gameId);
 }
@@ -1125,7 +1186,6 @@ export async function handleErgPick(interaction, ctx) {
   if (choice === 'discard') {
     const cond = f.harmful?.[0];
     if (cond) {
-      const { filterCondition } = await import('../game/conditions.js');
       filterCondition(game, f.figureKey, cond);
       resultText = `**${f.dcName}** discarded **${cond}**`;
     }

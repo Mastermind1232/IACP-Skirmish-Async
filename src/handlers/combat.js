@@ -495,6 +495,19 @@ export async function handleCombatGateReady(interaction, ctx) {
     return;
   }
 
+  // Force Exhaustion (The Child / Clan of Two): the on_declare gate must NOT
+  // advance to the roll while the defender's incapacitate decision is still open
+  // (alexanbv ruling: an incap forces the attack to miss with no dice rolled, so
+  // the decision is always resolved before any dice roll). Refuse the on_declare
+  // Ready ack until the force_exhaustion_yes_/no_ buttons clear pendingForceExhaustion.
+  if (gate.phase === 'on_declare' && game.pendingForceExhaustion) {
+    await interaction.followUp({
+      content: '**Force Exhaustion** is pending — The Child\'s owner must resolve the incapacitate decision before this attack can proceed.',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+
   // Sequential gate (destruct 2026-05-06): only the activePlayer can ack.
   // Test game: P1 acts for both — clicker is whoever is currently active.
   gate.acked = gate.acked || {};
@@ -5088,27 +5101,35 @@ export async function handleAttackTarget(interaction, ctx) {
   // attack-declare. The +1 Hit applies as a step-4 modifier alongside
   // Pulse Cannon / Negotiate / Call the Shots / Heavy Repeater.
 
-  // Force Exhaustion (The Child / Clan of Two): when attack targets The Child or a figure with Clan of Two,
-  // The Child's owner may choose to incapacitate The Child to remove 1 attack die and Weaken the attacker.
+  // Force Exhaustion (The Child / Clan of Two): when an attack targets The Child or a figure with
+  // Clan of Two, The Child's owner may incapacitate The Child. On incap (both cases) 1 attack die is
+  // removed and the attacker becomes Weakened. ADDITIONALLY, if The Child ITSELF is the target, the
+  // attack also MISSES (no dice rolled, skip to "after resolving an attack" — alexanbv ruling, like
+  // On the Lam). If a Clan-of-Two-attached figure is the target, the attack proceeds with reduced dice.
   {
     const _feDefMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, target.figureKey) || null);
     const _feDefUpgrades = _feDefMsgId ? (game.p1DcAttachments?.[_feDefMsgId] || game.p2DcAttachments?.[_feDefMsgId] || []) : [];
     const _feDecision = canOfferForceExhaustion(game, defenderPlayerNum, targetDcName, _feDefUpgrades);
     if (_feDecision.eligible) {
       const defOwnerId = getPlayerId(game, defenderPlayerNum);
+      const _feTargetIsChild = _feDecision.reasonCode === 'target-is-child';
       setPendingForceExhaustion(game, {
         gameId: game.gameId,
         defenderPlayerNum,
         attackerPlayerNum,
         attackerFigureKey,
         childFigureKey: _feDecision.childFigureKey,
+        targetIsChild: _feTargetIsChild,
         combatThreadId: thread.id,
       });
       const feRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. Use this ability?`, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
+      const _feMsg = _feTargetIsChild
+        ? `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated**: remove 1 attack die and **Weaken** the attacker, AND (since The Child itself is the target) this attack **misses** — no dice are rolled. Use this ability?`
+        : `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. The attack still proceeds with the reduced dice. Use this ability?`;
+      await thread.send(sanitizeMentions({ content: _feMsg, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
     }
   }
 
@@ -5172,7 +5193,7 @@ export async function handleAttackTarget(interaction, ctx) {
  * combat, enqueue step-8 effects for both sides, drain via
  * postPostResolveWindow, then clean up.
  */
-async function _forceMissAndStep8(thread, game, combat, ctx, message) {
+export async function _forceMissAndStep8(thread, game, combat, ctx, message) {
   if (thread) await thread.send(message).catch(discordCatch);
   // Synthesize miss state — step-8 enqueuers read _step7Hit/_step7Damage.
   combat._step7Hit = false;
@@ -5242,6 +5263,18 @@ export async function handleCombatRoll(interaction, ctx) {
   if (game.pendingDbhDiePick) {
     await interaction.followUp({
       content: '**Driven by Hatred** — pick a die to remove from your attack pool first (button in combat thread).',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+  // Force Exhaustion (The Child / Clan of Two): the defender's incap decision is
+  // made at attack-declare (on_declare, defender) and MUST be resolved before any
+  // dice are rolled (alexanbv ruling: an incap forces the attack to miss with no
+  // dice rolled). Refuse the roll while the FE decision is still pending — the
+  // force_exhaustion_yes_/no_ buttons drive resolution; "No" lets the gate roll.
+  if (game.pendingForceExhaustion) {
+    await interaction.followUp({
+      content: '**Force Exhaustion** — The Child\'s owner must resolve the incapacitate decision first (button in combat thread).',
       ephemeral: true,
     }).catch(discordCatch);
     return;

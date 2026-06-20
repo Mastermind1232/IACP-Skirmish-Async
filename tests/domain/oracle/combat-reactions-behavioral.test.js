@@ -639,58 +639,25 @@ describe('B-CR-DOUBT: Doubt forced-reroll queue', () => {
 
 // ── B-CR-FE: Force Exhaustion ───────────────────────────────────────────────
 
-describe('B-CR-FE: Force Exhaustion pre-roll die removal', () => {
-  it('B-CR-FE-001: yes removes weakest die from attackInfo.dice (yellow first)', async () => {
-    const combat = makeCombat();
-    combat.attackInfo = { dice: ['blue', 'yellow', 'red'] };
-    combat.attackerConds = [];
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingForceExhaustion: {
-        defenderPlayerNum: 2,
-        attackerFigureKey: 'Stormtrooper-1-0',
-        combatThreadId: 'thread1',
-      },
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
-
-    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'red'],
-      'yellow die removed (weakest by priority)');
-    assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated');
-    assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion deleted');
-  });
-
-  it('B-CR-FE-002: die removal order is yellow > green > blue > red', async () => {
-    // Only green and red available — green should be removed
-    const combat = makeCombat();
-    combat.attackInfo = { dice: ['red', 'green'] };
-    combat.attackerConds = [];
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingForceExhaustion: {
-        defenderPlayerNum: 2,
-        attackerFigureKey: 'Stormtrooper-1-0',
-        combatThreadId: 'thread1',
-      },
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
-
-    assert.deepStrictEqual(combat.attackInfo.dice, ['red'], 'green removed before red');
-  });
-
-  it('B-CR-FE-003: applies Weaken to attacker via figureConditions', async () => {
-    const combat = makeCombat();
-    combat.attackInfo = { dice: ['blue', 'red'] };
-    combat.attackerConds = [];
-    const game = {
+describe('B-CR-FE: Force Exhaustion (incap → die removal + Weaken, two cases)', () => {
+  // Per alexanbv's refined ruling: incapacitating The Child ALWAYS removes 1
+  // attack die (weakest-first) AND Weakens the attacker. ADDITIONALLY, only
+  // when The Child ITSELF is the target, the attack also MISSES with no dice
+  // (forceMiss, skip to "after resolving an attack"; attacker loses Focus +
+  // Hidden). When a Clan-of-Two-attached figure is the target, the die removal
+  // + Weaken happen but the attack PROCEEDS (no forceMiss).
+  function feCombat(overrides = {}) {
+    const c = makeCombat();
+    c.gameId = 'g1';
+    c.attackerFigureKey = 'Stormtrooper-1-0';
+    c.attackerDcName = 'Stormtrooper';
+    c.attackerConds = [];
+    c.attackInfo = { dice: ['blue', 'yellow', 'red'] };
+    c.target = { figureKey: 'The Child-1-0', label: 'The Child' };
+    return Object.assign(c, overrides);
+  }
+  function feGame(combat, { targetIsChild = true, ...extra } = {}) {
+    return {
       gameId: 'g1',
       player1Id: 'player1',
       player2Id: 'player2',
@@ -698,67 +665,103 @@ describe('B-CR-FE: Force Exhaustion pre-roll die removal', () => {
       pendingForceExhaustion: {
         defenderPlayerNum: 2,
         attackerFigureKey: 'Stormtrooper-1-0',
+        childFigureKey: 'The Child-1-0',
+        targetIsChild,
         combatThreadId: 'thread1',
       },
       pendingCombat: combat,
+      ...extra,
     };
+  }
+
+  // ── Case A: The Child ITSELF is the target (targetIsChild) ──
+  it('B-CR-FE-001: target=Child → incap, removes weakest die, forces miss', async () => {
+    const combat = feCombat();
+    const game = feGame(combat, { targetIsChild: true });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
 
-    assert.ok(game.figureConditions['Stormtrooper-1-0']?.includes('Weaken'),
-      'Weaken applied via figureConditions');
-    assert.ok(combat.attackerConds.includes('Weaken'),
+    assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated');
+    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'red'], 'yellow die removed (weakest)');
+    assert.strictEqual(combat.forceMiss, true, 'attack flagged as a forced miss');
+    assert.strictEqual(combat._step7Hit, false, 'synthesized miss (no hit)');
+    assert.strictEqual(combat._step7Damage, 0, 'no damage on a forced miss');
+    assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion cleared');
+  });
+
+  it('B-CR-FE-002: target=Child → attacker becomes Weakened', async () => {
+    const combat = feCombat();
+    const game = feGame(combat, { targetIsChild: true });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+
+    assert.ok((game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'),
+      'attacker Weakened via figureConditions');
+    assert.ok((combat.attackerConds || []).includes('Weaken'),
       'Weaken added to combat.attackerConds');
   });
 
-  it('B-CR-FE-004: no path does not modify dice or set incapacitated', async () => {
-    const combat = makeCombat();
-    combat.attackInfo = { dice: ['blue', 'red'] };
-    const origDice = [...combat.attackInfo.dice];
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingForceExhaustion: {
-        defenderPlayerNum: 2,
-        attackerFigureKey: 'Stormtrooper-1-0',
-        combatThreadId: 'thread1',
-      },
-      pendingCombat: combat,
-    };
-    const { ctx } = buildCtx(game);
-    await handleForceExhaustion(mockInteraction('force_exhaustion_no_g1', 'player2'), ctx);
-
-    assert.deepStrictEqual(combat.attackInfo.dice, origDice, 'dice unchanged');
-    assert.strictEqual(game.childIncapacitated, undefined, 'not incapacitated');
-    assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion still deleted');
-  });
-
-  it('B-CR-FE-005: attackInfo.dice is a different array than attackDiceResults', async () => {
-    // This test verifies the pre-roll vs post-roll distinction
-    const combat = makeCombat();
-    combat.attackInfo = { dice: ['blue', 'yellow', 'red'] };
-    combat.attackerConds = [];
-    const origResults = JSON.parse(JSON.stringify(combat.attackDiceResults));
-    const game = {
-      gameId: 'g1',
-      player1Id: 'player1',
-      player2Id: 'player2',
-      pendingForceExhaustion: {
-        defenderPlayerNum: 2,
-        attackerFigureKey: 'Stormtrooper-1-0',
-        combatThreadId: 'thread1',
-      },
-      pendingCombat: combat,
-    };
+  it('B-CR-FE-003: target=Child → attacker still loses Focus and Hidden', async () => {
+    const combat = feCombat();
+    combat.attackerConds = ['Focus', 'Hide'];
+    const game = feGame(combat, {
+      targetIsChild: true,
+      figureConditions: { 'Stormtrooper-1-0': ['Focus', 'Hide'] },
+    });
     const { ctx } = buildCtx(game);
     await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
 
-    // attackInfo.dice modified
-    assert.strictEqual(combat.attackInfo.dice.length, 2, 'attackInfo.dice shrunk');
-    // attackDiceResults NOT touched (those are post-roll)
-    assert.deepStrictEqual(combat.attackDiceResults, origResults,
-      'attackDiceResults unchanged — Force Exhaustion is pre-roll');
+    assert.ok(!(game.figureConditions['Stormtrooper-1-0'] || []).includes('Focus'),
+      'Focus consumed on the attacker');
+    assert.ok(!(game.figureConditions['Stormtrooper-1-0'] || []).includes('Hide'),
+      'Hidden removed from the attacker');
+    assert.ok(!combat.attackerConds.includes('Focus'), 'Focus off combat.attackerConds');
+    assert.ok(!combat.attackerConds.includes('Hide'), 'Hide off combat.attackerConds');
+  });
+
+  it('B-CR-FE-004: yes clears The Child\'s conditions on incapacitation (CRR-INCP-002)', async () => {
+    const combat = feCombat();
+    const game = feGame(combat, {
+      targetIsChild: true,
+      figureConditions: { 'The Child-1-0': ['Focus'] },
+    });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+
+    assert.ok(!('The Child-1-0' in game.figureConditions),
+      'The Child\'s conditions discarded on incapacitation');
+  });
+
+  // ── Case B: a Clan-of-Two-attached figure is the target ──
+  it('B-CR-FE-005: target=clan-of-two figure → die removed + Weaken, but attack PROCEEDS', async () => {
+    const combat = feCombat();
+    const game = feGame(combat, { targetIsChild: false });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_yes_g1', 'player2'), ctx);
+
+    assert.strictEqual(game.childIncapacitated, true, 'Child is incapacitated');
+    assert.deepStrictEqual(combat.attackInfo.dice, ['blue', 'red'], 'yellow die removed (weakest)');
+    assert.ok((game.figureConditions['Stormtrooper-1-0'] || []).includes('Weaken'),
+      'attacker Weakened');
+    assert.ok((combat.attackerConds || []).includes('Weaken'), 'Weaken on combat.attackerConds');
+    assert.notStrictEqual(combat.forceMiss, true, 'NO forced miss — attack proceeds');
+    assert.notStrictEqual(combat._step7Hit, false, 'not synthesized as a miss');
+    assert.ok(!('pendingForceExhaustion' in game),
+      'pendingForceExhaustion cleared so the gate can resume to roll');
+  });
+
+  // ── Decline ──
+  it('B-CR-FE-006: no → attack proceeds, dice untouched, not incapacitated', async () => {
+    const combat = feCombat();
+    const origDice = [...combat.attackInfo.dice];
+    const game = feGame(combat, { targetIsChild: true });
+    const { ctx } = buildCtx(game);
+    await handleForceExhaustion(mockInteraction('force_exhaustion_no_g1', 'player2'), ctx);
+
+    assert.deepStrictEqual(combat.attackInfo.dice, origDice, 'dice unchanged on decline');
+    assert.strictEqual(combat.forceMiss, undefined, 'no forced miss on decline');
+    assert.strictEqual(game.childIncapacitated, undefined, 'not incapacitated');
+    assert.ok(!('pendingForceExhaustion' in game), 'pendingForceExhaustion cleared');
   });
 });
 

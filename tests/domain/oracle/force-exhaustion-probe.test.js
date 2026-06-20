@@ -1,15 +1,15 @@
 /**
  * PROBE-FORCE-EXHAUSTION: The Child's **Force Exhaustion**.
  *
- * Card text: "When a figure you control is targeted by an attack, you
- *  may declare that The Child becomes Incapacitated. Remove 1 attack
- *  die from that attack and the attacker becomes Weakened. Extends to
- *  figures carrying the Clan of Two attachment."
- *
- * Phase 2 high-risk probe grind (2026-04-21). Atom was structural-only
- * with eligibility logic inlined at combat.js:2333 and die-removal at
- * combat-reactions.js:818. Pure helpers extracted to
- * src/game/force-exhaustion-helpers.js.
+ * Ruling (alexanbv, refined): when an attack targeting The Child (or a
+ *  Clan-of-Two carrier) is declared, The Child's owner may have it become
+ *  Incapacitated. On incap (BOTH cases) 1 attack die is removed (weakest-first
+ *  via removeForceExhaustionDie) AND the attacker becomes Weakened. ADDITIONALLY,
+ *  only when The Child ITSELF is the target, the attack also MISSES with no dice
+ *  rolled (skips to "after resolving an attack"); when a Clan-of-Two-attached
+ *  figure is the target the attack proceeds with the reduced dice. The incap
+ *  resolution lives in handleForceExhaustion (combat-reactions.js); this probe
+ *  covers the OFFER eligibility helpers + the pure die-removal helper.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,17 +1,31 @@
 /**
  * Pure helpers for The Child's **Force Exhaustion**.
  *
- * Card text (paraphrase): "When a figure you control is targeted by an
- *  attack, you may declare that The Child becomes Incapacitated. Remove
- *  1 attack die from that attack and the attacker becomes Weakened."
+ * Ruling (alexanbv, refined): when an attack targeting The Child — or a
+ * figure carrying the **Clan of Two** attachment — is declared, The Child's
+ * owner may have The Child become **Incapacitated**. There are two cases,
+ * distinguished by who the attack's target is:
  *
- * Coverage extension: the trigger also fires when the target carries
- * the **Clan of Two** attachment (Mandalorian/Grogu pair), not just
- * The Child itself.
+ *  - ALWAYS (both cases): on incap, remove 1 attack die from the attack
+ *    (weakest-first order via removeForceExhaustionDie) AND the attacker
+ *    becomes **Weakened** (respecting condition immunity).
  *
- * Extracted from src/handlers/combat.js (trigger declaration) and
- * src/handlers/combat-reactions.js (die removal) so the rule logic is
- * testable without discord.js.
+ *  - ADDITIONALLY, only when The Child *itself* is the target
+ *    (reasonCode 'target-is-child'): the attack is also SKIPPED — it
+ *    MISSES with no dice rolled, the pipeline jumping straight to the
+ *    "after resolving an attack" step (like On the Lam forcing a miss).
+ *    The attacker still loses Focus and Hidden.
+ *
+ *  - When a Clan-of-Two-ATTACHED figure is the target (reasonCode
+ *    'clan-of-two'): only the die-removal + Weaken happen; the attack
+ *    PROCEEDS normally with the reduced dice (no forced miss).
+ *
+ * This module owns the OFFER eligibility (canOfferForceExhaustion /
+ * findChildFigureKey) and the pure die-removal helper
+ * (removeForceExhaustionDie). The incap resolution (die removal + Weaken,
+ * and the forced-miss skip for the target-is-child case) lives in
+ * src/handlers/combat-reactions.js (handleForceExhaustion). Extracted so
+ * the rule logic is testable without discord.js.
  */
 
 import { dcNameFromFigureKey } from './index.js';
