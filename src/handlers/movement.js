@@ -1459,9 +1459,9 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         const [_swCur, _swMax] = _swEntry;
         if ((_swMax ?? 0) === 0 || ((_swCur ?? _swMax ?? 0) <= 0)) continue;
         const _swDmgRes = await _applyDamage(game, { dcHealthState: _swHs, logGameAction, client }, {
-          figureKey: _swTgtFk, msgId: _swTgtMsgId, figIndex: _swFigIdx,
+          figureKey: _swEfk, msgId: _swTgtMsgId, figIndex: _swFigIdx,
           amount: 1, controllerPlayerNum: _swOppPN,
-          source: 'Self-Defense',
+          attackerPlayerNum: playerNum, source: 'Swipe',
         });
         const _swPrev = _swDmgRes.prevHp;
         const _swNew = _swDmgRes.newHp;
