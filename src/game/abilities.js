@@ -9847,12 +9847,18 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'You may immediately activate another ready group with the same name (combined cost of both groups cannot exceed 15).' };
   }
 
-  // ccEffect: roundSmugglersTricksPlayerNum (Smuggler's Tricks)
+  // ccEffect: roundSmugglersTricksPlayerNum (Smuggler's Tricks) —
+  // INTENTIONALLY UNIMPLEMENTED (alexanbv 2026-06-20, same status as Harsh
+  // Environment). The card requires choosing a tile/token and reducing the
+  // opponent's effective figure-count on or adjacent to it for control/
+  // adjacency — a mission-tile/token-targeting model this engine does not
+  // have. The flag is never set, so no consumer fires; deck-loading reports
+  // it as unimplemented (see UNIMPLEMENTED_CARDS in validation.js).
   if (entry.type === 'ccEffect' && entry.roundSmugglersTricksPlayerNum) {
-    const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    game.roundSmugglersTricksPlayerNum = playerNum;
-    return { applied: true, logMessage: 'Choose a tile or token you are on or adjacent to; until start of next round, opponent counts 1 fewer figure on or adjacent to it.' };
+    return {
+      applied: false,
+      manualMessage: "**Smuggler's Tricks** is not implemented (requires a tile/token targeting + figure-count model) — resolve manually if you wish.",
+    };
   }
 
   // ccEffect: grantMpToFriendliesWithin2 (Forward March) — activator

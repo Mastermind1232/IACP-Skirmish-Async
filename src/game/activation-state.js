@@ -818,7 +818,9 @@ const ROUND_NULL_FLAGS = [
   'stillFasterExcludeMsgId',
   'pendingStillFaster',
   'roundUtinniJawaBuffs',
-  'roundSmugglersTricksPlayerNum',
+  // roundSmugglersTricksPlayerNum removed 2026-06-20 — Smuggler's Tricks is
+  // now INTENTIONALLY UNIMPLEMENTED (UNIMPLEMENTED_CARDS), so the flag is
+  // never written and must not be registered (else the unused-flag cert fails).
   'squadSwarmPlayerNum',
   'squadSwarmCumulativeCost',
   'fieldTacticsActivationPlayerNum',

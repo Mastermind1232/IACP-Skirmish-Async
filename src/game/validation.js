@@ -42,11 +42,12 @@ export const CC_COST_LEGAL = 15;
  * Each requires a model the engine lacks:
  *   - "Set a Trap": needs a map-TILE model (only individual spaces are modeled).
  *   - "Harsh Environment": needs an interior/exterior space classification.
+ *   - "Smuggler's Tricks": needs a tile/token targeting + figure-count model.
  * Their ccEffect handlers are no-ops (see abilities.js); deck-loading surfaces
  * "<card name> is not implemented" through validateDeckLegal's warnings channel
  * so players know to resolve them manually. Extend this list as needed.
  */
-export const UNIMPLEMENTED_CARDS = ['Set a Trap', 'Harsh Environment'];
+export const UNIMPLEMENTED_CARDS = ['Set a Trap', 'Harsh Environment', "Smuggler's Tricks"];
 
 /** Resolve DC list entry to card name (object or string). */
 export function resolveDcName(entry) {
