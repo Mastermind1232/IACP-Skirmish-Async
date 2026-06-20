@@ -391,7 +391,21 @@ export async function _runSelfDestructExplode(game, pending, ctx) {
         if (newHp <= 0) defeated.push({ figureKey: sfk, playerNum: eachPN });
       }
     }
-    resultLog += damaged.length ? damaged.join('; ') : 'No adjacent figures.';
+    // Adjacent damageable objects (crates / destructible objects) — CSV: "each
+    // figure OR OBJECT adjacent to you" (alexanbv 2026-06-20; objects were
+    // previously skipped).
+    for (const _igSpace of allAdj) {
+      for (const _igObjId of getDamageableObjectsAtCoord(game, _igSpace)) {
+        const _igObjRes = await applyDamageToObject(game, { logGameAction, client }, {
+          objectId: _igObjId, amount: hits, attackerPlayerNum: pending.defenderPlayerNum, source: 'IG-11 Self-Destruct',
+        });
+        if (_igObjRes.applied) {
+          const _igObjName = game.objectMeta?.[_igObjId]?.name || _igObjId;
+          damaged.push(`${_igObjName} (HP: ${_igObjRes.prevHp}→${_igObjRes.newHp})${_igObjRes.defeated ? ' **(destroyed)**' : ''}`);
+        }
+      }
+    }
+    resultLog += damaged.length ? damaged.join('; ') : 'No adjacent figures or objects.';
   } else {
     resultLog += 'No hits.';
   }
