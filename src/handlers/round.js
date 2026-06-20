@@ -147,6 +147,42 @@ export async function runStatusPhaseAfterEndOfRound(game, ctx) {
   await _runStatusPhaseLogic(game, gameId, null, ctx);
 }
 
+/**
+ * Clear "until the end of the round" active effects. Per alexanbv (2026-06-20):
+ * effects worded "until the end of the round" turn off at the START of the EOR
+ * (status) phase, so they fall off BEFORE EOR scoring/triggers resolve. This is
+ * distinct from "during this round" effects, which persist THROUGH the EOR phase
+ * and only clear at the round boundary (cleanupRoundStart, the ROUND_* buckets).
+ *
+ * Each flag below is ALSO registered in a ROUND_* bucket in activation-state.js;
+ * that round-start reset is a harmless safety net. The point of clearing here is
+ * that these effects must be GONE before EOR effects evaluate.
+ *
+ * NOTE — flags deliberately NOT cleared here (left to round-boundary):
+ *   - roundDefenseBonusBlock / roundDefenseBonusEvade / roundDefenseAccuracyPenalty
+ *     and roundAttackSurgeBonus are SHARED additive per-player counters fed by a
+ *     MIX of "during this round" cards (Take Position, Cavalry Charge, Take Cover)
+ *     and "until end of round" cards (Survival Instincts, Smuggled Supplies) /
+ *     immediate-attack bonuses (Payback, Reverse Engineer). They cannot be split
+ *     cleanly, so they are flagged needs-ruling and left at round-start clearing.
+ *   - roundEfficientTravel is "until end of round" but is a movement-only effect
+ *     that cannot be read during EOR scoring, so re-bucketing has no effect.
+ */
+export function clearUntilEndOfRoundFlags(game) {
+  // Disarm permanent Weakened lock — Disarm card leaves play at end of round.
+  game.disarmPermanentWeakened = {};
+  // In the Shadows (CC) — "until the end of the round" LOS effect.
+  game.roundInTheShadows = null;
+  // I Must Go Alone (CC) — "Until the end of the round, hostile figures cannot
+  // declare attacks targeting you unless within 3 spaces." Targeting/defense
+  // buff; isolated flag; moved to EOR-start clearing 2026-06-20.
+  game.roundDefenderCannotBeTargetedUnlessWithinSpaces = null;
+  // Programming Override (4-LOM DC) — "You gain that TRAIT until the end of the
+  // round." TRAIT grants can gate EOR scoring/triggers, so the grant must be
+  // gone before EOR effects evaluate. Isolated flag; moved 2026-06-20.
+  game.roundProgrammingOverrideTrait = {};
+}
+
 async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   const {
     getGame,
@@ -199,15 +235,11 @@ async function _runStatusPhaseLogic(game, gameId, interaction, ctx) {
   }
   // Stun is NOT cleared at end of round — figure must spend 1 action to remove it (rules: STUNNED L2759-2762).
   // Weakened is NOT cleared here — rules say "discarded at the end of a figure's activation" only.
-  // Disarm permanent Weakened lock: clear at end of round (Disarm card leaves play at end of round).
-  game.disarmPermanentWeakened = {};
-
-  // In the Shadows (CC) — "until the end of the round" timing (alexanbv
-  // 2026-06-20): the LOS effect falls off at the START of the EOR/status
-  // phase, BEFORE end-of-round scoring/triggers. (Distinct from "during this
-  // round" effects, which persist through the EOR phase and clear at round
-  // start.) cleanupRoundStart also nulls it as a safety net at round start.
-  game.roundInTheShadows = null;
+  // "Until the end of the round" effects fall off HERE (start of the EOR/status
+  // phase), BEFORE end-of-round scoring/triggers resolve. (Distinct from "during
+  // this round" effects, which persist THROUGH the EOR phase and clear at round
+  // start via cleanupRoundStart.) See clearUntilEndOfRoundFlags.
+  clearUntilEndOfRoundFlags(game);
 
   // ══ STEP 1: Ready Cards (rules: STATUS PHASE IN A SKIRMISH L2714-2715) ══
   // SU ready already done above (L170-176). Now ready all DCs (un-exhaust).
