@@ -1201,9 +1201,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           }
           game.nextDefeatedFriendlyVpReduction = null;
         }
-        // Price on Their Heads: award bounty VP to setter when target group is defeated
+        // Price on Their Heads: award bounty VP to the setter only when the LAST
+        // figure of the marked group is defeated (CSV row 778 — was firing on
+        // every figure's defeat; alexanbv 2026-06-20). processFigureDefeat above
+        // has already removed the just-defeated figure from figurePositions, so
+        // "no figure of the group remains" means this was the last one.
         const _priceBounty = game.priceBounties?.[combat.target.label];
-        if (_priceBounty) {
+        const _pbDcName = dcNameFromFigureKey(combat.target.figureKey);
+        const _pbDg = (combat.target.label || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] || '1';
+        const _pbGroupAlive = Object.keys(game.figurePositions?.[defenderPlayerNum] || {}).some((k) => k.startsWith(`${_pbDcName}-${_pbDg}-`));
+        if (_priceBounty && !_pbGroupAlive) {
           const _bountyAmt = typeof _priceBounty === 'object' ? _priceBounty.amount : _priceBounty;
           const _bountySetterNum = typeof _priceBounty === 'object' ? _priceBounty.playerNum : attackerPlayerNum;
           awardObjectiveVp(game, _bountySetterNum, _bountyAmt);
