@@ -5073,24 +5073,30 @@ export function resolveAbility(abilityId, context) {
     }
     addMovementPoints(game, msgId, n);
     let msg = n === 1 ? 'Gained 1 movement point.' : `Gained ${n} movement points.`;
-    // Rank and File: each other friendly TROOPER also gains N MP immediately
+    // Rank and File: each friendly TROOPER figure ADJACENT to you also gains N
+    // MP (CSV row 786 — was granting to every friendly TROOPER group on the map
+    // regardless of position; alexanbv 2026-06-20).
     if (entry.trooperMpBonusRound) {
       const bonus = entry.trooperMpBonusRound;
-      const dcMsgIds = getDcMessageIds(game, playerNum) || [];
-      const dcList = getDcList(game, playerNum) || [];
+      const _rfActFk = figureKeyForActivation(game, msgId);
+      const _rfActPos = _rfActFk ? game.figurePositions?.[playerNum]?.[_rfActFk] : null;
       let trooperCount = 0;
-      for (let i = 0; i < dcMsgIds.length; i++) {
-        const dMsgId = dcMsgIds[i];
-        if (dMsgId === msgId) continue;
-        const dc = dcList[i];
-        if (!dc?.dcName) continue;
-        const eff = getDcEffect(dc.dcName);
-        const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
-        if (!kws.includes('TROOPER')) continue;
-        addMovementPoints(game, dMsgId, bonus);
-        trooperCount++;
+      if (_rfActPos) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+          if (!pos || fk === _rfActFk) continue;
+          const d = countGameSpaces(game, _rfActPos, pos);
+          if (d !== 1) continue; // adjacent only
+          const kws = (getDcEffect(dcNameFromFigureKey(fk))?.keywords || []).map((k) => String(k).toUpperCase());
+          if (!kws.includes('TROOPER')) continue;
+          const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+          if (!figMsgId) continue;
+          const m = fk.match(/-(\d+)-(\d+)$/);
+          const fi = m ? parseInt(m[2], 10) : 0;
+          addMovementPoints(game, figMsgId, bonus, { figureIndex: fi });
+          trooperCount++;
+        }
       }
-      if (trooperCount > 0) msg += ` Each of ${trooperCount} other friendly TROOPER(s) also gained ${bonus} MP.`;
+      if (trooperCount > 0) msg += ` Each of ${trooperCount} adjacent friendly TROOPER(s) also gained ${bonus} MP.`;
     }
     // mobileMovement (Force Jump): during this move ignore figures and
     // doors for pathing; cannot end in blocking terrain.
@@ -8568,13 +8574,41 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const targetName = readyAdjacentFriendlyDcName || chosenOption;
     if (!targetName) {
-      // Build choice list from friendly DCs (player picks an adjacent one)
+      // Build choice list from friendly DCs. Rally the Troops restricts to
+      // "another friendly TROOPER within 3 spaces" via readyRequireTrait /
+      // readyRequireWithinSpaces (alexanbv 2026-06-20); New Orders leaves them
+      // unset (any friendly DC).
       const dcList = getDcList(game, playerNum) || [];
+      const _reqTrait = entry.readyRequireTrait ? String(entry.readyRequireTrait).toUpperCase() : null;
+      const _reqWithin = typeof entry.readyRequireWithinSpaces === 'number' ? entry.readyRequireWithinSpaces : null;
+      let _activPos = null, _activDcName = null;
+      if ((_reqTrait || _reqWithin != null) && dcMessageMeta) {
+        const _activMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        const _activMeta = _activMsgId ? dcMessageMeta.get(_activMsgId) : null;
+        _activDcName = _activMeta?.dcName || null;
+        const _activKeys = _activMeta ? getFigureKeysForDcMsg(game, playerNum, _activMeta) : [];
+        const _activFk = _activKeys[game.dcActionsData?.[_activMsgId]?.selectedFigure ?? 0] || _activKeys[0];
+        _activPos = _activFk ? game.figurePositions?.[playerNum]?.[_activFk] : null;
+      }
       const opts = dcList
-        .filter((dc) => dc && !dc.defeated)
+        .filter((dc) => {
+          if (!dc || dc.defeated) return false;
+          const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+          if (_reqTrait) {
+            const kws = (getDcEffect(dcName)?.keywords || []).map((k) => String(k).toUpperCase());
+            if (!kws.includes(_reqTrait)) return false;
+          }
+          if (_reqWithin != null && _activPos) {
+            if (dcName === _activDcName) return false; // "another" friendly figure
+            const _near = Object.entries(game.figurePositions?.[playerNum] || {})
+              .some(([fk, pos]) => fk.startsWith(`${dcName}-`) && pos && (() => { const d = countGameSpaces(game, _activPos, pos); return typeof d === 'number' && d >= 0 && d <= _reqWithin; })());
+            if (!_near) return false;
+          }
+          return true;
+        })
         .map((dc) => (typeof dc === 'object' ? dc.displayName || dc.dcName : dc))
         .filter(Boolean);
-      if (opts.length === 0) return { applied: false, manualMessage: 'No friendly Deployment cards to ready. Resolve manually.' };
+      if (opts.length === 0) return { applied: false, manualMessage: _reqTrait ? `No friendly ${_reqTrait} within ${_reqWithin} spaces to ready.` : 'No friendly Deployment cards to ready. Resolve manually.' };
       return { applied: false, requiresChoice: true, choiceOptions: opts };
     }
     const dcList = getDcList(game, playerNum) || [];

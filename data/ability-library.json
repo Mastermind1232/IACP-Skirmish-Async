@@ -3761,8 +3761,10 @@
     },
     "Rally the Troops": {
       "type": "ccEffect",
-      "label": "Choose friendly TROOPER within 3 spaces; ready that figure's Deployment card",
+      "label": "Choose another friendly TROOPER within 3 spaces; ready that figure's Deployment card",
       "readyAdjacentFriendlyDeploymentCard": true,
+      "readyRequireTrait": "TROOPER",
+      "readyRequireWithinSpaces": 3,
       "wiredStatus": "wired"
     },
     "ram_chopper": {
