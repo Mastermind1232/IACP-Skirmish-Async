@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dcNameFromFigureKey, parseFigureKey, isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc } from './dc-helpers.js';
+import { dcNameFromFigureKey, parseFigureKey, isFigurelessDc, hasDepleteEffect, getCompanionDescriptionForDc, figureHasPriorityTarget } from './dc-helpers.js';
 
 describe('dcNameFromFigureKey', () => {
   it('extracts DC name from figure key', () => {
@@ -66,5 +66,33 @@ describe('getCompanionDescriptionForDc', () => {
 
   it('returns *None* for DC without companion', () => {
     assert.strictEqual(getCompanionDescriptionForDc('Stormtrooper'), '*None*');
+  });
+});
+
+describe('figureHasPriorityTarget (FIX 1 — robust PT detection)', () => {
+  const game = { selectedMap: { id: 'x' } };
+
+  // passives-array figures
+  it('recognizes HK Assassin Droid (Elite) — passives array', () => {
+    assert.ok(figureHasPriorityTarget(game, 'HK Assassin Droid (Elite)-1-0'));
+  });
+  it("recognizes Mak Eshka'rey — passives array", () => {
+    assert.ok(figureHasPriorityTarget(game, "Mak Eshka'rey-1-0"));
+  });
+
+  // abilityText-only figures (the previously-uncovered cases)
+  it('recognizes Loku Kanoloa — abilityText only (Mon Cala Special Forces)', () => {
+    assert.ok(figureHasPriorityTarget(game, 'Loku Kanoloa-1-0'));
+  });
+  it('recognizes Rebel Saboteur (Elite) — abilityText only (Overload)', () => {
+    assert.ok(figureHasPriorityTarget(game, 'Rebel Saboteur (Elite)-1-0'));
+  });
+
+  it('returns false for a figure without Priority Target', () => {
+    assert.ok(!figureHasPriorityTarget(game, 'Stormtrooper-1-0'));
+  });
+  it('returns false for unknown DC / falsy', () => {
+    assert.ok(!figureHasPriorityTarget(game, 'NonexistentDC999-1-0'));
+    assert.ok(!figureHasPriorityTarget(game, null));
   });
 });

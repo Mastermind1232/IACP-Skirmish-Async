@@ -20,6 +20,36 @@ import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from 
 
 import { getDcEffect } from './dc-helpers.js';
 import { registerRoundModifier } from './round-modifiers.js';
+import { detectPushPartingBlow } from './movement-interrupts.js';
+
+/**
+ * After a PUSH relocates a hostile figure, run Parting Blow (C23) exit-detection
+ * on the pushed figure's (from → to) and, if it exited a space adjacent to an
+ * enemy BRAWLER holding Parting Blow, stash game.pendingPartingBlow so the PB
+ * resolver can target correctly AND the PB playability gate (cc-timing.js
+ * 'whenhostilefigureexitsadjacentspace') opens for the brawler's owner — on
+ * EITHER side's turn, since detection is keyed purely on the pushed figure's
+ * owner vs the opposing brawler, independent of whose turn it is.
+ *
+ * Reuses the same exit-adjacent-to-BRAWLER core a normal move uses (the C23
+ * branch of detectPostMoveInterrupts), via detectPushPartingBlow. Returns a
+ * log suffix to append so the affected player is told PB is now playable; the
+ * actual PB is then played from the holder's hand (the gate is satisfied).
+ *
+ * @returns {string} '' or a `\n⚠️ …` suffix
+ */
+function stashPushPartingBlow(game, pushedFigureKey, pushedOwnerNum, fromPos, toPos) {
+  if (!game || !pushedFigureKey || !fromPos || !toPos) return '';
+  const pb = detectPushPartingBlow(game, pushedFigureKey, pushedOwnerNum, fromPos, toPos);
+  if (!pb) return '';
+  game.pendingPartingBlow = {
+    brawlerFigureKey: pb.brawlerFigureKey,
+    brawlerPlayerNum: pb.brawlerPlayerNum,
+    exitingHostileFigureKey: pb.exitingHostileFigureKey,
+  };
+  const brawlerName = dcNameFromFigureKey(pb.brawlerFigureKey).replace(/_/g, ' ');
+  return `\n⚠️ The push exited a space adjacent to **${brawlerName}** (Brawler) — its controller may now play **Parting Blow**.`;
+}
 /**
  * Decrement a figure's HP in a healthState array.
  * @param {Array} hs - healthState array for the DC (from dcHealthState.get(msgId))
@@ -554,6 +584,7 @@ export function resolveAbility(abilityId, context) {
         const _warnList = _pushWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _pushLogMsg += `\n⚠️ Exits adjacency to: ${_warnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      _pushLogMsg += stashPushPartingBlow(game, targetFigureKey, targetOwner, prevPos, chosenSpace);
       // Strain cost (deferred from Phase 1 — see comment there) queued
       // via pendingStrainCost so applyStrain pipeline routes it.
       let _ptwrPhase3StrainPayload = null;
@@ -3099,6 +3130,7 @@ export function resolveAbility(abilityId, context) {
           const _slamWarnList = _slamWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
           _slamLogMsg += `\n⚠️ Exits adjacency to: ${_slamWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
         }
+        _slamLogMsg += stashPushPartingBlow(game, targetFigureKey, oppNum, _slamPrevPos, context.chosenSpace);
         return { applied: true, logMessage: _slamLogMsg, refreshDcEmbed: true, refreshBoard: true };
       }
       // Multi-target variant (Trample): auto-target all adjacent hostiles (up to N), single die roll
@@ -10532,6 +10564,7 @@ export function resolveAbility(abilityId, context) {
         const _warnList = _rpWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _rpLogMsg += `\n⚠️ Exits adjacency to: ${_warnList} — opponent may play interrupts.`;
       }
+      _rpLogMsg += stashPushPartingBlow(game, targetFigureKey, playerNum, prevPos, chosenSpace);
       return { applied: true, logMessage: _rpLogMsg, refreshBoard: true };
     }
 
@@ -12434,6 +12467,7 @@ export function resolveAbility(abilityId, context) {
         const _fmWarnList = _fmWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _fmLogMsg += `\n⚠️ Exits adjacency to: ${_fmWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      _fmLogMsg += stashPushPartingBlow(game, chosenFigureKey, oppNum, _fmPrevPos, chosenSpace);
       return { applied: true, logMessage: _fmLogMsg, refreshBoard: true };
     }
     // Phase 2: find spaces adjacent to activating figure for the push landing
@@ -12648,6 +12682,7 @@ export function resolveAbility(abilityId, context) {
         const _deWarnList = _deWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _deLogMsg += `\n⚠️ Exits adjacency to: ${_deWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      _deLogMsg += stashPushPartingBlow(game, chosenFigureKey, _deOwner, _dePrevPos, chosenSpace);
       return { applied: true, logMessage: _deLogMsg, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
     }
     // Phase 2: pick landing space adjacent to target (1-space push in any direction)
@@ -12735,6 +12770,7 @@ export function resolveAbility(abilityId, context) {
         const _lffWarnList = _lffWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _lffLogMsg += `\n⚠️ Exits adjacency to: ${_lffWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      _lffLogMsg += stashPushPartingBlow(game, chosenFigureKey, oppNum, _lffPrevPos, chosenSpace);
       const lffTokenFk = game._lffPendingTokenFigureKey;
       delete game._lffPendingTokenFigureKey;
       if (lffTokenFk) {
@@ -13221,6 +13257,7 @@ export function resolveAbility(abilityId, context) {
         const warnList = warnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         logMsg += `\n⚠️ Exits adjacency to: ${warnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      logMsg += stashPushPartingBlow(game, chosenFigureKey, targetPn, oldPos, destLower);
       return { applied: true, logMessage: logMsg, refreshBoard: true };
     }
     // Phase 2: space picker within 2 of chosen figure's current position
@@ -13276,6 +13313,7 @@ export function resolveAbility(abilityId, context) {
         const warnList = warnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         logMsg += `\n⚠️ Exits adjacency to: ${warnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
+      logMsg += stashPushPartingBlow(game, chosenFigureKey, targetPn, oldPos, destLower);
       return { applied: true, logMessage: logMsg, refreshBoard: true };
     }
     // Phase 2: push the chosen figure exactly 1 space (per spec: "push that figure

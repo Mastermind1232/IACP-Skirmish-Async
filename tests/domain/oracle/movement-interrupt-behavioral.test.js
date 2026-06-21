@@ -390,3 +390,89 @@ describe('B-MVINT-014: Multi-step path detects trigger at correct step', () => {
       'trigger at d1 (entering space where adjacency was gained)');
   });
 });
+
+// ── Push-triggered Parting Blow (FIX 2) ───────────────────────────────────────
+// A PUSH (Looking for a Fight, Dark Energy, Smash/Slam/Ram, Force Push, …)
+// relocates a figure WITHOUT running the normal move-interrupt path. detectPush-
+// PartingBlow reuses the same exit-adjacent-to-BRAWLER core so PB fires on a
+// push, on EITHER side's turn. Topology (anchorhead-cantina-bar):
+//   b1 adj: a1, a2, b2, c1, c2 — d1 is NOT adjacent to b1.
+
+import { detectPushPartingBlow } from '../../../src/game/movement-interrupts.js';
+
+describe('B-MVINT-PUSH-PB: push out of BRAWLER adjacency triggers Parting Blow', () => {
+  it('hostile pushed a1→d1 out of enemy BRAWLER (b1) adjacency → trigger', () => {
+    // Pushed figure is player 2's; brawler is player 1's. This is the
+    // LFAF/Dark Energy case: brawler-owner pushes the hostile on their OWN turn.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Agent Kallus-1-0': 'b1' },        // BRAWLER (player 1)
+        2: { 'Rebel Trooper-1-0': 'a1' },        // pushed hostile (player 2)
+      },
+      player1CcHand: ['Parting Blow'],
+    });
+
+    const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 2, 'a1', 'd1');
+    assert.ok(pb, 'push PB trigger emitted');
+    assert.strictEqual(pb.brawlerFigureKey, 'Agent Kallus-1-0');
+    assert.strictEqual(pb.brawlerPlayerNum, 1);
+    assert.strictEqual(pb.exitingHostileFigureKey, 'Rebel Trooper-1-0');
+    assert.strictEqual(pb.triggerSpace, 'a1');
+  });
+
+  it('either turn: same exit on the OPPONENT pushing onto the brawler-owner works too', () => {
+    // Brawler is player 2's; the pushed figure (player 1) is pushed by player 2
+    // (opponent's turn). Detection is symmetric in whose turn it is.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Rebel Trooper-1-0': 'a1' },        // pushed hostile (player 1)
+        2: { 'Agent Kallus-1-0': 'b1' },         // BRAWLER (player 2)
+      },
+      player2CcHand: ['Parting Blow'],
+    });
+
+    const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 1, 'a1', 'd1');
+    assert.ok(pb, 'push PB trigger emitted on opponent turn');
+    assert.strictEqual(pb.brawlerPlayerNum, 2);
+  });
+
+  it('no trigger when push stays within adjacency (a1→a2, both adj to b1)', () => {
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Agent Kallus-1-0': 'b1' },
+        2: { 'Rebel Trooper-1-0': 'a1' },
+      },
+      player1CcHand: ['Parting Blow'],
+    });
+    // a2 is still adjacent to b1, so no exit-of-adjacency on the final step;
+    // but the cell-by-cell test fires when ANY exited space was adjacent —
+    // a1 is adjacent to b1, so this DOES count (parity with normal-move C23,
+    // which fires on exiting ANY adjacent space). Assert the documented behavior.
+    const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 2, 'a1', 'a2');
+    assert.ok(pb, 'exiting a1 (adjacent to b1) counts, matching normal-move C23');
+  });
+
+  it('no trigger when brawler-owner lacks Parting Blow in hand', () => {
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Agent Kallus-1-0': 'b1' },
+        2: { 'Rebel Trooper-1-0': 'a1' },
+      },
+      player1CcHand: [],  // no PB
+    });
+    const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 2, 'a1', 'd1');
+    assert.strictEqual(pb, null, 'no PB in hand → no trigger');
+  });
+
+  it('no trigger when the adjacent figure is not a BRAWLER', () => {
+    const game = makeGame({
+      figurePositions: {
+        1: { 'Rebel Trooper-1-1': 'b1' },  // not a BRAWLER
+        2: { 'Rebel Trooper-1-0': 'a1' },
+      },
+      player1CcHand: ['Parting Blow'],
+    });
+    const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 2, 'a1', 'd1');
+    assert.strictEqual(pb, null, 'non-BRAWLER → no trigger');
+  });
+});

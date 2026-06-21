@@ -41,7 +41,7 @@ import { finalizeActivation } from '../engine/activation-setup.js';
 import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation, figureActionsRemaining, grantActionToFigure } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
-import { getDcEffect } from '../game/dc-helpers.js';
+import { getDcEffect, figureHasPriorityTarget } from '../game/dc-helpers.js';
 import { figureMpRemaining, grantMovementBank, consumeMovementPoints } from '../game/game-helpers.js';
 /** Fury of Kashyyyk grants Reach to all friendly WOOKIEE DCs. */
 function _hasFuryReach(game, playerNum, dcKws) {
@@ -1117,17 +1117,13 @@ async function buildAndSendAttackTargets(
   const _overrideMinRange = game.pendingOverrideAttackDice?.[figureKey]?.minRange;
   if (_overrideMinRange != null && _overrideMinRange > minRange) minRange = _overrideMinRange;
   // Priority Target (LOS-ignoring): "Figures do not block line of sight for this
-  // figure's attacks" (CSV docs/combat-spec.csv:347/407/901/961/985). Some cards
-  // carry it in abilityText (Loku Kanoloa, Rebel Saboteur Elite); others carry it
-  // ONLY as a passive keyword in their dc-effects passives array ([Flame Trooper]
-  // attachment, HK Assassin Droid Elite, Mak Eshka'rey). Read BOTH so the
-  // attacker-side figure-blocking bypass applies to every Priority Target figure.
-  // MASSIVE figures also ignore figure blocking. Clawdite Scout form too.
-  const abilityTextLower = (stats.abilityText || '').toLowerCase();
-  const _attackerPassives = (getDcEffect(meta.dcName)?.passives || []).map(p => String(p).toLowerCase());
+  // figure's attacks" (CSV docs/combat-spec.csv:347/407/901/961/985). Detection
+  // is delegated to the single shared predicate figureHasPriorityTarget() so the
+  // keyword is recognized whether it lives in passives, abilityText, or the
+  // named-abilities bucket — covering all 5 PT figures. MASSIVE figures also
+  // ignore figure blocking. Clawdite Scout form too.
   let attackerIgnoresFigureBlocking =
-    (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
-    _attackerPassives.includes('priority target') ||
+    figureHasPriorityTarget(game, figureKey) ||
     attackerKws.includes('MASSIVE');
   // Check Clawdite Scout form for Priority Target
   if (!attackerIgnoresFigureBlocking && figureKey) {
@@ -1405,7 +1401,7 @@ async function buildAndSendAttackTargets(
   // — NOT a defender-side taunt. The old "Priority Target intercept" here wrongly
   // forced the attacker to target PT-passive enemy figures (a taunt), the opposite
   // of the card. It has been removed; the keyword is now honored on the attacker
-  // side via _attackerPassives in the figure-blocking bypass above.
+  // side via figureHasPriorityTarget() in the figure-blocking bypass above.
   // Autofire chain attack: restrict targets to within 3 spaces of original target
   // Per alexanbv 2026-05-13: per-figureKey.
   if (game.autofireChainTargetSpace?.[figureKey]) {

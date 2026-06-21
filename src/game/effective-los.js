@@ -26,7 +26,7 @@
  */
 import { hasLineOfSight, countSpaces } from './spatial.js';
 import { getBrokenWallEdges } from './movement.js';
-import { dcNameFromFigureKey, figureHasInTheShadows } from './dc-helpers.js';
+import { dcNameFromFigureKey, figureHasInTheShadows, figureHasPriorityTarget } from './dc-helpers.js';
 import { edgeKey } from './coords.js';
 
 import { getDcEffect } from './dc-helpers.js';
@@ -122,14 +122,12 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
   // we replicate the inline logic here to keep this game-layer module
   // free of handler imports.
   const fromKws = (getDcEffects()?.[fromDcName]?.keywords || []).map((k) => String(k).toUpperCase());
-  const fromAbilityText = String(getDcEffects()?.[fromDcName]?.abilityText || '').toLowerCase();
-  // Priority Target may live ONLY in the passives array (HK Assassin Droid Elite,
-  // [Flame Trooper], Mak Eshka'rey) — read it too (parity with dc-play-area.js).
-  const fromPassives = (getDcEffects()?.[fromDcName]?.passives || []).map((p) => String(p).toLowerCase());
+  // Priority Target detection delegated to the single shared predicate
+  // figureHasPriorityTarget() — recognizes the keyword in passives, abilityText,
+  // or the named-abilities bucket (all 5 PT figures), parity with dc-play-area.js.
   let ignoreBlocking = !!opts.attackerIgnoresFigureBlocking
     || !!opts.marksmanActive
-    || (fromAbilityText.includes('priority target') && fromAbilityText.includes('line of sight'))
-    || fromPassives.includes('priority target')
+    || figureHasPriorityTarget(game, fromFigureKey)
     || fromKws.includes('MASSIVE');
   let blocking = null;
   if (!ignoreBlocking) {

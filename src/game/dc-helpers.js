@@ -60,6 +60,42 @@ export function figureHasInTheShadows(game, figureKey) {
 }
 
 /**
+ * True when a figure's deployment card grants Priority Target — "Figures do not
+ * block line of sight for this figure's attacks" (CSV docs/combat-spec.csv
+ * rows 347/407/901/961/985). Robust to where the keyword lives in the data:
+ *   - passives array (e.g. [Flame Trooper] attachment, HK Assassin Droid Elite,
+ *     Mak Eshka'rey) — dc-effects.json:197/3320/4587
+ *   - abilityText only (e.g. Loku Kanoloa / Mon Cala Special Forces,
+ *     Rebel Saboteur Elite / Overload) — dc-effects.json:4383/5284
+ *   - the merged ability flags (passives ∪ named abilities) as a belt-and-braces
+ *     fallback in case a future card lists it under `abilities`.
+ * This is the single shared predicate the three attacker-side figure-LOS-bypass
+ * paths (handlers/dc-play-area.js, engine/available-actions.js,
+ * game/effective-los.js) call so EVERY Priority Target figure is recognized,
+ * regardless of which data bucket carries the keyword. Note this intentionally
+ * does NOT cover MASSIVE / Clawdite Scout form / Marksman — those remain
+ * site-local bypasses OR-ed alongside this predicate. alexanbv 2026-06-21.
+ *
+ * @param {object} game
+ * @param {string} figureKey - e.g. "Loku Kanoloa-1-0"
+ * @returns {boolean}
+ */
+export function figureHasPriorityTarget(game, figureKey) {
+  const dcName = dcNameFromFigureKey(figureKey);
+  const eff = getDcEffect(dcName);
+  if (!eff) return false;
+  // passives: exact "Priority Target" entry (case-insensitive)
+  if ((eff.passives || []).some((p) => String(p).toLowerCase() === 'priority target')) return true;
+  // named abilities bucket (belt-and-braces)
+  if ((eff.abilities || []).some((a) => String(a).toLowerCase() === 'priority target')) return true;
+  // abilityText: must reference Priority Target as a LOS-bypass, not merely the
+  // phrase "priority target" used incidentally — require "line of sight" nearby.
+  const text = String(eff.abilityText || '').toLowerCase();
+  if (text.includes('priority target') && text.includes('line of sight')) return true;
+  return false;
+}
+
+/**
  * Strip deployment-group and Elite/Regular variant suffixes from a DC
  * name. Used by CC-playable-by matching, hand display, etc.
  *   "Rebel Trooper [DG 2] (Elite)" → "Rebel Trooper"

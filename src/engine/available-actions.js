@@ -14,7 +14,7 @@ import { hasLineOfSight, countSpaces } from '../game/spatial.js';
 import { edgeKey, getFootprintCells } from '../game/coords.js';
 import { clearPendingCelebration } from '../game/interrupts.js';
 import { getBrokenWallEdges } from '../game/movement.js';
-import { dcNameFromFigureKey, isCompanionHostDefeated, figureHasInTheShadows } from '../game/dc-helpers.js';
+import { dcNameFromFigureKey, isCompanionHostDefeated, figureHasInTheShadows, figureHasPriorityTarget } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
 import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower } from '../data-loader.js';
@@ -2337,15 +2337,13 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   // Handler consumes the Marksman flag (delete-on-read); engine is read-only here —
   // consumption is the mutator's responsibility at attack resolution, not at
   // target enumeration.
-  const _attackerAbilityText = (_aaEff?.abilityText || '').toLowerCase();
   const _attackerKws = (_aaEff?.keywords || []).map(k => String(k).toUpperCase());
-  // Priority Target may live ONLY in the passives array (e.g. HK Assassin Droid
-  // Elite, [Flame Trooper], Mak Eshka'rey) — read it too (parity with dc-play-area.js).
-  const _attackerPassives = (_aaEff?.passives || []).map(p => String(p).toLowerCase());
+  // Priority Target detection delegated to the single shared predicate
+  // figureHasPriorityTarget() — recognizes the keyword in passives, abilityText,
+  // or the named-abilities bucket (all 5 PT figures), parity with dc-play-area.js.
   const _clawditeForm = getConfig(game, figureKey)?.form;
   const _attackerIgnoresFigureBlocking =
-    (_attackerAbilityText.includes('priority target') && _attackerAbilityText.includes('line of sight')) ||
-    _attackerPassives.includes('priority target') ||
+    figureHasPriorityTarget(game, figureKey) ||
     _attackerKws.includes('MASSIVE') ||
     _clawditeForm === 'Scout' ||
     !!game.nextAttackIgnoreFigureLOS?.[figureKey];

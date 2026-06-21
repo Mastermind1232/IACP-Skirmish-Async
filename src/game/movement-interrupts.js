@@ -75,6 +75,100 @@ export function computeEnemyAdjacencyDangerSet(game, movingPlayerNum) {
 }
 
 /**
+ * BFS shortest path between two normalized spaces (ignoring occupants — pushed
+ * figures pass through). Mirrors computePushPathAndWarnings' pather so a push's
+ * intermediate spaces are walked the same way a normal move's path is.
+ * @returns {string[]} normalized coord path including both endpoints (or [] if unreachable)
+ */
+function bfsPushPath(adjacency, fromPos, toPos) {
+  const startNorm = normalizeCoord(fromPos);
+  const destNorm = normalizeCoord(toPos);
+  if (!startNorm || !destNorm) return [];
+  if (startNorm === destNorm) return [startNorm];
+  const visited = new Map();
+  visited.set(startNorm, null);
+  const queue = [startNorm];
+  let found = false;
+  while (queue.length > 0 && !found) {
+    const cur = queue.shift();
+    for (const neighbor of (adjacency[cur] || []).map((n) => normalizeCoord(n))) {
+      if (visited.has(neighbor)) continue;
+      visited.set(neighbor, cur);
+      if (neighbor === destNorm) { found = true; break; }
+      queue.push(neighbor);
+    }
+  }
+  if (!found) return [];
+  const path = [];
+  let node = destNorm;
+  while (node !== null) { path.unshift(node); node = visited.get(node) ?? null; }
+  return path;
+}
+
+/**
+ * Parting Blow (C23) detection for a PUSHED figure. A push relocates a hostile
+ * WITHOUT running the normal move-interrupt path, so PB never fired on a push
+ * (Looking for a Fight, Dark Energy, Smash/Slam/Ram, Force Push, …). This is the
+ * reusable core that, given the pushed figure + its FROM/TO spaces, detects
+ * whether it exited a space adjacent to an enemy BRAWLER that holds Parting Blow
+ * in hand — the exact same condition the normal-move C23 branch tests above.
+ *
+ * "Either side's turn" falls out naturally: the trigger is keyed purely on the
+ * PUSHED figure's owner vs the OPPOSING brawler, independent of whose turn it
+ * is. The caller passes the pushed figure's owner as `pushedOwnerNum`; the
+ * brawler is then sought among that owner's opponents (which may be the active
+ * pushing player, e.g. LFAF/Dark Energy on the brawler-owner's own turn).
+ *
+ * @param {object} game
+ * @param {string} pushedFigureKey - the figure that was pushed (a hostile of the brawler)
+ * @param {number} pushedOwnerNum - the player who owns the pushed figure
+ * @param {string} fromPos - space the figure was pushed FROM
+ * @param {string} toPos - space the figure was pushed TO
+ * @returns {null | {brawlerFigureKey:string, brawlerPlayerNum:number, exitingHostileFigureKey:string, triggerSpace:string, candidateDcName:string, description:string}}
+ */
+export function detectPushPartingBlow(game, pushedFigureKey, pushedOwnerNum, fromPos, toPos) {
+  const mapId = game.selectedMap?.id;
+  const rawMapSpaces = mapId ? getMapData(mapId) : null;
+  const adjacency = rawMapSpaces?.adjacency || {};
+  const path = bfsPushPath(adjacency, fromPos, toPos);
+  if (path.length < 2) return null;
+
+  const brawlerOwnerNum = opponentPlayerNum(pushedOwnerNum);
+  if (!hasCardInHand(game, brawlerOwnerNum, 'Parting Blow')) return null;
+  const brawlerPositions = game.figurePositions?.[brawlerOwnerNum] || {};
+
+  const brawlers = [];
+  for (const [bfk, bPos] of Object.entries(brawlerPositions)) {
+    if (!bPos) continue;
+    const bDcName = dcNameFromFigureKey(bfk);
+    if (!dcHasTrait(bDcName, ['BRAWLER'])) continue;
+    const bSize = game.figureOrientations?.[bfk] || '1x1';
+    const bCells = getFootprintCells(bPos, bSize).map((c) => normalizeCoord(c));
+    brawlers.push({ figureKey: bfk, dcName: bDcName, cells: bCells });
+  }
+  if (!brawlers.length) return null;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const exitingSpace = normalizeCoord(path[i]);
+    const exitAdj = new Set((adjacency[exitingSpace] || []).map((n) => normalizeCoord(n)));
+    for (const b of brawlers) {
+      const wasAdjacent = b.cells.some((c) => exitAdj.has(c) || c === exitingSpace);
+      if (!wasAdjacent) continue;
+      const displayName = b.dcName.replace(/_/g, ' ');
+      return {
+        brawlerFigureKey: b.figureKey,
+        brawlerPlayerNum: brawlerOwnerNum,
+        exitingHostileFigureKey: pushedFigureKey,
+        triggerSpace: exitingSpace,
+        candidateDcName: b.dcName,
+        description: `**${displayName}** (Brawler) — hostile was pushed out of adjacent space **${exitingSpace.toUpperCase()}**. Parting Blow opportunity.`,
+      };
+    }
+  }
+  return null;
+}
+
+/**
  * Walk the movement path and detect interrupt opportunities for C23, C15, C43.
  *
  * @param {object} game - game state
