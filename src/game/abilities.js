@@ -5090,13 +5090,20 @@ export function resolveAbility(abilityId, context) {
     const swapperPos = game.figurePositions?.[playerNum]?.[swapperFk];
     const swapperPosNorm = swapperPos ? String(swapperPos).toLowerCase() : null;
 
-    // Verify keyword: Bodyguard requires GUARDIAN; Get Behind Me requires GUARDIAN or FORCE USER
+    // Verify keyword: Bodyguard requires GUARDIAN; Get Behind Me (IACP 2026-06-21)
+    // requires a GUARDIAN, OR a Rebel FORCE USER whose attack type is MELEE.
     const swapperDcName = dcNameFromFigureKey(swapperFk);
     const swapperEff = getDcEffect(swapperDcName);
     const swapperKws = (swapperEff?.keywords || []).map(k => String(k).toUpperCase());
     if (isGetBehindMe) {
-      if (!swapperKws.includes('GUARDIAN') && !swapperKws.includes('FORCE USER')) {
-        return { applied: true, logMessage: `${mpNote} Activating figure is not a GUARDIAN or FORCE USER — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
+      const _gbmGuardian = swapperKws.includes('GUARDIAN');
+      const _gbmForceUser = swapperKws.includes('FORCE USER');
+      const _gbmRebel = String(swapperEff?.affiliation || '').toLowerCase() === 'rebel';
+      const _gbmAtkType = String(swapperEff?.attack?.type || '').toLowerCase();
+      const _gbmMelee = _gbmAtkType === 'melee' || _gbmAtkType === 'mêlée';
+      const _gbmEligible = _gbmGuardian || (_gbmForceUser && _gbmRebel && _gbmMelee);
+      if (!_gbmEligible) {
+        return { applied: true, logMessage: `${mpNote} Activating figure is not a GUARDIAN or a Rebel melee FORCE USER — resolve target swap manually.`, refreshMovementBank: true, activeMsgId: msgId };
       }
     } else {
       if (!swapperKws.includes('GUARDIAN')) {

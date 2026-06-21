@@ -2024,8 +2024,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Cover Fire (CT-1701): after resolving an attack, distribute 1 Block Token to a friendly figure within 3 spaces.
   // If the attack hit, may discard 1 condition or Power Token from the target. Limit once per round.
   const _cfAttEff = getDcEffects()?.[combat.attackerDcName || ''];
-  const _cfKey = `coverFire_${combat.attackerMsgId}`;
-  if ((_cfAttEff?.passives || []).includes('Cover Fire') && combat.attackerMsgId && !game.roundFigureAbilityUsed?.[_cfKey]) {
+  // Limit once per round (IACP 2026-06-21): key by attacker figure (not the
+  // attack/message id) so it fires at most once per round per CT-1701 figure.
+  // roundFigureAbilityUsed is cleared to {} at round start (ROUND_OBJECT_FLAGS).
+  const _cfKey = `coverFire_${combat.attackerFigureKey}`;
+  if ((_cfAttEff?.passives || []).includes('Cover Fire') && combat.attackerMsgId && combat.attackerFigureKey && !game.roundFigureAbilityUsed?.[_cfKey]) {
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     game.roundFigureAbilityUsed[_cfKey] = true;
     const _cfAttPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
@@ -3115,16 +3118,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
-  // Defensive Fire (Bo-Katan): after resolving a ranged attack (as attacker), gain 1 Block Token
-  if (combat.isRanged && combat.attackerFigureKey) {
-    const _dfbEff = getDcEffect(combat.attackerDcName);
-    if ((_dfbEff?.specialAbilityIds || []).includes('defensive_fire_bokatan')) {
-      grantPowerTokens(game, combat.attackerFigureKey, 'Block', 1);
-      await thread.send(`**Defensive Fire** — **${combat.attackerDcName}** gains 1 **Block Token** after ranged attack.`).catch(discordCatch);
-      await logGameAction(game, client, `**Defensive Fire** — **${combat.attackerDcName}** gains 1 Block Token.`, { phase: 'ROUND', icon: 'attack' });
-    }
-  }
-  // Dual-Wield Pistols (Bo-Katan): after resolving a ranged attack, free ranged attack once/round
+  // Dual-Wield Pistols (Bo-Katan): after resolving a ranged attack, free ranged attack once/round.
+  // IACP 2026-06-21: the Dual-Wield Pistols ability ALSO grants 2 Block Tokens BEFORE performing this
+  // once-per-round bonus ranged attack (this is distinct from the Beskar Armor keyword, which grants 2
+  // Block AFTER DEPLOYMENT via post-deploy.js). The tokens here are granted at the moment the bonus
+  // attack is offered — i.e. before she performs it.
   if (combat.isRanged && combat.attackerFigureKey && combat.attackerMsgId) {
     const _dwpEff = getDcEffect(combat.attackerDcName);
     if ((_dwpEff?.specialAbilityIds || []).includes('dual_wield_pistols_bokatan')) {
@@ -3132,6 +3130,12 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (!game.roundFigureAbilityUsed?.[_dwpKey]) {
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         game.roundFigureAbilityUsed[_dwpKey] = true;
+        // Dual-Wield Pistols: gain 2 Block Tokens BEFORE the bonus ranged attack.
+        if ((_dwpEff?.specialAbilityIds || []).includes('dual_wield_block_bokatan')) {
+          grantPowerTokens(game, combat.attackerFigureKey, 'Block', 2);
+          await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** gains 2 **Block Tokens** before her bonus Ranged attack.`).catch(discordCatch);
+          await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** gains 2 Block Tokens.`, { phase: 'ROUND', icon: 'attack' });
+        }
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[combat.attackerFigureKey] = true;
         await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Use the **Attack** button.`).catch(discordCatch);

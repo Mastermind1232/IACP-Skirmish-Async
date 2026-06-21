@@ -112,6 +112,18 @@ describe('Post-deploy: ability scanning', () => {
     assert.strictEqual(beskar.interactive, false, 'Beskar Armor is auto-apply');
   });
 
+  it('detects Beskar Armor on Bo-Katan Kryze (IACP 2026-06-21 keyword: 2 Block after deployment)', async () => {
+    const meta = createTestGame()
+      .withPlayer1Army([{ dcName: 'Bo-Katan Kryze' }])
+      .withPlayer2Army([{ dcName: 'Stormtrooper' }])
+      .inRound(1)
+      .build();
+    const abilities = await getPostDeployAbilities(meta.game, 1);
+    const beskar = abilities.find(a => a.abilityId === 'beskar_armor');
+    assert.ok(beskar, 'Beskar Armor detected on Bo-Katan Kryze');
+    assert.strictEqual(beskar.interactive, false, 'Beskar Armor is auto-apply');
+  });
+
   it('detects Stealthy on Davith Elso', async () => {
     const meta = createTestGame()
       .withPlayer1Army([{ dcName: 'Davith Elso' }])

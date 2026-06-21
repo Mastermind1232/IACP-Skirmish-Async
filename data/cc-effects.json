@@ -853,8 +853,9 @@
     "Get Behind Me!": {
       "cost": 2,
       "playableBy": "GUARDIAN or FORCE USER",
+      "eligibleFigure": "GUARDIAN, or a Rebel FORCE USER whose attack type is MELEE",
       "timing": "whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces",
-      "effect": "Use when an attack is declared targeting another friendly small figure with a figure cost of 10 or less within 3 spaces. Move up to 3 spaces into a space adjacent to that figure that can be targeted by the attack. The attack targets you instead, if able.",
+      "effect": "Play with a GUARDIAN or a Rebel melee FORCE USER. Use when an attack is declared targeting another friendly small figure with a figure cost of 10 or less within 3 spaces. Move up to 3 spaces into a space adjacent to that figure that can be targeted by the attack. The attack targets you instead, if able.",
       "abilityId": "Get Behind Me!"
     },
     "Glory of the Kill": {

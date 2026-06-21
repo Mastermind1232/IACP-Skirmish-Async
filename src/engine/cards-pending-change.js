@@ -7,18 +7,22 @@
 //
 // Match by DC/card BASE name (variant suffixes like " (Elite)" stripped).
 export const CARDS_PENDING_CHANGE = new Set([
-  'Rebel Trooper',        // Aim (Elite) reworked
+  // FINALIZED in the IACP 2026-06-21 update — implemented to spec, removed here:
+  //   Rebel Trooper (Elite) — Aim / Get Ready / Get into Position / cost / surges
+  //   Leia Organa — Military Efficiency is now a surge ability
+  //   Bantha Rider — Wild Beast once/activation AND once/status phase
+  //   Get Behind Me! — eligible figure = GUARDIAN or Rebel melee FORCE USER
+  //   Bo-Katan Kryze — Beskar Armor (2 Block before the bonus ranged attack)
+  // CT-1701 STAYS: only Cover Fire is finalized (now once/round, hand-wired);
+  //   Barrage is still mid-change, so keep CT-1701 pending to avoid graduating
+  //   its possibly-stale CSV rows.
   '[Mortar Trooper]',     // Guidance Systems
   '74-Z Speeder Bike',    // Forward Mounted Blasters etc.
-  'Leia Organa',
-  'CT-1701',              // Barrage / Cover Fire
+  'CT-1701',              // Barrage still changing (Cover Fire finalized + hand-wired)
   'Yoda',                 // Force Deflection
-  'Bantha Rider',         // Wild Beast
-  'Get Behind Me!',       // CC reworked
   'Stimulants',           // changing
   'Wookiee Rage',         // changing
   'The Armorer',          // changing
-  'Bo-Katan Kryze',       // changing
   // NOTE: K-2SO STAYS (alexanbv 2026-06-16). The new "KX security droid" is a
   // separate card not yet in the DB — nothing to mark for it.
 ]);

@@ -2272,10 +2272,9 @@ function _makeTokenResolver({ side }) {
       else if (tok.type === 'Surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; msg = '+1 Surge'; }
       else if (tok.type === 'Block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; msg = '+1 Block'; }
       else if (tok.type === 'Evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg = '+1 Evade'; }
-      // Personal Combat Shield (Gar Saxon / Bo-Katan): a Block token spent while
-      // defending → +1 Evade. The real special-ability ids are
-      // personal_combat_shield_gar_saxon / personal_combat_shield_bokatan; the bare
-      // 'personal_combat_shield' id is on no card, so it was a dead branch.
+      // Personal Combat Shield (Gar Saxon): a Block token spent while defending → +1 Evade.
+      // (Bo-Katan lost Personal Combat Shield in the IACP 2026-06-21 update — she now has
+      // Beskar Armor instead, so personal_combat_shield_bokatan is no longer present.)
       if (tok.type === 'Block' && side === 'defender') {
         const ids = (getDcEffectsGlobal()[dcNameFromFigureKey(tok.figureKey)]?.specialAbilityIds) || [];
         if (ids.includes('personal_combat_shield_gar_saxon') || ids.includes('personal_combat_shield_bokatan')) { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg += ', +1 Evade (Personal Combat Shield)'; }
@@ -4011,11 +4010,13 @@ export async function handleAttackTarget(interaction, ctx) {
   // activation" but alexanbv has confirmed this is INCORRECT card text;
   // the actual ruling is the same per-figure scope as Regular. Treat
   // both variants identically until the printed card is errata-corrected.
+  // Aim is carried as a specialAbilityId (aim_rebel_trooper_elite / _reg), not a
+  // passive keyword. BOTH variants share the identical per-FIGURE mechanic: the
+  // bonus applies only if THIS attacking figure has not exited its space during
+  // its own activation (game.figureMoved[attackerFigureKey]).
   let _aimFired = false;
-  if ((_atkEff?.passives || []).includes('Aim')) {
-    if (!game.figureMoved?.[attackerFigureKey]) {
-      _aimFired = true;
-    }
+  if (hasAimAbility(_atkEff?.specialAbilityIds) && aimBonusApplies(attackerFigureKey, game.figureMoved)) {
+    _aimFired = true;
   }
   const defenderPlayerNum = opponentPlayerNum(attackerPlayerNum);
   const attackerUserName = getPlayerDisplayName(game, attackerPlayerNum, client);
@@ -4039,7 +4040,7 @@ export async function handleAttackTarget(interaction, ctx) {
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
-  if (_aimFired) await thread.send(`🎯 **Aim** — Target already suffered damage this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
+  if (_aimFired) await thread.send(`🎯 **Aim** — You have not exited your space this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
   // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
   // (multifigure-independent-activation rule).
   const nextSurge = [
@@ -4126,10 +4127,11 @@ export async function handleAttackTarget(interaction, ctx) {
     attackTargetMsgId: interaction.message.id,
     darksaberBlastToCleave: overrideDice?.darksaberBlastToCleave || false,
   };
-  // Aim (Rebel Trooper Elite): apply +1 Hit +2 Accuracy to pendingCombat
+  // Aim (Rebel Trooper Elite/Regular): apply +1 Hit +2 Accuracy to pendingCombat.
   if (_aimFired) {
-    game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
-    game.pendingCombat.bonusAccuracy = (game.pendingCombat.bonusAccuracy || 0) + 2;
+    const _aimed = applyAimBonus({ bonusHits: game.pendingCombat.bonusHits, bonusAccuracy: game.pendingCombat.bonusAccuracy });
+    game.pendingCombat.bonusHits = _aimed.bonusHits;
+    game.pendingCombat.bonusAccuracy = _aimed.bonusAccuracy;
   }
   // Surge-granting auras (Gar Saxon, General Sorin, …): a friendly owner figure
   // within range grants its surge abilities to qualifying friendlies — so an

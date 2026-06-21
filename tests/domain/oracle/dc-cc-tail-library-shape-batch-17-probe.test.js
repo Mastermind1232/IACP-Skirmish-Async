@@ -18,13 +18,15 @@ const lib = JSON.parse(readFileSync(LIB_PATH, 'utf8'));
 const BATCH = [
   ['CC-CAL-S-BUDDY',               "Cal's Buddy",              'ccEffect',  "Deploy BD-1 to Cal's space or an adjacent space; BD-1 activates at start/end of Cal's activation"],
   ['DC-PASS-ATTACHED-DIO',         'attached_dio',             'dcPassive', 'Attached'],
-  ['DC-PASS-DEFENSIVE-FIRE-BOKATAN', 'defensive_fire_bokatan', 'dcPassive', 'Defensive Fire'],
+  // defensive_fire_bokatan REMOVED in the IACP 2026-06-21 update: Bo-Katan lost
+  // Defensive Fire. She now has the Beskar Armor keyword (2 Block AFTER deployment)
+  // plus Dual-Wield Pistols granting 2 Block BEFORE her bonus ranged attack.
   ['DC-PASS-DROID-KIT-IDEN',       'droid_kit_iden',           'dcPassive', 'Droid Kit (Iden)'],
   ['DC-PASS-INSIGNIFICANT-DIO',    'insignificant_dio',        'dcPassive', 'Insignificant'],
   ['DC-PASS-PULSE-CANNON-IDEN',    'pulse_cannon_iden',        'dcPassive', 'Pulse Cannon (Iden)'],
 ];
 
-describe('DC-CC batch-17: tail library-shape contracts (6 atoms)', () => {
+describe('DC-CC batch-17: tail library-shape contracts (5 atoms)', () => {
   for (const [id, key, type, label] of BATCH) {
     it(`${id} — ${type} ${key} library shape`, () => {
       const e = lib.abilities?.[key];

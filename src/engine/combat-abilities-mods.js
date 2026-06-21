@@ -575,9 +575,11 @@ registerCombatAbility({
   },
 });
 
-// Aim (Rebel Trooper) — CARD PENDING IACP CHANGE (alexanbv 2026-06-16: "rebel
-// trooper E card has been changed. Ignore that ability for now"). Not wired
-// until the new text lands. See cards-pending-change.js.
+// Aim (Rebel Trooper Regular AND Elite) — FINALIZED in the IACP 2026-06-21
+// update. Both variants share the same per-FIGURE mechanic, applied inline in
+// handlers/combat.js via aim-rebel-trooper-helpers.js (hasAimAbility /
+// aimBonusApplies / applyAimBonus), keyed on game.figureMoved[attackerFigureKey].
+// Not a CSV-graduated combat-window mod here.
 
 // Exploit Weakness (Scout Trooper Elite) — +1 Surge if the defender has a
 // harmful condition.

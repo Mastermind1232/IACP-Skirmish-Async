@@ -28,11 +28,33 @@ import { getMapData as _getMapData, getDcEffects as _getDcEffects } from '../dat
  *  - window: the pipeline timing instance it is offered at.
  *  - excludeActive: never offer the attacker/defender themselves as the player.
  */
+/**
+ * Get Behind Me! (IACP 2026-06-21) eligibility for the chooseable figure:
+ * a GUARDIAN, OR a Rebel FORCE USER whose attack type is MELEE.
+ */
+export function getBehindMeFigureEligible(game, figureKey, deps = {}) {
+  const dcName = dcNameFromFigureKey(figureKey);
+  const eff = (deps.getDcEffects || _getDcEffects)()?.[dcName]
+    || (deps.getDcEffects || _getDcEffects)()?.[String(dcName || '').replace(/\s*\(Elite\)\s*$/, '')];
+  if (!eff) return false;
+  const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
+  if (kws.includes('GUARDIAN')) return true;
+  // Otherwise must be a Rebel FORCE USER with a MELEE attack.
+  const isForceUser = kws.includes('FORCE USER');
+  const isRebel = String(eff.affiliation || '').toLowerCase() === 'rebel';
+  const atkType = String(eff.attack?.type || '').toLowerCase();
+  const isMelee = atkType === 'melee' || atkType === 'mêlée';
+  return isForceUser && isRebel && isMelee;
+}
+
 export const THIRD_PARTY_CC_SPECS = {
   'Concentrated Fire':     { side: 'attacker', playableBy: 'TROOPER',            from: 'target',  los: true, window: 'on_declare', excludeActive: true },
   'Guardian Stance':       { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'rerolls',    excludeActive: true },
   'Bodyguard':             { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'on_declare', excludeActive: true },
-  'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true },
+  // Get Behind Me! (IACP 2026-06-21): the chooseable figure must be a GUARDIAN,
+  // OR a Rebel FORCE USER whose attack type is MELEE. `playableBy` stays the broad
+  // pre-filter ('GUARDIAN or FORCE USER'); `figureEligible` enforces the full rule.
+  'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true, figureEligible: getBehindMeFigureEligible },
   // BA reacts to ANOTHER friendly figure rolling ANY dice within 3 (CSV row 543:
   // "after another friendly figure within 3 spaces rolls any number of dice,
   // reroll 1 of those dice"). That friendly may be the ATTACKER rolling attack
@@ -85,6 +107,9 @@ export function eligibleThirdPartyCcFigures(game, specKey, combat, deps = {}) {
     if (spec.excludeActive && (fk === combat.attackerFigureKey || fk === combat.target?.figureKey)) continue;
     const dcName = dcNameFromFigureKey(fk);
     if (!figureMatchesCcRestriction(game, dcName, dcName, spec.playableBy)) continue;
+    // Per-spec fine-grained eligibility (e.g. Get Behind Me!: GUARDIAN, or a
+    // Rebel FORCE USER whose attack type is MELEE).
+    if (typeof spec.figureEligible === 'function' && !spec.figureEligible(game, fk, deps)) continue;
     if (spec.n != null) {
       if (!refPos || !isWithinN(pos, refPos, spec.n, game?.selectedMap?.id, deps.getMapData || _getMapData)) continue;
     }

@@ -1192,11 +1192,6 @@
       "description": "While defending, you may apply either +1 Block or +1 Evade to your defense results.",
       "wiredStatus": "wired"
     },
-    "defensive_fire_bokatan": {
-      "type": "dcPassive",
-      "label": "Defensive Fire",
-      "wiredStatus": "wired"
-    },
     "dual_wield_pistols_bokatan": {
       "type": "dcSpecial",
       "category": "passive-reactive",
@@ -2994,9 +2989,18 @@
       "type": "ccEffect",
       "label": "+3 Accuracy (or -1 Dodge/-1 Evade — player choice)",
       "chooseOne": [
-        { "label": "+3 Accuracy", "attackAccuracyBonus": 3 },
-        { "label": "-1 Dodge", "attackDodgeReduction": 1 },
-        { "label": "-1 Evade", "attackEvadeReduction": 1 }
+        {
+          "label": "+3 Accuracy",
+          "attackAccuracyBonus": 3
+        },
+        {
+          "label": "-1 Dodge",
+          "attackDodgeReduction": 1
+        },
+        {
+          "label": "-1 Evade",
+          "attackEvadeReduction": 1
+        }
       ],
       "wiredStatus": "wired"
     },
@@ -5496,6 +5500,14 @@
       "category": "passive",
       "label": "Cover Fire",
       "description": "After you resolve an attack, distribute 1 Block Token to a friendly figure within 3 spaces. Then, if it did not miss, you may discard 1 condition or Power Token from the target. Limit once per round.",
+      "wiredStatus": "wired"
+    },
+    "dual_wield_block_bokatan": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "before-bonus-ranged-attack",
+      "label": "Dual-Wield Pistols",
+      "description": "Before performing your bonus Ranged attack from Dual-Wield Pistols, you gain 2 Block Tokens.",
       "wiredStatus": "wired"
     }
   }

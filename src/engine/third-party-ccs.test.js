@@ -2,7 +2,7 @@
 // the attacker/defender) that can legally play a reaction CC for the current attack.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { eligibleThirdPartyCcFigures, isThirdPartyCc, thirdPartyCardName, THIRD_PARTY_CC_SPECS, applyThirdPartyCcEffect } from './third-party-ccs.js';
+import { eligibleThirdPartyCcFigures, isThirdPartyCc, thirdPartyCardName, THIRD_PARTY_CC_SPECS, applyThirdPartyCcEffect, getBehindMeFigureEligible } from './third-party-ccs.js';
 
 describe('applyThirdPartyCcEffect — Concentrated Fire', () => {
   const deps = (stun) => ({
@@ -110,6 +110,57 @@ describe('Get Behind Me! — GUARDIAN or FORCE USER within 3 of the defender', (
     const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Darth Vader-2-0' } };
     const elig = eligibleThirdPartyCcFigures(game, 'Get Behind Me!', combat, mapDeps);
     assert.deepEqual(elig, ['Royal Guard (Elite)-2-1']);
+  });
+});
+
+// IACP 2026-06-21: the chooseable figure must be a GUARDIAN, OR a Rebel FORCE
+// USER whose attack type is MELEE.
+describe('getBehindMeFigureEligible — GUARDIAN or Rebel melee FORCE USER', () => {
+  const eff = {
+    'Royal Guard (Elite)': { keywords: ['GUARDIAN'], affiliation: 'Imperial', attack: { type: 'melee' } },
+    'Diala Passil':        { keywords: ['FORCE USER'], affiliation: 'Rebel', attack: { type: 'melee' } },
+    'Luke Skywalker':      { keywords: ['FORCE USER'], affiliation: 'Rebel', attack: { type: 'range' } },
+    'Darth Vader':         { keywords: ['FORCE USER'], affiliation: 'Imperial', attack: { type: 'melee' } },
+    'Stormtrooper':        { keywords: ['TROOPER'], affiliation: 'Imperial', attack: { type: 'range' } },
+  };
+  const deps = { getDcEffects: () => eff };
+  const g = {};
+  it('a GUARDIAN is eligible', () => {
+    assert.equal(getBehindMeFigureEligible(g, 'Royal Guard (Elite)-2-0', deps), true);
+  });
+  it('a Rebel melee FORCE USER is eligible', () => {
+    assert.equal(getBehindMeFigureEligible(g, 'Diala Passil-2-0', deps), true);
+  });
+  it('a Rebel RANGED FORCE USER is NOT eligible', () => {
+    assert.equal(getBehindMeFigureEligible(g, 'Luke Skywalker-2-0', deps), false);
+  });
+  it('a non-Rebel melee FORCE USER is NOT eligible', () => {
+    assert.equal(getBehindMeFigureEligible(g, 'Darth Vader-2-0', deps), false);
+  });
+  it('a plain TROOPER (no GUARDIAN, not a FORCE USER) is NOT eligible', () => {
+    assert.equal(getBehindMeFigureEligible(g, 'Stormtrooper-2-0', deps), false);
+  });
+});
+
+describe('eligibleThirdPartyCcFigures — Get Behind Me filters by the new figure rule', () => {
+  const mapDeps2 = { getMapData: () => ({ adjacency: { b2: ['b3'], b3: ['b2', 'b4'], b4: ['b3'] } }) };
+  const eff = {
+    'Stormtrooper':   { keywords: ['TROOPER'], affiliation: 'Imperial', attack: { type: 'range' } },
+    'Diala Passil':   { keywords: ['FORCE USER'], affiliation: 'Rebel', attack: { type: 'melee' } },
+    'Luke Skywalker': { keywords: ['FORCE USER'], affiliation: 'Rebel', attack: { type: 'range' } },
+  };
+  const deps = { ...mapDeps2, getDcEffects: () => eff };
+  it('offers the Rebel melee FORCE USER but not the Rebel ranged FORCE USER', () => {
+    const game = {
+      selectedMap: { id: 'm' },
+      figurePositions: {
+        1: { 'Stormtrooper-1-0': 'a1' },
+        2: { 'Diala Passil-2-0': 'b3', 'Luke Skywalker-2-1': 'b4', 'Stormtrooper-2-2': 'b2' },
+      },
+    };
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Stormtrooper-2-2' } };
+    const elig = eligibleThirdPartyCcFigures(game, 'Get Behind Me!', combat, deps);
+    assert.deepEqual(elig, ['Diala Passil-2-0']);
   });
 });
 

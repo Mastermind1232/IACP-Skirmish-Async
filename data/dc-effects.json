@@ -1074,7 +1074,7 @@
       ]
     },
     "Bantha Rider": {
-      "abilityText": "Wild Beast: When you would perform an attack, you may perform a Special Action instead.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
+      "abilityText": "Wild Beast: When you would perform an attack, you may perform a Special Action instead. Limit once per activation and once per status phase.\n\nSpecial Action (Trample): Choose up to 3 adjacent hostile figures and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.\n\nStampede: When you end your movement in spaces that contain other figures, each hostile figure in your space suffers 1 Damage.",
       "keywords": [
         "MASSIVE",
         "CREATURE",
@@ -1257,7 +1257,7 @@
       ]
     },
     "Bo-Katan Kryze": {
-      "abilityText": "Personal Combat Shield: Whenever you spend a Block Token while defending, apply +1 Evade to the defense results.\n\nDefensive Fire: After resolving a Ranged attack, gain 1 Block Token.\n\nDual-Wield Pistols: After resolving a Ranged attack, you may perform a Ranged attack without spending an action. Limit once per round.\n\nLast Wielder of the Darksaber: You may include \"The Darksaber\" in your army. At the start of the round, you may attach it to this group.",
+      "abilityText": "Beskar Armor: After you are deployed, gain 2 Block Tokens.\n\nDual-Wield Pistols: After resolving a Ranged attack, you may perform a Ranged attack without spending an action. Before performing this bonus Ranged attack, you gain 2 Block Tokens. Limit once per round.\n\nLast Wielder of the Darksaber: You may include \"The Darksaber\" in your army. At the start of the round, you may attach it to this group.",
       "keywords": [
         "LEADER",
         "VEHICLE"
@@ -1267,7 +1267,8 @@
       "health": 12,
       "speed": 5,
       "passives": [
-        "Mobile"
+        "Mobile",
+        "Beskar Armor"
       ],
       "figures": 1,
       "attack": {
@@ -1290,8 +1291,7 @@
       "unique": true,
       "affiliation": "Scum",
       "specialAbilityIds": [
-        "personal_combat_shield_gar_saxon",
-        "defensive_fire_bokatan",
+        "dual_wield_block_bokatan",
         "dual_wield_pistols_bokatan",
         "last_wielder_darksaber_bokatan"
       ],
