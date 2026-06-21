@@ -799,7 +799,9 @@ function getActivationActions(game, playerNum, deps) {
         const hasIRMultiAttack = !!game.imperialRetrofittingMultiAttack?.[figureKey];
         if (!hasFreeAttack && !hasIRMultiAttack) {
           const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
-          const hasAssault = /\bAssault:/i.test(dcAbilityText);
+          // Wild Fury (alexanbv 2026-06-21): per-figure flag grants Assault
+          // for this activation, so a second attack stays available.
+          const hasAssault = /\bAssault:/i.test(dcAbilityText) || !!game.activationAssaultGranted?.[figureKey];
           if (!hasAssault) attackBlocked = true;
         }
       }

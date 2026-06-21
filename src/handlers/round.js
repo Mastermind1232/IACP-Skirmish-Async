@@ -692,7 +692,11 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
     }
     game.secondChanceDcMsgId = {};
   }
-  // Adrenaline: deal 5 Damage then revert +5 maxHp bonus for each boosted WOOKIEE
+  // Adrenaline: at end of round, remove the temporary +5 Health bonus for each
+  // boosted WOOKIEE. Spec (combat-spec.csv:528 / cc-effects.json): the card ONLY
+  // grants "+5 Health to each of your WOOKIEEs during this round" — there is NO
+  // damage clause. Revert by lowering max HP by 5 and clamping current to the new
+  // max; never deal damage and never defeat a figure.
   if (game.adrenalineBonuses && typeof game.adrenalineBonuses === 'object') {
     for (const [msgId, info] of Object.entries(game.adrenalineBonuses)) {
       const pn = info.playerNum;
@@ -705,12 +709,9 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         const [cur, max] = healthState[fi];
         const curHp = cur ?? max ?? 0;
         const maxHp = max ?? cur ?? 0;
-        // 1. Suffer 5 damage
-        const afterDamage = Math.max(0, curHp - 5);
-        // 2. Revert the +5 max HP bonus
+        // Revert the +5 max HP bonus; clamp current to the new max (no damage).
         const newMax = Math.max(0, maxHp - 5);
-        // Clamp current to new max
-        const newCur = Math.min(afterDamage, newMax);
+        const newCur = Math.min(curHp, newMax);
         healthState[fi] = [newCur, newMax];
       }
       dcHealthState.set(msgId, healthState);
@@ -719,38 +720,7 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       const dcListArr = getDcList(game, pn) || [];
       const idx = dcIds.indexOf(msgId);
       if (idx >= 0 && dcListArr[idx]) dcListArr[idx].healthState = [...healthState];
-      // Check for defeats
-      const meta = dcMessageMeta.get(msgId);
-      const dgMatch = meta?.displayName?.match(/\[(?:DG|Group) (\d+)\]/);
-      const dgIndex = dgMatch ? dgMatch[1] : '0';
-      for (let fi = 0; fi < healthState.length; fi++) {
-        if (!Array.isArray(healthState[fi])) continue;
-        if (healthState[fi][0] <= 0) {
-          // Figure defeated by Adrenaline end-of-round damage (self-inflicted, no VP)
-          const baseName = (info.dcName || 'Figure').replace(/\s*\[.*\]\s*$/, '').trim();
-          const figureKey = `${baseName}-${dgIndex}-${fi}`;
-          await processFigureDefeat(game, {
-            defeatedPlayerNum: pn,
-            figureKey,
-            attackerPlayerNum: pn,
-            msgId,
-            dcIdx: idx,
-            dcName: info.dcName,
-            displayName: info.dcName,
-            source: 'Adrenaline',
-            awardVp: false,
-          }, {
-            removeFigurePosition,
-            calculateKillVp: () => 0,
-            awardKillVp,
-            dcNameFromFigureKey,
-            logGameAction,
-            client,
-            checkWinConditions,
-          });
-        }
-      }
-      await logGameAction(game, client, `**End of round — Adrenaline** — **${info.dcName}** lost **+5 Health** bonus and suffered **5 Damage**.`, { phase: 'ROUND', icon: 'round' });
+      await logGameAction(game, client, `**End of round — Adrenaline** — **${info.dcName}** lost the **+5 Health** bonus.`, { phase: 'ROUND', icon: 'round' });
     }
     game.adrenalineBonuses = {};
   }

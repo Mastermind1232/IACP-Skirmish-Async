@@ -1746,10 +1746,12 @@ export const COMBAT_RESOLVERS = {
   get_down: {
     prompt: () => ({ content: '**Get Down** — apply +1 Block or +1 Evade?', buttons: [['block', '+1 Block'], ['evade', '+1 Evade'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { game, combat, thread }) => {
+      // Once-per-round limit is spent ONLY when a bonus is actually applied; Skip
+      // must not burn Get Down (spec: "you MAY apply +1 Block or +1 Evade").
       const fk = _findModsFigKey('get_down', game, combat);
-      if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_get_down`] = true; }
-      if (choice === 'block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; thread?.send('**Get Down** — Applied +1 Block.').catch(discordCatch); }
-      else if (choice === 'evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; thread?.send('**Get Down** — Applied +1 Evade.').catch(discordCatch); }
+      const _gdStamp = () => { if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_get_down`] = true; } };
+      if (choice === 'block') { _gdStamp(); combat.bonusBlock = (combat.bonusBlock || 0) + 1; thread?.send('**Get Down** — Applied +1 Block.').catch(discordCatch); }
+      else if (choice === 'evade') { _gdStamp(); combat.bonusEvade = (combat.bonusEvade || 0) + 1; thread?.send('**Get Down** — Applied +1 Evade.').catch(discordCatch); }
       else thread?.send('**Get Down** — Skipped.').catch(discordCatch);
       combat.getDownResolved = true;
     },
@@ -2270,10 +2272,13 @@ function _makeTokenResolver({ side }) {
       else if (tok.type === 'Surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; msg = '+1 Surge'; }
       else if (tok.type === 'Block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; msg = '+1 Block'; }
       else if (tok.type === 'Evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg = '+1 Evade'; }
-      // Personal Combat Shield (Gar Saxon): a Block token spent while defending → +1 Evade.
+      // Personal Combat Shield (Gar Saxon / Bo-Katan): a Block token spent while
+      // defending → +1 Evade. The real special-ability ids are
+      // personal_combat_shield_gar_saxon / personal_combat_shield_bokatan; the bare
+      // 'personal_combat_shield' id is on no card, so it was a dead branch.
       if (tok.type === 'Block' && side === 'defender') {
         const ids = (getDcEffectsGlobal()[dcNameFromFigureKey(tok.figureKey)]?.specialAbilityIds) || [];
-        if (ids.includes('personal_combat_shield')) { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg += ', +1 Evade (Personal Combat Shield)'; }
+        if (ids.includes('personal_combat_shield_gar_saxon') || ids.includes('personal_combat_shield_bokatan')) { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg += ', +1 Evade (Personal Combat Shield)'; }
       }
       if (thread) await thread.send(`**Power Token** — ${dcNameFromFigureKey(tok.figureKey)} spent a ${tok.type} token: ${msg}.`).catch(discordCatch);
       // Max one per attack — return (record + re-drive); spend_token won't re-offer.
@@ -8340,14 +8345,20 @@ export async function handleCombatPassive(interaction, ctx) {
     await sendReadyToResolveRolls(thread, gameId, game, ctx);
     return;
   } else if (abilityKey === 'getdown') {
-    if (combat.getDownFigKey) {
-      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      game.roundFigureAbilityUsed[`${combat.getDownFigKey}_get_down`] = true;
-    }
+    // Spend the once-per-round limit ONLY when a bonus is applied; Skip must not
+    // burn Get Down for the round (matches the COMBAT_RESOLVERS get_down path).
+    const _gdStampLegacy = () => {
+      if (combat.getDownFigKey) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`${combat.getDownFigKey}_get_down`] = true;
+      }
+    };
     if (choice === 'block') {
+      _gdStampLegacy();
       combat.bonusBlock = (combat.bonusBlock || 0) + 1;
       await thread.send('**Get Down** — Applied +1 Block.');
     } else if (choice === 'evade') {
+      _gdStampLegacy();
       combat.bonusEvade = (combat.bonusEvade || 0) + 1;
       await thread.send('**Get Down** — Applied +1 Evade.');
     } else {

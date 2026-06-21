@@ -250,8 +250,14 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   })();
   {
     const pendingFig = game.nextAttacksBonusHits?.[combat.attackerFigureKey];
-    if (pendingFig && pendingFig.count > 0 && pendingFig.bonus > 0 && (!pendingFig.requiresSmallTarget || _saTargetIsSmall) && (!pendingFig.requiresUniqueHostileTarget || _othTargetIsUnique)) {
-      combat.bonusHits = (combat.bonusHits || 0) + pendingFig.bonus;
+    // A pending entry applies if it grants any of Hit bonus, Blast, or Accuracy.
+    // (Bombardment grants Blast 1 only — no Accuracy, no Hit bonus; alexanbv 2026-06-21.)
+    const _pfGrants = pendingFig && pendingFig.count > 0
+      && ((pendingFig.bonus > 0) || (pendingFig.blast > 0) || (pendingFig.accuracy > 0));
+    if (_pfGrants && (!pendingFig.requiresSmallTarget || _saTargetIsSmall) && (!pendingFig.requiresUniqueHostileTarget || _othTargetIsUnique)) {
+      if (pendingFig.bonus > 0) combat.bonusHits = (combat.bonusHits || 0) + pendingFig.bonus;
+      if (pendingFig.blast > 0) combat.bonusBlast = (combat.bonusBlast || 0) + pendingFig.blast;
+      if (pendingFig.accuracy > 0) combat.bonusAccuracy = (combat.bonusAccuracy || 0) + pendingFig.accuracy;
       pendingFig.count -= 1;
       if (pendingFig.count <= 0) delete game.nextAttacksBonusHits[combat.attackerFigureKey];
     } else {

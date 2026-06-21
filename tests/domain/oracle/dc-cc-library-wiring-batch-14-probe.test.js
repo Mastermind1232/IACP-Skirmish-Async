@@ -59,7 +59,7 @@ const BATCH = [
   ['Vanish',                ['vanishImmunityUntilNextActivation', 'nextActivationMpBonus']],
   ['Veteran Instincts',     ['powerTokenGain']],
   ['Wild Attack',           ['attackBonusDice', 'attackBonusDiceColor', 'defenseBonusDiceFromAttacker', 'defenseBonusDiceFromAttackerColor']],
-  ['Wild Fury',             ['applyFocus', 'freeAttackBonusCount', 'postActivationConditions']],
+  ['Wild Fury',             ['applyFocus', 'grantActivationAssault', 'postActivationConditions']],
   ['Worth Every Credit',    ['discardUpToNHarmful', 'mpBonus', 'nextHostileDefeatVpBonus']],
   ['You Will Not Deny Me',  ['setsYouWillNotDenyMe']],
 ];

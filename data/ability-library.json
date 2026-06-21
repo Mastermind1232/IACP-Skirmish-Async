@@ -5411,11 +5411,11 @@
     },
     "Wild Fury": {
       "type": "ccEffect",
-      "label": "Become Focused + up to 3 free attacks; then Stunned + Bleeding",
+      "label": "Become Focused + gain Assault this activation; then Stunned + Bleeding",
       "applyFocus": true,
       "wiredStatus": "wired",
-      "logMessage": "Became Focused. You may perform up to 3 free attacks this activation. After the last free attack (or end of activation), become Stunned and Bleeding.",
-      "freeAttackBonusCount": 3,
+      "logMessage": "Became Focused and gained Assault for this activation (may perform a second attack). At the end of the activation, become Stunned and Bleeding.",
+      "grantActivationAssault": true,
       "postActivationConditions": [
         "Stun",
         "Bleed"

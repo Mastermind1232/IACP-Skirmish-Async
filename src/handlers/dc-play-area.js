@@ -12,7 +12,7 @@ import { truncateLabel, getAttachmentSpecials, chunkButtonsToRows, buildRowPicke
 import { cardNameIncludes } from '../game/card-names.js';
 import { squadUpgradeOnGroup, effectiveFigureCount } from '../game/squad-upgrades.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
-import { bottomLeftCoord, edgeKey, normalizeCoord } from '../game/coords.js';
+import { bottomLeftCoord, edgeKey, normalizeCoord, getFootprintCells } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces } from '../game/movement.js';
@@ -21,7 +21,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
-import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower } from '../data-loader.js';
+import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower, getFigureSize } from '../data-loader.js';
 import { depleteDc } from '../game/card-state-helpers.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels, figureHasInTheShadows } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -2421,6 +2421,9 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       if (!isFreeAttack && !hasIRMultiAttack) {
         const dcAbilityText = getDcEffects()?.[meta.dcName]?.abilityText || '';
         let hasAssault = /\bAssault:/i.test(dcAbilityText);
+        // Wild Fury (alexanbv 2026-06-21): grants Assault for this activation
+        // via a per-figure flag (the figure may take a second attack).
+        if (game.activationAssaultGranted?.[figureKey]) hasAssault = true;
         // Scavenged Walker: "You lose ASSAULT"
         const _asFigKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
         if (hasAssault && (getConfig(game, _asFigKey)?.attachments || []).includes('Scavenged Walker')) hasAssault = false;
@@ -4844,34 +4847,39 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const attackerPlayerNum = pending.playerNum;
   const damageLog = [];
   const defeatedFigures = [];
-  for (const sp of pending.spacesChosen) {
-    // Check both players' figures
-    for (const pn of [1, 2]) {
-      const positions = game.figurePositions?.[pn] || {};
-      for (const [fk, pos] of Object.entries(positions)) {
-        if (!pos || String(pos).toLowerCase() !== sp) continue;
-        // Apply 2 damage to this figure
-        const fkMsgId = findDcMessageIdForFigure?.(gameId, pn, fk);
-        if (!fkMsgId) continue;
-        const hs = dcHealthState?.get(fkMsgId) || [];
-        const figMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-        const entry = hs[figIdx];
-        if (!entry) continue;
-        const [cur, max] = entry;
-        const newCur = Math.max(0, (cur ?? max) - 2);
-        hs[figIdx] = [newCur, max ?? newCur];
-        dcHealthState?.set(fkMsgId, hs);
-        const dcIds = getDcMessageIds(game, pn);
-        const dcList = getDcList(game, pn);
-        const idx = (dcIds || []).indexOf(fkMsgId);
-        if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
-        const dcName = dcNameFromFigureKey(fk);
-        damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
-        if (newCur <= 0) {
-          damageLog[damageLog.length - 1] += ' **(defeated)**';
-          defeatedFigures.push({ figureKey: fk, playerNum: pn });
-        }
+  // Match figures by FOOTPRINT (Large/Massive figures occupy multiple cells, not
+  // just their stored anchor) — spec: "each figure ON a chosen space suffers 2
+  // Damage". Each figure is damaged at most once even if it covers multiple chosen
+  // spaces. Mirror getFootprintCells usage elsewhere in this file.
+  const chosenSet = new Set(pending.spacesChosen.map(s => String(s).toLowerCase()));
+  for (const pn of [1, 2]) {
+    const positions = game.figurePositions?.[pn] || {};
+    for (const [fk, pos] of Object.entries(positions)) {
+      if (!pos) continue;
+      const fkSize = game.figureOrientations?.[fk] || getFigureSize(dcNameFromFigureKey(fk)) || '1x1';
+      const fpCells = getFootprintCells(String(pos).toLowerCase(), fkSize).map(c => String(c).toLowerCase());
+      if (!fpCells.some(c => chosenSet.has(c))) continue;
+      // Apply 2 damage to this figure
+      const fkMsgId = findDcMessageIdForFigure?.(gameId, pn, fk);
+      if (!fkMsgId) continue;
+      const hs = dcHealthState?.get(fkMsgId) || [];
+      const figMatch = fk.match(/-(\d+)-(\d+)$/);
+      const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
+      const entry = hs[figIdx];
+      if (!entry) continue;
+      const [cur, max] = entry;
+      const newCur = Math.max(0, (cur ?? max) - 2);
+      hs[figIdx] = [newCur, max ?? newCur];
+      dcHealthState?.set(fkMsgId, hs);
+      const dcIds = getDcMessageIds(game, pn);
+      const dcList = getDcList(game, pn);
+      const idx = (dcIds || []).indexOf(fkMsgId);
+      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+      const dcName = dcNameFromFigureKey(fk);
+      damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
+      if (newCur <= 0) {
+        damageLog[damageLog.length - 1] += ' **(defeated)**';
+        defeatedFigures.push({ figureKey: fk, playerNum: pn });
       }
     }
   }
@@ -4926,7 +4934,11 @@ export async function handleBombDropSpacePick(interaction, ctx) {
   for (const pn of [1, 2]) {
     const positions = game.figurePositions?.[pn] || {};
     for (const [fk, pos] of Object.entries(positions)) {
-      if (!pos || !affectedSpaces.has(String(pos).toLowerCase())) continue;
+      if (!pos) continue;
+      // Match by footprint so Large/Massive figures on/adjacent to the blast are hit.
+      const fkSize = game.figureOrientations?.[fk] || getFigureSize(dcNameFromFigureKey(fk)) || '1x1';
+      const fpCells = getFootprintCells(String(pos).toLowerCase(), fkSize).map(c => String(c).toLowerCase());
+      if (!fpCells.some(c => affectedSpaces.has(c))) continue;
       const fkMsgId = findDcMessageIdForFigure?.(gameId, pn, fk);
       if (!fkMsgId) continue;
       const hs = dcHealthState?.get(fkMsgId) || [];

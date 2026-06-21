@@ -9,16 +9,16 @@
  *
  * Implementation: in skirmish, the SOLE effect that reduces a figure's
  *   Health (max HP) is the end-of-round Adrenaline revert in
- *   `src/handlers/round.js`. The revert enforces the CRR-DMG-008 discard
- *   invariant through a two-sided clamp on the health tuple:
+ *   `src/handlers/round.js`. Adrenaline's spec (combat-spec.csv:528) ONLY
+ *   grants "+5 Health to each of your WOOKIEEs during this round" — there is
+ *   NO damage clause, so the end-of-round revert must NOT deal damage and
+ *   must NOT defeat the figure. The revert enforces the CRR-DMG-008 discard
+ *   invariant through a clamp on the health tuple:
  *     1. newMax = Math.max(0, maxHp - 5)     — Health-reduction floor
- *     2. afterDamage = Math.max(0, curHp - 5) — damage-suffering floor;
- *        damage below 0 HP is discarded (cannot accumulate negatives).
- *     3. newCur = Math.min(afterDamage, newMax) — current is bounded by
- *        the RESULTING Health; damage beyond newMax is discarded (cannot
- *        carry excess onto the tuple).
- *     4. if (healthState[fi][0] <= 0) processFigureDefeat(...) — defeat
- *        flow is a consequence (via CRR-DEF-001), not the discard itself.
+ *     2. newCur = Math.min(curHp, newMax)    — current is bounded by the
+ *        RESULTING Health; HP that no longer fits under the lowered max is
+ *        discarded (cannot carry excess onto the tuple), but no damage is
+ *        dealt and no figure is defeated.
  *   No other source file mutates maxHp downward, so the CRR-DMG-008
  *   discard invariant has a single enforcement site.
  */
@@ -40,39 +40,33 @@ function* walkFiles(dir) {
   }
 }
 
-describe('PROBE-PD-DMG-008: Health reduction that falls below suffered damage defeats the figure', () => {
+describe('PROBE-PD-DMG-008: Health reduction discards excess HP without dealing damage', () => {
   it('008a: source — Adrenaline revert reduces maxHp with a non-negative floor (newMax = Math.max(0, maxHp - 5))', () => {
     assert.match(R_SRC,
-      /\/\/ 2\. Revert the \+5 max HP bonus\s*\n\s*const newMax = Math\.max\(0, maxHp - 5\);/,
+      /const newMax = Math\.max\(0, maxHp - 5\);/,
       'max-HP reduction must be clamped to ≥ 0 — CRR-DMG-008');
   });
 
-  it('008b: source — current HP is clamped to the new max after reduction (newCur = Math.min(afterDamage, newMax))', () => {
+  it('008b: source — current HP is clamped to the new max after reduction (newCur = Math.min(curHp, newMax))', () => {
     assert.match(R_SRC,
-      /\/\/ Clamp current to new max\s*\n\s*const newCur = Math\.min\(afterDamage, newMax\);/,
-      'current HP must be clamped to the resulting Health — CRR-DMG-008');
+      /const newCur = Math\.min\(curHp, newMax\);/,
+      'current HP must be clamped to the resulting Health (no damage) — CRR-DMG-008');
   });
 
-  it('008c: source — damage-suffer step comes BEFORE the max-HP revert, but clamp ensures damage-exceeds-new-max lands current at newMax or lower', () => {
-    const damageIdx = R_SRC.indexOf('// 1. Suffer 5 damage');
-    const revertIdx = R_SRC.indexOf('// 2. Revert the +5 max HP bonus');
-    const clampIdx = R_SRC.indexOf('// Clamp current to new max');
-    assert.ok(damageIdx > 0 && revertIdx > 0 && clampIdx > 0,
-      'all three Adrenaline steps must be locatable');
-    assert.ok(damageIdx < revertIdx && revertIdx < clampIdx,
-      'order must be: suffer damage → reduce max → clamp current — CRR-DMG-008');
+  it('008c: source — the Adrenaline revert deals NO damage (spec: +5 Health only, no damage clause)', () => {
+    // The fixed revert must not subtract a flat 5 from current HP.
+    const adrIdx = R_SRC.indexOf('Adrenaline: at end of round');
+    assert.ok(adrIdx >= 0, 'Adrenaline revert block must be present');
+    const block = R_SRC.slice(adrIdx, adrIdx + 1500);
+    assert.ok(!/Suffer 5 damage|curHp - 5/.test(block),
+      'Adrenaline must NOT deal 5 damage on revert — CRR-DMG-008 / spec is +5 Health only');
   });
 
-  it('008d: source — after clamping, a defeat trigger fires when current HP <= 0 (damage ≥ resulting Health)', () => {
-    assert.match(R_SRC,
-      /healthState\[fi\]\s*=\s*\[newCur, newMax\];[\s\S]*?if \(healthState\[fi\]\[0\] <= 0\) \{[\s\S]*?processFigureDefeat\(/,
-      'defeat must fire when clamped current reaches 0 — CRR-DMG-008');
-  });
-
-  it('008e: source — processFigureDefeat is invoked with source:"Adrenaline" and awardVp:false (self-inflicted Health-reduction defeat)', () => {
-    assert.match(R_SRC,
-      /await processFigureDefeat\(game, \{[\s\S]*?source: 'Adrenaline',\s*\n\s*awardVp: false,\s*\n\s*\}/,
-      'Adrenaline-driven defeat must be self-inflicted (no VP) — CRR-DMG-008');
+  it('008d: source — the Adrenaline revert does NOT defeat figures (no processFigureDefeat in the block)', () => {
+    const adrIdx = R_SRC.indexOf('Adrenaline: at end of round');
+    const block = R_SRC.slice(adrIdx, adrIdx + 1500);
+    assert.ok(!/processFigureDefeat/.test(block),
+      'Adrenaline revert must not defeat figures — the card never harms your WOOKIEEs');
   });
 
   it('008f: source — Adrenaline in round.js is the sole code site that reduces maxHp anywhere in src/', () => {

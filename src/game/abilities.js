@@ -1115,8 +1115,12 @@ export function resolveAbility(abilityId, context) {
     if (game.emperorInterruptUsedThisActivation?.[msgId] && choiceIndex == null) {
       return { applied: false, manualMessage: '**Emperor** — Already used this activation.' };
     }
+    const _empEnemyNum = opponentPlayerNum(playerNum);
     if (choiceIndex != null && targetFigureKey) {
-      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
+      // Emperor may force ANY figure (friendly OR hostile) to interrupt and attack.
+      // Resolve the granted-attack message id against the target's actual owner.
+      const _empTargetOwner = game.figurePositions?.[playerNum]?.[targetFigureKey] ? playerNum : _empEnemyNum;
+      const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, _empTargetOwner, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingEmperorInterrupt(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
       }
@@ -1139,12 +1143,19 @@ export function resolveAbility(abilityId, context) {
     // other friendly figure on the map, not just within 4 spaces. alexanbv 2026-06-17.
     const _unlimitedPower = !!game.unlimitedPowerActive?.[playerNum];
     const validTargets = [];
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (fk === activatingKey || !pos) continue;
-      if (!_unlimitedPower && countGameSpaces(game, activatingPos, pos) > 4) continue;
-      validTargets.push(fk);
+    // Spec (combat-spec.csv:234): "another figure within 4 spaces" = ANY figure,
+    // friendly OR hostile (only the activating figure is excluded). Unlimited Power
+    // (CC) extends range to the whole map for FRIENDLY figures only.
+    for (const _empPn of [playerNum, _empEnemyNum]) {
+      const _empFriendly = _empPn === playerNum;
+      for (const [fk, pos] of Object.entries(game.figurePositions?.[_empPn] || {})) {
+        if (fk === activatingKey || !pos) continue;
+        const _empUnlimited = _unlimitedPower && _empFriendly;
+        if (!_empUnlimited && countGameSpaces(game, activatingPos, pos) > 4) continue;
+        validTargets.push(fk);
+      }
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: _unlimitedPower ? '**Emperor** — No other friendly figures on the map.' : '**Emperor** — No other friendly figures within 4 spaces.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: _unlimitedPower ? '**Emperor** — No other figures available.' : '**Emperor** — No other figures within 4 spaces.' };
     return {
       applied: false,
       requiresChoice: true,
@@ -1552,7 +1563,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // bombardment_sorin (General Sorin): choose an adjacent friendly; it interrupts to attack with Blast 1 + Accuracy 1
+  // bombardment_sorin (General Sorin): choose an adjacent friendly; it interrupts to attack with Blast 1 (no Accuracy; alexanbv 2026-06-21)
   if (abilityId === 'bombardment_sorin') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, findDcMessageIdForFigure } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Bombardment** manually.' };
@@ -1560,12 +1571,13 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       if (chosenMsgId) {
         setPendingBombardmentSorin(game, { forMsgId: chosenMsgId, chosenFigureKey: targetFigureKey, triggeredByMsgId: msgId });
-        // Grant Blast 1 + Accuracy 1 bonus for the next attack (per-figure 2026-05-09)
+        // Grant Blast 1 bonus for the next attack (per-figure; consumed in combat-bridge).
+        // Spec (combat-spec.csv:256): "The attack gains Blast 1." (no Accuracy clause.)
         game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
-        game.nextAttacksBonusHits[targetFigureKey] = { count: 1, bonus: 0, blast: 1, accuracy: 1 };
+        game.nextAttacksBonusHits[targetFigureKey] = { count: 1, bonus: 0, blast: 1 };
       }
       const chosenName = dcNameFromFigureKey(targetFigureKey);
-      return { applied: true, logMessage: `**Bombardment** — **${chosenName}** may interrupt to perform a free attack with **+1 Accuracy** and **Blast 1** (no action cost). Use their **Attack** button.` };
+      return { applied: true, logMessage: `**Bombardment** — **${chosenName}** may interrupt to perform a free attack with **Blast 1** (no action cost). Use their **Attack** button.` };
     }
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     const activatingKey = figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
@@ -6250,6 +6262,30 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
     }
     const extraParts = [];
+    // Wild Fury: applyFocus + grantActivationAssault + postActivationConditions
+    // in a single ccEffect. Per alexanbv (2026-06-21): Wild Fury does NOT grant
+    // multiple FREE attacks — it effectively gives the figure ASSAULT for that
+    // activation (i.e. it may perform more than one attack, but each non-free
+    // attack still costs an action). We grant this via a dedicated per-figure
+    // flag, game.activationAssaultGranted[figureKey], honored by both the
+    // 1-attack-per-activation gate in dc-play-area.js and the available-actions
+    // hasAssault check. The flag clears at end of the figure's activation
+    // (ACTIVATION_FIGKEY_FLAGS), matching "for that activation".
+    if (entry.grantActivationAssault) {
+      const _wfFk = figureKeyForActivation(game, msgId);
+      if (_wfFk) {
+        game.activationAssaultGranted = game.activationAssaultGranted || {};
+        game.activationAssaultGranted[_wfFk] = true;
+        extraParts.push('Gained **Assault** for this activation (may perform a second attack).');
+      }
+    }
+    if (Array.isArray(entry.postActivationConditions) && entry.postActivationConditions.length > 0) {
+      const _wfPacFk = figureKeyForActivation(game, msgId);
+      if (_wfPacFk) {
+        game.postActivationConditions = game.postActivationConditions || {};
+        game.postActivationConditions[_wfPacFk] = entry.postActivationConditions;
+      }
+    }
     // extraActionBonus (All in a Day's Work): increment remaining actions for active DC
     if (typeof entry.extraActionBonus === 'number' && entry.extraActionBonus > 0) {
       const actData = game.dcActionsData?.[msgId];
@@ -12388,26 +12424,31 @@ export function resolveAbility(abilityId, context) {
     const mapId = game.selectedMap?.id;
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // Spec (cc-effects.json:401): "Choose ANOTHER SMALL figure within 3 spaces" =
+    // any figure friendly OR hostile, excluding only the activating figure. Resolve
+    // the target's actual owner from its position rather than assuming the opponent.
+    const _deOwnerOf = (fk) => (game.figurePositions?.[playerNum]?.[fk] ? playerNum : oppNum);
     // Phase 3: apply push + deal 1 Damage
     if (chosenFigureKey && chosenSpace) {
-      const { prevPos: _dePrevPos } = pushFigure(game, oppNum, chosenFigureKey, chosenSpace) || { prevPos: null };
+      const _deOwner = _deOwnerOf(chosenFigureKey);
+      const { prevPos: _dePrevPos } = pushFigure(game, _deOwner, chosenFigureKey, chosenSpace) || { prevPos: null };
       const targetName = dcNameFromFigureKey(chosenFigureKey);
-      const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
+      const targetMsgId = findMsgIdForFigureKey(game, _deOwner, chosenFigureKey, dcMessageMeta);
       const refreshIds = [];
       if (targetMsgId) refreshIds.push(targetMsgId);
       if (dcHealthState && targetMsgId) {
         const targetMeta = dcMessageMeta.get(targetMsgId);
-        const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, oppNum, targetMeta) : [chosenFigureKey];
+        const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, _deOwner, targetMeta) : [chosenFigureKey];
         const fi = Math.max(0, targetKeys.indexOf(chosenFigureKey));
         const targetHs = (dcHealthState.get(targetMsgId) || []).slice();
         if (targetHs[fi] && Array.isArray(targetHs[fi])) {
           const [cur, max] = targetHs[fi];
           targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
           dcHealthState.set(targetMsgId, targetHs);
-          syncHealthStateToList(game, oppNum, targetMsgId, targetHs);
+          syncHealthStateToList(game, _deOwner, targetMsgId, targetHs);
         }
       }
-      const { pathStr: _dePathStr, warnings: _deWarnings } = computePushPathAndWarnings(game, _dePrevPos, chosenSpace, oppNum);
+      const { pathStr: _dePathStr, warnings: _deWarnings } = computePushPathAndWarnings(game, _dePrevPos, chosenSpace, _deOwner);
       let _deLogMsg = `**Dark Energy** — Pushed **${targetName}** to ${String(chosenSpace).toUpperCase()}${_dePathStr}, dealt 1 Damage.`;
       if (_deWarnings.length > 0) {
         const _deWarnList = _deWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
@@ -12417,7 +12458,8 @@ export function resolveAbility(abilityId, context) {
     }
     // Phase 2: pick landing space adjacent to target (1-space push in any direction)
     if (chosenFigureKey && !chosenSpace) {
-      const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
+      const _deOwner2 = _deOwnerOf(chosenFigureKey);
+      const targetPos = game.figurePositions?.[_deOwner2]?.[chosenFigureKey];
       if (!targetPos || !mapId) return { applied: false, manualMessage: 'Resolve Dark Energy push manually.' };
       const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
@@ -12436,26 +12478,31 @@ export function resolveAbility(abilityId, context) {
     const activatorFk = activatingKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || activatingKeys[0];
     const activatorPos = activatorFk ? game.figurePositions?.[playerNum]?.[activatorFk] : null;
     const validTargets = [];
-    for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
-      if (!coord) continue;
-      if (activatorPos && countGameSpaces(game, activatorPos, coord) > 3) continue;
-      // SMALL check: skip LARGE and MASSIVE figures
-      const targetDcName = dcNameFromFigureKey(fk);
-      const targetStats = getStatsForDc(targetDcName);
-      const kwds = (targetStats?.keywords || []).map((k) => String(k).toUpperCase());
-      if (kwds.includes('LARGE') || kwds.includes('MASSIVE')) continue;
-      validTargets.push(fk);
+    // Enumerate BOTH players' SMALL figures within 3, excluding only the activator.
+    for (const _dePn of [playerNum, oppNum]) {
+      for (const [fk, coord] of Object.entries(game.figurePositions?.[_dePn] || {})) {
+        if (!coord) continue;
+        if (fk === activatorFk) continue; // "another" figure — exclude self
+        if (activatorPos && countGameSpaces(game, activatorPos, coord) > 3) continue;
+        // SMALL check: skip LARGE and MASSIVE figures
+        const targetDcName = dcNameFromFigureKey(fk);
+        const targetStats = getStatsForDc(targetDcName);
+        const kwds = (targetStats?.keywords || []).map((k) => String(k).toUpperCase());
+        if (kwds.includes('LARGE') || kwds.includes('MASSIVE')) continue;
+        validTargets.push(fk);
+      }
     }
-    if (!validTargets.length) return { applied: true, logMessage: 'No SMALL hostile within 3 for Dark Energy.' };
+    if (!validTargets.length) return { applied: true, logMessage: 'No SMALL figure within 3 for Dark Energy.' };
     const getFigLbl = (fk) => {
-      const tMsgId = findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta);
+      const _lblOwner = _deOwnerOf(fk);
+      const tMsgId = findMsgIdForFigureKey(game, _lblOwner, fk, dcMessageMeta);
       const tMeta = tMsgId ? dcMessageMeta.get(tMsgId) : null;
       return tMeta?.displayName || tMeta?.dcName || dcNameFromFigureKey(fk);
     };
     if (validTargets.length === 1) {
       // Auto-select single target, go to Phase 2 immediately
       const fk = validTargets[0];
-      const targetPos = game.figurePositions?.[oppNum]?.[fk];
+      const targetPos = game.figurePositions?.[_deOwnerOf(fk)]?.[fk];
       const mapSpaces = getMapData(mapId);
       const adjacentSpaces = mapSpaces?.adjacency?.[targetPos] || [];
       const occupiedSet = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean));
@@ -13037,7 +13084,12 @@ export function resolveAbility(abilityId, context) {
       }
       return { applied: true, logMessage: logMsg, refreshBoard: true };
     }
-    // Phase 2: space picker within 4 of chosen figure's current position
+    // Phase 2: push the chosen figure exactly 1 space (per spec: "push that figure
+    // 1 space"), into an adjacent empty space. NOTE (deferred-trigger nuance): the
+    // spec gates this push on "when you enter that figure's space during this
+    // activation" — that on-enter interrupt trigger is not wired in this engine, so
+    // Hop On! is offered on-demand when the Special Action resolves rather than at
+    // the moment Kuiil enters the figure's space. Distance is correct (1, not 4).
     if (chosenFigureKey) {
       const targetPos = game.figurePositions?.[playerNum]?.[chosenFigureKey];
       if (!targetPos) return { applied: false, manualMessage: 'Could not locate target figure position. Push manually.' };
@@ -13045,12 +13097,12 @@ export function resolveAbility(abilityId, context) {
       if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Push manually (no map data).' };
       const occ = boardState.occupiedSet;
       const occArr = occ instanceof Set ? [...occ] : (occ || []);
-      const reachable = getReachableSpaces(targetPos, 4, boardState.mapSpaces, occArr);
+      const reachable = getReachableSpaces(targetPos, 1, boardState.mapSpaces, occArr);
       const validSpaces = reachable.map((s) => String(s).toLowerCase()).filter((s) => !occArr.includes(s));
-      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty spaces within 4 to push the figure to.' };
-      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**Hop On!** — Choose destination (within 4 of ${dcNameFromFigureKey(chosenFigureKey)}):`, chosenFigureKey };
+      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty adjacent space to push the figure to.' };
+      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**Hop On!** — Push **${dcNameFromFigureKey(chosenFigureKey)}** 1 space:`, chosenFigureKey };
     }
-    // Phase 1: pick friendly SMALL figure
+    // Phase 1: pick friendly SMALL figure with figure cost 8 or less
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
@@ -13064,9 +13116,11 @@ export function resolveAbility(abilityId, context) {
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
       if (kws.includes('MASSIVE') || kws.includes('LARGE')) continue; // only SMALL figures
+      const figCost = eff.subCost ?? eff.cost ?? 99; // per-figure cost when present
+      if (figCost > 8) continue; // figure cost 8 or less
       validKeys.push(fk); validLabels.push(dcN);
     }
-    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly SMALL figures to push.' };
+    if (!validKeys.length) return { applied: false, manualMessage: 'No friendly SMALL figures with figure cost 8 or less to push.' };
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
   }
 
@@ -14268,7 +14322,10 @@ export function resolveAbility(abilityId, context) {
     if (!meta) return { applied: false, manualMessage: 'Resolve manually: no activation meta.' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
-    const fk = figureKeys[0];
+    // Loth-cat (Elite & Regular) deploy as 2-figure groups: Pounce must act on the
+    // SELECTED figure, not hardcoded figure 0 (else figure 1 would teleport figure 0).
+    const _plSelIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const fk = figureKeys[_plSelIdx] || figureKeys[0];
     if (!chosenSpace) {
       // First call: enumerate empty spaces within pounceRange using the IACP
       // "counting spaces" rule (per destruct 2026-05-07): impassable terrain

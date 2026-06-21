@@ -1099,8 +1099,10 @@ test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [Group 1]' }]]);
   const result = resolveAbility('Wild Fury', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  assert.ok(result.logMessage?.startsWith('Became Focused.'));
-  assert.ok(result.logMessage?.includes('attacks') || result.logMessage?.includes('manually'));
+  assert.ok(result.logMessage?.startsWith('Became Focused'));
+  // alexanbv 2026-06-21: Wild Fury grants ASSAULT for the activation (a second
+  // attack), not multiple free attacks.
+  assert.ok(result.logMessage?.includes('Assault') || result.logMessage?.includes('manually'));
   assert.ok(game.figureConditions['Darth Vader-1-0']?.includes('Focus'));
 });
 
@@ -2069,4 +2071,106 @@ test('Collateral Damage: figure pick (cc-hand chosenFigureKey route) damages the
   const phase2 = resolveAbility('Collateral Damage', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: 'Bystander-1-0' });
   assert.strictEqual(phase2.applied, true);
   assert.deepStrictEqual(dcHealthState.get('m2')[0], [4, 6]);
+});
+
+// ─── Re-audit gap fixes (2026-06-21) ──────────────────────────────────────────
+
+test('Wild Fury grants Focus + Assault-for-activation + post-activation Stun/Bleed (gap 4/5)', () => {
+  // alexanbv 2026-06-21: Wild Fury does NOT grant multiple free attacks. It
+  // effectively gives the figure ASSAULT for that activation, surfaced via the
+  // per-figure game.activationAssaultGranted flag (NOT freeAttackBonusPending).
+  const msgId = 'msg-wf';
+  const game = {
+    gameId: 'g-wf',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Wookiee Warriors-1-0': 'a1' } },
+    figureConditions: {},
+    freeAttackBonusPending: {},
+    activationAssaultGranted: {},
+    postActivationConditions: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf', playerNum: 1, dcName: 'Wookiee Warriors', displayName: 'Wookiee Warriors [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Wild Fury', { game, playerNum: 1, dcMessageMeta, msgId });
+  assert.strictEqual(result.applied, true);
+  // Focus applied
+  assert.ok(game.figureConditions['Wookiee Warriors-1-0']?.includes('Focus'), 'Focus applied');
+  // Assault granted for this activation (NOT a freeAttackBonusPending grant)
+  assert.strictEqual(game.activationAssaultGranted['Wookiee Warriors-1-0'], true, 'activationAssaultGranted set');
+  assert.ok(game.freeAttackBonusPending['Wookiee Warriors-1-0'] == null, 'no free-attack count granted');
+  // End-of-activation Stun + Bleed queued
+  assert.deepStrictEqual(game.postActivationConditions['Wookiee Warriors-1-0'], ['Stun', 'Bleed'], 'postActivationConditions queued');
+});
+
+test('Bombardment (Sorin) stores Blast 1 (no Accuracy) by figureKey for the granted attack (gap 1)', () => {
+  const game = {
+    gameId: 'g-bomb',
+    nextAttacksBonusHits: {},
+  };
+  const findDcMessageIdForFigure = () => 'chosen-msg';
+  const result = resolveAbility('bombardment_sorin', {
+    game, playerNum: 1, msgId: 'sorin-msg',
+    choiceIndex: 0, targetFigureKey: 'B2-EMO-1-0', findDcMessageIdForFigure,
+  });
+  assert.strictEqual(result.applied, true);
+  assert.deepStrictEqual(game.nextAttacksBonusHits['B2-EMO-1-0'], { count: 1, bonus: 0, blast: 1 });
+  assert.ok(!/Accuracy/.test(result.logMessage), 'log no longer claims +1 Accuracy');
+  assert.match(result.logMessage, /Blast 1/);
+});
+
+test('Dark Energy enumerates friendly SMALL figures too, excluding only the activator (gap 10)', () => {
+  const msgId = 'msg-de';
+  const game = {
+    gameId: 'g-de',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: {
+      1: { 'Smuggler-1-0': 'a1', 'AllySmall-1-0': 'a2' },
+      2: { 'Foe-1-0': 'a3' },
+    },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-de', playerNum: 1, dcName: 'Smuggler', displayName: 'Smuggler [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Dark Energy', { game, playerNum: 1, dcMessageMeta });
+  // Phase 1 with multiple targets returns a choice; the friendly ally must be present.
+  assert.ok(result.choiceValues || result.requiresSpaceChoice, 'returns target choice or auto-selects');
+  if (result.choiceValues) {
+    assert.ok(result.choiceValues.includes('AllySmall-1-0'), 'friendly SMALL figure is targetable');
+    assert.ok(result.choiceValues.includes('Foe-1-0'), 'hostile SMALL figure is targetable');
+    assert.ok(!result.choiceValues.includes('Smuggler-1-0'), 'the activator is excluded');
+  }
+});
+
+test('Pounce uses the selected figure index, not figure 0 (gap 11/13/14)', () => {
+  const msgId = 'msg-pounce';
+  const game = {
+    gameId: 'g-pounce',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    dcActionsData: { [msgId]: { selectedFigure: 1 } },
+    figurePositions: { 1: { 'Loth-cat-1-0': 'a1', 'Loth-cat-1-1': 'b2' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-pounce', playerNum: 1, dcName: 'Loth-cat', displayName: 'Loth-cat [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  // Phase 1 (no chosenSpace) enumerates empty spaces within range of the SELECTED
+  // figure (index 1 at b2). It should not throw and should produce a space choice.
+  const result = resolveAbility('Pounce', { game, playerNum: 1, dcMessageMeta, msgId });
+  assert.ok(result.requiresSpaceChoice || result.applied === false, 'pounce resolves for selected figure');
+});
+
+test('Emperor may target a HOSTILE figure within 4 (gap 9)', () => {
+  const msgId = 'msg-emp';
+  const game = {
+    gameId: 'g-emp',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: {
+      1: { 'Emperor Palpatine-1-0': 'a1' },
+      2: { 'Rebel Trooper-1-0': 'a2' },
+    },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-emp', playerNum: 1, dcName: 'Emperor Palpatine', displayName: 'Emperor Palpatine [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('emperor_interrupt', { game, playerNum: 1, meta: dcMessageMeta.get(msgId), msgId, dcMessageMeta });
+  assert.strictEqual(result.requiresChoice, true);
+  assert.ok(result.targetFigureKeys.includes('Rebel Trooper-1-0'), 'hostile figure within 4 is targetable');
 });

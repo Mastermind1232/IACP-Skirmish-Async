@@ -215,6 +215,11 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'pummelTwoAttacksThisActivation',
   'pummelAttacksRemaining',
   'imperialRetrofittingMultiAttack',
+  // Wild Fury (alexanbv 2026-06-21): grants ASSAULT to the activating
+  // figure "for that activation" — set in the Wild Fury ccEffect resolver,
+  // honored by the 1-attack-per-activation gates in dc-play-area.js and
+  // available-actions.js. Per-figure, clears at end of the figure's activation.
+  'activationAssaultGranted',
   // alexanbv 2026-05-13 third-wave: attack-frame grants per-figure.
   // CC-special-action grants (Burst Fire, Crippling Blow, Disruptor
   // Rifle, Tonfa Strike, Barrage) tag a single figure to receive the

@@ -730,7 +730,47 @@ export async function handleLastResort(interaction, ctx) {
           if (_lhnc <= 0) _lrDefeated.push({ figureKey: _lfk, playerNum: pn });
         }
       }
-      _lrResultLog += _lrDamaged.length ? _lrDamaged.join(', ') : 'No adjacent figures.';
+      // Spec (combat-spec.csv:49): "each figure AND object on or adjacent to it
+      // suffers Damage." Also damage neutral NPCs (thugs/krykna) and damageable
+      // objects on or adjacent to the dying figure's space. Mirror Self-Destruct
+      // (object loop) and the Blast pipeline (NPC loop).
+      const _lrExplosionSpaces = [String(_lrPos).toLowerCase(), ..._lrAdj.map((s) => String(s).toLowerCase())];
+      const _lrAttackerPn = opponentPlayerNum(_lrPending.defenderPlayerNum);
+      // Neutral NPCs (thugs / krykna) on or adjacent to the dying figure.
+      try {
+        const { applyDamageToNpc } = await import('../game/hostile-enumeration.js');
+        const { awardObjectiveVp: _lrVp } = await import('../game/vp-helpers.js');
+        for (const [arrName, npcType] of [['npcThugs', 'thug'], ['npcKrykna', 'krykna']]) {
+          const arr = _lrGame[arrName];
+          if (!Array.isArray(arr)) continue;
+          for (let i = 0; i < arr.length; i++) {
+            const npc = arr[i];
+            if (!npc || npc.defeated) continue;
+            if (!_lrExplosionSpaces.includes(String(npc.coord).toLowerCase())) continue;
+            const _lrNpcRes = await applyDamageToNpc(_lrGame, { logGameAction, client, awardObjectiveVp: _lrVp }, {
+              npcType, npcIndex: i, amount: _lrHits, attackerPlayerNum: _lrAttackerPn, source: 'Last Resort',
+            });
+            if (_lrNpcRes?.applied) {
+              _lrDamaged.push(`${npcType} (HP: ${_lrNpcRes.prevHp}→${_lrNpcRes.newHp})${_lrNpcRes.defeated ? ' **(defeated)**' : ''}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[lastResort] npc damage iteration failed:', err?.message ?? err);
+      }
+      // Damageable objects (crates / destructible mission objects).
+      for (const _lrSpace of _lrExplosionSpaces) {
+        for (const _lrObjId of getDamageableObjectsAtCoord(_lrGame, _lrSpace)) {
+          const _lrObjRes = await applyDamageToObject(_lrGame, { logGameAction, client }, {
+            objectId: _lrObjId, amount: _lrHits, attackerPlayerNum: _lrAttackerPn, source: 'Last Resort',
+          });
+          if (_lrObjRes.applied) {
+            const _lrObjName = _lrGame.objectMeta?.[_lrObjId]?.name || _lrObjId;
+            _lrDamaged.push(`${_lrObjName} (HP: ${_lrObjRes.prevHp}→${_lrObjRes.newHp})${_lrObjRes.defeated ? ' **(destroyed)**' : ''}`);
+          }
+        }
+      }
+      _lrResultLog += _lrDamaged.length ? _lrDamaged.join(', ') : 'No adjacent figures or objects.';
     } else {
       _lrResultLog += 'No hits.';
     }
