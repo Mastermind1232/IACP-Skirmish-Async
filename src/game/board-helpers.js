@@ -104,6 +104,9 @@ export function getPlayerOccupiedCells(game, playerNum) {
  *    defeated, unlike Dio / J4X-7 (whose rules live on the host's DC card
  *    and stop when the host dies).
  */
+export function isExcludedFromControl(game, playerNum, figureKey) {
+  return _isExcludedFromControl(game, playerNum, figureKey);
+}
 function _isExcludedFromControl(game, playerNum, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
   const lowerName = dcName.toLowerCase();

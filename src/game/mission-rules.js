@@ -4,10 +4,9 @@
  */
 import { awardObjectiveVp } from './vp-helpers.js';
 import { getPlayerId, getCcHand, getInitiativePlayerNum } from './player-helpers.js';
-import { dcNameFromFigureKey } from './dc-helpers.js';
 import { grantPowerTokens } from './game-helpers.js';
 import { getDeploymentZones, getMissionFlag } from '../data-loader.js';
-import { getPlayerOccupiedCellsForControl } from './board-helpers.js';
+import { getPlayerOccupiedCellsForControl, isExcludedFromControl } from './board-helpers.js';
 import { snowflakeUsers } from '../discord/channel-helpers.js';
 import { normalizeCoord } from './coords.js';
 import { computeThugCandidates, computeThugDamageEvents } from './thug-movement.js';
@@ -55,26 +54,19 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
   const area = [].concat(areas).find((a) => a && String(a.name || '').toLowerCase() === String(areaName || '').toLowerCase());
   if (!area || !Array.isArray(area.cells) || area.cells.length === 0) return null;
   const cellSet = new Set(area.cells.map((c) => normalizeCoord(c)));
-  // Companions not counted for control: Salacious B. Crumb (Indentured Jester — always excluded),
-  // The Child (Clan of Two — excluded while incapacitated, i.e. when game.childIncapacitated is true),
-  // Dio (excluded while Iden Versio is alive; counts after Iden is defeated)
-  const excludedNames = new Set(['salacious b. crumb']);
-  if (game.childIncapacitated) excludedNames.add('the child');
-  // Pre-check whether Iden Versio is alive for each player (Dio excluded only while Iden lives)
-  const idenAlive = {};
-  for (const pn of [1, 2]) {
-    idenAlive[pn] = Object.keys(game.figurePositions?.[pn] || {}).some((fk) => dcNameFromFigureKey(fk) === 'Iden Versio');
-  }
+  // Companion figures not counted for control are excluded via the canonical
+  // predicate (board-helpers.isExcludedFromControl), the single source of truth
+  // shared with getSpaceController / countTerminalsControlledByPlayer /
+  // deployment-zone control. Covers: BD-1 (always), Salacious B. Crumb (always),
+  // The Child (while game.childIncapacitated), Dio (while Iden Versio alive),
+  // J4X-7 (while Jarrod Kelvin alive).
   let p1 = 0;
   let p2 = 0;
   for (const pn of [1, 2]) {
     const poses = game.figurePositions?.[pn] || {};
     for (const [fk, cell] of Object.entries(poses)) {
       if (!cellSet.has(normalizeCoord(cell))) continue;
-      const dcName = dcNameFromFigureKey((fk || '')).toLowerCase();
-      if (excludedNames.has(dcName)) continue;
-      // Dio excluded while its owner Iden Versio is alive
-      if (dcName === 'dio' && idenAlive[pn]) continue;
+      if (isExcludedFromControl(game, pn, fk)) continue;
       if (pn === 1) p1++;
       else p2++;
     }
