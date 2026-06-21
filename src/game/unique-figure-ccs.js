@@ -106,8 +106,27 @@ export function getFastLearnerPickerEligibility(game, playerNum, cardName) {
 
   if (!maraDc || namedFigures.length === 0) return { shouldPrompt: false, namedFigures, maraDc };
 
-  const flUsed = !!game.roundFigureAbilityUsed?.[`${maraDc.dcName}_fast_learner`];
-  if (flUsed) return { shouldPrompt: false, namedFigures, maraDc };
+  // Board-presence gate (alexanbv 2026-06-21): only prompt when BOTH a named
+  // figure AND Mara are actually ON THE BOARD (alive). A defeated named figure
+  // is still in the army dcList, but must not offer "play as <named>"; if only
+  // Mara is alive she plays it via Fast Learner (the legality path handles that
+  // substitution with no prompt), and if only the named figure is alive it
+  // plays normally.
+  const liveDcBases = new Set(
+    Object.entries(game.figurePositions?.[playerNum] || {})
+      .filter(([, pos]) => pos)
+      .map(([fk]) => _dcBase(String(fk).replace(/-\d+-\d+$/, '')).toLowerCase()),
+  );
+  const onBoard = (dcName) => {
+    const b = _dcBase(dcName).toLowerCase();
+    return liveDcBases.has(b) || [...liveDcBases].some((l) => l.includes(b) || b.includes(l));
+  };
+  const namedOnBoard = namedFigures.filter((f) => onBoard(f.dcName));
+  const maraOnBoard = onBoard(maraDc.dcName);
+  if (!maraOnBoard || namedOnBoard.length === 0) return { shouldPrompt: false, namedFigures: namedOnBoard, maraDc };
 
-  return { shouldPrompt: true, namedFigures, maraDc };
+  const flUsed = !!game.roundFigureAbilityUsed?.[`${maraDc.dcName}_fast_learner`];
+  if (flUsed) return { shouldPrompt: false, namedFigures: namedOnBoard, maraDc };
+
+  return { shouldPrompt: true, namedFigures: namedOnBoard, maraDc };
 }

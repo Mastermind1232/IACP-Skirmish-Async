@@ -28,6 +28,7 @@ import {
 } from '../../../src/game/movement.js';
 import { normalizeCoord } from '../../../src/game/coords.js';
 import { getFigureSize, getDcStats } from '../../../src/data-loader.js';
+import { getFastLearnerPickerEligibility } from '../../../src/game/unique-figure-ccs.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // #1/#2/#3 — getInnateRerollAbilities de-dup (named reroll = exactly 1 entry)
@@ -233,5 +234,63 @@ describe('Focused-gap 5: Overrun deals 2 Damage on entering a hostile space', ()
     // An Overrun log line was emitted.
     const logged = calls.logGameAction.some((a) => /Overrun/.test(a[2] || ''));
     assert.ok(logged, 'Overrun damage logged');
+  });
+
+  it('hits MULTIPLE hostiles whose spaces are entered in one step (alexanbv 2026-06-21)', async () => {
+    // AT-ST a1→a2 enters a4 AND b4. Two hostiles at a4 and b4 → BOTH take 2.
+    const game = makeGame({
+      figurePositions: {
+        1: { 'AT-ST-1-0': 'a1' },
+        2: { 'Stormtrooper (Regular)-1-0': 'a4', 'Stormtrooper (Regular)-1-1': 'b4' },
+      },
+      overrunThisActivation: { 'AT-ST-1-0': true },
+    });
+    const dcMeta = [
+      ['3001', { dcName: 'AT-ST', displayName: 'AT-ST', playerNum: 1, gameId: '42' }],
+      ['4001', { dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper (Regular) [Group 1]', playerNum: 2, gameId: '42' }],
+    ];
+    const dcHealthState = new Map();
+    dcHealthState.set('4001', [[5, 5], [5, 5]]); // two figures
+
+    seedMoveState(game, '3001', 0, 'AT-ST-1-0', 1, 'a1', 2, 'AT-ST', 'AT-ST');
+    const { ctx } = buildCtx(game, dcMeta, { dcHealthState });
+
+    await handleMovePick(mockInteraction('move_pick_3001_0_a2', 'player1'), ctx);
+
+    const hs = dcHealthState.get('4001');
+    assert.equal(hs[0][0], 3, 'first hostile (a4) took 2 Damage');
+    assert.equal(hs[1][0], 3, 'second hostile (b4) took 2 Damage');
+    assert.ok(game.overrunDamagedThisMove['AT-ST-1-0'].includes('Stormtrooper (Regular)-1-0'));
+    assert.ok(game.overrunDamagedThisMove['AT-ST-1-0'].includes('Stormtrooper (Regular)-1-1'));
+  });
+});
+
+// ── Fast Learner picker board-presence (alexanbv 2026-06-21) ──
+// When both Mara and the named figure are ON THE BOARD, the player is prompted
+// to choose who plays a unique CC. A defeated named figure (still in the army
+// list) must NOT prompt.
+describe('Fast Learner picker prompts only when both are on the board', () => {
+  function flGame(positions) {
+    return {
+      gameId: 'fl', p1DcList: ['The Armorer', 'Mara Jade'], p2DcList: [],
+      figurePositions: { 1: positions, 2: {} }, roundFigureAbilityUsed: {},
+    };
+  }
+  it('prompts (choose Armorer or Mara) when BOTH are alive on the board', () => {
+    const e = getFastLearnerPickerEligibility(flGame({ 'The Armorer-1-0': 'a1', 'Mara Jade-1-0': 'b1' }), 1, 'Mandalorian Steel');
+    assert.equal(e.shouldPrompt, true);
+  });
+  it('does NOT prompt when the named figure is defeated (only Mara on board) — Mara substitutes', () => {
+    const e = getFastLearnerPickerEligibility(flGame({ 'Mara Jade-1-0': 'b1' }), 1, 'Mandalorian Steel');
+    assert.equal(e.shouldPrompt, false);
+  });
+  it('does NOT prompt when Mara is defeated (only the named figure on board)', () => {
+    const e = getFastLearnerPickerEligibility(flGame({ 'The Armorer-1-0': 'a1' }), 1, 'Mandalorian Steel');
+    assert.equal(e.shouldPrompt, false);
+  });
+  it('does NOT prompt when Fast Learner was already used this round', () => {
+    const g = flGame({ 'The Armorer-1-0': 'a1', 'Mara Jade-1-0': 'b1' });
+    g.roundFigureAbilityUsed['Mara Jade_fast_learner'] = true;
+    assert.equal(getFastLearnerPickerEligibility(g, 1, 'Mandalorian Steel').shouldPrompt, false);
   });
 });
