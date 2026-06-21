@@ -14807,6 +14807,19 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // ccEffect: markedTerritoryUnimplemented (Marked Territory) — NOT IMPLEMENTED
+  // (alexanbv 2026-06-21, same class as Harsh Environment). Its 2nd clause grants
+  // a Power Token to a group figure in an EXTERIOR space, which needs an
+  // interior/exterior tile-type model this engine lacks (no map tags exterior
+  // spaces). Per owner decision the whole card is a no-op + deck-load warning
+  // (UNIMPLEMENTED_CARDS) until such a model exists.
+  if (entry.type === 'ccEffect' && entry.markedTerritoryUnimplemented) {
+    return {
+      applied: false,
+      manualMessage: '**Marked Territory** is not implemented (requires an interior/exterior tile-type model) — resolve manually if you wish.',
+    };
+  }
+
   // ccEffect: setsTerminalControl (Terminal Network — control all terminals this round)
   if (entry.type === 'ccEffect' && entry.setsTerminalControl) {
     const { game, playerNum } = context;

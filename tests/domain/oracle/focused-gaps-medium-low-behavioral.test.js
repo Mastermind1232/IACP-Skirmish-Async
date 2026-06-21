@@ -16,6 +16,7 @@ import { dcAbilityFlags, getMapData } from '../../../src/data-loader.js';
 import { getDcEffects } from '../../../src/data-loader.js';
 import { scrapBattalionGrantedSurges } from '../../../src/engine/surge-auras.js';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { UNIMPLEMENTED_CARDS } from '../../../src/game/validation.js';
 import { fireLieInAmbushWhenDeployed } from '../../../src/handlers/activation.js';
 import { handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from '../../../src/handlers/movement.js';
 import { enqueueAttackerPerDcEffects } from '../../../src/handlers/after-attack-resolve.js';
@@ -144,58 +145,22 @@ describe('Gap6 — Hunt Them Down applies Cleave 2 automatically', () => {
   });
 });
 
-// ── Gap 7: Marked Territory — 2nd token to a different exterior groupmate ──
-describe('Gap7 — Marked Territory grants the 2nd token to an exterior groupmate', () => {
-  const MAP_ID = 'mos-eisley-outskirts';
-  function setupExterior(extCells) {
-    const m = getMapData(MAP_ID);
-    const prev = m.exterior;
-    m.exterior = extCells;
-    return () => { if (prev === undefined) delete m.exterior; else m.exterior = prev; };
-  }
-
-  it('grants a separate token to a groupmate in an exterior space when the activating figure is interior', () => {
-    const dcName = 'Nexu'; // arbitrary multi-figure creature DC name for the test group
-    const fkA = `${dcName}-1-0`; // activating/base figure (interior)
-    const fkB = `${dcName}-1-1`; // groupmate in an exterior space
-    const restore = setupExterior({ 'c5': true });
-    try {
-      const game = {
-        gameId: 'gmt', selectedMap: { id: MAP_ID },
-        figurePositions: { 1: { [fkA]: 'a1', [fkB]: 'c5' }, 2: {} },
-        dcActionsData: { 'msg-mt': { selectedFigure: 0 } },
-        figurePowerTokens: {},
-      };
-      const dcMessageMeta = new Map([['msg-mt', { gameId: 'gmt', playerNum: 1, dcName, displayName: `${dcName} [Group 1]` }]]);
-      const r = resolveAbility('Marked Territory', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: fkA });
-      assert.equal(r.applied, true);
-      const grants = game.pendingPowerTokenGrant.grants;
-      const recipients = grants.map(g => g.figureKey);
-      assert.ok(recipients.includes(fkA), 'base token goes to the activating figure');
-      assert.ok(recipients.includes(fkB), 'the exterior groupmate gets the 2nd token');
-    } finally { restore(); }
+// ── Gap 7: Marked Territory — NOT IMPLEMENTED (alexanbv 2026-06-21) ──
+// Reclassified to the Harsh Environment / Smuggler's Tricks class: the exterior
+// clause needs an interior/exterior tile-type model the engine lacks, so the
+// whole card is a no-op + deck-load warning.
+describe('Gap7 — Marked Territory is not implemented (tile types)', () => {
+  it('resolves as not-implemented with a manual-resolution message', () => {
+    const game = { gameId: 'gmt', selectedMap: { id: 'mos-eisley-outskirts' }, figurePositions: { 1: {}, 2: {} }, figurePowerTokens: {} };
+    const r = resolveAbility('Marked Territory', { game, playerNum: 1, dcMessageMeta: new Map() });
+    assert.equal(r.applied, false);
+    assert.match(r.manualMessage, /not implemented/i);
+    // No tokens granted.
+    assert.ok(!game.pendingPowerTokenGrant, 'no power-token grant queued');
   });
 
-  it('keeps the bonus on the activating figure when IT is the exterior one', () => {
-    const dcName = 'Nexu';
-    const fkA = `${dcName}-1-0`;
-    const fkB = `${dcName}-1-1`;
-    const restore = setupExterior({ 'a1': true });
-    try {
-      const game = {
-        gameId: 'gmt2', selectedMap: { id: MAP_ID },
-        figurePositions: { 1: { [fkA]: 'a1', [fkB]: 'c5' }, 2: {} },
-        figurePowerTokens: {},
-      };
-      const dcMessageMeta = new Map([['msg-mt2', { gameId: 'gmt2', playerNum: 1, dcName, displayName: `${dcName} [Group 1]` }]]);
-      game.dcActionsData = { 'msg-mt2': { selectedFigure: 0 } };
-      const r = resolveAbility('Marked Territory', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: fkA });
-      assert.equal(r.applied, true);
-      const grants = game.pendingPowerTokenGrant.grants;
-      // single grant of 2 to the activating (exterior) figure
-      const fkAGrant = grants.find(g => g.figureKey === fkA);
-      assert.ok(fkAGrant && fkAGrant.count === 2, 'both tokens ride with the exterior activating figure');
-    } finally { restore(); }
+  it('is listed in UNIMPLEMENTED_CARDS so deck-loading warns', () => {
+    assert.ok(UNIMPLEMENTED_CARDS.includes('Marked Territory'));
   });
 });
 

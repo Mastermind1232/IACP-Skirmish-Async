@@ -31,7 +31,7 @@ const BATCH = [
   ['Lord of the Sith',       ['lordOfTheSithEffect']],
   ['Lure of the Dark Side',  ['lureOfTheDarkSide']],
   ['Mandalorian Steel',      ['setsMandaAsteel']],
-  ['Marked Territory',       ['powerTokenGain', 'conditionalExteriorPowerToken']],
+  ['Marked Territory',       ['markedTerritoryUnimplemented']],
   ['Marksman',               ['nextAttackIgnoreFigureLOS']],
   ['Merciless',              ['opponentDiscardDeckTop', 'elseGainVp']],
   ['Miracle Worker',         ['recoverDamage']],

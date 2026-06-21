@@ -3086,11 +3086,9 @@
     },
     "Marked Territory": {
       "type": "ccEffect",
-      "label": "Gain 1 Power Token (+1 if in exterior space)",
-      "powerTokenGain": 1,
-      "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. If this figure is in an exterior space, gain 1 additional Power Token.",
-      "conditionalExteriorPowerToken": 1
+      "label": "Marked Territory (NOT IMPLEMENTED — needs exterior/interior tile types)",
+      "markedTerritoryUnimplemented": true,
+      "wiredStatus": "wired"
     },
     "Marksman": {
       "type": "ccEffect",
