@@ -45,11 +45,14 @@ function mockGetEffect(cardName) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('getCcPlayContext: basic state derivation', () => {
-  it('startOfRound true when round active + activation msg + no button shown', () => {
+  it('startOfRound true when the SoR window is open (startOfRoundWhoseTurn set)', () => {
+    // SoR detection uses the authoritative game.startOfRoundWhoseTurn flag
+    // (cc-timing.js, commit b2454043 2026-04-05) — roundActivationButtonShown
+    // is no longer consulted (it was unreliable during early activation).
     const game = buildGame({
       currentRound: 1,
+      startOfRoundWhoseTurn: 'p1',
       roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
     });
     const ctx = getCcPlayContext(game, 1);
     assert.strictEqual(ctx.startOfRound, true);
@@ -292,8 +295,8 @@ describe('isCcPlayableNow: startOfRound CCs playable during SOR', () => {
   it('SOR CC playable during start of round', () => {
     const game = buildGame({
       currentRound: 1,
+      startOfRoundWhoseTurn: 'p1',
       roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
     });
     const sorCard = Object.entries(ccCards).find(([k, v]) => v.timing === 'startOfRound');
     if (sorCard) {
