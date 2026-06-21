@@ -62,19 +62,20 @@ export function figureHasInTheShadows(game, figureKey) {
 /**
  * True when a figure's deployment card grants Priority Target — "Figures do not
  * block line of sight for this figure's attacks" (CSV docs/combat-spec.csv
- * rows 347/407/901/961/985). Robust to where the keyword lives in the data:
- *   - passives array (e.g. [Flame Trooper] attachment, HK Assassin Droid Elite,
- *     Mak Eshka'rey) — dc-effects.json:197/3320/4587
- *   - abilityText only (e.g. Loku Kanoloa / Mon Cala Special Forces,
- *     Rebel Saboteur Elite / Overload) — dc-effects.json:4383/5284
- *   - the merged ability flags (passives ∪ named abilities) as a belt-and-braces
- *     fallback in case a future card lists it under `abilities`.
- * This is the single shared predicate the three attacker-side figure-LOS-bypass
- * paths (handlers/dc-play-area.js, engine/available-actions.js,
- * game/effective-los.js) call so EVERY Priority Target figure is recognized,
- * regardless of which data bucket carries the keyword. Note this intentionally
- * does NOT cover MASSIVE / Clawdite Scout form / Marksman — those remain
- * site-local bypasses OR-ed alongside this predicate. alexanbv 2026-06-21.
+ * rows 347/407/901/961/985). Per alexanbv 2026-06-21, all Priority Target
+ * abilities live in ONE normalized data structure: the `passives` keyword array
+ * — identical whether the card just lists the keyword (e.g. [Flame Trooper]
+ * attachment, HK Assassin Droid Elite, Mak Eshka'rey) or also spells it out in
+ * abilityText prose (Loku Kanoloa / Mon Cala Special Forces, Rebel Saboteur
+ * Elite / Overload — those two now carry "Priority Target" in `passives` too,
+ * with the abilityText left as descriptive prose). So this predicate reads the
+ * keyword from the normal keyword source only (passives), with the named
+ * `abilities` bucket as a belt-and-braces fallback should a future card list it
+ * there. It is the single shared predicate the three attacker-side
+ * figure-LOS-bypass paths (handlers/dc-play-area.js, engine/available-actions.js,
+ * game/effective-los.js) call so EVERY Priority Target figure is recognized.
+ * Note this intentionally does NOT cover MASSIVE / Clawdite Scout form /
+ * Marksman — those remain site-local bypasses OR-ed alongside this predicate.
  *
  * @param {object} game
  * @param {string} figureKey - e.g. "Loku Kanoloa-1-0"
@@ -84,14 +85,10 @@ export function figureHasPriorityTarget(game, figureKey) {
   const dcName = dcNameFromFigureKey(figureKey);
   const eff = getDcEffect(dcName);
   if (!eff) return false;
-  // passives: exact "Priority Target" entry (case-insensitive)
+  // passives: the normalized keyword home — exact "Priority Target" (case-insensitive)
   if ((eff.passives || []).some((p) => String(p).toLowerCase() === 'priority target')) return true;
-  // named abilities bucket (belt-and-braces)
+  // named abilities bucket (belt-and-braces, in case a future card lists it there)
   if ((eff.abilities || []).some((a) => String(a).toLowerCase() === 'priority target')) return true;
-  // abilityText: must reference Priority Target as a LOS-bypass, not merely the
-  // phrase "priority target" used incidentally — require "line of sight" nearby.
-  const text = String(eff.abilityText || '').toLowerCase();
-  if (text.includes('priority target') && text.includes('line of sight')) return true;
   return false;
 }
 

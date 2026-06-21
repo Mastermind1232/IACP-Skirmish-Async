@@ -399,6 +399,7 @@ describe('B-MVINT-014: Multi-step path detects trigger at correct step', () => {
 //   b1 adj: a1, a2, b2, c1, c2 — d1 is NOT adjacent to b1.
 
 import { detectPushPartingBlow } from '../../../src/game/movement-interrupts.js';
+import { stashPushPartingBlow } from '../../../src/game/abilities.js';
 
 describe('B-MVINT-PUSH-PB: push out of BRAWLER adjacency triggers Parting Blow', () => {
   it('hostile pushed a1→d1 out of enemy BRAWLER (b1) adjacency → trigger', () => {
@@ -474,5 +475,50 @@ describe('B-MVINT-PUSH-PB: push out of BRAWLER adjacency triggers Parting Blow',
     });
     const pb = detectPushPartingBlow(game, 'Rebel Trooper-1-0', 2, 'a1', 'd1');
     assert.strictEqual(pb, null, 'non-BRAWLER → no trigger');
+  });
+});
+
+// FIX 2 (alexanbv 2026-06-21): Parting Blow only triggers when you push a
+// figure HOSTILE to the pushing player. Pushing your OWN friendly figure
+// (Hop On, Reposition) must NOT trigger PB. The hostile-only gate lives in
+// stashPushPartingBlow, keyed on pushedOwner === pushingPlayer.
+describe('B-MVINT-PUSH-PB-HOSTILE: stashPushPartingBlow gates on hostile-only', () => {
+  function gateGame() {
+    return makeGame({
+      figurePositions: {
+        1: {
+          'Agent Kallus-1-0': 'b1',        // BRAWLER (player 1)
+          'Rebel Trooper-1-0': 'a1',       // friendly small figure (player 1)
+        },
+        2: {
+          'Stormtrooper-1-0': 'a1',        // hostile small figure (player 2)
+        },
+      },
+      player1CcHand: ['Parting Blow'],
+    });
+  }
+
+  it('HOSTILE push (player 1 pushes player 2 figure out of own BRAWLER adj) → PB fires', () => {
+    const game = gateGame();
+    // player 1 is pushing; pushed figure belongs to player 2 (hostile).
+    const suffix = stashPushPartingBlow(game, 'Stormtrooper-1-0', 2, 'a1', 'd1', 1);
+    assert.ok(suffix && suffix.includes('Parting Blow'), 'hostile push emits PB suffix');
+    assert.ok(game.pendingPartingBlow, 'hostile push stashed pendingPartingBlow');
+    assert.strictEqual(game.pendingPartingBlow.brawlerFigureKey, 'Agent Kallus-1-0');
+  });
+
+  it('FRIENDLY push (Hop On — player 1 pushes own figure) → no PB stash', () => {
+    const game = gateGame();
+    // player 1 is pushing; pushed figure belongs to player 1 (friendly) → SKIP.
+    const suffix = stashPushPartingBlow(game, 'Rebel Trooper-1-0', 1, 'a1', 'd1', 1);
+    assert.strictEqual(suffix, '', 'friendly push emits no suffix');
+    assert.ok(!game.pendingPartingBlow, 'friendly push does not stash pendingPartingBlow');
+  });
+
+  it('legacy call without pushingPlayerNum is unchanged (gate is a no-op)', () => {
+    const game = gateGame();
+    const suffix = stashPushPartingBlow(game, 'Stormtrooper-1-0', 2, 'a1', 'd1');
+    assert.ok(suffix && suffix.includes('Parting Blow'), 'no pusher arg → old behavior (fires)');
+    assert.ok(game.pendingPartingBlow);
   });
 });

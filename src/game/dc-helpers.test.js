@@ -69,27 +69,33 @@ describe('getCompanionDescriptionForDc', () => {
   });
 });
 
-describe('figureHasPriorityTarget (FIX 1 — robust PT detection)', () => {
+describe('figureHasPriorityTarget (FIX 1 — normalized PT detection via passives)', () => {
   const game = { selectedMap: { id: 'x' } };
 
-  // passives-array figures
+  // All 5 Priority Target figures now carry the keyword in the SAME data
+  // structure (the `passives` array) — whether the card just lists the keyword
+  // or also spells it out in abilityText prose. alexanbv 2026-06-21.
+  it('recognizes [Flame Trooper] attachment — passives array', () => {
+    assert.ok(figureHasPriorityTarget(game, '[Flame Trooper]-1-0'));
+  });
   it('recognizes HK Assassin Droid (Elite) — passives array', () => {
     assert.ok(figureHasPriorityTarget(game, 'HK Assassin Droid (Elite)-1-0'));
   });
   it("recognizes Mak Eshka'rey — passives array", () => {
     assert.ok(figureHasPriorityTarget(game, "Mak Eshka'rey-1-0"));
   });
-
-  // abilityText-only figures (the previously-uncovered cases)
-  it('recognizes Loku Kanoloa — abilityText only (Mon Cala Special Forces)', () => {
+  it('recognizes Loku Kanoloa — normalized into passives (prose stays as Mon Cala Special Forces)', () => {
     assert.ok(figureHasPriorityTarget(game, 'Loku Kanoloa-1-0'));
   });
-  it('recognizes Rebel Saboteur (Elite) — abilityText only (Overload)', () => {
+  it('recognizes Rebel Saboteur (Elite) — normalized into passives (prose stays as Overload)', () => {
     assert.ok(figureHasPriorityTarget(game, 'Rebel Saboteur (Elite)-1-0'));
   });
 
   it('returns false for a figure without Priority Target', () => {
     assert.ok(!figureHasPriorityTarget(game, 'Stormtrooper-1-0'));
+  });
+  it('returns false for Rebel Saboteur (Regular) — no Priority Target', () => {
+    assert.ok(!figureHasPriorityTarget(game, 'Rebel Saboteur (Regular)-1-0'));
   });
   it('returns false for unknown DC / falsy', () => {
     assert.ok(!figureHasPriorityTarget(game, 'NonexistentDC999-1-0'));

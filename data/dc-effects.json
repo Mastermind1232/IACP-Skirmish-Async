@@ -4411,6 +4411,9 @@
         "set_your_sights_loku",
         "mon_cala_sf_loku"
       ],
+      "passives": [
+        "Priority Target"
+      ],
       "abilities": [
         "+4 Accuracy"
       ]
@@ -5308,6 +5311,9 @@
       ],
       "specialAbilityIds": [
         "overload_saboteur"
+      ],
+      "passives": [
+        "Priority Target"
       ],
       "attachment": false,
       "elite": true,
