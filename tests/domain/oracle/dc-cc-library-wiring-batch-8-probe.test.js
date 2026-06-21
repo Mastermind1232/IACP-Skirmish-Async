@@ -31,7 +31,7 @@ const lib = JSON.parse(readFileSync(LIB_PATH, 'utf8'));
 // inline (not data-driven from the ledger) so a ledger edit alone
 // doesn't silently change test scope.
 const BATCH = [
-  ['Arcing Shot',             ['attackAccuracyBonus', 'arcingShotTargeting']],
+  ['Arcing Shot',             ['arcingShotTargeting']],
   ['Ballistics Matrix',       ['ballisticsMatrixEffect']],
   ['Battle Scars',            ['powerTokenGain', 'powerTokenGainIfDamagedGte']],
   ['Battlefield Awareness',   ['battlefieldAwarenessEffect']],

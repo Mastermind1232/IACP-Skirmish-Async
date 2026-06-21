@@ -213,8 +213,7 @@
     },
     "Arcing Shot": {
       "type": "ccEffect",
-      "label": "Before attack: may target figure adjacent to empty space in LOS (+1 Accuracy)",
-      "attackAccuracyBonus": 1,
+      "label": "Before attack: may target a figure/object adjacent to an empty space in your LOS",
       "arcingShotTargeting": true,
       "wiredStatus": "wired"
     },
@@ -470,6 +469,7 @@
       "fixedAreaStrain": 0,
       "placesRubble": true,
       "fixedAreaTargetOnly": true,
+      "requiresLos": true,
       "includeSelf": true,
       "logMessage": "**Boulder Barrage** — Choose a space in LOS. The figure on it suffers 2 Damage, then place a Rubble token.",
       "wiredStatus": "wired"
@@ -2352,7 +2352,7 @@
     "Guardian Stance": {
       "type": "ccEffect",
       "label": "While adjacent friendly is defending: reroll 1 or more attack or defense dice",
-      "defenderRerollDiceMax": 1,
+      "defenderRerollAnyNumber": true,
       "wiredStatus": "wired"
     },
     "Guerilla Warfare": {
@@ -2394,7 +2394,7 @@
     "Hard to Hit": {
       "type": "ccEffect",
       "label": "While defending: reroll 1 defense die",
-      "applyDefenseBonusEvade": 1,
+      "defenderRerollOneDefenseDie": 1,
       "wiredStatus": "wired"
     },
     "hardy_trandoshan": {
@@ -3126,20 +3126,12 @@
     },
     "Meditation": {
       "type": "ccEffect",
-      "label": "Become Focused + next activation free Melee attack (FORCE USER)",
+      "label": "Become Focused + next activation free attack vs adjacent figure (FORCE USER)",
       "applyFocus": true,
-      "logMessage": "Became Focused. During your next activation (if FORCE USER), you may perform a Melee attack (1 red + 1 yellow die) without spending an action.",
+      "logMessage": "Became Focused. During your next activation (if FORCE USER), you may perform an attack targeting an adjacent figure (using your own attack pool) without spending an action.",
       "wiredStatus": "wired",
       "nextActivationFreeAttack": {
-        "melee": true,
-        "dice": [
-          {
-            "color": "red"
-          },
-          {
-            "color": "yellow"
-          }
-        ]
+        "melee": true
       }
     },
     "merciless": {
@@ -3378,7 +3370,8 @@
     },
     "Officer's Training": {
       "type": "ccEffect",
-      "label": "Draw 1 if LEADER",
+      "label": "Reroll 1 attack die; then draw 1 if LEADER",
+      "rerollOneAttackDie": 1,
       "draw": 1,
       "drawIfTrait": "LEADER",
       "wiredStatus": "wired"
@@ -4012,8 +4005,8 @@
           "applyFocus": true
         },
         {
-          "label": "Gain 2 Power Tokens",
-          "powerTokenGain": 2
+          "label": "Gain 2 Hit Tokens",
+          "hitTokenGain": 2
         },
         {
           "label": "Move up to 2 spaces",

@@ -556,6 +556,10 @@ export function getMovementProfile(dcName, figureKey, game) {
     ignoreFigureCost: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     canEndOnOccupied: isMassive,
     treatBlockingAsDifficult: hasMortarHaul,
+    // Mortar Trooper Haul: impassable terrain (modeled as impassable edges)
+    // is treated as difficult terrain — passable, but costs +1 MP — rather
+    // than ignored entirely (Thrusters) or blocking.
+    treatImpassableAsDifficult: hasMortarHaul,
     wallRunActive,
     keywords,
   };
@@ -733,6 +737,9 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   if (!entering.length) return null;
   const dx = neighbor.dx;
   const dy = neighbor.dy;
+  // Mortar Trooper Haul (profile.treatImpassableAsDifficult): crossing an
+  // impassable edge is allowed but treated as difficult terrain (+1 MP).
+  let crossedImpassableAsDifficult = false;
   if (board.movementBlockingSet.size > 0) {
     const backDx = dx ? -Math.sign(dx) : 0;
     const backDy = dy ? -Math.sign(dy) : 0;
@@ -745,6 +752,12 @@ function evaluateMovementStep(current, neighbor, board, profile) {
         // Thrusters (profile.ignoreImpassable): waive impassable-terrain edges
         // only — doors/walls (movementBlockingSet but not impassableEdgeSet) still block.
         if (profile.ignoreImpassable && board.impassableEdgeSet?.has(ek)) continue;
+        // Haul (profile.treatImpassableAsDifficult): impassable edges are
+        // passable but cost as difficult terrain; doors/walls still block.
+        if (profile.treatImpassableAsDifficult && board.impassableEdgeSet?.has(ek)) {
+          crossedImpassableAsDifficult = true;
+          continue;
+        }
         return null;
       }
     }
@@ -766,7 +779,9 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   const enteringDifficult =
     !profile.ignoreDifficult &&
     !wallRunWaivesTerrain &&
-    (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult') || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0));
+    (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult')
+      || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0)
+      || crossedImpassableAsDifficult);
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
   const enteringHostile = board.hostileOccupiedSet
     ? entering.some((cell) => board.hostileOccupiedSet.has(cell))

@@ -576,15 +576,18 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
             if (_wymOppSpaces.has(String(_wymFigPos[fk]).toLowerCase())) { _wymInOppZone = true; break; }
           }
           if (_wymInOppZone) {
-            // Steal 2 VP: deduct from opponent, add to owner
+            // Two independent effects: opponent loses 2 VP (clamped so they
+            // cannot go below 0), and you ALWAYS gain 2 VP regardless of how
+            // much the opponent was able to lose.
             const _wymOppVpKey = oppNum === 1 ? 'player1VP' : 'player2VP';
-            const _wymSteal = Math.min(2, game[_wymOppVpKey]?.total || 0);
-            deductVp(game, oppNum, _wymSteal);
-            awardObjectiveVp(game, pn, _wymSteal);
+            const _wymLose = Math.min(2, game[_wymOppVpKey]?.total || 0);
+            const _wymGain = 2;
+            deductVp(game, oppNum, _wymLose);
+            awardObjectiveVp(game, pn, _wymGain);
             // Consume the once-per-mission use.
             game.whatsYoursIsMineUsed = game.whatsYoursIsMineUsed || {};
             game.whatsYoursIsMineUsed[mid] = true;
-            await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is in the opponent's deployment zone! Stole **${_wymSteal} VP** from Player ${oppNum}.`, { phase: 'ROUND', icon: 'round' });
+            await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is in the opponent's deployment zone! Player ${oppNum} loses **${_wymLose} VP**, you gain **${_wymGain} VP**.`, { phase: 'ROUND', icon: 'round' });
             await checkWinConditions(game, client);
           } else {
             await logGameAction(game, client, `💰 **What's Yours is Mine** — **${dc.displayName || dc.dcName}** is not in the opponent's deployment zone. No VP stolen.`, { phase: 'ROUND', icon: 'round' });

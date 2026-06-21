@@ -2616,7 +2616,8 @@ export function resolveAbility(abilityId, context) {
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[_odadFk] = {
         dice: entry.overrideAttackDice,
-        type: entry.overrideAttackType || null,
+        // Lowercase: consumers compare type against 'melee'/'ranged'.
+        type: entry.overrideAttackType ? String(entry.overrideAttackType).toLowerCase() : null,
         pierce: entry.overrideAttackPierce || 0,
         bonusAccuracy: entry.overrideBonusAccuracy || 0,
         mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
@@ -2801,7 +2802,13 @@ export function resolveAbility(abilityId, context) {
       if (_oatFk) {
         game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
         game.pendingOverrideAttackDice[_oatFk] = {
-          type: entry.overrideAttackType, dice: null, pierce: 0,
+          // Normalize to lowercase: every consumer compares against 'melee' /
+          // 'ranged' (combat.js:3862-3863, dc-play-area.js:58/4083), but some
+          // library entries store capitalized "Melee"/"Ranged" (e.g. Dying
+          // Lunge). Lowercasing here keeps the type restriction effective
+          // regardless of the entry's casing.
+          type: entry.overrideAttackType ? String(entry.overrideAttackType).toLowerCase() : null,
+          dice: null, pierce: 0,
           bonusAccuracy: entry.overrideBonusAccuracy || 0,
           mustTargetNonAdjacent: entry.mustTargetNonAdjacent || false,
           blockSurgeAbilities: entry.blockSurgeAbilities || false,
@@ -4560,6 +4567,18 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && typeof entry.draw === 'number' && entry.draw > 0 && !entry.setsThereIsAnother && !entry.forbiddenKnowledge) {
     const { game, playerNum, combat, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    // Officer's Training part 1: "Use while attacking to reroll 1 attack die."
+    // This applies regardless of the LEADER trait gate on the part-2 draw, so
+    // register the attacker reroll BEFORE the trait check. Mirrors the
+    // rerollOneAttackDie registry (Mitigate) at abilities.js:~9978.
+    let _otRerollMsg = '';
+    if (entry.rerollOneAttackDie) {
+      const cbtRR = combat || game.combat || game.pendingCombat;
+      if (cbtRR) {
+        cbtRR.rerollOneAttackDie = (cbtRR.rerollOneAttackDie || 0) + 1;
+        _otRerollMsg = ' You may reroll 1 attack die.';
+      }
+    }
     if (entry.drawIfTrait) {
       let dcName = null;
       const cbt = combat || game.combat || game.pendingCombat;
@@ -4574,10 +4593,10 @@ export function resolveAbility(abilityId, context) {
       const eff = getDcEffect(dcName);
       const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
       const trait = String(entry.drawIfTrait).toUpperCase();
-      if (!keywords.includes(trait)) return { applied: true };
+      if (!keywords.includes(trait)) return { applied: true, logMessage: _otRerollMsg ? `**${entry.label}** —${_otRerollMsg}`.trim() : undefined };
     }
     const drew = drawCcCards(game, playerNum, entry.draw);
-    return { applied: true, drewCards: drew };
+    return { applied: true, drewCards: drew, ...(_otRerollMsg ? { logMessage: `Drew ${drew.length} card.${_otRerollMsg}` } : {}) };
   }
 
   // ccEffect: forbiddenKnowledge (Forbidden Knowledge, Taron Malicos) — at the
@@ -5620,6 +5639,37 @@ export function resolveAbility(abilityId, context) {
       targetFigureKeys: eligible,
       logMessage: `**Combat Resupply** — Distribute ${roundNum} Damage Token(s) among friendly figures within 3 spaces (round ${roundNum}). Pick a figure:`,
     };
+  }
+
+  // ccEffect: hitTokenGain (Retaliation) — gain N Hit Tokens. Per the codebase
+  // convention, IACP "Hit Tokens" are NOT a player-choosable type; they map
+  // specifically to type-locked 'Damage' power tokens (each adds exactly 1 Hit
+  // to the next attack). Mirrors grantPowerTokens(game, fk, 'Damage', n) used
+  // by Prepared for Battle / Lure of the Dark Side. No type prompt.
+  if (entry.type === 'ccEffect' && typeof entry.hitTokenGain === 'number' && entry.hitTokenGain > 0) {
+    const { game, playerNum, dcMessageMeta } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: gain Hit Token(s).' };
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no figure context for Hit Tokens.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    if (figureKeys.length > 1 && !context.chosenFigureKey) {
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: figureChoiceLabels(figureKeys),
+        targetFigureKeys: figureKeys,
+        logMessage: `Choose which figure gains ${entry.hitTokenGain} Hit Token(s):`,
+      };
+    }
+    const fk = context.chosenFigureKey || figureKeys[0];
+    const current = (game.figurePowerTokens?.[fk] || []).length;
+    const toAdd = Math.min(entry.hitTokenGain, getMaxPowerTokens(fk) - current);
+    if (toAdd <= 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
+    grantPowerTokens(game, fk, 'Damage', toAdd);
+    return { applied: true, refreshBoard: true, logMessage: `**${entry.label || 'Hit Tokens'}** — gained ${toAdd} Hit Token${toAdd === 1 ? '' : 's'} (Damage).` };
   }
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
@@ -7582,14 +7632,15 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: Arcing Shot — +1 Accuracy AND set arcingShotActive flag for targeting validation
+  // ccEffect: Arcing Shot — set arcingShotActive flag for targeting validation.
+  // The card's ONLY effect is the targeting permission (target a figure/object
+  // adjacent to an empty space in your LOS); it grants NO Accuracy bonus.
   if (entry.type === 'ccEffect' && entry.arcingShotTargeting) {
     const { game, playerNum, combat, dcMessageMeta } = context;
     const cbt = combat || game?.pendingCombat || game?.combat;
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play before declaring an attack (as the attacker).' };
     }
-    cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + (entry.attackAccuracyBonus || 0);
     // Set flag so target selection validates adjacent empty space in
     // attacker's LOS. Per alexanbv 2026-05-13: per-figureKey.
     const _asFk = cbt.attackerFigureKey || null;
@@ -7602,7 +7653,7 @@ export function resolveAbility(abilityId, context) {
     }
     return {
       applied: true,
-      logMessage: `**Arcing Shot** — +${entry.attackAccuracyBonus || 0} Accuracy. Target must be adjacent to an empty space in attacker's LOS.`,
+      logMessage: `**Arcing Shot** — Target must be adjacent to an empty space in attacker's LOS.`,
     };
   }
 
@@ -9983,18 +10034,52 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'You may reroll 1 attack die.' };
   }
 
+  // ccEffect: defenderRerollOneDefenseDie (Hard to Hit) — the defender
+  // rerolls 1 of their own defense dice. Mirrors the defense-pool forced
+  // reroll entries (Double or Nothing / Soresu Form): push a single named
+  // queue entry controlled by the defender on the defense pool.
+  if (entry.type === 'ccEffect' && typeof entry.defenderRerollOneDefenseDie === 'number' && entry.defenderRerollOneDefenseDie > 0) {
+    const { game, combat } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while defending.' };
+    const _h2hDefPN = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
+    cbt.forcedRerollQueue = cbt.forcedRerollQueue || [];
+    for (let _i = 0; _i < entry.defenderRerollOneDefenseDie; _i++) {
+      cbt.forcedRerollQueue.push({
+        controlPlayer: _h2hDefPN,
+        pool: 'defense',
+        remaining: 1,
+        source: 'Hard to Hit',
+      });
+    }
+    return { applied: true, logMessage: `You may reroll ${entry.defenderRerollOneDefenseDie} defense die.` };
+  }
+
   // ccEffect: defenderRerollDiceMax (Guardian Stance) — while adjacent
   // friendly is defending. alexanbv 2026-05-13: register N named
   // queue entries (pool='any') instead of incrementing the deprecated
   // defenderRerollDiceMax count. Each entry surfaces as a "Use
   // Guardian Stance" bucket button.
-  if (entry.type === 'ccEffect' && typeof entry.defenderRerollDiceMax === 'number' && entry.defenderRerollDiceMax > 0) {
+  if (entry.type === 'ccEffect' && ((typeof entry.defenderRerollDiceMax === 'number' && entry.defenderRerollDiceMax > 0) || entry.defenderRerollAnyNumber)) {
     const { game, combat } = context;
     const cbt = combat || game?.combat || game?.pendingCombat;
     if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while adjacent friendly is defending.' };
     const _gsDefPN = cbt.defenderPlayerNum ?? (cbt.attackerPlayerNum === 1 ? 2 : 1);
     cbt.forcedRerollQueue = cbt.forcedRerollQueue || [];
-    for (let _i = 0; _i < entry.defenderRerollDiceMax; _i++) {
+    // Guardian Stance: "Reroll 1 OR MORE attack or defense dice." Register one
+    // optional reroll entry per die currently present across both pools, so the
+    // player may reroll any subset (each entry surfaces as a "Use Guardian
+    // Stance" bucket button and may be declined). Falls back to the fixed
+    // defenderRerollDiceMax count for single-die rerollers.
+    let _gsCount;
+    if (entry.defenderRerollAnyNumber) {
+      const _atkN = Array.isArray(cbt.attackDiceResults) ? cbt.attackDiceResults.length : 0;
+      const _defN = Array.isArray(cbt.defenseDiceResults) ? cbt.defenseDiceResults.length : 0;
+      _gsCount = Math.max(1, _atkN + _defN);
+    } else {
+      _gsCount = entry.defenderRerollDiceMax;
+    }
+    for (let _i = 0; _i < _gsCount; _i++) {
       cbt.forcedRerollQueue.push({
         controlPlayer: _gsDefPN,
         pool: 'any',
@@ -10002,7 +10087,9 @@ export function resolveAbility(abilityId, context) {
         source: 'Guardian Stance',
       });
     }
-    return { applied: true, logMessage: `You may reroll up to ${entry.defenderRerollDiceMax} attack or defense die.` };
+    return { applied: true, logMessage: entry.defenderRerollAnyNumber
+      ? `You may reroll **1 or more** (up to ${_gsCount}) attack or defense dice.`
+      : `You may reroll up to ${_gsCount} attack or defense die.` };
   }
 
   // ccEffect: bonusDamagePerDefenseDie + bonusSurgePerDefenseDie + ignoreDefenseResultsNotOnDice (Overwhelming Impact)

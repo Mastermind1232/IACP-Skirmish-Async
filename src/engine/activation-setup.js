@@ -1305,7 +1305,7 @@ export async function finalizeActivation({
         game.pendingOverrideAttackDice[_natFk] = { type: _natData.melee ? 'Melee' : null, dice: _natData.dice, pierce: 0, bonusAccuracy: 0 };
       }
       delete game.nextActivationFreeAttack[playerNum];
-      if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free Melee attack (1 red + 1 yellow) available this activation.`, { phase: 'ROUND', icon: 'card' });
+      if (logGameAction) await logGameAction(game, client, `**Meditation** — **${displayName}** has a free attack targeting an adjacent figure (using its own attack pool) available this activation.`, { phase: 'ROUND', icon: 'card' });
     }
   }
 
