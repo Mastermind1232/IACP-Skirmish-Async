@@ -10430,13 +10430,18 @@ export function resolveAbility(abilityId, context) {
   // attack die while attacking)" → affiliationScum + withinSpacesOfSource 3.
   // MIGRATED 2026-06-20 to the per-figure registry (attack side, rerollAttackDice).
   if (entry.type === 'ccEffect' && typeof entry.roundAttackRerollDice === 'number' && entry.roundAttackRerollDice > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    let _jbSourceFk = null;
-    if (dcMessageMeta) {
-      const _jbMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-      if (_jbMsgId) _jbSourceFk = figureKeyForActivation(game, _jbMsgId);
-    }
+    // "within 3 spaces of YOU": Just Business is a start_of_round CC, so there is
+    // no active activation to anchor on. Resolve the playing figure via the
+    // round-modifier anchor (played-by override → activation → defender →
+    // named-figure registry), mirroring the sibling start_of_round card Field
+    // Supply (alexanbv 2026-06-21). Without this the modifier carries a null
+    // source and round-modifiers.js drops the buff for every figure. Just
+    // Business is playableBy LEADER (a keyword, not a named figure), so when no
+    // played-by figure was recorded, fall back to a LEADER figure on the board.
+    let _jbSourceFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Just Business', { dcMessageMeta });
+    if (!_jbSourceFk) _jbSourceFk = resolveKeywordCcFigureKey(game, playerNum, ['LEADER']);
     registerRoundModifier(game, {
       id: `Just Business:${playerNum}:atk-reroll`,
       card: 'Just Business',
@@ -11012,11 +11017,13 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: whenDefeatHostileWithin3GainBlockTokens (Paid in Beskar) — ONE-SHOT
-  // reactive: when ANY hostile figure is defeated (alexanbv 2026-06-19: not only
-  // by the attacker), the nearest friendly figure within 3 spaces of the defeated
-  // figure gains the Block tokens. Range is measured from the playing side's
-  // figure, NOT the attacker→target distance. The defeated position is threaded
-  // in via context.defeatedPos (the when_defeated prompt path).
+  // reactive: "when a hostile figure within 3 spaces of YOU is defeated, YOU gain
+  // 2 Block tokens." Paid in Beskar is a HUNTER-keyword "you"-scoped reaction
+  // (cc-effects.json playableBy: HUNTER), so the within-3 range is measured from
+  // the playing HUNTER figure (NOT from the defeated figure to the nearest
+  // friendly), and the Block tokens go to that same HUNTER (alexanbv 2026-06-21
+  // anchor fix; mirrors the In the Shadows keyword-CC anchor pattern). The
+  // defeated position is threaded in via context.defeatedPos.
   if (entry.type === 'ccEffect' && typeof entry.whenDefeatHostileWithin3GainBlockTokens === 'number') {
     const { game, playerNum, defeatedPos } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
@@ -11024,15 +11031,14 @@ export function resolveAbility(abilityId, context) {
     const range = entry.whenDefeatHostileWithin3Range ?? 3;
     const dPos = defeatedPos || null;
     if (!dPos) return { applied: false, manualMessage: `**${entry.label || 'Paid in Beskar'}** — no recently-defeated hostile in context; resolve manually.` };
-    let best = null, bestDist = Infinity;
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (!pos) continue;
-      const dist = countGameSpaces(game, dPos, pos);
-      if (dist <= range && dist < bestDist) { best = fk; bestDist = dist; }
-    }
-    if (!best) return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — no friendly figure within ${range} spaces of the defeated figure.` };
-    grantPowerTokens(game, best, 'Block', tokens);
-    return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — **${dcNameFromFigureKey(best)}** gains ${tokens} Block Token${tokens !== 1 ? 's' : ''}.`, refreshDcEmbed: true };
+    // Anchor on the playing HUNTER figure (or the chosen play-by figure).
+    const hunterFk = resolveKeywordCcFigureKey(game, playerNum, ['HUNTER']);
+    const hunterPos = hunterFk ? game.figurePositions?.[playerNum]?.[hunterFk] : null;
+    if (!hunterFk || !hunterPos) return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — no eligible HUNTER figure to gain Block tokens.` };
+    const dist = countGameSpaces(game, dPos, hunterPos);
+    if (dist > range) return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — the defeated figure was not within ${range} spaces of **${dcNameFromFigureKey(hunterFk)}**.` };
+    grantPowerTokens(game, hunterFk, 'Block', tokens);
+    return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — **${dcNameFromFigureKey(hunterFk)}** gains ${tokens} Block Token${tokens !== 1 ? 's' : ''}.`, refreshDcEmbed: true };
   }
 
   // ccEffect: overrunThisActivation (Overrun) — per alexanbv 2026-05-13,
@@ -11468,18 +11474,22 @@ export function resolveAbility(abilityId, context) {
   // your discard. Applies to the current attack only (combat.bonusBlock), and
   // only when the defending figure is within 3 spaces of a friendly FORCE USER.
   if (entry.type === 'ccEffect' && entry.protectOldWaysBonus) {
-    const { game, playerNum } = context;
+    const { game, playerNum, cardName } = context;
     const _combat = context.combat || game?.pendingCombat;
     if (!game || !playerNum || !_combat) return { applied: false, manualMessage: '**Protect the Old Ways** — play while one of your figures is defending.' };
     const defenderFk = _combat.target?.figureKey;
     const defenderPos = defenderFk ? game.figurePositions?.[playerNum]?.[defenderFk] : null;
     if (!defenderPos) return { applied: false, manualMessage: '**Protect the Old Ways** — could not locate the defending figure.' };
-    // Range: the defending figure must be within 3 spaces of a friendly FORCE USER.
-    const dcEffects = getDcEffects();
-    const _isForceUser = (fk) => (dcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase()).includes('FORCE USER');
-    const within3OfFu = Object.entries(game.figurePositions?.[playerNum] || {}).some(([fk, pos]) =>
-      pos && _isForceUser(fk) && countGameSpaces(game, pos, defenderPos) <= 3);
-    if (!within3OfFu) return { applied: false, manualMessage: '**Protect the Old Ways** — the defending figure is not within 3 spaces of a friendly FORCE USER.' };
+    // Range: "a friendly figure within 3 spaces of YOU (the playing FORCE USER)
+    // is defending" — anchor on the figure that played the card (Kanan Jarrus,
+    // or Mara via Fast Learner / a substitute), NOT player-wide over every
+    // friendly FORCE USER (alexanbv 2026-06-21 anchor fix). Matches Kanan's own
+    // Soresu Form passive, which anchors the identical phrase on Kanan himself.
+    const _powAnchorFk = resolveUniqueFigureCcFigureKey(game, playerNum, cardName || 'Protect the Old Ways');
+    const _powAnchorPos = _powAnchorFk ? game.figurePositions?.[playerNum]?.[_powAnchorFk] : null;
+    if (!_powAnchorFk || !_powAnchorPos) return { applied: false, manualMessage: '**Protect the Old Ways** — could not locate the playing FORCE USER figure.' };
+    const within3OfFu = countGameSpaces(game, _powAnchorPos, defenderPos) <= 3;
+    if (!within3OfFu) return { applied: false, manualMessage: `**Protect the Old Ways** — the defending figure is not within 3 spaces of **${dcNameFromFigureKey(_powAnchorFk)}**.` };
     const discardKey = ccDiscardKey(playerNum);
     const discard = game[discardKey] || [];
     const forceUserCount = discard.filter((cardName) => {
@@ -15188,14 +15198,42 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: cripplesFigure (Cripple — chosen adjacent hostile cannot voluntarily exit its space this round)
+  // ccEffect: cripplesFigure (Cripple — chosen ADJACENT hostile cannot voluntarily exit its space this round)
   if (entry.type === 'ccEffect' && entry.cripplesFigure) {
-    const { game, playerNum, chosenOption } = context;
+    const { game, playerNum, chosenOption, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const oppDcList = getDcList(game, 3 - playerNum) || [];
     if (chosenOption == null) {
-      const options = oppDcList.filter((dc) => dc && !dc.defeated).map((dc) => dc.displayName || dc.dcName).filter(Boolean);
-      if (options.length === 0) return { applied: false, manualMessage: 'No active hostile figures to cripple.' };
+      // CSV "an adjacent hostile figure" — only offer hostile DCs that have at
+      // least one figure adjacent to one of the activating (playing) figures.
+      // Mirrors the sibling Disable handler (alexanbv 2026-06-21 anchor fix):
+      // gate the offered list on per-figure adjacency to the figure that played
+      // the card, rather than offering every non-defeated hostile.
+      const oppNum = 3 - playerNum;
+      const mapId = game.selectedMap?.id;
+      const adjacentHostileDcNames = new Set();
+      if (mapId && dcMessageMeta) {
+        const actMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        const actMeta = actMsgId ? dcMessageMeta.get(actMsgId) : null;
+        const actKeys = actMeta ? getFigureKeysForDcMsg(game, playerNum, actMeta) : [];
+        for (const fk of actKeys) {
+          const adj = getFiguresAdjacentToTarget(game, fk, mapId);
+          for (const { figureKey: hfk, playerNum: hp } of adj) {
+            if (hp === oppNum) adjacentHostileDcNames.add(dcNameFromFigureKey(hfk));
+          }
+        }
+      }
+      const options = oppDcList
+        .filter((dc) => dc && !dc.defeated)
+        .filter((dc) => {
+          // No map/meta context → fall back to all hostiles (resolve manually).
+          if (adjacentHostileDcNames.size === 0 && !mapId) return true;
+          const dcName = dc.dcName || dc.displayName;
+          return adjacentHostileDcNames.has(dcName);
+        })
+        .map((dc) => dc.displayName || dc.dcName)
+        .filter(Boolean);
+      if (options.length === 0) return { applied: false, manualMessage: 'No adjacent hostile figure to Cripple.' };
       return { requiresChoice: true, choiceOptions: options };
     }
     game.crippledFigures = game.crippledFigures || [];

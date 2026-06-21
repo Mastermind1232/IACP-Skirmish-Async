@@ -49,12 +49,66 @@ import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, s
 import { cardNameIncludes } from './card-names.js';
 import { getCcHand } from './player-helpers.js';
 import { isWithinN } from '../engine/utils.js';
+import { getUniqueFiguresForCc, isCcExcludedFromFastLearner } from './unique-figure-ccs.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 
 import { getDcEffect } from './dc-helpers.js';
 // Wire dc-effects resolver into damage-pipeline so its
 // isImmuneToDirectDefeat helper can read special-ability ids without
 // taking a static circular import on data-loader.
 _registerDcEffectsResolver(() => getDcEffects());
+
+/**
+ * Resolve the figureKey that "plays" a unique-figure "you"-scoped CC from a
+ * reactive damage-pipeline hook (Final Stand, Extra Protection, Miracle Worker).
+ *
+ * Per the designer rule (alexanbv 2026-06-21: "'you' refers to ONLY the figure
+ * that played the card"), the "within N of you" anchor for these unique-figure
+ * CCs must be the figure that plays them — which honors Mara Jade Fast Learner /
+ * There is Another / [A New Hope] substitution — NOT the hard-coded named figure.
+ *
+ * These hooks fire BEFORE the card is played (they probe whether to OFFER it),
+ * so game.ccPlayedByFigureKey is normally not yet set. Resolution order:
+ *   0. game.ccPlayedByFigureKey, if the player already chose who plays it.
+ *   1. The named figure for the CC (registry) on the board.
+ *   2. The Fast Learner figure (Mara Jade) on the board, when the CC is not
+ *      excluded from Fast Learner (so a substitute play is anchored correctly
+ *      and not silently suppressed when the named figure is off-board).
+ *
+ * Mirrors abilities.js resolveUniqueFigureCcFigureKey (kept local to avoid a
+ * circular import on abilities.js). Returns the figureKey or null.
+ *
+ * @param {object} game
+ * @param {number} playerNum
+ * @param {string} cardName
+ */
+function resolvePlayingFigureKeyForUniqueCc(game, playerNum, cardName) {
+  if (!game || !playerNum || !cardName) return null;
+  const positions = game.figurePositions?.[playerNum] || {};
+  const liveKeys = Object.keys(positions).filter((fk) => positions[fk]);
+  if (liveKeys.length === 0) return null;
+  // 0. Played-by override (already chosen who plays it).
+  const playedBy = game.ccPlayedByFigureKey || game.ccPlayedByFastLearnerFigureKey;
+  if (playedBy && liveKeys.includes(playedBy)) return playedBy;
+  const named = getUniqueFiguresForCc(cardName).map((n) => String(n || '').toLowerCase());
+  // 1. Prefer the named figure on board.
+  if (named.length > 0) {
+    for (const fk of liveKeys) {
+      const dn = String(dcNameFromFigureKey(fk) || '').toLowerCase();
+      if (named.some((n) => dn.includes(n) || n.includes(dn))) return fk;
+    }
+  }
+  // 2. Fall back to a Fast Learner figure (Mara Jade), unless excluded.
+  if (!isCcExcludedFromFastLearner(cardName)) {
+    const dcEffects = getDcEffects() || {};
+    for (const fk of liveKeys) {
+      const dn = dcNameFromFigureKey(fk);
+      const eff = dcEffects[dn] || dcEffects[String(dn || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((eff?.specialAbilityIds || []).includes(ADAPTIVE_SKILLS_ABILITY_ID)) return fk;
+    }
+  }
+  return null;
+}
 
 // ── WHEN_DAMAGED ────────────────────────────────────────────────────────────
 
@@ -141,15 +195,15 @@ WHEN_DAMAGED_HOOKS.push({
     if (!game.selectedMap?.id) return false;
     const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
     if (!targetPos) return false;
-    const friendly = game.figurePositions?.[defPN] || {};
-    for (const [fk, pos] of Object.entries(friendly)) {
-      if (fk === opts.figureKey) continue; // "another" friendly figure
-      const dcN = dcNameFromFigureKey(fk);
-      if (dcN !== 'Onar Koma') continue;
-      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
-      return true;
-    }
-    return false;
+    // "within 2 spaces of YOU" — anchor on the figure that plays Extra
+    // Protection (Onar Koma, OR Mara Jade via Fast Learner / a substitute),
+    // not the hard-coded named figure (alexanbv 2026-06-21 anchor fix).
+    const playFk = resolvePlayingFigureKeyForUniqueCc(game, defPN, 'Extra Protection');
+    if (!playFk || playFk === opts.figureKey) return false; // "another" friendly figure
+    const playPos = game.figurePositions?.[defPN]?.[playFk];
+    if (!playPos) return false;
+    if (!isWithinN(playPos, targetPos, 2, game.selectedMap.id, getMapData)) return false;
+    return true;
   },
   apply: async (game, opts, ctx) => {
     const thread = ctx?.thread;
@@ -163,18 +217,16 @@ WHEN_DAMAGED_HOOKS.push({
     const defPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
     if (!targetPos) return null;
-    const friendly = game.figurePositions?.[defPN] || {};
-    let onarFk = null;
-    let onarPos = null;
-    for (const [fk, pos] of Object.entries(friendly)) {
-      if (fk === opts.figureKey) continue;
-      if (dcNameFromFigureKey(fk) !== 'Onar Koma') continue;
-      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
-      onarFk = fk; onarPos = pos; break;
-    }
-    if (!onarFk) return null;
+    // Anchor on the playing figure (Onar Koma OR Mara via Fast Learner / a
+    // substitute) — alexanbv 2026-06-21 anchor fix.
+    const onarFk = resolvePlayingFigureKeyForUniqueCc(game, defPN, 'Extra Protection');
+    if (!onarFk || onarFk === opts.figureKey) return null;
+    const onarPos = game.figurePositions?.[defPN]?.[onarFk];
+    if (!onarPos) return null;
+    if (!isWithinN(onarPos, targetPos, 2, game.selectedMap.id, getMapData)) return null;
     const onarMsgId = findDcMessageIdForFigure(game.gameId, defPN, onarFk);
     if (!onarMsgId) return null;
+    const onarDcName = dcNameFromFigureKey(onarFk);
     setPendingExtraProtection(game, {
       targetFigKey: opts.figureKey,
       targetMsgId: opts.msgId,
@@ -183,7 +235,7 @@ WHEN_DAMAGED_HOOKS.push({
       playerNum: defPN,
       onarFigKey: onarFk,
       onarMsgId,
-      onarDcName: 'Onar Koma',
+      onarDcName,
       // combat-flow re-entry params (read by handleExtraProtection):
       hit: opts.combat?._step7Hit ?? true,
       resultText: opts.combat?._step7ResultText || '',
@@ -205,7 +257,7 @@ WHEN_DAMAGED_HOOKS.push({
       new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
     if (logGameAction) {
-      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **Onar Koma** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] }, interrupt: true });
+      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **${onarDcName}** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] }, interrupt: true });
     }
     return null;
   },
@@ -656,14 +708,14 @@ BEFORE_DEFEATED_HOOKS.push({
     // Baze must be alive AND within 3 spaces of the would-be-defeated figure.
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return false;
-    const friendlyFigs = game.figurePositions?.[ownerPN] || {};
-    for (const [fk, pos] of Object.entries(friendlyFigs)) {
-      if (fk === opts.figureKey) continue; // Final Stand triggers on a DIFFERENT friendly within 3
-      if (dcNameFromFigureKey(fk) !== 'Baze Malbus') continue;
-      if (!pos) continue;
-      if (isWithinN(pos, targetPos, 3, game.selectedMap.id)) return true;
-    }
-    return false;
+    // "within 3 spaces of YOU" — anchor on the figure that plays Final Stand
+    // (Baze Malbus OR Mara Jade via Fast Learner / a substitute), not the
+    // hard-coded named figure (alexanbv 2026-06-21 anchor fix).
+    const playFk = resolvePlayingFigureKeyForUniqueCc(game, ownerPN, 'Final Stand');
+    if (!playFk || playFk === opts.figureKey) return false; // triggers on a DIFFERENT friendly within 3
+    const playPos = game.figurePositions?.[ownerPN]?.[playFk];
+    if (!playPos) return false;
+    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData);
   },
   apply: async (game, opts, ctx) => {
     const thread = ctx?.thread;
@@ -676,16 +728,14 @@ BEFORE_DEFEATED_HOOKS.push({
     const ownerPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return null;
-    let bazeFigKey = null;
-    let bazePos = null;
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[ownerPN] || {})) {
-      if (fk === opts.figureKey) continue;
-      if (dcNameFromFigureKey(fk) !== 'Baze Malbus') continue;
-      if (!pos) continue;
-      if (!isWithinN(pos, targetPos, 3, game.selectedMap.id)) continue;
-      bazeFigKey = fk; bazePos = pos; break;
-    }
-    if (!bazeFigKey) return null;
+    // Anchor on the playing figure (Baze Malbus OR Mara via Fast Learner / a
+    // substitute) — alexanbv 2026-06-21 anchor fix.
+    const bazeFigKey = resolvePlayingFigureKeyForUniqueCc(game, ownerPN, 'Final Stand');
+    if (!bazeFigKey || bazeFigKey === opts.figureKey) return null;
+    const bazePos = game.figurePositions?.[ownerPN]?.[bazeFigKey];
+    if (!bazePos) return null;
+    if (!isWithinN(bazePos, targetPos, 3, game.selectedMap.id, getMapData)) return null;
+    const bazeDcName = dcNameFromFigureKey(bazeFigKey);
     const bazeMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, bazeFigKey);
     if (!bazeMsgId) return null;
     game.finalStandTriggered = game.finalStandTriggered || {};
@@ -702,19 +752,19 @@ BEFORE_DEFEATED_HOOKS.push({
       // The figure that performs the Move + free attack:
       playingFigureKey: bazeFigKey,
       playingMsgId: bazeMsgId,
-      playingDcName: 'Baze Malbus',
+      playingDcName: bazeDcName,
       active: false,
     });
     const ownerId = game[`player${ownerPN}Id`];
     const targetDcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`final_stand_play_${game.gameId}_${opts.msgId}`).setLabel('Play Final Stand (Baze)').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`final_stand_play_${game.gameId}_${opts.msgId}`).setLabel(`Play Final Stand (${bazeDcName})`).setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`final_stand_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
     await thread.send({
       content: ownerId
-        ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after Baze's attack.`
-        : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **Baze Malbus** intervene?`,
+        ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after ${bazeDcName}'s attack.`
+        : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** intervene?`,
       components: [row],
       allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
     }).catch(() => {});
@@ -803,14 +853,14 @@ BEFORE_DEFEATED_HOOKS.push({
     if (hand.indexOf('Miracle Worker') < 0) return false;
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return false;
-    const friendlyFigs = game.figurePositions?.[ownerPN] || {};
-    for (const [fk, pos] of Object.entries(friendlyFigs)) {
-      if (fk === opts.figureKey) continue;
-      if (dcNameFromFigureKey(fk) !== 'MHD-19') continue;
-      if (!pos) continue;
-      if (isWithinN(pos, targetPos, 3, game.selectedMap.id)) return true;
-    }
-    return false;
+    // "within 3 spaces of YOU" — anchor on the figure that plays Miracle Worker
+    // (MHD-19 OR Mara Jade via Fast Learner / a substitute), not the hard-coded
+    // named figure (alexanbv 2026-06-21 anchor fix).
+    const playFk = resolvePlayingFigureKeyForUniqueCc(game, ownerPN, 'Miracle Worker');
+    if (!playFk || playFk === opts.figureKey) return false;
+    const playPos = game.figurePositions?.[ownerPN]?.[playFk];
+    if (!playPos) return false;
+    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData);
   },
   apply: async (game, opts, ctx) => {
     const thread = ctx?.thread;
@@ -823,15 +873,14 @@ BEFORE_DEFEATED_HOOKS.push({
     const ownerPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return null;
-    let mhdFigKey = null;
-    for (const [fk, pos] of Object.entries(game.figurePositions?.[ownerPN] || {})) {
-      if (fk === opts.figureKey) continue;
-      if (dcNameFromFigureKey(fk) !== 'MHD-19') continue;
-      if (!pos) continue;
-      if (!isWithinN(pos, targetPos, 3, game.selectedMap.id)) continue;
-      mhdFigKey = fk; break;
-    }
-    if (!mhdFigKey) return null;
+    // Anchor on the playing figure (MHD-19 OR Mara via Fast Learner / a
+    // substitute) — alexanbv 2026-06-21 anchor fix.
+    const mhdFigKey = resolvePlayingFigureKeyForUniqueCc(game, ownerPN, 'Miracle Worker');
+    if (!mhdFigKey || mhdFigKey === opts.figureKey) return null;
+    const mhdPos = game.figurePositions?.[ownerPN]?.[mhdFigKey];
+    if (!mhdPos) return null;
+    if (!isWithinN(mhdPos, targetPos, 3, game.selectedMap.id, getMapData)) return null;
+    const mhdDcName = dcNameFromFigureKey(mhdFigKey);
     const mhdMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, mhdFigKey);
     if (!mhdMsgId) return null;
     game.miracleWorkerTriggered = game.miracleWorkerTriggered || {};
@@ -856,7 +905,7 @@ BEFORE_DEFEATED_HOOKS.push({
     );
     await thread.send({
       content: ownerId
-        ? `<@${ownerId}> ✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. **MHD-19** within 3 spaces — play to recover 3 Damage instead?`
+        ? `<@${ownerId}> ✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. **${mhdDcName}** within 3 spaces — play to recover 3 Damage instead?`
         : `✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. Play?`,
       components: [row],
       allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },

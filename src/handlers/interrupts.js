@@ -1822,10 +1822,15 @@ export async function handleExtraProtection(interaction, ctx) {
     // a Move-X effect — pendingMoveX with bypassCosts: true, no
     // bank, freeAttackPrompt continuation for the attack.
 
-    // Resolve Onar's figure key from dcMessageMeta for the picker.
-    let _epOnarFigureKey = null;
+    // Resolve the playing figure's key for the picker. Prefer the figureKey
+    // stashed at probe time (which anchors on the figure that plays Extra
+    // Protection — Onar Koma OR Mara via Fast Learner / a substitute —
+    // alexanbv 2026-06-21), falling back to dcMessageMeta lookup.
+    let _epOnarFigureKey = (_epPending.onarFigKey && _epGame.figurePositions?.[_epPending.playerNum]?.[_epPending.onarFigKey])
+      ? _epPending.onarFigKey
+      : null;
     const _epDcMsgMeta = ctx.dcMessageMeta;
-    if (_epDcMsgMeta && _epDcMsgMeta.get?.(_epPending.onarMsgId)) {
+    if (!_epOnarFigureKey && _epDcMsgMeta && _epDcMsgMeta.get?.(_epPending.onarMsgId)) {
       const _epMeta = _epDcMsgMeta.get(_epPending.onarMsgId);
       const _epFigKeys = Object.keys(_epGame.figurePositions?.[_epMeta.playerNum] || {})
         .filter(k => k.startsWith((_epMeta.dcName || '') + '-'));

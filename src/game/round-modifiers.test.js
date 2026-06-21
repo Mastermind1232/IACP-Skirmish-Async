@@ -582,18 +582,25 @@ test('figure aura: only applies for the OWNING player (auras are friendly)', () 
 });
 
 test('Just Business (integration): Scum within 3 gets a reroll, non-Scum and out-of-range get nothing', () => {
+  // start_of_round timing: there is NO activation in progress at genuine
+  // start_of_round, so the anchor must resolve from the played-by figure
+  // (game.ccPlayedByFigureKey, set by cc-hand.js when the LEADER plays it) —
+  // NOT a fake injected activation (which masked the prior null-source bug).
   const game = integrationGame('g-jb-int');
-  const msgId = 'm-jb';
-  game.dcActionsData[msgId] = { selectedFigure: 0 };
   game.figurePositions[1] = {
-    'Greedo-1-0': 'm17',                 // source (Scum)
+    'Greedo-1-0': 'm17',                 // source (Scum, played-by anchor)
     'Onar Koma-1-0': 'm18',              // Scum within 3
     'Jet Trooper (Regular)-1-0': 'p17',  // Imperial within 3 → no reroll
     'Boba Fett-1-0': 'r17',              // Scum but out of range (dist 7)
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-jb-int', playerNum: 1, dcName: 'Greedo', displayName: 'Greedo [Group 1]' }]]);
-  _registerDcMessageMeta(dcMessageMeta);
-  resolveAbility('Just Business', { game, playerNum: 1, dcMessageMeta });
+  game.ccPlayedByFigureKey = 'Greedo-1-0';
+  // No dcMessageMeta / dcActionsData → no activation (realistic start_of_round).
+  resolveAbility('Just Business', { game, playerNum: 1, cardName: 'Just Business' });
+  delete game.ccPlayedByFigureKey;
+
+  const jbMod = (game.activeRoundModifiers || []).find((m) => m.card === 'Just Business' && m.side === 'attack');
+  assert.ok(jbMod, 'Just Business attack descriptor registered');
+  assert.strictEqual(jbMod.sourceFigureKey, 'Greedo-1-0', 'anchor = the played-by figure (NOT null)');
 
   const rerollFor = (fk) => evaluateRoundModifiers(game, { side: 'attack', figureKey: fk, playerNum: 1, combat: {} }).rerollAttackDice;
   assert.strictEqual(rerollFor('Onar Koma-1-0'), 1, 'Scum within 3 gets a reroll');
