@@ -74,6 +74,7 @@ export const INTERRUPT_TYPES = Object.freeze({
   TOKEN_DISTRIBUTION:    'token-distribution',
   ILLEGAL_CC_PLAY:       'illegal-cc-play',
   MASSIVE_PUSH:          'massive-push',
+  CRUSH_CHOICE:          'crush-choice',
   IT_WILL_BE_ALRIGHT:    'it-will-be-alright',
   HAVOC_SHOT:            'havoc-shot',
   GENERALS_ORDERS:       'generals-orders',
@@ -514,6 +515,9 @@ export function clearPendingIllegalCcPlay(game) { _clearDual(game, 'pendingIlleg
 
 export function setPendingMassivePush(game, payload) { _setDual(game, 'pendingMassivePush', INTERRUPT_TYPES.MASSIVE_PUSH, payload); }
 export function clearPendingMassivePush(game) { _clearDual(game, 'pendingMassivePush', INTERRUPT_TYPES.MASSIVE_PUSH); }
+
+export function setPendingCrushChoice(game, payload) { _setDual(game, 'pendingCrushChoice', INTERRUPT_TYPES.CRUSH_CHOICE, payload); }
+export function clearPendingCrushChoice(game) { _clearDual(game, 'pendingCrushChoice', INTERRUPT_TYPES.CRUSH_CHOICE); }
 
 export function setPendingItWillBeAlright(game, payload) { _setDual(game, 'pendingItWillBeAlright', INTERRUPT_TYPES.IT_WILL_BE_ALRIGHT, payload); }
 export function clearPendingItWillBeAlright(game) { _clearDual(game, 'pendingItWillBeAlright', INTERRUPT_TYPES.IT_WILL_BE_ALRIGHT); }

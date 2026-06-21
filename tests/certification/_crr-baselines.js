@@ -174,6 +174,7 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingTokenDistribution',
   'pendingIllegalCcPlay',
   'pendingMassivePush',
+  'pendingCrushChoice',
   'pendingItWillBeAlright',
   'pendingHavocShot',
   'pendingGeneralsOrders',

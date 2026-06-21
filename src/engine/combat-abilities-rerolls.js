@@ -73,6 +73,13 @@ export function registerRerollAbilities() {
       // reroll. Skip them here and register them as kind:'cc' gate buttons below
       // so the button runs the real effect (alexanbv 2026-06-19).
       if (card === 'Demoralizing Monologue' || card === 'Double or Nothing') continue;
+      // Field Supply (CC row 654) is a CONDITIONAL token-spend reroll modeled on
+      // Ko-Tun's "Dead Precise" (spent-token reroll): it's only offered when the
+      // attacking figure spent a Hit/Surge token this attack AND Field Supply was
+      // PLAYED at start of round. The generic loop can't express the played-round
+      // half, so register it explicitly below (registerFieldSupplyReroll). Skip
+      // here so it doesn't also get a wrong card-presence-only button.
+      if (card === 'Field Supply') continue;
       // Lasat-Honor Guard (Zeb Orrelios) is a die-TURN that fires AFTER ALL rerolls
       // ("after any rerolls ... turn 1 die showing only a single attack icon to any
       // side") — NOT a reroll. It's registered in the SPECIAL window (die-turn) via
@@ -354,6 +361,43 @@ export function registerChargeGeneratorsReroll() {
 }
 
 registerChargeGeneratorsReroll();
+
+// Field Supply (CC row 654) — attacker-rerolls option modeled on Ko-Tun's "Dead
+// Precise" (a reroll gated on the attacker having SPENT a token this attack). Per
+// alexanbv: "The reroll from Field Supply should be an option in the ATTACKER
+// REROLLS step. Condition: (a) a token was SPENT, and (b) Field Supply was PLAYED
+// at start of round. Basically the same as the regular token-spend reroll trigger
+// except it also needs the CC played that round. It STACKS with other rerolls."
+//
+// Condition: combat.attackerSpentHitOrSurgeToken (a Hit/Surge token was spent by
+// the attacker THIS attack — marked at the token-spend sites in combat.js) AND
+// game.fieldSupplyPlayedRound[attackerPlayerNum] (Field Supply played this round).
+// The generic _makeRerollResolver (params.kind='reroll', pool 'attack', count 1)
+// serves it; its own once-per-attack limit key keeps it independent of (and
+// additive with) every other reroll source. STACKS — not exclusive.
+let _fieldSupplyRerollRegistered = false;
+export function registerFieldSupplyReroll() {
+  if (_fieldSupplyRerollRegistered) return;
+  _fieldSupplyRerollRegistered = true;
+  const limGuard = limitGuard('once per attack', abilityLimitKey('Field Supply', 'Field Supply'));
+  registerCombatAbility({
+    id: 'reroll:field_supply:attacker', name: 'Field Supply', windows: ['rerolls'], side: 'attacker',
+    kind: 'interactive',
+    params: { kind: 'reroll', pool: 'attack', count: 1, colorSwap: false, card: 'Field Supply', ability: 'Field Supply', limit: 'once per attack' },
+    applies: (game, combat) => {
+      const pn = combat.attackerPlayerNum;
+      if (!pn) return false;
+      // (a) a Hit/Surge token was spent this attack by the attacker.
+      if (!combat.attackerSpentHitOrSurgeToken) return false;
+      // (b) Field Supply was played this round by the attacking player.
+      if (!game.fieldSupplyPlayedRound?.[pn]) return false;
+      if (!limGuard(game, combat)) return false;
+      return selectableDieIndices(combat, { pool: 'attack' }).length > 0;
+    },
+  });
+}
+
+registerFieldSupplyReroll();
 
 // ── forcedRerollQueue drain in the GATE rerolls window (gate-rework 2026-06-18) ──
 //

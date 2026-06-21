@@ -8,7 +8,9 @@
  *
  *  FIX 2 — Crush resolves inside the MASSIVE end-of-move pipeline (before the
  *          push, Stampede timing): a SMALL enemy in the MASSIVE figure's ending
- *          footprint suffers 4 Damage and the card is consumed from hand.
+ *          footprint suffers 4 Damage and the card is consumed from hand. With 2+
+ *          eligible SMALL enemies the MASSIVE figure's OWNER is PROMPTED to pick
+ *          which one (suspend/resume); with exactly 1 it auto-resolves.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +19,7 @@ import { resolveAbility } from '../../../src/game/abilities.js';
 import { processFigureDefeat } from '../../../src/engine/defeat-handler.js';
 import { awardKillVp } from '../../../src/game/vp-helpers.js';
 import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
-import { _applyCrushBeforePush } from '../../../src/handlers/move-x-handler.js';
+import { _applyCrushBeforePush, handleCrushPick } from '../../../src/handlers/move-x-handler.js';
 
 // ── FIX 1: Field Promotion → figureCostModifier → defeat VP ──────────────────
 describe('Field Promotion: per-figure cost bump is read by defeat VP', () => {
@@ -170,11 +172,13 @@ describe('Crush: massive end-of-move pipeline (Stampede timing, before push)', (
     assert.ok(game.player1CcHand.includes('Crush'), 'card not consumed when no SMALL target');
   });
 
-  // ── alexanbv 2026-06-20 ruling: Crush mirrors Stampede but hits ONE figure ──
-  // Stampede iterates dispPending.enemyQueue damaging EVERY figure; Crush picks
-  // exactly the FIRST SMALL figure in that SAME deterministic order, owned by the
-  // MASSIVE figure's controller (the Crush player), with NO interactive picker.
-  it('with MULTIPLE SMALL enemies, picks exactly ONE — the first in queue order (Stampede ordering)', async () => {
+  // ── alexanbv 2026-06-20 ruling (supersedes "no prompt"): PROMPT the OWNER of
+  // the massive figure to CHOOSE which SMALL figure Crush hits. It must NOT just
+  // pick the first one. With exactly 1 eligible → auto-resolve (no prompt). With
+  // 2+ eligible → SUSPEND (stash pendingCrushChoice, post crush_pick_ buttons),
+  // apply NO damage until the controller picks; handleCrushPick applies 4 Damage
+  // to the CHOSEN figure and resumes the push.
+  function buildMultiCrushGame() {
     const massiveMsgId = 'msg-cr-massive';
     const smallA = 'msg-cr-smallA';
     const smallB = 'msg-cr-smallB';
@@ -199,15 +203,55 @@ describe('Crush: massive end-of-move pipeline (Stampede timing, before push)', (
     };
     const ctx = { client: {}, logGameAction: async () => {}, dcMessageMeta, dcHealthState };
     const pending = { playerNum: 1, figureKey: 'AT-ST-1-0', dcName: 'AT-ST' };
-    // enemyQueue in its deterministic (initMassiveDisplacement) order — group 1 first.
     const dispPending = { enemyQueue: [
       { playerNum: 2, figureKey: 'Stormtrooper-1-0', dcName: 'Stormtrooper' },
       { playerNum: 2, figureKey: 'Stormtrooper-2-0', dcName: 'Stormtrooper' },
     ] };
+    return { game, ctx, pending, dispPending, dcHealthState, smallA, smallB };
+  }
+
+  it('with 2+ SMALL enemies → SUSPENDS (pendingCrushChoice posted, no damage yet)', async () => {
+    const { game, ctx, pending, dispPending, dcHealthState, smallA, smallB } = buildMultiCrushGame();
+    const suspended = await _applyCrushBeforePush(game, ctx, pending, dispPending);
+    assert.strictEqual(suspended, true, '2+ eligible → must suspend (caller stops before the push)');
+    // No damage applied, card NOT yet consumed — that all happens on the pick.
+    assert.deepStrictEqual(dcHealthState.get(smallA), [[3, 3]], 'no damage before pick');
+    assert.deepStrictEqual(dcHealthState.get(smallB), [[3, 3]], 'no damage before pick');
+    assert.ok(game.player1CcHand.includes('Crush'), 'card not consumed until pick');
+    // Suspend state holds BOTH eligible figures (one button each), targeted at the
+    // Crush player (= massive figure's controller = P1).
+    assert.ok(game.pendingCrushChoice, 'pendingCrushChoice stashed');
+    assert.strictEqual(game.pendingCrushChoice.playerNum, 1, 'prompt the massive figure owner (P1)');
+    assert.strictEqual(game.pendingCrushChoice.eligible.length, 2, 'one option per eligible SMALL enemy');
+  });
+
+  it('handleCrushPick applies 4 Damage to the CHOSEN figure (not just the first) and consumes the card', async () => {
+    const { game, ctx, pending, dispPending, dcHealthState, smallA, smallB } = buildMultiCrushGame();
     await _applyCrushBeforePush(game, ctx, pending, dispPending);
-    // ONLY the first queued SMALL figure takes 4 Damage; the second is untouched.
-    assert.deepStrictEqual(dcHealthState.get(smallA), [[0, 3]], 'first queued SMALL takes 4 Damage');
-    assert.deepStrictEqual(dcHealthState.get(smallB), [[3, 3]], 'second SMALL untouched — Crush hits ONE figure');
-    assert.deepStrictEqual(game.player1CcDiscard, ['Crush'], 'one copy consumed');
+    // Pick index 1 → the SECOND Stormtrooper (smallB), proving it's not auto-first.
+    const idx = game.pendingCrushChoice.eligible.findIndex((e) => e.figureKey === 'Stormtrooper-2-0');
+    assert.strictEqual(idx, 1, 'second figure is at index 1');
+    const interaction = {
+      customId: `crush_pick_g-cr2_${idx}`,
+      user: { id: 'u1' },
+      message: { edit: async () => {} },
+      deferUpdate: async () => {},
+      followUp: async () => {},
+    };
+    const handlerCtx = {
+      getGame: async () => game,
+      saveGames: () => {},
+      client: {},
+      logGameAction: async () => {},
+      dcMessageMeta: ctx.dcMessageMeta,
+      dcHealthState,
+    };
+    // canActAsPlayer is consulted by requirePlayer; stub the game so P1 = u1.
+    game.player1Id = 'u1';
+    await handleCrushPick(interaction, handlerCtx);
+    assert.deepStrictEqual(dcHealthState.get(smallB), [[0, 3]], 'CHOSEN (second) SMALL takes 4 Damage');
+    assert.deepStrictEqual(dcHealthState.get(smallA), [[3, 3]], 'unchosen SMALL untouched');
+    assert.deepStrictEqual(game.player1CcDiscard, ['Crush'], 'one copy consumed on pick');
+    assert.ok(!game.pendingCrushChoice, 'suspend cleared after pick');
   });
 });

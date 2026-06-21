@@ -154,9 +154,9 @@ function gameWithWalkerPrompt() {
 // ── Unit tests: signatures + expected prompts ───────────────────────────────
 
 describe('prompt-reconciler signatures', () => {
-  it('PROMPT_KINDS exposes the four tracked kinds', () => {
+  it('PROMPT_KINDS exposes the tracked kinds', () => {
     assert.deepEqual([...PROMPT_KINDS].sort(), [
-      'massivePushFigure', 'massivePushSpace', 'postDeployChooser', 'walkerMove',
+      'crushPick', 'massivePushFigure', 'massivePushSpace', 'postDeployChooser', 'walkerMove',
     ]);
   });
 

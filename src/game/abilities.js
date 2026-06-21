@@ -11883,6 +11883,13 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.fieldSupplyEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Mark Field Supply as PLAYED this round by this player. Gates the
+    // attacker-rerolls option (CSV row 654 / combat-abilities-rerolls.js):
+    // the reroll is offered only when this flag is set AND the attacking
+    // figure spent a Hit/Surge token during the attack. Round-scoped
+    // (ROUND_OBJECT_FLAGS, resets to {} at round start).
+    game.fieldSupplyPlayedRound = game.fieldSupplyPlayedRound || {};
+    game.fieldSupplyPlayedRound[playerNum] = true;
     const MAX_PICKS = 2;
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta?.get(msgId) : null;

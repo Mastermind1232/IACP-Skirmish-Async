@@ -60,3 +60,47 @@ describe('rerolls gate: Charge Generators reroll half (FIX-1 split)', () => {
     assert.ok(!list.includes(CG), 'reroll used this attack → not re-offered');
   });
 });
+
+// FIX 2 (alexanbv): Field Supply attacker-rerolls option — modeled on Ko-Tun's
+// "Dead Precise" token-spend reroll, additionally gated on Field Supply being
+// PLAYED at start of round. Offered iff (a) a Hit/Surge token was spent this
+// attack AND (b) game.fieldSupplyPlayedRound[attackerPlayerNum]. STACKS with
+// other reroll sources (additive — its own once-per-attack limit key).
+describe('rerolls gate: Field Supply token-spend reroll (FIX 2)', () => {
+  const FS = 'reroll:field_supply:attacker';
+  const fsCombat = (overrides = {}) => ({
+    attackerPlayerNum: 1, attackerDcName: 'Stormtrooper',
+    attackDiceResults: [{ color: 'blue', dmg: 0, surge: 0, acc: 1 }], ...overrides,
+  });
+  const ids = (game, c) => abilitiesForWindow('rerolls', 'attacker', game, c, {}).map((a) => a.id);
+
+  it('is registered as an attacker attack-pool reroll', () => {
+    const reg = getCombatAbility(FS);
+    assert.ok(reg, 'Field Supply reroll should be registered');
+    assert.equal(reg.params?.kind, 'reroll');
+    assert.equal(reg.params?.pool, 'attack');
+  });
+
+  it('offered only when a Hit/Surge token was spent AND Field Supply was played this round', () => {
+    const played = { fieldSupplyPlayedRound: { 1: true } };
+    // (a) token spent + (b) played → offered.
+    assert.ok(ids(played, fsCombat({ attackerSpentHitOrSurgeToken: true })).includes(FS),
+      'token spent + played → offered');
+    // No token spent → not offered.
+    assert.ok(!ids(played, fsCombat({})).includes(FS), 'no token spent → not offered');
+    // Token spent but NOT played this round → not offered.
+    assert.ok(!ids({}, fsCombat({ attackerSpentHitOrSurgeToken: true })).includes(FS),
+      'Field Supply not played → not offered');
+  });
+
+  it('STACKS additively — once-per-attack limit is independent of other rerolls', () => {
+    const played = { fieldSupplyPlayedRound: { 1: true } };
+    // Charge Generators is unrelated; both can be offered simultaneously, and using
+    // Field Supply (its own limit key) doesn't block — only re-offering Field Supply.
+    const used = fsCombat({ attackerSpentHitOrSurgeToken: true, _abilityUsedThisAttack: { 'Field Supply:Field Supply': true } });
+    assert.ok(!ids(played, used).includes(FS), 'Field Supply used this attack → not re-offered');
+    // A FRESH attack with the same flags → offered again (per-attack limit).
+    assert.ok(ids(played, fsCombat({ attackerSpentHitOrSurgeToken: true })).includes(FS),
+      'fresh attack → offered again');
+  });
+});

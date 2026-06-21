@@ -645,6 +645,11 @@ const ROUND_OBJECT_FLAGS = [
   // pending queue empties.
   'firingSquadLockedTarget',
   'aphraExcavationOptions',
+  // Field Supply (CC) — per-player round flag set when the card is played at
+  // start of round (fieldSupplyEffect). Gates Field Supply's attacker-rerolls
+  // option (CSV row 654): the reroll is only offered when the attacking figure
+  // ALSO spent a Hit/Surge token this attack. Round-scoped (resets to {}).
+  'fieldSupplyPlayedRound',
   // setTrapSpace removed 2026-06-18: Set a Trap is intentionally unimplemented
   // (requires a map-tile model the engine lacks), so this round flag is no
   // longer written by any code. See setATrapEffect in abilities.js and
@@ -865,6 +870,11 @@ const ROUND_NULL_FLAGS = [
   'fieldTacticsActivationMsgId',
   'pendingRushPush',
   'pendingMassivePush',
+  // pendingCrushChoice — nested suspend INSIDE the massive-displacement
+  // pipeline (Crush CC): when 2+ SMALL enemies are eligible, the massive
+  // figure's controller is prompted to pick which one takes 4 Damage before
+  // the push. Cleared like pendingMassivePush on phase/round boundaries.
+  'pendingCrushChoice',
   'pendingMoveXSequence',
   'pendingExecutiveOrderAction',
   'pendingEmperorInterrupt',

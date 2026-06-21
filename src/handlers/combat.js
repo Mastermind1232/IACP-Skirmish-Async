@@ -10348,6 +10348,9 @@ export async function handleCombatToken(interaction, ctx) {
     }
     // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
     if (combat.pendingWildRole === 'attacker') combat.attackerSpentPowerToken = true;
+    // Field Supply (CC row 654): mark a Hit (Damage) / Surge token spend (the Wild
+    // resolved to that type) by the attacker — gates Field Supply's rerolls option.
+    if (combat.pendingWildRole === 'attacker' && (resolvedType === 'Damage' || resolvedType === 'Surge')) combat.attackerSpentHitOrSurgeToken = true;
     // Air Support (Bodhi Rook) — now a gate mods passive ('air_support' →
     // _fireModsPassive), gated on combat.attackerSpentPowerToken + unfocused.
     // Track defender modifications for Quick Strike (Electrostaff loadout)
@@ -10419,6 +10422,9 @@ export async function handleCombatToken(interaction, ctx) {
     await thread.send(`**Power Token spent (Squad Cohesion):** +1 ${scTokenType} (from ${scEntry.ownerName})`);
     logGameAction?.(game, interaction.client, `🎯 **Power Token spent (Squad Cohesion)** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${scTokenType} from ${scEntry.ownerName}`, { phase: 'ROUND', icon: 'attack' });
     if (isAttacker) combat.attackerSpentPowerToken = true;
+    // Field Supply (CC row 654): mark that a Hit (Damage) / Surge token was spent
+    // by the attacker this attack — gates Field Supply's attacker-rerolls option.
+    if (isAttacker && (scTokenType === 'Damage' || scTokenType === 'Surge')) combat.attackerSpentHitOrSurgeToken = true;
     // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
     if (!isAttacker) combat.defenderRerolledOrModified = true;
     if (!isAttacker && scTokenType === 'Block') {
@@ -10465,6 +10471,9 @@ export async function handleCombatToken(interaction, ctx) {
   logGameAction?.(game, interaction.client, `🎯 **Power Token spent** — ${isAttacker ? 'Attacker' : 'Defender'}: +1 ${tokenType}`, { phase: 'ROUND', icon: 'attack' });
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio)
   if (isAttacker) combat.attackerSpentPowerToken = true;
+  // Field Supply (CC row 654): mark that a Hit (Damage) / Surge token was spent
+  // by the attacker this attack — gates Field Supply's attacker-rerolls option.
+  if (isAttacker && (tokenType === 'Damage' || tokenType === 'Surge')) combat.attackerSpentHitOrSurgeToken = true;
   // Air Support (Bodhi Rook) — now a gate mods passive ('air_support').
   // Track defender modifications for Quick Strike (Electrostaff loadout)
   if (!isAttacker) combat.defenderRerolledOrModified = true;
@@ -10545,6 +10554,9 @@ export async function handleUnhingedDirectorChoice(interaction, ctx) {
 
   // Track attacker Power Token spending for Pulse Cannon (Iden Versio).
   combat.attackerSpentPowerToken = true;
+  // Field Supply (CC row 654): Unhinged Director spends are always the attacker;
+  // mark a Hit (Damage) / Surge token spend for Field Supply's rerolls option.
+  if (tokenType === 'Damage' || tokenType === 'Surge') combat.attackerSpentHitOrSurgeToken = true;
   clearPendingUnhingedDirector(game);
 
   if (!isPlus2) {

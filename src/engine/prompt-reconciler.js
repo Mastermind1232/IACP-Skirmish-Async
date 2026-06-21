@@ -15,6 +15,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 export const PROMPT_KINDS = Object.freeze([
   'massivePushFigure',
   'massivePushSpace',
+  'crushPick',
   'postDeployChooser',
   'walkerMove',
 ]);
@@ -51,8 +52,16 @@ function _queueSig(kind, game) {
   return null;
 }
 
+function _crushSig(game) {
+  const c = game.pendingCrushChoice;
+  if (!c) return null;
+  const keys = (c.eligible || []).map((e) => e.figureKey).join(',');
+  return `crush|${c.figureKey}|${keys}`;
+}
+
 export function signatureFor(kind, game) {
   if (kind === 'massivePushFigure' || kind === 'massivePushSpace') return _pendingSig(kind, game);
+  if (kind === 'crushPick') return _crushSig(game);
   if (kind === 'postDeployChooser' || kind === 'walkerMove') return _queueSig(kind, game);
   return null;
 }
@@ -64,6 +73,13 @@ export function signatureFor(kind, game) {
  */
 export function getExpectedPrompts(game) {
   const expected = [];
+  // Crush pick is a nested suspend that runs BEFORE the massive push is set up
+  // (push is deferred until the target is chosen). It gates everything else.
+  const cr = game.pendingCrushChoice;
+  if (cr && (cr.eligible || []).length >= 2) {
+    expected.push({ kind: 'crushPick', signature: signatureFor('crushPick', game) });
+    return expected;
+  }
   const p = game.pendingMassivePush;
   if (p) {
     const orderLocked = p._figurePickLockedIdx === p.currentIndex;
@@ -125,6 +141,11 @@ async function _renderPrompt(kind, game, gameId, client, ctx) {
     const mod = await import('../handlers/movement.js');
     if (kind === 'massivePushFigure') await mod.renderMassivePushFigurePrompt(game, client);
     else await mod.renderMassivePushSpacePrompt(game, client);
+    return;
+  }
+  if (kind === 'crushPick') {
+    const mod = await import('../handlers/move-x-handler.js');
+    await mod.renderCrushPickPrompt(game, client);
     return;
   }
   if (kind === 'postDeployChooser' || kind === 'walkerMove') {

@@ -29,7 +29,7 @@ import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeStrin
 import { dcNameFromFigureKey } from '../game/index.js';
 import { markMapDirty } from '../game/game-helpers.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
-import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush } from '../game/interrupts.js';
+import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush, setPendingCrushChoice, clearPendingCrushChoice } from '../game/interrupts.js';
 import { renderMassivePushSpacePrompt, renderMassivePushFigurePrompt } from './movement.js';
 import { getPlayerId, opponentPlayerNum, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { fetchCombatThread, fetchGameChannel } from '../discord/channel-helpers.js';
@@ -1255,22 +1255,23 @@ export async function runMassiveDisplacement(game, ctx, pending) {
  * figure in the ending footprint, Crush is played: one SMALL enemy in the
  * footprint suffers 4 Damage, and the card is moved to the discard pile.
  *
- * Per alexanbv ruling (2026-06-20): "Crush should work the same way that Stampede
- * does, it's just that it picks one figure. The CONTROLLER moves figures, but the
- * player moving the massive figure will be the one playing Crush." So Crush is NOT
- * a separate interactive double-suspend — it rides the EXACT Stampede path: it
- * damages a figure in the same pre-push enemyQueue, owned by the massive figure's
- * controller, with NO prompt. The only difference vs Stampede is that Crush hits
- * exactly ONE figure instead of every figure in the queue.
+ * Per alexanbv ruling (2026-06-20 — supersedes the earlier "no prompt" note):
+ * "You need to prompt the OWNER of the massive figure to choose which figure for
+ * Crush. It should not just pick the first one." So when 2+ SMALL enemy figures are
+ * eligible in the ending footprint, the Crush player (= the massive figure's
+ * controller, pending.playerNum) is PROMPTED to pick which one suffers 4 Damage.
+ * When exactly 1 is eligible we auto-resolve (no prompt). The "holds Crush in hand"
+ * gate is against that same player.
  *
- * Target selection: Stampede iterates dispPending.enemyQueue in its deterministic
- * (initMassiveDisplacement) order; Crush picks the FIRST SMALL figure in that SAME
- * ordering (.find over the same queue) — "it just picks one figure", no picker.
- * Ownership/eligibility: the massive figure's controller (pending.playerNum) is the
- * Crush player; the "holds Crush in hand" check is against that player's CC hand.
- * The card is consumed here (one copy per qualifying end-of-move). No-op (and no
- * card consumed) when the moving figure is not MASSIVE, the controller has no Crush
- * in hand, or there is no SMALL enemy in the ending footprint.
+ * Suspend/resume (mirrors pendingMassivePush in handlers/movement.js): with 2+
+ * eligible, this stashes game.pendingCrushChoice (figureKey + queue context),
+ * posts crush_pick_<gameId>_<idx> buttons to the controller, and returns true to
+ * signal _runMassiveDisplacement to STOP before the push. handleCrushPick applies
+ * 4 Damage to the chosen figure, clears the suspend, and RE-ENTERS the push portion
+ * via resumeCrushPush (same continuation the non-suspended path runs).
+ *
+ * Returns true when SUSPENDED (caller must not run the push synchronously); false
+ * otherwise (auto-resolved or no-op — caller proceeds to the push as before).
  */
 export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
   const { client, logGameAction } = ctx;
@@ -1278,28 +1279,50 @@ export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
   // 1. Controller must hold Crush in hand.
   const handKey = ccHandKey(movingPN);
   const hand = game[handKey];
-  if (!Array.isArray(hand) || !hand.includes('Crush')) return;
+  if (!Array.isArray(hand) || !hand.includes('Crush')) return false;
   // 2. Moving figure must be MASSIVE (only a MASSIVE figure ends movement in
   //    spaces "containing other figures" via the displacement framework).
   const dcEffects = getDcEffects() || {};
   const moverKw = (dcEffects[dcNameFromFigureKey(pending.figureKey)]?.keywords || [])
     .map((k) => String(k).toUpperCase());
-  if (!moverKw.includes('MASSIVE')) return;
-  // 3. Pick ONE SMALL enemy figure the SAME deterministic way Stampede orders its
-  //    queue: the FIRST SMALL figure in dispPending.enemyQueue (same iteration
-  //    order Stampede damages over). No interactive picker — "it just picks one
-  //    figure" (alexanbv 2026-06-20).
-  const oppPN = movingPN === 1 ? 2 : 1;
+  if (!moverKw.includes('MASSIVE')) return false;
+  // 3. Gather ALL eligible SMALL enemy figures in dispPending.enemyQueue (same
+  //    deterministic initMassiveDisplacement ordering Stampede iterates).
   const _isSmall = (fk) => {
     const kw = (dcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase());
     return !(kw.includes('LARGE') || kw.includes('MASSIVE'));
   };
-  const target = (dispPending.enemyQueue || []).find((e) => e?.figureKey && _isSmall(e.figureKey));
-  if (!target) return;
-  // 4. Resolve the target's msgId + figIndex (same lookup Stampede uses).
-  const { dcMessageMeta } = ctx;
-  const fkMatch = target.figureKey.match(/-(\d+)-(\d+)$/);
-  if (!fkMatch) return;
+  const eligible = (dispPending.enemyQueue || []).filter((e) => e?.figureKey && _isSmall(e.figureKey));
+  if (eligible.length === 0) return false;
+  // 4. Exactly 1 eligible → auto-resolve (no prompt). 2+ → suspend and prompt the
+  //    Crush player (= massive figure's controller) to pick which one.
+  if (eligible.length === 1) {
+    await _applyCrushDamageAndConsume(game, ctx, pending, eligible[0]);
+    return false;
+  }
+  // SUSPEND: stash queue context + post crush_pick_ buttons to the controller.
+  setPendingCrushChoice(game, {
+    gameId: game.gameId,
+    playerNum: movingPN,
+    figureKey: pending.figureKey,
+    dcName: pending.dcName || dcNameFromFigureKey(pending.figureKey),
+    eligible: eligible.map((e) => ({ figureKey: e.figureKey, dcName: e.dcName ?? dcNameFromFigureKey(e.figureKey) })),
+  });
+  await renderCrushPickPrompt(game, client, { fallbackChannel: ctx.fallbackChannel });
+  return true;
+}
+
+/**
+ * Apply Crush's 4 Damage to one chosen SMALL enemy figure and consume the card
+ * (first copy) from the Crush player's hand → discard. Shared by the auto-resolve
+ * (exactly-1-eligible) path and the handleCrushPick resume path.
+ */
+async function _applyCrushDamageAndConsume(game, ctx, pending, target) {
+  const { client, logGameAction, dcMessageMeta } = ctx;
+  const movingPN = pending.playerNum;
+  const oppPN = movingPN === 1 ? 2 : 1;
+  const fkMatch = String(target.figureKey).match(/-(\d+)-(\d+)$/);
+  if (!fkMatch) return false;
   const figIdx = parseInt(fkMatch[2], 10);
   const tDcName = dcNameFromFigureKey(target.figureKey);
   let tMsgId = null;
@@ -1309,8 +1332,7 @@ export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
     const dgIdx = dgM ? dgM[1] : '1';
     if (String(dgIdx) === String(fkMatch[1])) { tMsgId = mId; break; }
   }
-  if (!tMsgId) return;
-  // 5. Apply 4 Damage BEFORE the push, then consume the card from hand → discard.
+  if (!tMsgId) return false;
   const { applyDamage: _crApplyDamage } = await import('../game/damage-pipeline.js');
   try {
     await _crApplyDamage(game, { dcHealthState: ctx.dcHealthState, logGameAction, client }, {
@@ -1321,10 +1343,10 @@ export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
     });
   } catch (err) {
     console.error('[crush] applyDamage failed:', err?.message ?? err);
-    return;
+    return false;
   }
-  // Consume the card (first copy) from hand → discard.
-  const idx = hand.indexOf('Crush');
+  const hand = game[ccHandKey(movingPN)];
+  const idx = Array.isArray(hand) ? hand.indexOf('Crush') : -1;
   if (idx >= 0) hand.splice(idx, 1);
   const discKey = ccDiscardKey(movingPN);
   game[discKey] = game[discKey] || [];
@@ -1332,6 +1354,95 @@ export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
   await logGameAction?.(game, client,
     `💥 **Crush** — **${tDcName}** in **${pending.dcName || dcNameFromFigureKey(pending.figureKey)}**'s ending space: 4 Damage before push.`,
     { phase: 'ROUND', icon: 'attack' });
+  return true;
+}
+
+/**
+ * Render-from-state: post the Crush figure-pick buttons (one per eligible SMALL
+ * enemy figure) to the massive figure's controller. Mirrors
+ * renderMassivePushFigurePrompt: figures are encoded by index into
+ * pending.eligible (figure keys don't round-trip cleanly through a customId).
+ */
+export async function renderCrushPickPrompt(game, client, opts = {}) {
+  const pending = game.pendingCrushChoice;
+  if (!pending) return;
+  const eligible = pending.eligible || [];
+  if (eligible.length === 0) return;
+  const btns = eligible.map((e, idx) => {
+    const pos = game.figurePositions?.[game.pendingCrushChoice.playerNum === 1 ? 2 : 1]?.[e.figureKey];
+    const label = `${e.dcName}${pos ? ` @ ${String(pos).toUpperCase()}` : ''}`.slice(0, 80);
+    return new ButtonBuilder()
+      .setCustomId(`crush_pick_${pending.gameId}_${idx}`)
+      .setLabel(label)
+      .setStyle(ButtonStyle.Danger);
+  });
+  const rows = [];
+  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  const threadId = game.dcActionsData ? Object.values(game.dcActionsData).find((d) => d.threadId)?.threadId : null;
+  let channel = threadId ? await fetchGameChannel(client, threadId) : null;
+  if (!channel && opts.fallbackChannel) channel = opts.fallbackChannel;
+  if (!channel && game.generalId) channel = await fetchGameChannel(client, game.generalId);
+  if (!channel) return;
+  const sent = await channel.send({
+    content: `💥 **Crush** — **${pending.dcName}** ends movement on 2+ SMALL enemy figures. Choose which one suffers **4 Damage** (before the push).`,
+    components: rows.slice(0, 5),
+  }).catch(discordCatch);
+  if (sent?.id) {
+    const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
+    recordPromptMessage(game, 'crushPick', sent.channelId || channel.id, sent.id, signatureFor('crushPick', game));
+  }
+}
+
+/**
+ * Resume the massive-displacement PUSH after a Crush pick is resolved. Re-enters
+ * the same push portion _runMassiveDisplacement runs after the (now-completed)
+ * Crush step — recomputes dispPending from current positions and drives
+ * resolveNextDisplacements / the existing massive-push pickers.
+ */
+async function resumeCrushPush(game, ctx, pending) {
+  await _runMassiveDisplacementPush(game, ctx, pending);
+}
+
+/**
+ * Handle the Crush figure-pick button (crush_pick_<gameId>_<idx>). Applies 4
+ * Damage to the chosen SMALL enemy figure, clears pendingCrushChoice, then resumes
+ * the massive-displacement push pipeline.
+ */
+export async function handleCrushPick(interaction, ctx) {
+  const { getGame, saveGames, client } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const match = interaction.customId.match(/^crush_pick_([^_]+)_(\d+)$/);
+  if (!match) { await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch); return; }
+  const [, gameId, idxStr] = match;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const pending = game.pendingCrushChoice;
+  if (!pending || pending.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending Crush choice.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Authority: only the massive figure's controller (= the Crush player) picks.
+  if (!await requirePlayer(interaction, game, interaction.user.id, pending.playerNum, canActAsPlayer,
+    'Only the massive figure\'s controller can choose the Crush target.')) return;
+  const idx = parseInt(idxStr, 10);
+  const choice = (pending.eligible || [])[idx];
+  if (!choice) {
+    await interaction.followUp({ content: 'Invalid pick.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Reconstruct the minimal pending context the push/damage helpers expect.
+  const pushPending = {
+    playerNum: pending.playerNum,
+    figureKey: pending.figureKey,
+    dcName: pending.dcName,
+  };
+  await _applyCrushDamageAndConsume(game, ctx, pushPending, choice);
+  clearPendingCrushChoice(game);
+  try { await interaction.message.edit({ content: `💥 **Crush** target: **${choice.dcName}** suffers 4 Damage.`, components: [] }).catch(discordCatch); } catch {}
+  const { clearPromptRecord } = await import('../engine/prompt-reconciler.js');
+  clearPromptRecord(game, 'crushPick');
+  await resumeCrushPush(game, ctx, pushPending);
+  if (saveGames) saveGames(game.gameId);
 }
 async function _runMassiveDisplacement(game, ctx, pending) {
   const { client, logGameAction } = ctx;
@@ -1393,19 +1504,12 @@ async function _runMassiveDisplacement(game, ctx, pending) {
   // the controller's hand. Only SMALL enemy figures in the ending footprint are
   // eligible (the CSV "SMALL figure" filter, mirroring abilities.js requiresSmall).
   if (dispPending) {
-    await _applyCrushBeforePush(game, ctx, pending, dispPending);
-  }
-  if (dispPending) {
-    // Per CRR (2026-05-09 user clarification): once a MASSIVE figure
-    // displaces another figure, it may no longer move during the
-    // current phase (SoR / EoR / activation). Set a per-figureKey
-    // flag that movement validators check; flag is cleared on phase
-    // boundaries (cleanupActivation, round transitions).
-    game.massivePushedThisPhase = game.massivePushedThisPhase || {};
-    game.massivePushedThisPhase[pending.figureKey] = true;
-    await logGameAction?.(game, client,
-      `🦿 **MASSIVE displaced** — **${pending.dcName || dcName}** pushed ${dispPending.totalDisplaced} figure(s); cannot move again this phase.`,
-      { phase: 'ROUND', icon: 'move' });
+    // Crush may SUSPEND here (2+ eligible SMALL enemies → controller prompt).
+    // When suspended, _applyCrushBeforePush has stashed pendingCrushChoice and
+    // posted the picker; the push runs later from handleCrushPick → resumeCrushPush
+    // → _runMassiveDisplacementPush. Stop now so the push doesn't run pre-pick.
+    const suspended = await _applyCrushBeforePush(game, ctx, pending, dispPending);
+    if (suspended) return;
   }
   if (!dispPending) {
     // Diagnostic: log that the MASSIVE displacement check ran but
@@ -1417,6 +1521,33 @@ async function _runMassiveDisplacement(game, ctx, pending) {
       { phase: 'ROUND', icon: 'move' });
     return;
   }
+  await _runMassiveDisplacementPush(game, ctx, pending);
+}
+
+/**
+ * The PUSH portion of the MASSIVE end-of-move pipeline, split out so the Crush
+ * suspend/resume (handleCrushPick) can re-enter it after the controller picks a
+ * target. Recomputes the displacement set from current positions (identical to the
+ * head of _runMassiveDisplacement), marks the per-phase "cannot move again" flag,
+ * runs resolveNextDisplacements, and posts the existing massive-push pickers when
+ * interactive resolution remains. Stampede / Crush already ran before this point.
+ */
+async function _runMassiveDisplacementPush(game, ctx, pending) {
+  const { client, logGameAction } = ctx;
+  const pos = game.figurePositions?.[pending.playerNum]?.[pending.figureKey];
+  if (!pos) return;
+  const dcName = pending.dcName || dcNameFromFigureKey(pending.figureKey);
+  const size = game.figureOrientations?.[pending.figureKey] || getFigureSize(dcNameFromFigureKey(pending.figureKey)) || '1x1';
+  const footprintSet = new Set(getNormalizedFootprint(pos, size));
+  const dispPending = initMassiveDisplacement(game, pending.playerNum, pending.figureKey, footprintSet);
+  if (!dispPending) return;
+  // Per CRR (2026-05-09): once a MASSIVE figure displaces another figure, it may
+  // no longer move during the current phase. Flag is cleared on phase boundaries.
+  game.massivePushedThisPhase = game.massivePushedThisPhase || {};
+  game.massivePushedThisPhase[pending.figureKey] = true;
+  await logGameAction?.(game, client,
+    `🦿 **MASSIVE displaced** — **${dcName}** pushed ${dispPending.totalDisplaced} figure(s); cannot move again this phase.`,
+    { phase: 'ROUND', icon: 'move' });
   const result = resolveNextDisplacements(game, dispPending);
   for (const r of result.autoResolved) {
     const from = r.prevPos ? String(r.prevPos).toUpperCase() : '?';

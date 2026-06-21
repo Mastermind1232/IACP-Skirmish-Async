@@ -39,20 +39,20 @@
   },
   "roundFlagsCompleteness": {
     "bucketSizes": {
-      "ROUND_OBJECT_FLAGS": 114,
-      "ROUND_NULL_FLAGS": 138,
+      "ROUND_OBJECT_FLAGS": 115,
+      "ROUND_NULL_FLAGS": 139,
       "ROUND_ARRAY_FLAGS": 7,
       "ROUND_FALSE_FLAGS": 3,
       "ROUND_DELETE_FLAGS": 29
     },
-    "totalUniqueKeys": 291,
+    "totalUniqueKeys": 293,
     "baselineDuplicates": [],
     "baselineUnused": [
       "deviceRerollGranted",
       "drivenByHatredForceChoke",
       "pendingBELReorder"
     ],
-    "baselineTypeMismatchCount": 107
+    "baselineTypeMismatchCount": 108
   },
   "depBagParity": {
     "totalRequiredDepKeys": 241,
