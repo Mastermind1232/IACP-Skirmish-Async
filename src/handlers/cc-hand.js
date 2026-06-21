@@ -25,6 +25,7 @@ import { getDcEffects, getDcKeywords, getMapData, getFigureSize } from '../data-
 import { getFootprintCells } from '../game/coords.js';
 import { checkHandDiscardPassiveReshuffle, fireCcDiscarded } from '../game/cc-passive-redraw.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from '../game/adaptive-skills-helpers.js';
+import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { awardObjectiveVp } from '../game/index.js';
 import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck, getCcHand,
@@ -110,6 +111,25 @@ registerCcCustomResolve('celebration_vp', async (game, entry, ctx, client) => {
   await ctx.logGameAction?.(game, client, `<@${pid}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [pid] } });
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
 });
+
+/**
+ * Resolve the on-board figureKey of the player's Mara Jade (the Adaptive Skills
+ * / Fast Learner figure). Used to record the range anchor when a unique-figure
+ * CC is played via Mara's Fast Learner — so the range references Mara, not the
+ * named figure, even when both are on the board (alexanbv 2026-06-21).
+ * @returns {string|null}
+ */
+function resolveFastLearnerFigureKey(game, playerNum) {
+  const positions = game?.figurePositions?.[playerNum] || {};
+  const liveKeys = Object.keys(positions).filter(fk => positions[fk]);
+  const dcEffects = getDcEffects() || {};
+  for (const fk of liveKeys) {
+    const dn = dcNameFromFigureKey(fk);
+    const eff = dcEffects[dn] || dcEffects[String(dn || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((eff?.specialAbilityIds || []).includes(ADAPTIVE_SKILLS_ABILITY_ID)) return fk;
+  }
+  return null;
+}
 
 export async function openCcCounterWindow(game, gameId, play, ctx, client) {
   const spyForPlay = (play.card === COMM_DISRUPTION) ? _ccSpyGroupCount(game, play.playedBy) : undefined;
@@ -221,6 +241,7 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
     game.pendingCcEffect = {
       abilityId: entry.abilityId || entry.card, card: entry.card, playedBy: entry.playedBy,
       msgId: entry.msgId ?? null, fromDc: !!entry.fromDc, scProtect: SC_HAND_CCS.has(entry.card),
+      fastLearnerFigureKey: entry.fastLearnerFigureKey ?? null,
     };
     await _offerScThenResolveDeferredCc(game, ctx, client);
   }
@@ -327,7 +348,19 @@ async function _resumeScCcEffect(game, ctx, client) {
   delete game.pendingCcEffect;
   const { resolveAbility, dcMessageMeta, dcHealthState } = ctx;
   if (resolveAbility) {
-    const result = resolveAbility(pend.abilityId, { game, playerNum: pend.playedBy, cardName: pend.card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId: pend.msgId });
+    // Fast-Learner anchor (alexanbv 2026-06-21): if this unique-figure CC was
+    // played via Mara's Fast Learner, expose Mara's figureKey transiently so
+    // resolveUniqueFigureCcFigureKey / resolveRoundModifierAnchor anchor the
+    // CC's range on Mara (not the named figure). Cleared after the synchronous
+    // effect resolution so it never leaks to other CCs.
+    const _flAnchorFk = pend.fastLearnerFigureKey ?? null;
+    if (_flAnchorFk) game.ccPlayedByFastLearnerFigureKey = _flAnchorFk;
+    let result;
+    try {
+      result = resolveAbility(pend.abilityId, { game, playerNum: pend.playedBy, cardName: pend.card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId: pend.msgId });
+    } finally {
+      if (_flAnchorFk) delete game.ccPlayedByFastLearnerFigureKey;
+    }
     await applyAbilityResult(result, { game, playerNum: pend.playedBy, msgId: pend.fromDc ? pend.msgId : undefined, client, ctx });
     // Interactive effects (e.g. Intelligence Leak's looker pick) return
     // requiresChoice — stand up the choice prompt for the player who played it.
@@ -955,7 +988,15 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }
     }
     // 4. Open the recursive counter-window; it resolves the effect or cancels it.
-    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, interaction.client);
+    //    Thread the Fast-Learner-played-by anchor (Mara's figureKey) when this
+    //    unique-figure CC was played via Mara's Fast Learner — so a CC with a
+    //    range component references Mara, not the named figure (alexanbv
+    //    2026-06-21). Survives the counter-window via the stack entry → the
+    //    deferred-effect resolution (see _resumeScCcEffect).
+    const _flAnchorFk = (restriction.fastLearner || _flResolved === 'mara')
+      ? resolveFastLearnerFigureKey(game, playerNum)
+      : null;
+    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, fastLearnerFigureKey: _flAnchorFk }, ctx, interaction.client);
     saveGames(game.gameId);
     return;
   }

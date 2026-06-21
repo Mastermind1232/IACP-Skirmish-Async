@@ -328,6 +328,172 @@ test('LIVE Take Position (during activation): only the activating figure gets +1
   assert.strictEqual(blockFor('Greedo-1-0'), 0, 'a DIFFERENT friendly figure gets nothing');
 });
 
+// ── MARA JADE FAST LEARNER anchor override (alexanbv 2026-06-21) ────────────
+// A unique-figure CC played via Mara Jade's Fast Learner must anchor its RANGE
+// component on MARA — even when BOTH the named figure and Mara are on the board.
+// cc-hand.js records Mara's figureKey on game.ccPlayedByFastLearnerFigureKey for
+// the current resolution; resolveUniqueFigureCcFigureKey / resolveRoundModifierAnchor
+// honor it (priority over the named-figure preference). These tests prove the
+// override flips the anchor to Mara, and that WITHOUT it the named figure wins.
+
+test('Cavalry Charge via Mara Fast Learner: range anchors on MARA, not Captain Terro', () => {
+  const game = integrationGame('g-cc-fl');
+  // Captain Terro near the TROOPER (m17/m18 = dist 1); Mara FAR (r17, dist 7
+  // from the TROOPER). If the anchor were (wrongly) Captain Terro, the TROOPER
+  // would be in range; with the FL override anchoring on Mara it is NOT.
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',            // the actual player (via Fast Learner)
+    'Captain Terro-1-0': 'm17',        // named figure, also on board
+    'Gar Saxon-1-0': 'm18',            // friendly TROOPER: dist 1 from Terro, 7 from Mara
+  };
+  // Simulate cc-hand recording the Fast-Learner-played-by figure (Mara).
+  game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
+  const r = resolveAbility('Cavalry Charge', { game, playerNum: 1 });
+  delete game.ccPlayedByFastLearnerFigureKey; // cc-hand clears after resolution
+  assert.strictEqual(r.applied, true);
+
+  const blockD = (game.activeRoundModifiers || []).find((m) => m.card === 'Cavalry Charge' && m.side === 'defense');
+  assert.ok(blockD, 'Cavalry Charge defense descriptor registered');
+  assert.strictEqual(blockD.sourceFigureKey, 'Mara Jade-1-0', 'anchor = MARA (FL override), NOT Captain Terro');
+
+  // +1 Block is figure-scoped to Mara (the playing figure), not Captain Terro.
+  const blockFor = (fk) => evaluateRoundModifiers(game, { side: 'defense', figureKey: fk, playerNum: 1, combat: {} }).block;
+  assert.strictEqual(blockFor('Mara Jade-1-0'), 1, 'Mara gets +1 Block');
+  assert.strictEqual(blockFor('Captain Terro-1-0'), 0, 'Captain Terro (not the player) gets no Block');
+
+  // +1 Hit reaches a friendly TROOPER within 3 of MARA — Gar Saxon is 7 away → NO hit.
+  const hitFor = (fk) => evaluateRoundModifiers(game, { side: 'attack', figureKey: fk, playerNum: 1, combat: {} }).hit;
+  assert.strictEqual(hitFor('Gar Saxon-1-0'), 0, 'TROOPER out of range of Mara gets nothing (anchored on Mara)');
+});
+
+test('Cavalry Charge NORMAL (no Fast Learner): range anchors on Captain Terro', () => {
+  const game = integrationGame('g-cc-normal');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',            // present, but NOT the player this time
+    'Captain Terro-1-0': 'm17',        // named figure = the player
+    'Gar Saxon-1-0': 'm18',            // friendly TROOPER within 3 of Terro
+  };
+  // No ccPlayedByFastLearnerFigureKey → named-figure preference applies.
+  const r = resolveAbility('Cavalry Charge', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+
+  const blockD = (game.activeRoundModifiers || []).find((m) => m.card === 'Cavalry Charge' && m.side === 'defense');
+  assert.strictEqual(blockD.sourceFigureKey, 'Captain Terro-1-0', 'anchor = Captain Terro (named figure)');
+
+  const hitFor = (fk) => evaluateRoundModifiers(game, { side: 'attack', figureKey: fk, playerNum: 1, combat: {} }).hit;
+  assert.strictEqual(hitFor('Gar Saxon-1-0'), 1, 'TROOPER within 3 of Captain Terro gets +1 Hit');
+});
+
+test('I Must Go Alone via Mara Fast Learner: shielded figure = MARA, not Obi-Wan', () => {
+  const game = integrationGame('g-imga-fl');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Obi-Wan Kenobi-1-0': 'm17',
+  };
+  game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
+  const r = resolveAbility('I Must Go Alone', { game, playerNum: 1 });
+  delete game.ccPlayedByFastLearnerFigureKey;
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.roundDefenderCannotBeTargetedUnlessWithinSpaces?.figureKey, 'Mara Jade-1-0',
+    'the shielded "you" = Mara (FL override), not Obi-Wan');
+});
+
+test('I Must Go Alone NORMAL: shielded figure = Obi-Wan (named figure)', () => {
+  const game = integrationGame('g-imga-normal');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Obi-Wan Kenobi-1-0': 'm17',
+  };
+  const r = resolveAbility('I Must Go Alone', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.roundDefenderCannotBeTargetedUnlessWithinSpaces?.figureKey, 'Obi-Wan Kenobi-1-0',
+    'the shielded "you" = Obi-Wan (named figure)');
+});
+
+test('Mandalorian Steel via Mara Fast Learner: within-4 anchor = MARA, not The Armorer', () => {
+  const game = integrationGame('g-ms-fl');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'The Armorer-1-0': 'm17',
+  };
+  game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
+  const r = resolveAbility('Mandalorian Steel', { game, playerNum: 1 });
+  delete game.ccPlayedByFastLearnerFigureKey;
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.mandaAsteelArmorerFigureKey, 'Mara Jade-1-0',
+    'within-4 anchor = Mara (FL override), not The Armorer');
+});
+
+test('Mandalorian Steel NORMAL: within-4 anchor = The Armorer (named figure)', () => {
+  const game = integrationGame('g-ms-normal');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'The Armorer-1-0': 'm17',
+  };
+  const r = resolveAbility('Mandalorian Steel', { game, playerNum: 1 });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.mandaAsteelArmorerFigureKey, 'The Armorer-1-0',
+    'within-4 anchor = The Armorer (named figure)');
+});
+
+test('Deploy the Garrison via Mara Fast Learner: within-4 anchored on MARA, not Director Krennic', () => {
+  const game = integrationGame('g-dg-fl');
+  // Director Krennic at m17 (dist 1 from the TROOPER m18); Mara at r17 (dist 7).
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Director Krennic-1-0': 'm17',
+    'Gar Saxon-1-0': 'm18',            // TROOPER: within 4 of Krennic, NOT of Mara
+  };
+  game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
+  const r = resolveAbility('Deploy the Garrison', { game, playerNum: 1, dcMessageMeta: new Map() });
+  delete game.ccPlayedByFastLearnerFigureKey;
+  // Anchored on Mara → the only TROOPER is 7 away → none eligible.
+  assert.ok(!(r.choiceValues || []).includes('Gar Saxon-1-0'),
+    'TROOPER out of range of Mara is NOT eligible (anchored on Mara)');
+});
+
+test('Deploy the Garrison NORMAL: within-4 anchored on Director Krennic', () => {
+  const game = integrationGame('g-dg-normal');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Director Krennic-1-0': 'm17',
+    'Gar Saxon-1-0': 'm18',
+  };
+  const r = resolveAbility('Deploy the Garrison', { game, playerNum: 1, dcMessageMeta: new Map() });
+  assert.ok((r.choiceValues || []).includes('Gar Saxon-1-0'),
+    'TROOPER within 4 of Krennic IS eligible (anchored on the named figure)');
+});
+
+test('Field Supply via Mara Fast Learner: within-3 "other figures" anchored on MARA, not Ko-Tun Feralo', () => {
+  const game = integrationGame('g-fs-fl');
+  // Ko-Tun at m17 (dist 1 from Greedo m18); Mara at r17 (dist 7 from Greedo).
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Ko-Tun Feralo-1-0': 'm17',
+    'Greedo-1-0': 'm18',              // "other" friendly: within 3 of Ko-Tun, NOT of Mara
+  };
+  game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
+  const r = resolveAbility('Field Supply', { game, playerNum: 1, dcMessageMeta: new Map() });
+  delete game.ccPlayedByFastLearnerFigureKey;
+  // Anchored on Mara → Greedo is 7 away → not an eligible target.
+  const vals = (r.choiceValues || []);
+  assert.ok(!vals.some(v => String(v).startsWith('Greedo-1-0|')),
+    'Greedo out of range of Mara is NOT an eligible Field Supply target (anchored on Mara)');
+});
+
+test('Field Supply NORMAL: within-3 "other figures" anchored on Ko-Tun Feralo', () => {
+  const game = integrationGame('g-fs-normal');
+  game.figurePositions[1] = {
+    'Mara Jade-1-0': 'r17',
+    'Ko-Tun Feralo-1-0': 'm17',
+    'Greedo-1-0': 'm18',
+  };
+  const r = resolveAbility('Field Supply', { game, playerNum: 1, dcMessageMeta: new Map() });
+  const vals = (r.choiceValues || []);
+  assert.ok(vals.some(v => String(v).startsWith('Greedo-1-0|')),
+    'Greedo within 3 of Ko-Tun IS an eligible target (anchored on the named figure)');
+});
+
 // ── STANDING FIGURE AURAS (alexanbv 2026-06-20) ─────────────────────────────
 // A figure's passive aura projects a combat-stat bonus onto OTHER nearby
 // friendly figures, evaluated PER-FIGURE (keyword / within-N of the AURA SOURCE

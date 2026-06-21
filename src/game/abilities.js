@@ -132,6 +132,14 @@ function resolveUniqueFigureCcFigureKey(game, playerNum, cardName) {
   const positions = game.figurePositions?.[playerNum] || {};
   const liveKeys = Object.keys(positions).filter(fk => positions[fk]);
   if (liveKeys.length === 0) return null;
+  // 0. Fast-Learner override (alexanbv 2026-06-21): if the CC was played via
+  //    Mara Jade's Fast Learner, the range anchor is MARA — even when BOTH the
+  //    named figure and Mara are on the board. cc-hand.js records Mara's live
+  //    figureKey on game.ccPlayedByFastLearnerFigureKey for the duration of the
+  //    current CC effect resolution (transient; cleared after). This takes
+  //    priority over the named-figure preference below.
+  const flFigureKey = game.ccPlayedByFastLearnerFigureKey;
+  if (flFigureKey && liveKeys.includes(flFigureKey)) return flFigureKey;
   const named = getUniqueFiguresForCc(cardName).map(n => String(n || '').toLowerCase());
   // 1. Prefer a named figure on the board.
   if (named.length > 0) {
@@ -226,6 +234,16 @@ function resolveKeywordCcFigureKey(game, playerNum, requiredKeywords) {
 function resolveRoundModifierAnchor(game, playerNum, cardName, opts = {}) {
   if (!game || !playerNum) return null;
   const { dcMessageMeta } = opts;
+  // 0. Fast-Learner override (alexanbv 2026-06-21): when a unique-figure CC was
+  //    played via Mara Jade's Fast Learner, "you/your" anchors on MARA — even
+  //    when the named figure is also on the board. This takes priority over the
+  //    activation/defender/named-figure resolution below. Set transiently by
+  //    cc-hand.js (game.ccPlayedByFastLearnerFigureKey) for the current play.
+  const _flFigureKey = game.ccPlayedByFastLearnerFigureKey;
+  if (_flFigureKey) {
+    const _liveByMara = game.figurePositions?.[playerNum]?.[_flFigureKey];
+    if (_liveByMara) return _flFigureKey;
+  }
   // 1. Activating figure (during/start-of-activation, special_action cards).
   if (dcMessageMeta) {
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -11168,26 +11186,17 @@ export function resolveAbility(abilityId, context) {
   // timing) so all MP grants use the picker (rule 1, no bank,
   // bypassCosts: false).
   if (entry.type === 'ccEffect' && entry.deployGarrisonEffect) {
-    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, cardName } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    // The "you" who plays this card at start of round: pick any
-    // friendly figure on the board to anchor the within-4 measurement.
-    // Per spec the player chooses the activator-equivalent themselves;
-    // here we anchor to the first friendly with a position to keep the
-    // dispatch deterministic. (Multi-figure DGs use figure 0.)
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    let anchorPos = null;
-    if (msgId) {
-      const meta = dcMessageMeta.get(msgId);
-      const actData = game.dcActionsData?.[msgId];
-      const selfFigIdx = actData?.selectedFigure ?? 0;
-      const dgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-      const dgIndex = dgMatch ? dgMatch[1] : '1';
-      const selfFigKey = `${meta?.dcName}-${dgIndex}-${selfFigIdx}`;
-      anchorPos = game.figurePositions?.[playerNum]?.[selfFigKey];
-    }
+    // The "you" who plays this start_of_round card is the named figure
+    // (Director Krennic) — or Mara Jade when she plays it via Fast Learner.
+    // resolveRoundModifierAnchor handles activation → named-figure → Mara, and
+    // honors the Fast-Learner-played-by-Mara override (alexanbv 2026-06-21) so
+    // the within-4 range references the figure that ACTUALLY played the card.
+    const anchorFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Deploy the Garrison', { dcMessageMeta });
+    let anchorPos = anchorFk ? game.figurePositions?.[playerNum]?.[anchorFk] : null;
     if (!anchorPos) {
-      // No activation context → fall back to first friendly position.
+      // No anchor resolvable → fall back to first friendly position.
       for (const pos of Object.values(game.figurePositions?.[playerNum] || {})) {
         if (pos) { anchorPos = pos; break; }
       }
@@ -12183,7 +12192,7 @@ export function resolveAbility(abilityId, context) {
   // (The attack:rerolls token-spend reroll window, CSV row 654, is a separate deep
   // gap and is intentionally NOT implemented here.) alexanbv 2026-06-20.
   if (entry.type === 'ccEffect' && entry.fieldSupplyEffect) {
-    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, cardName } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     // Mark Field Supply as PLAYED this round by this player. Gates the
     // attacker-rerolls option (CSV row 654 / combat-abilities-rerolls.js):
@@ -12193,10 +12202,13 @@ export function resolveAbility(abilityId, context) {
     game.fieldSupplyPlayedRound = game.fieldSupplyPlayedRound || {};
     game.fieldSupplyPlayedRound[playerNum] = true;
     const MAX_PICKS = 2;
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    const meta = msgId ? dcMessageMeta?.get(msgId) : null;
-    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
-    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+    // "within 3 spaces of YOU": anchor on the figure that played the card —
+    // Ko-Tun Feralo (start_of_round), or Mara Jade when she plays it via Fast
+    // Learner. resolveRoundModifierAnchor honors the FL-by-Mara override
+    // (alexanbv 2026-06-21). actKeys = the anchor figure (excluded as "other").
+    const anchorFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Field Supply', { dcMessageMeta });
+    const actKeys = anchorFk ? [anchorFk] : [];
+    const actPos = anchorFk ? game.figurePositions?.[playerNum]?.[anchorFk] : null;
     // Enumerate eligible OTHER friendly figures within 3 (excluding already-picked).
     const _enumEligible = () => {
       const picked = new Set(game._fieldSupplyPicks || []);
