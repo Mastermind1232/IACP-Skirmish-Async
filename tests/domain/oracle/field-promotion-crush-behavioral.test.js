@@ -169,4 +169,45 @@ describe('Crush: massive end-of-move pipeline (Stampede timing, before push)', (
     await _applyCrushBeforePush(game, ctx, pending, dispPending);
     assert.ok(game.player1CcHand.includes('Crush'), 'card not consumed when no SMALL target');
   });
+
+  // ── alexanbv 2026-06-20 ruling: Crush mirrors Stampede but hits ONE figure ──
+  // Stampede iterates dispPending.enemyQueue damaging EVERY figure; Crush picks
+  // exactly the FIRST SMALL figure in that SAME deterministic order, owned by the
+  // MASSIVE figure's controller (the Crush player), with NO interactive picker.
+  it('with MULTIPLE SMALL enemies, picks exactly ONE — the first in queue order (Stampede ordering)', async () => {
+    const massiveMsgId = 'msg-cr-massive';
+    const smallA = 'msg-cr-smallA';
+    const smallB = 'msg-cr-smallB';
+    const dcMessageMeta = new Map([
+      [massiveMsgId, { gameId: 'g-cr2', playerNum: 1, dcName: 'AT-ST', displayName: 'AT-ST [DG 1]' }],
+      [smallA, { gameId: 'g-cr2', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
+      [smallB, { gameId: 'g-cr2', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 2]' }],
+    ]);
+    const dcHealthState = new Map([
+      [massiveMsgId, [[11, 11]]],
+      [smallA, [[3, 3]]],
+      [smallB, [[3, 3]]],
+    ]);
+    const game = {
+      gameId: 'g-cr2',
+      player1CcHand: ['Crush'],
+      figurePositions: {
+        1: { 'AT-ST-1-0': 'a1' },
+        2: { 'Stormtrooper-1-0': 'a1', 'Stormtrooper-2-0': 'a1' },
+      },
+      p2DcMessageIds: [smallA, smallB],
+    };
+    const ctx = { client: {}, logGameAction: async () => {}, dcMessageMeta, dcHealthState };
+    const pending = { playerNum: 1, figureKey: 'AT-ST-1-0', dcName: 'AT-ST' };
+    // enemyQueue in its deterministic (initMassiveDisplacement) order — group 1 first.
+    const dispPending = { enemyQueue: [
+      { playerNum: 2, figureKey: 'Stormtrooper-1-0', dcName: 'Stormtrooper' },
+      { playerNum: 2, figureKey: 'Stormtrooper-2-0', dcName: 'Stormtrooper' },
+    ] };
+    await _applyCrushBeforePush(game, ctx, pending, dispPending);
+    // ONLY the first queued SMALL figure takes 4 Damage; the second is untouched.
+    assert.deepStrictEqual(dcHealthState.get(smallA), [[0, 3]], 'first queued SMALL takes 4 Damage');
+    assert.deepStrictEqual(dcHealthState.get(smallB), [[3, 3]], 'second SMALL untouched — Crush hits ONE figure');
+    assert.deepStrictEqual(game.player1CcDiscard, ['Crush'], 'one copy consumed');
+  });
 });

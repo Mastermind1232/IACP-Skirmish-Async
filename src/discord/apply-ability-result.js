@@ -63,6 +63,32 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Companion deploy directive (Droid Mastery → J4X-7) ---
+  // A resolver with no Discord client (sync ccEffect) returns
+  // result.deployCompanion = { companionName, atFigureKey, playerNum }; the async
+  // apply layer (which HAS the client) deploys the companion via the SAME
+  // companion-deploy routine The Child / other companions use (alexanbv 2026-06-20).
+  if (result.applied && result.deployCompanion?.companionName && result.deployCompanion?.atFigureKey) {
+    try {
+      const dc = result.deployCompanion;
+      const { deployCompanionFigure } = await import('../handlers/post-deploy.js');
+      await deployCompanionFigure(
+        game,
+        { companionName: dc.companionName, hostFigureKey: dc.atFigureKey, playerNum: dc.playerNum ?? playerNum },
+        client,
+        {
+          buildDcEmbedAndFiles: ctx.buildDcEmbedAndFiles,
+          dcMessageMeta, dcExhaustedState, dcHealthState,
+          getDcPlayAreaComponents,
+          getNicknamesForDcMessage: ctx.getNicknamesForDcMessage,
+          logGameAction,
+        },
+      );
+    } catch (err) {
+      console.error('[apply-ability-result] deployCompanion failed:', err?.message ?? err);
+    }
+  }
+
   // --- Unhandled routing: caller must set up pendingCcChoice/pendingCcSpaceChoice themselves ---
   if (!result.applied && result.requiresChoice && result.choiceOptions?.length > 0) {
     return { handled: false, requiresChoice: true, requiresSpaceChoice: false };

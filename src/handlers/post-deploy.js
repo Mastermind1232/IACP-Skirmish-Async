@@ -407,6 +407,77 @@ async function _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId
 }
 
 /**
+ * Programmatic companion deploy (mid-game, NO interactive picker). Mirrors the
+ * core of handleCompanionDeployPick — placement + companionHostMap + the SAME
+ * _createCompanionDcEmbed (DC embed, banks, host map, board image) — but is driven
+ * by a directive from an ability resolver instead of a button click. Used by the
+ * apply layer to deploy J4X-7 for Droid Mastery exactly the way The Child / other
+ * companions enter play (alexanbv 2026-06-20 ruling).
+ *
+ * @param {object} game
+ * @param {object} d - { companionName, hostFigureKey, playerNum, space }
+ * @param {import('discord.js').Client} client
+ * @param {object} deps - { buildDcEmbedAndFiles, dcMessageMeta, dcExhaustedState,
+ *   dcHealthState, getDcPlayAreaComponents, getNicknamesForDcMessage?, logGameAction? }
+ * @returns {Promise<{ ok: boolean, companionKey?: string, space?: string }>}
+ */
+export async function deployCompanionFigure(game, d, client, deps) {
+  const { companionName, hostFigureKey, playerNum } = d || {};
+  if (!game || !companionName || !hostFigureKey || !playerNum) return { ok: false };
+  const hostPos = game.figurePositions?.[playerNum]?.[hostFigureKey];
+  if (!hostPos) return { ok: false }; // host not on board → cannot place
+  const normSpace = normalizeCoord(d.space || hostPos); // CSV: "into your space" (host space)
+  const companionKey = `${companionName}-0-0`;
+  if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
+  game.figurePositions[playerNum][companionKey] = normSpace;
+
+  // Track companion → host relationship (same shape as handleCompanionDeployPick).
+  game.companionHostMap = game.companionHostMap || {};
+  game.companionHostMap[companionKey] = { hostFigureKey, playerNum };
+
+  // Resolve the host DC's msgId so the companion embed registers at the host's
+  // index (the parallel-array fallback used by _createCompanionDcEmbed).
+  const hostMsgId = findCompanionHostMsgId(game, playerNum, hostFigureKey, deps?.dcMessageMeta);
+  if (hostMsgId != null) game[`companionDeployed_${hostMsgId}`] = true;
+
+  if (deps?.logGameAction) {
+    await deps.logGameAction(game, client, `👶 **${companionName}** deployed at **${normSpace.toUpperCase()}** (${dcNameFromFigureKey(hostFigureKey)}'s companion).`, { phase: 'ROUND', icon: 'deployed' }).catch(discordCatch);
+  }
+
+  // Build the companion DC embed via the SAME routine the interactive deploy uses.
+  if (hostMsgId != null && deps?.buildDcEmbedAndFiles && deps?.getDcPlayAreaComponents) {
+    try {
+      await _createCompanionDcEmbed(game, companionName, playerNum, hostMsgId, client, {
+        buildDcEmbedAndFiles: deps.buildDcEmbedAndFiles,
+        dcMessageMeta: deps.dcMessageMeta,
+        dcExhaustedState: deps.dcExhaustedState,
+        dcHealthState: deps.dcHealthState,
+        getDcPlayAreaComponents: deps.getDcPlayAreaComponents,
+        getNicknamesForDcMessage: deps.getNicknamesForDcMessage || (() => undefined),
+      });
+    } catch (err) {
+      console.error(`[post-deploy] deployCompanionFigure embed failed for ${companionName}:`, err?.message ?? err);
+    }
+  }
+  return { ok: true, companionKey, space: normSpace };
+}
+
+/** Resolve the host DC's Discord msgId from its figureKey via dcMessageMeta. */
+function findCompanionHostMsgId(game, playerNum, hostFigureKey, dcMessageMeta) {
+  if (!dcMessageMeta) return null;
+  const fkMatch = String(hostFigureKey).match(/-(\d+)-(\d+)$/);
+  const hostDc = dcNameFromFigureKey(hostFigureKey);
+  for (const [mId, mMeta] of dcMessageMeta) {
+    if (mMeta.gameId !== game.gameId || mMeta.playerNum !== playerNum || mMeta.dcName !== hostDc) continue;
+    if (!fkMatch) return mId;
+    const dgM = (mMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const dgIdx = dgM ? dgM[1] : '1';
+    if (String(dgIdx) === String(fkMatch[1])) return mId;
+  }
+  return null;
+}
+
+/**
  * Public wrapper around the internal companion-embed creator. Used by the
  * checkpoint loader to recreate companion play-area messages for DCs that
  * had companion attachments at save time but lost their companion msg

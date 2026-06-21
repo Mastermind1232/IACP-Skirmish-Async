@@ -11791,13 +11791,23 @@ export function resolveAbility(abilityId, context) {
     // Find J4X-7 figure
     const j4xFk = Object.keys(game.figurePositions?.[playerNum] || {}).find((fk) => fk.startsWith('J4X-7-'));
     if (!j4xFk) {
-      // CSV companion_place: "if not in play, put J4X-7 into your space". Auto-
-      // placing the companion requires the full companion-deploy pipeline
-      // (post-deploy.js companion_deploy: Discord DC message + banks + host map +
-      // board image) — heavy infra not safely reusable from a sync ccEffect. The
-      // companion is re-deployed via the in-game Deploy J4X-7 button at Jarrod
-      // Kelvin's space; this surfaces that step. DEFERRED: full auto-placement.
-      return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play. Put J4X-7 into play in **Jarrod Kelvin\'s space** (use the **Deploy J4X-7** companion button), then apply this card again.' };
+      // CSV companion_place: "if not in play, put J4X-7 into your space". Per
+      // alexanbv 2026-06-20 ("Droid Mastery should use the same companion deploy
+      // as the other companions, like The Child"): deploy J4X-7 via the SAME
+      // companion-deploy routine The Child / other companions use. The sync
+      // ccEffect has no Discord client, so it returns a deployCompanion DIRECTIVE
+      // that the async apply layer (apply-ability-result.js, which DOES have the
+      // client) acts on by calling deployCompanionFigure. Anchor on Jarrod Kelvin
+      // (J4X-7's host / "your space").
+      const hostFk = Object.keys(game.figurePositions?.[playerNum] || {}).find((fk) => fk.startsWith('Jarrod Kelvin-'));
+      if (!hostFk) {
+        return { applied: true, logMessage: '**Droid Mastery** — J4X-7 is not in play and Jarrod Kelvin is not on the board; nothing to deploy.' };
+      }
+      return {
+        applied: true,
+        deployCompanion: { companionName: 'J4X-7', atFigureKey: hostFk, playerNum },
+        logMessage: '**Droid Mastery** — J4X-7 is not in play; deploying J4X-7 into **Jarrod Kelvin\'s space**.',
+      };
     }
     applyCondition(game, j4xFk, 'Focus');
     // Grant free attack to J4X-7's DC

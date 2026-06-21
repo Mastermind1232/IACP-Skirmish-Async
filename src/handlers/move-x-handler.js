@@ -1255,12 +1255,22 @@ export async function runMassiveDisplacement(game, ctx, pending) {
  * figure in the ending footprint, Crush is played: one SMALL enemy in the
  * footprint suffers 4 Damage, and the card is moved to the discard pile.
  *
- * Per alexanbv ruling, Crush shares Stampede's timing. The card is consumed here
- * (one copy per qualifying end-of-move). Target selection: the FIRST SMALL enemy
- * in the enemyQueue (the interactive "Choose a SMALL figure" picker across
- * multiple SMALL targets is DEFERRED — see report). No-op (and no card consumed)
- * when the moving figure is not MASSIVE, the controller has no Crush in hand, or
- * there is no SMALL enemy in the footprint.
+ * Per alexanbv ruling (2026-06-20): "Crush should work the same way that Stampede
+ * does, it's just that it picks one figure. The CONTROLLER moves figures, but the
+ * player moving the massive figure will be the one playing Crush." So Crush is NOT
+ * a separate interactive double-suspend — it rides the EXACT Stampede path: it
+ * damages a figure in the same pre-push enemyQueue, owned by the massive figure's
+ * controller, with NO prompt. The only difference vs Stampede is that Crush hits
+ * exactly ONE figure instead of every figure in the queue.
+ *
+ * Target selection: Stampede iterates dispPending.enemyQueue in its deterministic
+ * (initMassiveDisplacement) order; Crush picks the FIRST SMALL figure in that SAME
+ * ordering (.find over the same queue) — "it just picks one figure", no picker.
+ * Ownership/eligibility: the massive figure's controller (pending.playerNum) is the
+ * Crush player; the "holds Crush in hand" check is against that player's CC hand.
+ * The card is consumed here (one copy per qualifying end-of-move). No-op (and no
+ * card consumed) when the moving figure is not MASSIVE, the controller has no Crush
+ * in hand, or there is no SMALL enemy in the ending footprint.
  */
 export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
   const { client, logGameAction } = ctx;
@@ -1275,7 +1285,10 @@ export async function _applyCrushBeforePush(game, ctx, pending, dispPending) {
   const moverKw = (dcEffects[dcNameFromFigureKey(pending.figureKey)]?.keywords || [])
     .map((k) => String(k).toUpperCase());
   if (!moverKw.includes('MASSIVE')) return;
-  // 3. Find the first SMALL enemy figure in the ending footprint (enemyQueue).
+  // 3. Pick ONE SMALL enemy figure the SAME deterministic way Stampede orders its
+  //    queue: the FIRST SMALL figure in dispPending.enemyQueue (same iteration
+  //    order Stampede damages over). No interactive picker — "it just picks one
+  //    figure" (alexanbv 2026-06-20).
   const oppPN = movingPN === 1 ? 2 : 1;
   const _isSmall = (fk) => {
     const kw = (dcEffects[dcNameFromFigureKey(fk)]?.keywords || []).map((k) => String(k).toUpperCase());

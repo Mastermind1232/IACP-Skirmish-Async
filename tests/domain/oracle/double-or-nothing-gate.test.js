@@ -17,7 +17,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { _offerDoubleOrNothing, handleDonGate } from '../../../src/handlers/combat.js';
+import { _offerDoubleOrNothing, handleDonGate, _driveGateOrOfferToughLuck, handleToughLuckGate } from '../../../src/handlers/combat.js';
 import { rerollDie } from '../../../src/engine/combat-reroll.js';
 
 const thread = { send: async () => ({}) };
@@ -150,5 +150,80 @@ describe('Double or Nothing post-reroll Double/Cancel/Decline gate', () => {
     assert.equal(posted, false, 'def-side DON ignores an attack-die reroll');
     // Arm NOT consumed (the matching defense reroll may still come).
     assert.equal(game.doubleMatchingIconsOnReroll.side, 'def');
+  });
+});
+
+// ── alexanbv 2026-06-20 ordering ruling ──────────────────────────────────────
+// "Tough Luck should prompt immediately after the reroll, BEFORE the
+// double/cancel option." Pin the post-reroll sequence:
+//   reroll → Tough Luck offer → (resolve) → Double/Cancel offer → continue.
+describe('post-reroll order: Tough Luck FIRST, then Double or Nothing', () => {
+  function makeCapturingThread(log) {
+    return { send: async (payload) => { log.push(typeof payload === 'string' ? payload : (payload?.content ?? '')); return {}; } };
+  }
+  function orderGame() {
+    return {
+      gameId: 'g-ord',
+      gameId_: 'g-ord',
+      player1Id: 'A', // attacker + DON controller
+      player2Id: 'D', // defender, holds Tough Luck
+      doubleMatchingIconsOnReroll: { playerNum: 1, side: 'atk' },
+      // Tough Luck reacts to an ATTACK-die reroll → defender (P2).
+      player2CcHand: ['Tough Luck'],
+      pendingCombat: {
+        gameId: 'g-ord',
+        attackerPlayerNum: 1,
+        defenderPlayerNum: 2,
+        combatThreadId: 'thr-ord',
+        attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 1 }],
+        defenseDiceResults: [{ color: 'white', block: 2, evade: 1, dodge: false }],
+        _lastRerolledDie: { pool: 'attack', index: 0, prevSymbols: 4, newSymbols: 4 },
+      },
+    };
+  }
+  const ctx = (game, thr) => ({
+    getGame: () => game, saveGames: () => {}, replyIfGameEnded: async () => false,
+  });
+  // Inject our capturing thread by overriding fetchCombatThread indirectly: the
+  // driver/handlers fetch the thread by combatThreadId; we instead pass our thread
+  // straight into _driveGateOrOfferToughLuck, and for the gate handler we rely on
+  // its own fetch returning a no-op (its sends are captured separately).
+
+  it('Tough Luck is offered FIRST (Double or Nothing not yet pending)', async () => {
+    const game = orderGame();
+    const combat = game.pendingCombat;
+    const log = [];
+    const thr = makeCapturingThread(log);
+    await _driveGateOrOfferToughLuck('rerolls', thr, game, combat, ctx(game, thr));
+    // Tough Luck prompt posted; DON NOT yet pending.
+    assert.ok(log.some((m) => m.includes('Tough Luck')), 'Tough Luck offered first');
+    assert.ok(!log.some((m) => m.includes('Double or Nothing')), 'DON not offered before Tough Luck resolves');
+    assert.ok(combat._pendingToughLuck, 'Tough Luck gate pending');
+    assert.equal(combat._pendingDoubleOrNothing, undefined, 'DON gate NOT pending yet');
+    assert.equal(combat._lastRerolledDie._toughLuckOffered, true, 'TL marked offered, die marker kept alive for DON');
+  });
+
+  it('after Tough Luck SKIP, Double or Nothing is offered next', async () => {
+    const game = orderGame();
+    const combat = game.pendingCombat;
+    const log = [];
+    const thr = makeCapturingThread(log);
+    // Step 1: Tough Luck offered.
+    await _driveGateOrOfferToughLuck('rerolls', thr, game, combat, ctx(game, thr));
+    assert.ok(combat._pendingToughLuck, 'TL pending after step 1');
+    // Step 2: defender SKIPS Tough Luck → handler re-enters the driver → DON offered.
+    const skipInteraction = {
+      customId: 'tlgate_skip_g-ord',
+      user: { id: 'D' },
+      client: {},
+      message: { edit: async () => ({}) },
+      deferUpdate: async () => ({}),
+      followUp: async () => ({}),
+    };
+    await handleToughLuckGate(skipInteraction, ctx(game, thr));
+    // Now DON must be pending (offered AFTER Tough Luck resolved).
+    assert.equal(combat._pendingToughLuck, undefined, 'TL cleared after skip');
+    assert.ok(combat._pendingDoubleOrNothing, 'Double or Nothing offered after Tough Luck resolves');
+    assert.equal(combat._pendingDoubleOrNothing.playerNum, 1, 'DON offered to the controller (P1)');
   });
 });

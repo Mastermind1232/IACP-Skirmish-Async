@@ -321,19 +321,30 @@ export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
  * PAUSES (handleToughLuckGate re-drives). Otherwise drive the window normally.
  * The single place the reroll → Tough Luck reaction is triggered.
  */
-async function _driveGateOrOfferToughLuck(window, thread, game, combat, ctx) {
+export async function _driveGateOrOfferToughLuck(window, thread, game, combat, ctx) {
   if (window === 'rerolls' && combat?._lastRerolledDie) {
     const last = combat._lastRerolledDie;
     const { pool, index } = last;
-    // Double or Nothing reaction (CSV row 625): when the die JUST rerolled by a
-    // Double or Nothing reroll has the SAME number of symbols as before, its
-    // controller MAY double OR cancel that die's results. Offer the interactive
-    // Double/Cancel/Decline prompt FIRST (it modifies the result the opponent
-    // would then react to with Tough Luck). If a window is posted, PAUSE — the
-    // dongate_* handler applies the choice and resumes the rerolls window.
+    // Post-reroll reaction ORDER (alexanbv 2026-06-20 ruling): "Tough Luck should
+    // prompt immediately after the reroll, BEFORE the double/cancel option."
+    //   1) Tough Luck FIRST — the opponent may remove the rerolled die's result.
+    //   2) Double or Nothing SECOND — only after Tough Luck resolves (used or
+    //      skipped) is the controller offered Double/Cancel on the (post-TL) die.
+    //   3) then continue the rerolls window.
+    // We keep combat._lastRerolledDie alive across the Tough Luck gate (marking
+    // _toughLuckOffered) so this driver, when re-entered after Tough Luck resolves
+    // (skip path or removal-resume), skips straight to the Double/Nothing offer
+    // with the CORRECT post-Tough-Luck die state.
+    if (!last._toughLuckOffered) {
+      last._toughLuckOffered = true;
+      if (await _offerToughLuck(game, combat, ctx, thread, pool, index)) return;
+    }
+    // Tough Luck resolved (or not applicable): now offer Double or Nothing. Its
+    // symbol-count comparison reads last.prevSymbols/newSymbols (captured at
+    // reroll time); if Tough Luck removed the die the controller may still
+    // double/cancel the (now-zeroed) result per the same gate.
     if (await _offerDoubleOrNothing(game, combat, ctx, thread, pool, index, last)) return;
     delete combat._lastRerolledDie;
-    if (await _offerToughLuck(game, combat, ctx, thread, pool, index)) return;
   }
   await _driveGatePath(window, thread, game, combat, ctx);
 }
@@ -431,12 +442,10 @@ export async function handleDonGate(interaction, ctx) {
   combat.doubleOrNothingApplied = true;
   game.doubleMatchingIconsOnReroll = null;
   delete combat._pendingDoubleOrNothing;
-  // Opponent may still react to the (now modified) rerolled die with Tough Luck.
-  const last = combat._lastRerolledDie;
-  if (last) {
-    delete combat._lastRerolledDie;
-    if (await _offerToughLuck(game, combat, ctx, thread, last.pool, last.index)) { saveGames?.(game.gameId); return; }
-  }
+  // Tough Luck has ALREADY been offered (it now precedes Double or Nothing per the
+  // alexanbv 2026-06-20 ordering ruling); the rerolled-die marker is consumed and
+  // we simply resume the rerolls window.
+  delete combat._lastRerolledDie;
   await _driveGatePath('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
@@ -929,6 +938,15 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
   // Attack gate CC: re-drive the paused gate (return to that phase's options).
   const cfg = _GATE_WINDOWS[pend.window];
   if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
+  // Tough Luck removal-resume: if a rerolled-die marker is still live with Tough
+  // Luck already offered, route through the post-reroll driver so Double or Nothing
+  // is offered next (BEFORE the rerolls window resumes), per the 2026-06-20 ordering
+  // ruling. The DON symbol comparison reads the (now post-Tough-Luck) die state.
+  if (pend.window === 'rerolls' && combat._lastRerolledDie?._toughLuckOffered) {
+    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
   await _driveGatePath(pend.window, thread, game, combat, ctx);
 }
 
@@ -2634,10 +2652,12 @@ export async function handleToughLuckGate(interaction, ctx) {
     saveGames?.(game.gameId);
     return;
   }
-  // Skip (or the die vanished) — no play, no counter-window; resume the rerolls window.
+  // Skip (or the die vanished) — no play, no counter-window. Tough Luck has now
+  // resolved, so re-enter the post-reroll driver: it will offer Double or Nothing
+  // next (combat._lastRerolledDie still flags _toughLuckOffered), then resume.
   if (!isRemove) await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
   delete combat._pendingToughLuck;
-  await _driveGatePath('rerolls', thread, game, combat, ctx);
+  await _driveGateOrOfferToughLuck('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
 
