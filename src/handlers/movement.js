@@ -11,12 +11,13 @@ import { reduceHp, dcNameFromFigureKey, getMaxPowerTokens, grantPowerTokens } fr
 import { markMapDirty, setFigureMp } from '../game/game-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
-import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum, pushFigure } from '../game/player-helpers.js';
+import { getDcList, getDcMessageIds, getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 import { getImmediateStepSpaces } from '../game/movement.js';
 import { isForcedStepByStep } from '../game/forced-step-movement.js';
+import { applyHopOnPush } from '../game/hop-on.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { setPendingRushPush, setPendingShoulderRush, setPendingMassivePush, clearPendingMassivePush, setPendingDioFollow, clearPendingDioFollow } from '../game/interrupts.js';
@@ -1517,6 +1518,58 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   // into the MASSIVE push framework — each displaced enemy in Bantha's
   // final footprint takes 1 Damage BEFORE being pushed. Implementation
   // moved to `_runMassiveDisplacement` in move-x-handler.js.
+  // Hop On! (Kuiil) — on-enter push during movement (alexanbv 2026-06-21).
+  // While a Hop On designation is active for the moving figure, each time
+  // Kuiil's footprint ENTERS the designated figure's space (this step's commit),
+  // push that figure 1 space in Kuiil's direction of travel — the space beyond
+  // it along the move — so the space is vacated and Kuiil occupies it. The
+  // designation persists for the rest of the activation, so repeated entries
+  // (Kuiil chasing the figure he keeps pushing) chain naturally. Kuiil is forced
+  // step-by-step while designated (forced-step-movement.js), so each entry is a
+  // discrete, detectable single-space step.
+  {
+    const _hopDesigKey = game.hopOnDesignated?.[figureKey];
+    if (_hopDesigKey && startCoord && newTopLeft && startCoord !== newTopLeft) {
+      const _hopDesigPos = game.figurePositions?.[playerNum]?.[_hopDesigKey];
+      if (_hopDesigPos) {
+        const _hopDesigDc = dcNameFromFigureKey(_hopDesigKey);
+        const _hopDesigSize = game.figureOrientations?.[_hopDesigKey] || getFigureSize(_hopDesigDc);
+        // Board for push-destination validation: exclude BOTH Kuiil and the
+        // designated figure from the occupied set so the figure can be pushed
+        // into a space neither of them blocks.
+        const _hopBoard = getBoardStateForMovement(game, figureKey);
+        const _hopOcc = new Set(_hopBoard?.occupiedSet || []);
+        for (const c of getNormalizedFootprint(_hopDesigPos, _hopDesigSize)) _hopOcc.delete(String(c).toLowerCase());
+        // Push the designated figure via the game-layer applyHopOnPush (which
+        // performs the pushFigure write) — the handler layer must not call
+        // pushFigure directly (CRR-PSH-003 voluntary-exit invariant).
+        const _hopRes = applyHopOnPush(game, playerNum, _hopDesigKey, {
+          kuiilStartCoord: startCoord,
+          kuiilNewCoord: newTopLeft,
+          kuiilSize: newSize,
+          designatedSize: _hopDesigSize,
+          spacesSet: _hopBoard?.spacesSet || new Set(),
+          occupiedSet: _hopOcc,
+          blockingSet: _hopBoard?.blockingSet || new Set(),
+        });
+        if (_hopRes.entered && _hopRes.pushed) {
+          await logGameAction(
+            game, client,
+            `**Hop On!** — **${displayName}** entered **${_hopDesigDc}**'s space (${String(_hopRes.fromPos).toUpperCase()}); pushed it 1 space to **${String(_hopRes.toPos).toUpperCase()}**.`,
+            { phase: 'ROUND', icon: 'move' },
+          );
+        } else if (_hopRes.entered && !_hopRes.pushed) {
+          // Entered but no legal push (blocked / off-board). Kuiil still occupies
+          // the space (engine shares it transiently); the figure stays put.
+          await logGameAction(
+            game, client,
+            `**Hop On!** — **${displayName}** entered **${_hopDesigDc}**'s space but it could not be pushed (no legal space ahead).`,
+            { phase: 'ROUND', icon: 'move' },
+          );
+        }
+      }
+    }
+  }
   // Attached (Dio): when Iden Versio exits Dio's space during movement, Dio may move up to 1 space
   {
     const _attachedTrigger = detectAttachedTrigger(game, playerNum, meta.dcName, startCoord, newTopLeft, path);

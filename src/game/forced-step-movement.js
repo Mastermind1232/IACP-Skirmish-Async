@@ -31,3 +31,24 @@ const FORCED_STEP_BY_STEP_DCS = new Set([
 export function isForcedStepByStep(dcName) {
   return FORCED_STEP_BY_STEP_DCS.has(dcName);
 }
+
+/**
+ * Figure-aware variant. Returns true when this specific figure must move one
+ * space at a time, accounting for DYNAMIC per-figure step-by-step conditions in
+ * addition to the static DC allowlist.
+ *
+ * Dynamic case — Kuiil "Hop On!" (alexanbv 2026-06-21): while a Hop On
+ * designation is active for this figure (game.hopOnDesignated[figureKey]),
+ * Kuiil must move step-by-step so the move handler can detect each discrete
+ * ENTRY into the designated figure's space and fire the 1-space push there.
+ *
+ * @param {string} dcName - the moving figure's DC name (meta.dcName)
+ * @param {object} [game] - game state (for dynamic conditions)
+ * @param {string} [figureKey] - the moving figure's key (e.g. "Kuiil-1-0")
+ * @returns {boolean} true if this figure must move one space at a time
+ */
+export function isForcedStepByStepForFigure(dcName, game, figureKey) {
+  if (FORCED_STEP_BY_STEP_DCS.has(dcName)) return true;
+  if (game && figureKey && game.hopOnDesignated && game.hopOnDesignated[figureKey]) return true;
+  return false;
+}

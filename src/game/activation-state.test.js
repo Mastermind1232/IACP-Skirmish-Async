@@ -40,6 +40,13 @@ describe('cleanupActivation', () => {
     }
   });
 
+  it('clears Kuiil Hop On! designation at end of activation (per-figure, this-activation scope)', () => {
+    const game = { hopOnDesignated: { 'Kuiil-1-0': 'Bodhi Rook-1-0', 'Other-1-0': 'X-1-0' } };
+    cleanupActivation(game, 'msg1', 1, ['Kuiil-1-0']);
+    assert.strictEqual(game.hopOnDesignated['Kuiil-1-0'], undefined, 'designation cleared for the ending figure');
+    assert.strictEqual(game.hopOnDesignated['Other-1-0'], 'X-1-0', 'another figure\'s designation preserved');
+  });
+
   it('deletes playerNum-keyed entries', () => {
     const game = {};
     for (const key of ACTIVATION_PLAYERNUM_FLAGS) {

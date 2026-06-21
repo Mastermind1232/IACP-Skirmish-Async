@@ -16,7 +16,7 @@ import { bottomLeftCoord, edgeKey, normalizeCoord, getFootprintCells } from '../
 import { countSpaces } from '../game/spatial.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces, getImmediateStepSpaces } from '../game/movement.js';
-import { isForcedStepByStep } from '../game/forced-step-movement.js';
+import { isForcedStepByStepForFigure } from '../game/forced-step-movement.js';
 import { COLORS } from '../discord/colors.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
@@ -2294,11 +2294,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
       }
       game.moveInProgress = game.moveInProgress || {};
       const moveKey = `${msgId}_${figureIndex}`;
-      // Forced step-by-step DCs (e.g. Iden Versio + Dio) must move one space
-      // at a time so a per-step follow/interrupt trigger fires after EACH
-      // step (alexanbv 2026-06-21). Start in step-by-step mode and show only
+      // Forced step-by-step figures (e.g. Iden Versio + Dio; or Kuiil while a
+      // Hop On designation is active) must move one space at a time so a
+      // per-step follow/interrupt/push trigger fires after EACH step
+      // (alexanbv 2026-06-21). Start in step-by-step mode and show only
       // immediate neighbours.
-      const forcedStep = isForcedStepByStep(meta.dcName);
+      const forcedStep = isForcedStepByStepForFigure(meta.dcName, game, figureKey);
       // Show all reachable cells directly — no MP pre-selection step.
       // cache.cells only stores topLeft cells, so no filtering needed.
       const isMultiTile = profile.size && profile.size !== '1x1';
@@ -3767,9 +3768,10 @@ export async function handlePounceSpacePick(interaction, ctx) {
     return;
   }
 
-  // Iterative space choice (Kuiil Hop On!): the resolver pushed the figure and
-  // Kuiil followed; if MP remain it returns another requiresSpaceChoice to push
-  // again. Re-prompt the next push pick with a Skip button to stop.
+  // Iterative space choice: a resolver pushed a figure and, if more pushes
+  // remain, returns another requiresSpaceChoice to push again. Re-prompt the
+  // next push pick with a Skip button to stop. (Kuiil's Hop On no longer uses
+  // this path — it now designates only; its pushes fire during movement.)
   if (!result.applied && result.requiresSpaceChoice && Array.isArray(result.validSpaces) && result.validSpaces.length > 0) {
     const figureIndex = pending.figureIndex;
     // Refresh the board so Kuiil's / the figure's new positions are visible.
@@ -3885,16 +3887,10 @@ export async function handlePounceSkipPush(interaction, ctx) {
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the activating player can skip the push.')) return;
   // Damage was already applied during the rollOneDie phase 2 (when the die
   // was rolled). Skipping just declines the optional push and finalizes.
-  // For Kuiil Hop On! iterations, Skip simply STOPS the iterative loop —
-  // pushes already resolved stay; clear the Hop On tracking state.
-  const wasHopOn = !!game.pendingHopOn;
-  if (game.pendingHopOn) delete game.pendingHopOn;
   delete game.pendingPounceSpaceChoice[msgId];
   if (Object.keys(game.pendingPounceSpaceChoice || {}).length === 0) delete game.pendingPounceSpaceChoice;
   await interaction.message.edit({
-    content: wasHopOn
-      ? `${interaction.message.content}\n\n✅ **Hop On! ended** — Kuiil stopped pushing.`
-      : `${interaction.message.content}\n\n✅ **Push declined** — ${pending.targetFigureKey ? `target stays in place` : `no push`}.`,
+    content: `${interaction.message.content}\n\n✅ **Push declined** — ${pending.targetFigureKey ? `target stays in place` : `no push`}.`,
     components: [],
   }).catch(discordCatch);
   if (logGameAction) {
