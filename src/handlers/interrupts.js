@@ -1224,6 +1224,75 @@ async function _postAphraExcavationPlayButton(game, client) {
   }
 }
 
+// ── 13b. Last Wielder of the Darksaber (Bo-Katan Kryze, start-of-round) ──────
+// "At the start of the round, you may attach [The Darksaber] to this group."
+// Posted by round.js (_postLastWielderClaimPrompt) only when The Darksaber is
+// currently attached to a DIFFERENT DC owned by the same player. On Claim, move
+// the "The Darksaber" attachment string from the source DC's attachment array
+// onto Bo-Katan's, then refresh both DC attachment messages. The Darksaber is
+// already readied by the start-of-round SU ready pass, so no exhaust handling.
+export async function handleLastWielderDarksaber(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, updateAttachmentMessageForDc } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const isSkip = interaction.customId.startsWith('last_wielder_skip_');
+  // claim: last_wielder_claim_{gameId}_{playerNum}_{boMsgId}_{sourceMsgId}
+  // skip:  last_wielder_skip_{gameId}_{playerNum}
+  const suffix = isSkip
+    ? parseCustomId(interaction.customId, 'last_wielder_skip_')
+    : parseCustomId(interaction.customId, 'last_wielder_claim_');
+  const parts = suffix.split('_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the DC owner may choose.')) return;
+
+  if (isSkip) {
+    await interaction.message.edit({ content: '🗡️ **Last Wielder of the Darksaber** — skipped (The Darksaber stays where it is).', components: [] }).catch(discordCatch);
+    await logGameAction(game, client, '🗡️ **Last Wielder of the Darksaber** — skipped.', { phase: 'ROUND', icon: 'round' });
+    await resolveStartOfRoundEffect(game, ctx);
+    saveGames(game.gameId);
+    return;
+  }
+
+  const boMsgId = parts[2];
+  const sourceMsgId = parts[3];
+  const attKey = dcAttachmentsKey(playerNum);
+  game[attKey] = game[attKey] || {};
+  const atts = game[attKey];
+  const sourceList = atts[sourceMsgId] || [];
+  const idx = sourceList.findIndex((n) => cardNameIncludes([n], 'The Darksaber'));
+  // Defend against state drift (Darksaber moved/defeated between post and click).
+  if (idx < 0 || cardNameIncludes(atts[boMsgId], 'The Darksaber')) {
+    await interaction.message.edit({ content: '🗡️ **Last Wielder of the Darksaber** — The Darksaber is no longer claimable.', components: [] }).catch(discordCatch);
+    await resolveStartOfRoundEffect(game, ctx);
+    saveGames(game.gameId);
+    return;
+  }
+  // Move the attachment string from source DC → Bo-Katan's DC.
+  const [card] = sourceList.splice(idx, 1);
+  if (sourceList.length === 0) delete atts[sourceMsgId];
+  atts[boMsgId] = atts[boMsgId] || [];
+  atts[boMsgId].push(card);
+
+  // Refresh both DC attachment displays (source may now be empty → message
+  // deleted; Bo-Katan gains the embed).
+  if (updateAttachmentMessageForDc) {
+    await updateAttachmentMessageForDc(game, playerNum, sourceMsgId, client).catch(discordCatch);
+    await updateAttachmentMessageForDc(game, playerNum, boMsgId, client).catch(discordCatch);
+  }
+
+  const dcList = getDcList(game, playerNum) || [];
+  const msgIds = getDcMessageIds(game, playerNum) || [];
+  const boDc = dcList[msgIds.indexOf(boMsgId)];
+  const boLabel = boDc?.displayName || boDc?.dcName || 'Bo-Katan Kryze';
+  await interaction.message.edit({ content: `🗡️ **Last Wielder of the Darksaber** — **The Darksaber** attached to **${boLabel}**.`, components: [] }).catch(discordCatch);
+  await logGameAction(game, client, `🗡️ **Last Wielder of the Darksaber** — <@${interaction.user.id}> attached **The Darksaber** to **${boLabel}**.`, { phase: 'ROUND', icon: 'round' });
+  await resolveStartOfRoundEffect(game, ctx);
+  saveGames(game.gameId);
+  return;
+}
+
 // ── 14. Driven by Hatred (Darth Vader EOR) ──────────────────────────────────
 // Per alexanbv 2026-05-10: choice (Force Choke / Attack / Skip) happens
 // AFTER the 2-space move-X picker drains, not before. Top-level button is

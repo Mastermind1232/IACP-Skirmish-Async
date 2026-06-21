@@ -1353,6 +1353,14 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
           await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
         }
 
+        // Last Wielder of the Darksaber (Bo-Katan Kryze): "At the start of the
+        // round, you may attach [The Darksaber] to this group." If The Darksaber
+        // is currently attached to ANOTHER of this player's DCs, Bo-Katan's owner
+        // may claim it onto her group. Optional → picker with Skip.
+        if (sIds.includes('last_wielder_darksaber_bokatan')) {
+          await _postLastWielderClaimPrompt(game, gameId, playerNum, dc, msgIds[i], logGameAction, client);
+        }
+
         // Programming Override (4-LOM): choose a TRAIT at start of round.
         // Suppressed if Preservation Protocol was played on this 4-LOM —
         // PP rule says "Until the end of the game, you lose Programming
@@ -1765,6 +1773,52 @@ export async function handleEndStartOfRound(interaction, ctx) {
 }
 
 // ── Helpers: Force Slow & Excavation pickers (shared by handleEndEndOfRound + handleEndStartOfRound) ──
+
+/**
+ * Last Wielder of the Darksaber (Bo-Katan Kryze) start-of-round claim prompt.
+ *
+ * Bo-Katan may attach "The Darksaber" to her group at the start of the round.
+ * If The Darksaber is currently attached to a DIFFERENT DC owned by the same
+ * player, post an optional (Claim / Skip) prompt to Bo-Katan's owner. On claim,
+ * the attachment string is moved off the source DC's attachment array and onto
+ * Bo-Katan's. Nothing to do if The Darksaber is already on Bo-Katan or not in
+ * play. (The Darksaber rides along with army-build attachment; it is readied at
+ * round start via the SU ready pass, so no exhaust handling is needed here.)
+ *
+ * @param {string} boMsgId - Bo-Katan's DC message id (claim target).
+ */
+async function _postLastWielderClaimPrompt(game, gameId, playerNum, dc, boMsgId, logGameAction, client) {
+  if (!boMsgId) return;
+  const atts = getDcAttachments(game, playerNum) || {};
+  // Already on Bo-Katan → nothing to claim.
+  if (cardNameIncludes(atts[boMsgId], 'The Darksaber')) return;
+  // Find the source DC (same player) that currently holds The Darksaber.
+  const msgIds = getDcMessageIds(game, playerNum) || [];
+  const dcList = getDcList(game, playerNum) || [];
+  let sourceMsgId = null;
+  for (let j = 0; j < msgIds.length; j++) {
+    const mid = msgIds[j];
+    if (!mid || mid === boMsgId) continue;
+    if (dcList[j]?.defeated) continue;
+    if (cardNameIncludes(atts[mid], 'The Darksaber')) { sourceMsgId = mid; break; }
+  }
+  if (!sourceMsgId) return; // not attached elsewhere → nothing to claim
+  const ownerId = getPlayerId(game, playerNum);
+  const sourceDc = dcList[msgIds.indexOf(sourceMsgId)];
+  const sourceLabel = sourceDc?.displayName || sourceDc?.dcName || 'another group';
+  game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
+  const btns = [
+    new ButtonBuilder().setCustomId(`last_wielder_claim_${gameId}_${playerNum}_${boMsgId}_${sourceMsgId}`).setLabel('Claim The Darksaber').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`last_wielder_skip_${gameId}_${playerNum}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  ];
+  _stashSorActions(game, btns, 'Last Wielder of the Darksaber', playerNum);
+  const rows = chunkButtonsToRows(btns);
+  await logGameAction(game, client, `🗡️ **Last Wielder of the Darksaber** — <@${ownerId}>, **The Darksaber** is attached to **${sourceLabel}**. You may attach it to **${dc.displayName || dc.dcName}** instead.`, {
+    phase: 'ROUND', icon: 'round',
+    components: rows,
+    allowedMentions: { users: [ownerId] },
+  });
+}
 
 async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client) {
   const ownerId = getPlayerId(game, playerNum);

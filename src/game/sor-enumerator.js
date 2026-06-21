@@ -26,6 +26,7 @@ const SOR_ABILITIES = [
   { id: 'programming_override_4lom', label: 'Programming Override' },
   { id: 'shift_clawdite_elite', label: 'Shift' },
   { id: 'shift_clawdite_reg', label: 'Shift' },
+  { id: 'last_wielder_darksaber_bokatan', label: 'Last Wielder of the Darksaber' },
 ];
 const SOR_ABILITY_IDS = new Set(SOR_ABILITIES.map((a) => a.id));
 const SOR_LABEL = Object.fromEntries(SOR_ABILITIES.map((a) => [a.id, a.label]));

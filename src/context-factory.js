@@ -359,6 +359,10 @@ const CONTEXT_GROUPS = {
     'sendPhaseGateMessages',
     'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
     'computeSpacesReachable',
+    // Last Wielder of the Darksaber (handleLastWielderDarksaber): moving the
+    // Darksaber attachment between DCs at start of round needs the attachment
+    // message refresher for both the source and Bo-Katan's DC.
+    'updateAttachmentMessageForDc',
   ],
 
   requests: [
