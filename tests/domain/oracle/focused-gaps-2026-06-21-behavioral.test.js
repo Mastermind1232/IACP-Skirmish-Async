@@ -29,6 +29,7 @@ import {
 import { normalizeCoord } from '../../../src/game/coords.js';
 import { getFigureSize, getDcStats } from '../../../src/data-loader.js';
 import { getFastLearnerPickerEligibility } from '../../../src/game/unique-figure-ccs.js';
+import { isCcPlayLegalByRestriction } from '../../../src/game/cc-timing.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // #1/#2/#3 — getInnateRerollAbilities de-dup (named reroll = exactly 1 entry)
@@ -292,5 +293,53 @@ describe('Fast Learner picker prompts only when both are on the board', () => {
     const g = flGame({ 'The Armorer-1-0': 'a1', 'Mara Jade-1-0': 'b1' });
     g.roundFigureAbilityUsed['Mara Jade_fast_learner'] = true;
     assert.equal(getFastLearnerPickerEligibility(g, 1, 'Mandalorian Steel').shouldPrompt, false);
+  });
+});
+
+// isCcPlayLegalByRestriction: a unique-figure CC's named figure must be ALIVE ON
+// THE BOARD to satisfy the restriction "as the named figure". A defeated named
+// figure (still in the army dcList) must route the play through Mara Jade's Fast
+// Learner (which is then consumed). alexanbv 2026-06-21.
+describe('isCcPlayLegalByRestriction — unique-figure-CC board-presence gate', () => {
+  function g(dcList, positions) {
+    return {
+      gameId: 't', p1DcList: dcList, p2DcList: [],
+      figurePositions: { 1: positions, 2: {} }, roundFigureAbilityUsed: {},
+    };
+  }
+
+  it('(a) named figure on board, no Mara → legal, no fastLearner', () => {
+    const r = isCcPlayLegalByRestriction(g(['The Armorer'], { 'The Armorer-1-0': 'x' }), 1, 'Mandalorian Steel');
+    assert.equal(r.legal, true);
+    assert.ok(!r.fastLearner);
+  });
+
+  it('(b) named figure + Mara both on board → legal (picker handles choice), no fastLearner flag', () => {
+    const r = isCcPlayLegalByRestriction(
+      g(['The Armorer', 'Mara Jade'], { 'The Armorer-1-0': 'x', 'Mara Jade-1-0': 'y' }), 1, 'Mandalorian Steel');
+    assert.equal(r.legal, true);
+    assert.ok(!r.fastLearner);
+  });
+
+  it('(c) named figure DEFEATED (in dcList, off board) + Mara on board → legal WITH fastLearner', () => {
+    const r = isCcPlayLegalByRestriction(
+      g(['The Armorer', 'Mara Jade'], { 'Mara Jade-1-0': 'y' }), 1, 'Mandalorian Steel');
+    assert.equal(r.legal, true);
+    assert.equal(r.fastLearner, true);
+  });
+
+  it('(d) named figure defeated + no Mara → not legal', () => {
+    const r = isCcPlayLegalByRestriction(g(['The Armorer'], {}), 1, 'Mandalorian Steel');
+    assert.equal(r.legal, false);
+  });
+
+  it('(e) keyword-restricted CC (TROOPER) is UNAFFECTED by board-presence change', () => {
+    // Army has a TROOPER DC but NOTHING on the board: keyword restriction stays
+    // army/keyword based, so the CC is still legal.
+    const r = isCcPlayLegalByRestriction(
+      { gameId: 't', p1DcList: ['74-Z Speeder Bike (Elite)'], p2DcList: [], figurePositions: { 1: {}, 2: {} }, roundFigureAbilityUsed: {} },
+      1, 'Concentrated Fire');
+    assert.equal(r.legal, true);
+    assert.ok(!r.fastLearner);
   });
 });

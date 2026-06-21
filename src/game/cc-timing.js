@@ -525,6 +525,41 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
   // Split on " or " for alternatives (handle quoted names like "\"Iden Versio\" or \"Dio\"")
   const alternatives = playableBy.split(/\s+or\s+/i).map(a => a.trim().replace(/^"|"$/g, '').toLowerCase());
 
+  // Board-presence gate for unique-figure CCs (alexanbv 2026-06-21).
+  // When this card is a UNIQUE-FIGURE CC (registry data/unique-figure-ccs.json),
+  // its named figure must be ALIVE ON THE BOARD to satisfy the restriction "as the
+  // named figure". A defeated named figure is still in the army dcList, but playing
+  // its CC then must route through Mara Jade's Fast Learner (consumed) — handled by
+  // the Fast Learner branch below. We only apply this board check to the
+  // named-figure alternatives of a unique-figure CC; affiliation/keyword
+  // restrictions (e.g. "TROOPER") stay army/keyword based and are unaffected.
+  const _ufcEntry = getUniqueFigureCcEntry(cardName);
+  const _ufcNamedFigs = _ufcEntry
+    ? (_ufcEntry.figures || [_ufcEntry.figure]).map((s) => String(s || '').toLowerCase()).filter(Boolean)
+    : [];
+  // Set of base DC names that have at least one LIVE figure on the board.
+  const _liveDcBases = new Set(
+    Object.entries(game?.figurePositions?.[playerNum] || {})
+      .filter(([, pos]) => pos)
+      .map(([fk]) => getDcBaseName(String(fk).replace(/-\d+-\d+$/, '')).toLowerCase()),
+  );
+  const _dcOnBoard = (baseLower) => {
+    if (!baseLower) return false;
+    if (_liveDcBases.has(baseLower)) return true;
+    for (const l of _liveDcBases) {
+      if (l.includes(baseLower) || baseLower.includes(l)) return true;
+    }
+    return false;
+  };
+  // True iff `altLow` is one of this unique-figure CC's named figures AND `dcBaseLower`
+  // is that named figure (i.e. this match is the named-figure match, not a keyword match).
+  const _isUniqueNamedFigureMatch = (altLow, dcBaseLower) => {
+    if (_ufcNamedFigs.length === 0) return false;
+    const altIsNamed = _ufcNamedFigs.some((n) => altLow === n || altLow.includes(n) || n.includes(altLow));
+    if (!altIsNamed) return false;
+    return _ufcNamedFigs.some((n) => dcBaseLower === n || dcBaseLower.includes(n) || n.includes(dcBaseLower));
+  };
+
   // Detect army-wide DC ability modifiers
   let hasFallenMaster = false;
   let hasDevout = false;
@@ -596,8 +631,16 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
     }
 
     for (const alt of alternatives) {
-      if (alternativeMatchesDc(alt, dcBase.toLowerCase(), String(disp).toLowerCase(), effectiveAffiliation, effectiveKw))
+      if (alternativeMatchesDc(alt, dcBase.toLowerCase(), String(disp).toLowerCase(), effectiveAffiliation, effectiveKw)) {
+        // For a unique-figure CC, the named-figure alternative only satisfies the
+        // restriction when that named figure is ALIVE ON THE BOARD. If it matched
+        // by name but is defeated (off board), do NOT return here — fall through so
+        // the Fast Learner branch can route the play via Mara (consuming FL).
+        if (_isUniqueNamedFigureMatch(alt, dcBase.toLowerCase()) && !_dcOnBoard(dcBase.toLowerCase())) {
+          continue;
+        }
         return { legal: true };
+      }
 
       // Fallen Master override: if alt requires IMPERIAL and DC is FORCE USER, allow
       if (hasFallenMaster && kwLower.includes('force user')) {
