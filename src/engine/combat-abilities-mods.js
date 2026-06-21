@@ -213,14 +213,14 @@ registerCombatAbility({
   },
 });
 
-// Guidance Systems ([Mortar Trooper] attachment) [attacker] — FIX-3 repeatable
-// mods choice. Card text: "While attacking, you may apply -1 Damage and +2
-// Accuracy to the attack results. This ability may be used MULTIPLE TIMES per
-// attack." A mods interactive with NO once-per limit — the gate's re-prompt loop
-// re-offers it each pass, so it can be stacked. Detection: the attacking DC
-// carries the [Mortar Trooper] attachment (Squad Upgrade). Gated to stop when the
-// projected attack Damage would drop below 0 (a -1 Damage with 0 damage is a
-// no-op / shouldn't underflow). Resolver: COMBAT_RESOLVERS.guidance_systems.
+// Guidance Systems ([Mortar Trooper] attachment) [attacker] — mods choice.
+// IACP 2026-06-21 update: "While attacking, you may apply -1 Damage and +2
+// Accuracy to the attack results. LIMIT once per attack." A mods interactive
+// gated to ONCE PER ATTACK (combat._abilityUsedThisAttack key, mirroring Illicit
+// Arms / Charge Generators). Detection: the attacking DC carries the [Mortar
+// Trooper] attachment (Squad Upgrade). Also gated to stop when the projected
+// attack Damage would drop below 0 (a -1 Damage with 0 damage is a no-op /
+// shouldn't underflow). Resolver: COMBAT_RESOLVERS.guidance_systems marks usage.
 // Clobbers the timing-only catalog entry of the same id (per-id last-write).
 export function guidanceSystemsAttached(game, combat) {
   const msgId = combat.attackerMsgId;
@@ -232,11 +232,14 @@ export function guidanceSystemsAttached(game, combat) {
 export function projectedAttackDamage(combat) {
   return (combat.attackRoll?.dmg || 0) + (combat.bonusHits || 0);
 }
+export const GUIDANCE_SYSTEMS_LIMIT_KEY = '[Mortar Trooper]:Guidance Systems';
 registerCombatAbility({
   id: 'guidance_systems', name: 'Guidance Systems', windows: ['mods'], side: 'attacker', kind: 'interactive',
-  // No card/ability/limit params → no once-per mark; offered every pass (multiple/attack).
+  card: '[Mortar Trooper]', ability: 'Guidance Systems', limit: 'once per attack',
   applies: (game, combat) => {
     if (!guidanceSystemsAttached(game, combat)) return false;
+    // IACP 2026-06-21: once per attack — not re-offered after one use.
+    if (combat._abilityUsedThisAttack?.[GUIDANCE_SYSTEMS_LIMIT_KEY]) return false;
     // -1 Damage must not push Damage below 0 — only offer while Damage > 0.
     return projectedAttackDamage(combat) > 0;
   },

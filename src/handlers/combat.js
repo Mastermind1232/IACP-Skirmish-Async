@@ -2037,14 +2037,17 @@ export const COMBAT_RESOLVERS = {
     },
     bonus: (combat) => { combat.bonusBlock = (combat.bonusBlock || 0) + 1; return '+1 Block'; },
   }),
-  // Guidance Systems ([Mortar Trooper] attachment) — FIX-3. -1 Damage + +2
-  // Accuracy, usable MULTIPLE times per attack (no once-per limit; the gate re-
-  // offers it each pass). No sub-choice — clicking applies the trade immediately.
+  // Guidance Systems ([Mortar Trooper] attachment). IACP 2026-06-21: -1 Damage +
+  // +2 Accuracy, LIMIT once per attack. No sub-choice — clicking applies the
+  // trade immediately and marks the once-per-attack limit so it is not re-offered.
   guidance_systems: {
     apply: async (_choice, { combat, thread }) => {
       combat.bonusHits = (combat.bonusHits || 0) - 1;
       combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2;
-      thread?.send('**Guidance Systems** — -1 Damage, +2 Accuracy applied.').catch(discordCatch);
+      combat._abilityUsedThisAttack = combat._abilityUsedThisAttack || {};
+      // Mirror GUIDANCE_SYSTEMS_LIMIT_KEY in combat-abilities-mods.js.
+      combat._abilityUsedThisAttack['[Mortar Trooper]:Guidance Systems'] = true;
+      thread?.send('**Guidance Systems** — -1 Damage, +2 Accuracy applied (once per attack).').catch(discordCatch);
       return undefined;
     },
   },
@@ -8723,7 +8726,7 @@ export async function sendModsYn(thread, game, combat, role, ctx) {
         new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
       );
       await thread.send({
-        content: `**Guidance Systems** — <@${ownerId}> Apply -1 Hit and +2 Accuracy? (May use multiple times.)`,
+        content: `**Guidance Systems** — <@${ownerId}> Apply -1 Hit and +2 Accuracy? (Once per attack.)`,
         components: [_gsRow],
         allowedMentions: { users: [ownerId] },
       }).catch(discordCatch);
@@ -11809,18 +11812,18 @@ export async function handleGuidanceSystems(interaction, ctx) {
   }
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   if (action === 'use') {
+    // IACP 2026-06-21: Guidance Systems is now LIMIT once per attack. Apply the
+    // single -1 Damage / +2 Accuracy trade, mark it complete, and advance to the
+    // mods Y/N — no "use again" loop.
     combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - 1);
     combat.attackRoll.acc = (combat.attackRoll.acc || 0) + 2;
     combat.guidanceSystemsCount = (combat.guidanceSystemsCount || 0) + 1;
-    const gsCount = combat.guidanceSystemsCount;
-    const _gsRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_use`).setLabel('Use again (-1 Damage, +2 Acc)').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`guidance_systems_${gameId}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
-    );
+    combat.guidanceSystemsCompleted = true;
     await interaction.message.edit({
-      content: `**Guidance Systems** — Applied ${gsCount}x (-${gsCount} Hit, +${gsCount * 2} Acc). Current: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge. Use again?`,
-      components: [_gsRow],
+      content: `**Guidance Systems** — Applied (-1 Hit, +2 Acc; once per attack). Final attack: ${combat.attackRoll.acc} acc, ${combat.attackRoll.dmg} dmg, ${combat.attackRoll.surge} surge.`,
+      components: [],
     }).catch(discordCatch);
+    if (thread) await sendModsYn(thread, game, combat, 'attacker');
     saveGames(game.gameId);
   } else {
     // Done — mark complete and advance to next modifier check

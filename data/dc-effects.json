@@ -313,7 +313,7 @@
       "affiliation": "Any"
     },
     "[Mortar Trooper]": {
-      "abilityText": "SHORETROOPER ONLY\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nGuidance Systems: While attacking, you may apply -1 Damage and +2 Accuracy to the attack results. This ability may be used multiple times per attack.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
+      "abilityText": "SHORETROOPER ONLY\n\nApply +1 Accuracy to your attack results.\n\nDouble Action Special (Fire Mission): Perform an attack. You may draw line of sight from any figure in this group, but still measure range from this figure. Apply Blast 1 to the attack results.\n\nGuidance Systems: While attacking, you may apply -1 Damage and +2 Accuracy to the attack results. This ability may be used once per attack.\n\nHaul: While moving, treat blocking and impassable terrain as difficult terrain.",
       "keywords": [
         "TROOPER",
         "HEAVY WEAPON",
@@ -341,7 +341,7 @@
       "affiliation": "Imperial",
       "abilities": [
         "Guidance Systems",
-        "+2 Accuracy"
+        "+1 Accuracy"
       ]
     },
     "[Motivation]": {
@@ -6308,7 +6308,7 @@
         "LEADER"
       ],
       "cost": 6,
-      "health": 10,
+      "health": 11,
       "speed": 4,
       "passives": [
         "Mobile"

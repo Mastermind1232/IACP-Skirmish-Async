@@ -255,14 +255,17 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     assert.equal(find(at('defender', noZt, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard'), undefined);
   });
 
-  // ── FIX-3: Guidance Systems — repeatable; NO once-per limit; stops at Damage 0
-  it('guidance_systems: repeatable (no once-per), gated on the [Mortar Trooper] attachment + Damage>0', () => {
+  // ── IACP 2026-06-21: Guidance Systems — LIMIT once per attack; stops at Damage 0
+  it('guidance_systems: once-per-attack, gated on the [Mortar Trooper] attachment + Damage>0', () => {
     const g = game({ p1DcAttachments: { m: ['[Mortar Trooper]'] } });
     const c = combat({ attackerMsgId: 'm', attackRoll: { dmg: 3 } });
     assert.equal(find(at('attacker', g, c, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
-    // Still offered after a prior use this attack (multiple times per attack).
-    const cUsed = { ...c, _abilityUsedThisAttack: { 'whatever': true } };
-    assert.equal(find(at('attacker', g, cUsed, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
+    // NOT re-offered after a prior use this attack (once per attack).
+    const cUsed = { ...c, _abilityUsedThisAttack: { '[Mortar Trooper]:Guidance Systems': true } };
+    assert.equal(find(at('attacker', g, cUsed, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
+    // An unrelated ability's per-attack mark does NOT block it.
+    const cOther = { ...c, _abilityUsedThisAttack: { 'whatever': true } };
+    assert.equal(find(at('attacker', g, cOther, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
     // Damage already 0 → -1 would underflow → not offered.
     const c0 = combat({ attackerMsgId: 'm', attackRoll: { dmg: 0 }, bonusHits: 0 });
     assert.equal(find(at('attacker', g, c0, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);

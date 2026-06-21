@@ -16,13 +16,15 @@ export const CARDS_PENDING_CHANGE = new Set([
   // CT-1701 STAYS: only Cover Fire is finalized (now once/round, hand-wired);
   //   Barrage is still mid-change, so keep CT-1701 pending to avoid graduating
   //   its possibly-stale CSV rows.
-  '[Mortar Trooper]',     // Guidance Systems
-  '74-Z Speeder Bike',    // Forward Mounted Blasters etc.
+  //   [Mortar Trooper] — innate +1 Acc, Surge +2 Dmg, Surge +2 Acc, Guidance
+  //                      Systems now LIMIT once per attack
+  //   74-Z Speeder Bike — Forward Mounted Blasters "same row" = same LINE
+  //                       (row OR column); already implemented as the inline test
+  //   The Armorer — HP increased 10 → 11
   'CT-1701',              // Barrage still changing (Cover Fire finalized + hand-wired)
   'Yoda',                 // Force Deflection
   'Stimulants',           // changing
   'Wookiee Rage',         // changing
-  'The Armorer',          // changing
   // NOTE: K-2SO STAYS (alexanbv 2026-06-16). The new "KX security droid" is a
   // separate card not yet in the DB — nothing to mark for it.
 ]);
