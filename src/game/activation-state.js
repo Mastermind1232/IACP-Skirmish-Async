@@ -1009,6 +1009,10 @@ const ROUND_NULL_FLAGS = [
   // step-by-step + Stop button + end-of-move MASSIVE displacement).
   'pendingShoulderRush',
   'pendingDioFollow',
+  // Kuiil "Hop On!" iterative enter-and-push tracking (alexanbv 2026-06-21):
+  // set when Kuiil enters a friendly figure's space, consumed/cleared when the
+  // iterative push loop finishes (apply) or is stopped (Skip). Safety-net here.
+  'pendingHopOn',
   // pendingEe3Carbine moved to ROUND_OBJECT_FLAGS 2026-05-05 — same
   // reasoning as pendingVoracious above.
   'pendingRightBackAtYa',

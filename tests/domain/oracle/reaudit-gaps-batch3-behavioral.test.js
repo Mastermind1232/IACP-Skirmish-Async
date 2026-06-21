@@ -59,8 +59,12 @@ describe('Re-audit batch 3: Dark Energy — friendly SMALL target allowed', () =
 // resolves rather than at the moment Kuiil enters the figure's space. The
 // figure-cost <= 8 filter, SMALL filter, and 1-space push distance are tested.
 
-describe('Re-audit batch 3: Kuiil Hop On! — SMALL friendly cost<=8, push 1', () => {
-  function buildGame() {
+// Updated 2026-06-21 (alexanbv): Hop On is now ITERATIVE enter-and-push
+// movement — Kuiil spends MP to MOVE ONTO the figure's space, pushes it 1,
+// FOLLOWS into the vacated space, and may repeat until out of MP. The
+// figure-cost <= 8 + SMALL + friendly filters are preserved.
+describe('Re-audit batch 3: Kuiil Hop On! — iterative enter-and-push (MP-based)', () => {
+  function buildGame({ mp = 3 } = {}) {
     const dcMessageMeta = new Map();
     dcMessageMeta.set('msg_act', { gameId: 'g', playerNum: 1, dcName: 'Kuiil', displayName: 'Kuiil [DG 1]' });
     dcMessageMeta.set('msg_friend', { gameId: 'g', playerNum: 1, dcName: 'Bodhi Rook', displayName: 'Bodhi Rook [DG 1]' });
@@ -70,6 +74,8 @@ describe('Re-audit batch 3: Kuiil Hop On! — SMALL friendly cost<=8, push 1', (
       gameId: 'g', selectedMap: { id: MAP },
       figurePositions: { 1: { 'Kuiil-1-0': ACT, 'Bodhi Rook-1-0': FRIEND, 'Darth Vader-1-0': ENEMY }, 2: {} },
       dcActionsData: { msg_act: { remaining: 1, total: 1, selectedFigure: 0 } },
+      // Mounted grants Kuiil 3 MP at start of activation; Hop On spends from it.
+      movementBank: { msg_act: { perFig: { 0: { total: mp, remaining: mp } } } },
     };
     return { game, dcMessageMeta };
   }
@@ -83,15 +89,60 @@ describe('Re-audit batch 3: Kuiil Hop On! — SMALL friendly cost<=8, push 1', (
     assert.ok(!r.choiceValues.includes('Darth Vader-1-0'), 'cost-18 figure must be filtered (cost <= 8 only)');
   });
 
-  it('Phase 2 offers only 1-space (adjacent) push destinations', () => {
+  it('Phase 1 with no MP returns a no-MP message (Hop On is MP-based)', () => {
+    const { game, dcMessageMeta } = buildGame({ mp: 0 });
+    const r = resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map() });
+    assert.equal(r.applied, false);
+    assert.match(r.manualMessage, /movement points/i);
+  });
+
+  it('Phase 2 ENTERS the figure\'s space and offers only 1-space push destinations', () => {
     const { game, dcMessageMeta } = buildGame();
     const r = resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0' });
     assert.equal(r.requiresSpaceChoice, true);
+    // Kuiil ENTERS Bodhi Rook's space (a2) — always enters the pushed figure's space.
+    assert.equal(game.figurePositions[1]['Kuiil-1-0'], 'a2', 'Kuiil moved onto the figure\'s space');
+    // Entering cost 1 MP (3 → 2).
+    assert.equal(game.movementBank.msg_act.perFig[0].remaining, 2, 'entering the figure\'s space costs 1 MP');
     // Bodhi Rook is on a2 → only its adjacent empty spaces are offered (1-space push).
-    const expectedAdj = new Set(['b2', 'a3', 'b3', 'a1', 'b1']);
+    const expectedAdj = new Set(['b2', 'a3', 'b3', 'a1', 'b1', 'c1', 'c2', 'c3']);
     for (const s of r.validSpaces) {
       assert.ok(expectedAdj.has(s), `push destination ${s} must be adjacent to a2 (1-space push, not 4)`);
     }
+  });
+
+  it('Phase 3 pushes the figure 1 space and Kuiil FOLLOWS into the vacated space', () => {
+    const { game, dcMessageMeta } = buildGame({ mp: 1 }); // only 1 MP → no iteration
+    resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0' });
+    // Kuiil is now on a2 (entered). Push Bodhi to b2.
+    const r = resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0', chosenSpace: 'b2' });
+    assert.equal(r.applied, true, 'no MP left → loop ends, applied');
+    assert.equal(game.figurePositions[1]['Bodhi Rook-1-0'], 'b2', 'figure pushed 1 space to b2');
+    assert.equal(game.figurePositions[1]['Kuiil-1-0'], 'a2', 'Kuiil follows into the space the figure was pushed FROM (a2)');
+    assert.match(r.logMessage, /follows into/i);
+  });
+
+  it('accepts the figure key via targetFigureKey (the space-pick handler round-trip)', () => {
+    const { game, dcMessageMeta } = buildGame({ mp: 1 });
+    resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0' });
+    // Real handler re-invokes with targetFigureKey (not chosenFigureKey) on the space pick.
+    const r = resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), targetFigureKey: 'Bodhi Rook-1-0', chosenSpace: 'b2' });
+    assert.equal(r.applied, true);
+    assert.equal(game.figurePositions[1]['Bodhi Rook-1-0'], 'b2');
+  });
+
+  it('iterates: with MP left, a push returns ANOTHER push choice and Kuiil re-enters the figure\'s NEW space', () => {
+    const { game, dcMessageMeta } = buildGame({ mp: 3 });
+    // Phase 2: enter (3 → 2 MP), Kuiil at a2.
+    resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0' });
+    // Phase 3: push Bodhi a2 → b2; Kuiil follows to a2; MP remains → re-enter b2 (2 → 1 MP), offer next push.
+    const r = resolveAbility('hop_on_kuiil', { game, playerNum: 1, dcMessageMeta, dcHealthState: new Map(), chosenFigureKey: 'Bodhi Rook-1-0', chosenSpace: 'b2' });
+    assert.equal(r.requiresSpaceChoice, true, 'with MP remaining the loop offers another push');
+    assert.equal(game.figurePositions[1]['Bodhi Rook-1-0'], 'b2', 'figure was pushed to b2');
+    assert.equal(game.figurePositions[1]['Kuiil-1-0'], 'b2', 'Kuiil ALWAYS enters the figure\'s (new) space before pushing again');
+    assert.equal(game.movementBank.msg_act.perFig[0].remaining, 1, 're-entering the figure\'s new space spent another MP (2 → 1)');
+    // Every offered destination is adjacent to the figure\'s current space (b2) — 1-space push.
+    assert.ok(r.validSpaces.length > 0, 'further push destinations exist');
   });
 });
 

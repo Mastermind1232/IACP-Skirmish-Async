@@ -13310,53 +13310,149 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: validLabels.map((n) => `Push: ${n}`), choiceValues: validKeys };
   }
 
-  // dcSpecial: hopOnPush (Kuiil Hop On!) — pick friendly SMALL figure, push up to 4 spaces
+  // dcSpecial: hopOnPush (Kuiil "Hop On!") — ITERATIVE enter-and-push movement.
+  //
+  // Designer ruling (alexanbv 2026-06-21):
+  //  - "Hop On always needs to ENTER the space of the figure being pushed."
+  //  - "One can hop on a figure, MOVE ONTO their space, PUSH it 1, MOVE ONTO
+  //     the space they were pushed into, push again, etc. etc. until out of MP."
+  //
+  // So Hop On is a movement-points-based action: Kuiil spends MP to MOVE ONTO
+  // the chosen SMALL friendly figure's space (figures share a space transiently
+  // in this engine's push model), pushes that figure 1 space, FOLLOWS into the
+  // space the figure was pushed FROM, and may repeat (enter the figure's new
+  // space, push again, follow) until out of MP / no legal push / player stops.
+  //
+  // Each iteration costs 1 MP (the move ONTO the figure's space). The push and
+  // the follow-into-vacated-space are part of that single Hop-On move-step.
+  // Filters preserved: target must be a SMALL friendly figure (not MASSIVE/
+  // LARGE) with a figure cost of 8 or less.
   if (entry.type === 'dcSpecial' && entry.hopOnPush) {
-    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenSpace } = context;
+    const { game, playerNum, dcMessageMeta, chosenSpace } = context;
+    // The space-pick handler round-trips the figure key as `targetFigureKey`,
+    // while the figure-pick handler supplies `chosenFigureKey`. Accept either so
+    // Phase 3 (push + iterate) reliably knows which figure is being pushed.
+    const chosenFigureKey = context.chosenFigureKey || context.targetFigureKey || null;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 3: move target figure to chosen space
+
+    const _hopMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    const _hopMeta = _hopMsgId ? dcMessageMeta.get(_hopMsgId) : null;
+    const _hopActKeys = _hopMeta ? getFigureKeysForDcMsg(game, playerNum, _hopMeta) : [];
+    const _hopKuiilKey = _hopActKeys[0] || null; // Kuiil is a single-figure DC
+    // Read/decrement Kuiil's remaining MP from his per-figure sub-bank.
+    const _hopKuiilFigIdx = _hopKuiilKey ? (parseFigureKey(_hopKuiilKey)?.figureIndex ?? 0) : 0;
+    const _hopMpRemaining = () => {
+      const fig = game.movementBank?.[_hopMsgId]?.perFig?.[_hopKuiilFigIdx];
+      return Math.max(0, fig?.remaining ?? 0);
+    };
+    const _hopSpendMp = (n) => {
+      const top = game.movementBank?.[_hopMsgId];
+      const fig = top?.perFig?.[_hopKuiilFigIdx];
+      if (fig) fig.remaining = Math.max(0, (fig.remaining ?? 0) - n);
+    };
+
+    // Build the list of empty adjacent push destinations for the chosen figure.
+    const _hopPushDests = (figureKey) => {
+      const targetPos = game.figurePositions?.[playerNum]?.[figureKey];
+      if (!targetPos) return { error: 'Could not locate target figure position. Push manually.' };
+      const boardState = getBoardStateForMovement(game, null);
+      if (!boardState?.mapSpaces) return { error: 'Push manually (no map data).' };
+      const occ = boardState.occupiedSet;
+      const occArr = occ instanceof Set ? [...occ] : (occ || []);
+      // Kuiil currently occupies the figure's space (he entered it); allow the
+      // figure to be pushed to any empty adjacent space (Kuiil's space is the
+      // figure's own space, so it is not "another figure" blocking).
+      const kuiilPos = _hopKuiilKey ? game.figurePositions?.[playerNum]?.[_hopKuiilKey] : null;
+      const reachable = getReachableSpaces(targetPos, 1, boardState.mapSpaces, occArr);
+      const validSpaces = reachable
+        .map((s) => String(s).toLowerCase())
+        .filter((s) => !occArr.includes(s) || s === String(kuiilPos).toLowerCase());
+      return { validSpaces, targetPos };
+    };
+
+    // Phase 3: a push destination was chosen → push the figure 1 space, then
+    // Kuiil FOLLOWS into the vacated space. Iterate if MP + a legal push remain.
     if (chosenFigureKey && chosenSpace) {
       const targetPn = playerNum; // always friendly
       const { prevPos: oldPos, newPos: destLower } = pushFigure(game, targetPn, chosenFigureKey, chosenSpace) || { prevPos: null, newPos: String(chosenSpace).toLowerCase() };
       const dcName = dcNameFromFigureKey(chosenFigureKey);
 
+      // Kuiil follows into the space the figure was pushed FROM (he was sharing
+      // that space; now he occupies it alone). This realises "MOVE ONTO the
+      // space they were pushed into [for the figure] … follow".
+      let kuiilFollowNote = '';
+      if (_hopKuiilKey && oldPos) {
+        pushFigure(game, playerNum, _hopKuiilKey, oldPos);
+        kuiilFollowNote = ` Kuiil follows into **${String(oldPos).toUpperCase()}**.`;
+      }
+
       const { pathStr, warnings } = computePushPathAndWarnings(game, oldPos, destLower, targetPn);
-      let logMsg = `**Hop On!** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**${pathStr}.`;
+      let logMsg = `**Hop On!** — **${dcName}** pushed from **${String(oldPos || '?').toUpperCase()}** to **${String(chosenSpace).toUpperCase()}**${pathStr}.${kuiilFollowNote}`;
       if (warnings.length > 0) {
         const warnList = warnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         logMsg += `\n⚠️ Exits adjacency to: ${warnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
       logMsg += stashPushPartingBlow(game, chosenFigureKey, targetPn, oldPos, destLower, playerNum);
+
+      // Iterate: if Kuiil still has MP, he can enter the figure's NEW space
+      // (1 MP) and push again. The figure is now 1 space away from Kuiil.
+      if (_hopMpRemaining() > 0) {
+        _hopSpendMp(1); // spend MP to MOVE ONTO the figure's new space
+        // Kuiil enters the figure's (new) space — always enters before pushing.
+        if (_hopKuiilKey) pushFigure(game, playerNum, _hopKuiilKey, destLower);
+        const next = _hopPushDests(chosenFigureKey);
+        if (!next.error && next.validSpaces.length > 0) {
+          return {
+            requiresSpaceChoice: true,
+            validSpaces: next.validSpaces,
+            spaceChoiceLabel: `**Hop On!** — Kuiil entered **${dcName}**'s space (${String(destLower).toUpperCase()}). Push 1 space again (${_hopMpRemaining()} MP left after this), or press Skip to stop:`,
+            chosenFigureKey,
+            targetFigureKey: chosenFigureKey,
+            refreshBoard: true,
+            hopOnIterate: true,
+          };
+        }
+        // No legal push to continue — Kuiil already advanced onto the figure's
+        // space; leave him there (he spent the MP to enter). Note it.
+        logMsg += ` Kuiil entered **${String(destLower).toUpperCase()}** but no further legal push — Hop On ends.`;
+      }
+      if (game.pendingHopOn) delete game.pendingHopOn;
       return { applied: true, logMessage: logMsg, refreshBoard: true };
     }
-    // Phase 2: push the chosen figure exactly 1 space (per spec: "push that figure
-    // 1 space"), into an adjacent empty space. NOTE (deferred-trigger nuance): the
-    // spec gates this push on "when you enter that figure's space during this
-    // activation" — that on-enter interrupt trigger is not wired in this engine, so
-    // Hop On! is offered on-demand when the Special Action resolves rather than at
-    // the moment Kuiil enters the figure's space. Distance is correct (1, not 4).
+
+    // Phase 2: a figure was chosen → Kuiil MOVES ONTO (enters) that figure's
+    // space (1 MP), then is offered the 1-space push.
     if (chosenFigureKey) {
-      const targetPos = game.figurePositions?.[playerNum]?.[chosenFigureKey];
-      if (!targetPos) return { applied: false, manualMessage: 'Could not locate target figure position. Push manually.' };
-      const boardState = getBoardStateForMovement(game, null);
-      if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Push manually (no map data).' };
-      const occ = boardState.occupiedSet;
-      const occArr = occ instanceof Set ? [...occ] : (occ || []);
-      const reachable = getReachableSpaces(targetPos, 1, boardState.mapSpaces, occArr);
-      const validSpaces = reachable.map((s) => String(s).toLowerCase()).filter((s) => !occArr.includes(s));
-      if (!validSpaces.length) return { applied: false, manualMessage: 'No empty adjacent space to push the figure to.' };
-      return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: `**Hop On!** — Push **${dcNameFromFigureKey(chosenFigureKey)}** 1 space:`, chosenFigureKey };
+      if (_hopMpRemaining() <= 0) {
+        return { applied: false, manualMessage: 'Kuiil has no movement points remaining for Hop On! (gain MP via Mounted first).' };
+      }
+      const dests = _hopPushDests(chosenFigureKey);
+      if (dests.error) return { applied: false, manualMessage: dests.error };
+      if (!dests.validSpaces.length) return { applied: false, manualMessage: 'No empty adjacent space to push the figure to.' };
+      // Spend 1 MP and move Kuiil ONTO the figure's space (always enters).
+      _hopSpendMp(1);
+      if (_hopKuiilKey) pushFigure(game, playerNum, _hopKuiilKey, dests.targetPos);
+      game.pendingHopOn = { figureKey: chosenFigureKey, kuiilKey: _hopKuiilKey, msgId: _hopMsgId };
+      return {
+        requiresSpaceChoice: true,
+        validSpaces: dests.validSpaces,
+        spaceChoiceLabel: `**Hop On!** — Kuiil entered **${dcNameFromFigureKey(chosenFigureKey)}**'s space. Push it 1 space (${_hopMpRemaining()} MP left after this):`,
+        chosenFigureKey,
+        targetFigureKey: chosenFigureKey,
+        refreshBoard: true,
+        hopOnIterate: true,
+      };
     }
-    // Phase 1: pick friendly SMALL figure with figure cost 8 or less
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    const meta = msgId ? dcMessageMeta.get(msgId) : null;
-    const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
-    const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
+
+    // Phase 1: pick friendly SMALL figure with figure cost 8 or less.
+    if (_hopMpRemaining() <= 0) {
+      return { applied: false, manualMessage: 'Kuiil has no movement points for Hop On! — gain MP via Mounted (3 MP at start of activation) first.' };
+    }
     const dcEffects = getDcEffects();
     const validKeys = [];
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      if (!pos || actKeys.includes(fk)) continue;
+      if (!pos || _hopActKeys.includes(fk)) continue;
       const dcN = dcNameFromFigureKey(fk);
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());

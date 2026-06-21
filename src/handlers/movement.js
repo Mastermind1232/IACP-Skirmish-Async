@@ -16,6 +16,7 @@ import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { detectPostMoveInterrupts } from '../game/movement-interrupts.js';
 import { getImmediateStepSpaces } from '../game/movement.js';
+import { isForcedStepByStep } from '../game/forced-step-movement.js';
 import { detectAttachedTrigger, applyDioFollow } from '../game/attached-dio-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { setPendingRushPush, setPendingShoulderRush, setPendingMassivePush, clearPendingMassivePush, setPendingDioFollow, clearPendingDioFollow } from '../game/interrupts.js';
@@ -564,6 +565,12 @@ export async function handleMoveAdjustMp(interaction, ctx) {
   }
   const { playerNum, mpRemaining } = moveState;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can adjust.')) return;
+  // Forced step-by-step DCs (Iden Versio + Dio) cannot use the auto A→B path
+  // picker — it would skip the per-step Dio-follow trigger. Refuse a stale click.
+  if (moveState.forcedStepByStep) {
+    await interaction.followUp({ content: 'This figure must move step-by-step (one space at a time).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   // The MP-distance picker is the auto A→B sub-flow (pick N MP → pick a cell
   // exactly N away → auto-path); leaving step-by-step mode here keeps the
   // toggle label consistent.
@@ -626,6 +633,11 @@ export async function handleMoveStepModeToggle(interaction, ctx) {
   }
   const { figureKey, playerNum } = moveState;
   if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the owner can move.')) return;
+  // Forced step-by-step DCs cannot leave step-by-step mode (stale-click guard).
+  if (moveState.forcedStepByStep) {
+    await interaction.followUp({ content: 'This figure must move step-by-step (one space at a time).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
   moveState.stepByStep = !moveState.stepByStep;
   // Drop the current grid (and the distance/MP message) and re-render in the new
   // mode from the figure's current position with its remaining MP.
@@ -683,7 +695,10 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
   // Step-by-step mode shows only immediate one-step neighbours so the player
   // advances a single space at a time; auto mode shows every reachable cell
   // (the pick is then auto-pathed with enemy-space avoidance in handleMovePick).
-  const stepByStep = !!moveState.stepByStep;
+  // Forced step-by-step DCs (Iden Versio + Dio) are locked into step-by-step
+  // so the per-step Dio-follow trigger fires after EACH step.
+  const forcedStep = !!moveState.forcedStepByStep;
+  const stepByStep = forcedStep ? true : !!moveState.stepByStep;
   const newButtonSpaces = stepByStep
     ? getImmediateStepSpaces(newTopLeft, nextBoard, nextProfile, newMp)
     : [...nextCache.cells.keys()];
@@ -701,11 +716,15 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
     }
   }
   const newMoveContextKey = `${meta.gameId}_${moveKey}`;
-  const newModeNote = stepByStep
-    ? `\n👣 **Step-by-step** — pick an adjacent space (one at a time).`
-    : `\n🎯 **Auto** — pick any space; routes A→B avoiding enemy-adjacent spaces when possible.`;
+  const newModeNote = forcedStep
+    ? `\n👣 **Step-by-step** (locked) — pick an adjacent space (one at a time).`
+    : stepByStep
+      ? `\n👣 **Step-by-step** — pick an adjacent space (one at a time).`
+      : `\n🎯 **Auto** — pick any space; routes A→B avoiding enemy-adjacent spaces when possible.`;
   const newMoveHeader = `**Move** — Pick destination (**${newMp}** MP remaining):${newModeNote}${newMultiTileNote}`;
-  const newMoveActionBtns = [
+  // Forced step-by-step suppresses the auto-path picker and the mode toggle so
+  // the player cannot bypass the per-step model.
+  const newMoveActionBtns = forcedStep ? [] : [
     { customId: `move_adjust_mp_${msgId}_${figureIndex}`, label: 'Pick Path Manually', style: ButtonStyle.Secondary },
     _stepModeToggleBtn(msgId, figureIndex, stepByStep),
   ];
@@ -727,10 +746,12 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
   const newActionBtns = newMoveActionBtns.map(b =>
     new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style)
   );
-  const newActionRow = new ActionRowBuilder().addComponents(...newActionBtns);
+  const newActionRowComponents = newActionBtns.length > 0
+    ? [new ActionRowBuilder().addComponents(...newActionBtns)]
+    : [];
   const newFirstPayload = {
     content: `${newMoveHeader}\nChoose a row:`,
-    components: [...newRowBtns.slice(0, 4), newActionRow],
+    components: [...newRowBtns.slice(0, 4), ...newActionRowComponents],
     fetchReply: true,
   };
   if (newMinimap) newFirstPayload.files = [newMinimap];
