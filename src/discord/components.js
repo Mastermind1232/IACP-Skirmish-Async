@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
-import { isDcCompanion, hasChooseASideFlamethrower } from '../data-loader.js';
+import { isDcCompanion, hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { figureActionsRemaining } from '../game/activation-state.js';
 
@@ -1052,6 +1052,11 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _hasWaSlam = !!(_suUpgrades.length && cardNameIncludes(_suUpgrades, 'Wookiee Avenger'));
   const _waSlamUsed = !!game?.wookieeAvengerSlamUsed?.[_figureKeyForOncePerAct];
   const _showWaSlam = _hasWaSlam && !_waSlamUsed;
+  // Jundland Terror free Special Action (CSV row 706): when the chosen figure
+  // has the freeSpecialActionPending marker, ALL of its native special actions
+  // are offered at 0 action cost (one free special, consumed on use). Mirrors
+  // the Choose-a-Side Gar Saxon Flamethrower 0-cost injection.
+  const _jtFreeSpecial = !!game?.freeSpecialActionPending?.[_figureKeyForOncePerAct];
 
   const rows = [];
 
@@ -1195,13 +1200,20 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   if (specials.length > 0 && rows.length < 5) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
-      const cost = specialCosts[idx] ?? 1;
+      // Jundland free special: this native special is offered at 0 cost.
+      // (Only native specials — idx < base count — qualify; injected specials
+      // keep their own costs.) When set, the action-budget gate is bypassed.
+      const _baseSpecialCount = (stats.specials || []).length;
+      const _isJtFree = _jtFreeSpecial && idx < _baseSpecialCount;
+      const cost = _isJtFree ? 0 : (specialCosts[idx] ?? 1);
       const mpCost = specialMpCosts[idx] ?? 0;
       const needsDoubleAction = cost >= 2;
       // VF: Focus — limit once per round per group
       const isVfFocusUsed = name === 'VF: Focus' && !!game?.vadersFocusUsedThisRound?.[msgId];
       let label;
-      if (mpCost > 0 && cost <= 0) {
+      if (_isJtFree) {
+        label = `Special Action: ${name} (free)`.slice(0, 80);
+      } else if (mpCost > 0 && cost <= 0) {
         // MP-based ability (e.g. Boba Fett's Wrist Cord) — not an action
         label = `${name} (${mpCost} MP)`.slice(0, 80);
       } else if (needsDoubleAction) {
@@ -1292,6 +1304,58 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
             .setStyle(ButtonStyle.Danger)
         ));
       }
+    }
+  }
+  // ── In-activation attachment-exhaust buttons (alexanbv 2026-06-20) ──────────
+  // Reusable exhaust attachments (Ballistics Matrix, Navigation Upgrade) need a
+  // BUTTON to exhaust them at the right moment during activation. The effect +
+  // start-of-round re-arm already exist; this surfaces the trigger. Mirrors the
+  // non-native button injection pattern (Choose-a-Side flamethrower). Each
+  // button is disabled-absent when the attachment is already exhausted; the
+  // round boundary (round.js) re-arms it.
+  if (game && rows.length < 5) {
+    const _exBtns = [];
+    // Ballistics Matrix / Navigation Upgrade are COMMAND-card attachments
+    // (placed via ccAttachmentsKey → p[12]CcAttachments), not skirmish-upgrade
+    // DC attachments. Read the CC attachment map for these.
+    const _myAttKey = playerNum === 1 ? 'p1CcAttachments' : 'p2CcAttachments';
+    const _allAtt = game[_myAttKey] || {};
+    // Ballistics Matrix: lives on THIS DC; exhaust before declaring an attack so
+    // figures don't block LOS for that attack. Show on the wearer's activation.
+    if (cardNameIncludes(_allAtt[msgId], 'Ballistics Matrix')
+        && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[msgId], 'Ballistics Matrix')) {
+      _exBtns.push(
+        new ButtonBuilder()
+          .setCustomId(`dc_exhaust_ballistics_${msgId}`)
+          .setLabel('Exhaust Ballistics Matrix (ignore figure LOS)')
+          .setStyle(ButtonStyle.Secondary)
+      );
+    }
+    // Navigation Upgrade: the attachment may live on a DIFFERENT friendly DC,
+    // but the +1 MP goes to the ACTIVATING DROID. Show on ANY friendly DROID's
+    // activation while the player has a readied Navigation Upgrade attachment.
+    const _navDcKws = (getDcKeywords(game)?.[dcName] || []).map((k) => String(k).toUpperCase());
+    if (_navDcKws.includes('DROID')) {
+      let _navReadyMsgId = null;
+      for (const [mid, atts] of Object.entries(_allAtt)) {
+        if (cardNameIncludes(atts, 'Navigation Upgrade')
+            && !cardNameIncludes(game.exhaustedSkirmishUpgrades?.[mid], 'Navigation Upgrade')) {
+          _navReadyMsgId = mid;
+          break;
+        }
+      }
+      if (_navReadyMsgId) {
+        _exBtns.push(
+          new ButtonBuilder()
+            .setCustomId(`dc_exhaust_navupgrade_${msgId}`)
+            .setLabel('Exhaust Navigation Upgrade (+1 MP)')
+            .setStyle(ButtonStyle.Secondary)
+        );
+      }
+    }
+    if (_exBtns.length) {
+      // Discord caps a row at 5; at most 2 buttons here.
+      rows.push(new ActionRowBuilder().addComponents(..._exBtns.slice(0, 5)));
     }
   }
   // End Activation button in thread (mirrors dc_end_activation_ on DC card in play area)

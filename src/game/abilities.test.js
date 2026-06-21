@@ -1797,6 +1797,77 @@ test('Take Initiative prompts to choose among multiple readied DCs', () => {
   assert.strictEqual(dcExhaustedState.get('dc-b'), true);
 });
 
+// ── Jundland Terror: figure pick → Attack/Special choice → free action ──────
+
+function _jundlandGame(msgId) {
+  return {
+    gameId: 'g-jt', player1Id: 'P1', player2Id: 'P2',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Tusken Raider-1-0': 'a1' }, 2: {} },
+    freeAttackBonusPending: {},
+    freeSpecialActionPending: {},
+    pendingMoveX: {},
+  };
+}
+function _jundlandMeta(msgId) {
+  const m = new Map([[msgId, { gameId: 'g-jt', playerNum: 1, dcName: 'Tusken Raider', displayName: 'Tusken Raider [Group 1]' }]]);
+  _registerDcMessageMeta(m);
+  return m;
+}
+
+test('Jundland Terror Phase 1 prompts which Tusken/Bantha figure plays it', () => {
+  const msgId = 'jt-1';
+  const game = _jundlandGame(msgId);
+  const dcMessageMeta = _jundlandMeta(msgId);
+  const r = resolveAbility('Jundland Terror', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(r.requiresChoice, true);
+  assert.deepStrictEqual(r.choiceValues, ['Tusken Raider-1-0']);
+});
+
+test('Jundland Terror Phase 2a prompts Attack vs Special after figure pick', () => {
+  const msgId = 'jt-2';
+  const game = _jundlandGame(msgId);
+  const dcMessageMeta = _jundlandMeta(msgId);
+  const r = resolveAbility('Jundland Terror', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'Tusken Raider-1-0' });
+  assert.strictEqual(r.requiresChoice, true);
+  assert.deepStrictEqual(r.choiceOptions, ['Jundland: Attack', 'Jundland: Special Action']);
+  assert.deepStrictEqual(r.choiceValues, ['Tusken Raider-1-0', 'Tusken Raider-1-0']);
+  // Not yet committed: EOR flag stays unset until a mode is chosen.
+  assert.ok(!game.jundlandTerrorPlayedThisEor);
+});
+
+test('Jundland Terror Attack mode arms free attack + 2 MP + EOR gate', () => {
+  const msgId = 'jt-3';
+  const game = _jundlandGame(msgId);
+  const dcMessageMeta = _jundlandMeta(msgId);
+  const r = resolveAbility('Jundland Terror', {
+    game, playerNum: 1, dcMessageMeta,
+    chosenFigureKey: 'Tusken Raider-1-0', chosenOption: 'Jundland: Attack',
+  });
+  assert.strictEqual(r.applied, true);
+  assert.strictEqual(game.freeAttackBonusPending['Tusken Raider-1-0'], true);
+  assert.ok(!game.freeSpecialActionPending['Tusken Raider-1-0']);
+  assert.strictEqual(game.pendingMoveX[msgId]?.remaining, 2);
+  assert.strictEqual(game.jundlandTerrorPlayedThisEor, true);
+});
+
+test('Jundland Terror Special mode arms free special action + 2 MP + EOR gate', () => {
+  const msgId = 'jt-4';
+  const game = _jundlandGame(msgId);
+  const dcMessageMeta = _jundlandMeta(msgId);
+  const r = resolveAbility('Jundland Terror', {
+    game, playerNum: 1, dcMessageMeta,
+    chosenFigureKey: 'Tusken Raider-1-0', chosenOption: 'Jundland: Special Action',
+  });
+  assert.strictEqual(r.applied, true);
+  assert.ok(game.freeSpecialActionPending['Tusken Raider-1-0']);
+  assert.strictEqual(game.freeSpecialActionPending['Tusken Raider-1-0'].from, 'Jundland Terror');
+  // Special mode does NOT also arm a free attack.
+  assert.ok(!game.freeAttackBonusPending['Tusken Raider-1-0']);
+  assert.strictEqual(game.pendingMoveX[msgId]?.remaining, 2);
+  assert.strictEqual(game.jundlandTerrorPlayedThisEor, true);
+});
+
 // ── Transmit the Plans: distribute 2 Hit Tokens among friendly figures ──────
 
 test('Transmit the Plans distributes 2 Hit Tokens among friendly figures', () => {

@@ -11424,33 +11424,59 @@ export function resolveAbility(abilityId, context) {
   // their next activation).
   // G37/C21: max 1 copy per EOR phase.
   if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
-    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenOption } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const traits = ['Tusken Raider', 'Bantha Rider'];
     const dcEffects = getDcEffects();
-    // Phase 2: chosen figure → stamp picker + free-attack flag.
-    if (chosenFigureKey) {
+    // Mode markers carried by the Attack-vs-Special choice (Phase 2b). The
+    // chained choice round-trips chosenFigureKey via choiceValues, so the mode
+    // is distinguished by chosenOption.
+    const _JT_ATTACK = 'Jundland: Attack';
+    const _JT_SPECIAL = 'Jundland: Special Action';
+    const _jtIsMode = chosenOption === _JT_ATTACK || chosenOption === _JT_SPECIAL;
+    // Phase 2a: a figure was picked but no mode yet → prompt Attack vs Special.
+    if (chosenFigureKey && !_jtIsMode) {
+      const targetName = dcNameFromFigureKey(chosenFigureKey);
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [_JT_ATTACK, _JT_SPECIAL],
+        choiceValues: [chosenFigureKey, chosenFigureKey],
+        chosenFigureKey,
+        manualMessage: `**Jundland Terror** — **${targetName}**: choose **Attack** or **Special Action**.`,
+      };
+    }
+    // Phase 2b: figure + mode chosen → grant 2 MP and arm the chosen interrupt.
+    if (chosenFigureKey && _jtIsMode) {
       game.jundlandTerrorPlayedThisEor = true;
       const targetMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       const targetName = dcNameFromFigureKey(chosenFigureKey);
       if (!targetMsgId) {
         return { applied: false, manualMessage: `**Jundland Terror** — could not locate **${targetName}**'s play area; resolve manually.` };
       }
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      game.freeAttackBonusPending[chosenFigureKey] = true;
-      // CSV row 706: the chosen figure may interrupt to perform an attack OR a
-      // Special Action. The attack half rides on freeAttackBonusPending. For the
-      // Special-Action half: Bantha Rider already substitutes Trample via Wild
-      // Beast when the granted attack is offered; Tusken Raider's Tusken Cycler
-      // (its only Special Action) is itself an attack, so the granted-attack path
-      // already covers it in practice. Record the option as a per-figure flag so
-      // the prompt advertises it (full generic special-action-interrupt routing
-      // is not yet wired — flagged for follow-up).
-      game.jundlandTerrorSpecialOption = game.jundlandTerrorSpecialOption || {};
-      game.jundlandTerrorSpecialOption[chosenFigureKey] = true;
+      const wantsSpecial = chosenOption === _JT_SPECIAL;
+      if (wantsSpecial) {
+        // FREE SPECIAL ACTION: surface ALL of the chosen figure's special
+        // actions at 0 cost on its next activation. The render path
+        // (getDcActionButtons) reads freeSpecialActionPending[figureKey] to
+        // render the natives at cost 0; the dispatch path (dc-play-area.js)
+        // reads it to skip the action charge and consume the marker. Mirrors
+        // the Choose-a-Side Gar Saxon Flamethrower special injection.
+        game.freeSpecialActionPending = game.freeSpecialActionPending || {};
+        game.freeSpecialActionPending[chosenFigureKey] = { from: 'Jundland Terror' };
+      } else {
+        // FREE ATTACK: rides on the standard freeAttackBonusPending flag for the
+        // figure's next-activation interrupt.
+        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+        game.freeAttackBonusPending[chosenFigureKey] = true;
+        // Legacy advertise-flag (Bantha Rider Trample / Tusken Cycler attack-
+        // specials still ride the granted attack); kept for back-compat.
+        game.jundlandTerrorSpecialOption = game.jundlandTerrorSpecialOption || {};
+        game.jundlandTerrorSpecialOption[chosenFigureKey] = true;
+      }
       // Out-of-activation 2-MP grant on a non-activating friendly →
-      // setupPendingMoveX, bypassCosts: false. Free attack stays
-      // banked for the figure's next activation interrupt.
+      // setupPendingMoveX, bypassCosts: false. The chosen interrupt (free attack
+      // or free special) stays armed for the figure's next activation.
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[targetMsgId] = {
         remaining: 2,
@@ -11463,11 +11489,14 @@ export function resolveAbility(abilityId, context) {
         msgId: targetMsgId,
         nextAction: null,
       };
+      const _modeText = wantsSpecial
+        ? 'may interrupt to perform a **free Special Action**'
+        : 'may interrupt to perform a **free attack**';
       return {
         applied: true,
         pendingMoveXMsgId: targetMsgId,
         activeMsgId: targetMsgId,
-        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and may interrupt to perform an attack **or a Special Action** on their next activation.`,
+        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and ${_modeText} on their next activation.`,
       };
     }
     // Phase 1: enumerate friendly Tusken / Bantha figures on the board.

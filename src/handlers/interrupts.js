@@ -6,7 +6,7 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, ccAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { reduceHp, healHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
@@ -18,7 +18,9 @@ import { clearPendingLastResort, clearPendingPunishingStrike, clearPendingYHSIW,
 import { updateDcCardMessage } from '../engine/message-updaters.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getDamageableObjectsAtCoord, applyDamageToObject } from '../game/object-damage-pipeline.js';
-import { exhaustAttachment } from '../game/card-state-helpers.js';
+import { exhaustAttachment, isAttachmentExhausted } from '../game/card-state-helpers.js';
+import { figureKeyForActivation } from '../game/activation-state.js';
+import { cardNameIncludes } from '../game/card-names.js';
 
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
@@ -216,6 +218,75 @@ export async function handleOverdrive(interaction, ctx) {
   await updateDcActionsMessage(_odGame, _odMsgId, client);
   await updateDcCardMessage(client, _odGame, _odMsgId, ctx, { exhausted: true, errorContext: 'Overdrive embed refresh failed:' });
   saveGames(_odGame.gameId); return;
+}
+
+// ── Attachment exhaust: Ballistics Matrix ───────────────────────────────────
+// CSV row 541: "Exhaust this card before you declare an attack; figures do not
+// block line of sight during this attack." In-activation button surfaced on the
+// wearer's DC (components.js). On click: if readied, exhaust + set
+// nextAttackIgnoreFigureLOS for that figure's next attack (consumed at declare,
+// already wired in combat-bridge). Re-arms at start of round (round.js).
+export async function handleExhaustBallistics(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, updateDcActionsMessage } = ctx;
+  const _bmMsgId = parseCustomId(interaction.customId, 'dc_exhaust_ballistics_');
+  const _bmMeta = dcMessageMeta.get(_bmMsgId);
+  if (!_bmMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  const _bmGame = await requireGame(interaction, getGame, _bmMeta.gameId);
+  if (!_bmGame) return;
+  if (!await requirePlayer(interaction, _bmGame, interaction.user.id, _bmMeta.playerNum, canActAsPlayer, 'Only the DC owner can exhaust this attachment.')) return;
+  const _bmAttKey = ccAttachmentsKey(_bmMeta.playerNum);
+  if (!cardNameIncludes(_bmGame[_bmAttKey]?.[_bmMsgId], 'Ballistics Matrix')) {
+    await interaction.followUp({ content: 'Ballistics Matrix is not attached to this DC.', ephemeral: true }).catch(discordCatch); return;
+  }
+  if (isAttachmentExhausted(_bmGame, _bmMsgId, 'Ballistics Matrix')) {
+    await interaction.followUp({ content: '**Ballistics Matrix** is already exhausted — it readies at the start of your next round.', ephemeral: true }).catch(discordCatch); return;
+  }
+  const _bmFk = figureKeyForActivation(_bmGame, _bmMsgId) || `${_bmMeta.dcName}-1-0`;
+  _bmGame.nextAttackIgnoreFigureLOS = _bmGame.nextAttackIgnoreFigureLOS || {};
+  _bmGame.nextAttackIgnoreFigureLOS[_bmFk] = true;
+  exhaustAttachment(_bmGame, _bmMsgId, 'Ballistics Matrix');
+  await logGameAction(_bmGame, client, `**Ballistics Matrix** — **${_bmMeta.displayName || _bmMeta.dcName}** exhausts the attachment: figures do **not** block line of sight for its next attack. (Exhausted — readies at the start of your next round.)`, { phase: 'ROUND', icon: 'card' });
+  if (updateDcActionsMessage) await updateDcActionsMessage(_bmGame, _bmMsgId, client);
+  await updateDcCardMessage(client, _bmGame, _bmMsgId, ctx, { exhausted: true, errorContext: 'Ballistics Matrix embed refresh failed:' });
+  saveGames(_bmGame.gameId); return;
+}
+
+// ── Attachment exhaust: Navigation Upgrade ──────────────────────────────────
+// CSV row 750: "Exhaust this card during a friendly DROID's activation; that
+// figure gains 1 movement point." The attachment may live on a DIFFERENT
+// friendly DC; the MP goes to the ACTIVATING DROID. Button surfaced on any
+// friendly DROID's activation while a Navigation Upgrade attachment is readied
+// (components.js). On click: locate the readied attachment, exhaust it, grant
+// 1 MP to the activating DROID. Re-arms at start of round (round.js).
+export async function handleExhaustNavUpgrade(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction, updateDcActionsMessage } = ctx;
+  const _nuMsgId = parseCustomId(interaction.customId, 'dc_exhaust_navupgrade_');
+  const _nuMeta = dcMessageMeta.get(_nuMsgId);
+  if (!_nuMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
+  const _nuGame = await requireGame(interaction, getGame, _nuMeta.gameId);
+  if (!_nuGame) return;
+  if (!await requirePlayer(interaction, _nuGame, interaction.user.id, _nuMeta.playerNum, canActAsPlayer, 'Only the DC owner can exhaust this attachment.')) return;
+  // Locate a readied Navigation Upgrade attachment among this player's DCs.
+  const _nuAttKey = ccAttachmentsKey(_nuMeta.playerNum);
+  const _nuAtts = _nuGame[_nuAttKey] || {};
+  let _nuAttMsgId = null;
+  for (const [mid, atts] of Object.entries(_nuAtts)) {
+    if (cardNameIncludes(atts, 'Navigation Upgrade') && !isAttachmentExhausted(_nuGame, mid, 'Navigation Upgrade')) {
+      _nuAttMsgId = mid; break;
+    }
+  }
+  if (!_nuAttMsgId) {
+    await interaction.followUp({ content: 'No readied **Navigation Upgrade** attachment — it readies at the start of your next round.', ephemeral: true }).catch(discordCatch); return;
+  }
+  // Grant 1 MP to the activating DROID (the figure whose activation this is).
+  const _nuDgIdx = (_nuMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const _nuSelFig = _nuGame.dcActionsData?.[_nuMsgId]?.selectedFigure ?? 0;
+  grantMovementBank(_nuGame, _nuMsgId, 1, _nuSelFig);
+  exhaustAttachment(_nuGame, _nuAttMsgId, 'Navigation Upgrade');
+  await logGameAction(_nuGame, client, `**Navigation Upgrade** — exhausted: **${_nuMeta.displayName || _nuMeta.dcName}** gains **1 MP**. (Exhausted — readies at the start of your next round.)`, { phase: 'ROUND', icon: 'card' });
+  if (updateDcActionsMessage) await updateDcActionsMessage(_nuGame, _nuMsgId, client);
+  await updateDcCardMessage(client, _nuGame, _nuAttMsgId, ctx, { exhausted: true, errorContext: 'Navigation Upgrade embed refresh failed:' }).catch(() => {});
+  saveGames(_nuGame.gameId); return;
 }
 
 // ── 4. Self-Destruct Probe ──────────────────────────────────────────────────

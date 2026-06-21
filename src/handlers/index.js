@@ -169,7 +169,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleForceExhaustionDiePick, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleExhaustBallistics, handleExhaustNavUpgrade, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleAdaptBlaisePick } from './blaise-adapt.js';
 import { handleDefeatPick } from './defeat-pick.js';
@@ -603,6 +603,8 @@ register('still_faster_dc_pick_', handleStillFaster, 'interrupts');
 register('squad_swarm_yes_', handleSquadSwarm, 'interrupts');
 register('squad_swarm_no_', handleSquadSwarm, 'interrupts');
 register('overdrive_use_', handleOverdrive, 'interrupts');
+register('dc_exhaust_ballistics_', handleExhaustBallistics, 'interrupts');
+register('dc_exhaust_navupgrade_', handleExhaustNavUpgrade, 'interrupts');
 register('self_destruct_probe_use_', handleSelfDestructProbe, 'interrupts');
 register('self_destruct_probe_skip_', handleSelfDestructProbe, 'interrupts');
 register('self_destruct_protocol_use_', handleSelfDestructProtocol, 'interrupts');

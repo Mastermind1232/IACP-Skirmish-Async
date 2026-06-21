@@ -196,6 +196,11 @@ const ACTIVATION_FIGKEY_FLAGS = [
   // interrupt may be an attack OR a Special Action (CSV row 706). Same
   // per-figure scoping and cleanup as the free-attack flag.
   'jundlandTerrorSpecialOption',
+  // Jundland Terror "free Special Action" grant (CSV row 706): per-figureKey
+  // marker { from }. The render path surfaces that figure's native specials at
+  // 0 action cost; the dispatch path skips the action charge + consumes it.
+  // Same per-figure activation scoping as the free-attack flag.
+  'freeSpecialActionPending',
   // Migrated 2026-05-13 from ACTIVATION_MSGID_FLAGS — same rule. The
   // standard "1 attack per activation" cap is PER FIGURE, not per group.
   // Without Assault, each figure in a multifigure group can still
@@ -676,6 +681,7 @@ const ROUND_OBJECT_FLAGS = [
   'deflectionUnconditional',
   'freeAttackBonusPending',
   'jundlandTerrorSpecialOption',
+  'freeSpecialActionPending',
   'freeAttackDifferentTargets',
   // heroicUsedThisActivation + boRifleStaffUsedThisActivation moved
   // to ACTIVATION_FIGKEY_FLAGS 2026-05-09 (per-figure scope per IACP).

@@ -2104,6 +2104,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   } else if (buttonKey === 'dc_special_') {
     _effectiveActionCost = (getDcStats(meta.dcName).specialCosts || [])[specialIdx] ?? 1;
   }
+  // Jundland Terror free Special Action (CSV row 706): if the activating figure
+  // has the freeSpecialActionPending marker and this is one of its NATIVE
+  // specials, charge 0 actions. Marker is consumed after the special resolves
+  // (see below). Mirrors the Choose-a-Side flamethrower 0-cost handling.
+  let _isJundlandFreeSpecial = false;
+  if (buttonKey === 'dc_special_' && specialIdx < _baseSpecialCount) {
+    const _jtSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _jtDgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+    const _jtFk = `${meta.dcName}-${_jtDgIdx}-${_jtSelFig}`;
+    if (game.freeSpecialActionPending?.[_jtFk]) {
+      _isJundlandFreeSpecial = true;
+      _effectiveActionCost = 0;
+    }
+  }
   const ownerId = getPlayerId(game, meta.playerNum);
   const actionsData = game.dcActionsData?.[msgId];
   const actionsRemaining = figureActionsRemaining(actionsData, actionsData?.selectedFigure ?? 0);
@@ -2725,6 +2739,14 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     } else {
       const actionCost = buttonKey === 'dc_special_' ? _effectiveActionCost : 1;
       consumeActionForCurrentFigure(actionsData, actionCost, game, msgId);
+      // Jundland Terror: the free Special Action is one-shot — consume the
+      // per-figure marker now that the special has been used.
+      if (_isJundlandFreeSpecial) {
+        const _jtSelFig2 = actionsData?.selectedFigure ?? 0;
+        const _jtDgIdx2 = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+        const _jtFk2 = `${meta.dcName}-${_jtDgIdx2}-${_jtSelFig2}`;
+        if (game.freeSpecialActionPending) delete game.freeSpecialActionPending[_jtFk2];
+      }
       // All in a Day's Work (CC) timing: a Special Action has been used during
       // this activation. Set the per-activation flag the card's timing gate reads
       // ("after you resolve a Special or Interact during your activation").
