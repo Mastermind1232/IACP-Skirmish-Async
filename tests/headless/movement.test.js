@@ -57,12 +57,22 @@ describe('headless movement flow', () => {
       ...baseGame,
       p1ActivationsRemaining: 1,
       dcActionsData: {},
+      // The dc_activate_ handler resolves the DC by index into the player's DC
+      // list (getDcList/getDcMessageIds), so the game must expose them, plus the
+      // per-player activated-index tracker the activation push() targets.
+      p1DcList: [{ dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' }],
+      p1DcMessageIds: [dcMsgId],
+      p1ActivatedDcIndices: [],
+      p2ActivatedDcIndices: [],
     };
     const harness = createHarness(game, {
       dcMessageMeta: dcMeta,
       dcExhaustedState: new Map(), // not exhausted = ready
     });
-    const result = await harness.submitAction(`dc_activate_${dcMsgId}`, 'p1');
+    // The dc_activate_ customId is now gameId/playerNum/dcIndex-based
+    // (dc_activate_${gameId}_${playerNum}_${dcIndex}), not msgId-based. The
+    // Stormtrooper is player 1, DC index 0.
+    const result = await harness.submitAction(`dc_activate_${game.gameId}_1_0`, 'p1');
     assert.ok(!result.error, `Expected no error, got: ${result.error}`);
   });
 });

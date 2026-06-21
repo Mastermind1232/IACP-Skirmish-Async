@@ -722,28 +722,43 @@ describe('Section 4: CC Timing Deep Tests — playability under correct game sta
   });
 
   // -- whenYouDeclareAttack CCs --
-  it('Wild Attack playable during activation (when you declare attack)', () => {
-    const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
+  // Two-timing model (commit e3fde202): whenYouDeclareAttack CCs are playable
+  // only once an attack is DECLARED (pendingCombat exists with the holder as
+  // attacker), not merely during activation. cc-timing.js:175-177 now gates on
+  // ctx.duringAttack && ctx.isAttacker.
+  it('Wild Attack playable when you declare attack (pendingCombat, you are attacker)', () => {
+    const game = buildGame({ currentActivationTurnPlayerId: 'p1',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 } });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Wild Attack', mockGetEffect), true);
   });
 
-  it('Deathblow playable during activation', () => {
-    const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
+  it('Deathblow playable when you declare attack', () => {
+    const game = buildGame({ currentActivationTurnPlayerId: 'p1',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 } });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Deathblow', mockGetEffect), true);
   });
 
-  it('Element of Surprise playable during activation', () => {
-    const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
+  it('Element of Surprise playable when you declare attack', () => {
+    const game = buildGame({ currentActivationTurnPlayerId: 'p1',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 } });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Element of Surprise', mockGetEffect), true);
   });
 
-  it('Explosive Weaponry playable during activation', () => {
-    const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
+  it('Explosive Weaponry playable when you declare attack', () => {
+    const game = buildGame({ currentActivationTurnPlayerId: 'p1',
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 } });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Explosive Weaponry', mockGetEffect), true);
   });
 
-  it('Wild Attack NOT playable for non-active player', () => {
-    const game = buildGame({ currentActivationTurnPlayerId: 'p2' });
+  it('Wild Attack NOT playable during activation before an attack is declared', () => {
+    // No pendingCombat → not yet a declared attack.
+    const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
+    assert.strictEqual(isCcPlayableNow(game, 1, 'Wild Attack', mockGetEffect), false);
+  });
+
+  it('Wild Attack NOT playable when you are the defender', () => {
+    const game = buildGame({ currentActivationTurnPlayerId: 'p2',
+      pendingCombat: { attackerPlayerNum: 2, defenderPlayerNum: 1 } });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Wild Attack', mockGetEffect), false);
   });
 
@@ -755,16 +770,19 @@ describe('Section 4: CC Timing Deep Tests — playability under correct game sta
     assert.strictEqual(isCcPlayableNow(game, 1, 'Collateral Damage', mockGetEffect), true);
   });
 
-  it('Escalating Hostility playable during attack', () => {
+  it('Escalating Hostility playable after an attack that did not miss', () => {
+    // alexanbv 2026-06-19: gated on a confirmed hit (combat.hit === true).
     const game = buildGame({
-      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2, hit: true },
     });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Escalating Hostility', mockGetEffect), true);
   });
 
-  it('Glory of the Kill playable during attack', () => {
+  it('Glory of the Kill playable after the attack defeated a figure', () => {
+    // cc-timing.js:186 — gated on a recent defeat (game.lastDefeatInfo set).
     const game = buildGame({
-      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2, hit: true },
+      lastDefeatInfo: { figureKey: 'Rebel Trooper-1-0', playerNum: 2 },
     });
     assert.strictEqual(isCcPlayableNow(game, 1, 'Glory of the Kill', mockGetEffect), true);
   });
@@ -775,23 +793,27 @@ describe('Section 4: CC Timing Deep Tests — playability under correct game sta
   });
 
   // -- whenCommandCardPlayed CCs --
-  it('Negation playable during activation (whenCommandCardPlayed)', () => {
+  // cc-timing.js:314-318 — Negation & Comm Disruption are purely REACTIVE: they
+  // are never offered in the proactive "Play CC" dropdown (isCcPlayableNow ===
+  // false). They fire via their dedicated counter-window prompt flow when an
+  // opponent plays a card. The old "playable during activation/round" model is
+  // gone.
+  it('Negation NOT playable proactively (reactive only)', () => {
     const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
-    assert.strictEqual(isCcPlayableNow(game, 1, 'Negation', mockGetEffect), true);
+    assert.strictEqual(isCcPlayableNow(game, 1, 'Negation', mockGetEffect), false);
   });
 
-  it('Comm Disruption playable during activation', () => {
+  it('Comm Disruption NOT playable proactively (reactive only)', () => {
     const game = buildGame({ currentActivationTurnPlayerId: 'p1' });
-    assert.strictEqual(isCcPlayableNow(game, 1, 'Comm Disruption', mockGetEffect), true);
+    assert.strictEqual(isCcPlayableNow(game, 1, 'Comm Disruption', mockGetEffect), false);
   });
 
-  it('Negation playable during round (non-active player can react)', () => {
+  it('Negation NOT playable proactively even during the round', () => {
     const game = buildGame({
       currentRound: 1,
       currentActivationTurnPlayerId: 'p2',
     });
-    // duringRound is true for player 1 (round active, not EOR)
-    assert.strictEqual(isCcPlayableNow(game, 1, 'Negation', mockGetEffect), true);
+    assert.strictEqual(isCcPlayableNow(game, 1, 'Negation', mockGetEffect), false);
   });
 
   // -- whenHostileFigureEntersAdjacentSpace CCs --

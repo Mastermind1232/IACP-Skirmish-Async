@@ -15,6 +15,7 @@ import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
+import { openCounterWindow, counterResponder, topCard, topAvailableCounters } from '../../src/game/cc-counter-window.js';
 
 function buildActionDeps(meta) {
   return {
@@ -122,9 +123,14 @@ describe('Arsenal weapon choice (dark)', () => {
       .build();
     const { game } = meta;
 
-    // Activate IG-88
+    // Activate IG-88. dcActionsData is now strictly per-figure (alexanbv
+    // 2026-06-13): perFigureRemaining keyed by figure index, no group-level
+    // remaining/selectedFigure. available-actions only surfaces DC actions
+    // (move/arsenal_pick/end) when this shape is present.
     const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
-    game.dcActionsData = { [p1MsgId]: { remaining: 2, selectedFigure: 0 } };
+    game.dcActionsData = {
+      [p1MsgId]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, messageId: null, threadId: null, specialsUsed: [] },
+    };
     game.currentActivationTurnPlayerId = game.player1Id;
 
     const actionDeps = buildActionDeps(meta);
@@ -149,11 +155,19 @@ describe('Arsenal weapon choice (dark)', () => {
     const { game } = meta;
 
     const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
-    game.dcActionsData = { [p1MsgId]: { remaining: 2, selectedFigure: 0 } };
+    // Per-figure dcActionsData shape (alexanbv 2026-06-13) so the picks would
+    // otherwise be surfaced — proving the override (not a stale shape) is what
+    // suppresses them.
+    game.dcActionsData = {
+      [p1MsgId]: { perFigureRemaining: { 0: 2 }, figureLocked: {}, messageId: null, threadId: null, specialsUsed: [] },
+    };
     game.currentActivationTurnPlayerId = game.player1Id;
 
-    // Simulate having already picked dice
-    game.pendingOverrideAttackDice = { [p1MsgId]: { dice: ['red', 'blue'] } };
+    // Simulate having already picked dice. pendingOverrideAttackDice is now
+    // keyed by figureKey (alexanbv 2026-05-13), not msgId. IG-88 is a single
+    // figure: "IG-88-1-0".
+    const figKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('IG-88'));
+    game.pendingOverrideAttackDice = { [figKey]: { dice: ['red', 'blue'] } };
 
     const actionDeps = buildActionDeps(meta);
     const actions = getAvailableActions(game, 1, actionDeps);
@@ -276,7 +290,15 @@ describe('Bo-Rifle weapon choice (dark)', () => {
 // ── Priority 3: Negation ─────────────────────────────────────────────────────
 
 describe('Negation gating (dark)', () => {
-  it('pendingNegation gates actions for opponent only', () => {
+  // The old pendingNegation model (surfaced as negation_play/negation_let_resolve
+  // via getAvailableActions) was DELETED and replaced by the unified recursive
+  // counter-window (src/game/cc-counter-window.js, alexanbv 2026-06-17; AI
+  // auto-pass commit 69e2e4e 2026-06-18). available-actions.js no longer
+  // references pendingNegation at all. The "opponent responds, playing player
+  // waits" intent is now carried by the ccCounterWindow state: counterResponder()
+  // is the opponent, and only the responder is offered legal counters. This test
+  // witnesses that current model.
+  it('counter-window routes to opponent only (Negation against cost-0 card)', () => {
     const meta = createTestGame()
       .withPlayer1Army([{ dcName: 'Luke Skywalker' }])
       .withPlayer2Army([{ dcName: 'Darth Vader' }])
@@ -284,20 +306,19 @@ describe('Negation gating (dark)', () => {
       .build();
     const { game } = meta;
 
-    // P1 played a CC, P2 has Negation
-    game.pendingNegation = { playedBy: 1, card: 'Son of Skywalker' };
+    // P1 plays a cost-0 CC; P2 holds Negation. The unified window opens for the
+    // opponent (P2).
+    openCounterWindow(game, { card: 'Element of Surprise', cost: 0, playedBy: 1 });
 
-    const actionDeps = buildActionDeps(meta);
-    const p2Actions = getAvailableActions(game, 2, actionDeps);
-    const p2Types = new Set(p2Actions.map(a => a.type));
+    // Responder is the opponent (P2), not the playing player (P1).
+    assert.strictEqual(counterResponder(game), 2, 'opponent (P2) is the counter responder');
+    assert.strictEqual(topCard(game).card, 'Element of Surprise', 'top of window is P1\'s card');
 
-    assert.ok(p2Types.has('negation_play'), 'P2 sees negation_play');
-    assert.ok(p2Types.has('negation_let_resolve'), 'P2 sees negation_let_resolve');
-    assert.ok(!p2Types.has('activate_dc'), 'no activate_dc during negation');
-
-    // P1 should get nothing during negation window
-    const p1Actions = getAvailableActions(game, 1, actionDeps);
-    assert.strictEqual(p1Actions.length, 0, 'P1 gets no actions during negation window');
+    // P2 is offered Negation (it cancels cost-0 cards); the playing player gets
+    // no counter offer because the responder is the opponent.
+    const p2Offer = topAvailableCounters(game, /*p2SpyCount*/ 0);
+    assert.ok(p2Offer.includes('Negation'), 'P2 (responder) is offered Negation against a cost-0 card');
+    assert.notStrictEqual(counterResponder(game), 1, 'P1 (playing player) is NOT the responder');
   });
 });
 

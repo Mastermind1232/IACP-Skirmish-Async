@@ -202,16 +202,18 @@ describe('activate-dc: cleanupRoundStart', () => {
 
 describe('movement: grantMovementBank', () => {
   it('initializes movement bank from scratch', () => {
+    // alexanbv 2026-06-13: MP banks are now per-figure under
+    // movementBank[msgId].perFig[figureIndex]; there is no shared group bank.
     const game = {};
     grantMovementBank(game, 'msg1', 4);
-    assert.deepStrictEqual(game.movementBank.msg1, { total: 4, remaining: 4 });
+    assert.deepStrictEqual(game.movementBank.msg1.perFig[0], { total: 4, remaining: 4 });
   });
 
   it('adds to existing movement bank', () => {
-    const game = { movementBank: { msg1: { total: 4, remaining: 2 } } };
+    const game = { movementBank: { msg1: { perFig: { 0: { total: 4, remaining: 2 } } } } };
     grantMovementBank(game, 'msg1', 2);
-    assert.strictEqual(game.movementBank.msg1.total, 6);
-    assert.strictEqual(game.movementBank.msg1.remaining, 4);
+    assert.strictEqual(game.movementBank.msg1.perFig[0].total, 6);
+    assert.strictEqual(game.movementBank.msg1.perFig[0].remaining, 4);
   });
 
   it('no-ops when amount is 0', () => {
@@ -1008,25 +1010,33 @@ describe('computeCombatResult: pure combat math', () => {
     assert.strictEqual(result.damage, 2);
   });
 
-  it('attacker Weakened reduces damage by 1', () => {
+  it('attacker Weakened does NOT reduce damage at computeCombatResult layer (-1 surge applied upstream)', () => {
+    // destruct 2026-05-07: Weakened on the attacker applies -1 Surge to the
+    // attack results (handled UPSTREAM in handlers/combat.js, before surge
+    // spends). The old damage/block penalties in computeCombatResult were
+    // removed (see combat.js:436-445). With no surge spent here, damage is
+    // simply dmg - block = 4 - 1 = 3.
     const combat = {
       attackRoll: { acc: 5, dmg: 4, surge: 0 },
       defenseRoll: { block: 1, evade: 0, dodge: false },
       attackerConds: ['Weaken'],
     };
     const result = computeCombatResult(combat);
-    assert.strictEqual(result.damage, 2);
+    assert.strictEqual(result.damage, 3);
   });
 
-  it('defender Weakened reduces block by 1', () => {
+  it('defender Weakened reduces Evade (not block) — block unchanged at this layer', () => {
+    // destruct 2026-05-07: Weakened on the defender applies -1 Evade to the
+    // defense results, not -1 Block. With no evade rolled, block is unchanged:
+    // effectiveBlock = 2, damage = dmg - block = 3 - 2 = 1.
     const combat = {
       attackRoll: { acc: 5, dmg: 3, surge: 0 },
       defenseRoll: { block: 2, evade: 0, dodge: false },
       defenderConds: ['Weaken'],
     };
     const result = computeCombatResult(combat);
-    assert.strictEqual(result.effectiveBlock, 1);
-    assert.strictEqual(result.damage, 2);
+    assert.strictEqual(result.effectiveBlock, 2);
+    assert.strictEqual(result.damage, 1);
   });
 
   it('defender Hidden gives -2 accuracy', () => {

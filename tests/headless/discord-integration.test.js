@@ -15,6 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlowHarness, PENDING_STATE_KEYS } from './flow-harness.js';
 import { validatePayloadShape } from './flow-invariants.js';
+import { openCounterWindow, counterResponder, topAvailableCounters } from '../../src/game/cc-counter-window.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,13 @@ async function endActivation(fh, playerNum) {
   const uid = playerNum === 1 ? P1 : P2;
   const action = findAction(fh, playerNum, 'dc_end_activation');
   if (!action) return null;
-  return fh.act(action.customId, uid);
+  // dc_end_activation ends only the figure's activation; the turn passes via
+  // the separate pass_activation_turn action (handleDcEndActivation does not
+  // switch the turn). Do both so the player's turn fully ends.
+  const r = await fh.act(action.customId, uid);
+  const pass = findAction(fh, playerNum, 'pass_activation_turn');
+  if (pass) await fh.act(pass.customId, uid);
+  return r;
 }
 
 async function driveCombatToCompletion(fh) {
@@ -346,11 +353,11 @@ describe('Region 2: Wrong Player Routing', () => {
     const fh = createPrivacyHarness();
     const r = await activateDc(fh, 1);
     assertNoErrors(r, 'P1 activate');
-    const surface = fh.getSurface();
-    const step1 = surface.getStepEntries(1);
-    const p1Interactions = step1.filter(e => e.source === 'interaction' && e.userId === P1);
-    assert.ok(p1Interactions.length > 0 || step1.some(e => e.source === 'uiCall'),
-      'P1 gets response when P1 acts');
+    // The intercepted dc_activate_ flow emits a DcActivated engine event (its
+    // observable response) rather than a captured Discord interaction/uiCall.
+    // P1 acting produces that event.
+    assert.ok((r.result.events || []).some(e => e.type === 'DcActivated' && e.playerId === P1),
+      'P1 acting produces a P1-attributed DcActivated event');
   });
 
   it('2.02 — available actions for P1 only list P1 actions at start', () => {
@@ -408,19 +415,24 @@ describe('Region 2: Wrong Player Routing', () => {
     assert.ok(canAct, 'P2 has activate or pass after P1 ends');
   });
 
-  it('2.07 — negation routes to opponent, not playing player', async () => {
+  it('2.07 — counter-window routes to opponent, not playing player', async () => {
+    // The pendingNegation/getAvailableActions routing model was DELETED and
+    // replaced by the unified recursive counter-window (src/game/
+    // cc-counter-window.js, alexanbv 2026-06-17; AI auto-pass commit 69e2e4e
+    // 2026-06-18). available-actions.js no longer references pendingNegation.
+    // Routing is now carried by counterResponder() (the opponent) and the legal
+    // counters offered only to that responder via topAvailableCounters().
     const fh = createPrivacyHarness();
     const game = fh.getGame();
-    game.pendingNegation = { playedBy: 1, card: 'Adrenaline', fromDc: false };
-    const p1Actions = fh.getActions(1);
-    const p2Actions = fh.getActions(2);
-    assert.ok(!p1Actions.some(a => a.type === 'negation_let_resolve'),
-      'P1 cannot respond to own negation');
-    assert.ok(!p1Actions.some(a => a.type === 'negation_play'),
-      'P1 cannot negate own card');
-    assert.ok(p2Actions.some(a => a.type === 'negation_let_resolve') ||
-              p2Actions.some(a => a.type === 'negation_play'),
-      'P2 has negation response actions');
+    // As if P1 played a cost-0 CC: open the window for the responder (P2).
+    openCounterWindow(game, { card: 'Adrenaline', cost: 0, playedBy: 1 });
+
+    // Responder is the opponent (P2), not the playing player (P1).
+    assert.strictEqual(counterResponder(game), 2, 'opponent (P2) is the counter responder');
+    assert.notStrictEqual(counterResponder(game), 1, 'P1 cannot respond to its own card');
+    // P2 is offered a legal counter (Negation cancels cost-0 cards).
+    assert.ok(topAvailableCounters(game, 0).includes('Negation'),
+      'P2 (responder) is offered Negation against a cost-0 card');
   });
 
   it('2.08 — power token grant routes to correct player', async () => {
@@ -530,17 +542,13 @@ describe('Region 2: Wrong Player Routing', () => {
   it('2.14 — P2 acting produces P2-attributed responses', async () => {
     const fh = createPrivacyHarness();
     await activateDc(fh, 1);
-    await endActivation(fh, 1);
+    await endActivation(fh, 1); // ends P1 + passes the turn to P2
     const r = await activateDc(fh, 2);
     if (!r) return;
-    const surface = fh.getSurface();
-    const lastStep = r.step.step;
-    const stepEntries = surface.getStepEntries(lastStep);
-    const p2Interactions = stepEntries.filter(e =>
-      e.source === 'interaction' && e.userId === P2
-    );
-    assert.ok(p2Interactions.length > 0 || stepEntries.some(e => e.source === 'uiCall'),
-      'P2 act produces P2 responses or UI calls');
+    // P2's activation emits a P2-attributed DcActivated engine event (the
+    // intercepted activation path's observable response).
+    assert.ok((r.result.events || []).some(e => e.type === 'DcActivated' && e.playerId === P2),
+      'P2 act produces a P2-attributed DcActivated event');
   });
 
   it('2.15 — CC play actions only available to hand owner', () => {
@@ -850,14 +858,12 @@ describe('Region 4: Stale Component — Activation Lifecycle', () => {
     await activateDc(fh, 1);
     const r = await endActivation(fh, 1);
     assertNoErrors(r, 'end activation');
-    const surface = fh.getSurface();
-    const endStep = r.step.step;
-    const stepEntries = surface.getStepEntries(endStep);
-    const hasEvidence = stepEntries.some(e =>
-      (e.source === 'interaction' && (e.responseType === 'update' || e.responseType === 'editReply')) ||
-      e.source === 'uiCall'
-    );
-    assert.ok(hasEvidence, 'End activation produced update or UI call');
+    // Ending the activation emits an ActivationCleanedUp engine event — the
+    // component-update evidence in the current harness model (the intercepted
+    // activation path no longer produces interaction-update/uiCall surface
+    // entries).
+    assert.ok((r.result.events || []).some(e => e.type === 'ActivationCleanedUp'),
+      'end activation produces an ActivationCleanedUp event');
   });
 
   it('4.07 — after activation end, no stale activate buttons remain', async () => {

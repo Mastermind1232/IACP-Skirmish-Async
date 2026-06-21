@@ -65,6 +65,13 @@ const CONTEXT_GROUPS = {
 
   dcPlayArea: [
     'getGame', 'replyIfGameEnded', 'saveGames', 'pushUndo', 'client',
+    // canActAsPlayer: required by handleSoaPick/handleSoaFire/handleSoaSkipAll +
+    // the EoA equivalents (all registered under this group), which call
+    // requirePlayer(..., canActAsPlayer, ...). Introduced with the SoA
+    // orchestrator (commit 8dc037f2) but never added to this whitelist, so the
+    // player check threw "canActAsPlayer is not a function" — every SoA/EoA
+    // resolution (Fulcrum, Vigor, Responsive, etc.) silently crashed.
+    'canActAsPlayer',
     'dcMessageMeta', 'dcExhaustedState', 'dcHealthState',
     'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage', 'getDcPlayAreaComponents',
     'getDcActionButtons', 'getActionsCounterContent', 'getActivationMinimapAttachment',
@@ -235,6 +242,18 @@ const CONTEXT_GROUPS = {
     'reorderPlayAreaAfterAttachments',
     'runPostDeployPhase', 'applySquadSubmission',
     'sendPhaseGateMessages',
+    // handleDeploymentDone → advanceFromDeployment → autoDrawAllStartingHands
+    // (cc-hand.js) → drawStartingHandForPlayer + advanceFromCcDraw runs the
+    // ENTIRE post-deploy → cc-draw → start-of-round chain on THIS (setup-group)
+    // ctx. The chain destructures shuffleArray and the hand-display / SoR
+    // helpers; the round group already enumerates these for its own entry into
+    // the same chain. Without them, auto-draw throws and the game stalls in
+    // `deployment` (mirrors the round-group fix at lines 194-208).
+    'shuffleArray', 'buildHandDisplayPayload', 'updateHandVisualMessage',
+    'updateHandChannelMessages', 'updatePlayAreaDcButtons',
+    'sendRoundActivationPhaseMessage', 'runStartOfRoundDcEffects',
+    'runStartOfRoundContinuation', 'runStartOfRoundRules',
+    'getMissionRules', 'getMapTokensData', 'getInitiativePlayerZoneLabel',
   ],
 
   interactCancel: [

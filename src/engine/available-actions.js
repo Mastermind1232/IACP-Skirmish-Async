@@ -1158,6 +1158,84 @@ function getCombatActions(game, playerNum, deps) {
   // combat._pendingToughLuck — not by a round-long game.toughLuckPlayerNum arm.
   // The legacy game.pendingToughLuck oracle block was removed 2026-06-18.
 
+  // ── Gate-machine combat windows (alexanbv 2026-06-16 rebuild) ──────────────
+  // The attack runs on the sequence driver (runAttackSequence → _seqStep walk);
+  // its interactive windows live on combat.<window>Gate fields and post their own
+  // Discord buttons (combat_<window>_pick_<gameId>_<id|done> → handleModsPick),
+  // plus the surge window (combat_surge_<gameId>_<i|done> → handleCombatSurge).
+  // The legacy currentStep/rerollPhase/pendingSurges blocks below DON'T cover
+  // them (currentStep stays at 'step1+2-attacker' under the gate driver), so
+  // without this self-play/headless stalls at an interactive window with no
+  // surfaced action. Surface the active side's pass + each interactive ability
+  // (and the attacker's surges) via the REAL gate customIds so the sequence can
+  // be driven to completion. This runs AFTER the pending-reaction returns above
+  // (those take priority when the gate is paused for a counter-window).
+  const _GATE_FIELD_TO_WINDOW = {
+    onDeclareGate: 'ondeclare', rerollsGate: 'rerolls', specialGate: 'special',
+    modsGate: 'mods', zilloGate: 'zillo', afterResolveGate: 'afterresolve',
+  };
+  for (const [field, windowName] of Object.entries(_GATE_FIELD_TO_WINDOW)) {
+    const gate = combat[field];
+    if (!gate) continue;
+    // Active side: attacker first (until it has passed), then defender.
+    const activeSide = !gate.attacker?.passed
+      ? 'attacker'
+      : (!gate.defender?.passed ? 'defender' : null);
+    if (!activeSide) return actions; // both passed — driver will advance
+    const activePn = activeSide === 'attacker'
+      ? attackerPn
+      : (combat.defenderPlayerNum ?? defenderPn);
+    if (playerNum !== activePn) return [];
+    const sideGate = gate[activeSide] || {};
+    const resolved = new Set(sideGate.resolved || []);
+    for (const id of (sideGate.interactive || [])) {
+      if (resolved.has(id)) continue;
+      actions.push({
+        type: 'combat_gate_pick',
+        customId: `combat_${windowName}_pick_${gameId}_${id}`,
+        description: `${windowName}: use ${gate.byId?.[id]?.name || id}`,
+        params: { window: windowName, abilityId: id },
+      });
+    }
+    actions.push({
+      type: 'combat_gate_pass',
+      customId: `combat_${windowName}_pick_${gameId}_done`,
+      description: `${windowName}: pass`,
+      params: { window: windowName },
+    });
+    return actions;
+  }
+
+  // Surge window (spend_surges mechanic step). Attacker spends/skips via the
+  // gate-machine surge ids (combat_surge_<gameId>_<i|done>).
+  if (combat._seqStep === 'spend_surges' && combat.surgeRemaining > 0) {
+    if (playerNum !== attackerPn) return [];
+    const surgeKeys = getAttackerSurgeAbilities(combat);
+    const surgesRemaining = combat.surgeRemaining ?? 0;
+    const atkDcNameS = dcNameFromFigureKey(combat.attackerFigureKey || '');
+    const atkEffS = getDcEffect(atkDcNameS);
+    const maxSurgeUsesS = (atkEffS?.specialAbilityIds || []).includes('overload_saboteur') ? 2 : 1;
+    for (let i = 0; i < surgeKeys.length; i++) {
+      const key = surgeKeys[i];
+      const cost = key.startsWith('double:') ? 2 : 1;
+      if (cost > surgesRemaining) continue;
+      if (((combat.surgeSpentCount || {})[i] || 0) >= maxSurgeUsesS) continue;
+      const label = SURGE_LABELS[key] || SURGE_LABELS[key.replace('double:', '')] || key;
+      actions.push({
+        type: ACTION_TYPES.COMBAT_SURGE,
+        customId: `combat_surge_${gameId}_${i}`,
+        description: `Spend surge: ${label}`,
+        params: { surgeIndex: i, surgeKey: key, cost },
+      });
+    }
+    actions.push({
+      type: ACTION_TYPES.COMBAT_SKIP_SURGES,
+      customId: `combat_surge_${gameId}_done`,
+      description: 'Skip surges and resolve',
+    });
+    return actions;
+  }
+
   // Combat sub-phase gate — sequential (destruct 2026-05-06): only the
   // activePlayer can ack. Surface the action exclusively to them.
   if (combat.combatGate) {

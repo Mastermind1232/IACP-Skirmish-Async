@@ -3,6 +3,94 @@ import assert from 'node:assert/strict';
 import { createTestGame } from '../fixtures/game-builder.js';
 import { createFlowHarness } from './flow-harness.js';
 import { applyCondition } from '../../src/game/conditions.js';
+import { enumerateActivatorSoaDescriptors, startSoaResolution } from '../../src/game/soa-orchestrator.js';
+
+// ── Gate-machine combat driver ───────────────────────────────────────────────
+// The combat pipeline was rebuilt into a "gate machine" / sequence driver
+// (alexanbv 2026-06-16 "replace the old code with the new gate machine"). After
+// handleAttackTarget calls runAttackSequence (src/handlers/combat.js:5319), the
+// attack auto-walks on_declare → roll (dice AUTO-ROLL via autoRollDice,
+// combat.js:9586-9588 — no combat_roll button) → rerolls → special → mods →
+// spend_surges → zillo → damage → after_resolve. The interactive gate windows
+// (rerolls/mods/etc.) and the surge window post their OWN Discord buttons
+// (combat_<window>_pick_<gameId>_<id|done> → handleModsPick; combat_surge_*) and
+// are NOT surfaced through getAvailableActions, so the legacy combat_gate /
+// combat_roll / combat_surge / combat_resolve action-driving no longer applies.
+// This helper drives the sequence to completion (or to a requested stop step) by
+// passing every live gate and skipping surges via those real customIds.
+const _GATE_WINDOW_CUSTOM = {
+  onDeclareGate: 'ondeclare', rerollsGate: 'rerolls', specialGate: 'special',
+  modsGate: 'mods', zilloGate: 'zillo', afterResolveGate: 'afterresolve',
+};
+function _liveGateField(combat) {
+  return Object.keys(_GATE_WINDOW_CUSTOM).find(f => combat[f]) || null;
+}
+/**
+ * Drive the gate-machine combat forward. Passes each live gate (active side
+ * first, then the other) and skips all surges. Stops when combat finishes, when
+ * _seqStep === stopBeforeStep, or after a bounded number of iterations.
+ */
+async function driveGateCombat(fh, { stopBeforeStep = null, maxIters = 60 } = {}) {
+  const game = fh.getGame();
+  const gid = game.gameId;
+  for (let i = 0; i < maxIters; i++) {
+    const cb = game.pendingCombat;
+    if (!cb) return;
+    if (stopBeforeStep && cb._seqStep === stopBeforeStep) return;
+    const gf = _liveGateField(cb);
+    if (gf) {
+      const gate = cb[gf];
+      const side = !gate.attacker.passed ? 'attacker' : 'defender';
+      const pn = side === 'attacker'
+        ? cb.attackerPlayerNum
+        : (cb.defenderPlayerNum ?? (cb.attackerPlayerNum === 1 ? 2 : 1));
+      await fh.act(`combat_${_GATE_WINDOW_CUSTOM[gf]}_pick_${gid}_done`, pn === 1 ? 'player1' : 'player2');
+      continue;
+    }
+    if (cb.surgeRemaining > 0) {
+      await fh.act(`combat_surge_${gid}_done`, cb.attackerPlayerNum === 1 ? 'player1' : 'player2');
+      continue;
+    }
+    // No gate live and no surges pending — the mechanic steps advance on their
+    // own (roll auto-rolls; damage/after_resolve self-finish). Nothing to click.
+    break;
+  }
+}
+/**
+ * Drive the gate-machine combat, spending the surge ability at surgeIndex once,
+ * then skipping the rest. Used by the Recover tests (surge index 1 = "recover 2").
+ */
+async function driveGateCombatWithSurge(fh, surgeIndex, { maxIters = 60 } = {}) {
+  const game = fh.getGame();
+  const gid = game.gameId;
+  let surgeSpent = false;
+  for (let i = 0; i < maxIters; i++) {
+    const cb = game.pendingCombat;
+    if (!cb) break;
+    const gf = _liveGateField(cb);
+    if (gf) {
+      const gate = cb[gf];
+      const side = !gate.attacker.passed ? 'attacker' : 'defender';
+      const pn = side === 'attacker'
+        ? cb.attackerPlayerNum
+        : (cb.defenderPlayerNum ?? (cb.attackerPlayerNum === 1 ? 2 : 1));
+      await fh.act(`combat_${_GATE_WINDOW_CUSTOM[gf]}_pick_${gid}_done`, pn === 1 ? 'player1' : 'player2');
+      continue;
+    }
+    if (cb.surgeRemaining > 0) {
+      const atkUser = cb.attackerPlayerNum === 1 ? 'player1' : 'player2';
+      if (!surgeSpent) {
+        await fh.act(`combat_surge_${gid}_${surgeIndex}`, atkUser);
+        surgeSpent = true;
+        continue;
+      }
+      await fh.act(`combat_surge_${gid}_done`, atkUser);
+      continue;
+    }
+    break;
+  }
+  return { surgeSpent };
+}
 
 describe('headless combat resolution', () => {
   it('reduces target HP when damage is applied', () => {
@@ -285,12 +373,29 @@ describe('headless combat resolution', () => {
     assert.ok(attackAction, 'P1 has attack target action');
     await fh.act(attackAction.customId, 'player1');
 
-    // Witness pendingCombat after attack_target
+    // The eager pendingCombat.rerollOneAttackDie count is dead in the gate
+    // (combat.js:4819 "The old eager rerollOneAttackDie count is dead in the
+    // gate. alexanbv 2026-06-16."). Heir's reroll moved to the rerolls gate
+    // window (registered as the generic attachment-presence reroll
+    // reroll:heir_to_the_jedi:attacker) and the +1 Hit is a mods passive that
+    // only fires on Ranged (combat-abilities-attachment-auto.js:40,
+    // heir_to_the_jedi_hit cond: isRanged). Witness the CURRENT behavior.
     assert.ok(game.pendingCombat, 'pendingCombat created');
     assert.strictEqual(game.pendingCombat.isRanged, false, 'Vader is melee');
-    assert.strictEqual(game.pendingCombat.rerollOneAttackDie, 1,
-      'R43: Heir to the Jedi grants +1 rerollOneAttackDie');
-    assert.strictEqual(game.pendingCombat.bonusHits || 0, 0,
+
+    // R43: Heir grants a reroll regardless of melee/ranged — it appears in the
+    // rerolls gate window as an interactive attacker ability.
+    assert.strictEqual(game.pendingCombat._seqStep, 'rerolls',
+      'attack auto-walked to the rerolls gate (Heir reroll surfaced there)');
+    assert.ok(
+      (game.pendingCombat.rerollsGate?.attacker?.interactive || [])
+        .includes('reroll:heir_to_the_jedi:attacker'),
+      'R43: Heir to the Jedi grants a reroll in the rerolls gate (melee)');
+
+    // R43: Heir's +1 Hit must NOT apply on a melee attack. Drive past the mods
+    // window (where heir_to_the_jedi_hit would fire) and confirm bonusHits stays 0.
+    await driveGateCombat(fh, { stopBeforeStep: 'spend_surges' });
+    assert.strictEqual(game.pendingCombat?.bonusHits || 0, 0,
       'R43: Heir to the Jedi does NOT grant bonusHits on melee attack');
   });
 
@@ -298,10 +403,23 @@ describe('headless combat resolution', () => {
     // Han Solo (ranged) with Heir to the Jedi attachment.
     // Ranged attacks get the reroll AND the +1 Hit (ranged-only clause).
     // Han has no innate attack rerolls. Clean witness.
+    //
+    // Deterministic dice (else flaky): pin an attack roll that produces a SURGE so
+    // the sequence pauses at the spend_surges step. Without a surge the gate machine
+    // auto-advances spend_surges → damage → combat resolves and deletes
+    // pendingCombat, so the post-mods bonusHits read came back undefined on the
+    // ~1-in-5 runs where the random Han roll rolled 0 surge.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Han Solo' }],
       p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      diceOverrides: {
+        attackRolls: [{ acc: 5, dmg: 2, surge: 1, dice: [
+          { color: 'blue', acc: 5, dmg: 0, surge: 0 },
+          { color: 'green', acc: 0, dmg: 2, surge: 1 },
+        ] }],
+        defenseRolls: [{ block: 0, evade: 0, dodge: false, color: 'white' }],
+      },
     });
     const game = fh.getGame();
     const dcMeta = fh.getDcMessageMeta();
@@ -336,12 +454,23 @@ describe('headless combat resolution', () => {
     const attackAction = fh.getActions(1).find(a => a.type === 'attack_target');
     await fh.act(attackAction.customId, 'player1');
 
-    // Witness pendingCombat after attack_target
+    // See the melee test for why the eager rerollOneAttackDie / bonusHits fields
+    // are gone (alexanbv 2026-06-16/17 gate rebuild). Witness CURRENT behavior:
+    // Heir's reroll lives in the rerolls gate, and on a RANGED attack its +1 Hit
+    // mods passive (heir_to_the_jedi_hit) fires → bonusHits === 1.
     assert.ok(game.pendingCombat, 'pendingCombat created');
     assert.strictEqual(game.pendingCombat.isRanged, true, 'Han Solo is ranged');
-    assert.strictEqual(game.pendingCombat.rerollOneAttackDie, 1,
-      'R43: Heir to the Jedi grants +1 rerollOneAttackDie even on ranged');
-    assert.strictEqual(game.pendingCombat.bonusHits, 1,
+
+    assert.strictEqual(game.pendingCombat._seqStep, 'rerolls',
+      'attack auto-walked to the rerolls gate (Heir reroll surfaced there)');
+    assert.ok(
+      (game.pendingCombat.rerollsGate?.attacker?.interactive || [])
+        .includes('reroll:heir_to_the_jedi:attacker'),
+      'R43: Heir to the Jedi grants a reroll in the rerolls gate even on ranged');
+
+    // Drive past the mods window where heir_to_the_jedi_hit fires (Ranged-only).
+    await driveGateCombat(fh, { stopBeforeStep: 'spend_surges' });
+    assert.strictEqual(game.pendingCombat?.bonusHits, 1,
       'R43: Heir to the Jedi grants +1 bonusHits on ranged attack');
   });
 
@@ -352,10 +481,22 @@ describe('headless combat resolution', () => {
     //
     // Pinned coordinates (verified against map-spaces.json adjacency):
     //   Han at a10 (attacker), Luke at a12 (distance 2: a10→a11→a12), Stormtrooper at b10 (target)
+    //
+    // Deterministic dice (else flaky): pin an attack roll with a SURGE so the
+    // sequence pauses at spend_surges and pendingCombat survives to be inspected.
+    // A random 0-surge roll would let the attack auto-resolve to completion and
+    // delete pendingCombat before the witness is read.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Han Solo' }, { dcName: 'Luke Skywalker' }],
       p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      diceOverrides: {
+        attackRolls: [{ acc: 5, dmg: 2, surge: 1, dice: [
+          { color: 'blue', acc: 5, dmg: 0, surge: 0 },
+          { color: 'green', acc: 0, dmg: 2, surge: 1 },
+        ] }],
+        defenseRolls: [{ block: 0, evade: 0, dodge: false, color: 'white' }],
+      },
     });
     const game = fh.getGame();
     game.p1PlayAreaId = 'p1-play-area';
@@ -383,42 +524,46 @@ describe('headless combat resolution', () => {
     assert.ok(activateHan, 'Found activate action for Han Solo');
     await fh.act(activateHan.customId, 'player1');
 
-    // Step 2: Attack target
+    // Step 2: Attack target. With the gate machine, the attack auto-walks
+    // (dice auto-roll, on_declare passes) and PAUSES at the rerolls gate. The
+    // legacy combat_gate/combat_roll actions + the eager attackerRerollsRemaining
+    // count are gone (combat.js:4819 + gate rebuild alexanbv 2026-06-16). The
+    // friendly-Inspiring reroll is now surfaced as an interactive entry in the
+    // attacker's rerolls gate (reroll:luke_skywalker:attacker).
     const attackAction = fh.getActions(1).find(a => a.type === 'attack_target');
     assert.ok(attackAction, 'Han has attack target action');
     await fh.act(attackAction.customId, 'player1');
     assert.ok(game.pendingCombat, 'pendingCombat created after attack_target');
 
-    // Step 3: Both players ready
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
-    assert.ok(readyP1, 'P1 has combat_ready action');
-    await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
-    assert.ok(readyP2, 'P2 has combat_ready action');
-    await fh.act(readyP2.customId, 'player2');
-
-    // Step 4: Attack roll (P1), then defense roll (P2)
-    // Inspiring scan fires during defense roll phase (combat.js:2844-2860)
-    // attackerRerollsRemaining set at combat.js:3130
-    const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
-    assert.ok(atkRoll, 'P1 (attacker) has combat_roll action');
-    await fh.act(atkRoll.customId, 'player1');
-    const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
-    assert.ok(defRoll, 'P2 (defender) has combat_roll action');
-    await fh.act(defRoll.customId, 'player2');
-
-    // Witness: Inspiring grants exactly 1 attack reroll
-    assert.strictEqual(game.pendingCombat.attackerRerollsRemaining, 1,
-      'R45: Inspiring — Luke within 3 spaces grants +1 attackerRerollsRemaining');
+    // Witness: Inspiring registers a reroll in the attacker's rerolls gate.
+    assert.strictEqual(game.pendingCombat._seqStep, 'rerolls',
+      'attack auto-walked to the rerolls gate');
+    assert.ok(
+      (game.pendingCombat.rerollsGate?.attacker?.interactive || [])
+        .includes('reroll:luke_skywalker:attacker'),
+      'R45: Inspiring — Luke within 3 spaces grants an attacker reroll in the gate');
   });
 
   it('R45: Inspiring — friendly Luke beyond 3 spaces grants 0 attackerRerollsRemaining', async () => {
     // Same setup as positive test, but Luke at a14 (distance 4: a10→a11→a12→a13→a14).
     // Beyond 3 spaces, so Inspiring should NOT fire.
+    //
+    // Deterministic dice (else flaky): with Inspiring absent the rerolls gate has
+    // nothing interactive, so the sequence auto-advances. Pin an attack roll with a
+    // SURGE so it pauses at spend_surges and pendingCombat survives — otherwise a
+    // random 0-surge roll resolves the whole attack synchronously and the
+    // "pendingCombat created" assertion sees null on ~1-in-5 runs.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Han Solo' }, { dcName: 'Luke Skywalker' }],
       p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
+      diceOverrides: {
+        attackRolls: [{ acc: 5, dmg: 2, surge: 1, dice: [
+          { color: 'blue', acc: 5, dmg: 0, surge: 0 },
+          { color: 'green', acc: 0, dmg: 2, surge: 1 },
+        ] }],
+        defenseRolls: [{ block: 0, evade: 0, dodge: false, color: 'white' }],
+      },
     });
     const game = fh.getGame();
     game.p1PlayAreaId = 'p1-play-area';
@@ -448,20 +593,15 @@ describe('headless combat resolution', () => {
 
     const attackAction = fh.getActions(1).find(a => a.type === 'attack_target');
     await fh.act(attackAction.customId, 'player1');
+    assert.ok(game.pendingCombat, 'pendingCombat created after attack_target');
 
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
-    await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
-    await fh.act(readyP2.customId, 'player2');
-
-    const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
-    await fh.act(atkRoll.customId, 'player1');
-    const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
-    await fh.act(defRoll.customId, 'player2');
-
-    // Witness: no rerolls granted
-    assert.strictEqual(game.pendingCombat.attackerRerollsRemaining, 0,
-      'R45: Inspiring — Luke beyond 3 spaces grants 0 attackerRerollsRemaining');
+    // Witness: Inspiring does NOT register a reroll when Luke is beyond 3 spaces.
+    // With no interactive attacker reroll, the rerolls gate has nothing to do and
+    // the sequence auto-advances past it; assert the Inspiring reroll is absent
+    // from the rerolls gate (whether or not the gate is still live).
+    const interactive = game.pendingCombat.rerollsGate?.attacker?.interactive || [];
+    assert.ok(!interactive.includes('reroll:luke_skywalker:attacker'),
+      'R45: Inspiring — Luke beyond 3 spaces grants NO attacker reroll');
   });
 
   it('LOS-PARITY: non-MASSIVE figure blocks LOS in computeAttackTargets', async () => {
@@ -701,15 +841,6 @@ describe('headless combat resolution', () => {
     assert.strictEqual(p1HandBefore, 1, 'P1 starts with 1 CC in hand');
     assert.strictEqual(p2HandBefore, 1, 'P2 starts with 1 CC in hand');
 
-    // Activate Agent Kallus → triggers Fulcrum prompt (does NOT auto-draw)
-    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
-    assert.ok(activateAction, 'P1 has activate action for Kallus');
-    await fh.act(activateAction.customId, 'player1');
-
-    // Hands should be unchanged — prompt shown but not yet resolved
-    assert.strictEqual(game.player1CcHand.length, p1HandBefore, 'P1 hand unchanged before Fulcrum choice');
-    assert.strictEqual(game.player2CcHand.length, p2HandBefore, 'P2 hand unchanged before Fulcrum choice');
-
     // Discover Kallus msgId
     const dcMeta = fh.getDcMessageMeta();
     let kallusMsgId = null;
@@ -718,8 +849,28 @@ describe('headless combat resolution', () => {
     }
     assert.ok(kallusMsgId, 'Kallus msgId found');
 
-    // Click "Use Fulcrum"
-    await fh.act(`act_passive_${game.gameId}_${kallusMsgId}_fulcrum_use`, 'player1');
+    // Fulcrum is no longer an eager act_passive_*_fulcrum_* effect — it moved to
+    // the Start-of-Activation (SoA) orchestrator (activation-setup.js:740-743;
+    // soa-orchestrator.js subPromptKey 'fulcrum'; resolved by soa_pick_/soa_fire_
+    // in soa-handler.js). The headless dc_activate_ path bypasses the real
+    // activation handler (game-harness.js:261), so the SoA pass that the live
+    // handler would run isn't fired; set up the SoA resolution directly (the
+    // same enumerate + start the activation handler uses), then drive it.
+    const soaDescriptors = enumerateActivatorSoaDescriptors(
+      game, { dcName: 'Agent Kallus', playerNum: 1, msgId: kallusMsgId, figureIndex: 0 });
+    assert.ok(
+      soaDescriptors.some(d => d.subPromptKey === 'fulcrum'),
+      'Kallus enumerates a Fulcrum SoA descriptor');
+    startSoaResolution(game, soaDescriptors, 1, { activatorPlayerNum: 1, activatorMsgId: kallusMsgId });
+
+    // Selecting the trigger (soa_pick) posts the use/decline sub-prompt; nothing
+    // drawn yet.
+    await fh.act(`soa_pick_${game.gameId}_fulcrum:${kallusMsgId}`, 'player1');
+    assert.strictEqual(game.player1CcHand.length, p1HandBefore, 'P1 hand unchanged before Fulcrum choice');
+    assert.strictEqual(game.player2CcHand.length, p2HandBefore, 'P2 hand unchanged before Fulcrum choice');
+
+    // Click "Use Fulcrum" (soa_fire ... _use). Each player draws exactly 1.
+    await fh.act(`soa_fire_${game.gameId}_fulcrum:${kallusMsgId}_use`, 'player1');
 
     // Both hands should have grown by 1
     assert.strictEqual(game.player1CcHand.length, p1HandBefore + 1, 'P1 drew 1 CC from Fulcrum');
@@ -743,11 +894,6 @@ describe('headless combat resolution', () => {
     const p1HandBefore = game.player1CcHand.length;
     const p2HandBefore = game.player2CcHand.length;
 
-    // Activate Agent Kallus
-    const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
-    assert.ok(activateAction, 'P1 has activate action for Kallus');
-    await fh.act(activateAction.customId, 'player1');
-
     // Discover Kallus msgId
     const dcMeta = fh.getDcMessageMeta();
     let kallusMsgId = null;
@@ -756,8 +902,15 @@ describe('headless combat resolution', () => {
     }
     assert.ok(kallusMsgId, 'Kallus msgId found');
 
-    // Click "Skip"
-    await fh.act(`act_passive_${game.gameId}_${kallusMsgId}_fulcrum_skip`, 'player1');
+    // Fulcrum now resolves through the SoA orchestrator (see the accept test).
+    // Drive it directly (headless dc_activate_ bypasses the SoA pass) and decline.
+    const soaDescriptors = enumerateActivatorSoaDescriptors(
+      game, { dcName: 'Agent Kallus', playerNum: 1, msgId: kallusMsgId, figureIndex: 0 });
+    startSoaResolution(game, soaDescriptors, 1, { activatorPlayerNum: 1, activatorMsgId: kallusMsgId });
+    await fh.act(`soa_pick_${game.gameId}_fulcrum:${kallusMsgId}`, 'player1');
+
+    // Click "Decline" (soa_fire ... _skip)
+    await fh.act(`soa_fire_${game.gameId}_fulcrum:${kallusMsgId}_skip`, 'player1');
 
     // Hands must be unchanged
     assert.strictEqual(game.player1CcHand.length, p1HandBefore, 'P1 hand unchanged after declining Fulcrum');
@@ -767,10 +920,18 @@ describe('headless combat resolution', () => {
     assert.strictEqual(game.player2CcDeck.length, 1, 'P2 deck unchanged');
   });
 
-  it('Useful Hide: range filter — only friendly within 3 spaces gets Evade', async () => {
+  it('Useful Hide: distributes Evade to a player-picked friendly figure', async () => {
+    // Useful Hide (Tauntaun Rider) was reworked (damage-pipeline-hooks.js:1435-1437,
+    // alexanbv 2026-06-19): "distributes 2 Evade Tokens among friendly figures with
+    // NO range restriction (the old ≤3-space filter was not on the card)." It is now
+    // an interactive WHEN_DEFEATED player-pick (openDefeatPick kind 'uh' →
+    // defeat_pick_<gameId>_uh_<idx>), not an automatic spatial grant. This test
+    // drives that pick: the controller chooses the Saboteur for an Evade token, and
+    // an UN-picked friendly (Luke) gets none.
+    //
     // P1 Stormtrooper (Elite) at e2 attacks P2 Tauntaun Rider at e3 (1 HP).
-    // P2 also has: Rebel Saboteur at e5 (within 3 of e3), Luke Skywalker at e10 (beyond 3).
-    // On defeat, Useful Hide should give Evade only to the Saboteur (within 3), not Luke (beyond 3).
+    // P2 also has Rebel Saboteur at e5 and Luke Skywalker at e10 — both eligible
+    // (range no longer matters); the pick decides who receives the token.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Stormtrooper (Elite)' }],
@@ -799,8 +960,8 @@ describe('headless combat resolution', () => {
     const saboteurFig = p2Figs.find(fk => fk.startsWith('Rebel Saboteur'));
     const lukeFig = p2Figs.find(fk => fk.startsWith('Luke Skywalker'));
     game.figurePositions[2][tauntaunFig] = 'e3';
-    game.figurePositions[2][saboteurFig] = 'e5';   // within 3 of e3
-    game.figurePositions[2][lukeFig] = 'e10';       // beyond 3 of e3
+    game.figurePositions[2][saboteurFig] = 'e5';
+    game.figurePositions[2][lukeFig] = 'e10';
     for (const fk of p2Figs) {
       if (![tauntaunFig, saboteurFig, lukeFig].includes(fk)) game.figurePositions[2][fk] = 't18';
     }
@@ -831,72 +992,38 @@ describe('headless combat resolution', () => {
     assert.ok(attackAction, 'Tauntaun Rider is a valid attack target');
     await fh.act(attackAction.customId, 'player1');
 
-    // Both players ready
-    const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
-    if (readyP1) await fh.act(readyP1.customId, 'player1');
-    const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
-    if (readyP2) await fh.act(readyP2.customId, 'player2');
-
-    // Attack roll
-    const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
-    assert.ok(atkRoll, 'Attacker has combat_roll');
-    await fh.act(atkRoll.customId, 'player1');
-
-    // Defense roll
-    const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
-    assert.ok(defRoll, 'Defender has combat_roll');
-    await fh.act(defRoll.customId, 'player2');
-
-    // Advance through reroll/token/surge phases until resolve
-    for (let step = 0; step < 20; step++) {
-      const p1Actions = fh.getActions(1);
-      const p2Actions = fh.getActions(2);
-      const resolve = p1Actions.find(a => a.type === 'combat_resolve')
-        || p2Actions.find(a => a.type === 'combat_resolve');
-      if (resolve) {
-        await fh.act(resolve.customId, resolve === p1Actions.find(a => a.type === 'combat_resolve') ? 'player1' : 'player2');
-        break;
-      }
-      const skipSurges = p1Actions.find(a => a.type === 'combat_skip_surges');
-      if (skipSurges) { await fh.act(skipSurges.customId, 'player1'); continue; }
-      const reroll = p1Actions.find(a => a.type === 'combat_reroll')
-        || p2Actions.find(a => a.type === 'combat_reroll');
-      if (reroll) {
-        await fh.act(reroll.customId, reroll === p1Actions.find(a => a.type === 'combat_reroll') ? 'player1' : 'player2');
-        continue;
-      }
-      const token = p1Actions.find(a => a.type === 'combat_token')
-        || p2Actions.find(a => a.type === 'combat_token');
-      if (token) {
-        await fh.act(token.customId, token === p1Actions.find(a => a.type === 'combat_token') ? 'player1' : 'player2');
-        continue;
-      }
-      const passive = p1Actions.find(a => a.type === 'combat_passive')
-        || p2Actions.find(a => a.type === 'combat_passive');
-      if (passive) {
-        await fh.act(passive.customId, passive === p1Actions.find(a => a.type === 'combat_passive') ? 'player1' : 'player2');
-        continue;
-      }
-      // Fallback: try any remaining combat action
-      const any = [...p1Actions, ...p2Actions].find(a => a.type.startsWith('combat_'));
-      if (any) {
-        const userId = p1Actions.includes(any) ? 'player1' : 'player2';
-        await fh.act(any.customId, userId);
-        continue;
-      }
-      break;
-    }
+    // Drive the gate-machine combat to completion (dice auto-roll; the gate
+    // machine no longer surfaces combat_gate/combat_roll/combat_surge through
+    // getAvailableActions — see driveGateCombat). Useful Hide's WHEN_DEFEATED
+    // hook fires when the Tauntaun is defeated and opens the player-pick prompt.
+    await driveGateCombat(fh);
 
     // Assert: Tauntaun Rider is defeated (position removed)
     assert.ok(!game.figurePositions[2][tauntaunFig], 'Tauntaun Rider position removed (defeated)');
 
-    // Assert: Saboteur (within 3) got Evade token
-    const sabEvadeAfter = (game.figurePowerTokens[saboteurFig] || []).filter(t => t === 'Evade').length;
-    assert.ok(sabEvadeAfter > sabEvadeBefore, `Saboteur within 3 spaces gained Evade token (${sabEvadeBefore} → ${sabEvadeAfter})`);
+    // Useful Hide opened a player-pick for the controller (P2). Options are the
+    // full friendly set, in a stable order; idx is the position in that list.
+    const pick = game.pendingDefeatPick;
+    assert.ok(pick && pick.kind === 'uh', 'Useful Hide opened a defeat-pick prompt');
+    assert.strictEqual(pick.choosingPlayerNum, 2, 'P2 (Tauntaun controller) makes the pick');
+    const sabIdx = pick.options.findIndex(o => o.figureKey === saboteurFig);
+    const lukeIdx = pick.options.findIndex(o => o.figureKey === lukeFig);
+    assert.ok(sabIdx >= 0 && lukeIdx >= 0,
+      'both Saboteur and Luke are eligible options (no range restriction)');
 
-    // Assert: Luke (beyond 3) did NOT get Evade token
+    // P2 assigns the first Evade Token to the Saboteur, then is done.
+    await fh.act(`defeat_pick_${game.gameId}_uh_${sabIdx}`, 'player2');
+    const skipId = `defeat_pick_skip_${game.gameId}_uh`;
+    if (game.pendingDefeatPick) await fh.act(skipId, 'player2');
+
+    // Assert: Saboteur (picked) gained an Evade token
+    const sabEvadeAfter = (game.figurePowerTokens[saboteurFig] || []).filter(t => t === 'Evade').length;
+    assert.ok(sabEvadeAfter > sabEvadeBefore,
+      `Picked Saboteur gained an Evade token (${sabEvadeBefore} → ${sabEvadeAfter})`);
+
+    // Assert: Luke (not picked) did NOT get an Evade token
     const lukeEvadeAfter = (game.figurePowerTokens[lukeFig] || []).filter(t => t === 'Evade').length;
-    assert.strictEqual(lukeEvadeAfter, lukeEvadeBefore, 'Luke beyond 3 spaces did NOT gain Evade token');
+    assert.strictEqual(lukeEvadeAfter, lukeEvadeBefore, 'Un-picked Luke did NOT gain an Evade token');
   });
 
   it('VP award triggers game end at 40', async () => {
@@ -939,30 +1066,37 @@ describe('headless combat resolution', () => {
     const p1FigKey = Object.keys(game.figurePositions[1])[0];
     assert.ok(p1FigKey, 'P1 has a figure');
 
-    // Manually set pendingStrainChoice (normally created by applyStrainToFigure)
-    game.pendingStrainChoice = {
+    // The legacy pendingStrainChoice + strain_choice_discard_ path was RETIRED in
+    // strain-migration slice 8 (handlers/index.js:374-378 "Legacy strain prompt
+    // handlers ... retired ... All voluntary strain now routes through applyStrain
+    // → strain_resolve_*"). Strain now lives on game.pendingStrainEvent with an
+    // eventId, resolved one strain-point at a time via
+    // strain_resolve_discard_<gameId>_<eventId> (strain-handler.js:567-568 →
+    // resolveSingleStrainChoice → deck.splice(0, costMult), strain-resolver.js:137).
+    // Set up the event directly (the eventId is normally Date.now()-derived in
+    // production; a fixed id keeps this test deterministic).
+    game.pendingStrainEvent = {
+      eventId: 'test-strain-evt',
       figureKey: p1FigKey,
-      playerNum: 1,
-      amount: 2,
-      headhunterDmg: 0,
-      abilityLabel: 'Test Strain',
-      sourceLabel: 'test',
-      dcName: 'Luke Skywalker',
-      msgId: p1MsgId,
-      figureIndex: 0,
-      threadId: 'test-combat-thread',
-      discardedCount: 0,
-      underDuressActive: false,
-      ccCostPerStrain: 1,
+      originalControllerPN: 1,
+      controllerPN: 1,
+      remaining: 2,
+      totalAmount: 2,
+      source: 'Test Strain',
+      costMultiplier: 1,
+      udPrompted: false,
+      udResolved: true,
+      udMsgId: null,
+      followup: null,
     };
 
     // Snapshot before
-    const deckBefore = [...game.player1CcDeck];
     const handBefore = [...game.player1CcHand];
-    const discardBefore = [...(game.player1CcDiscard || [])];
 
-    // Act: choose to discard 2 CCs for strain
-    await fh.act(`strain_choice_discard_${game.gameId}_2`, 'player1');
+    // Act: absorb both strain points by discarding from deck top (one click per
+    // strain point).
+    await fh.act(`strain_resolve_discard_${game.gameId}_test-strain-evt`, 'player1');
+    await fh.act(`strain_resolve_discard_${game.gameId}_test-strain-evt`, 'player1');
 
     // Assert: deck lost 2 cards from front
     assert.deepEqual(game.player1CcDeck, ['CardC'],
@@ -976,9 +1110,9 @@ describe('headless combat resolution', () => {
     assert.ok(game.player1CcDiscard.includes('CardA'), 'CardA in discard pile');
     assert.ok(game.player1CcDiscard.includes('CardB'), 'CardB in discard pile');
 
-    // Assert: pendingStrainChoice cleared
-    assert.strictEqual(game.pendingStrainChoice, undefined,
-      'pendingStrainChoice should be cleared after resolution');
+    // Assert: pendingStrainEvent cleared after both strain points resolved
+    assert.strictEqual(game.pendingStrainEvent, undefined,
+      'pendingStrainEvent should be cleared after resolution');
   });
 
   // ── Attachment VP on Group Defeat ────────────────────────────────────────────
@@ -1216,83 +1350,14 @@ describe('Weakened removal at end of activation', () => {
 
 /**
  * Drive combat to completion, spending a specific surge ability by index.
- * All other phases (reroll, token, passive) are auto-advanced.
+ * Thin wrapper over driveGateCombatWithSurge — the gate machine no longer
+ * surfaces combat_gate/combat_roll/combat_surge through getAvailableActions, so
+ * the attack is driven via the gate windows' own customIds instead.
  */
 async function driveCombatWithSurge(fh, surgeIndex) {
-  // Both players ready
-  const readyP1 = fh.getActions(1).find(a => a.type === 'combat_gate');
-  if (readyP1) await fh.act(readyP1.customId, 'player1');
-  const readyP2 = fh.getActions(2).find(a => a.type === 'combat_gate');
-  if (readyP2) await fh.act(readyP2.customId, 'player2');
-
-  // Attack roll
-  const atkRoll = fh.getActions(1).find(a => a.type === 'combat_roll');
-  assert.ok(atkRoll, 'Attacker has combat_roll');
-  await fh.act(atkRoll.customId, 'player1');
-
-  // Defense roll
-  const defRoll = fh.getActions(2).find(a => a.type === 'combat_roll');
-  assert.ok(defRoll, 'Defender has combat_roll');
-  await fh.act(defRoll.customId, 'player2');
-
-  // Advance through phases, spending the requested surge
-  let surgeSpent = false;
-  for (let step = 0; step < 30; step++) {
-    const p1Actions = fh.getActions(1);
-    const p2Actions = fh.getActions(2);
-
-    const resolve = p1Actions.find(a => a.type === 'combat_resolve')
-      || p2Actions.find(a => a.type === 'combat_resolve');
-    if (resolve) {
-      const uid = p1Actions.includes(resolve) ? 'player1' : 'player2';
-      await fh.act(resolve.customId, uid);
-      break;
-    }
-
-    // Spend the target surge if available
-    if (!surgeSpent) {
-      const surgeAction = p1Actions.find(a =>
-        a.type === 'combat_surge' && a.params?.surgeIndex === surgeIndex
-      );
-      if (surgeAction) {
-        await fh.act(surgeAction.customId, 'player1');
-        surgeSpent = true;
-        continue;
-      }
-    }
-
-    // Skip remaining surges
-    const skipSurges = p1Actions.find(a => a.type === 'combat_skip_surges');
-    if (skipSurges) { await fh.act(skipSurges.customId, 'player1'); continue; }
-
-    // Auto-advance other phases
-    const reroll = p1Actions.find(a => a.type === 'combat_reroll')
-      || p2Actions.find(a => a.type === 'combat_reroll');
-    if (reroll) {
-      await fh.act(reroll.customId, p1Actions.includes(reroll) ? 'player1' : 'player2');
-      continue;
-    }
-    const token = p1Actions.find(a => a.type === 'combat_token')
-      || p2Actions.find(a => a.type === 'combat_token');
-    if (token) {
-      await fh.act(token.customId, p1Actions.includes(token) ? 'player1' : 'player2');
-      continue;
-    }
-    const passive = p1Actions.find(a => a.type === 'combat_passive')
-      || p2Actions.find(a => a.type === 'combat_passive');
-    if (passive) {
-      await fh.act(passive.customId, p1Actions.includes(passive) ? 'player1' : 'player2');
-      continue;
-    }
-    const any = [...p1Actions, ...p2Actions].find(a => a.type.startsWith('combat_'));
-    if (any) {
-      await fh.act(any.customId, p1Actions.includes(any) ? 'player1' : 'player2');
-      continue;
-    }
-    break;
-  }
-  return { surgeSpent };
+  return driveGateCombatWithSurge(fh, surgeIndex);
 }
+
 
 describe('Recover heals attacker regardless of damage dealt', () => {
   it('Recover heals attacker when attack deals 0 damage (fully blocked)', async () => {

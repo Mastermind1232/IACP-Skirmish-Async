@@ -181,6 +181,34 @@ async function drivePostDeployQueue(game, gameId, p1Id, p2Id, submit, harness, g
     if (q.activeAbility) {
       const active = q.activeAbility;
 
+      // Move-X sequence in progress (Strike Team / Forward Emplacement /
+      // Smooth Landing reworked to setupPendingMoveXSequence, move-x-handler.js).
+      // Drive it WITHOUT moving: pick the next figure if the order-picker is
+      // open, then finish that figure's picker (move_x_done = skip the move).
+      // When the queue drains, the afterAction (e.g. strikeTeamTokenDistrib)
+      // fires and the ability advances to its next step (token distribution).
+      if (g.pendingMoveXSequence) {
+        const seq = g.pendingMoveXSequence;
+        if (!seq.currentMsgId && (seq.queue || []).length > 1) {
+          // Order picker open — pick the first remaining figure.
+          await submit(`move_x_seq_pick_${gameId}_${seq.queue[0].figureKey}`, userId);
+          continue;
+        }
+        if (seq.currentMsgId) {
+          // A figure is in its move-x picker — finish (skip) it.
+          await submit(`move_x_done_${gameId}_${seq.currentMsgId}`, userId);
+          continue;
+        }
+      }
+      // A lone figure's move-x picker (no surrounding sequence) — finish it.
+      if (g.pendingMoveX) {
+        const mxKeys = Object.keys(g.pendingMoveX);
+        if (mxKeys.length > 0) {
+          await submit(`move_x_done_${gameId}_${mxKeys[0]}`, userId);
+          continue;
+        }
+      }
+
       // Movement in progress — find and skip it
       if (active.moveFigures && g.moveInProgress) {
         const moveKeys = Object.keys(g.moveInProgress).filter(k => g.moveInProgress[k]?.postDeployReturn);

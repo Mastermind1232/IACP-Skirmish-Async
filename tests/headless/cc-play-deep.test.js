@@ -99,21 +99,22 @@ function makeDeps(overrides = {}) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('CC Play Deep: getCcPlayContext derivation', () => {
-  it('startOfRound=true when round active, activation msg set, button not shown', () => {
+  it('startOfRound=true when round active and the SoR window is open', () => {
+    // SoR detection moved to game.startOfRoundWhoseTurn (commit b2454043,
+    // 2026-04-05); the old roundActivationButtonShown heuristic is gone
+    // (cc-timing.js:45-52).
     const { game } = buildGameForCc({
       currentRound: 1,
-      roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
+      startOfRoundWhoseTurn: 'p1',
     });
     const ctx = getCcPlayContext(game, 1);
     assert.strictEqual(ctx.startOfRound, true);
   });
 
-  it('startOfRound=false when roundActivationButtonShown is true', () => {
+  it('startOfRound=false when the SoR window is not open', () => {
     const { game } = buildGameForCc({
       currentRound: 1,
-      roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: true,
+      startOfRoundWhoseTurn: null,
     });
     const ctx = getCcPlayContext(game, 1);
     assert.strictEqual(ctx.startOfRound, false);
@@ -179,38 +180,42 @@ describe('CC Play Deep: getCcPlayContext derivation', () => {
 });
 
 describe('CC Play Deep: isCcPlayableNow blocking flags', () => {
+  // Witness card must be playable in the unblocked case so the blocking flag is
+  // the only variable. "Beatdown" is duringActivation timing; "Element of
+  // Surprise" became whenYouDeclareAttack (two-timing model) so it would be
+  // unplayable without a pendingCombat regardless of the block.
   it('shadowOpsBlockedPlayer blocks the targeted player', () => {
     const { game } = buildGameForCc({ shadowOpsBlockedPlayer: 1 });
     game.currentActivationTurnPlayerId = game.player1Id;
-    const result = isCcPlayableNow(game, 1, 'Element of Surprise');
+    const result = isCcPlayableNow(game, 1, 'Beatdown');
     assert.strictEqual(result, false);
   });
 
   it('shadowOpsBlockedPlayer does NOT block the other player', () => {
     const { game } = buildGameForCc({ shadowOpsBlockedPlayer: 1 });
     game.currentActivationTurnPlayerId = game.player2Id;
-    const result = isCcPlayableNow(game, 2, 'Element of Surprise');
+    const result = isCcPlayableNow(game, 2, 'Beatdown');
     assert.strictEqual(result, true);
   });
 
   it('criticalHitBlockedPlayer blocks the targeted player', () => {
     const { game } = buildGameForCc({ criticalHitBlockedPlayer: 2 });
     game.currentActivationTurnPlayerId = game.player2Id;
-    const result = isCcPlayableNow(game, 2, 'Element of Surprise');
+    const result = isCcPlayableNow(game, 2, 'Beatdown');
     assert.strictEqual(result, false);
   });
 
   it('commsJammerActivePlayerNum blocks the OTHER player', () => {
     const { game } = buildGameForCc({ commsJammerActivePlayerNum: 1 });
     game.currentActivationTurnPlayerId = game.player2Id;
-    const result = isCcPlayableNow(game, 2, 'Element of Surprise');
+    const result = isCcPlayableNow(game, 2, 'Beatdown');
     assert.strictEqual(result, false);
   });
 
   it('commsJammerActivePlayerNum does NOT block the owner', () => {
     const { game } = buildGameForCc({ commsJammerActivePlayerNum: 1 });
     game.currentActivationTurnPlayerId = game.player1Id;
-    const result = isCcPlayableNow(game, 1, 'Element of Surprise');
+    const result = isCcPlayableNow(game, 1, 'Beatdown');
     assert.strictEqual(result, true);
   });
 
@@ -235,8 +240,7 @@ describe('CC Play Deep: isCcPlayableNow blocking flags', () => {
     const { game } = buildGameForCc({
       reinforcementsPlayedThisSor: true,
       currentRound: 1,
-      roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
+      startOfRoundWhoseTurn: 'p1',
     });
     const result = isCcPlayableNow(game, 1, 'Reinforcements');
     assert.strictEqual(result, false);
@@ -247,8 +251,7 @@ describe('CC Play Deep: isCcPlayableNow timing categories', () => {
   it('startOfRound cards playable during SoR', () => {
     const { game } = buildGameForCc({
       currentRound: 1,
-      roundActivationMessageId: 'msg1',
-      roundActivationButtonShown: false,
+      startOfRoundWhoseTurn: 'p1',
     });
     const sorCards = Object.entries(ccData.cards || {})
       .filter(([, v]) => v.timing?.toLowerCase() === 'startofround')
@@ -1047,14 +1050,13 @@ describe('CC Play Deep: every timing category has playable card', () => {
   // Build game states for each timing context
   const timingToState = {
     startofround: (game) => {
+      // SoR detection uses game.startOfRoundWhoseTurn (commit b2454043).
       game.currentRound = 1;
-      game.roundActivationMessageId = 'msg1';
-      game.roundActivationButtonShown = false;
+      game.startOfRoundWhoseTurn = game.player1Id;
     },
     startofstatusphase: (game) => {
       game.currentRound = 1;
-      game.roundActivationMessageId = 'msg1';
-      game.roundActivationButtonShown = false;
+      game.startOfRoundWhoseTurn = game.player1Id;
     },
     duringactivation: (game) => {
       game.currentActivationTurnPlayerId = game.player1Id;
@@ -1078,6 +1080,12 @@ describe('CC Play Deep: every timing category has playable card', () => {
     afterattackdice: (game) => {
       game.combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
     },
+    // Two-timing model: whenYouDeclareAttack CCs now require a declared attack
+    // (pendingCombat with the holder as attacker), not just activation.
+    whenyoudeclareattack: (game) => {
+      game.currentActivationTurnPlayerId = game.player1Id;
+      game.combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
+    },
   };
 
   // Timings that need P1 as activation owner
@@ -1091,7 +1099,7 @@ describe('CC Play Deep: every timing category has playable card', () => {
     'whenyouendmovementinspaceswithotherfigures',
     'whenyoudeclarelightsaberthrow',
     'afterdamage', 'afteractivationresolves', 'afterspecial',
-    'afterspecialorinteract', 'afteryouresolvecloseandpersonal',
+    'afteryouresolvecloseandpersonal',
     'afteryouresolveinterrogate', 'other',
     'whenhostilefigurewithin3spacesdefeated',
     'whenhostilefiguredefeatednotyouractivation',
@@ -1136,6 +1144,16 @@ describe('CC Play Deep: every timing category has playable card', () => {
   for (const [timing, exampleCard] of allTimings) {
     // Skip specialAction/doubleActionSpecial (never playable from hand)
     if (timing === 'specialaction' || timing === 'doubleactionspecial') continue;
+    // whencommandcardplayed (Negation / Comm Disruption) is purely REACTIVE —
+    // isCcPlayableNow always returns false (cc-timing.js:314-318); the cards
+    // fire via their counter-window prompt, never the proactive dropdown. There
+    // is no game state in which they are "playable now", so this timing has no
+    // proactive witness by design.
+    if (timing === 'whencommandcardplayed') continue;
+    // afteropponentreroll (Tough Luck) is also purely reactive — it returns
+    // false from isCcPlayableNow (cc-timing.js:358-364) and fires via its
+    // dedicated tlgate_* prompt after the opponent rerolls, never proactively.
+    if (timing === 'afteropponentreroll') continue;
 
     it(`timing "${timing}" has at least one playable card (${exampleCard})`, () => {
       const { game } = buildGameForCc();
@@ -1155,6 +1173,12 @@ describe('CC Play Deep: every timing category has playable card', () => {
         game.currentActivationTurnPlayerId = game.player1Id;
         game.endOfRoundWhoseTurn = null;
         game.lastDefeatInfo = { figureKey: 'Stormtrooper-0-0' };
+      } else if (timing === 'afterspecialorinteract') {
+        // All in a Day's Work: gated on having resolved a Special/Interact
+        // this activation (cc-timing.js:292).
+        game.currentActivationTurnPlayerId = game.player1Id;
+        game.endOfRoundWhoseTurn = null;
+        game.specialOrInteractResolvedThisActivation = true;
       } else if (timing.includes('attack') || timing.includes('defending')) {
         game.combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
       } else if (timing.includes('commandcard')) {

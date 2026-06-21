@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { createFlowHarness, PENDING_STATE_KEYS } from './flow-harness.js';
 import { assertSurfaceInvariants, validatePayloadShape } from './flow-invariants.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { openCounterWindow, counterResponder, topAvailableCounters, resolveAndCloseWindow } from '../../src/game/cc-counter-window.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,12 +70,18 @@ async function activateDc(fh, playerNum) {
   return fh.act(action.customId, uid);
 }
 
-/** End activation for current DC. */
+/** End activation for current DC, then pass the activation turn.
+ *  dc_end_activation only ends the figure's activation (handleDcEndActivation
+ *  does NOT switch the turn); the turn passes via the separate
+ *  pass_activation_turn action. To finish the player's turn we do both. */
 async function endActivation(fh, playerNum) {
   const uid = playerNum === 1 ? 'player1' : 'player2';
   const action = findAction(fh, playerNum, 'dc_end_activation');
   if (!action) return null;
-  return fh.act(action.customId, uid);
+  const r = await fh.act(action.customId, uid);
+  const pass = findAction(fh, playerNum, 'pass_activation_turn');
+  if (pass) await fh.act(pass.customId, uid);
+  return r;
 }
 
 // ── Suite 1: Game Setup ─────────────────────────────────────────────────────
@@ -107,7 +114,11 @@ describe('Flow: activate → end activation', () => {
 
     const r1 = await activateDc(fh, 1);
     assertNoErrors(r1, 'activate_dc');
-    assert.ok(fh.getSurface().getStepEntries(1).length > 0, 'Surface entries produced');
+    // The dc_activate_ flow is intercepted by the headless harness and emits an
+    // engine event (DcActivated) rather than Discord-surface interaction
+    // entries. Assert on the event as the activation evidence.
+    assert.ok((r1.result.events || []).some(e => e.type === 'DcActivated'),
+      'activation emits a DcActivated event');
 
     const r2 = await endActivation(fh, 1);
     assertNoErrors(r2, 'dc_end_activation');
@@ -324,41 +335,35 @@ describe('Flow: pending state lifecycles (DS-4)', () => {
     assert.ok(r.step.pendingCleared.includes('pendingCelebration'), 'celebration cleared in step log');
   });
 
-  it('pendingNegation: synthetic injection → opponent has actions → resolves', async () => {
+  it('counter-window: synthetic injection → opponent is responder → stack resolves', async () => {
+    // The old pendingNegation model (negation_play/negation_let_resolve surfaced
+    // via getAvailableActions) was DELETED and replaced by the unified recursive
+    // counter-window (src/game/cc-counter-window.js, alexanbv 2026-06-17; AI
+    // auto-pass commit 69e2e4e 2026-06-18). available-actions.js no longer
+    // references pendingNegation. We inject the new ccCounterWindow state and
+    // witness the same intent: the opponent is the responder, the playing player
+    // is not, and resolving the stack cancels the played card per the rules.
     const fh = createFlowHarness({
       p1Army: [{ dcName: 'Luke Skywalker' }],
       p2Army: [{ dcName: 'Darth Vader' }],
     });
 
-    // Synthetically inject a negation state (as if P1 played a cost-0 CC)
     const game = fh.getGame();
-    game.pendingNegation = {
-      playedBy: 1,
-      card: 'Take Initiative',
-      fromDc: false,
-    };
+    // As if P1 played a cost-0 CC: open the unified window for the responder (P2).
+    openCounterWindow(game, { card: 'Take Initiative', cost: 0, playedBy: 1 });
 
-    // P2 should now have negation actions
-    const p2Actions = fh.getActions(2);
-    const negPlay = p2Actions.find(a => a.type === 'negation_play');
-    const negResolve = p2Actions.find(a => a.type === 'negation_let_resolve');
+    // Opponent (P2) is the responder; the playing player (P1) is not.
+    assert.strictEqual(counterResponder(game), 2, 'opponent (P2) is the counter responder');
+    assert.notStrictEqual(counterResponder(game), 1, 'P1 (playing player) is not the responder');
 
-    assert.ok(negPlay || negResolve, 'P2 has negation response actions');
+    // P2 holds Negation: it is a legal counter against a cost-0 card.
+    const offered = topAvailableCounters(game, 0);
+    assert.ok(offered.includes('Negation'), 'P2 is offered Negation against a cost-0 card');
 
-    // P1 should NOT have negation actions
-    const p1Actions = fh.getActions(1);
-    assert.ok(!p1Actions.some(a => a.type === 'negation_play' || a.type === 'negation_let_resolve'),
-      'P1 does NOT have negation actions');
-
-    // Let it resolve
-    if (negResolve) {
-      const r = await fh.act(negResolve.customId, 'player2');
-      // Handler may error since we synthetically injected state (missing waitingMsgId etc.)
-      // But the invariant check on the state transition is the real test
-      if (r.result.error) {
-        console.log(`  [info] Expected handler error on synthetic negation: ${r.result.error}`);
-      }
-    }
+    // P2 passes (lets it resolve): the stack resolves with the card surviving.
+    const outcome = resolveAndCloseWindow(game);
+    assert.strictEqual(outcome[0].status, 'resolved', 'uncountered cost-0 card resolves on pass');
+    assert.ok(!game.ccCounterWindow, 'window cleared after resolution');
   });
 
   it('pendingPowerTokenGrant: synthetic injection → correct player has token choice actions', async () => {
@@ -451,17 +456,12 @@ describe('Flow: component cleanup (DS-5)', () => {
     const r = await endActivation(fh, 1);
     assertNoErrors(r, 'dc_end_activation');
 
-    // Check that activation end produced some form of component cleanup
-    const surface = fh.getSurface();
-    const endStep = r.step.step;
-    const stepEntries = surface.getStepEntries(endStep);
-
-    // Should have either: interaction update, edit, or UI call
-    const hasUpdate = stepEntries.some(e =>
-      (e.source === 'interaction' && (e.responseType === 'update' || e.responseType === 'editReply')) ||
-      (e.source === 'uiCall')
-    );
-    assert.ok(hasUpdate, 'End activation produced update or UI call');
+    // Ending the activation emits an ActivationCleanedUp engine event (the
+    // component-cleanup evidence in the current harness model; the old
+    // interaction-update/uiCall surface entries are no longer produced by the
+    // intercepted activation path).
+    assert.ok((r.result.events || []).some(e => e.type === 'ActivationCleanedUp'),
+      'end activation emits an ActivationCleanedUp event');
   });
 
   it('combat resolution clears combat components', async () => {
@@ -523,25 +523,24 @@ describe('Flow: action control visibility (DS-6)', () => {
 
 describe('Flow: regression scenarios', () => {
 
-  it('negation window: opponent gets response options, playing player waits', async () => {
+  it('counter-window: opponent is responder, playing player waits', async () => {
+    // pendingNegation/getAvailableActions routing was replaced by the unified
+    // counter-window (cc-counter-window.js, alexanbv 2026-06-17; commit
+    // 69e2e4e). The "opponent responds, player waits" intent is now carried by
+    // counterResponder() / topAvailableCounters().
     const fh = createFlowHarness({
       p1Army: [{ dcName: 'Luke Skywalker' }],
       p2Army: [{ dcName: 'Darth Vader' }],
     });
 
-    // Inject negation state
     const game = fh.getGame();
-    game.pendingNegation = { playedBy: 1, card: 'Take Initiative', fromDc: false };
+    openCounterWindow(game, { card: 'Take Initiative', cost: 0, playedBy: 1 });
 
-    // Verify correct player routing
-    const p1Actions = fh.getActions(1);
-    const p2Actions = fh.getActions(2);
-
-    // P2 (opponent) should have negation options
-    assert.ok(p2Actions.some(a => a.type === 'negation_let_resolve'), 'P2 can let resolve');
-    // P1 (playing player) should NOT have negation options
-    assert.ok(!p1Actions.some(a => a.type === 'negation_let_resolve'), 'P1 cannot respond to own negation');
-    assert.ok(!p1Actions.some(a => a.type === 'negation_play'), 'P1 cannot negate own card');
+    // P2 (opponent) is the responder and is offered the legal counter.
+    assert.strictEqual(counterResponder(game), 2, 'P2 (opponent) is the responder');
+    assert.ok(topAvailableCounters(game, 0).includes('Negation'), 'P2 offered Negation against cost-0 card');
+    // P1 (playing player) is not the responder — it waits.
+    assert.notStrictEqual(counterResponder(game), 1, 'P1 cannot respond to its own card');
   });
 
   it('end-activation turn switch: after P1 ends, P2 gets activate actions', async () => {

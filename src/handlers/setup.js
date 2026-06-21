@@ -953,7 +953,12 @@ export async function handleDeploymentZone(interaction, ctx) {
   const zone = isRed ? 'red' : 'blue';
   const otherZone = zone === 'red' ? 'blue' : 'red';
   game.deploymentZoneChosen = zone;
-  setPhase(game, PHASES.DEPLOYMENT);
+  // NOTE: the ZONE_SELECTION → DEPLOYMENT transition is deferred to the
+  // terminal branch below. The attachment branch goes ZONE_SELECTION →
+  // ATTACHMENT instead, and the no-attachment branch's
+  // _sendInitiativeDeployButtons sets DEPLOYMENT. Setting it eagerly here
+  // caused a redundant DEPLOYMENT → DEPLOYMENT transition (the invalid
+  // transition strict mode flags) on the no-attachment path.
   // Assign zones based on who chose (DS player or initiative player)
   const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;
   game[`player${zoneChooserPlayerNum}DeploymentZone`] = zone;
@@ -1029,6 +1034,9 @@ export async function handleDeploymentZone(interaction, ctx) {
   // No attachments — proceed directly to deployment
   // Blitz (Lothal-Wastes-A): special alternating deployment with post-deploy movement
   if (isBlitzMission(game)) {
+    // Blitz path doesn't route through _sendInitiativeDeployButtons, so it
+    // must perform the ZONE_SELECTION → DEPLOYMENT transition itself.
+    setPhase(game, PHASES.DEPLOYMENT);
     initBlitzDeployment(game);
     await sendBlitzTurnPrompt(game, game.blitzDeployment.currentPlayerNum, ctx);
     saveGames(game.gameId);

@@ -684,7 +684,12 @@ describe('Region 4: Deployment -- phase transitions', () => {
     assert.ok(result.phases.includes('deployment'), 'should include deployment phase');
   });
 
-  it('setup phases include deploy_done_gate', async () => {
+  it('deployment auto-advances to round active (deploy_done ready check removed 2026-05-09)', async () => {
+    // setup.js handleDeploymentDone (2026-05-09): the explicit deploy_done
+    // phase gate was removed — both players clicking "Deployment Completed"
+    // IS the ready signal, so the flow proceeds straight into
+    // advanceFromDeployment (post-deploy → auto-draw → start of round). There
+    // is no longer a separate deploy_done_gate step for the harness to visit.
     const result = await runSetupSim({
       mapId: DEFAULT_MAP,
       p1Army: [{ dcName: 'Luke Skywalker' }],
@@ -693,10 +698,18 @@ describe('Region 4: Deployment -- phase transitions', () => {
       p2CcDeck: IMPERIAL_CC_DECK,
     });
 
-    assert.ok(result.phases.includes('deploy_done_gate'), 'should include deploy_done_gate');
+    assert.ok(result.phases.includes('deployment'), 'deployment phase visited');
+    assert.ok(result.reachedRoundActive, 'reaches ROUND_ACTIVE without a manual deploy_done gate');
+    assert.ok(!result.phases.includes('deploy_done_gate'),
+      'deploy_done_gate is no longer a distinct visited phase');
   });
 
-  it('setup phases include cc_draw', async () => {
+  it('CC draw auto-fires inside advanceFromDeployment (no manual cc_draw step)', async () => {
+    // advanceFromDeployment now auto-draws both starting hands (cc-hand.js
+    // autoDrawAllStartingHands, per user 2026-05-09) instead of waiting for a
+    // manual "Shuffle & Draw" click, so the harness never visits a separate
+    // cc_draw phase. Witness: both hands are drawn by the time ROUND_ACTIVE is
+    // reached.
     const result = await runSetupSim({
       mapId: DEFAULT_MAP,
       p1Army: [{ dcName: 'Luke Skywalker' }],
@@ -705,7 +718,9 @@ describe('Region 4: Deployment -- phase transitions', () => {
       p2CcDeck: IMPERIAL_CC_DECK,
     });
 
-    assert.ok(result.phases.includes('cc_draw'), 'should include cc_draw phase');
+    assert.ok(result.reachedRoundActive, 'reaches ROUND_ACTIVE');
+    assert.strictEqual(result.game.player1CcDrawn, true, 'P1 hand auto-drawn');
+    assert.strictEqual(result.game.player2CcDrawn, true, 'P2 hand auto-drawn');
   });
 
   it('CC draw gives each player a hand of 3 cards', async () => {

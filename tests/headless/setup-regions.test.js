@@ -104,6 +104,9 @@ describe('Squad Submission: DC data integrity', () => {
   it('all DCs in dc-effects.json have cost and affiliation when deployable', () => {
     const violations = [];
     for (const [name, card] of Object.entries(dcEffects)) {
+      // Skip underscore-prefixed metadata keys (inline audit notes stored as
+      // strings, e.g. "_Cal_Kestis_audit_note") — not real cards.
+      if (name.startsWith('_') || !card || typeof card !== 'object') continue;
       if (card.attachment || card.companion === true) continue; // skip attachments and companion tokens
       if (name.startsWith('[')) continue; // skip upgrade cards
       if (typeof card.cost !== 'number') violations.push(`${name}: missing cost`);

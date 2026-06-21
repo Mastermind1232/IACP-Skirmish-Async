@@ -663,18 +663,21 @@ describe('Post-deploy: player routing', () => {
 // ── Suite 7: Handler Registration ────────────────────────────────────────────
 
 describe('Post-deploy: handler registration', () => {
-  it('all 12 pd_* prefixes are registered in handlers/index.js', async () => {
+  it('all pd_* prefixes are registered in handlers/index.js', async () => {
     const { default: fs } = await import('fs');
     const indexPath = 'src/handlers/index.js';
     const content = fs.readFileSync(indexPath, 'utf8');
 
+    // pd_move_skip_ REMOVED 2026-05-09 (post-deploy.js:1684): the
+    // pendingOrderedMove pipeline was retired; post-deploy moves now use the
+    // move-x picker whose Stop button covers the skip path. The prefix is no
+    // longer emitted or registered.
     const requiredPrefixes = [
       'pd_pick_',
       'pd_security_pick_',
       'pd_strike_adj_',
       'pd_strike_token_',
       'pd_strike_token_done_',
-      'pd_move_skip_',
       'pd_move_stay_',
       'pd_sl_pick_',
       'pd_walker_move_',

@@ -164,7 +164,12 @@ export async function handleDefeatPick(interaction, ctx) {
     await interaction.followUp({ content: 'No pending defeat pick.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.choosingPlayerNum);
+  // requirePlayer signature is (interaction, game, userId, playerNum,
+  // canActAsPlayer, message). The previous call passed canActAsPlayer in the
+  // `game` slot and omitted the function arg entirely, so the guard threw
+  // "canActAsPlayer is not a function" — every defeat-pick (Useful Hide, Into
+  // the Force, Brutal Tactics) crashed on the player check.
+  const ok = await requirePlayer(interaction, game, interaction.user.id, pending.choosingPlayerNum, canActAsPlayer, 'Only the choosing player may pick.');
   if (!ok) return;
 
   const kind = parts[1];

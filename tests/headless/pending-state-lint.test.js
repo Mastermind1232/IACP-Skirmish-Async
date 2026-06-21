@@ -84,6 +84,29 @@ const ALLOWED_EXCEPTIONS = new Set([
   // Defeat handler — set/consumed in defeat flow
   'pendingHeroicEffortReturn',
   'pendingScavengedWeaponryTransfer',
+  'pendingIntoTheForce', // defeat-handler: set + cleared in the Into the Force pick flow
+
+  // Combat pipeline reactive prompts — each set + cleared within its own
+  // interaction flow (verified: every key has an explicit delete/clear site).
+  'pendingCombatCcResolve', // after-attack-fire/combat: CC-resolve interrupt window
+  'pendingDbhDiePick',      // combat: Driven by Hatred die pick
+
+  // CC-play / ability reactive prompts — self-managed (set + cleared in flow)
+  'pendingCcEffect',            // cc-hand: CC effect resolution handoff
+  'pendingAdaptBlaise',         // blaise-adapt: Adapt (Blaise) prompt
+  'pendingBarteredInfoFocused', // abilities: Bartered Information focus pick
+  'pendingForbiddenKnowledge',  // abilities: Forbidden Knowledge prompt
+  'pendingEyesOnThePrize',      // abilities: Eyes on the Prize prompt
+  'pendingKuilTokenSplitState', // abilities: Kuiil token-split prompt
+
+  // Movement / map reactive prompts — set + consumed in their move/map flow
+  'pendingTriangulate',       // move-x-handler/abilities: Triangulate target pick
+  'pendingCratePush',         // map-events/misc-helpers: crate push prompt
+
+  // Round / strain reactive prompts — self-managed
+  'pendingSmugglingCompartmentPeek', // round: Smuggling Compartment peek
+  'pendingPrototypeMoveQueue',       // round: Prototype move queue
+  'pendingScHeadhunter',             // strain-handler: SC Headhunter prompt
 ]);
 
 // ── Directories and files to scan ───────────────────────────────────────────

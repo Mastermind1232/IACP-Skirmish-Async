@@ -59,9 +59,10 @@ describe('Cover Fire pending-state resolution', () => {
     const blockAction = actions.find(a => a.type === 'cover_fire_block');
     await harness.submitAction(blockAction.customId, game.player1Id);
 
-    // pendingCoverFire must be cleared
+    // pendingCoverFire must be cleared (the cleanup path now deletes the key,
+    // so it reads as undefined rather than null — both mean "cleared").
     const g = harness.getGame();
-    assert.strictEqual(g.pendingCoverFire, null, 'pendingCoverFire cleared after block');
+    assert.ok(!g.pendingCoverFire, 'pendingCoverFire cleared after block');
 
     // available-actions should no longer return cover_fire actions
     const afterActions = getAvailableActions(g, 1, actionDeps);
@@ -95,7 +96,7 @@ describe('Cover Fire pending-state resolution', () => {
     await harness.submitAction(skipAction.customId, game.player1Id);
 
     const g = harness.getGame();
-    assert.strictEqual(g.pendingCoverFire, null, 'pendingCoverFire cleared after skip');
+    assert.ok(!g.pendingCoverFire, 'pendingCoverFire cleared after skip');
 
     // No more cover fire actions
     const afterActions = getAvailableActions(g, 1, actionDeps);
@@ -148,7 +149,12 @@ describe('Strain Choice pending-state resolution', () => {
     assert.ok(!p2Types.has('strain_choice_alldmg'), 'P2 does not see strain_choice');
   });
 
-  it('strain_choice_alldmg resolves and clears pendingStrainChoice', async () => {
+  it('strain_resolve_damage resolves and clears pendingStrainEvent', async () => {
+    // Strain migration slice 8 (destruct 2026-05-06): the legacy
+    // strain_choice_alldmg_ prompt + pendingStrainChoice state were retired.
+    // Voluntary strain now routes through applyStrain → game.pendingStrainEvent,
+    // resolved by the strain_resolve_damage_/discard_/paz_ handlers
+    // (strain-handler.js). The "take all as damage" path is strain_resolve_damage_.
     const meta = createTestGame()
       .withPlayer1Army([{ dcName: 'Luke Skywalker' }])
       .withPlayer2Army([{ dcName: 'Darth Vader' }])
@@ -163,40 +169,41 @@ describe('Strain Choice pending-state resolution', () => {
     const healthArr = meta.dcHealthState.get(p1MsgId);
     const initialHp = healthArr[0][0];
 
-    game.pendingStrainChoice = {
+    // Stamp a pending strain event in the current (post-migration) shape.
+    const eventId = 'strain_test_evt_1';
+    game.pendingStrainEvent = {
+      eventId,
       figureKey: p1Fig,
-      playerNum: 1,
-      amount: 2,
-      headhunterDmg: 0,
-      abilityLabel: 'Test Strain',
-      sourceLabel: 'test',
-      dcName: 'Luke Skywalker',
-      msgId: p1MsgId,
-      figureIndex: 0,
-      threadId: 'fake-thread',
-      discardedCount: 0,
-      underDuressActive: false,
-      ccCostPerStrain: 1,
+      originalControllerPN: 1,
+      controllerPN: 1,
+      remaining: 2,
+      totalAmount: 2,
+      source: 'test',
+      costMultiplier: 1,
+      udPrompted: false,
+      udResolved: true,
+      udMsgId: null,
+      followup: null,
     };
 
-    // Submit strain_choice_alldmg
-    const customId = `strain_choice_alldmg_${game.gameId}`;
+    // Each strain_resolve_damage_ click resolves ONE point of strain (the
+    // event re-prompts while remaining > 0). Two points → two clicks; the
+    // event clears once remaining hits 0.
+    const customId = `strain_resolve_damage_${game.gameId}_${eventId}`;
     await harness.submitAction(customId, game.player1Id);
+    let g = harness.getGame();
+    assert.ok(g.pendingStrainEvent, 'still pending after first of two strain points');
+    assert.strictEqual(g.pendingStrainEvent.remaining, 1, 'one strain point remaining');
 
-    const g = harness.getGame();
-    // pendingStrainChoice must be deleted
-    assert.ok(!g.pendingStrainChoice, 'pendingStrainChoice cleared after alldmg');
+    await harness.submitAction(customId, game.player1Id);
+    g = harness.getGame();
+    // pendingStrainEvent must be cleared once all strain is resolved.
+    assert.ok(!g.pendingStrainEvent, 'pendingStrainEvent cleared after taking all damage');
 
-    // HP should have decreased by the strain amount
+    // HP should have decreased by the full strain amount (2).
     const newHealthArr = meta.dcHealthState.get(p1MsgId);
     const newHp = newHealthArr[0][0];
     assert.strictEqual(newHp, initialHp - 2, `HP reduced by strain amount (${initialHp} -> ${newHp})`);
-
-    // available-actions should no longer return strain_choice actions
-    const actionDeps = buildActionDeps(meta);
-    const afterActions = getAvailableActions(g, 1, actionDeps);
-    const afterTypes = new Set(afterActions.map(a => a.type));
-    assert.ok(!afterTypes.has('strain_choice_alldmg'), 'no strain_choice after resolution');
   });
 
   it('full game with CT-1701 (Cover Fire) completes without Cover Fire loop', async () => {
@@ -209,7 +216,16 @@ describe('Strain Choice pending-state resolution', () => {
 
     const actionDeps = buildActionDeps(meta);
     const MAX_ITERATIONS = 800;
-    const STALE_THRESHOLD = 200; // force a kill if no progress in this many iterations
+    // Force a kill if no progress in this many iterations. P2 fields 4 figures
+    // (IG-88 + 3× Stormtrooper Elite), so eliminating that side needs 4 stale
+    // kills; at 150 they land at i≈150/300/450/600 — comfortably inside the 800
+    // budget. (Random play rarely closes distance to attack on its own; the
+    // combat pipeline rebuild made interactive attack windows resolve through the
+    // gate machine rather than getAvailableActions, so self-play progress here
+    // comes from the stale breaker. The engine now surfaces the gate windows —
+    // see available-actions.js getCombatActions — so any attack that DOES happen
+    // completes instead of leaving pendingCombat live forever.)
+    const STALE_THRESHOLD = 150;
     let coverFireCount = 0;
     let iterations = 0;
     let lastKillIteration = 0;
