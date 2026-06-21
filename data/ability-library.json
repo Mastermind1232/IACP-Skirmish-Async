@@ -187,6 +187,7 @@
       "label": "Move up to 4 spaces, then choose adjacent hostile: deal 2 Damage",
       "mpBonus": 4,
       "isMoveX": true,
+      "requiresTerrainAdjacency": true,
       "chooseAdjacentHostileThen": {
         "damage": 2
       },

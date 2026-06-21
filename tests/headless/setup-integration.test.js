@@ -1296,6 +1296,74 @@ describe('Region 5: Companion Deployment -- Iden Versio (DC-level companion Dio)
       assert.ok(p1Keys.some(k => k.startsWith('Iden Versio-')), `Iden should be deployed: ${p1Keys}`);
     }
   });
+
+  // CSV docs/combat-spec.csv:286 (Iden Versio :: ID10 Seeker Droid): "At the start
+  // of the game, put the Dio companion into play in your space." Iden's Dio is a
+  // DC-LEVEL companion (no attachment). These assertions verify it actually
+  // deploys (designer-requested strengthening — the prior block never checked Dio).
+  it('Dio companion deploys into P1 positions (DC-level companion)', async () => {
+    const stats = getDcStats('Iden Versio');
+    if (!stats) return;
+
+    const result = await runSetupSim({
+      mapId: DEFAULT_MAP,
+      p1Army: [{ dcName: 'Iden Versio' }],
+      p2Army: [{ dcName: 'Luke Skywalker' }],
+      p1CcDeck: STANDARD_CC_DECK,
+      p2CcDeck: IMPERIAL_CC_DECK,
+    });
+
+    assert.ok(result.reachedRoundActive, 'should reach pre-activation / ROUND_ACTIVE');
+    const p1Keys = getFigureKeys(result.game, 1);
+    assert.ok(p1Keys.some(k => k.startsWith('Iden Versio-')), `Iden should be deployed: ${p1Keys}`);
+    assert.ok(p1Keys.some(k => k.startsWith('Dio-')),
+      `Dio companion should be deployed into P1 positions: ${p1Keys}`);
+  });
+
+  it('companionHostMap links Dio → Iden Versio for P1', async () => {
+    const stats = getDcStats('Iden Versio');
+    if (!stats) return;
+
+    const result = await runSetupSim({
+      mapId: DEFAULT_MAP,
+      p1Army: [{ dcName: 'Iden Versio' }],
+      p2Army: [{ dcName: 'Luke Skywalker' }],
+      p1CcDeck: STANDARD_CC_DECK,
+      p2CcDeck: IMPERIAL_CC_DECK,
+    });
+
+    if (result.reachedRoundActive) {
+      const hostMap = result.game.companionHostMap || {};
+      const dioEntry = Object.entries(hostMap).find(([k]) => k.startsWith('Dio-'));
+      assert.ok(dioEntry, `companionHostMap should track Dio: ${JSON.stringify(hostMap)}`);
+      assert.ok(dioEntry[1].hostFigureKey?.startsWith('Iden Versio-'),
+        `Dio host should be Iden Versio, got: ${dioEntry[1].hostFigureKey}`);
+      assert.equal(dioEntry[1].playerNum, 1, 'Dio should belong to P1');
+    }
+  });
+
+  it('Dio deploys at the same space as Iden Versio', async () => {
+    const stats = getDcStats('Iden Versio');
+    if (!stats) return;
+
+    const result = await runSetupSim({
+      mapId: DEFAULT_MAP,
+      p1Army: [{ dcName: 'Iden Versio' }],
+      p2Army: [{ dcName: 'Luke Skywalker' }],
+      p1CcDeck: STANDARD_CC_DECK,
+      p2CcDeck: IMPERIAL_CC_DECK,
+    });
+
+    if (result.reachedRoundActive) {
+      const positions = result.game.figurePositions?.[1] || {};
+      const idenKey = Object.keys(positions).find(k => k.startsWith('Iden Versio-'));
+      const dioKey = Object.keys(positions).find(k => k.startsWith('Dio-'));
+      if (idenKey && dioKey) {
+        assert.equal(positions[dioKey], positions[idenKey],
+          'Dio should deploy into Iden Versio\'s space (ID10 Seeker Droid)');
+      }
+    }
+  });
 });
 
 describe('Region 5: Companion Deployment -- P2 companion armies', () => {

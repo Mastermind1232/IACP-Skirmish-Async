@@ -978,7 +978,7 @@ export async function finalizeActivation({
 
   // D27. Dead Precise (Ko-Tun)
   if (_abilityIds.includes('dead_precise_kotun')) {
-    await thread.send({ content: `🎯 **Dead Precise** — If you do not move during this activation, apply +2 Accuracy while attacking.` }).catch(discordCatch);
+    await thread.send({ content: `🎯 **Dead Precise** — When an attacking figure within 3 spaces (including Ko-Tun) spent a Power Token, it may reroll 1 attack die and apply -1 Dodge to the attack results.` }).catch(discordCatch);
   }
 
   // D28. Adapt (Agent Blaise)

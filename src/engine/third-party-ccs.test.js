@@ -123,7 +123,7 @@ describe('Battlefield Awareness — friendly LEADER within 3 of the attacker (no
         2: { 'Darth Vader-2-0': 'p15' },
       },
     };
-    const elig = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat, mapDeps);
+    const elig = eligibleThirdPartyCcFigures(game, 'Battlefield Awareness (attacker)', combat, mapDeps);
     assert.deepEqual(elig, ['Lando Calrissian-1-1']);
   });
   it('does NOT offer the attacker itself even if it is a LEADER (reacts to ANOTHER figure)', () => {
@@ -132,7 +132,7 @@ describe('Battlefield Awareness — friendly LEADER within 3 of the attacker (no
       figurePositions: { 1: { 'Lando Calrissian-1-0': 'b2' }, 2: { 'Darth Vader-2-0': 'p15' } },
     };
     const combat2 = { ...combat, attackerFigureKey: 'Lando Calrissian-1-0' };
-    assert.deepEqual(eligibleThirdPartyCcFigures(game, 'Battlefield Awareness', combat2, mapDeps), []);
+    assert.deepEqual(eligibleThirdPartyCcFigures(game, 'Battlefield Awareness (attacker)', combat2, mapDeps), []);
   });
 });
 
@@ -143,12 +143,19 @@ describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
     assert.equal(r.applied, true);
     assert.deepEqual(combat.forcedRerollQueue, [{ controlPlayer: 2, pool: 'any', remaining: 1, source: 'Guardian Stance' }]);
   });
-  it('Battlefield Awareness grants the attacker a reroll', () => {
+  it('Battlefield Awareness (attacker) grants the attacker a reroll', () => {
     const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
-    const r = applyThirdPartyCcEffect('Battlefield Awareness', {}, combat, 'General Sorin-1-1');
+    const r = applyThirdPartyCcEffect('Battlefield Awareness (attacker)', {}, combat, 'General Sorin-1-1');
     assert.equal(r.applied, true);
     assert.equal(combat.forcedRerollQueue[0].source, 'Battlefield Awareness');
     assert.equal(combat.forcedRerollQueue[0].controlPlayer, 1);
+  });
+  it('Battlefield Awareness (defender) grants the DEFENDER a reroll', () => {
+    const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2 };
+    const r = applyThirdPartyCcEffect('Battlefield Awareness (defender)', {}, combat, 'General Sorin-2-1');
+    assert.equal(r.applied, true);
+    assert.equal(combat.forcedRerollQueue[0].source, 'Battlefield Awareness');
+    assert.equal(combat.forcedRerollQueue[0].controlPlayer, 2);
   });
   it('Opportunistic grants 3 MP to the playing figure (via injected deps)', () => {
     let granted = null;
@@ -162,7 +169,8 @@ describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
 describe('descriptor corrections', () => {
   it('Opportunistic is SCUM, Battlefield Awareness is within 3', () => {
     assert.equal(THIRD_PARTY_CC_SPECS['Opportunistic'].playableBy, 'SCUM');
-    assert.equal(THIRD_PARTY_CC_SPECS['Battlefield Awareness'].n, 3);
+    assert.equal(THIRD_PARTY_CC_SPECS['Battlefield Awareness (attacker)'].n, 3);
+    assert.equal(THIRD_PARTY_CC_SPECS['Battlefield Awareness (defender)'].n, 3);
   });
 });
 

@@ -304,6 +304,29 @@ export function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId
 }
 
 /**
+ * The set of board coords that contain blocking or difficult terrain on a map.
+ * Used by terrain-prerequisite checks (e.g. Ambush: "you share an edge or corner
+ * with a space containing blocking, impassable, or difficult terrain").
+ *
+ * NOTE: "impassable terrain" is modeled in this engine as impassableEdges (an
+ * edge between two spaces), not as a space type — so a space-based check cannot
+ * represent "adjacent to an impassable-terrain space". This helper covers the
+ * two space-based terrain types (blocking + difficult); impassable-edge
+ * adjacency is a known limitation (flagged for Ambush).
+ */
+export function getBlockingDifficultTerrainCoords(mapId) {
+  const mapSpaces = getBoundedMapSpaces(mapId);
+  const out = new Set();
+  if (!mapSpaces) return out;
+  for (const b of mapSpaces.blocking || []) out.add(normalizeCoord(b));
+  for (const [coord, type] of Object.entries(mapSpaces.terrain || {})) {
+    const t = String(type || '').toLowerCase();
+    if (t === 'difficult' || t === 'blocking' || t === 'impassable') out.add(normalizeCoord(coord));
+  }
+  return out;
+}
+
+/**
  * Group adjacent parallel door edges into logical doors.
  * E.g., [["o15","o16"], ["p15","p16"]] → one group (same horizontal wall, adjacent columns).
  */

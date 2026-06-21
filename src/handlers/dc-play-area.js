@@ -1116,12 +1116,18 @@ async function buildAndSendAttackTargets(
   // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
   const _overrideMinRange = game.pendingOverrideAttackDice?.[figureKey]?.minRange;
   if (_overrideMinRange != null && _overrideMinRange > minRange) minRange = _overrideMinRange;
-  // Priority Target (LOS-ignoring): Loku Kanoloa + Rebel Saboteur Elite have it in abilityText.
-  // MASSIVE figures also ignore figure blocking. (Intercept-defender PT is checked separately below.)
-  // Clawdite Scout form also grants Priority Target.
+  // Priority Target (LOS-ignoring): "Figures do not block line of sight for this
+  // figure's attacks" (CSV docs/combat-spec.csv:347/407/901/961/985). Some cards
+  // carry it in abilityText (Loku Kanoloa, Rebel Saboteur Elite); others carry it
+  // ONLY as a passive keyword in their dc-effects passives array ([Flame Trooper]
+  // attachment, HK Assassin Droid Elite, Mak Eshka'rey). Read BOTH so the
+  // attacker-side figure-blocking bypass applies to every Priority Target figure.
+  // MASSIVE figures also ignore figure blocking. Clawdite Scout form too.
   const abilityTextLower = (stats.abilityText || '').toLowerCase();
+  const _attackerPassives = (getDcEffect(meta.dcName)?.passives || []).map(p => String(p).toLowerCase());
   let attackerIgnoresFigureBlocking =
     (abilityTextLower.includes('priority target') && abilityTextLower.includes('line of sight')) ||
+    _attackerPassives.includes('priority target') ||
     attackerKws.includes('MASSIVE');
   // Check Clawdite Scout form for Priority Target
   if (!attackerIgnoresFigureBlocking && figureKey) {
@@ -1394,17 +1400,12 @@ async function buildAndSendAttackTargets(
       });
     }
   }
-  // Priority Target intercept: if any enemy figures with "Priority Target" passive are among
-  // valid targets, the attacker must target those figures only (other targets suppressed).
-  {
-    const ptTargets = targets.filter(t => {
-      if (t.isNpc) return false;
-      const dcN = dcNameFromFigureKey(t.figureKey);
-      const eff = getDcEffect(dcN);
-      return (eff?.passives || []).some(p => String(p).toLowerCase() === 'priority target');
-    });
-    if (ptTargets.length > 0) targets.splice(0, targets.length, ...ptTargets);
-  }
+  // NOTE: Priority Target is an ATTACKER-side LOS-bypass keyword ("Figures do not
+  // block line of sight for THIS figure's attacks", CSV docs/combat-spec.csv:901/961/985)
+  // — NOT a defender-side taunt. The old "Priority Target intercept" here wrongly
+  // forced the attacker to target PT-passive enemy figures (a taunt), the opposite
+  // of the card. It has been removed; the keyword is now honored on the attacker
+  // side via _attackerPassives in the figure-blocking bypass above.
   // Autofire chain attack: restrict targets to within 3 spaces of original target
   // Per alexanbv 2026-05-13: per-figureKey.
   if (game.autofireChainTargetSpace?.[figureKey]) {

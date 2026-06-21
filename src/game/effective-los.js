@@ -123,9 +123,13 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
   // free of handler imports.
   const fromKws = (getDcEffects()?.[fromDcName]?.keywords || []).map((k) => String(k).toUpperCase());
   const fromAbilityText = String(getDcEffects()?.[fromDcName]?.abilityText || '').toLowerCase();
+  // Priority Target may live ONLY in the passives array (HK Assassin Droid Elite,
+  // [Flame Trooper], Mak Eshka'rey) — read it too (parity with dc-play-area.js).
+  const fromPassives = (getDcEffects()?.[fromDcName]?.passives || []).map((p) => String(p).toLowerCase());
   let ignoreBlocking = !!opts.attackerIgnoresFigureBlocking
     || !!opts.marksmanActive
     || (fromAbilityText.includes('priority target') && fromAbilityText.includes('line of sight'))
+    || fromPassives.includes('priority target')
     || fromKws.includes('MASSIVE');
   let blocking = null;
   if (!ignoreBlocking) {

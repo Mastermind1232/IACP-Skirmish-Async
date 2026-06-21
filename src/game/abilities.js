@@ -11,7 +11,7 @@ import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.j
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
 import { awardObjectiveVp, deductVp } from './vp-helpers.js';
-import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone, isFigureAdjacentOrOnAny } from './board-helpers.js';
+import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone, isFigureAdjacentOrOnAny, getBlockingDifficultTerrainCoords, getFigureAdjacentCoordsFromSet } from './board-helpers.js';
 import { applyDefenseDieRemoval, applyAttackDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
 import { exhaustAttachment, isAttachmentExhausted } from './card-state-helpers.js';
@@ -1825,8 +1825,15 @@ export function resolveAbility(abilityId, context) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[targetFigureKey] = { from: 'Coordinated Raid' };
       }
+      // Once per group per round (CSV row 300) — mirror the Elite branch.
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`coordinated_raid_${msgId}`] = true;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
+    }
+    // Once per group per round gate (CSV row 300) — mirror the Elite branch.
+    if (game.roundFigureAbilityUsed?.[`coordinated_raid_${msgId}`]) {
+      return { applied: false, manualMessage: '**Coordinated Raid** — already used this round (once per group per round).' };
     }
     // Find other figures in the same group (same DC message ID)
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -1840,6 +1847,9 @@ export function resolveAbility(abilityId, context) {
       // Universal free-attack pipeline tag.
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[onlyFk] = { from: 'Coordinated Raid' };
+      // Once per group per round (CSV row 300) — mirror the Elite branch.
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`coordinated_raid_${msgId}`] = true;
       const chosenName = dcNameFromFigureKey(onlyFk);
       return { applied: true, logMessage: `**Coordinated Raid** — **${chosenName}** may interrupt to perform a free attack. Use their **Attack** button.` };
     }
@@ -8396,6 +8406,22 @@ export function resolveAbility(abilityId, context) {
       if (!_cahFigureKey) {
         return { applied: false, manualMessage: `**${entry.label || context.cardName}** — could not locate the activating figure; resolve manually.` };
       }
+      // Ambush terrain prerequisite (CSV docs/combat-spec.csv:532): playable only
+      // "if you share an edge or corner with a space containing blocking,
+      // impassable, or difficult terrain." Check 8-connected adjacency of the
+      // playing figure to a blocking/difficult-terrain space. (Impassable terrain
+      // is modeled as edges, not spaces, in this engine — see
+      // getBlockingDifficultTerrainCoords; that axis is a known limitation.)
+      if (entry.requiresTerrainAdjacency) {
+        const _amMapId = game.selectedMap?.id;
+        const _amTerrain = _amMapId ? getBlockingDifficultTerrainCoords(_amMapId) : new Set();
+        const _amAdj = _amTerrain.size
+          ? getFigureAdjacentCoordsFromSet(game, playerNum, _cahFigureKey, _amMapId, _amTerrain)
+          : [];
+        if (!_amAdj.length) {
+          return { applied: false, manualMessage: `**${entry.label || context.cardName}** — you must share an edge or corner with a space containing blocking, impassable, or difficult terrain to play this.` };
+        }
+      }
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
         remaining: entry.mpBonus,
@@ -8895,9 +8921,80 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: Whistling Birds — Move 2 (Move-X), then roll 1 red die,
-  // up to 3 hostiles within 2 of the post-move position suffer Hits as Damage
+  // up to 3 FIGURES within 2 of the post-move position suffer Hits as Damage.
+  // CSV (docs/combat-spec.csv:870): "Choose up to 3 figures within 2 spaces
+  // ... each of those figures suffers Damage equal to the Hit results" —
+  // target is "figures" (friendly OR hostile) and the controller CHOOSES
+  // which up-to-3 (not arbitrary iteration order). Phase 2 (below) drives
+  // the multi-pick + damage; the roll & pending state are stamped by the
+  // post-move whistlingBirdsRoll continuation (move-x-handler.js).
   if (entry.type === 'ccEffect' && entry.whistlingBirdsEffect) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
+    // ── Phase 2: figure picker + damage (mirrors wookieeRageEffect) ──
+    const wbPending = game?._whistlingBirdsPending;
+    if (wbPending && (chosenFigureKey || wbPending.armed)) {
+      const hits = wbPending.hits || 0;
+      // "Done" signal OR no candidates: apply accumulated targets.
+      if (chosenFigureKey === 'whistling_birds_done') {
+        const targets = wbPending.targets || [];
+        const refreshIds = [];
+        const parts = [];
+        for (const fk of targets) {
+          const tPn = wbPending.playerOf?.[fk];
+          if (!tPn || !dcHealthState) continue;
+          const tMsgId = findMsgIdForFigureKey(game, tPn, fk, dcMessageMeta);
+          if (!tMsgId) continue;
+          const tHs = dcHealthState.get(tMsgId) || [];
+          const m = fk.match(/-(\d+)-(\d+)$/);
+          const figIdx = m ? parseInt(m[2], 10) : 0;
+          const e = tHs[figIdx];
+          if (!e) continue;
+          const [cur, max] = e;
+          const newCur = Math.max(0, (cur ?? max) - hits);
+          tHs[figIdx] = [newCur, max];
+          dcHealthState.set(tMsgId, tHs);
+          syncHealthStateToList(game, tPn, tMsgId, tHs);
+          parts.push(`**${dcNameFromFigureKey(fk)}** ${cur ?? max} → ${newCur}`);
+          if (!refreshIds.includes(tMsgId)) refreshIds.push(tMsgId);
+        }
+        delete game._whistlingBirdsPending;
+        return { applied: true, logMessage: `**Whistling Birds** — ${hits} Damage to each chosen figure: ${parts.length ? parts.join(', ') : 'none'}.`, refreshDcEmbed: refreshIds.length > 0, refreshDcEmbedMsgIds: refreshIds };
+      }
+      // Accumulate a chosen target, then re-offer remaining candidates.
+      if (chosenFigureKey) {
+        wbPending.targets = wbPending.targets || [];
+        if (!wbPending.targets.includes(chosenFigureKey)) wbPending.targets.push(chosenFigureKey);
+        if (wbPending.targets.length >= 3) {
+          return resolveAbility(abilityId, { ...context, chosenFigureKey: 'whistling_birds_done' });
+        }
+      }
+      // Build candidate list: all figures (both players) within 2 of the
+      // activator's post-move position, excluding the activator and any
+      // already-chosen figures.
+      const chosenSet = new Set(wbPending.targets || []);
+      const actPos = game.figurePositions?.[wbPending.playerNum]?.[wbPending.figureKey];
+      const choiceValues = [];
+      const playerOf = {};
+      if (actPos) {
+        for (const pn of [1, 2]) {
+          for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+            if (!coord || fk === wbPending.figureKey || chosenSet.has(fk)) continue;
+            if (countGameSpaces(game, actPos, coord) > 2) continue;
+            choiceValues.push(fk);
+            playerOf[fk] = pn;
+          }
+        }
+      }
+      wbPending.playerOf = Object.assign(wbPending.playerOf || {}, playerOf);
+      wbPending.armed = false;
+      if (choiceValues.length === 0) {
+        return resolveAbility(abilityId, { ...context, chosenFigureKey: 'whistling_birds_done' });
+      }
+      const choiceOptions = [...figureChoiceLabels(choiceValues)];
+      choiceOptions.push(`Done (${(wbPending.targets || []).length} chosen)`);
+      choiceValues.push('whistling_birds_done');
+      return { applied: true, requiresChoice: true, choiceOptions, choiceValues, logMessage: `**Whistling Birds** — rolled **${hits} Hit${hits !== 1 ? 's' : ''}**; choose up to 3 figures within 2 spaces (each suffers ${hits} Damage).` };
+    }
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
@@ -12292,10 +12389,20 @@ export function resolveAbility(abilityId, context) {
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
     if (!actPos) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no position).' };
-    const occ = boardState.occupiedSet;
-    const occArr = occ instanceof Set ? [...occ] : (occ || []);
-    const reachable = getReachableSpaces(actPos, 3, boardState.mapSpaces, occArr);
-    const validSet = new Set([String(actPos).toLowerCase(), ...reachable.map((s) => String(s).toLowerCase())]);
+    // CSV (docs/combat-spec.csv:816): "Choose a space within 3 spaces". "Within 3"
+    // is a RANGE measure (countGameSpaces), not movement reachability — difficult
+    // terrain must not shrink the set, and figures ON a space don't disqualify it
+    // as a blast center (figures on the space suffer the damage). So enumerate all
+    // map spaces by board distance rather than running a movement-cost BFS.
+    const allSpaces = boardState.mapSpaces?.spaces || [];
+    const actPosNorm = String(actPos).toLowerCase();
+    const validSet = new Set([actPosNorm]);
+    for (const sp of allSpaces) {
+      const spNorm = String(sp).toLowerCase();
+      if (validSet.has(spNorm)) continue;
+      if (countGameSpaces(game, actPos, spNorm) > 3) continue;
+      validSet.add(spNorm);
+    }
     const validSpaces = [...validSet];
     if (!validSpaces.length) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no spaces in range).' };
     return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charges** — Choose a space within 3:' };

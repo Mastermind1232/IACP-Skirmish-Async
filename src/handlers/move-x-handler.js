@@ -428,9 +428,8 @@ async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
  */
 async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
   const { client, logGameAction } = ctx;
-  const { dcHealthState, dcMessageMeta, getDiceData: gd } = ctx;
+  const { getDiceData: gd } = ctx;
   const playerNum = next.payload?.playerNum || pending.playerNum;
-  const oppNum = playerNum === 1 ? 2 : 1;
   const { getDiceData } = await import('../data-loader.js');
   const faces = (gd?.()?.attack?.red) || (getDiceData()?.attack?.red) || [];
   if (!faces.length) {
@@ -449,34 +448,63 @@ async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
     return;
   }
   const { countGameSpaces } = await import('../game/movement.js').catch(() => ({}));
-  const { findMsgIdForFigureKey } = await import('../game/index.js').catch(() => ({}));
-  const { syncHealthStateToList } = await import('../game/index.js').catch(() => ({}));
-  const parts = [];
-  const refreshIds = [];
-  let count = 0;
-  for (const [fk, coord] of Object.entries(game.figurePositions?.[oppNum] || {})) {
-    if (!coord || count >= 3) continue;
-    if (typeof countGameSpaces === 'function' && countGameSpaces(game, activatorPos, coord) > 2) continue;
-    const fMsgId = typeof findMsgIdForFigureKey === 'function'
-      ? findMsgIdForFigureKey(game, oppNum, fk, dcMessageMeta)
-      : null;
-    if (!fMsgId || !dcHealthState) continue;
-    const hs = dcHealthState.get(fMsgId) || [];
-    const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-    const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-    const hp = hs[figIdx];
-    if (hp) {
-      const [cur, max] = hp;
-      hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
-      dcHealthState.set(fMsgId, hs);
-      if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, fMsgId, hs);
-      parts.push(`${dcNameFromFigureKey(fk)}: ${hits} Dmg`);
-      if (!refreshIds.includes(fMsgId)) refreshIds.push(fMsgId);
-      count++;
+  // CSV (docs/combat-spec.csv:870): "Choose up to 3 FIGURES within 2 spaces ...
+  // each suffers Damage equal to the Hit results." Target is "figures" (friendly
+  // OR hostile, excluding only the activator) and the controlling player CHOOSES
+  // which up-to-3. Enumerate all figures (both players) within 2 spaces, then
+  // hand off to the whistlingBirdsEffect Phase-2 picker via pendingCcChoice.
+  const candidates = [];
+  const labels = [];
+  for (const pn of [1, 2]) {
+    for (const [fk, coord] of Object.entries(game.figurePositions?.[pn] || {})) {
+      if (!coord || fk === pending.figureKey) continue;
+      if (typeof countGameSpaces === 'function' && countGameSpaces(game, activatorPos, coord) > 2) continue;
+      candidates.push(fk);
+      labels.push(dcNameFromFigureKey(fk));
     }
   }
-  const msg = `**Whistling Birds** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → ${parts.length ? parts.join(', ') : 'no hostiles within 2 spaces'}.`;
-  await logGameAction?.(game, client, msg, { phase: 'ROUND', icon: 'card' });
+  if (candidates.length === 0) {
+    await logGameAction?.(game, client, `**Whistling Birds** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}** → no figures within 2 spaces.`, { phase: 'ROUND', icon: 'card' });
+    return;
+  }
+  // Stamp the pending state the whistlingBirdsEffect Phase-2 resolver reads.
+  game._whistlingBirdsPending = {
+    hits,
+    playerNum,
+    figureKey: pending.figureKey,
+    targets: [],
+    playerOf: {},
+    armed: true,
+  };
+  const ownerId = getPlayerId(game, playerNum);
+  // pendingCcChoice routes each pick back through handleCcChoice →
+  // resolveAbility('Whistling Birds', { chosenFigureKey }) (multi-pick loop).
+  game.pendingCcChoice = {
+    gameId: game.gameId,
+    playerNum,
+    cardName: 'Whistling Birds',
+    abilityId: 'Whistling Birds',
+    choiceOptions: [...labels, `Done (0 chosen)`],
+    choiceValues: [...candidates, 'whistling_birds_done'],
+  };
+  const btns = labels.map((label) => new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_${label}`)
+    .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
+    .setStyle(ButtonStyle.Danger));
+  btns.push(new ButtonBuilder()
+    .setCustomId(`cc_choice_${game.gameId}_whistling_birds_done`)
+    .setLabel('Done')
+    .setStyle(ButtonStyle.Secondary));
+  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const content = `<@${ownerId}> **Whistling Birds** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}**. Choose up to 3 figures within 2 spaces (each suffers ${hits} Damage):`;
+  if (pending.threadId) {
+    const thread = await fetchCombatThread(client, pending.threadId);
+    if (thread) {
+      await thread.send({ content, components: rows, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 /**

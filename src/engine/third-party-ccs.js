@@ -33,9 +33,14 @@ export const THIRD_PARTY_CC_SPECS = {
   'Guardian Stance':       { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'rerolls',    excludeActive: true },
   'Bodyguard':             { side: 'defender', playableBy: 'GUARDIAN',           from: 'target',  n: 1,      window: 'on_declare', excludeActive: true },
   'Get Behind Me!':        { side: 'defender', playableBy: 'GUARDIAN or FORCE USER', from: 'target', n: 3,   window: 'on_declare', excludeActive: true },
-  // BA reacts to ANOTHER friendly figure attacking, so the playing LEADER must
-  // NOT be the attacker themselves → excludeActive (alexanbv 2026-06-17).
-  'Battlefield Awareness': { side: 'attacker', playableBy: 'LEADER',             from: 'attacker', n: 3,     window: 'rerolls',    excludeActive: true },
+  // BA reacts to ANOTHER friendly figure rolling ANY dice within 3 (CSV row 543:
+  // "after another friendly figure within 3 spaces rolls any number of dice,
+  // reroll 1 of those dice"). That friendly may be the ATTACKER rolling attack
+  // dice OR a friendly DEFENDER rolling defense dice — so register both sides,
+  // mirroring "There Is No Try". The playing LEADER must NOT be the rolling
+  // figure itself → excludeActive (alexanbv 2026-06-17).
+  'Battlefield Awareness (attacker)': { side: 'attacker', playableBy: 'LEADER', from: 'attacker', n: 3, window: 'rerolls', excludeActive: true, cardName: 'Battlefield Awareness' },
+  'Battlefield Awareness (defender)': { side: 'defender', playableBy: 'LEADER', from: 'target',   n: 3, window: 'rerolls', excludeActive: true, cardName: 'Battlefield Awareness' },
   // Yoda (There Is No Try) can be played while attacking OR defending — two specs.
   'There Is No Try (attacker)': { side: 'attacker', playableBy: 'Yoda', from: 'attacker', n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
   'There Is No Try (defender)': { side: 'defender', playableBy: 'Yoda', from: 'target',   n: 4, window: 'rerolls', excludeActive: false, cardName: 'There Is No Try' },
@@ -176,10 +181,15 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
     return { applied: true, log };
   }
   if (specKey.startsWith('Battlefield Awareness')) {
-    // LEADER: reroll 1 die rolled by a friendly within 3. Grant the attacker
-    // (the rolling side) one reroll of any die.
+    // LEADER: reroll 1 die rolled by a friendly within 3. The rolling side may be
+    // the ATTACKER (attack dice) or a friendly DEFENDER (defense dice) — route the
+    // reroll to whichever side actually rolled, per the spec variant played.
+    const side = THIRD_PARTY_CC_SPECS[specKey]?.side || 'attacker';
+    const controlPlayer = side === 'defender'
+      ? (combat?.defenderPlayerNum ?? (combat?.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null))
+      : combat?.attackerPlayerNum;
     combat.forcedRerollQueue = combat.forcedRerollQueue || [];
-    combat.forcedRerollQueue.push({ controlPlayer: combat?.attackerPlayerNum, pool: 'any', remaining: 1, source: 'Battlefield Awareness' });
+    combat.forcedRerollQueue.push({ controlPlayer, pool: 'any', remaining: 1, source: 'Battlefield Awareness' });
     log.push('reroll 1 die rolled by a friendly within 3');
     return { applied: true, log };
   }

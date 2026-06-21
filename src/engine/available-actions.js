@@ -2339,9 +2339,13 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
   // target enumeration.
   const _attackerAbilityText = (_aaEff?.abilityText || '').toLowerCase();
   const _attackerKws = (_aaEff?.keywords || []).map(k => String(k).toUpperCase());
+  // Priority Target may live ONLY in the passives array (e.g. HK Assassin Droid
+  // Elite, [Flame Trooper], Mak Eshka'rey) — read it too (parity with dc-play-area.js).
+  const _attackerPassives = (_aaEff?.passives || []).map(p => String(p).toLowerCase());
   const _clawditeForm = getConfig(game, figureKey)?.form;
   const _attackerIgnoresFigureBlocking =
     (_attackerAbilityText.includes('priority target') && _attackerAbilityText.includes('line of sight')) ||
+    _attackerPassives.includes('priority target') ||
     _attackerKws.includes('MASSIVE') ||
     _clawditeForm === 'Scout' ||
     !!game.nextAttackIgnoreFigureLOS?.[figureKey];
