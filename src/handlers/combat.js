@@ -6079,7 +6079,7 @@ export async function handleCombatRoll(interaction, ctx) {
       combat.forcedRerollQueue.push({ controlPlayer: fsPlayer, pool: 'attack', remaining: 1, source: 'Fyrnock Style' });
     }
     // Survival is Strength (Armorer): if defender spent a Block (PT) during this attack
-    // and an Armorer with the ability is within 3 spaces of the defender, that Armorer's
+    // and an Armorer with the ability is within 4 spaces of the defender, that Armorer's
     // player may force 1 attack-die reroll. Per CRR p.10 step 3, all rerolls fire here
     // (not at modifier or post-modifier stage). Once-per-round tracked on the Armorer's
     // figureKey: marked-used only when the player actually rerolls (skip preserves the
@@ -6097,7 +6097,7 @@ export async function handleCombatRoll(interaction, ctx) {
           // not once per round — track on the per-attack combat object.
           if (combat._survivalIsStrengthUsed?.[_sisFk]) continue;
           if (!_sisPos) continue;
-          if (isWithinSpaces(_sisMapSp, String(_sisPos).toLowerCase(), String(_sisDefCoord).toLowerCase(), 3)) {
+          if (isWithinSpaces(_sisMapSp, String(_sisPos).toLowerCase(), String(_sisDefCoord).toLowerCase(), 4)) {
             combat.forcedRerollQueue.push({
               controlPlayer: defenderPlayerNum,
               pool: 'attack',

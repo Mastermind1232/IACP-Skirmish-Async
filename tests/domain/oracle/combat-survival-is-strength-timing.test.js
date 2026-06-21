@@ -11,10 +11,10 @@
  *   "An ability that allows a player to reroll dice can only be used during
  *    step 3 of the attack."
  *
- * Card text (data/dc-effects.json: "The Armorer"):
- *   "Survival is Strength: While a friendly figure within 3 spaces is
- *    defending, if it spent a Block symbol during this attack, it may
- *    reroll 1 attack die."
+ * Card text (data/dc-effects.json: "The Armorer") — IACP 2026-06-21:
+ *   "Survival is Strength: While a friendly figure within 4 spaces of the
+ *    Armorer is defending, if it spent a Block symbol during this attack, it
+ *    may reroll 1 attack die."
  *
  * Old code put SiS into proceedAfterTokens (post-rerolls, post-tokens).
  * That triggered a reroll AFTER the attacker had finished rerolling — so
@@ -56,6 +56,16 @@ describe('CRR-COMBAT-SIS-STEP3: Survival is Strength fires in step 3 (forced rer
     assert.match(H_CB_SRC,
       /survival_is_strength_armorer[\s\S]*?combat\.forcedRerollQueue\.push\(\{[\s\S]*?source:\s*'Survival is Strength'/,
       'reroll-phase build must push a SiS entry when the Armorer/condition match');
+  });
+
+  it('SiS range gate is within 4 spaces of the Armorer (IACP 2026-06-21, was 3)', () => {
+    // The isWithinSpaces call that builds the SiS forced-reroll entry must use
+    // a max distance of 4. Match the single-line call so a regression back to 3
+    // fails loudly. The _sisMapSp/_sisDefCoord call lives on one line.
+    const sisCall = H_CB_SRC.match(/isWithinSpaces\(_sisMapSp,[^\n]*_sisDefCoord[^\n]*?,\s*(\d+)\)/);
+    assert.ok(sisCall, 'SiS isWithinSpaces(_sisMapSp, ...) gate must exist');
+    assert.strictEqual(sisCall[1], '4',
+      'Survival is Strength must gate on within-4-spaces-of-the-Armorer (was 3)');
   });
 
   it('SiS forced-reroll entry includes armorerFigKey for ability-used tracking', () => {

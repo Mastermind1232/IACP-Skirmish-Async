@@ -4421,9 +4421,10 @@
     "shoulder_rush": {
       "type": "dcSpecial",
       "label": "Shoulder Rush",
-      "description": "Move up to 2 spaces and choose an adjacent hostile figure. If that figure is SMALL, push it 1 space and enter the space it exited. Then, perform an attack targeting the chosen figure.",
-      "logMessage": "**Shoulder Rush** — Move up to 2 spaces, then choose an adjacent hostile figure. If SMALL, push it 1 space and enter the vacated space. Then attack that figure (free).",
-      "freeMoveBonus": 2,
+      "description": "Double Action (Shoulder Rush): Move up to 6 spaces and choose an adjacent hostile figure. If that figure is SMALL, push it 1 space and enter the space it exited. If the figure is not SMALL, it is not pushed and KX cannot enter its space, but KX may still attack it. Then perform an attack targeting the chosen figure.",
+      "logMessage": "**Shoulder Rush** (Double Action) — Move up to 6 spaces, then choose an adjacent hostile figure. If SMALL, push it 1 space and enter the vacated space; if not SMALL, no push and KX cannot enter its space. Then attack that figure (free).",
+      "freeMoveBonus": 6,
+      "actionCost": 2,
       "shoulderRushPostMove": true,
       "wiredStatus": "wired"
     },

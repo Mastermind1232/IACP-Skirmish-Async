@@ -20,11 +20,14 @@ export const CARDS_PENDING_CHANGE = new Set([
   //                      Systems now LIMIT once per attack
   //   74-Z Speeder Bike — Forward Mounted Blasters "same row" = same LINE
   //                       (row OR column); already implemented as the inline test
-  //   The Armorer — HP increased 10 → 11
+  //   The Armorer — HP increased 10 → 11; This is the Way + Survival is Strength
+  //                 now gated to a friendly within 4 spaces of the Armorer
+  //   KX-Series Security Droid — Shoulder Rush reworked (Double Action, move 6,
+  //                 non-SMALL target: no push / KX cannot enter its space, still attacks)
+  //   Yoda — VERIFIED already correct (cost 5; Calming Presence + Do or Do Not
+  //          limited to REBEL FORCE USERS; Force Deflection wired + once/round, correct)
+  //   Wookiee Rage / Stimulants — confirmed correct by designer (text unchanged)
   'CT-1701',              // Barrage still changing (Cover Fire finalized + hand-wired)
-  'Yoda',                 // Force Deflection
-  'Stimulants',           // changing
-  'Wookiee Rage',         // changing
   // NOTE: K-2SO STAYS (alexanbv 2026-06-16). The new "KX security droid" is a
   // separate card not yet in the DB — nothing to mark for it.
 ]);

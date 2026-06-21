@@ -281,8 +281,11 @@ export async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKe
 }
 
 /**
- * This is the Way (The Armorer): When another friendly figure resolves an attack,
- * if the defender was defeated, that figure gains 1 Block Token.
+ * This is the Way (The Armorer): When another friendly figure within 4 spaces
+ * of the Armorer resolves an attack, if the defender was defeated, that figure
+ * gains 1 Block Token.
+ *
+ * IACP 2026-06-21: added the within-4-spaces-of-the-Armorer range gate.
  *
  * @param {object} game
  * @param {number} attackerPlayerNum - player who owns the attacker
@@ -293,8 +296,8 @@ export async function checkHuntDissent(game, attackerPlayerNum, attackerFigureKe
 export async function checkThisIsTheWay(game, attackerPlayerNum, attackerFigureKey, client, deps) {
   if (!attackerFigureKey) return;
   // Find all alive Armorer figures on the attacker's team
-  const armorerFigures = Object.keys(game.figurePositions?.[attackerPlayerNum] || {})
-    .filter(fk => fk.startsWith('The Armorer-'));
+  const positions = game.figurePositions?.[attackerPlayerNum] || {};
+  const armorerFigures = Object.keys(positions).filter(fk => fk.startsWith('The Armorer-'));
   if (armorerFigures.length === 0) return;
   // Verify The Armorer has this_is_the_way_armorer ability
   const armorerEff = deps.getDcEffects()?.['The Armorer'];
@@ -302,6 +305,15 @@ export async function checkThisIsTheWay(game, attackerPlayerNum, attackerFigureK
   // "another friendly figure" — The Armorer herself does NOT trigger this
   const attackerDcName = deps.dcNameFromFigureKey(attackerFigureKey);
   if (attackerDcName === 'The Armorer') return;
+  // IACP 2026-06-21: the attacking friendly must be within 4 spaces of an
+  // Armorer that has the ability.
+  const attackerPos = positions[attackerFigureKey];
+  if (!attackerPos) return;
+  const withinRange = armorerFigures.some(fk => {
+    const armorerPos = positions[fk];
+    return armorerPos && countGameSpaces(game, attackerPos, armorerPos) <= 4;
+  });
+  if (!withinRange) return;
   // Grant 1 Block Token to the attacker (not to The Armorer)
   const granted = deps.grantPowerTokens(game, attackerFigureKey, 'Block', 1);
   if (granted > 0) {

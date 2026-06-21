@@ -116,12 +116,15 @@ describe('ORACLE-TITW-002: Structural wiring', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat', () => {
-  function buildTestGame(armorerAlive = true) {
+  // devaron-garrison: a1 and b1 are adjacent (distance 1), well within the
+  // 4-space This is the Way range gate (IACP 2026-06-21).
+  function buildTestGame(armorerAlive = true, armorerCoord = 'b1') {
     const game = {
+      selectedMap: { id: 'devaron-garrison' },
       figurePositions: {
         1: {
           'Greedo-0-0': 'a1',
-          ...(armorerAlive ? { 'The Armorer-0-0': 'b1' } : {}),
+          ...(armorerAlive ? { 'The Armorer-0-0': armorerCoord } : {}),
         },
         2: {},
       },
@@ -185,6 +188,7 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
 
   it('003e: No trigger when Armorer is on the OPPONENT team', async () => {
     const game = {
+      selectedMap: { id: 'devaron-garrison' },
       figurePositions: {
         1: { 'Greedo-0-0': 'a1' },
         2: { 'The Armorer-0-0': 'b1' },
@@ -197,6 +201,26 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
     const tokens = game.figurePowerTokens['Greedo-0-0'] || [];
     assert.strictEqual(tokens.length, 0,
       'No Block Token when The Armorer is on the opponent team');
+  });
+
+  // IACP 2026-06-21: within-4-spaces-of-the-Armorer range gate.
+  it('003g: Armorer exactly 4 spaces away (a1↔e1) → grants 1 Block Token', async () => {
+    const game = buildTestGame(true, 'e1'); // distance 4 from a1
+    const deps = buildDeps();
+    await checkThisIsTheWay(game, 1, 'Greedo-0-0', null, deps);
+    const tokens = game.figurePowerTokens['Greedo-0-0'] || [];
+    assert.strictEqual(tokens.filter(t => t === 'Block').length, 1,
+      'Attacker within 4 spaces of the Armorer should gain a Block Token');
+  });
+
+  it('003h: Armorer 5 spaces away (a1↔f1, out of range) → NO Block Token', async () => {
+    const game = buildTestGame(true, 'f1'); // distance 5 from a1 (> 4)
+    const deps = buildDeps();
+    await checkThisIsTheWay(game, 1, 'Greedo-0-0', null, deps);
+    const tokens = game.figurePowerTokens['Greedo-0-0'] || [];
+    assert.strictEqual(tokens.length, 0,
+      'Attacker more than 4 spaces from the Armorer must NOT gain a Block Token');
+    assert.strictEqual(deps._logs.length, 0, 'No log when out of range');
   });
 
   it('003f: Multiple defeats in same combat each grant independently', async () => {

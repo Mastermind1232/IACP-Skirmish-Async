@@ -1255,8 +1255,16 @@ WHEN_DEFEATED_HOOKS.push({
     // CSV "When ANOTHER friendly figure resolves an attack" — The Armorer
     // does not self-grant when it is itself the attacker.
     if (String(opts.combat.attackerFigureKey).startsWith('The Armorer-')) return false;
-    return Object.keys(game.figurePositions?.[opts.attackerPlayerNum] || {})
-      .some(fk => fk.startsWith('The Armorer-'));
+    // IACP 2026-06-21: the attacking friendly figure must be within 4 spaces
+    // of an Armorer that has this ability. Mirror Survival is Strength's
+    // within-N-of-the-Armorer distance gate.
+    const positions = game.figurePositions?.[opts.attackerPlayerNum] || {};
+    const attackerPos = positions[opts.combat.attackerFigureKey];
+    if (!attackerPos) return false;
+    return Object.entries(positions).some(([fk, pos]) => {
+      if (!fk.startsWith('The Armorer-') || !pos) return false;
+      return countGameSpaces(game, attackerPos, pos) <= 4;
+    });
   },
   apply: (game, opts, ctx) => {
     const granted = grantPowerTokens(game, opts.combat.attackerFigureKey, 'Block', 1, 2);

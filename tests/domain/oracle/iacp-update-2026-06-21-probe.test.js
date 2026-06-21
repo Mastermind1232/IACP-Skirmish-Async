@@ -119,8 +119,45 @@ describe('PROBE-IACP-7: Bantha Rider Wild Beast double limit', () => {
   });
 });
 
+describe('PROBE-IACP-8: The Armorer aura range increased to 4', () => {
+  const armorer = effects['The Armorer'];
+  it('abilityText: This is the Way + Survival is Strength both gated to within 4 spaces of the Armorer', () => {
+    assert.match(armorer.abilityText, /This is the Way: When another friendly figure within 4 spaces of the Armorer/);
+    assert.match(armorer.abilityText, /Survival is Strength: While a friendly figure within 4 spaces of the Armorer/);
+    assert.ok(!/within 3 spaces/.test(armorer.abilityText), 'no stale within-3 wording remains');
+  });
+  it('This is the Way (win-conditions) enforces a within-4 range gate', () => {
+    const wc = readFileSync(new URL('../../../src/engine/win-conditions.js', import.meta.url), 'utf8');
+    const fn = wc.slice(wc.indexOf('export async function checkThisIsTheWay'),
+      wc.indexOf('export async function decrementActivationIfGroupDefeated'));
+    assert.match(fn, /countGameSpaces\(game, attackerPos, armorerPos\)\s*<=\s*4/,
+      'checkThisIsTheWay must gate the attacker to within 4 of the Armorer');
+  });
+  it('Survival is Strength (combat.js) gate uses within-4', () => {
+    const cb = readFileSync(new URL('../../../src/handlers/combat.js', import.meta.url), 'utf8');
+    const call = cb.match(/isWithinSpaces\(_sisMapSp,[^\n]*_sisDefCoord[^\n]*?,\s*(\d+)\)/);
+    assert.ok(call);
+    assert.equal(call[1], '4');
+  });
+});
+
+describe('PROBE-IACP-9: KX-Series Shoulder Rush rework', () => {
+  it('shoulder_rush is a Double Action (actionCost 2) that moves up to 6', () => {
+    const e = lib.shoulder_rush;
+    assert.ok(e);
+    assert.equal(e.actionCost, 2);
+    assert.equal(e.freeMoveBonus, 6);
+    assert.equal(e.shoulderRushPostMove, true);
+  });
+  it('KX-Series Security Droid (Elite) abilityText reflects move-6 + non-SMALL no-enter-still-attack', () => {
+    const kx = effects['KX-Series Security Droid (Elite)'];
+    assert.match(kx.abilityText, /Double Action \(Shoulder Rush\): Move up to 6 spaces/);
+    assert.match(kx.abilityText, /not SMALL.*not pushed.*cannot enter its space.*still attack/s);
+  });
+});
+
 describe('PROBE-IACP-PENDING: finalized cards removed from CARDS_PENDING_CHANGE', () => {
-  for (const name of ['Rebel Trooper (Elite)', 'Rebel Trooper', 'Leia Organa', 'Bantha Rider', 'Get Behind Me!', 'Bo-Katan Kryze']) {
+  for (const name of ['Rebel Trooper (Elite)', 'Rebel Trooper', 'Leia Organa', 'Bantha Rider', 'Get Behind Me!', 'Bo-Katan Kryze', 'Yoda', 'Stimulants', 'Wookiee Rage']) {
     it(`${name} is no longer pending`, () => {
       assert.equal(isCardPendingChange(name), false);
     });

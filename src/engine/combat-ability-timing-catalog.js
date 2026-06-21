@@ -156,7 +156,7 @@ e('shared_calculations', 'Shared Calculations (Zuckuss)', 'attacker', 'interacti
 e('raider', 'Raider (Weequay)', 'attacker', 'interactive', RR, 'reroll any 1 die');
 e('precision_grand_inquisitor', 'Precision (Grand Inquisitor)', 'either', 'interactive', RR, 'attacker adjacent defender');
 e('fyrnock_style', 'Fyrnock Style (Tress Hacnua)', 'either', 'interactive', RR, 'forces 1 atk die');
-e('survival_is_strength', 'Survival is Strength (Armorer)', 'defender', 'interactive', RR, 'defenderSpentBlock + Armorer ≤3, per-attack');
+e('survival_is_strength', 'Survival is Strength (Armorer)', 'defender', 'interactive', RR, 'defenderSpentBlock + Armorer ≤4, per-attack');
 e('trusted_ally', 'Trusted Ally (attachment)', 'attacker', 'interactive', RR, 'friendly DROID ≤3, non-exhausted');
 e('the_darksaber_reroll', 'The Darksaber (reroll, attachment)', 'attacker', 'interactive', RR, 'non-exhausted SU');
 e('self_augmentation', 'Self-Augmentation (attachment)', 'attacker', 'interactive', RR, 'selfAugmentationMsgId');
