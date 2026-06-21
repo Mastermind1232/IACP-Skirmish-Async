@@ -14780,22 +14780,23 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: setsMandaAsteel (Mandalorian Steel — recover 1 Damage when a friendly
-  // figure WITHIN 4 SPACES of The Armorer spends a Block Token). CSV row 743 target
-  // = "a friendly figure within 4 spaces" (of The Armorer, the playing figure).
-  // Track The Armorer's figure key so the proximity check can be resolved against
-  // its CURRENT position at attack-resolution time (figures move during the round).
+  // figure WITHIN 4 SPACES of the FIGURE PLAYING THE CC spends a Block Token).
+  // alexanbv 2026-06-21: the within-4 anchor is the playing figure — The Armorer,
+  // OR Mara Jade via Fast Learner — not hard-coded to The Armorer. Resolve it via
+  // the named-figure/Fast-Learner helper and track the figure key so the proximity
+  // check uses its CURRENT position at attack-resolution time (figures move).
   if (entry.type === 'ccEffect' && entry.setsMandaAsteel) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.mandaAsteelPlayerNum = playerNum;
-    // The Armorer is a unique DC; find its on-board figure key for this player.
+    // Anchor = the playing figure (The Armorer, or Mara Jade via Fast Learner).
     game.mandaAsteelArmorerFigureKey = null;
-    const _maArmorerFk = Object.keys(game.figurePositions?.[playerNum] || {})
-      .find((fk) => dcNameFromFigureKey(fk) === 'The Armorer') || null;
-    if (_maArmorerFk) game.mandaAsteelArmorerFigureKey = _maArmorerFk;
+    const _maAnchorFk = resolveUniqueFigureCcFigureKey(game, playerNum, abilityId || entry.label || 'Mandalorian Steel');
+    if (_maAnchorFk) game.mandaAsteelArmorerFigureKey = _maAnchorFk;
+    const _maAnchorName = game.mandaAsteelArmorerFigureKey ? dcNameFromFigureKey(game.mandaAsteelArmorerFigureKey) : 'the playing figure';
     return {
       applied: true,
-      logMessage: 'This round, when a friendly figure within 4 spaces of The Armorer spends a Block Token during defense, recover 1 Damage on that figure.',
+      logMessage: `This round, when a friendly figure within 4 spaces of **${_maAnchorName}** spends a Block Token during defense, recover 1 Damage on that figure.`,
     };
   }
 

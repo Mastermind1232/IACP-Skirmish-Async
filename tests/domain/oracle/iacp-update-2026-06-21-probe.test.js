@@ -157,13 +157,13 @@ describe('PROBE-IACP-9: KX-Series Shoulder Rush rework', () => {
 });
 
 describe('PROBE-IACP-PENDING: finalized cards removed from CARDS_PENDING_CHANGE', () => {
-  for (const name of ['Rebel Trooper (Elite)', 'Rebel Trooper', 'Leia Organa', 'Bantha Rider', 'Get Behind Me!', 'Bo-Katan Kryze', 'Yoda', 'Stimulants', 'Wookiee Rage']) {
+  for (const name of ['Rebel Trooper (Elite)', 'Rebel Trooper', 'Leia Organa', 'Bantha Rider', 'Get Behind Me!', 'Bo-Katan Kryze', 'Yoda', 'Stimulants', 'Wookiee Rage', 'CT-1701']) {
     it(`${name} is no longer pending`, () => {
       assert.equal(isCardPendingChange(name), false);
     });
   }
-  it('CT-1701 STAYS pending (Barrage still changing; Cover Fire is hand-wired)', () => {
-    assert.equal(isCardPendingChange('CT-1701'), true);
+  it('CT-1701 graduated (Cover Fire once/round done; Barrage confirmed unchanged by alexanbv 2026-06-21)', () => {
+    assert.equal(isCardPendingChange('CT-1701'), false);
   });
 });
 
