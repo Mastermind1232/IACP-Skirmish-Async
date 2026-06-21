@@ -15,7 +15,7 @@ const lib = JSON.parse(readFileSync(LIB_PATH, 'utf8'));
 const BATCH = [
   ['Hostile Negotiation',    ['discardRandomFromHand', 'opponentDiscardRandomFromHand']],
   ['Hour of Need',           ['recoverDamageFromRound']],
-  ['Hunt Them Down',         ['attackAccuracyBonus', 'attackBonusSurgeAbilities']],
+  ['Hunt Them Down',         ['attackAccuracyBonus', 'attackBonusCleave']],
   ['I Make My Own Luck',     ['claimInitiative', 'firstActivationFigureName']],
   ['I Must Go Alone',        ['roundDefenderCannotBeTargetedUnlessWithinSpaces']],
   ['Induce Rage',            ['induceRageEffect']],

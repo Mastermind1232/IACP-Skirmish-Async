@@ -2534,9 +2534,7 @@
       "type": "ccEffect",
       "label": "When declaring Lightsaber Throw: +2 Accuracy, Cleave 2",
       "attackAccuracyBonus": 2,
-      "attackBonusSurgeAbilities": [
-        "cleave 2"
-      ],
+      "attackBonusCleave": 2,
       "wiredStatus": "wired"
     },
     "hunt_dissent_kallus": {

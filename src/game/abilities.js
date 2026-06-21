@@ -5797,15 +5797,35 @@ export function resolveAbility(abilityId, context) {
     game.figurePowerTokens = game.figurePowerTokens || {};
     game.figurePowerTokens[fk] = game.figurePowerTokens[fk] || [];
     const current = game.figurePowerTokens[fk].length;
-    // conditionalExteriorPowerToken (Marked Territory): +1 if figure is in an exterior space
+    // conditionalExteriorPowerToken (Marked Territory): the SECOND clause grants
+    // +1 Power Token to "a figure in your GROUP in an exterior space" — possibly
+    // a DIFFERENT groupmate than the one that took the base token. Enumerate the
+    // group's figures, prefer the base-token figure (fk) if it is itself
+    // exterior, otherwise pick any group figure standing in an exterior space.
     let conditionalPtBonus = 0;
     let conditionalPtNote = '';
+    let exteriorBonusRecipient = null; // null = grant alongside fk's base tokens
     if (typeof entry.conditionalExteriorPowerToken === 'number' && entry.conditionalExteriorPowerToken > 0 && game.selectedMap?.id) {
       const _mapExt = getMapData(game.selectedMap.id)?.exterior || {};
-      const _figPos = game.figurePositions?.[playerNum]?.[fk];
-      if (_figPos && (_mapExt[String(_figPos).toLowerCase()] || _mapExt[String(_figPos).toUpperCase()])) {
-        conditionalPtBonus += entry.conditionalExteriorPowerToken;
-        conditionalPtNote += ` (exterior: +${entry.conditionalExteriorPowerToken} bonus token)`;
+      const _isExterior = (_pos) => _pos && (_mapExt[String(_pos).toLowerCase()] || _mapExt[String(_pos).toUpperCase()]);
+      const _grpPositions = game.figurePositions?.[playerNum] || {};
+      let _extFk = null;
+      if (_isExterior(_grpPositions[fk])) {
+        _extFk = fk; // base-token figure is itself exterior — bonus rides with it
+      } else {
+        for (const _gfk of figureKeys) {
+          if (_isExterior(_grpPositions[_gfk])) { _extFk = _gfk; break; }
+        }
+      }
+      if (_extFk) {
+        if (_extFk === fk) {
+          conditionalPtBonus += entry.conditionalExteriorPowerToken;
+          conditionalPtNote += ` (exterior: +${entry.conditionalExteriorPowerToken} bonus token)`;
+        } else {
+          // Different groupmate in an exterior space — grant separately below.
+          exteriorBonusRecipient = { figureKey: _extFk, count: entry.conditionalExteriorPowerToken };
+          conditionalPtNote += ` (exterior groupmate **${dcNameFromFigureKey(_extFk)}**: +${entry.conditionalExteriorPowerToken} bonus token)`;
+        }
       }
     }
     // conditionalAdjacentLeaderPowerToken (Prepared for Battle): +1 if adjacent to a friendly LEADER
@@ -5824,9 +5844,21 @@ export function resolveAbility(abilityId, context) {
     }
     const nTotal = n + conditionalPtBonus;
     const toAdd = Math.min(nTotal, getMaxPowerTokens(fk) - current);
-    if (toAdd <= 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
-    game.pendingPowerTokenGrant = { grants: [{ figureKey: fk, figName: fk, count: toAdd }], channelId: null, playerNum };
-    const msg = (toAdd === 1 ? 'Gained 1 Power Token' : `Gained ${toAdd} Power Tokens`) + conditionalPtNote + ' — choose type.';
+    // Build grants: base tokens to fk, plus (if the exterior figure is a
+    // different groupmate) a separate grant to that groupmate. At least one of
+    // the two grants must be able to land for the ability to apply.
+    const _grants = [];
+    if (toAdd > 0) _grants.push({ figureKey: fk, figName: fk, count: toAdd });
+    if (exteriorBonusRecipient) {
+      const _rfk = exteriorBonusRecipient.figureKey;
+      const _rCur = (game.figurePowerTokens[_rfk] || []).length;
+      const _rAdd = Math.min(exteriorBonusRecipient.count, getMaxPowerTokens(_rfk) - _rCur);
+      if (_rAdd > 0) _grants.push({ figureKey: _rfk, figName: _rfk, count: _rAdd });
+    }
+    if (_grants.length === 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
+    game.pendingPowerTokenGrant = { grants: _grants, channelId: null, playerNum };
+    const _grantTotal = _grants.reduce((s, g) => s + g.count, 0);
+    const msg = (_grantTotal === 1 ? 'Gained 1 Power Token' : `Gained ${_grantTotal} Power Tokens`) + conditionalPtNote + ' — choose type.';
     // Veteran Instincts: per user clarification 2026-05-09, this is a
     // ONE-TIME token distributor only — gain 1 Hit/Surge token + 1
     // Block/Evade token. The legacy "active during attacks/defenses"
@@ -7655,6 +7687,32 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `This attack gains surge abilities: ${labels}${accNote}.`,
+    };
+  }
+
+  // ccEffect: attackBonusCleave — the attack AUTOMATICALLY gains Cleave N (no
+  // surge cost). Hunt Them Down: "the attack gains Cleave 2" is an unconditional
+  // keyword, so route through combat.passiveCleave / cleaveSources (the
+  // keyword-Cleave path at handlers/combat.js:7966) rather than the surge menu.
+  if (entry.type === 'ccEffect' && typeof entry.attackBonusCleave === 'number' && entry.attackBonusCleave > 0) {
+    const { game, playerNum, combat } = context;
+    const cbt = combat || game?.pendingCombat || game?.combat;
+    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
+      return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
+    }
+    const _clv = entry.attackBonusCleave;
+    cbt.passiveCleave = (cbt.passiveCleave || 0) + _clv;
+    (cbt.cleaveSources = cbt.cleaveSources || []).push({ value: _clv, label: `Cleave ${_clv} (passive)` });
+    // Some CCs grant Cleave AND a flat Accuracy bonus in one card
+    // (Hunt Them Down: "+2 Accuracy and the attack gains Cleave 2").
+    let accNote = '';
+    if (typeof entry.attackAccuracyBonus === 'number' && entry.attackAccuracyBonus > 0) {
+      cbt.bonusAccuracy = (cbt.bonusAccuracy || 0) + entry.attackAccuracyBonus;
+      accNote = ` and +${entry.attackAccuracyBonus} Accuracy`;
+    }
+    return {
+      applied: true,
+      logMessage: `This attack gains Cleave ${_clv}${accNote}.`,
     };
   }
 

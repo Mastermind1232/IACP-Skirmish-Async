@@ -243,7 +243,7 @@ import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
 import { pendingForcedRerolls } from '../engine/combat-abilities-rerolls.js';
-import { auraGrantedSurges as _auraGrantedSurges } from '../engine/surge-auras.js';
+import { auraGrantedSurges as _auraGrantedSurges, scrapBattalionGrantedSurges as _scrapBattalionGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { markAbilityUsed as _markAbilityUsed, limitGuard as _limitGuard, abilityLimitKey as _abilityLimitKey } from '../engine/combat-conditions.js';
 
@@ -3905,8 +3905,16 @@ export async function handleAttackTarget(interaction, ctx) {
           const cqAttack = cqHostileStats?.attack;
           if (cqAttack?.dice) {
             attackInfo = { ...attackInfo, dice: cqAttack.dice };
-            if (cqAttack.attackType?.toLowerCase() === 'melee') attackInfo = { ...attackInfo, range: [1, 1] };
-            else if (cqAttack.attackType?.toLowerCase() === 'ranged') attackInfo = { ...attackInfo, range: [1, 99] };
+            // Borrow the hostile weapon's attack TYPE/range too. Raw attack data
+            // uses .type with values 'melee'/'range' (isRanged is computed as
+            // attackInfo.type === 'range' at combat.js:4063/11671), so set both
+            // .type and .range to match the borrowed weapon.
+            const cqType = cqAttack.type?.toLowerCase();
+            if (cqType === 'melee') {
+              attackInfo = { ...attackInfo, type: 'melee', attackType: 'Melee', range: [1, 1] };
+            } else if (cqType === 'range') {
+              attackInfo = { ...attackInfo, type: 'range', attackType: 'Ranged', range: [1, 99] };
+            }
             game._closeQuartersBonusAcc = 1;
             game.pendingCombat.defensePoolRemoveMax = (game.pendingCombat.defensePoolRemoveMax || 0) + 1;
             await withDiscordRetry(() => thread.send(`**Close Quarters** — Using **${cqHostileName}**'s attack pool [${cqAttack.dice.join(', ')}], +1 Accuracy, remove 1 defense die (picker will fire at defense roll).`));
@@ -4142,6 +4150,10 @@ export async function handleAttackTarget(interaction, ctx) {
   // Owner-centric / footprint-aware eligibility via the condition engine; granted
   // surges are data-driven (the owner's surgeAbilities). alexanbv 2026-06-16.
   game.pendingCombat.bonusSurgeAbilities.push(..._auraGrantedSurges(game, game.pendingCombat));
+  // Scrap Battalion (Ugnaught Tinkerer): the Junk Droid "may use YOUR surge
+  // abilities." When the Junk Droid attacks, borrow the host Ugnaught's surge
+  // abilities (Bleed, Pierce N) so they appear in the spend_surges step.
+  game.pendingCombat.bonusSurgeAbilities.push(..._scrapBattalionGrantedSurges(game, attackerPlayerNum, meta.dcName));
   // CC Passive Redraw (per CRR card text 2026-05-09): K&D / Targeting
   // Network grant the relevant figure (FORCE USER / DROID) a NEW
   // surge ability "Re-draw this card" while the card is in discard.

@@ -1456,11 +1456,25 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
         game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
         const csKey = `cassian_said_i_had_to_${fk}`;
         if (game.roundFigureAbilityUsed[csKey]) continue;
-        game.roundFigureAbilityUsed[csKey] = true;
-        grantPowerTokens(game, fk, 'Damage', 1);
-        if (logGameAction) {
-          await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Damage Token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
-        }
+        // Card text: "gain UP TO 1 Damage Token" — the player MAY decline (gain 0).
+        // Offer a Use/Skip opt-in; the once-per-round flag is NOT consumed unless
+        // the player chooses Use (handled in handleCassianSaidIHadTo).
+        const csOwnerId = getPlayerId(game, playerNum);
+        const csBtns = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`cassian_kx_use_${game.gameId}_${fk}`)
+            .setLabel('Gain Damage Token')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`cassian_kx_skip_${game.gameId}_${fk}`)
+            .setLabel('Skip')
+            .setStyle(ButtonStyle.Secondary),
+        );
+        await interaction.channel?.send?.({
+          content: `🤖 <@${csOwnerId}> — **Cassian Said I Had To**: **${csDcName}** may gain **1 Damage Token** (friendly LEADER entered adjacent space).`,
+          components: [csBtns],
+          allowedMentions: { users: csOwnerId ? [csOwnerId] : [] },
+        }).catch(discordCatch);
       }
     }
   }
@@ -1719,6 +1733,55 @@ export async function handleMoveInterruptSkip(interaction, ctx) {
   }
 
   await logGameAction(game, client, `**${dcName}** skipped **${cardName}** opportunity.`, { phase: 'ROUND', icon: 'skip' });
+  saveGames(game.gameId);
+}
+
+/**
+ * Handle cassian_kx_use_ — K-2S0's owner chose to gain the (optional, "up to 1")
+ * Damage Token from Cassian Said I Had To. Consumes the once-per-round flag and
+ * grants the token only on Use.
+ */
+export async function handleCassianSaidIHadTo(interaction, ctx) {
+  const { getGame, logGameAction, saveGames, client } = ctx;
+  const m = interaction.customId.match(/^cassian_kx_use_([^_]+)_(.+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId, fk] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* handled */ } }
+  game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+  const csKey = `cassian_said_i_had_to_${fk}`;
+  if (game.roundFigureAbilityUsed[csKey]) {
+    await interaction.followUp({ content: 'Already used this round.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  game.roundFigureAbilityUsed[csKey] = true;
+  grantPowerTokens(game, fk, 'Damage', 1);
+  const csDcName = dcNameFromFigureKey(fk);
+  if (logGameAction) {
+    await logGameAction(game, client, `**Cassian Said I Had To** — **${csDcName}** gained a Damage Token (friendly LEADER entered adjacent space).`, { phase: 'ROUND', icon: 'attack' });
+  }
+  saveGames(game.gameId);
+}
+
+/**
+ * Handle cassian_kx_skip_ — owner declined the optional Damage Token. The
+ * once-per-round flag is NOT consumed, so it may still trigger later this round.
+ */
+export async function handleCassianSaidIHadToSkip(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const m = interaction.customId.match(/^cassian_kx_skip_([^_]+)_(.+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const [, gameId] = m;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  try { await interaction.update({ components: [] }); } catch { try { await interaction.deferUpdate(); } catch { /* handled */ } }
   saveGames(game.gameId);
 }
 

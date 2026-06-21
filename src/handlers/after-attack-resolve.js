@@ -346,7 +346,10 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   }
   // Bladestorm (CC effect): after attack resolves, all hostiles within N
   // spaces of the attacker suffer N AoE damage. Triggered by combat.postAttackAoeDamage > 0.
-  if (combat.postAttackAoeDamage > 0 && combat._step7Hit && combat.attackerFigureKey) {
+  // The card imposes NO miss requirement ("After the attack resolves, each
+  // hostile figure within 2 spaces of you suffers 1 Damage"), so do NOT gate
+  // on _step7Hit — the AoE fires unconditionally after the attack resolves.
+  if (combat.postAttackAoeDamage > 0 && combat.attackerFigureKey) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'bladestorm',

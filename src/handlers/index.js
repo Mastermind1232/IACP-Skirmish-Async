@@ -26,7 +26,7 @@ import {
   handleSetYourSightsPick,
   handleCompanionDeployPick,
 } from './post-deploy.js';
-import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure } from './movement.js';
+import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure, handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
 import { handleAttackTarget, handleTargetSquarePick, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMtlFacePick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate } from './combat.js';
@@ -287,6 +287,8 @@ register('thug_pick_', handleThugPick, 'thugMove');
 register('thug_dest_', handleThugDest, 'thugMove');
 register('mvint_play_', handleMoveInterruptPlay, 'movePick');
 register('mvint_skip_', handleMoveInterruptSkip, 'movePick');
+register('cassian_kx_use_', handleCassianSaidIHadTo, 'movePick');
+register('cassian_kx_skip_', handleCassianSaidIHadToSkip, 'movePick');
 register('ow_interrupt_use_', handleOverwatchInterruptUse, 'movePick');
 register('ow_interrupt_skip_', handleOverwatchInterruptSkip, 'movePick');
 register('dio_follow_pick_', handleDioFollowPick, 'movePick');

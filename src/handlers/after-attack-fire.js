@@ -872,7 +872,9 @@ async function fireBladestorm(thread, game, combat, effect, ctx) {
   if (!atkPos || !defPn) return;
   const lines = [];
   for (const [fk, coord] of Object.entries(game.figurePositions?.[defPn] || {})) {
-    if (!coord || fk === combat.target?.figureKey) continue;
+    // "each hostile figure within 2 spaces of you" INCLUDES the original
+    // target if it survived and is still in range — do not exclude it.
+    if (!coord) continue;
     if (countGameSpaces(game, atkPos, coord) > aoeRange) continue;
     const fMsgId = findDcMessageIdForFigure?.(game.gameId, defPn, fk);
     if (!fMsgId) continue;

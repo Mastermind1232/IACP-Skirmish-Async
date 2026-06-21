@@ -21,7 +21,7 @@ import { isFieldTacticsDc, fieldTacticsRoundKey, enumerateFieldTacticsTargets } 
 import { cardNameIncludes } from '../game/card-names.js';
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { getFootprintCells } from '../game/coords.js';
-import { getDiceData, getDcKeywords } from '../data-loader.js';
+import { getDiceData, getDcKeywords, dcAbilityFlags } from '../data-loader.js';
 import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { setPendingLoadoutSelection } from '../game/interrupts.js';
 import { getFormsChosenByTeamClawdites } from '../game/figure-config.js';
@@ -403,12 +403,15 @@ export async function fireLieInAmbushWhenDeployed(game, playerNum, dcName, figur
 
   const passives = eff.passives || [];
   const sIds = eff.specialAbilityIds || [];
+  // When-deployed keyword flags (In The Shadows / Ambush) may live in either
+  // `passives` or `abilities` (2026-06-15 data split), so scan the union.
+  const flags = dcAbilityFlags(eff);
   // Only consider figures that were actually placed on the board.
   const placedKeys = figureKeys.filter(fk => game.figurePositions?.[playerNum]?.[fk]);
   if (placedKeys.length === 0) return;
 
   // ── In The Shadows (non-interactive) — become Hidden ───────────────────────
-  if (passives.includes('In The Shadows')) {
+  if (flags.includes('In The Shadows')) {
     for (const fk of placedKeys) applyCondition(game, fk, 'Hide');
     await logGameAction(game, client, `🥷 **In The Shadows** — **${dcName}** becomes **Hidden** when deployed.`, { phase: 'ROUND', icon: 'deployed' });
   }
@@ -419,7 +422,7 @@ export async function fireLieInAmbushWhenDeployed(game, playerNum, dcName, figur
   // deployment" abilities (E-Web Forward Emplacement, Smooth Landing, Beskar
   // Armor, …) which do NOT. (alexanbv 2026-06-18: the CSV tags Ambush
   // after_deployment, but the card wording is the per-figure form.)
-  if (passives.includes('Ambush')) {
+  if (flags.includes('Ambush')) {
     for (const fk of placedKeys) applyCondition(game, fk, 'Hide');
     await logGameAction(game, client, `🥷 **Ambush** — **${dcName}** becomes **Hidden** when deployed.`, { phase: 'ROUND', icon: 'deployed' });
   }

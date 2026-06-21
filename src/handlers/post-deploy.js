@@ -4,7 +4,7 @@
  * Initiative player resolves first, then the other player.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { getDcEffects, getDcStats, getMapData, getDeploymentZones, getFigureSize } from '../data-loader.js';
+import { getDcEffects, getDcStats, getMapData, getDeploymentZones, getFigureSize, dcAbilityFlags } from '../data-loader.js';
 import { dcNameFromFigureKey, applyCondition, grantPowerTokens, buildFigureButtonLabel } from '../game/index.js';
 import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
@@ -67,17 +67,21 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
     if (!eff) continue;
     const passives = eff.passives || [];
     const sIds = eff.specialAbilityIds || [];
+    // When-deployed keyword flags can live in either `passives` or `abilities`
+    // (2026-06-15 data split moved named ability flags into `abilities`), so scan
+    // the union via dcAbilityFlags for these checks.
+    const flags = dcAbilityFlags(eff);
 
     if (passives.includes('Beskar Armor')) {
       abilities.push({ abilityId: 'beskar_armor', label: 'Beskar Armor', dcName, figureKey: fk, playerNum, interactive: false, type: 'token' });
     }
-    if (passives.includes('Stealthy')) {
+    if (flags.includes('Stealthy')) {
       abilities.push({ abilityId: 'stealthy', label: 'Stealthy', dcName, figureKey: fk, playerNum, interactive: false, type: 'condition' });
     }
-    if (passives.includes('Ambush')) {
+    if (flags.includes('Ambush')) {
       abilities.push({ abilityId: 'ambush', label: 'Ambush', dcName, figureKey: fk, playerNum, interactive: false, type: 'condition' });
     }
-    if (passives.includes('In The Shadows')) {
+    if (flags.includes('In The Shadows')) {
       abilities.push({ abilityId: 'in_the_shadows', label: 'In The Shadows', dcName, figureKey: fk, playerNum, interactive: false, type: 'condition' });
     }
     if (passives.includes('Forward Emplacement')) {

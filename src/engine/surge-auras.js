@@ -46,3 +46,29 @@ export function auraGrantedSurges(game, combat) {
   }
   return out;
 }
+
+/**
+ * Scrap Battalion (Ugnaught Tinkerer Elite/Regular): "the Junk Droid ... may use
+ * YOUR surge abilities." Unlike the range/keyword auras above, this is a
+ * companion→host link: when the Junk Droid attacks, it borrows the surge
+ * abilities (Bleed, Pierce N) of a friendly Ugnaught Tinkerer with Scrap
+ * Battalion in play. Returns the host's surgeAbilities (deduped by caller).
+ * @param {number} attackerPlayerNum
+ * @param {string} attackerDcName — the attacking figure's DC name
+ */
+export function scrapBattalionGrantedSurges(game, attackerPlayerNum, attackerDcName) {
+  if (norm(attackerDcName) !== 'Junk Droid') return [];
+  const all = getDcEffects() || {};
+  const figs = game?.figurePositions?.[attackerPlayerNum] || {};
+  const SB_IDS = ['scrap_battalion_ugnaught_elite', 'scrap_battalion_ugnaught_reg'];
+  for (const fk of Object.keys(figs)) {
+    if (!figs[fk]) continue;
+    const name = norm(String(fk).replace(/-\d+-\d+$/, ''));
+    const card = all[name];
+    const sIds = card?.specialAbilityIds || [];
+    if (sIds.some((id) => SB_IDS.includes(id))) {
+      return card?.surgeAbilities || [];
+    }
+  }
+  return [];
+}
