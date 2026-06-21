@@ -22,6 +22,7 @@ import { registerCombatAbility } from './combat-timing-registry.js';
 import { sharpshooterInRange } from '../game/sharpshooter-helpers.js';
 import { hasFullOfRageAbility, fullOfRageDamageTriggered } from '../game/full-of-rage-helpers.js';
 import { hasShockAndAweAbility } from '../game/shock-and-awe-helpers.js';
+import { dcAbilityFlags } from '../data-loader.js';
 import { limitGuard, abilityLimitKey } from './combat-conditions.js';
 
 function atkEff(combat, deps) {
@@ -74,7 +75,15 @@ registerCombatAbility({
 });
 
 // Mystic Hunter (Zuckuss) — auto-Focus on every attack declaration.
-atkPassive('mystic_hunter', 'Mystic Hunter', ['mystic hunter']);
+// "Mystic Hunter" is a display-name flag (no specialAbilityId), so it lives in
+// passives AND/OR abilities depending on the data split. Match via dcAbilityFlags
+// (passives ∪ abilities) so detection survives flags moving between the two
+// arrays — hasAny() alone reads only specialAbilityIds + passives.
+registerCombatAbility({
+  id: 'mystic_hunter', name: 'Mystic Hunter', side: 'attacker', kind: 'passive', windows: ['on_declare'],
+  applies: (game, combat, side, deps) => !!combat.attackerFigureKey
+    && dcAbilityFlags(atkEff(combat, deps)).map((s) => String(s).toLowerCase()).includes('mystic hunter'),
+});
 
 // Fly-By (Jet Trooper Elite) — +1 blue die when the target is within 2 spaces.
 registerCombatAbility({

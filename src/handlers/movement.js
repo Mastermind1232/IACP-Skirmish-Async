@@ -1114,7 +1114,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
       const hCurHp = hCur ?? hMax ?? 0;
       if (hMax === 0 || hCurHp <= 0) continue;
       const _orRes = await _applyDamage(game, { dcHealthState: _dcHealthState, logGameAction, client }, {
-        figureKey: hostileFk, msgId: hostileMsgId, figIndex: hFigIndex,
+        figureKey: hostileFigureKey, msgId: hostileMsgId, figIndex: hFigIndex,
         amount: 2, controllerPlayerNum: hostilePlayerNum,
         source: 'Overrun',
       });

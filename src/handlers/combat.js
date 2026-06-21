@@ -5851,6 +5851,11 @@ export async function handleCombatRoll(interaction, ctx) {
     // Sentry Droid Elite/Reg, AT-ST, Dark Trooper Mk III ATC): +1 atk reroll
     if (hasTargetingComputerAbility(atkSIds)) {
       _pushVoluntary(attackerPlayerNum, 'attack', 'Targeting Computer');
+      // De-dup vs the innate text-parse path: the same card's printed
+      // "Targeting Computer: While attacking, reroll 1 attack die" ALSO
+      // surfaces via getInnateRerollAbilities. Flag so the text path skips
+      // its duplicate 'targeting-computer' entry (1 reroll total, not 2).
+      combat._targetingComputerIdPushed = true;
     }
     // Overpower (Royal Guard Champion): +1 atk reroll restricted to RED die when
     // attacking, +1 def reroll restricted to BLACK die when defending. Color
@@ -6170,6 +6175,11 @@ export async function handleCombatRoll(interaction, ctx) {
       const _atkInnateAbs = getInnateRerollAbilities(combat.attackerDcName);
       for (const ab of _atkInnateAbs) {
         if (ab.pool !== 'attack' && ab.pool !== 'any') continue;
+        // De-dup the SAME named reroll already counted via the id/passive
+        // path. Only collapses identical sources — distinct reroll abilities
+        // (Field Supply, Just Business, generic while-attacking) still stack.
+        if (ab.id === 'targeting-computer' && combat._targetingComputerIdPushed) continue;
+        if (ab.id === 'professional' && combat._professionalPassivePushed) continue;
         for (let _i = 0; _i < (ab.remainingUses || 1); _i++) {
           _pushVoluntary(attackerPlayerNum, ab.pool, ab.label || 'Innate Attack Reroll');
         }
@@ -7943,7 +7953,7 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
       const blas = p.match(/^blast\s+(\d+)$/);        if (blas)   { combat.bonusBlast     = (combat.bonusBlast     || 0) + parseInt(blas[1],   10); continue; }
       const clv  = p.match(/^cleave\s+(\d+)$/);       if (clv)    { const _cv = parseInt(clv[1], 10); combat.passiveCleave  = (combat.passiveCleave  || 0) + _cv; (combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (passive)` }); continue; }
       if (p === 'bleed')        { combat.bonusConditions = (combat.bonusConditions || []).concat(['Bleed']); continue; }
-      if (p === 'professional') { combat.rerollOneAttackDie = (combat.rerollOneAttackDie || 0) + 1; continue; }
+      if (p === 'professional') { combat.rerollOneAttackDie = (combat.rerollOneAttackDie || 0) + 1; combat._professionalPassivePushed = true; continue; }
     }
   }
 

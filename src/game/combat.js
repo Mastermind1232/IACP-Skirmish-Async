@@ -159,8 +159,18 @@ export function getInnateRerollAbilities(dcName) {
   // matches the printed card. Falls back to generic "While Attacking
   // Reroll" / "While Defending Reroll" for cards whose ability is
   // unnamed in the text.
+  // Targeting Computer / Professional are NAMED reroll abilities whose
+  // printed text ("Targeting Computer: While attacking, you may reroll 1
+  // attack die.") ALSO matches the generic atkMatch regex. Detect the
+  // named ability FIRST and make all three branches mutually exclusive so
+  // the same abilityText yields exactly ONE attack-die reroll entry (not
+  // two). Without this, a single named ability double-counts.
   const atkMatch = text.match(/while attacking,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
-  if (atkMatch) {
+  if (/targeting computer/i.test(text)) {
+    abilities.push({ id: 'targeting-computer', label: 'Use Targeting Computer', pool: 'attack', remainingUses: 1 });
+  } else if (/professional/i.test(text)) {
+    abilities.push({ id: 'professional', label: 'Use Professional', pool: 'attack', remainingUses: 1 });
+  } else if (atkMatch) {
     const n = parseInt(atkMatch[1], 10) || 1;
     abilities.push({
       id: 'while-attacking-reroll',
@@ -168,11 +178,6 @@ export function getInnateRerollAbilities(dcName) {
       pool: 'attack',
       remainingUses: n,
     });
-  } else if (/professional/i.test(text)) {
-    abilities.push({ id: 'professional', label: 'Use Professional', pool: 'attack', remainingUses: 1 });
-  }
-  if (/targeting computer/i.test(text)) {
-    abilities.push({ id: 'targeting-computer', label: 'Use Targeting Computer', pool: 'attack', remainingUses: 1 });
   }
   const defMatch = text.match(/while defending,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+defense?\s+di/);
   if (defMatch) {
