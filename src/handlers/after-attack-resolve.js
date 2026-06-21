@@ -235,9 +235,11 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       });
     }
   }
-  // Stalk Prey (CC, attacker side): triggered by combat.surgeStalkPrey
-  // set when the CC was played. Hit-gated.
-  if (combat.surgeStalkPrey && combat._step7Hit && combat.attackerMsgId && combat.attackerFigureKey) {
+  // Stalk Prey (Maul CC, attacker side): triggered by combat.surgeStalkPrey
+  // set when the CC was played. CSV cond=None ("After this attack resolves,
+  // you gain 2 movement points and 1 Damage Token") — NO miss clause, so the
+  // grant fires whenever the surge was spent, even on a miss. NOT hit-gated.
+  if (combat.surgeStalkPrey && combat.attackerMsgId && combat.attackerFigureKey) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'stalk_prey',

@@ -207,7 +207,7 @@ e('surge_condition', 'Surge condition (Bleed/Stun/Weaken/Focus/Hide)', 'either',
 e('leg_hydraulics', 'Leg Hydraulics (Tress Hacnua)', 'attacker', 'interactive', AR, 'Move-1 picker');
 e('vaders_finest_move', 'Vader\'s Finest (post-attack move)', 'attacker', 'interactive', AR, 'vadersFinestPostAttackMove');
 e('stun_batons', 'Stun Batons (Riot Trooper)', 'attacker', 'passive', AR, 'hit + damage>0 → Strain');
-e('stalk_prey', 'Stalk Prey (CC)', 'attacker', 'passive', AR, 'surgeStalkPrey + hit → +2 MP +1 dmg token');
+e('stalk_prey', 'Stalk Prey (CC)', 'attacker', 'passive', AR, 'surgeStalkPrey (no miss clause) → +2 MP +1 dmg token');
 e('burst_fire', 'Burst Fire (Imperial Loadout)', 'attacker', 'passive', AR, 'hit + damage>0 → Stun adjacent');
 e('crippling_blow', 'Crippling Blow (Imperial Loadout)', 'attacker', 'passive', AR, 'hit → Stun defender');
 e('disruptor_rifle', 'Disruptor Rifle (Imperial Loadout)', 'attacker', 'passive', AR, 'hit + target at 1 HP → defeat');

@@ -9950,19 +9950,22 @@ export async function handleCombatSurge(interaction, ctx) {
       // Cancel: remove N block results from defender (like Pierce but applied to results)
       if (mod.surgeCancel) combat.surgeCancel = (combat.surgeCancel || 0) + mod.surgeCancel;
       // Named surge flags
-      if (mod.replaceWithStun) combat.attackResultReplaceWithStun = true;
+      if (mod.replaceWithStun) combat.attackResultReplaceWithStun = true; // Set for Stun (CC): hit, damage>0 gated
+      if (mod.missAndStun) combat.attackMissAndStun = true; // Shocking Palm (0-0-0): MISS + unconditional Stun
       if (mod.surgeCancelDodge) combat.surgeCancelDodge = true;
       if (mod.surgeHarass) combat.surgeHarass = (combat.surgeHarass || 0) + mod.surgeHarass;
       if (mod.surgeSquadCommand) combat.surgeSquadCommand = true;
       if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
       if (mod.surgeCriticalHit) {
         combat.surgeCriticalHit = true;
-        // Per user 2026-05-09: Critical Hit is a surge that's not a
-        // keyword — it applies IMMEDIATELY when the surge is spent
-        // (during surge-spend phase), not in step 7 or step 8.
-        // Sets the per-round CC-block flag for the defender.
-        game.criticalHitBlockedPlayer = combat.defenderPlayerNum;
-        await thread.send(`\u{1F3AF} **Critical Hit** — Defender's Command cards are blocked for the rest of this round.`).catch(discordCatch);
+        // Mak Eshka'rey "Critical Hit": "This attack gains Pierce 2; if the
+        // target suffered 1 or more Damage during this attack, it may not play
+        // command cards this round." The CC-lockout is conditional on the
+        // target actually suffering >=1 Damage, which isn't known at surge-spend
+        // time. Defer it: set a pending flag here and apply
+        // game.criticalHitBlockedPlayer in step-7/step-8 resolution (combat-
+        // bridge) only when combat._step7Damage >= 1. (Pierce 2 is generic.)
+        combat.surgeCriticalHitPending = true;
       }
       if (mod.surgeSuppressionStrain) combat.surgeSuppressionStrain = true;
       if (mod.surgeFightingKnife) combat.surgeFightingKnife = true;

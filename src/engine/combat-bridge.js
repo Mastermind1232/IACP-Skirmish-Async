@@ -1450,6 +1450,30 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // can gate keyword effects (Blast, Cleave, Recover) consistently.
   combat._step7Hit = hit;
   combat._step7Damage = damage;
+  // Mak Eshka'rey "Critical Hit" surge: "...if the target suffered 1 or more
+  // Damage during this attack, it may not play command cards this round." The
+  // surge-spend phase only sets combat.surgeCriticalHitPending; the CC-lockout
+  // is deferred to here where the per-attack damage total is known. Mirror how
+  // other "after damage, if it dealt damage" step-8 effects gate on
+  // combat._step7Damage. Only block CCs when the target actually took >=1 dmg.
+  if (combat.surgeCriticalHitPending && (combat._step7Damage || 0) >= 1) {
+    game.criticalHitBlockedPlayer = combat.defenderPlayerNum;
+    await logGameAction(game, client, `\u{1F3AF} **Critical Hit** — **${combat.target?.label || 'Defender'}** suffered ${combat._step7Damage} Damage; that player's Command cards are blocked for the rest of this round.`, { phase: 'ROUND', icon: 'card' });
+  }
+  // 0-0-0 "Shocking Palm" surge: "The attack misses and the defender becomes
+  // Stunned." computeCombatResult forces hit=false (real miss, 0 damage), so
+  // the normal damage>0 step-8 condition assembly above is skipped. Apply the
+  // Stun UNCONDITIONALLY here — append it to _step8Conditions so it lands via
+  // the same fireCondition path (immunity / Fireproof / Punishing Strike all
+  // honoured at click time) in both the fully-blocked and would-have-dealt-
+  // damage cases. Harmful → target (the defender).
+  if (combat.attackMissAndStun && targetMsgId
+      && !(combat.target?.isCrate || combat.target?.npcType === 'crate')) {
+    combat._step8Conditions = Array.isArray(combat._step8Conditions) ? combat._step8Conditions : [];
+    if (!combat._step8Conditions.some((e) => e?.condition === 'Stun')) {
+      combat._step8Conditions.push({ condition: 'Stun', recipient: 'target' });
+    }
+  }
   // Discard consumed conditions post-combat. Then re-apply any conditions
   // granted via surge: focus / surge: hide AFTER the discard, per destruct
   // 2026-05-07 ("hidden is discarded, and then reacquired"). Same logic
@@ -1880,7 +1904,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     }
     if (combat.surgeSuppressionStrain) {
       const supRoll = combat.defenseRoll || {};
-      const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge ? 1 : 0), 2);
+      // Biv Bodhrik "Suppression": Strain = number of Block + Evade + Dodge
+      // results (max 2). dodge is a numeric COUNT (recalcDefenseTotals sums
+      // it), so use the count — not a binary 0/1 — so a 2-dodge roll yields 2.
+      const supAmt = Math.min((supRoll.block || 0) + (supRoll.evade || 0) + (supRoll.dodge || 0), 2);
       if (supAmt > 0) {
         await _applyStrain(game, { client, logGameAction, saveGames, dcHealthState, findDcMessageIdForFigure, processFigureDefeat, findFigureheadFigure: deps.findFigureheadFigure }, {
           figureKey: combat.target.figureKey,
@@ -1889,7 +1916,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           source: 'Suppression',
         });
         embedRefreshMsgIds.add(targetMsgId);
-        await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? ', 1 dodge' : ''})`, { phase: 'ROUND', icon: 'attack' });
+        await logGameAction(game, client, `**Suppression** — **${combat.target.label}** suffers **${supAmt}** Strain (${supRoll.block || 0} block, ${supRoll.evade || 0} evade${supRoll.dodge ? `, ${supRoll.dodge} dodge` : ''})`, { phase: 'ROUND', icon: 'attack' });
       }
     }
   }
@@ -1914,7 +1941,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Stalk Prey — migrated to step-8 button window (slice 2b, destruct
   // 2026-05-08). fireStalkPrey reads combat.surgeStalkPrey flag and
   // clears it; enqueue probe is in enqueueAttackerPerDcEffects.
-  if (hit && combat.surgeStalkPrey && combat.attackerMsgId) {
+  // No miss clause (CSV cond=None) — refresh the attacker embed whenever the
+  // surge was spent, even on a miss, so the +2 MP / Damage-Token grant shows.
+  if (combat.surgeStalkPrey && combat.attackerMsgId) {
     embedRefreshMsgIds.add(combat.attackerMsgId);
   }
   // Squad Command (Kayn Somos surge): Focus an adjacent friendly TROOPER.

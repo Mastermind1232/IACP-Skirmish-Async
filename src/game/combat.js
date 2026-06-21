@@ -260,7 +260,10 @@ export function parseSurgeEffect(key) {
   // Named surge key shortcuts (cannot be parsed as generic patterns)
   if (k === 'stun_net') { out.conditions.push('Stun'); return out; }
   if (k === 'harass') { out.surgeHarass = 1; return out; }
-  if (k === 'shocking_palm') { out.replaceWithStun = true; return out; }
+  // Shocking Palm (0-0-0): "The attack misses and the defender becomes
+  // Stunned." Distinct from "Set for Stun" (CC) which is a HIT that floors
+  // damage to 0 — Shocking Palm is a genuine MISS with an unconditional Stun.
+  if (k === 'shocking_palm') { out.missAndStun = true; return out; }
   if (k === 'squad_command') { out.surgeSquadCommand = true; return out; }
   if (k === 'stalk_prey') { out.surgeStalkPrey = true; return out; }
   if (k === 'deadly_spin') { out.surgeCancelDodge = true; out.cleave = 3; return out; }
@@ -376,6 +379,18 @@ export function computeCombatResult(combat) {
     hit = false;
     missReason = 'On the Lam (target moved out of LOS)';
   }
+  // 0-0-0 "Shocking Palm" surge: "The attack misses and the defender
+  // becomes Stunned." The attack is a real MISS (0 damage) — not a 0-dmg
+  // hit — so on-hit / non-miss triggers see a miss and it logs as a miss.
+  // The Stun is applied UNCONDITIONALLY downstream (combat-bridge step-8),
+  // independent of damage. (destruct: surge spent → miss + Stun in both
+  // fully-blocked and would-have-dealt-damage cases.) NOTE: this is distinct
+  // from "Set for Stun" (CC, combat.attackResultReplaceWithStun) which is a
+  // HIT that floors damage to 0 and is gated on damage>0.
+  if (combat.attackMissAndStun) {
+    hit = false;
+    missReason = 'Shocking Palm — attack misses';
+  }
   // Wookiee Avenger (Skirmish Upgrade): convert Dodge results to Evade
   // results — converts ALL rolled Dodge (numeric).
   if (defRoll.dodge && combat.wookieeAvengerDefend) {
@@ -457,7 +472,9 @@ export function computeCombatResult(combat) {
   const defenderDamageReduction = combat.defenderDamageReduction || 0;
   let damage = hit ? Math.max(0, roll.dmg + surgeD + bonusHits + perDefDieDamage - effectiveBlock - defenderDamageReduction) : 0;
   if (combat.maxDamageToDefender != null && damage > combat.maxDamageToDefender) damage = combat.maxDamageToDefender;
-  const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
+  // "Set for Stun" (CC): "if the target would suffer 1 or more Damage, reduce
+  // the Damage suffered to 0, then the target becomes Stunned." HIT, gated on
+  // damage>0 — if the attack was already fully blocked, nothing happens.
   if (combat.attackResultReplaceWithStun && damage > 0) {
     damage = 0;
     if (!(combat.bonusConditions || []).includes('Stun')) {
@@ -465,6 +482,17 @@ export function computeCombatResult(combat) {
       combat.bonusConditions.push('Stun');
     }
   }
+  // Shocking Palm (0-0-0): queue the Stun UNCONDITIONALLY (hit is already
+  // false → damage 0). The step-8 application in combat-bridge.js applies
+  // this Stun even on a 0-damage / miss outcome, bypassing the damage>0 gate.
+  if (combat.attackMissAndStun) {
+    damage = 0;
+    if (!(combat.bonusConditions || []).includes('Stun')) {
+      combat.bonusConditions = combat.bonusConditions || [];
+      combat.bonusConditions.push('Stun');
+    }
+  }
+  const allConds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
   const conditionsText = allConds.length ? ` (${allConds.join(', ')})` : '';
   const bonusBlast = combat.bonusBlast || 0;
   const totalBlastDisplay = (combat.surgeBlast || 0) + bonusBlast;
@@ -476,6 +504,7 @@ export function computeCombatResult(combat) {
   let headline;
   if (!hit) {
     headline = missReason ? `**Result: MISS** — ${missReason}` : '**Result: MISS**';
+    if (combat.attackMissAndStun) headline += ' (defender becomes Stunned)';
   } else {
     headline = `**Result: HIT** — ${damage} damage${conditionsText}`;
     if (combat.attackResultReplaceWithStun) headline += ' (Set for Stun: 0 damage, Stunned)';

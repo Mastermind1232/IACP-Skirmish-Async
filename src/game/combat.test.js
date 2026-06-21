@@ -510,6 +510,38 @@ test('computeCombatResult combined surge blast and bonus blast', () => {
   assert.ok(r.resultText.includes('Blast 3'));
 });
 
+// --- 0-0-0 "Shocking Palm" surge: attack MISSES and defender becomes Stunned ---
+
+test('Shocking Palm: attack is a MISS with 0 damage (would-have-dealt-damage case)', () => {
+  const combat = { bonusConditions: [] };
+  const r = computeCombatResult({
+    attackRoll: { acc: 3, dmg: 5, surge: 1 },
+    defenseRoll: { block: 0, evade: 0 },
+    attackMissAndStun: true,
+    bonusConditions: combat.bonusConditions,
+  });
+  // Real miss — not a 0-damage hit — so on-hit / non-miss triggers see a miss.
+  assert.strictEqual(r.hit, false);
+  assert.strictEqual(r.damage, 0);
+  assert.ok(/MISS/.test(r.resultText));
+  assert.ok(/Shocking Palm/.test(r.resultText));
+  // Stun queued for unconditional step-8 application.
+  assert.ok(combat.bonusConditions.includes('Stun'));
+});
+
+test('Shocking Palm: MISS + Stun queued even when fully blocked (0 damage anyway)', () => {
+  const combat = { bonusConditions: [] };
+  const r = computeCombatResult({
+    attackRoll: { acc: 3, dmg: 2, surge: 1 },
+    defenseRoll: { block: 5, evade: 0 },
+    attackMissAndStun: true,
+    bonusConditions: combat.bonusConditions,
+  });
+  assert.strictEqual(r.hit, false);
+  assert.strictEqual(r.damage, 0);
+  assert.ok(combat.bonusConditions.includes('Stun'));
+});
+
 // --- parseSurgeEffect extended ---
 
 test('parseSurgeEffect special keys: stun_net, focus, hide', () => {
