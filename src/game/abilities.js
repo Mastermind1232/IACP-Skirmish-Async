@@ -132,14 +132,16 @@ function resolveUniqueFigureCcFigureKey(game, playerNum, cardName) {
   const positions = game.figurePositions?.[playerNum] || {};
   const liveKeys = Object.keys(positions).filter(fk => positions[fk]);
   if (liveKeys.length === 0) return null;
-  // 0. Fast-Learner override (alexanbv 2026-06-21): if the CC was played via
-  //    Mara Jade's Fast Learner, the range anchor is MARA — even when BOTH the
-  //    named figure and Mara are on the board. cc-hand.js records Mara's live
-  //    figureKey on game.ccPlayedByFastLearnerFigureKey for the duration of the
-  //    current CC effect resolution (transient; cleared after). This takes
-  //    priority over the named-figure preference below.
-  const flFigureKey = game.ccPlayedByFastLearnerFigureKey;
-  if (flFigureKey && liveKeys.includes(flFigureKey)) return flFigureKey;
+  // 0. Played-by override (alexanbv 2026-06-21): if the player chose WHO plays
+  //    this unique-figure CC (named figure, Mara via Fast Learner, a Force User
+  //    via There is Another, or any army figure via [A New Hope]), the range
+  //    anchors on that CHOSEN figure — even when the named figure is also on the
+  //    board. cc-hand.js records the chosen live figureKey on
+  //    game.ccPlayedByFigureKey (general) for the duration of the current CC
+  //    effect resolution (transient; cleared after). The legacy
+  //    ccPlayedByFastLearnerFigureKey alias is still honored for back-compat.
+  const playedByFigureKey = game.ccPlayedByFigureKey || game.ccPlayedByFastLearnerFigureKey;
+  if (playedByFigureKey && liveKeys.includes(playedByFigureKey)) return playedByFigureKey;
   const named = getUniqueFiguresForCc(cardName).map(n => String(n || '').toLowerCase());
   // 1. Prefer a named figure on the board.
   if (named.length > 0) {
@@ -234,15 +236,17 @@ function resolveKeywordCcFigureKey(game, playerNum, requiredKeywords) {
 function resolveRoundModifierAnchor(game, playerNum, cardName, opts = {}) {
   if (!game || !playerNum) return null;
   const { dcMessageMeta } = opts;
-  // 0. Fast-Learner override (alexanbv 2026-06-21): when a unique-figure CC was
-  //    played via Mara Jade's Fast Learner, "you/your" anchors on MARA — even
-  //    when the named figure is also on the board. This takes priority over the
-  //    activation/defender/named-figure resolution below. Set transiently by
-  //    cc-hand.js (game.ccPlayedByFastLearnerFigureKey) for the current play.
-  const _flFigureKey = game.ccPlayedByFastLearnerFigureKey;
-  if (_flFigureKey) {
-    const _liveByMara = game.figurePositions?.[playerNum]?.[_flFigureKey];
-    if (_liveByMara) return _flFigureKey;
+  // 0. Played-by override (alexanbv 2026-06-21): when the player chose WHO plays
+  //    this unique-figure CC (named, Mara via Fast Learner, a Force User via
+  //    There is Another, or any army figure via [A New Hope]), "you/your" anchors
+  //    on that CHOSEN figure — even when the named figure is also on the board.
+  //    This takes priority over the activation/defender/named-figure resolution
+  //    below. Set transiently by cc-hand.js (game.ccPlayedByFigureKey, general;
+  //    ccPlayedByFastLearnerFigureKey legacy alias) for the current play.
+  const _playedByFigureKey = game.ccPlayedByFigureKey || game.ccPlayedByFastLearnerFigureKey;
+  if (_playedByFigureKey) {
+    const _liveByChosen = game.figurePositions?.[playerNum]?.[_playedByFigureKey];
+    if (_liveByChosen) return _playedByFigureKey;
   }
   // 1. Activating figure (during/start-of-activation, special_action cards).
   if (dcMessageMeta) {

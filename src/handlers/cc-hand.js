@@ -348,18 +348,21 @@ async function _resumeScCcEffect(game, ctx, client) {
   delete game.pendingCcEffect;
   const { resolveAbility, dcMessageMeta, dcHealthState } = ctx;
   if (resolveAbility) {
-    // Fast-Learner anchor (alexanbv 2026-06-21): if this unique-figure CC was
-    // played via Mara's Fast Learner, expose Mara's figureKey transiently so
-    // resolveUniqueFigureCcFigureKey / resolveRoundModifierAnchor anchor the
-    // CC's range on Mara (not the named figure). Cleared after the synchronous
-    // effect resolution so it never leaks to other CCs.
-    const _flAnchorFk = pend.fastLearnerFigureKey ?? null;
-    if (_flAnchorFk) game.ccPlayedByFastLearnerFigureKey = _flAnchorFk;
+    // Played-by anchor (alexanbv 2026-06-21): if the player chose WHO plays this
+    // unique-figure CC (named figure, Mara via Fast Learner, a Force User via
+    // There is Another, or any army figure via [A New Hope]), expose the chosen
+    // figureKey transiently so resolveUniqueFigureCcFigureKey /
+    // resolveRoundModifierAnchor anchor the CC's range on that figure (not the
+    // named figure). Cleared after the synchronous effect resolution so it never
+    // leaks to other CCs. `playedByFigureKey` is the general field;
+    // `fastLearnerFigureKey` is kept for back-compat with older stack entries.
+    const _anchorFk = pend.playedByFigureKey ?? pend.fastLearnerFigureKey ?? null;
+    if (_anchorFk) game.ccPlayedByFigureKey = _anchorFk;
     let result;
     try {
       result = resolveAbility(pend.abilityId, { game, playerNum: pend.playedBy, cardName: pend.card, dcMessageMeta, dcHealthState, combat: game.combat || game.pendingCombat, msgId: pend.msgId });
     } finally {
-      if (_flAnchorFk) delete game.ccPlayedByFastLearnerFigureKey;
+      if (_anchorFk) delete game.ccPlayedByFigureKey;
     }
     await applyAbilityResult(result, { game, playerNum: pend.playedBy, msgId: pend.fromDc ? pend.msgId : undefined, client, ctx });
     // Interactive effects (e.g. Intelligence Leak's looker pick) return
@@ -791,17 +794,39 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
-  // Mara Jade Fast Learner picker: when both the named figure AND Mara are
-  // in army with FL unused this round, the player must choose who plays the
-  // CC. Re-entry from the picker has _flResolved set; skip on re-entry.
+  // Unified unique-figure-CC player picker (alexanbv 2026-06-21): when a
+  // unique-figure CC can be played by MORE THAN ONE eligible on-board figure
+  // (named figure, Mara via Fast Learner, a Force User via There is Another, or
+  // any army figure via [A New Hope]), the player must choose WHO plays it — the
+  // range always anchors on the chosen figure, and each choice applies its own
+  // consumption (FL / A New Hope deplete / none). Re-entry from the picker has
+  // _flResolved set (it carries the chosen figureKey + consume); skip on re-entry.
+  let _pickedFigureKey = null;   // chosen playing figure (for range anchor)
+  let _pickedConsume = null;     // 'none' | 'fast_learner' | 'a_new_hope'
+  if (_flResolved && typeof _flResolved === 'object') {
+    _pickedFigureKey = _flResolved.figureKey ?? null;
+    _pickedConsume = _flResolved.consume ?? null;
+  }
   if (!_flResolved) {
-    const { getFastLearnerPickerEligibility } = await import('../game/unique-figure-ccs.js');
-    const eligibility = getFastLearnerPickerEligibility(game, playerNum, card);
-    if (eligibility.shouldPrompt) {
-      const { presentFastLearnerPicker } = await import('./fast-learner-picker.js');
-      await presentFastLearnerPicker(interaction, game, playerNum, card, eligibility);
+    const { getUniqueCcPlayerOptions } = await import('../game/unique-figure-ccs.js');
+    const options = getUniqueCcPlayerOptions(game, playerNum, card);
+    // Prompt when there is genuine choice: >1 distinct eligible figure, OR a
+    // single non-named option whose consumption differs from playing as the
+    // named figure (so the player can decline a Fast Learner / A New Hope spend).
+    const needsPrompt = options.length > 1
+      || (options.length === 1 && options[0].kind !== 'named');
+    if (needsPrompt) {
+      const { presentUniqueCcPlayerPicker } = await import('./fast-learner-picker.js');
+      await presentUniqueCcPlayerPicker(interaction, game, playerNum, card, options);
       saveGames(game.gameId);
       return;
+    }
+    // Exactly one named option (or none): no prompt. Anchor on the named figure
+    // when present so the range references it even if the legality path used an
+    // enabler substitution elsewhere.
+    if (options.length === 1) {
+      _pickedFigureKey = options[0].figureKey;
+      _pickedConsume = options[0].consume;
     }
   }
 
@@ -884,10 +909,11 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       }
     }
   }
-  // Fast Learner (Mara Jade): mark FL used when either (a) the legality
-  // check granted FL bypass (named figure NOT in army, Mara substituted) or
-  // (b) the picker resolved to Mara when both figures were in army.
-  if (restriction.fastLearner || _flResolved === 'mara') {
+  // Fast Learner (Mara Jade): mark FL used when either (a) the legality check
+  // granted FL bypass (named figure NOT in army, Mara substituted — no picker),
+  // or (b) the unified picker resolved to Mara (consume === 'fast_learner').
+  // Other picker choices (named / There is Another / A New Hope) do NOT spend FL.
+  if (restriction.fastLearner || _pickedConsume === 'fast_learner') {
     const dcList2 = playerNum === 1 ? (game.p1DcList || []) : (game.p2DcList || []);
     for (const dc of dcList2) {
       const dn = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
@@ -979,24 +1005,34 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
     // 3. On-play triggers (Hunt Dissent, Adapt) fire for the played card.
     await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-    // [A New Hope]: if this CC was playable ONLY via the [A New Hope] name-
-    // restriction relaxation, deplete it now (once per game — it enabled the play).
-    if (restriction?.aNewHope) {
+    // [A New Hope]: deplete it now (once per game — it enabled the play) when
+    // the play actually used A New Hope. When the unified picker produced a
+    // choice, the picked consumption is AUTHORITATIVE — deplete ONLY if the
+    // chosen figure qualified via A New Hope (`_pickedConsume === 'a_new_hope'`).
+    // This enforces TIA-over-A-New-Hope precedence: a Force User chosen via There
+    // is Another carries consume 'none', so A New Hope is NOT depleted even when
+    // it is also available. When the picker did NOT run (single-named or legacy
+    // auto-substitution), fall back to the legality flag `restriction.aNewHope`.
+    const _useANewHope = _pickedConsume != null
+      ? _pickedConsume === 'a_new_hope'
+      : !!restriction?.aNewHope;
+    if (_useANewHope) {
       const { depleteANewHope } = await import('../game/cc-timing.js');
       if (depleteANewHope(game, playerNum)) {
         await logGameAction(game, interaction.client, `**[A New Hope]** depleted — enabled **${card}**.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
       }
     }
     // 4. Open the recursive counter-window; it resolves the effect or cancels it.
-    //    Thread the Fast-Learner-played-by anchor (Mara's figureKey) when this
-    //    unique-figure CC was played via Mara's Fast Learner — so a CC with a
-    //    range component references Mara, not the named figure (alexanbv
-    //    2026-06-21). Survives the counter-window via the stack entry → the
-    //    deferred-effect resolution (see _resumeScCcEffect).
-    const _flAnchorFk = (restriction.fastLearner || _flResolved === 'mara')
-      ? resolveFastLearnerFigureKey(game, playerNum)
-      : null;
-    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, fastLearnerFigureKey: _flAnchorFk }, ctx, interaction.client);
+    //    Thread the played-by anchor (the CHOSEN playing figure's figureKey) so a
+    //    CC with a range component references THAT figure, not the named figure
+    //    (alexanbv 2026-06-21). Covers all paths: named, Mara via Fast Learner, a
+    //    Force User via There is Another, any army figure via A New Hope. Survives
+    //    the counter-window via the stack entry → deferred-effect resolution
+    //    (see _resumeScCcEffect). When the picker did not run, fall back to the
+    //    Fast-Learner figureKey for the legacy Mara-auto-substitution path.
+    const _anchorFk = _pickedFigureKey
+      ?? ((restriction.fastLearner) ? resolveFastLearnerFigureKey(game, playerNum) : null);
+    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, playedByFigureKey: _anchorFk, fastLearnerFigureKey: _anchorFk }, ctx, interaction.client);
     saveGames(game.gameId);
     return;
   }

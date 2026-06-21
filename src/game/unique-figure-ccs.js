@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 import { getDcEffects } from '../data-loader.js';
+import { dcNameFromFigureKey } from './dc-helpers.js';
+import { aNewHopeAvailable } from './cc-timing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -129,4 +131,134 @@ export function getFastLearnerPickerEligibility(game, playerNum, cardName) {
   if (flUsed) return { shouldPrompt: false, namedFigures: namedOnBoard, maraDc };
 
   return { shouldPrompt: true, namedFigures: namedOnBoard, maraDc };
+}
+
+/** On-board live figureKeys for a player (positions truthy). */
+function _liveFigureKeys(game, playerNum) {
+  const positions = game?.figurePositions?.[playerNum] || {};
+  return Object.keys(positions).filter((fk) => positions[fk]);
+}
+
+/** Is the DC of this figureKey a FORCE USER (per dc-effects keywords)? */
+function _figureIsForceUser(figureKey) {
+  const dcEffects = getDcEffects() || {};
+  const dn = dcNameFromFigureKey(figureKey);
+  const eff = dcEffects[dn] || dcEffects[_dcBase(dn)];
+  return (eff?.keywords || []).map((k) => String(k).toLowerCase()).includes('force user');
+}
+
+/** Is the DC of this figureKey the Adaptive Skills (Fast Learner / Mara) figure? */
+function _figureIsFastLearner(figureKey) {
+  const dcEffects = getDcEffects() || {};
+  const dn = dcNameFromFigureKey(figureKey);
+  const eff = dcEffects[dn] || dcEffects[_dcBase(dn)];
+  return (eff?.specialAbilityIds || []).includes(ADAPTIVE_SKILLS_ABILITY_ID);
+}
+
+/** True iff the figure's DC matches one of the CC's named figures. */
+function _figureIsNamed(figureKey, namedLower) {
+  if (namedLower.length === 0) return false;
+  const dn = _dcBase(dcNameFromFigureKey(figureKey)).toLowerCase();
+  return namedLower.some((n) => dn === n || dn.includes(n) || n.includes(dn));
+}
+
+/**
+ * Generalized unique-figure-CC player options (alexanbv 2026-06-21).
+ *
+ * Returns ONE entry per ELIGIBLE ON-BOARD figure who may play this unique-figure
+ * CC, de-duped by figureKey using the CHEAPEST qualification. The range always
+ * anchors on whichever figure is chosen.
+ *
+ * Qualification kinds + consumption (precedence: cheapest wins):
+ *   - 'named'            (consume 'none')           — the CC's registry figure, alive on board.
+ *   - 'there_is_another'(consume 'none')           — any FORCE USER on board, when
+ *                          game.thereIsAnotherActive[pn] AND the CC's restriction
+ *                          names a FORCE USER figure.
+ *   - 'fast_learner'    (consume 'fast_learner')   — Mara Jade on board, FL unused this round.
+ *   - 'a_new_hope'      (consume 'a_new_hope')      — any army figure on board, when an
+ *                          un-depleted [A New Hope] is in play.
+ *
+ * Precedence note: a figure qualifying both via There is Another (Force User) AND
+ * A New Hope keeps 'there_is_another' (no deplete) — TIA takes precedence.
+ *
+ * @returns {Array<{ figureKey, dcName, displayName, kind, consume }>}
+ */
+export function getUniqueCcPlayerOptions(game, playerNum, cardName) {
+  const entry = getUniqueFigureCcEntry(cardName);
+  if (!entry) return [];
+
+  const liveKeys = _liveFigureKeys(game, playerNum);
+  if (liveKeys.length === 0) return [];
+
+  const namedLower = (entry.figures || [entry.figure])
+    .map((s) => String(s || '').toLowerCase())
+    .filter(Boolean);
+
+  // Does the CC's restriction name a FORCE USER figure? Mirrors the
+  // isCcPlayLegalByRestriction There-is-Another gate: the registry named figure(s)
+  // for a unique-figure CC are by construction the restriction's named figure.
+  const restrictionNamesForceUser = (() => {
+    if (namedLower.length === 0) return false;
+    const dcEffects = getDcEffects() || {};
+    for (const [dcName, eff] of Object.entries(dcEffects)) {
+      if (!(eff?.keywords || []).map((k) => String(k).toLowerCase()).includes('force user')) continue;
+      const base = String(dcName).replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim().toLowerCase();
+      if (!base) continue;
+      if (namedLower.some((n) => base === n || base.includes(n) || n.includes(base))) return true;
+    }
+    return false;
+  })();
+
+  const tiaActive = !!game.thereIsAnotherActive?.[playerNum] && restrictionNamesForceUser && !entry.excludeFromFastLearner;
+  const anhActive = aNewHopeAvailable(game, playerNum) && !entry.excludeFromFastLearner;
+
+  // Mara's FL availability (excluded CCs cannot route through Fast Learner).
+  const flBlocked = !!entry.excludeFromFastLearner;
+
+  const options = [];
+  const seen = new Set();
+  const add = (figureKey, kind, consume) => {
+    if (seen.has(figureKey)) return;
+    seen.add(figureKey);
+    options.push({
+      figureKey,
+      dcName: dcNameFromFigureKey(figureKey),
+      displayName: dcNameFromFigureKey(figureKey),
+      kind,
+      consume,
+    });
+  };
+
+  for (const fk of liveKeys) {
+    // Precedence (cheapest qualification per figure):
+    //   named (none) > fast_learner (Mara/FL) > there_is_another (none) > a_new_hope (deplete).
+    //
+    // NOTE on Mara + There is Another: Mara Jade is herself a FORCE USER, so when
+    // There is Another is active she ALSO satisfies the TIA path (which costs
+    // nothing). Per the designer's worked example (army = Luke + Leia + Mara, TIA
+    // played, Son of Skywalker), Mara is classified as the FAST LEARNER path and
+    // CONSUMES FL — her dedicated enabler — rather than free-riding TIA. So Fast
+    // Learner is checked BEFORE There is Another. For any OTHER Force User, TIA
+    // applies first (free). A New Hope is always the last resort (deplete).
+    if (_figureIsNamed(fk, namedLower)) {
+      add(fk, 'named', 'none');
+      continue;
+    }
+    if (!flBlocked && _figureIsFastLearner(fk)) {
+      const flUsed = !!game.roundFigureAbilityUsed?.[`${dcNameFromFigureKey(fk)}_fast_learner`];
+      if (!flUsed) { add(fk, 'fast_learner', 'fast_learner'); continue; }
+      // FL already used this round: Mara may still play it for free via TIA if
+      // she's a Force User and TIA is active — fall through to the TIA check.
+    }
+    if (tiaActive && _figureIsForceUser(fk)) {
+      add(fk, 'there_is_another', 'none');
+      continue;
+    }
+    if (anhActive) {
+      add(fk, 'a_new_hope', 'a_new_hope');
+      continue;
+    }
+  }
+
+  return options;
 }
