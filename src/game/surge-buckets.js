@@ -77,6 +77,40 @@ export const SURGE_BUCKET = Object.freeze({
 });
 
 /**
+ * SURGE TIMING — the SECOND, independent dimension (alexanbv 2026-06-22: "check
+ * the individual timing of each ability — some are deferred, others are not").
+ *
+ *   - 'immediate' — resolves the MOMENT the surge is spent, in the spend handler,
+ *                   before the attack finishes (so a later miss can't undo it):
+ *                   token grants, VP, and the "Surge: Re-draw this card" redraws.
+ *   - 'deferred'  — resolves at the AFTER-ATTACK-RESOLVES step (queued on the
+ *                   combat): conditions, Blast, Cleave, Recover, and the
+ *                   "after this attack resolves, …" effects (Fell Swoop, Mastery,
+ *                   Military Efficiency, Interrogate, Open-Minded, Fighting Knife,
+ *                   Squad Command, Shocking Palm's Stun, etc.).
+ *
+ * Timing is orthogonal to the bucket: a 'requires_damage'/'did_not_miss' surge is
+ * NECESSARILY 'deferred' (its gate needs the attack outcome); a 'no_restriction'
+ * surge may be either (a re-draw is immediate; Recover is deferred-but-ungated).
+ */
+export const SURGE_TIMING = Object.freeze({
+  // immediate (applied in the spend handler) — only the resource/redraw surges
+  'hit token': 'immediate', 'hit token 2': 'immediate', 'block token': 'immediate',
+  'power token': 'immediate', 'evade token': 'immediate', evade: 'immediate',
+  'block 1': 'immediate', 'surge 1': 'immediate',
+  kd_redraw: 'immediate', tn_redraw: 'immediate', utinni_vp_1: 'immediate',
+  // everything else that produces a post-resolution effect is deferred
+  stun: 'deferred', weaken: 'deferred', bleed: 'deferred', immobilize: 'deferred',
+  focus: 'deferred', hide: 'deferred', blast: 'deferred', cleave: 'deferred',
+  stun_net: 'deferred', harass: 'deferred', suppression: 'deferred',
+  concussive_bolt: 'deferred', spread_the_pain: 'deferred',
+  recover: 'deferred', fell_swoop: 'deferred', fighting_knife: 'deferred',
+  open_minded: 'deferred', mastery: 'deferred', interrogate: 'deferred',
+  military_efficiency: 'deferred', shocking_palm: 'deferred', squad_command: 'deferred',
+  stalk_prey: 'deferred', bargain: 'deferred',
+});
+
+/**
  * The bucket for a surge key. Unknown / pure-modifier keys default to
  * 'no_restriction' (they have no condition/effect that a miss would cancel).
  * @param {string} key
