@@ -5248,15 +5248,14 @@
     "tusken_cycler_regular": {
       "type": "dcSpecial",
       "label": "Tusken Cycler",
-      "description": "Perform a Ranged attack using 1 blue and 1 red die. You cannot use abilities during this attack.",
+      "description": "Perform a Ranged attack using 1 blue and 1 red die. (Note: the card's 'you cannot use abilities during this attack' clause is intentionally NOT enforced — per alexanbv 2026-06-22, use the Elite implementation with no ability block.)",
       "freeAttackBonus": true,
       "overrideAttackDice": [
         "blue",
         "red"
       ],
       "overrideAttackType": "Ranged",
-      "blockSurgeAbilities": true,
-      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged). Surge abilities blocked for this attack (automated).",
+      "logMessage": "**Tusken Cycler** — Your next attack is free and uses [Blue, Red] dice (Ranged).",
       "wiredStatus": "wired"
     },
     "twin_sabers_ahsoka": {
