@@ -1132,7 +1132,10 @@ async function fireIndiscriminateFire(thread, game, combat, effect, ctx) {
     availableDice: nonRedDice,
   });
   const ownerId = getPlayerId(game, combat.attackerPlayerNum);
-  const btns = nonRedDice.slice(0, 5).map((d, i) =>
+  // Attack pools can reach 6 dice (3 base + Focus + Tools + Wild Attack), so all
+  // non-red dice plus Skip can exceed one Discord row — render multi-row
+  // (alexanbv 2026-06-21).
+  const btns = nonRedDice.slice(0, 6).map((d, i) =>
     new ButtonBuilder()
       .setCustomId(`indiscriminate_die_${game.gameId}_${i}`)
       .setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}↯)`)
@@ -1141,7 +1144,7 @@ async function fireIndiscriminateFire(thread, game, combat, effect, ctx) {
   await thread.send(sanitizeMentions({
     content: `<@${ownerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
     allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   })).catch(discordCatch);
 }
 

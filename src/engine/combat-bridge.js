@@ -2833,14 +2833,16 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
       } else {
         setPendingIndiscriminateFire(game, { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice });
-        const ifBtns = nonRedDice.slice(0, 5).map((d, i) =>
+        // Attack pools can reach 6 dice (3 base + Focus + Tools + Wild Attack),
+        // so all non-red dice + Skip can exceed one Discord row — multi-row.
+        const ifBtns = nonRedDice.slice(0, 6).map((d, i) =>
           new ButtonBuilder().setCustomId(`indiscriminate_die_${game.gameId}_${i}`).setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}\u21AF)`).setStyle(ButtonStyle.Secondary)
         );
         ifBtns.push(new ButtonBuilder().setCustomId(`indiscriminate_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
         await thread.send(sanitizeMentions({
           content: `<@${pcOwnerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
           allowedMentions: { users: [pcOwnerId] },
-          components: [new ActionRowBuilder().addComponents(ifBtns)],
+          components: chunkButtonsToRows(ifBtns),
         })).catch(discordCatch);
       }
     }
