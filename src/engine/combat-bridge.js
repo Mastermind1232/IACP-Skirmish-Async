@@ -2308,15 +2308,24 @@ export async function runAfterResolveWindow(thread, game, combat, { resultText, 
     if (_atkHidden) await logGameAction(game, client, `\uD83D\uDC7B **Hidden** removed from **${combat.attackerDcName}** \u2014 resolved an attack.`, { phase: 'ROUND', icon: 'attack' });
     // Re-apply deferred surge conditions AFTER the discard (so the figure
     // ends the attack with the surge-granted condition rather than having
-    // it stripped by the unconditional discard).
+    // it stripped by the unconditional discard). These are the inline
+    // "Surge: Focus" / "Surge: Hide" keyword conditions (Davith's Hide,
+    // Officer's Focus) \u2014 the REQUIRES-DAMAGE bucket: they only apply when the
+    // attack hit AND the target suffered damage (alexanbv 2026-06-22). Special
+    // friendly-Focus surges (Kayn) use their own no-restriction path.
+    const _ssCondOk = combat._step7Hit && (combat._step7Damage || 0) > 0;
     if (combat.deferredSurgeFocus) {
-      _applyCondition(game, combat.attackerFigureKey, 'Focus');
-      await logGameAction(game, client, `\u{1F3AF} **Focus** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      if (_ssCondOk) {
+        _applyCondition(game, combat.attackerFigureKey, 'Focus');
+        await logGameAction(game, client, `\u{1F3AF} **Focus** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      }
       combat.deferredSurgeFocus = false;
     }
     if (combat.deferredSurgeHide) {
-      _applyCondition(game, combat.attackerFigureKey, 'Hide');
-      await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      if (_ssCondOk) {
+        _applyCondition(game, combat.attackerFigureKey, 'Hide');
+        await logGameAction(game, client, `\uD83D\uDC7B **Hidden** applied via Surge to **${combat.attackerDcName}** (post-discard).`, { phase: 'ROUND', icon: 'attack' });
+      }
       combat.deferredSurgeHide = false;
     }
     // Guerrilla (Alliance Ranger) "become Hidden after defeating the target"
