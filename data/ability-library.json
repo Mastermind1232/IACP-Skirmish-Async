@@ -3687,7 +3687,7 @@
     },
     "Primary Target": {
       "type": "ccEffect",
-      "label": "Become Focused + 1 Damage when attacking highest-cost hostile",
+      "label": "Become Focused + 1 Damage when attacking the highest-FIGURE-cost hostile (group cost ÷ figures)",
       "applyFocus": true,
       "attackBonusHits": 1,
       "wiredStatus": "wired",

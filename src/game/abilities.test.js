@@ -440,6 +440,38 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
   assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
 });
 
+test('Primary Target uses FIGURE cost not group cost (allows highest-figure-cost target despite a higher group-cost hostile)', () => {
+  // AT-ST: group cost 10, 1 figure → figure cost 10.
+  // Alliance Ranger (Elite): group cost 12, 3 figures → figure cost 4.
+  // Target AT-ST IS the highest FIGURE cost (10 > 4), but NOT the highest GROUP
+  // cost (10 < 12). Old group-cost logic wrongly blocked this; figure cost allows.
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt2', target: { figureKey: 'AT-ST-1-0' } };
+  const game = {
+    gameId: 'g-pt2', dcActionsData: { 'msg-pt2': {} }, pendingCombat: combat,
+    figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } }, figureConditions: {},
+    p2DcList: [{ dcName: 'AT-ST' }, { dcName: 'Alliance Ranger (Elite)' }],
+    p2DcMessageIds: ['m1', 'm2'],
+  };
+  const dcMessageMeta = new Map([['msg-pt2', { gameId: 'g-pt2', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
+  const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.strictEqual(combat.bonusHits, 1);
+});
+
+test('Primary Target rejects when a hostile has a strictly higher FIGURE cost', () => {
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt3', target: { figureKey: 'Alliance Ranger (Elite)-1-0' } };
+  const game = {
+    gameId: 'g-pt3', dcActionsData: { 'msg-pt3': {} }, pendingCombat: combat,
+    figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } }, figureConditions: {},
+    p2DcList: [{ dcName: 'AT-ST' }, { dcName: 'Alliance Ranger (Elite)' }],
+    p2DcMessageIds: ['m1', 'm2'],
+  };
+  const dcMessageMeta = new Map([['msg-pt3', { gameId: 'g-pt3', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
+  const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
+  // Target Ranger figure cost 4 < AT-ST figure cost 10 → not the highest → rejected.
+  assert.strictEqual(result.applied, false);
+});
+
 test('resolveAbility Master Operative applies Focus and attackSurgeBonus', () => {
   const combat = { attackerPlayerNum: 1, gameId: 'g-mo' };
   const game = {

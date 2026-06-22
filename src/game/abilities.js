@@ -6397,13 +6397,18 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
     }
-    // Primary Target: validate target is the highest-cost hostile figure on the map
+    // Primary Target: validate target has the highest FIGURE cost of all hostile
+    // figures on the map. alexanbv 2026-06-22: "figure cost, not group cost" —
+    // figure cost = deployment-group cost ÷ number of figures in the group (so a
+    // 3-figure group costing 6 is figure cost 2, NOT 6). Compared per-group since
+    // every figure in a group shares the same figure cost.
     if (entry.requireHighestCostTarget && dcMessageMeta) {
       const defPn = cbt.defenderPlayerNum ?? opponentPlayerNum(playerNum);
       const targetDcName = dcNameFromFigureKey(cbt.target?.figureKey || '');
       const allEffects = getDcEffects() || {};
-      const targetCost = allEffects[targetDcName]?.cost ?? 0;
-      // Check all living hostile figures for any with higher cost
+      const figureCostOf = (eff) => (eff?.cost ?? 0) / (eff?.figures || 1);
+      const targetFigureCost = figureCostOf(allEffects[targetDcName]);
+      // Check all living hostile figures for any with higher figure cost
       const defDcIds = getDcMessageIds(game, defPn) || [];
       const defDcList = getDcList(game, defPn) || [];
       let higherExists = false;
@@ -6411,10 +6416,10 @@ export function resolveAbility(abilityId, context) {
         const dc = defDcList[i];
         if (!dc || dc.defeated) continue;
         const eff = allEffects[dc.dcName] || {};
-        if ((eff.cost ?? 0) > targetCost) { higherExists = true; break; }
+        if (figureCostOf(eff) > targetFigureCost) { higherExists = true; break; }
       }
       if (higherExists) {
-        return { applied: false, manualMessage: `Cannot play: target (${targetDcName}, cost ${targetCost}) is not the highest-cost hostile figure on the map.` };
+        return { applied: false, manualMessage: `Cannot play: target (${targetDcName}, figure cost ${targetFigureCost}) is not the highest-figure-cost hostile on the map.` };
       }
     }
     let focusApplied = false;
