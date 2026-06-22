@@ -18,7 +18,7 @@ import { exhaustAttachment, isAttachmentExhausted } from './card-state-helpers.j
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
 
-import { getDcEffect } from './dc-helpers.js';
+import { getDcEffect, effectiveDcNameForFigure } from './dc-helpers.js';
 import { registerRoundModifier } from './round-modifiers.js';
 import { detectPushPartingBlow } from './movement-interrupts.js';
 
@@ -1876,8 +1876,8 @@ export function resolveAbility(abilityId, context) {
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (fk === activatingKey || !pos) continue;
       if (countGameSpaces(game, activatingPos, pos) > 4) continue;
-      const fkDcName = dcNameFromFigureKey(fk);
-      const fkEff = dcEffects?.[fkDcName];
+      // SU-aware: an SU figure's affiliation + figure cost come from its own card.
+      const fkEff = getDcEffect(effectiveDcNameForFigure(game, fk));
       if (!fkEff) continue;
       if (fkEff.affiliation !== 'Imperial') continue;
       if ((fkEff.subCost || fkEff.cost || 99) > 4) continue;
@@ -2248,8 +2248,9 @@ export function resolveAbility(abilityId, context) {
     const validTargets = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[enemyNum] || {})) {
       if (!pos) continue;
-      const targetDcName = dcNameFromFigureKey(fk);
-      const targetStats = getStatsForDc(targetDcName);
+      // SU-aware: a Squad Upgrade figure's figure cost is the attachment's cost
+      // (its own card), not the host group's (alexanbv 2026-06-22).
+      const targetStats = getStatsForDc(effectiveDcNameForFigure(game, fk));
       // CSV "figure cost 4 or less" = the PER-FIGURE cost. Multi-figure
       // DCs carry a subCost (single-figure cost) distinct from the group
       // `cost`; prefer it. Mirrors coordinated_raid (abilities.js:1615).
@@ -6459,8 +6460,11 @@ export function resolveAbility(abilityId, context) {
       const targetDcName = dcNameFromFigureKey(cbt.target?.figureKey || '');
       const allEffects = getDcEffects() || {};
       const figureCostOf = (eff) => (eff?.subCost ?? eff?.cost ?? 0);
-      const targetFigureCost = figureCostOf(allEffects[targetDcName]);
-      // Check all living hostile figures for any with higher figure cost
+      // SU-aware: an SU figure's figure cost is the attachment's cost (its own
+      // card), so resolve the target from its effective card (alexanbv 2026-06-22).
+      const targetFigureCost = figureCostOf(getDcEffect(effectiveDcNameForFigure(game, cbt.target?.figureKey || '')));
+      // Check all living hostile figures for any with higher figure cost —
+      // including Squad Upgrade figures (their figure cost = attachment cost).
       const defDcIds = getDcMessageIds(game, defPn) || [];
       const defDcList = getDcList(game, defPn) || [];
       let higherExists = false;
@@ -6469,6 +6473,8 @@ export function resolveAbility(abilityId, context) {
         if (!dc || dc.defeated) continue;
         const eff = allEffects[dc.dcName] || {};
         if (figureCostOf(eff) > targetFigureCost) { higherExists = true; break; }
+        const _suOnDef = squadUpgradeOnGroup(attachmentsForMsgId(game, defDcIds[i]));
+        if (_suOnDef && figureCostOf(getDcEffect(`[${_suOnDef}]`)) > targetFigureCost) { higherExists = true; break; }
       }
       if (higherExists) {
         return { applied: false, manualMessage: `Cannot play: target (${targetDcName}, figure cost ${targetFigureCost}) is not the highest-figure-cost hostile on the map.` };
