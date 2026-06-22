@@ -8,7 +8,7 @@ import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-pr
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { consumeActionForCurrentFigure } from '../game/activation-state.js';
-import { getDcEffect, figureHasInTheShadows } from '../game/dc-helpers.js';
+import { getDcEffect, figureHasInTheShadows, effectiveDcNameForFigure } from '../game/dc-helpers.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 export { sendPowerTokenOverflowUI };
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -3994,9 +3994,13 @@ export async function handleAttackTarget(interaction, ctx) {
       targetEff = {};
     }
   } else {
+    // targetDcName stays the host group (identity/logs); but a Squad Upgrade
+    // figure's STATS (defense, cost, passives, surges) are its OWN — resolve them
+    // from the SU card (alexanbv 2026-06-22).
     targetDcName = dcNameFromFigureKey(target.figureKey);
-    targetStats = getDcStats(targetDcName);
-    targetEff = getDcEffect(targetDcName);
+    const _targetEffName = effectiveDcNameForFigure(game, target.figureKey);
+    targetStats = getDcStats(_targetEffName);
+    targetEff = getDcEffect(_targetEffName);
   }
   // Reverse Engineer: capture flag before building pendingCombat, then clear it
   const reverseEngineerActive = !!(game.reverseEngineerActive?.[attackerPlayerNum]);
@@ -4273,13 +4277,15 @@ export async function handleAttackTarget(interaction, ctx) {
   if (game._closeQuartersBonusAcc) delete game._closeQuartersBonusAcc;
   // Apply printed passive stat bonuses from attacker only (NPC has no passives)
   // Merge form passives (e.g. "+2 Accuracy") and form combat passives (e.g. "Professional") with DC passives
-  const attackerPassives = [...(getDcStats(meta.dcName).passives || [])];
+  // SU-aware: attackerStats / targetStats were resolved from the SU card when the
+  // figure is a Squad Upgrade figure, so its OWN passives apply (not the host's).
+  const attackerPassives = [...(attackerStats.passives || [])];
   if (_formChoice) {
     const _fCard = getFormCards()[_formChoice];
     if (_fCard?.passives) attackerPassives.push(..._fCard.passives);
     if (_fCard?.combatPassives) attackerPassives.push(..._fCard.combatPassives);
   }
-  const defenderPassives = target.isNpc ? [] : (getDcStats(targetDcName).passives || []);
+  const defenderPassives = target.isNpc ? [] : (targetStats.passives || []);
   applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
 
   // Blood Feud: persistent +1 Hit when attacking a DC marked with Blood Feud
@@ -4298,7 +4304,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // axis; the test reduces to: target row matches both speeder rows
   // (horizontal alignment) OR target column matches both speeder
   // columns (vertical alignment).
-  if ((getDcStats(meta.dcName).passives || []).includes('Forward Mounted Blasters')) {
+  if ((attackerStats.passives || []).includes('Forward Mounted Blasters')) {
     const _fmbSize = game.figureOrientations?.[attackerFigureKey] || getFigureSize(meta.dcName);
     const _fmbPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     const _fmbTargetPos = game.figurePositions?.[opponentPlayerNum(attackerPlayerNum)]?.[target.figureKey];

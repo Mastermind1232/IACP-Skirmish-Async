@@ -39,6 +39,31 @@ export function getDcEffect(dcName) {
 }
 
 /**
+ * The EFFECTIVE deployment-card name to read a figure's OWN stats/abilities/
+ * keywords/surges/cost/health/speed/defense from (alexanbv 2026-06-22).
+ *
+ * A Squad Upgrade figure (Z-6 Trooper / Mortar Trooper / Flame Trooper) is its
+ * own figure with its own deployment card: its stats are NEVER the host group's,
+ * and it never inherits group-mates' abilities. For an SU figure this returns the
+ * SU card's bracketed key (e.g. '[Flame Trooper]'); for any other figure it
+ * returns the host DC name (dcNameFromFigureKey). Use this anywhere you would
+ * otherwise call dcNameFromFigureKey(figureKey) to look up a figure's stats.
+ *
+ * @param {object} game
+ * @param {string} figureKey
+ * @returns {string}
+ */
+export function effectiveDcNameForFigure(game, figureKey) {
+  const su = squadUpgradeFigureCard(game, figureKey);
+  return su ? `[${su}]` : dcNameFromFigureKey(figureKey);
+}
+
+/** The SU-aware DC effect for a figure (its own card's effect). */
+export function effectiveDcEffectForFigure(game, figureKey) {
+  return getDcEffect(effectiveDcNameForFigure(game, figureKey));
+}
+
+/**
  * True when `figureKey` currently has the In the Shadows (CC) effect active.
  * In the Shadows scopes to the single figure that played it (game.roundInTheShadows
  * = { playerNum, figureKey }). The effect is mechanically identical to

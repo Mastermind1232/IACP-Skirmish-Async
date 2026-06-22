@@ -6,7 +6,7 @@ import { getDcEffects } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { checkCapitalizePassiveRedraw } from './cc-passive-redraw.js';
 
-import { getDcEffect } from './dc-helpers.js';
+import { getDcEffect, effectiveDcNameForFigure } from './dc-helpers.js';
 export const HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken'];
 
 /**
@@ -37,8 +37,8 @@ export function filterCondition(game, figureKey, cond) {
  * @returns {boolean}
  */
 export function isConditionImmune(game, figureKey) {
-  const dcName = dcNameFromFigureKey(figureKey);
-  const dcEff = getDcEffect(dcName);
+  // SU-aware: an SU figure's immunity comes from its OWN card, not the host's.
+  const dcEff = getDcEffect(effectiveDcNameForFigure(game, figureKey));
   const sIds = dcEff?.specialAbilityIds || [];
   if (sIds.includes('immune_onar') || sIds.includes('immune_snowtrooper_elite')) return true;
   return false;
@@ -74,7 +74,8 @@ function ywndmActiveForFigure(game, figureKey) {
 
 export function areConditionEffectsSuppressed(game, figureKey) {
   if (!ywndmActiveForFigure(game, figureKey)) return false;
-  const dcName = dcNameFromFigureKey(figureKey);
+  // SU-aware: read the figure's own card name.
+  const dcName = effectiveDcNameForFigure(game, figureKey);
   if (dcName?.toLowerCase().includes('fifth brother')) return true;
   return false;
 }

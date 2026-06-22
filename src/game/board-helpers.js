@@ -6,6 +6,7 @@ import { normalizeCoord, parseCoord, colRowToCoord, edgeKey, toLowerSet, getFoot
 import { getBoundedMapSpaces } from './movement.js';
 import { countSpaces } from './spatial.js';
 import { dcNameFromFigureKey, getDcEffect } from './dc-helpers.js';
+import { squadUpgradeFigureCard } from './squad-upgrades.js';
 import { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 import {
   getMapTokensData,
@@ -206,14 +207,17 @@ export function eyesOnThePrizeEligibleFigures(game, playerNum, mapId) {
 
 /** Effective speed, accounting for mission-defined carry penalty and round bonuses (Fuel Upgrade, etc.). */
 export function getEffectiveSpeed(dcName, figureKey, game, playerNum) {
-  let base = getDcStats(dcName).speed ?? 4;
+  // SU-aware: a Squad Upgrade figure uses its OWN card's speed, not the host's.
+  const _suCard = (game && figureKey) ? squadUpgradeFigureCard(game, figureKey) : null;
+  const effName = _suCard ? `[${_suCard}]` : dcName;
+  let base = getDcStats(effName).speed ?? 4;
   const mech = game?.selectedMission?.mechanics;
   if (mech?.type === 'carry' && mech.speedPenalty && game.figureContraband?.[figureKey]) {
     base = Math.max(0, base + mech.speedPenalty);
   }
   // Fuel Upgrade: round VEHICLE speed bonus
   if (playerNum && game?.roundVehicleSpeedBonus?.[playerNum]) {
-    const eff = getDcEffect(dcName);
+    const eff = getDcEffect(effName);
     const keywords = (eff?.keywords || []).map((k) => String(k).toUpperCase());
     if (keywords.includes('VEHICLE')) base += game.roundVehicleSpeedBonus[playerNum];
   }

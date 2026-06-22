@@ -69,6 +69,7 @@ import {
 } from '../data-loader.js';
 import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum, pushFigure } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { squadUpgradeFigureCard } from './squad-upgrades.js';
 
 // ---------------------------------------------------------------------------
 // Wasskah Hunting Ground: breakable walls (blue-line edges on the map diagram).
@@ -482,17 +483,23 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
-  const baseSize = getFigureSize(dcName) || '1x1';
+  // SU-aware: a Squad Upgrade figure moves with its OWN card's size / keywords /
+  // passives (Massive, Mobile, Reach, Thrusters, …), never the host group's
+  // (alexanbv 2026-06-22). Only override for an actual SU figure so callers that
+  // pass a form-card / overridden dcName for non-SU figures are unaffected.
+  const _suCard = (game && figureKey) ? squadUpgradeFigureCard(game, figureKey) : null;
+  const effName = _suCard ? `[${_suCard}]` : dcName;
+  const baseSize = getFigureSize(effName) || '1x1';
   const storedSize = game.figureOrientations?.[figureKey] || baseSize;
   const { cols, rows } = parseSizeString(storedSize);
-  const keywords = getMovementKeywords(dcName, game);
+  const keywords = getMovementKeywords(effName, game);
   const isMassive = keywords.has('massive');
   const isMobile = keywords.has('mobile');
   // Thrusters (74-Z Speeder Bike): "While moving, ignore impassable terrain."
   // Thrusters lives in the DC effect's `passives` (not promoted to a keyword),
   // so read it directly. The footprint-overlap half is enforced separately in
   // handlers/movement.js.
-  const hasThrusters = (getDcEffects()?.[dcName]?.passives || []).includes('Thrusters');
+  const hasThrusters = (getDcEffects()?.[effName]?.passives || []).includes('Thrusters');
   let hasEfficientTravel = keywords.has('efficient travel');
   // Check round flag from Efficient Travel CC card
   if (!hasEfficientTravel && figureKey) {
