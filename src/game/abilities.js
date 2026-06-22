@@ -2797,6 +2797,71 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
+  // Close Quarters (Verena Talos) — source-figure picker. CSV: "perform an
+  // attack using AN adjacent hostile figure's attack type and attack pool".
+  // The player chooses WHICH adjacent hostile to copy (melee vs ranged + the
+  // dice pool materially change the attack). When 2+ adjacent hostiles offer
+  // DISTINCT pools/types, prompt for the source; when 0–1 distinct, auto-pick.
+  // The chosen source figureKey is threaded onto game.closeQuartersActive so
+  // combat.js borrows from THAT figure (not the first by iteration order).
+  // We do NOT short-circuit the free-move/free-attack grant: once the source
+  // is resolved we fall through to the generic freeAttackBonus block below,
+  // which arms closeQuartersActive using game._closeQuartersChosenSource.
+  if (entry.closeQuartersOverride && (entry.type === 'dcSpecial' || entry.type === 'ccEffect')) {
+    const { game, playerNum, meta, dcMessageMeta, targetFigureKey } = context;
+    const msgId = context.msgId ?? (playerNum && dcMessageMeta ? findActiveActivationMsgId(game, playerNum, dcMessageMeta) : null);
+    if (game && msgId) {
+      const _cqFk = figureKeyForActivation(game, msgId);
+      // Phase 2: a source was chosen via the requiresChoice re-entry. Stash it
+      // and fall through to grant the move/attack + arm the override.
+      if (targetFigureKey && _cqFk) {
+        game._closeQuartersChosenSource = game._closeQuartersChosenSource || {};
+        game._closeQuartersChosenSource[_cqFk] = targetFigureKey;
+        // fall through to generic freeAttackBonus handler
+      } else if (_cqFk) {
+        // Phase 1: enumerate adjacent hostiles and their attack pools.
+        const cqMapId = game.selectedMap?.id;
+        const cqPos = game.figurePositions?.[playerNum]?.[_cqFk];
+        const cqOppNum = opponentPlayerNum(playerNum);
+        const dcEffectsMap = getDcEffects() || {};
+        const cqCandidates = [];
+        if (cqMapId && cqPos) {
+          const cqMapSpaces = getMapData(cqMapId);
+          const cqAdj = new Set(cqMapSpaces?.adjacency?.[cqPos] || []);
+          for (const [fk, pos] of Object.entries(game.figurePositions?.[cqOppNum] || {})) {
+            if (!pos || !cqAdj.has(pos)) continue;
+            const dcN = dcNameFromFigureKey(fk);
+            const atk = dcEffectsMap[dcN]?.attack;
+            if (!atk?.dice) continue;
+            cqCandidates.push({ fk, dcN, type: String(atk.type || '').toLowerCase(), dice: (atk.dice || []).join(',') });
+          }
+        }
+        // Distinct pools = unique (type|dice). >1 distinct ⇒ the borrowed
+        // attack genuinely differs ⇒ the player must choose which hostile.
+        const distinctPools = new Set(cqCandidates.map((c) => `${c.type}|${c.dice}`));
+        if (cqCandidates.length >= 2 && distinctPools.size >= 2) {
+          return {
+            applied: false,
+            requiresChoice: true,
+            choiceOptions: cqCandidates.map((c) => {
+              const tLabel = c.type === 'range' ? 'Ranged' : c.type === 'melee' ? 'Melee' : c.type;
+              return `${c.dcN} (${tLabel}: ${c.dice})`;
+            }),
+            targetFigureKeys: cqCandidates.map((c) => c.fk),
+            choicePrompt: '**Close Quarters** — choose which adjacent hostile figure\'s attack type and pool to borrow:',
+          };
+        }
+        // 0–1 distinct pool: auto-pick (no meaningful choice). If exactly one
+        // candidate, thread it so combat.js uses precisely that figure.
+        if (cqCandidates.length >= 1) {
+          game._closeQuartersChosenSource = game._closeQuartersChosenSource || {};
+          game._closeQuartersChosenSource[_cqFk] = cqCandidates[0].fk;
+        }
+        // fall through to generic freeAttackBonus handler
+      }
+    }
+  }
+
   // dcSpecial/ccEffect: freeAttackBonus (Heroic, Rapid Fire, Brutality, etc.) — next attack this activation costs no action
   // Cruel Strike also carries freeAttackBonus but owns a dedicated handler
   // (nextAttackBonusSurgeAbilities, below) that grants the attack AND the surge
@@ -2869,7 +2934,15 @@ export function resolveAbility(abilityId, context) {
       // Per alexanbv 2026-05-13: per-figureKey (specials are per-figure).
       game.closeQuartersActive = game.closeQuartersActive || {};
       const _cqFk = figureKeyForActivation(game, msgId);
-      if (_cqFk) game.closeQuartersActive[_cqFk] = true;
+      if (_cqFk) {
+        // Thread the player-chosen (or auto-picked) source hostile figureKey
+        // so combat.js borrows from THAT figure, not the first by iteration
+        // order. Falls back to true (combat.js picks the first adjacent
+        // hostile) only when no source was resolved (e.g. no map context).
+        const _cqSrc = game._closeQuartersChosenSource?.[_cqFk];
+        game.closeQuartersActive[_cqFk] = _cqSrc ? { source: _cqSrc } : true;
+        if (game._closeQuartersChosenSource) delete game._closeQuartersChosenSource[_cqFk];
+      }
     }
     // overrideAttackType (Face to Face, Dying Lunge, Final Stand, Lightsaber Throw): force attack type without overriding dice.
     // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
@@ -10572,13 +10645,18 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — choose opponent DC; all its figures become Stunned
+  // ccEffect: applyStunToUpToNAdjacentHostiles (Roar) — CSV: "Choose up to 3
+  // ADJACENT hostile figures; those figures become Stunned." The choice is
+  // per-FIGURE across ANY hostile groups (not per-DC), and the player picks
+  // WHICH up to 3 (and may pick fewer). Iterative per-figure picker with a
+  // Done sentinel (Field Report shape); condition-immune figures are skipped.
   if (entry.type === 'ccEffect' && typeof entry.applyStunToUpToNAdjacentHostiles === 'number' && entry.applyStunToUpToNAdjacentHostiles > 0) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    if (typeof entry.onlyIfSufferedDamageGte === 'number') {
+    // Damage-suffered gate (only checked on the initial play, not on re-entry).
+    if (typeof entry.onlyIfSufferedDamageGte === 'number' && !game.pendingRoar) {
       const healthState = dcHealthState?.get(msgId) || [];
       // healthState entries are [current, max]; damage suffered = max - current
       const totalDamage = healthState.reduce((s, e) => s + ((e?.[1] ?? 0) - (e?.[0] ?? e?.[1] ?? 0)), 0);
@@ -10587,8 +10665,8 @@ export function resolveAbility(abilityId, context) {
       }
     }
     const oppNum = opponentPlayerNum(playerNum);
-    // CSV "up to 3 ADJACENT hostile figures": compute the set of hostile figures
-    // adjacent to any of the activating figures. Only those are eligible.
+    const _roarMax = entry.applyStunToUpToNAdjacentHostiles;
+    // Compute the set of hostile figures adjacent to any activating figure.
     const mapId = game.selectedMap?.id;
     const adjacentHostileFks = new Set();
     if (mapId) {
@@ -10600,50 +10678,60 @@ export function resolveAbility(abilityId, context) {
           if (hp === oppNum) adjacentHostileFks.add(hfk);
         }
       }
+    } else {
+      // No map context (headless/manual): every hostile figure is eligible.
+      for (const fk of Object.keys(game.figurePositions?.[oppNum] || {})) adjacentHostileFks.add(fk);
     }
-    if (!chosenFigureKey) {
-      // Build choice list from opponent DCs that have at least one ADJACENT
-      // figure (per-DC selection; up to 3 of that DC's adjacent figures Stun).
-      const choiceOptions = [];
-      const choiceValues = [];
-      for (const [dcMsgId, meta] of dcMessageMeta) {
-        if (meta.playerNum !== oppNum) continue;
-        const name = meta.displayName || meta.dcName;
-        if (!name) continue;
-        // Only offer the DC if at least one of its figures is adjacent.
-        if (mapId) {
-          const dcFks = getFigureKeysForDcMsg(game, oppNum, meta) || [];
-          if (!dcFks.some((fk) => adjacentHostileFks.has(fk))) continue;
-        }
-        choiceOptions.push(name);
-        choiceValues.push(dcMsgId);
+    const _roarApply = (fks) => {
+      let stunned = 0;
+      let skipped = 0;
+      const names = [];
+      for (const fk of fks) {
+        if (isConditionImmune(game, fk)) { skipped++; continue; }
+        applyCondition(game, fk, 'Stun');
+        stunned++;
+        names.push(dcNameFromFigureKey(fk));
       }
-      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No adjacent hostile figure to Roar at. Resolve manually.' };
-      return { applied: false, requiresChoice: true, choiceOptions, choiceValues };
+      const immuneNote = skipped > 0 ? ` (${skipped} immune)` : '';
+      if (stunned === 0 && skipped === 0) {
+        return { applied: true, logMessage: '**Roar** — No figures chosen.' };
+      }
+      return { applied: true, logMessage: `**Roar** — ${names.join(', ') || 'figure(s)'} became **Stunned**.${immuneNote}` };
+    };
+    // Phase 2+: accumulate sequential per-figure picks.
+    if (chosenFigureKey && game.pendingRoar) {
+      const pend = game.pendingRoar;
+      if (chosenFigureKey === '__done__') {
+        delete game.pendingRoar;
+        return _roarApply(pend.chosen);
+      }
+      pend.chosen.push(chosenFigureKey);
+      const remaining = pend.candidates.filter((fk) => !pend.chosen.includes(fk));
+      if (pend.chosen.length >= _roarMax || remaining.length === 0) {
+        delete game.pendingRoar;
+        return _roarApply(pend.chosen);
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [...remaining.map(dcNameFromFigureKey), 'Done selecting'],
+        choiceValues: [...remaining, '__done__'],
+        choicePrompt: `**Roar** — Stunned ${pend.chosen.length}/${_roarMax}. Choose another adjacent hostile figure or Done:`,
+      };
     }
-    // Apply Stun to up to N ADJACENT figures of the chosen hostile DC.
-    const targetMeta = dcMessageMeta.get(chosenFigureKey);
-    if (!targetMeta) return { applied: false, manualMessage: `Could not find hostile DC. Resolve manually.` };
-    const figureKeys = getFigureKeysForDcMsg(game, oppNum, targetMeta);
-    // Restrict to adjacent figures when we have map context.
-    const eligibleKeys = mapId
-      ? figureKeys.filter((fk) => adjacentHostileFks.has(fk))
-      : figureKeys;
-    let stunned = 0;
-    let skipped = 0;
-    for (const fk of eligibleKeys.slice(0, entry.applyStunToUpToNAdjacentHostiles)) {
-      if (isConditionImmune(game, fk)) { skipped++; continue; }
-      applyCondition(game, fk, 'Stun');
-      stunned++;
-    }
-    const label = targetMeta.displayName || targetMeta.dcName || 'hostile figure(s)';
-    const immuneNote = skipped > 0 ? ` (${skipped} immune)` : '';
-    if (stunned === 0 && skipped === 0) {
-      return { applied: false, manualMessage: `**${label}** — no adjacent figure to Stun.` };
-    }
+    // Phase 1: enumerate adjacent hostile FIGURES (across all groups).
+    const candidates = [...adjacentHostileFks].filter((fk) => game.figurePositions?.[oppNum]?.[fk] !== undefined);
+    if (candidates.length === 0) return { applied: false, manualMessage: 'No adjacent hostile figure to Roar at. Resolve manually.' };
+    // ≤N candidates: auto-Stun all (no meaningful which/how-many choice).
+    if (candidates.length <= _roarMax) return _roarApply(candidates);
+    // >N candidates: offer a per-figure pick of WHICH up to N to Stun.
+    game.pendingRoar = { chosen: [], candidates };
     return {
-      applied: true,
-      logMessage: `**${label}** — ${stunned} adjacent figure(s) became Stunned.${immuneNote}`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: [...candidates.map(dcNameFromFigureKey), 'Done selecting'],
+      choiceValues: [...candidates, '__done__'],
+      choicePrompt: `**Roar** — Choose up to ${_roarMax} adjacent hostile figures to become Stunned:`,
     };
   }
 
@@ -12364,9 +12452,58 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: optimalBombardmentEffect (Optimal Bombardment) — adjacent VEHICLE/DROID/HEAVY WEAPON figures may each perform 1 free attack
+  // CSV: "Choose up to 3 VEHICLES, DROIDS, or HEAVY WEAPONS adjacent to you;
+  // each may interrupt to perform an attack gaining Blast 1." The PLAYER picks
+  // WHICH (and how many, up to 3). When ≤3 candidates exist there is no
+  // meaningful subset choice (the player would grant all of them), so we
+  // auto-grant. With >3, run an iterative up-to-3 picker (Field Report shape)
+  // with a Done sentinel so the player may stop early.
   if (entry.type === 'ccEffect' && entry.optimalBombardmentEffect) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    const blastBonus = entry.blastBonusToAdjacentVehiclesDroidHW || 0;
+    const _obGrant = (fks) => {
+      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
+      const names = [];
+      let count = 0;
+      for (const fk of fks) {
+        const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
+        if (figMsgId) {
+          game.freeAttackBonusPending[fk] = true;
+          if (blastBonus > 0) {
+            // Per alexanbv 2026-05-13: per-figureKey (the chosen friendly).
+            game.optimalBombardmentBlastBonus = game.optimalBombardmentBlastBonus || {};
+            game.optimalBombardmentBlastBonus[fk] = blastBonus;
+          }
+          count++;
+        }
+        names.push(dcNameFromFigureKey(fk));
+      }
+      if (!count) return { applied: true, logMessage: '**Optimal Bombardment** — No figures chosen.' };
+      return { applied: true, logMessage: `**Optimal Bombardment** — Free attack granted to: ${names.join(', ')} (${count} figure${count !== 1 ? 's' : ''}, up to 3).` };
+    };
+    const _obMax = 3;
+    // Phase 2+: accumulate sequential picks (only entered when >3 candidates).
+    if (chosenFigureKey && game.pendingOptimalBombardment) {
+      const pend = game.pendingOptimalBombardment;
+      if (chosenFigureKey === '__done__') {
+        delete game.pendingOptimalBombardment;
+        return _obGrant(pend.chosen);
+      }
+      pend.chosen.push(chosenFigureKey);
+      if (pend.chosen.length >= _obMax) {
+        delete game.pendingOptimalBombardment;
+        return _obGrant(pend.chosen);
+      }
+      const remaining = pend.candidates.filter((fk) => !pend.chosen.includes(fk));
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [...remaining.map(dcNameFromFigureKey), 'Done selecting'],
+        choiceValues: [...remaining, '__done__'],
+        choicePrompt: `**Optimal Bombardment** — Selected ${pend.chosen.length}/${_obMax}. Choose another or Done:`,
+      };
+    }
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
@@ -12387,24 +12524,17 @@ export function resolveAbility(abilityId, context) {
       }
     }
     if (!targets.length) return { applied: false, manualMessage: 'No adjacent VEHICLE/DROID/HEAVY WEAPON figures to activate.' };
-    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    const names = [];
-    let count = 0;
-    const blastBonus = entry.blastBonusToAdjacentVehiclesDroidHW || 0;
-    for (const fk of targets.slice(0, 3)) {
-      const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
-      if (figMsgId) {
-        game.freeAttackBonusPending[fk] = true;
-        if (blastBonus > 0) {
-          // Per alexanbv 2026-05-13: per-figureKey (the chosen friendly).
-          game.optimalBombardmentBlastBonus = game.optimalBombardmentBlastBonus || {};
-          game.optimalBombardmentBlastBonus[fk] = blastBonus;
-        }
-        count++;
-      }
-      names.push(dcNameFromFigureKey(fk));
-    }
-    return { applied: true, logMessage: `**Optimal Bombardment** — Free attack granted to: ${names.join(', ')} (${count} figure${count !== 1 ? 's' : ''}, up to 3).` };
+    // ≤3 candidates: auto-grant (no meaningful which/how-many choice).
+    if (targets.length <= _obMax) return _obGrant(targets);
+    // >3 candidates: offer a player pick of WHICH up to 3 get the free attack.
+    game.pendingOptimalBombardment = { chosen: [], candidates: targets };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: [...targets.map(dcNameFromFigureKey), 'Done selecting'],
+      choiceValues: [...targets, '__done__'],
+      choicePrompt: `**Optimal Bombardment** — Choose up to ${_obMax} adjacent VEHICLE/DROID/HEAVY WEAPON figures (each gains a free attack with Blast ${blastBonus || 1}):`,
+    };
   }
 
   // ccEffect: overheatedEffect (Overheated) — Paz Vizsla.
@@ -13096,7 +13226,10 @@ export function resolveAbility(abilityId, context) {
     const dcEffects = getDcEffects();
     // Phase 2: apply damage to chosen hostile.
     // Damage = # of *moved* DROIDs that have LOS to the target.
-    if (chosenFigureKey) {
+    // Guard: when game.pendingTriangulateSel is set we are still in the Phase-0
+    // "which DROIDs" picker (chosenFigureKey = a friendly DROID, not a hostile
+    // target) — fall through to the picker below rather than dealing damage.
+    if (chosenFigureKey && !game.pendingTriangulateSel) {
       const oppNum = opponentPlayerNum(playerNum);
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       // Read the moved-figureKey list snapshotted at sequence-end via
@@ -13175,24 +13308,67 @@ export function resolveAbility(abilityId, context) {
     if (friendlyDroidFigs.length === 0) {
       return { applied: false, manualMessage: '**Triangulate** — no friendly DROIDs in play; resolve manually.' };
     }
-    const seqFigures = friendlyDroidFigs.slice(0, 3).map((f) => ({
-      msgId: f.msgId,
-      figureKey: f.figureKey,
-      playerNum,
-      spaces: 1,
-      dcName: f.dcName,
-    }));
-    const movedFigKeys = seqFigures.map(f => f.figureKey);
+    // Stamp the Move-X sequence for the chosen subset of DROID figureKeys.
+    // CSV "up to 3 friendly DROIDS each move up to 1": the moved set is
+    // threaded as movedFigKeys and only those count toward the Phase-2 LOS
+    // damage — so the player must pick WHICH up to 3, not the first 3.
+    const _triStamp = (chosenFks) => {
+      const byFk = new Map(friendlyDroidFigs.map((f) => [f.figureKey, f]));
+      const seqFigures = chosenFks.map((fk) => byFk.get(fk)).filter(Boolean).map((f) => ({
+        msgId: f.msgId,
+        figureKey: f.figureKey,
+        playerNum,
+        spaces: 1,
+        dcName: f.dcName,
+      }));
+      if (seqFigures.length === 0) return { applied: true, logMessage: '**Triangulate** — No DROIDs chosen.' };
+      const movedFigKeys = seqFigures.map((f) => f.figureKey);
+      return {
+        applied: true,
+        pendingMoveXSequenceSetup: {
+          figures: seqFigures,
+          source: 'Triangulate',
+          threadId: null,
+          bypassCosts: true,
+          afterAction: { type: 'triangulateTarget', playerNum, movedFigKeys },
+        },
+        logMessage: `**Triangulate** — ${seqFigures.length} friendly DROID${seqFigures.length === 1 ? '' : 's'} may each move up to 1 space; pick order. After all moves, choose a hostile within 5 + LOS. Damage = # of those DROIDs with LOS to the target.`,
+      };
+    };
+    // Phase 0+: iterative pick of WHICH up-to-3 DROIDs participate (only when
+    // >3 DROIDs exist). Accumulate via game.pendingTriangulateSel; the picker
+    // re-enters through chosenFigureKey (Done sentinel = '__done__').
+    if (chosenFigureKey && game.pendingTriangulateSel) {
+      const pend = game.pendingTriangulateSel;
+      if (chosenFigureKey === '__done__') {
+        delete game.pendingTriangulateSel;
+        return _triStamp(pend.chosen);
+      }
+      pend.chosen.push(chosenFigureKey);
+      const remaining = pend.candidates.filter((fk) => !pend.chosen.includes(fk));
+      if (pend.chosen.length >= 3 || remaining.length === 0) {
+        delete game.pendingTriangulateSel;
+        return _triStamp(pend.chosen);
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [...remaining.map(dcNameFromFigureKey), 'Done selecting'],
+        choiceValues: [...remaining, '__done__'],
+        choicePrompt: `**Triangulate** — Selected ${pend.chosen.length}/3 DROIDs. Choose another to move or Done:`,
+      };
+    }
+    const allDroidFks = friendlyDroidFigs.map((f) => f.figureKey);
+    // ≤3 DROIDs: no meaningful subset choice — stamp all.
+    if (allDroidFks.length <= 3) return _triStamp(allDroidFks);
+    // >3 DROIDs: offer a player pick of WHICH up to 3 move.
+    game.pendingTriangulateSel = { chosen: [], candidates: allDroidFks };
     return {
-      applied: true,
-      pendingMoveXSequenceSetup: {
-        figures: seqFigures,
-        source: 'Triangulate',
-        threadId: null,
-        bypassCosts: true,
-        afterAction: { type: 'triangulateTarget', playerNum, movedFigKeys },
-      },
-      logMessage: `**Triangulate** — ${seqFigures.length} friendly DROID${seqFigures.length === 1 ? '' : 's'} may each move up to 1 space; pick order. After all moves, choose a hostile within 5 + LOS. Damage = # of those DROIDs with LOS to the target.`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: [...allDroidFks.map(dcNameFromFigureKey), 'Done selecting'],
+      choiceValues: [...allDroidFks, '__done__'],
+      choicePrompt: '**Triangulate** — Choose up to 3 friendly DROIDS to each move up to 1 space:',
     };
   }
 
@@ -13202,8 +13378,11 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     const dcEffects = getDcEffects();
     const oppNum = opponentPlayerNum(playerNum);
-    // Phase 2: count CREATUREs adjacent to chosen hostile, apply damage
-    if (chosenFigureKey) {
+    // Phase 2: count CREATUREs adjacent to chosen hostile, apply damage.
+    // Guard: while game.pendingPackAlphaSel is set we are still in the Phase-0
+    // "which CREATUREs" picker (chosenFigureKey = a friendly CREATURE, not the
+    // hostile target) — fall through to the picker rather than dealing damage.
+    if (chosenFigureKey && !game.pendingPackAlphaSel) {
       const targetPos = game.figurePositions?.[oppNum]?.[chosenFigureKey];
       const boardState = getBoardStateForMovement(game, null);
       const adjRaw = targetPos ? (boardState?.mapSpaces?.adjacency?.[String(targetPos).toLowerCase()] || []) : [];
@@ -13276,28 +13455,69 @@ export function resolveAbility(abilityId, context) {
     if (friendlyCreatureFigs.length === 0) {
       return { applied: false, manualMessage: '**Pack Alpha** — no friendly CREATUREs within 3 spaces; resolve manually.' };
     }
-    // "Up to 3" — cap to 3 figures. The picker's Stop button lets the
-    // player decline a move per figure, so passing the top 3 is fine.
-    const seqFigures = friendlyCreatureFigs.slice(0, 3).map((f) => ({
-      msgId: f.msgId,
-      figureKey: f.figureKey,
-      playerNum,
-      spaces: 3,
-      dcName: f.dcName,
-    }));
+    // Stamp the Move-X sequence for the chosen subset of CREATURE figureKeys.
+    // CSV "Up to 3 friendly CREATURES ... each move up to 3": only the moved
+    // set (threaded as creatureFigureKeys) counts toward the hostile's damage,
+    // so the player must pick WHICH up to 3 move — not the first 3.
+    const _paStamp = (chosenFks) => {
+      const byFk = new Map(friendlyCreatureFigs.map((f) => [f.figureKey, f]));
+      const seqFigures = chosenFks.map((fk) => byFk.get(fk)).filter(Boolean).map((f) => ({
+        msgId: f.msgId,
+        figureKey: f.figureKey,
+        playerNum,
+        spaces: 3,
+        dcName: f.dcName,
+      }));
+      if (seqFigures.length === 0) return { applied: true, logMessage: '**Pack Alpha** — No CREATUREs chosen.' };
+      return {
+        applied: true,
+        pendingMoveXSequenceSetup: {
+          figures: seqFigures,
+          source: 'Pack Alpha',
+          threadId: null,
+          bypassCosts: true,
+          // CSV: damage = "number of THOSE figures adjacent to it" — i.e. only the
+          // up-to-3 CREATUREs moved by this card, not every friendly CREATURE.
+          // Thread the selected set so Phase 2 counts only these. alexanbv 2026-06-20.
+          afterAction: { type: 'packAlphaTarget', playerNum, creatureFigureKeys: seqFigures.map((f) => f.figureKey) },
+        },
+        logMessage: `**Pack Alpha** — ${seqFigures.length} friendly CREATURE${seqFigures.length === 1 ? '' : 's'} may each move up to 3 spaces; pick order. After all moves, choose a hostile target.`,
+      };
+    };
+    // Phase 0+: iterative pick of WHICH up-to-3 CREATUREs participate (only
+    // when >3 exist). Accumulate via game.pendingPackAlphaSel; the picker
+    // re-enters through chosenFigureKey (Done sentinel = '__done__').
+    if (chosenFigureKey && game.pendingPackAlphaSel) {
+      const pend = game.pendingPackAlphaSel;
+      if (chosenFigureKey === '__done__') {
+        delete game.pendingPackAlphaSel;
+        return _paStamp(pend.chosen);
+      }
+      pend.chosen.push(chosenFigureKey);
+      const remaining = pend.candidates.filter((fk) => !pend.chosen.includes(fk));
+      if (pend.chosen.length >= 3 || remaining.length === 0) {
+        delete game.pendingPackAlphaSel;
+        return _paStamp(pend.chosen);
+      }
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: [...remaining.map(dcNameFromFigureKey), 'Done selecting'],
+        choiceValues: [...remaining, '__done__'],
+        choicePrompt: `**Pack Alpha** — Selected ${pend.chosen.length}/3 CREATUREs. Choose another to move or Done:`,
+      };
+    }
+    const allCreatureFks = friendlyCreatureFigs.map((f) => f.figureKey);
+    // ≤3 CREATUREs: no meaningful subset choice — stamp all.
+    if (allCreatureFks.length <= 3) return _paStamp(allCreatureFks);
+    // >3 CREATUREs: offer a player pick of WHICH up to 3 move.
+    game.pendingPackAlphaSel = { chosen: [], candidates: allCreatureFks };
     return {
-      applied: true,
-      pendingMoveXSequenceSetup: {
-        figures: seqFigures,
-        source: 'Pack Alpha',
-        threadId: null,
-        bypassCosts: true,
-        // CSV: damage = "number of THOSE figures adjacent to it" — i.e. only the
-        // up-to-3 CREATUREs moved by this card, not every friendly CREATURE.
-        // Thread the selected set so Phase 2 counts only these. alexanbv 2026-06-20.
-        afterAction: { type: 'packAlphaTarget', playerNum, creatureFigureKeys: seqFigures.map((f) => f.figureKey) },
-      },
-      logMessage: `**Pack Alpha** — ${seqFigures.length} friendly CREATURE${seqFigures.length === 1 ? '' : 's'} may each move up to 3 spaces; pick order. After all moves, choose a hostile target.`,
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: [...allCreatureFks.map(dcNameFromFigureKey), 'Done selecting'],
+      choiceValues: [...allCreatureFks, '__done__'],
+      choicePrompt: '**Pack Alpha** — Choose up to 3 friendly CREATUREs (within 3 spaces) to each move up to 3 spaces:',
     };
   }
 

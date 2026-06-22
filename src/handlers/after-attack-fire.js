@@ -28,6 +28,7 @@ import { isWithinN } from '../engine/utils.js';
 import { getFigureLabel } from '../engine/game-readers.js';
 import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from '../game/spatial.js';
 import { sanitizeMentions } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { canPlayCC } from '../game/cc-timing.js';
 import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
@@ -1045,14 +1046,49 @@ async function fireBoltslinger(thread, game, combat, effect, ctx) {
     targets,
   });
   const ownerId = getPlayerId(game, combat.attackerPlayerNum);
-  const btns = targets.slice(0, 4).map((t, i) =>
-    new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger));
-  btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
-  await thread.send(sanitizeMentions({
-    content: `<@${ownerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
-    allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
-  })).catch(discordCatch);
+  // Render EVERY candidate (not just the first 4) so all hostiles within 3
+  // are reachable — the click handler indexes pendingBoltslinger.targets[i],
+  // so each button MUST keep its real array index. chunkButtonsToRows packs
+  // them across up to 5 rows (Discord cap 25 components); we reserve one slot
+  // for Skip. If candidates exceed 24, surface a select menu fallback so none
+  // are silently dropped (the Boltslinger truncation bug). alexanbv 2026-06-21.
+  const MAX_BTN_TARGETS = 24; // 25 components total − 1 Skip
+  if (targets.length <= MAX_BTN_TARGETS) {
+    const btns = targets.map((t, i) =>
+      new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(String(t.label).slice(0, 80)).setStyle(ButtonStyle.Danger));
+    btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+    await thread.send(sanitizeMentions({
+      content: `<@${ownerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
+      allowedMentions: { users: [ownerId] },
+      components: chunkButtonsToRows(btns).slice(0, 5),
+    })).catch(discordCatch);
+  } else {
+    // >24 candidates (extremely rare): use a string select menu so every
+    // candidate is selectable. The select value is the target index, matching
+    // boltslinger_target_{gameId}_{i}.
+    const { StringSelectMenuBuilder } = ctx;
+    const menu = new (StringSelectMenuBuilder || ButtonBuilder.constructor)();
+    const options = targets.slice(0, 25).map((t, i) => ({ label: String(t.label).slice(0, 100), value: String(i) }));
+    if (StringSelectMenuBuilder) {
+      menu.setCustomId(`boltslinger_select_${game.gameId}`).setPlaceholder('Choose a hostile within 3 spaces').addOptions(options);
+      const skipBtn = new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary);
+      await thread.send(sanitizeMentions({
+        content: `<@${ownerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
+        allowedMentions: { users: [ownerId] },
+        components: [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(skipBtn)],
+      })).catch(discordCatch);
+    } else {
+      // Fallback: render the first 24 as buttons (still better than 4).
+      const btns = targets.slice(0, MAX_BTN_TARGETS).map((t, i) =>
+        new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(String(t.label).slice(0, 80)).setStyle(ButtonStyle.Danger));
+      btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
+      await thread.send(sanitizeMentions({
+        content: `<@${ownerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
+        allowedMentions: { users: [ownerId] },
+        components: chunkButtonsToRows(btns).slice(0, 5),
+      })).catch(discordCatch);
+    }
+  }
 }
 
 /**

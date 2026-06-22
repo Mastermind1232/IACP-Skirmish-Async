@@ -1948,9 +1948,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   }
   // Squad Command (Kayn Somos surge): Focus an adjacent friendly TROOPER.
   // Per destruct 2026-05-08: ACS (Advanced Com Systems) extends "adjacent"
-  // → "within 3" for Kayn's abilities. The card text says "Choose AN
-  // adjacent friendly TROOPER" (singular) — current impl auto-Focuses
-  // the first eligible (TODO: full player-choice prompt).
+  // → "within 3" for Kayn's abilities. CSV: "Choose AN adjacent friendly
+  // TROOPER; that figure becomes Focused." When 2+ TROOPERs are eligible the
+  // player must pick WHICH — mirror the Cover Fire post-attack picker (post a
+  // squad_command_focus_* button row; click handler applies Focus). When
+  // exactly 1 is eligible, auto-Focus (no meaningful choice). alexanbv
+  // 2026-06-21.
   if (hit && combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
     // ACS check on Kayn's DC msgId.
     const _sqAtkMsgId = combat.attackerMsgId;
@@ -1958,21 +1961,42 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     const _sqHasACS = _sqAtts.some((a) => /Advanced Com Systems/i.test(String(a)));
     const _sqRange = _sqHasACS ? 3 : 1;
     const _sqAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
-    let _sqApplied = false;
     if (_sqAtkPos) {
+      // Collect ALL eligible adjacent/within-3 friendly TROOPERs.
+      const _sqEligible = [];
       for (const [sqFk, sqPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
-        if (_sqApplied) break;
         if (sqFk === combat.attackerFigureKey || !sqPos) continue;
         if (typeof isWithinN === 'function' && !isWithinN(sqPos, _sqAtkPos, _sqRange, game.selectedMap.id)) continue;
         const sqDcName = dcNameFromFigureKey(sqFk);
         const sqEff = getDcEffect(sqDcName);
         const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
         if (!sqKws.includes('TROOPER')) continue;
+        _sqEligible.push({ fk: sqFk, dcName: sqDcName });
+      }
+      if (_sqEligible.length === 1) {
+        // Exactly one eligible — no choice, auto-Focus.
+        const { fk: sqFk, dcName: sqDcName } = _sqEligible[0];
         if (_applyCondition(game, sqFk, 'Focus')) {
           const sqMsgId = findDcMessageIdForFigure(game.gameId, attackerPlayerNum, sqFk);
           if (sqMsgId) embedRefreshMsgIds.add(sqMsgId);
           await logGameAction(game, client, `**Squad Command**${_sqHasACS ? ' (ACS within 3)' : ''} — **${sqDcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
-          _sqApplied = true;
+        }
+      } else if (_sqEligible.length > 1) {
+        // 2+ eligible — the player chooses WHICH TROOPER to Focus.
+        game.pendingSquadCommand = {
+          gameId: game.gameId,
+          playerNum: attackerPlayerNum,
+          candidates: _sqEligible.map((e) => e.fk),
+          hasACS: _sqHasACS,
+        };
+        if (thread && ButtonBuilder && ButtonStyle) {
+          const _sqBtns = _sqEligible.slice(0, 20).map(({ fk, dcName }) =>
+            new ButtonBuilder()
+              .setCustomId(`squad_command_focus_${game.gameId}_${attackerPlayerNum}_${fk}`)
+              .setLabel(String(dcName).slice(0, 80))
+              .setStyle(ButtonStyle.Primary));
+          const _sqRows = chunkButtonsToRows(_sqBtns);
+          await thread.send(sanitizeMentions({ content: `**Squad Command**${_sqHasACS ? ' (ACS within 3)' : ''} — <@${ownerId}> Choose a friendly TROOPER to become **Focused**:`, allowedMentions: { users: [ownerId] }, components: _sqRows })).catch(discordCatch);
         }
       }
     }

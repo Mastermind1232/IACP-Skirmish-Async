@@ -1085,6 +1085,15 @@ const ROUND_DELETE_FLAGS = [
   'pendingFluctuationSwapQueue',
   'pendingFluctuationSwapFirst',
   'drivenByHatredForceChoke',
+  // Multi-figure-selection pickers (alexanbv 2026-06-21): global picker objects
+  // ({chosen/targets, candidates}) for "choose up to N figures" CCs / special
+  // actions. Use a `!game.pendingX` first-call gate, so they must reset to
+  // undefined (delete), not {} — same rationale as pendingStaticPulse above.
+  'pendingRoar',
+  'pendingOptimalBombardment',
+  'pendingTriangulateSel',
+  'pendingPackAlphaSel',
+  'pendingSquadCommand',
   // Stale per-attack tracking — safety net
   'lastAttackAttackerMsgId',
   'lastAttackAttackerFigureIndex',

@@ -3882,6 +3882,10 @@ export async function handleAttackTarget(interaction, ctx) {
   }
   // Close Quarters: override attack with adjacent hostile's dice/type, +1 Accuracy, -1 defense die
   if (game.closeQuartersActive?.[attackerFigureKey]) {
+    // The arm value may be { source: <figureKey> } (player/auto-chosen which
+    // adjacent hostile to copy — Verena Talos multi-figure pick) or `true`
+    // (legacy: copy the first adjacent hostile). alexanbv 2026-06-21.
+    const cqChosenSourceFk = game.closeQuartersActive[attackerFigureKey]?.source || null;
     delete game.closeQuartersActive[attackerFigureKey];
     const cqMapId = game.selectedMap?.id;
     if (cqMapId) {
@@ -3897,8 +3901,14 @@ export async function handleAttackTarget(interaction, ctx) {
         const cqOppNum = opponentPlayerNum(meta.playerNum);
         const cqOppPositions = game.figurePositions?.[cqOppNum] || {};
         let cqHostileName = null;
-        for (const [fk, pos] of Object.entries(cqOppPositions)) {
-          if (pos && cqAdjSpaces.has(pos)) { cqHostileName = dcNameFromFigureKey(fk); break; }
+        // Prefer the threaded source figure (player's pick) when it is still
+        // adjacent; else fall back to the first adjacent hostile.
+        if (cqChosenSourceFk && cqOppPositions[cqChosenSourceFk] && cqAdjSpaces.has(cqOppPositions[cqChosenSourceFk])) {
+          cqHostileName = dcNameFromFigureKey(cqChosenSourceFk);
+        } else {
+          for (const [fk, pos] of Object.entries(cqOppPositions)) {
+            if (pos && cqAdjSpaces.has(pos)) { cqHostileName = dcNameFromFigureKey(fk); break; }
+          }
         }
         if (cqHostileName) {
           const cqHostileStats = getDcStats(cqHostileName);
@@ -11769,6 +11779,36 @@ export async function handleCoverFireBlock(interaction, ctx) {
     if (ch) await sendPowerTokenOverflowUI(game, gameId, ch, playerNum, saveGames);
     return;
   }
+  saveGames(game.gameId);
+}
+
+/**
+ * Squad Command (Kayn Somos) — Focus a chosen adjacent friendly TROOPER.
+ * squad_command_focus_{gameId}_{playerNum}_{figureKey}
+ * Posted by combat-bridge when 2+ TROOPERs are eligible (player chooses which).
+ */
+export async function handleSquadCommandFocus(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, logGameAction, client } = ctx;
+  const match = interaction.customId.match(/^squad_command_focus_(\d+)_(\d+)_(.+)$/);
+  if (!match) return;
+  const [, gameId, playerNumStr, figureKey] = match;
+  const playerNum = parseInt(playerNumStr, 10);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, playerNum, canActAsPlayer, 'Only the attacker can choose.')) return;
+  // Guard double-clicks / ensure this figure was a valid candidate.
+  const pend = game.pendingSquadCommand;
+  if (!pend || !Array.isArray(pend.candidates) || !pend.candidates.includes(figureKey)) {
+    await interaction.message.edit({ content: '**Squad Command** — already resolved.', components: [] }).catch(discordCatch);
+    return;
+  }
+  const hasACS = !!pend.hasACS;
+  delete game.pendingSquadCommand;
+  const dcName = dcNameFromFigureKey(figureKey);
+  applyCondition(game, figureKey, 'Focus');
+  await interaction.message.edit({ content: `**Squad Command**${hasACS ? ' (ACS within 3)' : ''} — **${dcName}** is now **Focused**.`, components: [] }).catch(discordCatch);
+  if (logGameAction) await logGameAction(game, client, `**Squad Command**${hasACS ? ' (ACS within 3)' : ''} — **${dcName}** is now **Focused**`, { phase: 'ROUND', icon: 'card' });
   saveGames(game.gameId);
 }
 
