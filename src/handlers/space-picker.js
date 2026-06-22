@@ -27,8 +27,68 @@ import {
 import { requireGame } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 
+// Cell button-rows per page (4 rows × 5 = 20 cells); the 5th row holds Back +
+// Prev/Next + any flow action buttons.
+const CELL_ROWS_PER_PAGE = 4;
+
 /**
- * Handle space_row_{contextKey}_{rowNum}: user picked a row, show cells in that row.
+ * Render one page of a row's cells. A board row can hold up to ~36 cells
+ * (corellian-underground), which exceeds Discord's 25-button / 5-row max, so
+ * wide rows paginate (alexanbv 2026-06-21) — no cell is ever dropped. The cell
+ * buttons keep their `${cellPrefix}${space}` customIds, so the flows' own cell
+ * handlers are unchanged.
+ */
+async function _renderRowCells(interaction, pending, contextKey, rowNum, page) {
+  const filtered = filterSpacesToRow(pending.validSpaces, rowNum);
+  const displayRow = rowNum + (pending.rowDisplayOffset || 0);
+  if (filtered.length === 0) {
+    await interaction.followUp({ content: `No spaces in Row ${displayRow}.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  const { rows: cellRows } = getSpaceChoiceRows(
+    pending.cellPrefix,
+    filtered,
+    pending.mapSpaces,
+    Infinity,
+    pending.labelMap || {},
+  );
+
+  const totalPages = Math.max(1, Math.ceil(cellRows.length / CELL_ROWS_PER_PAGE));
+  const pg = Math.max(0, Math.min(page || 0, totalPages - 1));
+  const pageCellRows = cellRows.slice(pg * CELL_ROWS_PER_PAGE, pg * CELL_ROWS_PER_PAGE + CELL_ROWS_PER_PAGE);
+
+  const navBtns = [
+    new ButtonBuilder().setCustomId(`space_row_back_${contextKey}`).setLabel('Back to Rows').setStyle(ButtonStyle.Secondary),
+  ];
+  if (totalPages > 1) {
+    if (pg > 0) navBtns.push(new ButtonBuilder().setCustomId(`space_cellpg_${contextKey}_${rowNum}_${pg - 1}`).setLabel('◀ Prev').setStyle(ButtonStyle.Secondary));
+    if (pg < totalPages - 1) navBtns.push(new ButtonBuilder().setCustomId(`space_cellpg_${contextKey}_${rowNum}_${pg + 1}`).setLabel('Next ▶').setStyle(ButtonStyle.Secondary));
+  }
+  for (const b of (pending.actionButtons || [])) {
+    navBtns.push(new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style || ButtonStyle.Secondary));
+  }
+  // Discord caps an ActionRow at 5 buttons — Back + Prev + Next + up to 2 extras.
+  const actionRow = new ActionRowBuilder().addComponents(...navBtns.slice(0, 5));
+  const components = [...pageCellRows, actionRow];
+
+  const pageNote = totalPages > 1 ? ` — page ${pg + 1}/${totalPages}` : '';
+  try {
+    await interaction.message.edit({
+      content: `${pending.headerText || 'Pick a space'} — **Row ${displayRow}** (${filtered.length} space${filtered.length !== 1 ? 's' : ''})${pageNote}:`,
+      components,
+    });
+  } catch {
+    await interaction.followUp({
+      content: `**Row ${displayRow}** — pick a space${pageNote}:`,
+      components,
+      ephemeral: false,
+    }).catch(discordCatch);
+  }
+}
+
+/**
+ * Handle space_row_{contextKey}_{rowNum}: user picked a row, show cells (page 0).
  */
 export async function handleSpaceRow(interaction, ctx) {
   const { getGame } = ctx;
@@ -50,45 +110,30 @@ export async function handleSpaceRow(interaction, ctx) {
     await interaction.followUp({ content: 'Space selection expired.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  await _renderRowCells(interaction, pending, contextKey, rowNum, 0);
+}
 
-  const filtered = filterSpacesToRow(pending.validSpaces, rowNum);
-  const displayRow = rowNum + (pending.rowDisplayOffset || 0);
-  if (filtered.length === 0) {
-    await interaction.followUp({ content: `No spaces in Row ${displayRow}.`, ephemeral: true }).catch(discordCatch);
+/**
+ * Handle space_cellpg_{contextKey}_{rowNum}_{page}: page through a wide row's cells.
+ */
+export async function handleSpaceCellPage(interaction, ctx) {
+  const { getGame } = ctx;
+  // contextKey may contain underscores; rowNum and page are the last two numerics
+  const m = interaction.customId.match(/^space_cellpg_(.+)_(\d+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
     return;
   }
-
-  const { rows: cellRows } = getSpaceChoiceRows(
-    pending.cellPrefix,
-    filtered,
-    pending.mapSpaces,
-    Infinity,
-    pending.labelMap || {},
-  );
-
-  const backBtn = new ButtonBuilder()
-    .setCustomId(`space_row_back_${contextKey}`)
-    .setLabel('Back to Rows')
-    .setStyle(ButtonStyle.Secondary);
-  const extraBtns = (pending.actionButtons || []).map(b =>
-    new ButtonBuilder().setCustomId(b.customId).setLabel(b.label).setStyle(b.style || ButtonStyle.Secondary)
-  );
-  const actionRow = new ActionRowBuilder().addComponents(backBtn, ...extraBtns);
-
-  const components = [...cellRows.slice(0, 4), actionRow];
-
-  try {
-    await interaction.message.edit({
-      content: `${pending.headerText || 'Pick a space'} — **Row ${displayRow}** (${filtered.length} space${filtered.length !== 1 ? 's' : ''}):`,
-      components,
-    });
-  } catch {
-    await interaction.followUp({
-      content: `**Row ${displayRow}** — pick a space:`,
-      components,
-      ephemeral: false,
-    }).catch(discordCatch);
+  const [, contextKey, rowNumStr, pageStr] = m;
+  const gameId = contextKey.split('_')[0];
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const pending = game.pendingSpacePick?.[contextKey];
+  if (!pending) {
+    await interaction.followUp({ content: 'Space selection expired.', ephemeral: true }).catch(discordCatch);
+    return;
   }
+  await _renderRowCells(interaction, pending, contextKey, parseInt(rowNumStr, 10), parseInt(pageStr, 10));
 }
 
 /**

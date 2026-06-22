@@ -212,7 +212,7 @@ import {
   handleDeflectPick, handleDeflectSkip,
   handleWantonUse, handleWantonCcPick, handleWantonPick, handleWantonDone, handleWantonSkip,
 } from './combat-special-effects.js';
-import { handleSpaceRow, handleSpaceRowBack } from './space-picker.js';
+import { handleSpaceRow, handleSpaceRowBack, handleSpaceCellPage } from './space-picker.js';
 import { getValidGroupNames } from '../context-factory.js';
 
 const HANDLERS = new Map();
@@ -484,6 +484,7 @@ register('vanguard_pick_', handleVanguardDiePick, 'dcPlayArea');
 register('bo_rifle_pick_', handleBoRiflePick, 'dcPlayArea');
 
 // --- Generic Space Picker (2-step row→cell) ---
+register('space_cellpg_', handleSpaceCellPage, 'spacePicker');
 register('space_row_back_', handleSpaceRowBack, 'spacePicker');
 register('space_row_', handleSpaceRow, 'spacePicker');
 
