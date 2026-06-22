@@ -49,6 +49,7 @@ import { setPendingCelebration, setPendingPartingShot, setPendingSelfDestruct, s
 import { cardNameIncludes } from './card-names.js';
 import { getCcHand } from './player-helpers.js';
 import { isWithinN } from '../engine/utils.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getUniqueFiguresForCc, isCcExcludedFromFastLearner } from './unique-figure-ccs.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 
@@ -1114,14 +1115,13 @@ WHEN_DEFEATED_HOOKS.push({
       try {
         const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = await import('discord.js');
         const ownerId = game[`player${opts.controllerPlayerNum}Id`];
-        const btns = alive.slice(0, 4).map((fk) =>
+        const btns = alive.slice(0, 24).map((fk) =>
           new ButtonBuilder()
             .setCustomId(`last_stand_pick_${game.gameId}_${fk}`)
             .setLabel(dcNameFromFigureKey(fk).slice(0, 80))
             .setStyle(ButtonStyle.Primary),
         );
         btns.push(new ButtonBuilder().setCustomId(`last_stand_pick_${game.gameId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const row = new ActionRowBuilder().addComponents(btns);
         // Post to general channel — defeat-handler doesn't have a thread context.
         const channelId = game.generalId;
         const channel = channelId ? await ctx.client.channels.fetch(channelId).catch(() => null) : null;
@@ -1129,7 +1129,7 @@ WHEN_DEFEATED_HOOKS.push({
           await channel.send({
             content: `⚡ **Last Stand** — <@${ownerId}> Pick another figure in **${dcName}**'s group to become Focused:`,
             allowedMentions: { users: ownerId ? [ownerId] : [] },
-            components: [row],
+            components: chunkButtonsToRows(btns),
           }).catch(() => {});
         }
       } catch (err) {

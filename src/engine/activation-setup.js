@@ -774,13 +774,13 @@ export async function finalizeActivation({
         }
       }
       if (_dfTargets.length > 0) {
-        const _dfSlice = _dfTargets.slice(0, 4);
+        const _dfSlice = _dfTargets.slice(0, 24);
         const _dfLabels = figureChoiceLabels(_dfSlice.map(({ fk }) => fk));
         const _dfBtns = _dfSlice.map(({ fk }, i) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_${fk}`).setLabel(_dfLabels[i]).setStyle(ButtonStyle.Danger)
         );
         _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🤜 **Durasteel Fist** — At any point during this activation, you may target an adjacent figure (roll 1 green die, apply Hits as damage):`, components: [new ActionRowBuilder().addComponents(_dfBtns)] }).catch(discordCatch);
+        await thread.send({ content: `🤜 **Durasteel Fist** — At any point during this activation, you may target an adjacent figure (roll 1 green die, apply Hits as damage):`, components: chunkButtonsToRows(_dfBtns) }).catch(discordCatch);
       } else {
         await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(discordCatch);
       }
@@ -819,11 +819,11 @@ export async function finalizeActivation({
       const skipBtn = new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary);
       await thread.send({ content: `🔧 **Unstable Devices** — At any point during this activation, grant **1 Device token** to **${f.dcName}**? (free, once per activation)`, components: [new ActionRowBuilder().addComponents(confirmBtn, skipBtn)] }).catch(discordCatch);
     } else if (_udFriendlies.length > 1) {
-      const btns = _udFriendlies.slice(0, 4).map(f =>
+      const btns = _udFriendlies.slice(0, 24).map(f =>
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_${f.figureKey}`).setLabel(f.dcName).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_unstabledev_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🔧 **Unstable Devices** — At any point during this activation, choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: [new ActionRowBuilder().addComponents(...btns)] }).catch(discordCatch);
+      await thread.send({ content: `🔧 **Unstable Devices** — At any point during this activation, choose a friendly figure in LOS to gain **1 Device token** (free, once per activation):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
     } else {
       await thread.send({ content: `🔧 **Unstable Devices** — No friendly figures in line of sight.` }).catch(discordCatch);
     }
@@ -892,13 +892,13 @@ export async function finalizeActivation({
       .filter(([fk, fp]) => fk !== _goSelfFk && fp);
     if (friendlyFigs.length > 0) {
       setPendingGeneralsOrders(game, { gameId, msgId, playerNum, remaining: 2, chosen: [] });
-      const _goSlice = friendlyFigs.slice(0, 4);
+      const _goSlice = friendlyFigs.slice(0, 24);
       const _goLabels = figureChoiceLabels(_goSlice.map(([fk]) => fk));
       const btns = _goSlice.map(([fk], i) =>
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(_goLabels[i]).setStyle(ButtonStyle.Primary)
       );
       btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each may **perform a Move** (their own Speed-MP, spend immediately):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+      await thread.send({ content: `🎖️ **General's Orders** — Choose up to 2 friendly figures; each may **perform a Move** (their own Speed-MP, spend immediately):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
     } else {
       await thread.send({ content: `🎖️ **General's Orders** — No friendly figures available.` }).catch(discordCatch);
     }
@@ -1048,12 +1048,12 @@ export async function finalizeActivation({
           const _conFriendlies = Object.entries(game.figurePositions?.[playerNum] || {})
             .filter(([fk2, pos2]) => fk2 !== _conFk && pos2 && _conAdj.includes(String(pos2).toLowerCase()));
           if (_conFriendlies.length > 0 && _conDiceCount > 0) {
-            const btns = _conFriendlies.slice(0, 4).map(([fk2]) =>
+            const btns = _conFriendlies.slice(0, 24).map(([fk2]) =>
               new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
             );
             btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
             setPendingConspire(game, { tokensRemaining: _conDiceCount, senderFk: _conFk });
-            await thread.send({ content: `🗣️ **Conspire** (Special Action) — Distribute **${_conDiceCount} Focus token(s)** to friendly figures within 1 space. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+            await thread.send({ content: `🗣️ **Conspire** (Special Action) — Distribute **${_conDiceCount} Focus token(s)** to friendly figures within 1 space. Choose a figure:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
           } else {
             await thread.send({ content: `🗣️ **Conspire** — No friendly figures within 1 space (or no dice in attack pool). Use manually if needed.` }).catch(discordCatch);
           }
@@ -1069,11 +1069,11 @@ export async function finalizeActivation({
           const _suOccupied = new Set([...Object.values(game.figurePositions?.[1] || {}), ...Object.values(game.figurePositions?.[2] || {})].filter(Boolean).map(s => String(s).toLowerCase()));
           const _suAvail = _suAdj.filter(s => !_suOccupied.has(s));
           if (_suAvail.length > 0) {
-            const btns = _suAvail.slice(0, 4).map(s =>
+            const btns = _suAvail.slice(0, 24).map(s =>
               new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_shieldsup_${s}`).setLabel(s.toUpperCase()).setStyle(ButtonStyle.Primary)
             );
             btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_shieldsup_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-            await thread.send({ content: `🛡️ **Shields Up** (Special Action) — Place an energy shield in an adjacent space:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+            await thread.send({ content: `🛡️ **Shields Up** (Special Action) — Place an energy shield in an adjacent space:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
           } else {
             await thread.send({ content: `🛡️ **Shields Up** — No adjacent empty spaces. Use manually if needed.` }).catch(discordCatch);
           }
@@ -1129,13 +1129,13 @@ export async function finalizeActivation({
           return true;
         }) : [];
       if (_motFriendlies.length > 0) {
-        const _motSlice = _motFriendlies.slice(0, 4);
+        const _motSlice = _motFriendlies.slice(0, 24);
         const _motLabels = figureChoiceLabels(_motSlice.map(([fk]) => fk));
         const btns = _motSlice.map(([fk], i) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivation_${fk}`).setLabel(_motLabels[i]).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_motivation_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+        await thread.send({ content: `**Motivation** — Choose a friendly figure with lower cost in your LOS (recover 1 Damage or discard HARMFUL, then gain 1 MP):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
       } else {
         await thread.send({ content: `**Motivation** — No eligible friendly figures (lower cost with LOS).` }).catch(discordCatch);
       }
@@ -1151,13 +1151,13 @@ export async function finalizeActivation({
       const _taFriendlies = Object.entries(game.figurePositions?.[playerNum] || {})
         .filter(([fk, fp]) => fk !== _taSelfFk && fp && _taAdj.includes(String(fp).toLowerCase()));
       if (_taFriendlies.length > 0) {
-        const _taSlice = _taFriendlies.slice(0, 4);
+        const _taSlice = _taFriendlies.slice(0, 24);
         const _taLabels = figureChoiceLabels(_taSlice.map(([fk]) => fk));
         const btns = _taSlice.map(([fk], i) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_trustedally_${fk}`).setLabel(_taLabels[i]).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_trustedally_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+        await thread.send({ content: `**Trusted Ally** — Choose an adjacent friendly figure (recover 1 Damage or discard 1 HARMFUL condition):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
       } else {
         await thread.send({ content: `**Trusted Ally** — No adjacent friendly figures.` }).catch(discordCatch);
       }

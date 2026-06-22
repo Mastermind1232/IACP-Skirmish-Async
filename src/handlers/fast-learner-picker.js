@@ -14,6 +14,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getHandChannelId } from '../game/player-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -149,11 +150,10 @@ export async function presentUniqueCcPlayerPicker(interaction, game, playerNum, 
     })),
   });
 
-  const buttons = options.slice(0, 5).map((o, i) => new ButtonBuilder()
+  const buttons = options.slice(0, 24).map((o, i) => new ButtonBuilder()
     .setCustomId(`cc_uccp_${i}_${gameId}`)
     .setLabel(`${(o.displayName || _displayForFigureKey(o.figureKey)).slice(0, 60)}${_KIND_LABEL[o.kind] || ''}`.slice(0, 80))
     .setStyle(o.kind === 'named' ? ButtonStyle.Primary : ButtonStyle.Secondary));
-  const row = new ActionRowBuilder().addComponents(buttons);
 
   await interaction.deferUpdate().catch(discordCatch);
   await interaction.message.delete().catch(discordCatch);
@@ -162,7 +162,7 @@ export async function presentUniqueCcPlayerPicker(interaction, game, playerNum, 
   const _anyConsumes = options.some((o) => o.consume && o.consume !== 'none');
   await withDiscordRetry(() => handChannel.send({
     content: `Multiple figures can play **${card}**. Choose who plays it — the range is measured from the figure you pick.${_anyConsumes ? ' Fast Learner / A New Hope choices consume that ability.' : ''}`,
-    components: [row],
+    components: chunkButtonsToRows(buttons),
   }));
 }
 

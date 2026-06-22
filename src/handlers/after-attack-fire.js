@@ -1296,13 +1296,13 @@ async function fireConcussiveBolt(thread, game, combat, effect, ctx) {
     initialEmbedRefreshMsgIds: [],
     fromStep8Queue: true,
   });
-  const btns = adjSpaces.slice(0, 4).map((sp) =>
+  const btns = adjSpaces.slice(0, 24).map((sp) =>
     new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger));
   btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
   await thread.send(sanitizeMentions({
     content: `<@${ownerId}> **Concussive Bolt** — Push **${label}** 1 space. Choose a destination:`,
     allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   })).catch(discordCatch);
 }
 
@@ -1339,13 +1339,13 @@ async function fireFightingKnife(thread, game, combat, effect, ctx) {
     initialEmbedRefreshMsgIds: [],
     fromStep8Queue: true,
   });
-  const btns = targets.slice(0, 4).map((t, i) =>
+  const btns = targets.slice(0, 24).map((t, i) =>
     new ButtonBuilder().setCustomId(`fighting_knife_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger));
   btns.push(new ButtonBuilder().setCustomId(`fighting_knife_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
   await thread.send(sanitizeMentions({
     content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
     allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   })).catch(discordCatch);
 }
 
@@ -1672,13 +1672,13 @@ async function fireDeflect(thread, game, combat, effect, ctx) {
         hostiles,
       });
       const ownerId = getPlayerId(game, defPN);
-      const btns = hostiles.slice(0, 4).map((t, i) =>
+      const btns = hostiles.slice(0, 24).map((t, i) =>
         new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger));
       btns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
       await thread.send(sanitizeMentions({
         content: `<@${ownerId}> **Deflect** — **${cand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
         allowedMentions: { users: [ownerId] },
-        components: [new ActionRowBuilder().addComponents(btns)],
+        components: chunkButtonsToRows(btns),
       })).catch(discordCatch);
     }
     break; // Only one Deflect trigger per attack

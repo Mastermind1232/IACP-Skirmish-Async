@@ -5182,8 +5182,8 @@ export async function handleAttackTarget(interaction, ctx) {
         adjacentHostiles,
       });
       const defOwnerId = getPlayerId(game, defenderPlayerNum);
-      // Cap at 4 picker buttons so the Skip still fits in a 5-button row.
-      const _fiwmSlice = adjacentHostiles.slice(0, 4);
+      // Up to 24 picker buttons so the Skip still fits within Discord's 25-component cap.
+      const _fiwmSlice = adjacentHostiles.slice(0, 24);
       const btns = _fiwmSlice.map((fk, i) =>
         new ButtonBuilder()
           .setCustomId(`force_with_me_pick_${game.gameId}_${i}`)
@@ -5198,7 +5198,7 @@ export async function handleAttackTarget(interaction, ctx) {
       );
       await thread.send(sanitizeMentions({
         content: `<@${defOwnerId}> **The Force is With Me** — Ranged attack targeting Chirrut. Choose an adjacent hostile figure to take 1 Damage (and apply **-1 Damage** to the attack results), or Skip:`,
-        components: [new ActionRowBuilder().addComponents(btns)],
+        components: chunkButtonsToRows(btns),
         allowedMentions: { users: [defOwnerId] },
       }));
     }

@@ -8,6 +8,7 @@
  *   interrogate_pick_ / interrogate_discard_ / interrogate_skip_
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { getMapData, getCcEffect } from '../data-loader.js';
 import { ccHandKey, ccDiscardKey, ccDeckKey, getPlayerId, getHandChannelId, getDcList, getDcMessageIds } from '../game/player-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
@@ -362,14 +363,14 @@ export async function handleInterrogatePick(interaction, ctx) {
       return;
     }
     intGame.pendingInterrogate.ownEligibleSnapshot = intEligible;
-    const intStep2Btns = intEligible.slice(0, 4).map((cardName, i) =>
+    const intStep2Btns = intEligible.slice(0, 24).map((cardName, i) =>
       new ButtonBuilder().setCustomId(`interrogate_discard_${intGameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)
     );
     intStep2Btns.push(new ButtonBuilder().setCustomId(`interrogate_skip_${intGameId}`).setLabel("Skip (don't discard)").setStyle(ButtonStyle.Secondary));
     if (intThread) await intThread.send({
       content: `<@${intOwnerId}> **Interrogate** — You chose **${intChosenCard}** (cost ${intChosenCost}). Discard a card (cost ≥ ${intChosenCost}) from your hand to force-discard it?`,
       allowedMentions: { users: [intOwnerId] },
-      components: [new ActionRowBuilder().addComponents(intStep2Btns)],
+      components: chunkButtonsToRows(intStep2Btns),
     }).catch(discordCatch);
     saveGames(game.gameId);
     return;
@@ -435,12 +436,12 @@ async function presentInterrogatePicker(game, client) {
   pend.opponentHandSnapshot = [...oppHand];
   pend.awaitingSc = false;
   const ownerId = getPlayerId(game, pend.attackerPlayerNum);
-  const btns = oppHand.slice(0, 4).map((cardName, i) =>
+  const btns = oppHand.slice(0, 24).map((cardName, i) =>
     new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger));
   if (thread) await thread.send(sanitizeMentions({
     content: `<@${ownerId}> **Interrogate** — ⚠️ *Opponent: look away!* Pick the card you want to target:`,
     allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   })).catch(discordCatch);
   return true;
 }

@@ -174,7 +174,7 @@ export async function advanceSpreadThePain(game, pending, ctx) {
     saveGames(game.gameId);
     return;
   }
-  const btns = figuresAtSpaces.slice(0, 4).map((f) =>
+  const btns = figuresAtSpaces.slice(0, 24).map((f) =>
     new ButtonBuilder()
       .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
       .setLabel(f.label)
@@ -184,7 +184,7 @@ export async function advanceSpreadThePain(game, pending, ctx) {
   await thread.send({
     content: `<@${pending.ownerId}> **Spread the Pain** — Apply **${nextCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
     allowedMentions: { users: [pending.ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   }).catch(discordCatch);
   saveGames(game.gameId);
 }
@@ -358,7 +358,7 @@ registerStrainFollowup('havoc_shot_pick', async (game, ctx, payload) => {
   if (!hs) return;
   const thread = await fetchCombatThread(client, hs.combatThreadId);
   if (!thread) return;
-  const btns = hs.targets.slice(0, 4).map((t, i) =>
+  const btns = hs.targets.slice(0, 24).map((t, i) =>
     new ButtonBuilder().setCustomId(`havoc_shot_pick_${payload.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger));
   btns.push(new ButtonBuilder().setCustomId(`havoc_shot_done_${payload.gameId}`).setLabel('Done (skip remaining)').setStyle(ButtonStyle.Secondary));
   await thread.send({
@@ -813,7 +813,7 @@ async function advanceHeavyFirePick(game, pending, ctx) {
   }
 
   const ownerId = getPlayerId(game, pending.attackerPlayerNum);
-  const btns = available.slice(0, 4).map((t) =>
+  const btns = available.slice(0, 24).map((t) =>
     new ButtonBuilder()
       .setCustomId(`heavy_fire_tgt_${game.gameId}_${t.figureKey}`)
       .setLabel(t.label)
@@ -823,7 +823,7 @@ async function advanceHeavyFirePick(game, pending, ctx) {
   await thread.send({
     content: `<@${ownerId}> **Heavy Fire** — Pick hostile target ${pending.chosenTargets.length + 1}/${pending.diceCount} (within 2 of target space). ${remaining} pick${remaining !== 1 ? 's' : ''} left:`,
     allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
+    components: chunkButtonsToRows(btns),
   }).catch(discordCatch);
   saveGames(game.gameId);
 }
@@ -1126,7 +1126,7 @@ export async function handleHavocShotPick(interaction, ctx) {
   const remainingTargets = hs.targets.filter((t, i) => !hs.chosen.includes(t.figureKey));
   const remaining2 = remainingTargets;
   if (remaining > 0 && remaining2.length > 0) {
-    const btns2 = remaining2.slice(0, 4).map((t) => {
+    const btns2 = remaining2.slice(0, 24).map((t) => {
       const origIdx = hs.targets.indexOf(t);
       return new ButtonBuilder().setCustomId(`havoc_shot_pick_${gameId}_${origIdx}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger);
     });

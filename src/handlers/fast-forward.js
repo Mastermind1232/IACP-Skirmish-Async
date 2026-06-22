@@ -21,6 +21,7 @@ import { requireGame } from '../utils/guards.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { openCcCounterWindow, runCcPlayTriggers } from './cc-hand.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
 /**
@@ -330,16 +331,15 @@ export async function startDefenderThreadForFastForward(game, defenderPlayerNum,
   if (defenderCards.length === 0) {
     await thread.send({ content: '🛡️ No defender CCs available in hand.' });
   } else {
-    const btns = defenderCards.slice(0, 5).map((cardName, idx) =>
+    const btns = defenderCards.slice(0, 25).map((cardName, idx) =>
       new ButtonBuilder()
         .setCustomId(`dc_cc_defender_${gameId}_${msgId}_${idx}`)
         .setLabel(`CC: ${cardName}`.slice(0, 80))
         .setStyle(ButtonStyle.Secondary)
     );
-    const row = new ActionRowBuilder().addComponents(...btns);
     // Store card list so handler can look up by index
-    game.defenderThreadData[msgId].defenderCards = defenderCards.slice(0, 5);
-    await thread.send({ content: '🛡️ Defender CCs (play while being attacked):', components: [row] });
+    game.defenderThreadData[msgId].defenderCards = defenderCards.slice(0, 25);
+    await thread.send({ content: '🛡️ Defender CCs (play while being attacked):', components: chunkButtonsToRows(btns) });
   }
 
   return { thread, msgId, displayName };

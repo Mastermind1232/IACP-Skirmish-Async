@@ -1105,7 +1105,7 @@ export async function handleDcEndActivation(interaction, ctx) {
         // space if host is small AND companion can stack — for IA the Child
         // is a companion that shares squares OK, so include host space).
         const _candidates = [String(_hostPos).toLowerCase(), ..._adj];
-        const _btns = _candidates.slice(0, 4).map((sp) =>
+        const _btns = _candidates.slice(0, 24).map((sp) =>
           new ButtonBuilder()
             .setCustomId(`clan_of_two_teleport_${gameId}_${msgId}_${sp}`)
             .setLabel(`Teleport to ${sp.toUpperCase()}`)
@@ -1115,7 +1115,7 @@ export async function handleDcEndActivation(interaction, ctx) {
           await logGameAction(game, client, `\u{1F4AB} **Clan of Two** — Teleport **The Child** to **${meta.dcName}**'s space or adjacent (Child currently at ${String(_childFk).toUpperCase()} → ${String(game.figurePositions?.[meta.playerNum]?.[_childFk] || '?').toUpperCase()}):`, {
             phase: 'ACTIVATION',
             icon: 'activate',
-            components: [new ActionRowBuilder().addComponents(_btns)],
+            components: chunkButtonsToRows(_btns),
           });
         }
       }
@@ -1196,7 +1196,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     });
     if (eligibleIds.length > 0) {
       const ownerId = getPlayerId(game, meta.playerNum);
-      const btns = eligibleIds.slice(0, 4).map((id) =>
+      const btns = eligibleIds.slice(0, 24).map((id) =>
         new ButtonBuilder()
           .setCustomId(`squad_swarm_yes_${gameId}_${msgId}_${id}`)
           .setLabel(`Activate ${ctx.dcMessageMeta?.get(id)?.displayName || meta.dcName}`.slice(0, 80))
@@ -1204,7 +1204,7 @@ export async function handleDcEndActivation(interaction, ctx) {
       );
       btns.push(new ButtonBuilder().setCustomId(`squad_swarm_no_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
       await logGameAction(game, client, `<@${ownerId}> **Squad Swarm** — activate another **${meta.dcName}** (${cumulativeCost} pts used)?`, {
-        components: [new ActionRowBuilder().addComponents(...btns)],
+        components: chunkButtonsToRows(btns),
         allowedMentions: { users: [ownerId] },
       });
     } else {
@@ -1662,11 +1662,11 @@ export async function handleActPassive(interaction, ctx) {
       const _tdFriendlies = _tdSelfPos ? Object.entries(game.figurePositions?.[meta.playerNum] || {})
         .filter(([fk2, fp]) => fp && countGameSpaces(game, _tdSelfPos, fp) <= 3) : [];
       if (_tdFriendlies.length > 0) {
-        const btns = _tdFriendlies.slice(0, 4).map(([fk2]) =>
+        const btns = _tdFriendlies.slice(0, 24).map(([fk2]) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_${fk2}`).setLabel(dcNameFromFigureKey(fk2)).setStyle(ButtonStyle.Primary)
         );
         btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_tokendist_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+        await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. Pick next figure (${pending.remaining} remaining):`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
       } else {
         await interaction.message.edit({ content: `${icon} **${abilityLabel}** — **${targetDcName}** gained **1 ${tokenType} Token**. No more eligible figures.`, components: [] }).catch(discordCatch);
         clearPendingTokenDistribution(game);
@@ -1729,13 +1729,13 @@ export async function handleActPassive(interaction, ctx) {
         const _goSelfFk = `${meta.dcName}-${_goSelfDgIdx}-0`;
         const filtered = friendlyFigs.filter(([fk]) => fk !== _goSelfFk);
         if (filtered.length > 0) {
-          const _go2Slice = filtered.slice(0, 4);
+          const _go2Slice = filtered.slice(0, 24);
           const _go2Labels = figureChoiceLabels(_go2Slice.map(([fk]) => fk));
           const btns = _go2Slice.map(([fk], i) =>
             new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_${fk}`).setLabel(_go2Labels[i]).setStyle(ButtonStyle.Primary)
           );
           btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_genorders_done`).setLabel('Done').setStyle(ButtonStyle.Secondary));
-          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+          await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. Pick figure ${2 - pending.remaining + 1} of 2:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
         } else {
           await interaction.message.edit({ content: `🎖️ **General's Orders** — **${targetDcName}** gained **2 MP**. No more eligible figures.`, components: [] }).catch(discordCatch);
           clearPendingGeneralsOrders(game);
@@ -1849,11 +1849,11 @@ export async function handleActPassive(interaction, ctx) {
             if (validPushSpaces.length > 0) {
               // Store pending push state
               setPendingWookSlamPush(game, { targetFk, targetPlayerNum, gameId, msgId });
-              const spaceBtns = validPushSpaces.slice(0, 4).map(s =>
+              const spaceBtns = validPushSpaces.slice(0, 24).map(s =>
                 new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_${String(s).toLowerCase()}`).setLabel(String(s).toUpperCase()).setStyle(ButtonStyle.Primary)
               );
               spaceBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_wookslamspace_skip`).setLabel('Skip push').setStyle(ButtonStyle.Secondary));
-              await interaction.message.edit({ content: `**Wookiee Avenger Slam** — ${resultParts.join('. ')}. Push **${targetDcName}** to which space?`, components: [new ActionRowBuilder().addComponents(spaceBtns)] }).catch(discordCatch);
+              await interaction.message.edit({ content: `**Wookiee Avenger Slam** — ${resultParts.join('. ')}. Push **${targetDcName}** to which space?`, components: chunkButtonsToRows(spaceBtns) }).catch(discordCatch);
               await logGameAction?.(game, client, `**Wookiee Avenger Slam** — Rolled ${diceResult} against ${targetDcName}. Push pending.`, { phase: 'ACTIVATION', icon: 'activate' });
               saveGames(game.gameId);
               return; // Don't save again at the end
@@ -1961,7 +1961,7 @@ export async function handleActPassive(interaction, ctx) {
                 targetDcName,
                 legalSpaces: legal,
               });
-              const btns = legal.slice(0, 5).map((sp) =>
+              const btns = legal.slice(0, 24).map((sp) =>
                 new ButtonBuilder()
                   .setCustomId(`durasteel_push_${gameId}_${sp}`)
                   .setLabel(sp.toUpperCase())
@@ -1969,7 +1969,7 @@ export async function handleActPassive(interaction, ctx) {
               );
               await interaction.followUp({
                 content: `🤜 **Durasteel Fist** — Surge rolled, push **${targetDcName}** 1 space. Pick a destination:`,
-                components: [new ActionRowBuilder().addComponents(btns)],
+                components: chunkButtonsToRows(btns),
               }).catch(discordCatch);
               resultParts.push(`Surge — push prompt sent`);
             }
@@ -2242,14 +2242,14 @@ export async function handleActPassive(interaction, ctx) {
             const _conFriendlies = Object.entries(game.figurePositions?.[meta.playerNum] || {})
               .filter(([fk2, pos2]) => fk2 !== _conFk && pos2 && _conAdj.includes(String(pos2).toLowerCase()));
             if (_conFriendlies.length > 0) {
-              const _conSlice = _conFriendlies.slice(0, 4);
+              const _conSlice = _conFriendlies.slice(0, 24);
               const _conLabels = figureChoiceLabels(_conSlice.map(([fk2]) => fk2));
               const btns = _conSlice.map(([fk2], i) =>
                 new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_${fk2}`).setLabel(_conLabels[i]).setStyle(ButtonStyle.Primary)
               );
               btns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_conspire_skip`).setLabel('Done').setStyle(ButtonStyle.Secondary));
               const thread = interaction.channel;
-              await thread.send({ content: `🗣️ **Conspire** — ${game.pendingConspire.tokensRemaining} Focus token(s) remaining. Choose a figure:`, components: [new ActionRowBuilder().addComponents(btns)] }).catch(discordCatch);
+              await thread.send({ content: `🗣️ **Conspire** — ${game.pendingConspire.tokensRemaining} Focus token(s) remaining. Choose a figure:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
               saveGames(game.gameId);
               return;
             }

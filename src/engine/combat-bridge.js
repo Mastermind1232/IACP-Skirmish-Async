@@ -2399,14 +2399,14 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
           combat,
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
         });
-        const btns = adjSpaces.slice(0, 4).map((sp) =>
+        const btns = adjSpaces.slice(0, 24).map((sp) =>
           new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger)
         );
         btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
         await thread.send(sanitizeMentions({
           content: `<@${ownerId}> **Concussive Bolt** — Push **${targetLabel}** 1 space. Choose a destination:`,
           allowedMentions: { users: [ownerId] },
-          components: [new ActionRowBuilder().addComponents(btns)],
+          components: chunkButtonsToRows(btns),
         })).catch(discordCatch);
         return true;
       }
@@ -2444,7 +2444,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
           combat,
           initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
         });
-        const btns = figuresAtSpaces.slice(0, 4).map((f) =>
+        const btns = figuresAtSpaces.slice(0, 24).map((f) =>
           new ButtonBuilder()
             .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
             .setLabel(f.label)
@@ -2454,7 +2454,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         await thread.send(sanitizeMentions({
           content: `<@${ownerId}> **Spread the Pain** — Apply **${firstCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
           allowedMentions: { users: [ownerId] },
-          components: [new ActionRowBuilder().addComponents(btns)],
+          components: chunkButtonsToRows(btns),
         })).catch(discordCatch);
         return true;
       }
@@ -2591,14 +2591,14 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         } else {
           setPendingMastery(game, { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
           const mastOwnerId = getPlayerId(game, mastPlayerNum);
-          const mastBtns = mastEligible.slice(0, 4).map((cardName, i) =>
+          const mastBtns = mastEligible.slice(0, 24).map((cardName, i) =>
             new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
           );
           mastBtns.push(new ButtonBuilder().setCustomId(`mastery_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
           await thread.send(sanitizeMentions({
             content: `<@${mastOwnerId}> **Mastery** — Choose a FORCE USER CC (cost \u2264 1) from your discard pile to return to hand:`,
             allowedMentions: { users: [mastOwnerId] },
-            components: [new ActionRowBuilder().addComponents(mastBtns)],
+            components: chunkButtonsToRows(mastBtns),
           })).catch(discordCatch);
           return true;
         }
@@ -2645,13 +2645,13 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         }
       }
       const intOwnerId = getPlayerId(game, intAttackerPlayerNum);
-      const intBtns = intOpponentHand.slice(0, 4).map((cardName, i) =>
+      const intBtns = intOpponentHand.slice(0, 24).map((cardName, i) =>
         new ButtonBuilder().setCustomId(`interrogate_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Danger)
       );
       await thread.send(sanitizeMentions({
         content: `<@${intOwnerId}> **Interrogate** — \u26A0\uFE0F *Opponent: look away!* Pick the card you want to target:`,
         allowedMentions: { users: [intOwnerId] },
-        components: [new ActionRowBuilder().addComponents(intBtns)],
+        components: chunkButtonsToRows(intBtns),
       })).catch(discordCatch);
       return true;
     }
@@ -2677,14 +2677,14 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         defenderPlayerNum,
       });
       const meOwnerId = getPlayerId(game, mePlayerNum);
-      const meBtns = meDiscard.slice(0, 4).map((cardName, i) =>
+      const meBtns = meDiscard.slice(0, 24).map((cardName, i) =>
         new ButtonBuilder().setCustomId(`me_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)
       );
       meBtns.push(new ButtonBuilder().setCustomId(`me_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
       await thread.send(sanitizeMentions({
         content: `<@${meOwnerId}> **Military Efficiency** — Choose a Command card from your discard pile to shuffle back into your deck:`,
         allowedMentions: { users: [meOwnerId] },
-        components: [new ActionRowBuilder().addComponents(meBtns)],
+        components: chunkButtonsToRows(meBtns),
       })).catch(discordCatch);
       return true;
     }
@@ -2796,14 +2796,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
     if (boltslingerTargets.length > 0) {
       setPendingBoltslinger(game, { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets });
-      const btns = boltslingerTargets.slice(0, 4).map((t, i) =>
+      const btns = boltslingerTargets.slice(0, 24).map((t, i) =>
         new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger)
       );
       btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
       await thread.send(sanitizeMentions({
         content: `<@${pcOwnerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
         allowedMentions: { users: [pcOwnerId] },
-        components: [new ActionRowBuilder().addComponents(btns)],
+        components: chunkButtonsToRows(btns),
       })).catch(discordCatch);
     }
   }
@@ -3015,7 +3015,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           combatThreadId: combat.combatThreadId,
           hostiles: _dflHostiles,
         });
-        const _dflBtns = _dflHostiles.slice(0, 4).map((t, i) =>
+        const _dflBtns = _dflHostiles.slice(0, 24).map((t, i) =>
           new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
         );
         _dflBtns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
@@ -3312,7 +3312,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
           playerNum: _blPlayerNum,
         };
         const _blOwnerId = game[`player${_blPlayerNum}Id`];
-        const _blBtns = _blEligible.slice(0, 4).map((fk) =>
+        const _blBtns = _blEligible.slice(0, 24).map((fk) =>
           new ButtonBuilder()
             .setCustomId(`bl_friendly_${game.gameId}_${fk}`)
             .setLabel(`${dcNameFromFigureKey(fk)}`.slice(0, 80))
@@ -3326,7 +3326,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         );
         await thread.send({
           content: `<@${_blOwnerId}> **Battlefield Leadership** — Choose a friendly figure within 3 of Leia. They may move up to 1 space (terrain ignored) and perform a free attack against the same target (**${dcNameFromFigureKey(combat.defenderFigureKey)}**).`,
-          components: [new ActionRowBuilder().addComponents(_blBtns)],
+          components: chunkButtonsToRows(_blBtns),
           allowedMentions: { users: [_blOwnerId] },
         }).catch(discordCatch);
       }
