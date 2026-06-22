@@ -9557,6 +9557,11 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey } = context;
     const cah = entry.chooseAdjacentHostileThen;
     const { damage = 0, selfStrain = 0, scaleStrainToRound = false } = cah;
+    // Disorient: when the chosen target has >1 BENEFICIAL condition, the player
+    // picks which one to discard (alexanbv 2026-06-22). The choice is threaded
+    // back via a "discard:<cond>:" chosenFigureKey prefix; applyToFigureKey reads
+    // this closure var to discard the chosen one (else the first present).
+    let _disorientChosenCondition = null;
     // Capture the Weary: target becomes Weakened. If already Weakened, suffers
     // strain instead. Per-target check happens in applyToFigureKey below.
     const useWeakenIfNotAlreadyWeakened = !!cah.weakenIfNotAlreadyWeakened;
@@ -9640,11 +9645,15 @@ export function resolveAbility(abilityId, context) {
         game.disarmPermanentWeakened = game.disarmPermanentWeakened || {};
         game.disarmPermanentWeakened[targetFk] = true;
       }
-      // Disorient: discard one beneficial condition from target
+      // Disorient: discard one beneficial condition from target. When the figure
+      // has more than one, the player's chosen condition (threaded via
+      // _disorientChosenCondition) is removed; otherwise the only present one.
       if (cah.discardBeneficialCondition) {
         const BENEFICIAL = ['Focus', 'Hidden'];
-        const targetConds = game.figureConditions?.[targetFk] || [];
-        const toDiscard = targetConds.find(c => BENEFICIAL.includes(c));
+        const present = (game.figureConditions?.[targetFk] || []).filter(c => BENEFICIAL.includes(c));
+        const toDiscard = (_disorientChosenCondition && present.includes(_disorientChosenCondition))
+          ? _disorientChosenCondition
+          : present[0];
         if (toDiscard) filterCondition(game, targetFk, toDiscard);
       }
       // Apply self-strain to activating figure(s)
@@ -9733,7 +9742,28 @@ export function resolveAbility(abilityId, context) {
         applyCondition(game, actualFk, 'Stun');
         return { applied: true, logMessage: `**${tName}** becomes Stunned.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: tMsgId ? [tMsgId] : [] };
       }
-      const strainKey = typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('strain:') ? chosenFigureKey.slice(7) : chosenFigureKey;
+      // Disorient: a "discard:<cond>:<fk>" re-entry carries the chosen beneficial
+      // condition; a freshly-chosen figure with >1 beneficial condition prompts
+      // for which to discard before applying (alexanbv 2026-06-22).
+      let _effChosenFk = chosenFigureKey;
+      if (typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('discard:')) {
+        const _dp = chosenFigureKey.split(':');
+        _disorientChosenCondition = _dp[1];
+        _effChosenFk = _dp.slice(2).join(':');
+      } else if (cah.discardBeneficialCondition) {
+        const _figFk = typeof chosenFigureKey === 'string' && chosenFigureKey.startsWith('strain:') ? chosenFigureKey.slice(7) : chosenFigureKey;
+        const present = (game.figureConditions?.[_figFk] || []).filter(c => ['Focus', 'Hidden'].includes(c));
+        if (present.length > 1) {
+          return {
+            applied: false,
+            requiresChoice: true,
+            choiceOptions: present.map(c => `Discard ${c}`),
+            targetFigureKeys: present.map(c => `discard:${c}:${_figFk}`),
+            choicePrompt: `**Disorient** — choose which beneficial condition to discard from **${dcNameFromFigureKey(_figFk)}**:`,
+          };
+        }
+      }
+      const strainKey = typeof _effChosenFk === 'string' && _effChosenFk.startsWith('strain:') ? _effChosenFk.slice(7) : _effChosenFk;
       const mainResult = applyToFigureKey(strainKey);
       // Splash: apply cah.splashDamage / cah.splashConditions to figures adjacent to the chosen target
       const splashDmg = cah.splashDamage ?? 0;
@@ -12941,29 +12971,42 @@ export function resolveAbility(abilityId, context) {
     // Phase 2: apply damage to chosen, grant MP/Focus to chosen.
     if (chosenFigureKey) {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
+      const oppNum = opponentPlayerNum(playerNum);
       const targetIsActivator = chosenFigureKey === 'self' || chosenFigureKey === activatorFk;
-      const damageMsgId = targetIsActivator ? msgId : findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       const damageFk = targetIsActivator ? activatorFk : chosenFigureKey;
-      const targetHs = (dcHealthState.get(damageMsgId) || []).slice();
+      // Stimulants may target a friendly OR a hostile adjacent figure (alexanbv
+      // 2026-06-22) — resolve the target's actual owner from its position.
+      const ownerPn = targetIsActivator ? playerNum : (game.figurePositions?.[playerNum]?.[damageFk] ? playerNum : oppNum);
+      const isHostileTarget = ownerPn !== playerNum;
+      const damageMsgId = targetIsActivator ? msgId : findMsgIdForFigureKey(game, ownerPn, damageFk, dcMessageMeta);
       const targetMeta = damageMsgId ? dcMessageMeta.get(damageMsgId) : null;
-      const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, playerNum, targetMeta) : [damageFk];
+      const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, ownerPn, targetMeta) : [damageFk];
       const fi = Math.max(0, targetKeys.indexOf(damageFk));
-      if (targetHs[fi] && Array.isArray(targetHs[fi])) {
-        const [cur, max] = targetHs[fi];
-        targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
-        dcHealthState.set(damageMsgId, targetHs);
-        syncHealthStateToList(game, playerNum, damageMsgId, targetHs);
-      }
-      applyCondition(game, damageFk, 'Focus');
       const targetName = targetIsActivator ? (meta.displayName || meta.dcName) : dcNameFromFigureKey(damageFk);
       const refreshIds = [msgId];
       if (damageMsgId && !refreshIds.includes(damageMsgId)) refreshIds.push(damageMsgId);
-      // MP grant: activator-self → bank (rule 3); other recipient → picker (rule 1).
+      // Apply 1 Damage (defeat-aware, so finishing a low-HP hostile removes it).
+      let wasDefeated = false;
+      if (damageMsgId) {
+        const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, damageMsgId, fi, 1, ownerPn, { sourceLabel: 'Stimulants', attackerPlayerNum: playerNum });
+        wasDefeated = !!dmgRes.wasDefeated;
+      }
+      if (wasDefeated) {
+        return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage and was **defeated**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+      }
+      // A surviving figure becomes Focused and gains 1 MP.
+      applyCondition(game, damageFk, 'Focus');
       if (targetIsActivator) {
         addMovementPoints(game, msgId, 1);
         return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };
       }
-      // Recipient ≠ activator → setupPendingMoveX on their msgId.
+      if (isHostileTarget) {
+        // A surviving HOSTILE recipient becomes Focused and gains 1 MP — but it
+        // moves on the OPPONENT's turn, so note the MP rather than auto-prompting
+        // them mid-our-activation.
+        return { applied: true, logMessage: `**Stimulants** — hostile **${targetName}** suffered 1 Damage; becomes Focused and gains 1 MP (opponent spends on their turn).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+      }
+      // Friendly recipient ≠ activator → setupPendingMoveX on their msgId.
       if (!damageMsgId) {
         return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage and gained Focus; resolve their 1 MP manually (could not locate play area).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'] };
       }
@@ -12989,47 +13032,25 @@ export function resolveAbility(abilityId, context) {
         conditionCardsToPost: ['Focus'],
       };
     }
-    // Phase 1: find adjacent friendly figures to offer as damage targets
-    const mapId = game.selectedMap?.id;
-    const adjFriendlyKeys = [];
-    if (mapId) {
-      for (const fk of activatingKeys) {
-        const adj = getFiguresAdjacentToTarget(game, fk, mapId);
-        for (const { figureKey, playerNum: p } of adj) {
-          if (p === playerNum && !activatingKeys.includes(figureKey) && !adjFriendlyKeys.includes(figureKey)) {
-            adjFriendlyKeys.push(figureKey);
-          }
-        }
+    // Phase 1: offer ANY friendly or hostile figure EXCEPT the activating figure.
+    // alexanbv 2026-06-22 errata: "Stimulants no longer costs an action; select
+    // any friendly or hostile figure except yourself." (CC play is already
+    // action-free; "yourself" = the card-playing figure, so groupmates and other
+    // figures are valid, but the activator is not.)
+    const _stimOpp = opponentPlayerNum(playerNum);
+    const opts = [];
+    const vals = [];
+    for (const pn of [playerNum, _stimOpp]) {
+      for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
+        if (!game.figurePositions[pn][fk] || fk === activatorFk) continue;
+        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+        const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
+        const fName = fMeta?.displayName || fMeta?.dcName || dcNameFromFigureKey(fk);
+        opts.push(`${pn === playerNum ? 'Friendly' : 'Hostile'}: ${fName}`);
+        vals.push(fk);
       }
     }
-    if (adjFriendlyKeys.length === 0) {
-      // No adjacent friendly — auto-apply to self (activator banks 1 MP per rule 3).
-      if (dcHealthState) {
-        const selfHs = (dcHealthState.get(msgId) || []).slice();
-        const activatorIdx = activatingKeys.indexOf(activatorFk);
-        const fi = Math.max(0, activatorIdx);
-        if (selfHs[fi] && Array.isArray(selfHs[fi])) {
-          const [cur, max] = selfHs[fi];
-          selfHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
-          dcHealthState.set(msgId, selfHs);
-          syncHealthStateToList(game, playerNum, msgId, selfHs);
-        }
-      }
-      addMovementPoints(game, msgId, 1);
-      applyCondition(game, activatorFk, 'Focus');
-      return { applied: true, logMessage: `**Stimulants** — Suffered 1 Damage (self); gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };
-    }
-    // Show choice: self or an adjacent friendly
-    const selfName = meta.displayName || meta.dcName || 'self';
-    const opts = [`Damage self (${selfName})`];
-    const vals = ['self'];
-    for (const fk of adjFriendlyKeys) {
-      const fMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
-      const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
-      const fName = fMeta?.displayName || fMeta?.dcName || dcNameFromFigureKey(fk);
-      opts.push(`Damage: ${fName}`);
-      vals.push(fk);
-    }
+    if (vals.length === 0) return { applied: false, manualMessage: '**Stimulants** — no other figure to target.' };
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 

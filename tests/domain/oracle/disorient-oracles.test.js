@@ -109,3 +109,30 @@ describe('ORACLE-DISOR-002: Resolution discards condition and applies Strain', (
     assert.ok(!conds.includes('Hidden'), 'Hidden should be discarded');
   });
 });
+
+// ── ORACLE-DISOR-003: which-beneficial picker when the figure has BOTH ────────
+describe('ORACLE-DISOR-003: player picks which beneficial condition to discard', () => {
+  it('003: figure with Focus AND Hidden → prompts for which to discard, then discards the chosen one', () => {
+    const { game, dcMessageMeta, dcHealthState } = buildDisorientGame();
+    game.figureConditions['Darth Vader-1-0'] = ['Focus', 'Hidden'];
+
+    // Picking the figure prompts for which beneficial condition to discard.
+    const p1 = resolveAbility('Disorient', {
+      game, playerNum: 1, dcMessageMeta, dcHealthState,
+      chosenFigureKey: 'Darth Vader-1-0',
+    });
+    assert.equal(p1.requiresChoice, true, 'two beneficials → must pick which to discard');
+    assert.deepStrictEqual(p1.targetFigureKeys, ['discard:Focus:Darth Vader-1-0', 'discard:Hidden:Darth Vader-1-0']);
+
+    // Choosing "Hidden" discards Hidden and KEEPS Focus.
+    const p2 = resolveAbility('Disorient', {
+      game, playerNum: 1, dcMessageMeta, dcHealthState,
+      chosenFigureKey: 'discard:Hidden:Darth Vader-1-0',
+    });
+    assert.equal(p2.applied, true);
+    const conds = game.figureConditions?.['Darth Vader-1-0'] || [];
+    assert.ok(!conds.includes('Hidden'), 'chosen Hidden discarded');
+    assert.ok(conds.includes('Focus'), 'unchosen Focus kept');
+    assert.ok(Array.isArray(p2.pendingStrain) && p2.pendingStrain[0].amount === 2, '2 Strain still queued');
+  });
+});

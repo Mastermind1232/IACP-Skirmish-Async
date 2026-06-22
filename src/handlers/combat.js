@@ -1853,10 +1853,13 @@ export const COMBAT_RESOLVERS = {
       const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
       if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
         const oldAtk = atkDice[dieIdx];
-        atkDice[dieIdx] = { ...oldAtk, dmg: 0, surge: 0, acc: 0 };
+        // alexanbv 2026-06-22: "remove all SYMBOLS on the chosen die" — Accuracy
+        // is NOT a symbol (it's a number/range), so it is KEPT. Only the card
+        // worded "results" (e.g. Lando) would also remove Accuracy.
+        atkDice[dieIdx] = { ...oldAtk, dmg: 0, surge: 0 };
         combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
         for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
-        thread?.send(`**Elusive** — nullified attack die #${dieIdx + 1} (${oldAtk.color}): -${oldAtk.dmg || 0} Hit, -${oldAtk.surge || 0} Surge, -${oldAtk.acc || 0} Acc.`).catch(discordCatch);
+        thread?.send(`**Elusive** — nullified attack die #${dieIdx + 1} (${oldAtk.color}) symbols: -${oldAtk.dmg || 0} Hit, -${oldAtk.surge || 0} Surge (Accuracy unaffected).`).catch(discordCatch);
         // If there are defense dice, the DEFENDER now picks which one to nullify.
         if (defDice && defDice.length > 0) {
           combat[`${sk}Stage`] = 'def';

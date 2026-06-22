@@ -89,13 +89,16 @@ describe('mods resolvers: defender', () => {
     // auto-nullified the worst (#1). New behavior lets the DEFENDER pick — here
     // we pick the STRONG die #0, which auto-worst would never have chosen.
     const c = {
-      attackDiceResults: [{ color: 'red', dmg: 2, surge: 1, acc: 0 }],
+      attackDiceResults: [{ color: 'blue', dmg: 2, surge: 1, acc: 3 }],
       defenseDiceResults: [{ color: 'white', block: 3, evade: 0 }, { color: 'white', block: 0, evade: 0 }],
     };
     const args = { ...baseArgs(c), id: 'elusive' };
-    // Stage 1: pick attack die #0 → nullified, then a follow-up is posted.
+    // Stage 1: pick attack die #0 → symbols nullified, then a follow-up is posted.
     const r1 = await COMBAT_RESOLVERS.elusive.apply('0', args);
     assert.equal(c.attackRoll.dmg, 0);
+    assert.equal(c.attackRoll.surge, 0);
+    // "symbols" excludes Accuracy (alexanbv 2026-06-22) — acc is preserved.
+    assert.equal(c.attackRoll.acc, 3, 'Accuracy is NOT a symbol — kept on the nullified die');
     assert.equal(r1?.followUp, true, 'stage 1 returns followUp so the gate waits for the defense-die pick');
     assert.notEqual(c.elusiveResolved, true, 'not resolved until the defense die is chosen');
     assert.equal(c._elusiveStage, 'def');

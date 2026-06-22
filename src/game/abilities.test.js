@@ -524,6 +524,42 @@ test('resolveAbility Guild Programming Focuses IG-11 and arms re-Focus for the 2
   assert.strictEqual(game.guildProgrammingRefocus?.['IG-11-1-0'], true);
 });
 
+test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile takes 1 Damage + Focus', () => {
+  const actMsg = 'msg-stim-act';
+  const tgtMsg = 'msg-stim-tgt';
+  const buildGame = () => ({
+    gameId: 'g-stim',
+    dcActionsData: { [actMsg]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Luke Skywalker-1-0': 'a1' }, 2: { 'Stormtrooper (Elite)-1-0': 'a2' } },
+    figureConditions: {},
+    p1DcList: [{ dcName: 'Luke Skywalker', healthState: [[12, 12]] }],
+    p2DcList: [{ dcName: 'Stormtrooper (Elite)', healthState: [[6, 6], [6, 6], [6, 6]] }],
+    p1DcMessageIds: [actMsg],
+    p2DcMessageIds: [tgtMsg],
+    selectedMap: { id: 'test_map' },
+  });
+  const meta = () => new Map([
+    [actMsg, { gameId: 'g-stim', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }],
+    [tgtMsg, { gameId: 'g-stim', playerNum: 2, dcName: 'Stormtrooper (Elite)', displayName: 'Stormtrooper (Elite) [Group 1]' }],
+  ]);
+  // Phase 1: picker lists hostiles but NOT the activating figure (self).
+  const g1 = buildGame();
+  const p1 = resolveAbility('Stimulants', { game: g1, playerNum: 1, dcMessageMeta: meta(), dcHealthState: new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]) });
+  assert.strictEqual(p1.requiresChoice, true);
+  assert.ok(p1.choiceValues.includes('Stormtrooper (Elite)-1-0'), 'hostile offered');
+  assert.ok(!p1.choiceValues.includes('Luke Skywalker-1-0'), 'activating figure (self) NOT offered');
+
+  // Phase 2 with the hostile chosen: 1 Damage + it becomes Focused.
+  const g2 = buildGame();
+  const hs2 = new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]);
+  const r = resolveAbility('Stimulants', { game: g2, playerNum: 1, dcMessageMeta: meta(), dcHealthState: hs2, chosenFigureKey: 'Stormtrooper (Elite)-1-0' });
+  assert.strictEqual(r.applied, true);
+  assert.deepStrictEqual(hs2.get(tgtMsg)[0], [5, 6], 'hostile took 1 Damage');
+  assert.ok((g2.figureConditions['Stormtrooper (Elite)-1-0'] || []).includes('Focus'), 'hostile becomes Focused');
+  assert.ok(/hostile/i.test(r.logMessage), 'log notes the hostile target');
+  assert.ok(!g2.pendingMoveX, 'no friendly MP picker armed for a hostile recipient');
+});
+
 test('Veteran Instincts: constrained pair — 1 attack token (Hit/Surge) + 1 defense token (Block/Evade)', () => {
   const msgId = 'msg-vi';
   const game = {
