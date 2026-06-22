@@ -252,14 +252,11 @@ export function getAttackerSurgeAbilities(combat) {
     : (combat.suAttackerCard ? `[${combat.suAttackerCard}]` : combat.attackerDcName);
   const card = getDcEffect(surgeDcName);
   let base = [...(card?.surgeAbilities || [])];
-  // An SU figure's innate condition surge spelled out in the card's `abilities`
-  // (e.g. Flame Trooper "Bleed" = Surge: Bleed) → add the Surge: <condition> key.
-  if (combat.suAttackerCard && !combat.reverseEngineerActive) {
-    for (const ab of (card?.abilities || [])) {
-      const k = String(ab).toLowerCase();
-      if (['bleed', 'stun', 'weaken', 'immobilize'].includes(k) && !base.includes(k)) base.push(k);
-    }
-  }
+  // NOTE: an SU figure's INNATE abilities (Flame Trooper "Bleed"/+2 Accuracy/
+  // Pierce 1, Z-6 "Blast 1", Mortar "+1 Accuracy") are NOT surges — they live in
+  // the SU card's `abilities` (merged into `passives` at data-load) and apply on
+  // EVERY attack via applyDcPassivesToCombat once attackerStats/attackerPassives
+  // are SU-aware. (alexanbv 2026-06-22: "innate bleed like Nexu", not Surge: Bleed.)
   // Skirmish Upgrade attachments may remove base surge keys (e.g. Focused on the Kill removes "recover 3")
   const removeKeys = combat?.removeSurgeKeys;
   if (removeKeys?.length) {

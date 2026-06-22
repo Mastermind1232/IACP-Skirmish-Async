@@ -633,15 +633,13 @@ test('innate passive +1 Hit: bonusHits added to damage', () => {
   assert.strictEqual(r.damage, 4); // 3 + 1
 });
 
-test('getAttackerSurgeAbilities: SU figure uses the SU card surges + Surge: Bleed (alexanbv 2026-06-22)', () => {
-  // Host group (Stormtrooper) attacking normally → host surges.
-  const host = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper' });
-  assert.ok(!host.includes('bleed'), 'host Stormtrooper does not get Bleed');
-  // The Flame Trooper Squad Upgrade figure → the SU card's OWN surges
-  // (damage 2 / blast 1) PLUS Surge: Bleed (listed in the card's abilities).
+test('getAttackerSurgeAbilities: SU figure uses the SU card SURGES only (innate Bleed is NOT a surge)', () => {
+  // The Flame Trooper Squad Upgrade figure → the SU card's OWN surgeAbilities
+  // (damage 2 / blast 1). Its Bleed is INNATE (applied every attack via passives),
+  // NOT a Surge: Bleed (alexanbv 2026-06-22 "innate bleed like Nexu").
   const su = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper', suAttackerCard: 'Flame Trooper' });
   assert.ok(su.includes('damage 2') && su.includes('blast 1'), "uses Flame Trooper's own surges");
-  assert.ok(su.includes('bleed'), 'Flame Trooper gets Surge: Bleed');
+  assert.ok(!su.includes('bleed'), 'Bleed is innate, not a surge ability');
   // bonusSurgeAbilities (CC-granted) still append for the SU figure.
   const suBonus = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper', suAttackerCard: 'Flame Trooper', bonusSurgeAbilities: ['recover 3'] });
   assert.ok(suBonus.includes('recover 3'));

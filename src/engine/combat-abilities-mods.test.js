@@ -256,9 +256,10 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
   });
 
   // ── IACP 2026-06-21: Guidance Systems — LIMIT once per attack; stops at Damage 0
-  it('guidance_systems: once-per-attack, gated on the [Mortar Trooper] attachment + Damage>0', () => {
+  it('guidance_systems: SU-figure-scoped, once-per-attack, gated on the [Mortar Trooper] attachment + Damage>0', () => {
     const g = game({ p1DcAttachments: { m: ['[Mortar Trooper]'] } });
-    const c = combat({ attackerMsgId: 'm', attackRoll: { dmg: 3 } });
+    // The Mortar SU FIGURE is the attacker (combat.suAttackerCard).
+    const c = combat({ attackerMsgId: 'm', suAttackerCard: 'Mortar Trooper', attackRoll: { dmg: 3 } });
     assert.equal(find(at('attacker', g, c, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
     // NOT re-offered after a prior use this attack (once per attack).
     const cUsed = { ...c, _abilityUsedThisAttack: { '[Mortar Trooper]:Guidance Systems': true } };
@@ -267,11 +268,14 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     const cOther = { ...c, _abilityUsedThisAttack: { 'whatever': true } };
     assert.equal(find(at('attacker', g, cOther, deps({ Atk: {}, Def: {} })), 'guidance_systems').kind, 'interactive');
     // Damage already 0 → -1 would underflow → not offered.
-    const c0 = combat({ attackerMsgId: 'm', attackRoll: { dmg: 0 }, bonusHits: 0 });
+    const c0 = combat({ attackerMsgId: 'm', suAttackerCard: 'Mortar Trooper', attackRoll: { dmg: 0 }, bonusHits: 0 });
     assert.equal(find(at('attacker', g, c0, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
     // No Mortar Trooper attachment → not offered.
     const noAtt = game({ p1DcAttachments: { m: [] } });
     assert.equal(find(at('attacker', noAtt, c, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
+    // A BASE group-mate (attachment present, but not the SU figure) → not offered.
+    const cBase = combat({ attackerMsgId: 'm', attackerFigureKey: 'Shoretrooper-1-0', attackRoll: { dmg: 3 } });
+    assert.equal(find(at('attacker', g, cBase, deps({ Atk: {}, Def: {} })), 'guidance_systems'), undefined);
   });
 });
 

@@ -12,6 +12,7 @@
 import { getMapData as _getMapData, getDcEffects as _getDcEffects, getFigureSize as _getFigureSize } from '../data-loader.js';
 import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
 import { hasAgileAbility } from '../game/agile-jet-trooper-helpers.js';
 import { hasSlipperyAbility } from '../game/slippery-smuggler-helpers.js';
@@ -81,6 +82,7 @@ registerCombatAbility({
     return hasSprayFireAbility(ids(eff(deps, combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey))));
   },
 });
+
 
 // Negotiate (Hondo) + Query (HK-47) MOVED to the on_declare window
 // (combat-abilities-ondeclare.js) per the two-timing model (alexanbv
@@ -223,10 +225,16 @@ registerCombatAbility({
 // shouldn't underflow). Resolver: COMBAT_RESOLVERS.guidance_systems marks usage.
 // Clobbers the timing-only catalog entry of the same id (per-id last-write).
 export function guidanceSystemsAttached(game, combat) {
+  // The group must carry the Mortar Trooper attachment AND — Guidance Systems is
+  // the MORTAR TROOPER SU FIGURE's ability — the attacker must BE that SU figure,
+  // not a base group-mate (alexanbv 2026-06-22). The SU figure is identified by
+  // combat.suAttackerCard (stamped at attack declaration) / its nickname.
   const msgId = combat.attackerMsgId;
   if (!msgId) return false;
   const atts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-  return cardNameIncludes(atts, 'Mortar Trooper');
+  if (!cardNameIncludes(atts, 'Mortar Trooper')) return false;
+  return combat.suAttackerCard === 'Mortar Trooper'
+    || squadUpgradeFigureCard(game, combat.attackerFigureKey) === 'Mortar Trooper';
 }
 /** Projected attack Damage so far (dice + bonus), used to gate the -1 underflow. */
 export function projectedAttackDamage(combat) {

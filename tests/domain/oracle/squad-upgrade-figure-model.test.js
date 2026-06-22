@@ -74,10 +74,28 @@ describe('SU figure model — own ATTACK SURGES (not the host group)', () => {
       for (const k of s.surges) assert.ok(surges.includes(k), `${suCard} surge ${k}`);
     });
   }
-  it('Flame Trooper gets Surge: Bleed (from its abilities); others do not', () => {
-    assert.ok(getAttackerSurgeAbilities({ attackerDcName: HOST, suAttackerCard: 'Flame Trooper' }).includes('bleed'));
-    assert.ok(!getAttackerSurgeAbilities({ attackerDcName: HOST, suAttackerCard: 'Z-6 Trooper' }).includes('bleed'));
-    assert.ok(!getAttackerSurgeAbilities({ attackerDcName: HOST, suAttackerCard: 'Mortar Trooper' }).includes('bleed'));
+  it('innate Bleed is NOT a surge for any SU figure (it applies every attack via passives)', () => {
+    for (const suCard of Object.keys(SU)) {
+      assert.ok(!getAttackerSurgeAbilities({ attackerDcName: HOST, suAttackerCard: suCard }).includes('bleed'),
+        `${suCard}: Bleed must not be offered as a surge`);
+    }
+  });
+});
+
+describe('SU figure model — INNATE attack modifiers apply every attack (via passives)', () => {
+  // Innate abilities are merged into the SU card's runtime `passives`;
+  // applyDcPassivesToCombat applies +Accuracy / Pierce / Blast / Bleed from there
+  // on EVERY attack once attackerPassives is SU-aware. (alexanbv 2026-06-22)
+  it('Flame Trooper innates: Bleed + +2 Accuracy + Pierce 1', () => {
+    const p = getDcEffect('[Flame Trooper]').passives.map((x) => String(x).toLowerCase());
+    assert.ok(p.includes('bleed') && p.includes('+2 accuracy') && p.includes('pierce 1'));
+  });
+  it('Z-6 Trooper innate: Blast 1', () => {
+    assert.ok(getDcEffect('[Z-6 Trooper]').passives.map((x) => String(x).toLowerCase()).includes('blast 1'));
+  });
+  it('Mortar Trooper innate: +1 Accuracy (Guidance Systems is the optional one)', () => {
+    const p = getDcEffect('[Mortar Trooper]').passives.map((x) => String(x).toLowerCase());
+    assert.ok(p.includes('+1 accuracy') && p.includes('guidance systems'));
   });
 });
 

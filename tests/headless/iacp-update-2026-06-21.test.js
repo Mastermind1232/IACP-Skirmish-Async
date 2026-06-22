@@ -43,7 +43,10 @@ describe('IACP 2026-06-21: data changes', () => {
 describe('IACP 2026-06-21: Guidance Systems once per attack', () => {
   const KEY = '[Mortar Trooper]:Guidance Systems';
   const baseGame = (extra = {}) => ({ p1DcAttachments: { m: ['[Mortar Trooper]'] }, ...extra });
-  const baseCombat = (extra = {}) => ({ attackerMsgId: 'm', attackRoll: { dmg: 3 }, ...extra });
+  // alexanbv 2026-06-22: Guidance Systems is the Mortar SU FIGURE's ability — it
+  // applies only when that figure is the attacker (combat.suAttackerCard), not a
+  // base group-mate.
+  const baseCombat = (extra = {}) => ({ attackerMsgId: 'm', suAttackerCard: 'Mortar Trooper', attackRoll: { dmg: 3 }, ...extra });
   const find = (list, id) => list.find((a) => a.id === id);
   const deps = { getDcEffects: () => dc, getMapData: () => ({}) };
 
@@ -59,5 +62,12 @@ describe('IACP 2026-06-21: Guidance Systems once per attack', () => {
     const g = baseGame();
     const cOther = baseCombat({ _abilityUsedThisAttack: { 'Something Else:Foo': true } });
     assert.ok(find(at('attacker', g, cOther, deps), 'guidance_systems'), 'still offered');
+  });
+
+  it('a base group-mate (NOT the Mortar SU figure) is NOT offered Guidance Systems', () => {
+    const g = baseGame();
+    // Same group/attachment, but the attacker is a base figure (no suAttackerCard).
+    const cBase = baseCombat({ suAttackerCard: undefined, attackerFigureKey: 'Shoretrooper-1-0' });
+    assert.equal(find(at('attacker', g, cBase, deps), 'guidance_systems'), undefined, 'only the SU figure gets it');
   });
 });
