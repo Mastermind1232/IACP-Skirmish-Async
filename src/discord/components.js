@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 import { isDcCompanion, hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
@@ -651,6 +651,24 @@ export function buildRowPickerButtons(spaces, customIdPrefix, options = {}) {
   const { style = ButtonStyle.Primary, rowDisplayOffset = 0 } = options;
   const normalized = (spaces || []).map((s) => normalizeCoord(s));
   const { sortedRows } = groupSpacesByRow(normalized);
+  // More than 20 rows cannot fit as a button grid: 5×5 = 25 max, and callers
+  // append their own action row, so >20 row-buttons would overflow / drop rows
+  // (the tallest map, devaron-garrison, has 28 rows). Use a select menu (one
+  // ActionRow, up to 25 options — alexanbv 2026-06-21 "25 is enough"); the chosen
+  // row arrives via interaction.values[0] (handleSpaceRow reads it). The select
+  // customId reuses the `space_row_<contextKey>_` prefix so it routes to the same
+  // handler; the trailing `_` (no row number) marks it as the menu form.
+  if (sortedRows.length > 20) {
+    const ctx = String(customIdPrefix).replace(/^space_row_/, '').replace(/_$/, '');
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId(`space_row_${ctx}_`)
+      .setPlaceholder('Choose a row')
+      .addOptions(sortedRows.slice(0, 25).map((rowNum) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(`Row ${rowNum + rowDisplayOffset}`)
+          .setValue(String(rowNum))));
+    return { rows: [new ActionRowBuilder().addComponents(menu)], available: normalized };
+  }
   const btns = sortedRows.map((rowNum) =>
     new ButtonBuilder()
       .setCustomId(`${customIdPrefix}${rowNum}`)

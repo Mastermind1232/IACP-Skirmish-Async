@@ -92,14 +92,23 @@ async function _renderRowCells(interaction, pending, contextKey, rowNum, page) {
  */
 export async function handleSpaceRow(interaction, ctx) {
   const { getGame } = ctx;
-  // contextKey can contain underscores; rowNum is always the last numeric segment
-  const m = interaction.customId.match(/^space_row_(.+)_(\d+)$/);
-  if (!m) {
-    await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
-    return;
+  let contextKey, rowNum;
+  if (interaction.isStringSelectMenu?.() && interaction.values?.length) {
+    // Select-menu form (maps with >20 rows): customId `space_row_<contextKey>_`
+    // (trailing `_`, no row number); the chosen row is in values[0].
+    contextKey = interaction.customId.replace(/^space_row_/, '').replace(/_$/, '');
+    rowNum = parseInt(interaction.values[0], 10);
+  } else {
+    // Button form: customId `space_row_<contextKey>_<rowNum>` (contextKey may
+    // contain underscores; rowNum is the last numeric segment).
+    const m = interaction.customId.match(/^space_row_(.+)_(\d+)$/);
+    if (!m) {
+      await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    contextKey = m[1];
+    rowNum = parseInt(m[2], 10);
   }
-  const [, contextKey, rowNumStr] = m;
-  const rowNum = parseInt(rowNumStr, 10);
   const gameId = contextKey.split('_')[0];
 
   const game = await requireGame(interaction, getGame, gameId);
