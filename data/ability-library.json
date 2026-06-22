@@ -5332,10 +5332,9 @@
     },
     "Veteran Instincts": {
       "type": "ccEffect",
-      "label": "Gain 1 Damage/Surge token + 1 Block/Evade token",
-      "powerTokenGain": 2,
+      "label": "Gain 1 Hit/Surge token, then 1 Block/Evade token (constrained pair)",
       "wiredStatus": "wired",
-      "logMessage": "Gained **2 Power Tokens** (1 Damage/Surge + 1 Block/Evade — choose types)."
+      "constrainedAttackDefenseTokenPair": true
     },
     "voracious_rancor": {
       "type": "dcSpecial",

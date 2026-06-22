@@ -57,7 +57,7 @@ const BATCH = [
   ['Trandoshan Terror',     ['attackBonusDice', 'attackBonusDiceColor']],
   ['Urgency',               ['mpBonusFromSpeed']],
   ['Vanish',                ['vanishImmunityUntilNextActivation', 'nextActivationMpBonus']],
-  ['Veteran Instincts',     ['powerTokenGain']],
+  ['Veteran Instincts',     ['constrainedAttackDefenseTokenPair']],
   ['Wild Attack',           ['attackBonusDice', 'attackBonusDiceColor', 'defenseBonusDiceFromAttacker', 'defenseBonusDiceFromAttackerColor']],
   ['Wild Fury',             ['applyFocus', 'grantActivationAssault', 'postActivationConditions']],
   ['Worth Every Credit',    ['discardUpToNHarmful', 'mpBonus', 'nextHostileDefeatVpBonus']],

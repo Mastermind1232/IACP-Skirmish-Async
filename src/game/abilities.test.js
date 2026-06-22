@@ -521,6 +521,42 @@ test('resolveAbility Guild Programming Focuses IG-11 and arms re-Focus for the 2
   assert.strictEqual(game.guildProgrammingRefocus?.['IG-11-1-0'], true);
 });
 
+test('Veteran Instincts: constrained pair — 1 attack token (Hit/Surge) + 1 defense token (Block/Evade)', () => {
+  const msgId = 'msg-vi';
+  const game = {
+    gameId: 'g-vi',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-vi', playerNum: 1, dcName: 'Rebel Trooper', displayName: 'Rebel Trooper [Group 1]' }]]);
+  // Phase 1: only the 4 valid (attack, defense) pairs are offered — never 2 of
+  // the same family (e.g. Damage+Damage or Block+Evade).
+  const p1 = resolveAbility('Veteran Instincts', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(p1.requiresChoice, true);
+  assert.deepStrictEqual(p1.choiceValues, ['Damage+Block', 'Damage+Evade', 'Surge+Block', 'Surge+Evade']);
+  // Phase 2: grant the chosen pair to the activating figure.
+  const p2 = resolveAbility('Veteran Instincts', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'Surge+Evade' });
+  assert.strictEqual(p2.applied, true);
+  assert.deepStrictEqual(game.figurePowerTokens['Rebel Trooper-1-0'], ['Surge', 'Evade']);
+});
+
+test('Price of Glory: offers all distinct token options (none / any single / any distinct pair)', () => {
+  const msgId = 'msg-pog';
+  const game = {
+    gameId: 'g-pog',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } },
+    figureConditions: { 'Boba Fett-1-0': ['Bleed'] },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-pog', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
+  const p1 = resolveAbility('Price of Glory', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(p1.requiresChoice, true);
+  // skip + 4 singles + 6 distinct pairs = 11 options (was only 3 hardcoded pairs).
+  assert.strictEqual(p1.choiceValues.length, 11);
+  assert.ok(p1.choiceValues.includes('Surge+Evade'), 'now includes the previously-missing Surge+Evade pair');
+  assert.ok(p1.choiceValues.includes('Damage'), 'now includes single-token options ("up to 2")');
+});
+
 test('Etiquette and Protocol: excludes the C-3PO source (not self) and pairs hostile×friendly', () => {
   const game = {
     gameId: 'g-eap',

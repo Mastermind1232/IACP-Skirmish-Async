@@ -4979,16 +4979,21 @@ export function resolveAbility(abilityId, context) {
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     // Price of Glory Phase 1: present token combo choice before applying any effects
     if (entry.optionalPowerTokenOnConditionDiscard && !chosenFigureKey) {
-      return {
-        requiresChoice: true,
-        choiceOptions: [
-          'Discard condition + gain MP (no tokens)',
-          'Damage self — Surge + Damage tokens',
-          'Damage self — Damage + Block tokens',
-          'Damage self — Block + Evade tokens',
-        ],
-        choiceValues: ['skip', 'Surge+Damage', 'Damage+Block', 'Block+Evade'],
-      };
+      // alexanbv 2026-06-22: "you may suffer 1 Damage to gain up to 2 DIFFERENT
+      // Power Tokens." Offer the full menu — none, any single type, or any pair
+      // of DISTINCT types (the old list hardcoded only 3 of the 6 pairs and no
+      // single-token options).
+      const TYPES = ['Damage', 'Surge', 'Block', 'Evade'];
+      const choiceOptions = ['Discard condition + gain MP (no tokens)'];
+      const choiceValues = ['skip'];
+      for (const t of TYPES) { choiceOptions.push(`Damage self — gain 1 ${t} token`); choiceValues.push(t); }
+      for (let i = 0; i < TYPES.length; i++) {
+        for (let j = i + 1; j < TYPES.length; j++) {
+          choiceOptions.push(`Damage self — gain ${TYPES[i]} + ${TYPES[j]} tokens`);
+          choiceValues.push(`${TYPES[i]}+${TYPES[j]}`);
+        }
+      }
+      return { requiresChoice: true, choiceOptions, choiceValues };
     }
     const HARMFUL = HARMFUL_CONDITIONS;
     const limit = entry.discardUpToNHarmful;
@@ -5845,6 +5850,47 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
   // Skip if a more specific handler owns the ability (lookingForAFightChoice, apexPredator, etc.)
+  // ccEffect: constrainedAttackDefenseTokenPair (Veteran Instincts) — "gain 1
+  // Hit Token OR Surge Token, then gain 1 Block Token OR Evade Token." alexanbv
+  // 2026-06-22: TWO CONSTRAINED picks — the first token must be an ATTACK token
+  // (Damage/Surge) and the second a DEFENSE token (Block/Evade) — NOT two
+  // free-choice tokens (which the old generic powerTokenGain:2 allowed). Offer
+  // the 4 valid (attack, defense) pairs; both go to the activating figure.
+  if (entry.type === 'ccEffect' && entry.constrainedAttackDefenseTokenPair) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    const meta = dcMessageMeta.get(msgId);
+    if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
+    if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
+    if (!chosenFigureKey) {
+      const ATTACK = ['Damage', 'Surge'];
+      const DEFENSE = ['Block', 'Evade'];
+      const choiceOptions = [];
+      const choiceValues = [];
+      for (const a of ATTACK) for (const d of DEFENSE) {
+        choiceOptions.push(`Gain 1 ${a === 'Damage' ? 'Hit' : a} + 1 ${d} token`);
+        choiceValues.push(`${a}+${d}`);
+      }
+      return { requiresChoice: true, choiceOptions, choiceValues };
+    }
+    // chosenFigureKey carries the chosen "Attack+Defense" pair.
+    const _viFk = figureKeyForActivation(game, msgId) || figureKeys[game.dcActionsData?.[msgId]?.selectedFigure ?? 0] || figureKeys[0];
+    const _viPair = String(chosenFigureKey).split('+');
+    game.figurePowerTokens = game.figurePowerTokens || {};
+    const granted = [];
+    for (const tok of _viPair) {
+      if ((game.figurePowerTokens[_viFk] || []).length < getMaxPowerTokens(_viFk)) {
+        grantPowerTokens(game, _viFk, tok, 1);
+        granted.push(tok === 'Damage' ? 'Hit' : tok);
+      }
+    }
+    const _viName = meta.displayName || dcNameFromFigureKey(_viFk);
+    return { applied: true, logMessage: `**Veteran Instincts** — **${_viName}** gains ${granted.length ? granted.map((t) => `1 ${t}`).join(' + ') : 'no'} token${granted.length === 1 ? '' : 's'}.`, refreshDcEmbed: true };
+  }
+
   if (entry.type === 'ccEffect' && (typeof entry.powerTokenGain === 'number' || entry.powerTokenGainIfDamagedGte)
     && !entry.lookingForAFightChoice) {
     const { game, playerNum, dcMessageMeta } = context;
