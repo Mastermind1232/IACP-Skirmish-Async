@@ -335,7 +335,12 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         for (const [fk, pos] of Object.entries(_usAllFigPos)) {
           if (!pos) continue;
           const fkDcName = dcNameFromFigureKey(fk);
-          const fkCost = _usEffMap[fkDcName]?.cost ?? 0;
+          // FIGURE cost ≥ 9 — printed per-figure cost (subCost for multi-figure
+          // groups), NOT group cost (alexanbv 2026-06-22). Without this a cheap-
+          // per-figure squad with group cost ≥9 (e.g. Alliance Ranger Elite,
+          // group 12 / figure cost 4) would wrongly qualify.
+          const _usEff = _usEffMap[fkDcName] || {};
+          const fkCost = _usEff.subCost ?? _usEff.cost ?? 0;
           if (fkCost < 9) continue;
           const conds = game.figureConditions?.[fk] || [];
           const harmful = conds.filter((c) => ['Stun', 'Bleed', 'Weaken'].includes(c) && !(c === 'Weaken' && game.disarmPermanentWeakened?.[fk]));

@@ -5237,10 +5237,13 @@ export function resolveAbility(abilityId, context) {
       if (!isSmall) {
         return { applied: true, logMessage: `${mpNote} Original target is not a Small figure — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
       }
-      // Cost check: figure cost ≤ 10
-      const origCost = origTargetStats?.cost ?? 99;
+      // Cost check: FIGURE cost ≤ 10. alexanbv 2026-06-22: figure cost is the
+      // printed per-figure cost (subCost for a multi-figure group), NOT the group
+      // cost — so a cheap-per-figure squad (e.g. group cost 12 / figure cost 4)
+      // still qualifies.
+      const origCost = origTargetStats?.subCost ?? origTargetStats?.cost ?? 99;
       if (origCost > 10) {
-        return { applied: true, logMessage: `${mpNote} Original target cost (${origCost}) exceeds 10 — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
+        return { applied: true, logMessage: `${mpNote} Original target figure cost (${origCost}) exceeds 10 — resolve manually.`, refreshMovementBank: true, activeMsgId: msgId };
       }
       // Range check: original target within 3 spaces of the card player
       if (swapperPosNorm && originalTargetCoord && countGameSpaces(game, swapperPosNorm, originalTargetCoord) > 3) {
