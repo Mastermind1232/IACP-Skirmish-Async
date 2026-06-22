@@ -737,21 +737,16 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
           await logGameAction(game, client, `<@${ownerId}> defeated **${combat.target.label}** (+2 VP)`, { allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack' });
           await checkWinConditions(game, client);
         }
-        // Per destruct 2026-05-07: NPC FIGURES (Thug, Krykna) get
-        // conditions like normal figures (CRR p.13 — only OBJECTS skip
-        // conditions). Apply both BENEFICIAL (attacker-side) and HARMFUL
-        // (target = NPC) conditions, gated on damage>0 same as normal
-        // figure path. NPC condition state lives on
-        // game.figureConditions keyed by the NPC figureKey
-        // (npc_thug_N / npc_krykna_N).
-        if (!npc.defeated) {
-          // Conditions (thug/krykna are FIGURES — CRR p.13) now route through the
-          // unified after-attack window via _step8Conditions, NOT inline, so they
-          // resolve in-sequence with the same harmful→target / beneficial→attacker
-          // routing fireCondition applies (alexanbv 2026-06-15 "nothing out of sequence").
-          _npcStep8Conditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])]
-            .map((_nc) => ({ condition: _nc, recipient: HARMFUL_CONDITIONS.includes(_nc) ? 'target' : 'attacker' }));
-        }
+      }
+      // NPC FIGURES (Thug, Krykna) get conditions like normal figures (CRR p.13 —
+      // only OBJECTS skip conditions). "-ed"-form surge/bonus conditions resolve
+      // on a HIT (not-miss) regardless of damage (alexanbv 2026-06-22), so this is
+      // gated on `hit`, NOT on damage>0 (the damage application above stays
+      // damage-gated). Routed through _step8Conditions so they fire in-sequence
+      // with harmful→target / beneficial→attacker routing.
+      if (hit && !npc.defeated) {
+        _npcStep8Conditions = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])]
+          .map((_nc) => ({ condition: _nc, recipient: HARMFUL_CONDITIONS.includes(_nc) ? 'target' : 'attacker' }));
       }
     }
     // Unified after-attack pipeline (alexanbv 2026-06-15 "exactly one pipeline
