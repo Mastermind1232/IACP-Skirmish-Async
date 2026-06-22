@@ -15,7 +15,7 @@ import { getHandChannelId, getPlayerId as _getPlayerIdHelper, getDcList, getDcMe
 import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js';
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
-import { getDcEffect } from '../game/dc-helpers.js';
+import { getDcEffect, effectiveDcNameForFigure } from '../game/dc-helpers.js';
 import { isDcUnique } from '../data-loader.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
@@ -238,7 +238,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   const _saTargetIsSmall = (() => {
     const _tFk = combat.target?.figureKey;
     if (!_tFk) return false;
-    const _tKws = (getDcEffect(dcNameFromFigureKey(_tFk))?.keywords || []).map(k => String(k).toUpperCase());
+    const _tKws = (getDcEffect(effectiveDcNameForFigure(game, _tFk))?.keywords || []).map(k => String(k).toUpperCase());
     return !(_tKws.includes('LARGE') || _tKws.includes('MASSIVE'));
   })();
   // On the Hunt (CSV row 396): +1 Damage only when targeting a unique hostile

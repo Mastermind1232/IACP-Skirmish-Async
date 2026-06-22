@@ -5719,7 +5719,7 @@ export function resolveAbility(abilityId, context) {
           if (!pos || fk === _rfActFk) continue;
           const d = countGameSpaces(game, _rfActPos, pos);
           if (d !== 1) continue; // adjacent only
-          const kws = (getDcEffect(dcNameFromFigureKey(fk))?.keywords || []).map((k) => String(k).toUpperCase());
+          const kws = (getDcEffect(effectiveDcNameForFigure(game, fk))?.keywords || []).map((k) => String(k).toUpperCase());
           if (!kws.includes('TROOPER')) continue;
           const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
           if (!figMsgId) continue;
@@ -6030,7 +6030,7 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, refreshBoard: true, logMessage: `**Prepared for Battle** — you gained 1 Hit + 1 Block Token; **${dcNameFromFigureKey(chosenFigureKey)}** gained 1 Hit + 1 Block Token (LEADER).` };
     }
     // Phase 1. Is the activating figure a LEADER?
-    const _pfbEff = getDcEffect(dcNameFromFigureKey(_pfbSelf));
+    const _pfbEff = getDcEffect(effectiveDcNameForFigure(game, _pfbSelf));
     const _pfbIsLeader = (_pfbEff?.keywords || []).map(k => String(k).toUpperCase()).includes('LEADER');
     if (!_pfbIsLeader) {
       _pfbGrant(_pfbSelf);
@@ -6217,7 +6217,7 @@ export function resolveAbility(abilityId, context) {
       for (const { figureKey, playerNum: p } of adj) {
         if (p !== playerNum || activatingKeys.includes(figureKey)) continue;
         if (_recoverTraits) {
-          const fkKw = (getDcEffect(dcNameFromFigureKey(figureKey))?.keywords || []).map((k) => String(k).toUpperCase());
+          const fkKw = (getDcEffect(effectiveDcNameForFigure(game, figureKey))?.keywords || []).map((k) => String(k).toUpperCase());
           if (!_recoverTraits.some((t) => fkKw.includes(t))) continue;
         }
         adjacentSet.add(figureKey);
@@ -9694,7 +9694,7 @@ export function resolveAbility(abilityId, context) {
       let selfHealMsg = '';
       const healSIT = cah.healSelfIfTrait;
       const targetHasHealTrait = healSIT?.trait
-        ? (getStatsForDc(dcNameFromFigureKey(targetFk))?.keywords || []).includes(healSIT.trait)
+        ? (getStatsForDc(effectiveDcNameForFigure(game, targetFk))?.keywords || []).includes(healSIT.trait)
         : false;
       if (healSIT?.trait && typeof healSIT.amount === 'number' && healSIT.amount > 0 && dcHealthState && targetHasHealTrait) {
         const healSelfMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -9933,7 +9933,7 @@ export function resolveAbility(abilityId, context) {
     if (cah.requiresSmall) {
       hostiles = hostiles.filter(fk => {
         if (typeof fk === 'string' && /^npc_(?:thug|krykna)_\d+$/.test(fk)) return true;
-        const kwds = (getStatsForDc(dcNameFromFigureKey(fk))?.keywords || []).map(k => String(k).toUpperCase());
+        const kwds = (getStatsForDc(effectiveDcNameForFigure(game, fk))?.keywords || []).map(k => String(k).toUpperCase());
         return !(kwds.includes('LARGE') || kwds.includes('MASSIVE'));
       });
     }
@@ -11182,7 +11182,7 @@ export function resolveAbility(abilityId, context) {
     // CSV row 783 / cc-effects condition: "If you have the MELEE attack type,
     // perform 2 attacks." A RANGED figure gets no attacks — gate the grant on
     // the activating figure's attack type (dcEffects.attack.type === 'melee').
-    const _pummelStats = getStatsForDc(dcNameFromFigureKey(_pummelFk));
+    const _pummelStats = getStatsForDc(effectiveDcNameForFigure(game, _pummelFk));
     if (_pummelStats?.attack?.type !== 'melee') {
       return { applied: false, manualMessage: 'Pummel: you do not have the MELEE attack type — no attacks granted.' };
     }
@@ -12942,7 +12942,7 @@ export function resolveAbility(abilityId, context) {
       // AND no farther than the target's Speed from its current space (push
       // distance limit). Without this cap, a target could be teleported to any
       // adjacent-to-activator space regardless of its speed.
-      const _fmTargetSpeed = getStatsForDc(dcNameFromFigureKey(chosenFigureKey))?.speed ?? 4;
+      const _fmTargetSpeed = getStatsForDc(effectiveDcNameForFigure(game, chosenFigureKey))?.speed ?? 4;
       const validSpaces = adjacentSpaces.filter((s) => {
         if (occupiedSet.has(s) && s !== targetCurrentPos) return false;
         if (targetCurrentPos && countGameSpaces(game, targetCurrentPos, s) > _fmTargetSpeed) return false;
@@ -13288,7 +13288,7 @@ export function resolveAbility(abilityId, context) {
         const adj = getFiguresAdjacentToTarget(game, fk, mapId);
         for (const { figureKey, playerNum: p } of adj) {
           if (p !== oppNum || adjSmallHostileFks.includes(figureKey)) continue;
-          const hStats = getStatsForDc(dcNameFromFigureKey(figureKey));
+          const hStats = getStatsForDc(effectiveDcNameForFigure(game, figureKey));
           const hIsSmall = !(hStats?.keywords || []).some(k => /large|massive/i.test(k));
           if (hIsSmall) adjSmallHostileFks.push(figureKey);
         }
