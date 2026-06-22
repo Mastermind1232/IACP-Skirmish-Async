@@ -13,7 +13,61 @@
  */
 
 import { ButtonBuilder, ButtonStyle, ActionRowBuilder } from 'discord.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { discordCatch } from '../error-handling.js';
+
+/**
+ * Token-type options for a figure×token SoA sub-prompt (alexanbv 2026-06-21).
+ * Returns [{ key, label, style }]. LLP excludes already-distributed types.
+ */
+function _soaTokenTypes(desc) {
+  const D = ButtonStyle.Danger, P = ButtonStyle.Primary;
+  if (desc.subPromptKey === 'long_laid_plans') {
+    const used = desc.extras?.usedTypes || [];
+    return ['damage', 'block', 'surge', 'evade']
+      .filter((t) => !used.includes(t))
+      .map((t) => ({ key: t, label: t.charAt(0).toUpperCase() + t.slice(1), style: t === 'damage' ? D : P }));
+  }
+  if (desc.subPromptKey === 'arms_distribution') return [{ key: 'damage', label: 'Damage', style: D }, { key: 'block', label: 'Block', style: P }];
+  if (desc.subPromptKey === 'awr') return [{ key: 'damage', label: 'Damage', style: D }, { key: 'surge', label: 'Surge', style: P }];
+  return [];
+}
+
+/**
+ * Build overflow-safe components for a figure×token SoA sub-prompt. When the
+ * flat (figure × type) grid plus Skip would exceed Discord's 25-button limit,
+ * fall back to TWO-STAGE: stage 1 picks the figure (figpick|<fk> keys), stage 2
+ * (pickedFk set) picks the token type for that figure (alexanbv 2026-06-21 —
+ * "good idea to do 2 stage for picking figure and token"). All paths are chunked
+ * to multiple rows so nothing is dropped.
+ */
+function _soaFigTokenComponents(gameId, descId, candidates, types, skipLabel, pickedFk = null) {
+  const btns = [];
+  const fire = (fk, t) => new ButtonBuilder()
+    .setCustomId(`soa_fire_${gameId}_${descId}_${fk}|${t.key}`)
+    .setLabel(`${dcNameFromFigureKey(fk)}: ${t.label}`.slice(0, 80))
+    .setStyle(t.style);
+  const skip = () => new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${descId}_skip`).setLabel(skipLabel).setStyle(ButtonStyle.Secondary);
+  if (pickedFk) {
+    for (const t of types) btns.push(fire(pickedFk, t));
+    btns.push(skip());
+    return chunkButtonsToRows(btns);
+  }
+  if (candidates.length * types.length + 1 <= 25) {
+    for (const fk of candidates) for (const t of types) btns.push(fire(fk, t));
+    btns.push(skip());
+    return chunkButtonsToRows(btns);
+  }
+  // Two-stage: figure picker first (cap 24 so Skip always fits).
+  for (const fk of candidates.slice(0, 24)) {
+    btns.push(new ButtonBuilder()
+      .setCustomId(`soa_fire_${gameId}_${descId}_figpick|${fk}`)
+      .setLabel(dcNameFromFigureKey(fk).slice(0, 80))
+      .setStyle(ButtonStyle.Primary));
+  }
+  btns.push(skip());
+  return chunkButtonsToRows(btns);
+}
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
@@ -257,20 +311,9 @@ export async function handleSoaPick(interaction, ctx) {
       await interaction.followUp({ content: 'No eligible friendlies in range.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const buttons = [];
-    for (const fk of targets) {
-      const name = dcNameFromFigureKey(fk);
-      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|damage`).setLabel(`${name}: Damage`).setStyle(ButtonStyle.Danger));
-      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|surge`).setLabel(`${name}: Surge`).setStyle(ButtonStyle.Primary));
-    }
-    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const rows = [];
-    for (let i = 0; i < buttons.length; i += 5) {
-      rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-    }
     await interaction.message.channel.send({
       content: `\u{1F52C} **Advanced Weapons Research** — Pick a friendly within ${range} spaces and a token type:`,
-      components: rows,
+      components: _soaFigTokenComponents(gameId, desc.id, targets, _soaTokenTypes(desc), 'Skip'),
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'unshakable') {
     // Sub-prompt: one button per (figure × HARMFUL condition) pair so
@@ -436,30 +479,14 @@ export async function handleSoaPick(interaction, ctx) {
     // handleSoaFire grants 1 token and re-prompts with reduced types
     // until remainingCount === 0 or no types left.
     const candidates = desc.extras?.candidates || [];
-    const used = desc.extras?.usedTypes || [];
-    const remainingTypes = ['damage', 'block', 'surge', 'evade'].filter((t) => !used.includes(t));
-    if (candidates.length === 0 || remainingTypes.length === 0) {
+    const types = _soaTokenTypes(desc);
+    if (candidates.length === 0 || types.length === 0) {
       await interaction.followUp({ content: 'No eligible friendlies or token types remaining.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const buttons = [];
-    for (const fk of candidates) {
-      const name = dcNameFromFigureKey(fk);
-      for (const t of remainingTypes) {
-        buttons.push(new ButtonBuilder()
-          .setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${t}`)
-          .setLabel(`${name}: ${t.charAt(0).toUpperCase() + t.slice(1)}`)
-          .setStyle(t === 'damage' ? ButtonStyle.Danger : ButtonStyle.Primary));
-      }
-    }
-    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip remaining').setStyle(ButtonStyle.Secondary));
-    const llpRows = [];
-    for (let i = 0; i < buttons.length; i += 5) {
-      llpRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-    }
     await interaction.message.channel.send({
       content: `\u{1F9E0} **Long-Laid Plans** — **${displayName}** distributes **${desc.extras?.remainingCount ?? 1}** Power Tokens (each a different type) among friendlies within 3:`,
-      components: llpRows.slice(0, 5),
+      components: _soaFigTokenComponents(gameId, desc.id, candidates, types, 'Skip remaining'),
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'arms_distribution') {
     // Flat (figure × type) sub-prompt. choiceKey: `${figureKey}|damage`
@@ -469,20 +496,9 @@ export async function handleSoaPick(interaction, ctx) {
       await interaction.followUp({ content: 'No eligible friendlies within 3 spaces.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const buttons = [];
-    for (const fk of candidates) {
-      const name = dcNameFromFigureKey(fk);
-      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|damage`).setLabel(`${name}: Damage`).setStyle(ButtonStyle.Danger));
-      buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|block`).setLabel(`${name}: Block`).setStyle(ButtonStyle.Primary));
-    }
-    buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const adRows = [];
-    for (let i = 0; i < buttons.length; i += 5) {
-      adRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-    }
     await interaction.message.channel.send({
       content: `\u{1F3AF} **Arms Distribution** — **${displayName}** picks a friendly figure within 3 to gain **1 Power Token** (Damage or Block):`,
-      components: adRows.slice(0, 5),
+      components: _soaFigTokenComponents(gameId, desc.id, candidates, _soaTokenTypes(desc), 'Skip'),
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'force_vision') {
     // Owner is the opponent (Kanan's enemy). List the opponent's
@@ -723,6 +739,22 @@ export async function handleSoaFire(interaction, ctx) {
   const ownerPlayerNum = bucket.ownerPlayerNum;
   const dgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const selfFigKey = `${desc.extras?.dcName || meta?.dcName || ''}-${dgIdx}-0`;
+
+  // --- Two-stage figure×token: stage 1 (figure) → stage 2 (token type) ---
+  // When the flat grid overflowed 25 buttons, _soaFigTokenComponents posted a
+  // figure picker with `figpick|<fk>` keys. Intercept that here and re-post the
+  // token-type buttons for the chosen figure; the existing `<fk>|<type>` fire
+  // path below resolves it (alexanbv 2026-06-21).
+  if (choiceKey.startsWith('figpick|') && ['long_laid_plans', 'arms_distribution', 'awr'].includes(desc.subPromptKey)) {
+    const pickedFk = choiceKey.slice('figpick|'.length);
+    const skipLabel = desc.subPromptKey === 'long_laid_plans' ? 'Skip remaining' : 'Skip';
+    await interaction.message.channel.send({
+      content: `Choose a token type for **${dcNameFromFigureKey(pickedFk)}**:`,
+      components: _soaFigTokenComponents(gameId, descId, [], _soaTokenTypes(desc), skipLabel, pickedFk),
+    }).catch(discordCatch);
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
 
   // --- Vigor ---
   if (desc.subPromptKey === 'vigor') {
@@ -1360,26 +1392,12 @@ export async function handleSoaFire(interaction, ctx) {
       const remainingTypes = ['damage', 'block', 'surge', 'evade'].filter((t) => !desc.extras.usedTypes.includes(t));
       if (logGameAction) await logGameAction(game, client, `\u{1F9E0} **Long-Laid Plans** — ${targetDcName} +1 ${tokenType} Token (${desc.extras.remainingCount} left).`, { phase: 'ROUND', icon: 'card' });
       if (desc.extras.remainingCount > 0 && remainingTypes.length > 0) {
-        // Re-prompt with reduced types; do NOT consume.
+        // Re-prompt with reduced types; do NOT consume. Overflow-safe + two-stage
+        // when figures×types exceeds 25 (alexanbv 2026-06-21).
         const candidates = desc.extras.candidates || [];
-        const buttons = [];
-        for (const fk of candidates) {
-          const name = dcNameFromFigureKey(fk);
-          for (const t of remainingTypes) {
-            buttons.push(new ButtonBuilder()
-              .setCustomId(`soa_fire_${gameId}_${desc.id}_${fk}|${t}`)
-              .setLabel(`${name}: ${t.charAt(0).toUpperCase() + t.slice(1)}`)
-              .setStyle(t === 'damage' ? ButtonStyle.Danger : ButtonStyle.Primary));
-          }
-        }
-        buttons.push(new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip remaining').setStyle(ButtonStyle.Secondary));
-        const llpRows = [];
-        for (let i = 0; i < buttons.length; i += 5) {
-          llpRows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
-        }
         await interaction.message.edit({
           content: `\u{1F9E0} **Long-Laid Plans** — **${targetDcName}** gained **1 ${tokenType} Token**. Distribute **${desc.extras.remainingCount}** more (different type):`,
-          components: llpRows.slice(0, 5),
+          components: _soaFigTokenComponents(gameId, desc.id, candidates, _soaTokenTypes(desc), 'Skip remaining'),
         }).catch(discordCatch);
         saveGames(game.gameId);
         return;

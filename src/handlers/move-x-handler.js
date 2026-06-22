@@ -487,7 +487,10 @@ async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
     choiceOptions: [...labels, `Done (0 chosen)`],
     choiceValues: [...candidates, 'whistling_birds_done'],
   };
-  const btns = labels.map((label) => new ButtonBuilder()
+  // Cap candidate buttons at 24 so the Done button always fits within Discord's
+  // 25-button (5-row) max and is never dropped (alexanbv 2026-06-21: 25 is
+  // enough; board density keeps figures-within-2 well under this in practice).
+  const btns = labels.slice(0, 24).map((label) => new ButtonBuilder()
     .setCustomId(`cc_choice_${game.gameId}_${label}`)
     .setLabel(label.length > 80 ? label.slice(0, 77) + '…' : label)
     .setStyle(ButtonStyle.Danger));
@@ -495,7 +498,7 @@ async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
     .setCustomId(`cc_choice_${game.gameId}_whistling_birds_done`)
     .setLabel('Done')
     .setStyle(ButtonStyle.Secondary));
-  const rows = chunkButtonsToRows(btns).slice(0, 5);
+  const rows = chunkButtonsToRows(btns);
   const content = `<@${ownerId}> **Whistling Birds** — Rolled 1 red die: **${hits} Hit${hits !== 1 ? 's' : ''}**. Choose up to 3 figures within 2 spaces (each suffers ${hits} Damage):`;
   if (pending.threadId) {
     const thread = await fetchCombatThread(client, pending.threadId);
