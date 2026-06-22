@@ -9980,6 +9980,10 @@ export async function handleCombatSurge(interaction, ctx) {
       combat.surgePierce = (combat.surgePierce || 0) + (mod.pierce ?? 0);
       combat.surgeAccuracy = (combat.surgeAccuracy || 0) + (mod.accuracy ?? 0);
       if (mod.conditions?.length) combat.surgeConditions = (combat.surgeConditions || []).concat(mod.conditions);
+      // "-ed" surge conditions (e.g. Zuckuss Stun Net) — resolve on a NOT-MISS
+      // even at 0 damage, so they go to a separate not-miss bucket rather than the
+      // damage-gated surgeConditions (alexanbv 2026-06-22).
+      if (mod.noMissConditions?.length) combat.surgeNoMissConditions = (combat.surgeNoMissConditions || []).concat(mod.noMissConditions);
       combat.surgeBlast = (combat.surgeBlast || 0) + (mod.blast ?? 0);
       combat.surgeRecover = (combat.surgeRecover || 0) + (mod.recover ?? 0);
       if (mod.cleave) {

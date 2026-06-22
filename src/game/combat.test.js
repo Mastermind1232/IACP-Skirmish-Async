@@ -545,7 +545,10 @@ test('Shocking Palm: MISS + Stun queued even when fully blocked (0 damage anyway
 // --- parseSurgeEffect extended ---
 
 test('parseSurgeEffect special keys: stun_net, focus, hide', () => {
-  assert.deepStrictEqual(parseSurgeEffect('stun_net').conditions, ['Stun']);
+  // Zuckuss Stun Net is an "-ed"/not-miss surge — routed to noMissConditions (it
+  // resolves on a hit even at 0 damage), NOT the damage-gated conditions list.
+  assert.deepStrictEqual(parseSurgeEffect('stun_net').noMissConditions, ['Stun']);
+  assert.strictEqual(parseSurgeEffect('stun_net').conditions.length, 0);
   assert.strictEqual(parseSurgeEffect('focus').surgeSelfFocus, true);
   assert.strictEqual(parseSurgeEffect('hide').surgeSelfHide, true);
 });

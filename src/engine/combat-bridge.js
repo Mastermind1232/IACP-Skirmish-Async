@@ -2180,6 +2180,23 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // sees combat._afterResolveArgs and advances to the after_resolve gate, which
   // calls the bound runAfterResolveWindow. Legacy path (_seqActive unset) is
   // byte-for-byte unchanged.
+  // "-ed"-form NOT-MISS surge conditions (e.g. Zuckuss Stun Net: "after this
+  // attack resolves, if it did not miss, the target becomes Stunned"). These
+  // resolve on ANY hit (not-miss), even at 0 damage — unlike the inline
+  // "Surge: Stun/Weaken" keywords, which require damage. Append them to
+  // _step8Conditions here (after the damage-gated assembly, so this augments it
+  // and also covers the hit-but-0-damage case). Objects never receive conditions.
+  // (alexanbv 2026-06-22)
+  if (hit && targetMsgId && (combat.surgeNoMissConditions || []).length
+    && !(combat.target?.isCrate || combat.target?.npcType === 'crate')) {
+    combat._step8Conditions = Array.isArray(combat._step8Conditions) ? combat._step8Conditions : [];
+    for (const _nc of combat.surgeNoMissConditions) {
+      if (!combat._step8Conditions.some((e) => e?.condition === _nc)) {
+        combat._step8Conditions.push({ condition: _nc, recipient: HARMFUL_CONDITIONS.includes(_nc) ? 'target' : 'attacker' });
+      }
+    }
+  }
+
   await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps);
 }
 

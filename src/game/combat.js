@@ -263,7 +263,12 @@ export function parseSurgeEffect(key) {
   // Strip double-surge prefix and parenthetical annotations (e.g. "blast 3 (2 surges)" → "blast 3")
   const k = String(key || '').replace(/^double:/, '').replace(/\s*\([^)]*\)/g, '').toLowerCase().trim();
   // Named surge key shortcuts (cannot be parsed as generic patterns)
-  if (k === 'stun_net') { out.conditions.push('Stun'); return out; }
+  // Zuckuss Stun Net is an "-ed" surge — "after this attack resolves, if it did
+  // not miss, the target becomes Stunned" — so it resolves on a NOT-MISS even at
+  // 0 damage, unlike the inline "Surge: Stun" keyword (which requires damage).
+  // Routed to the not-miss bucket, not the damage-gated conditions list (alexanbv
+  // 2026-06-22).
+  if (k === 'stun_net') { (out.noMissConditions = out.noMissConditions || []).push('Stun'); return out; }
   if (k === 'harass') { out.surgeHarass = 1; return out; }
   // Shocking Palm (0-0-0): "The attack misses and the defender becomes
   // Stunned." Distinct from "Set for Stun" (CC) which is a HIT that floors
