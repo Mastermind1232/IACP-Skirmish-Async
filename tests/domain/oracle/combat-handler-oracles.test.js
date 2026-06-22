@@ -107,17 +107,16 @@ function buildCombat(game, dcMessageMeta, opts) {
 
 // ── ORACLE-HANDLER-001: G22 Condition Gating — Negative Path ───────────────
 //
-// Rule (revised alexanbv 2026-06-22): "-ed"-form SURGE conditions (a surge that
-// NAMES the condition — the target becomes Stunned/Bleeding/Weakened) resolve on
-// a HIT (not-miss) even when final damage is 0 (hit-but-fully-blocked) — they do
-// NOT require the target to suffer damage. Only the KEYWORD form (the Bleed /
-// Weaken keyword on the attack, from attacker passives) requires a damaging hit.
-// Implementation: src/engine/combat-bridge.js — the hit-but-0-damage "-ed"
-// condition block before `if (damage > 0 && targetMsgId)`, plus the damage>0
-// path (which adds keyword passives).
+// Rule: Surge conditions (Stun, Bleed, Weaken) apply ONLY when final damage > 0.
+//       When damage = 0, conditions must NOT be applied to the defender.
+// Implementation: src/engine/combat-bridge.js:402-405
+//   The outer `if (damage > 0 && targetMsgId)` block at line 390 +
+//   defense-in-depth inner `if (damage > 0)` at line 405.
+// Why handler-level: computeCombatResult always includes conditions in resultText.
+//   The G22 gate lives in applyDamageAndFinishCombat, outside the pure function.
 
-describe('ORACLE-HANDLER-001: "-ed" surge conditions apply on a hit even at 0 damage', () => {
-  it('001a: hit-but-0-damage still applies surge Stun ("-ed" form)', async () => {
+describe('ORACLE-HANDLER-001: G22 Condition Gating — Negative Path', () => {
+  it('001a: zero damage blocks Stun application', async () => {
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'Rebel Saboteur (Elite)' }])
@@ -136,15 +135,15 @@ describe('ORACLE-HANDLER-001: "-ed" surge conditions apply on a hit even at 0 da
 
     await deps.resolveCombatAfterRolls(game, combat, deps.client);
 
-    // "-ed" surge Stun resolves on a hit even at 0 damage (not-miss).
+    // G22: damage was 0, so Stun must NOT be applied
     const conditions = game.figureConditions?.[defenderFigKey] || [];
     assert.ok(
-      conditions.includes('Stun'),
-      `"-ed" surge Stun should apply on a hit-but-0-damage attack. Conditions: [${conditions}]`
+      !conditions.includes('Stun'),
+      `G22 violation: Stun was applied despite 0 damage. Conditions: [${conditions}]`
     );
   });
 
-  it('001b: hit-but-0-damage still applies surge Bleed ("-ed" form)', async () => {
+  it('001b: zero damage blocks Bleed application', async () => {
     const { game, deps, dcMessageMeta } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'Rebel Saboteur (Elite)' }])
@@ -165,12 +164,12 @@ describe('ORACLE-HANDLER-001: "-ed" surge conditions apply on a hit even at 0 da
 
     const conditions = game.figureConditions?.[defenderFigKey] || [];
     assert.ok(
-      conditions.includes('Bleed'),
-      `"-ed" surge Bleed should apply on a hit-but-0-damage attack. Conditions: [${conditions}]`
+      !conditions.includes('Bleed'),
+      `G22 violation: Bleed was applied despite 0 damage. Conditions: [${conditions}]`
     );
   });
 
-  it('001c: hit-but-0-damage applies multiple surge conditions ("-ed" form)', async () => {
+  it('001c: zero damage blocks multiple conditions simultaneously', async () => {
     const { game, deps, dcMessageMeta } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'Rebel Saboteur (Elite)' }])
@@ -190,8 +189,8 @@ describe('ORACLE-HANDLER-001: "-ed" surge conditions apply on a hit even at 0 da
 
     const conditions = game.figureConditions?.[defenderFigKey] || [];
     assert.ok(
-      conditions.includes('Stun') && conditions.includes('Bleed'),
-      `"-ed" surge conditions should apply on a hit-but-0-damage attack. Conditions: [${conditions}]`
+      !conditions.includes('Stun') && !conditions.includes('Bleed'),
+      `G22 violation: Conditions applied despite 0 damage. Conditions: [${conditions}]`
     );
   });
 });

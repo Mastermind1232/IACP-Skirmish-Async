@@ -804,24 +804,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     ? (game.figureOrientations?.[combat.target.figureKey] || (_targetDcName ? getFigureSize(_targetDcName) : null))
     : null;
 
-  // "-ed"-FORM surge conditions resolve on a HIT (not-miss) even when the attack
-  // deals 0 damage (hit-but-fully-blocked) — they do NOT require the target to
-  // suffer damage; only KEYWORD-form conditions (the Bleed/Weaken keyword, added
-  // from attacker passives) do (alexanbv 2026-06-22). The `damage > 0` path below
-  // builds _step8Conditions for damaging hits (incl. those keyword passives);
-  // this block covers the hit-but-0-damage case so the named "-ed" surge/bonus
-  // conditions still land.
-  if (hit && damage === 0 && targetMsgId && !Array.isArray(combat._step8Conditions)) {
-    const _z0Conds = [...(combat.surgeConditions || []), ...(combat.bonusConditions || [])];
-    const _z0IsObject = combat.target?.isCrate || combat.target?.npcType === 'crate';
-    if (_z0Conds.length && !_z0IsObject) {
-      combat._step8Conditions = _z0Conds.map((c) => ({
-        condition: c,
-        recipient: HARMFUL_CONDITIONS.includes(c) ? 'target' : 'attacker',
-      }));
-    }
-  }
-
   let _fdNeedsEmbedRefresh = false;
   if (damage > 0 && targetMsgId) {
     // Extra Protection re-entry guard (alexanbv 2026-05-09): damage was
