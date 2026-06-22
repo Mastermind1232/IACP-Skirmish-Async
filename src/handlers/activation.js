@@ -2382,6 +2382,62 @@ export async function handleForceVisionPick(interaction, ctx) {
 /**
  * Heroic Effort: player picks a CC from hand to place on bottom of deck.
  */
+/**
+ * Heroic Effort — the OPTIONAL draw decision (alexanbv 2026-06-22). On "Draw 1"
+ * the player draws a Command card and is then prompted to bury 1 from hand; on
+ * "Decline" nothing happens. customId: heroic_effort_draw_<gameId>_<pn>_<yes|no>.
+ */
+export async function handleHeroicEffortDraw(interaction, ctx) {
+  await interaction.deferUpdate().catch(discordCatch);
+  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
+  const parts = splitCustomId(interaction.customId, 'heroic_effort_draw_');
+  const gameId = parts[0];
+  const playerNum = parseInt(parts[1], 10);
+  const decision = parts[2]; // 'yes' | 'no'
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (!game.pendingHeroicEffortDraw?.[playerNum]) {
+    await interaction.followUp({ content: 'No Heroic Effort draw pending.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  delete game.pendingHeroicEffortDraw[playerNum];
+  if (Object.keys(game.pendingHeroicEffortDraw).length === 0) delete game.pendingHeroicEffortDraw;
+  if (decision !== 'yes') {
+    await interaction.message.edit({ content: '**Heroic Effort** — Declined (no card drawn).', components: [] }).catch(discordCatch);
+    await logGameAction(game, client, `**Heroic Effort** — P${playerNum} declined the draw.`, { phase: 'ROUND', icon: 'card' });
+    saveGames(game.gameId);
+    return;
+  }
+  const hKey = ccHandKey(playerNum);
+  const dKey = ccDeckKey(playerNum);
+  const deck = game[dKey] || [];
+  if (deck.length === 0) {
+    await interaction.message.edit({ content: '**Heroic Effort** — Deck is empty; no card drawn.', components: [] }).catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  const drawn = deck.shift();
+  game[hKey] = [...(game[hKey] || []), drawn];
+  game[dKey] = deck;
+  if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client);
+  await logGameAction(game, client, `**Heroic Effort** — P${playerNum} drew 1 Command card; must return 1 to deck bottom.`, { phase: 'ROUND', icon: 'card' });
+  // The draw was taken → the bury-1 is now mandatory. Post the return picker.
+  game.pendingHeroicEffortReturn = game.pendingHeroicEffortReturn || {};
+  game.pendingHeroicEffortReturn[playerNum] = true;
+  const hand = game[hKey] || [];
+  const btns = hand.slice(0, 25).map((card, idx) =>
+    new ButtonBuilder()
+      .setCustomId(`heroic_effort_return_${game.gameId}_${playerNum}_${idx}`)
+      .setLabel(truncateLabel(card))
+      .setStyle(ButtonStyle.Primary)
+  );
+  await interaction.message.edit({
+    content: '**Heroic Effort** — Drew 1 card. Choose 1 Command card from your hand to place on the bottom of your deck:',
+    components: chunkButtonsToRows(btns).slice(0, 5),
+  }).catch(discordCatch);
+  saveGames(game.gameId);
+}
+
 export async function handleHeroicEffortReturn(interaction, ctx) {
   const { getGame, saveGames, updateHandVisualMessage, logGameAction, client } = ctx;
   const parts = splitCustomId(interaction.customId, 'heroic_effort_return_');

@@ -305,48 +305,39 @@ export async function processFigureDefeat(game, opts, deps) {
     await checkThisIsTheWay(game, attackerPlayerNum, attackerFigureKey, client);
   }
 
-  // 8b. Heroic Effort: when unique figure defeated, owner draws 1 CC + must return 1 to deck bottom
+  // 8b. Heroic Effort: "When one of your unique figures is defeated, you MAY draw
+  // 1 Command card, then place 1 Command card from your hand on the bottom of your
+  // deck." alexanbv 2026-06-22: the draw is OPTIONAL — offer Draw/Decline first;
+  // the bury-1 happens ONLY if a card is actually drawn (handleHeroicEffortDraw).
   {
     const dcList = getDcList(game, defeatedPlayerNum) || [];
     const hasHeroicEffort = dcList.some(dc => (dc.dcName || dc) === '[Heroic Effort]');
     if (hasHeroicEffort) {
       const dcEff = getDcEffects();
       const effEntry = dcEff?.[dcName] || dcEff?.[dcName?.replace(/\s*\[.*\]\s*$/, '')];
-      if (effEntry?.unique) {
-        const hKey = ccHandKey(defeatedPlayerNum);
-        const dKey = ccDeckKey(defeatedPlayerNum);
-        const deck = game[dKey] || [];
-        if (deck.length > 0) {
-          const drawn = deck.shift();
-          game[hKey] = [...(game[hKey] || []), drawn];
-          game[dKey] = deck;
-          await logGameAction(game, client,
-            `**Heroic Effort** — Drew 1 Command card (unique **${dcName}** defeated). Must return 1 card to deck bottom.`,
-            { phase: 'ROUND', icon: 'card' });
-          // Set pending state for the return-card-to-deck-bottom interaction
-          game.pendingHeroicEffortReturn = game.pendingHeroicEffortReturn || {};
-          game.pendingHeroicEffortReturn[defeatedPlayerNum] = true;
-          // Send pick buttons to hand channel
-          const handChId = getHandChannelId(game, defeatedPlayerNum);
-          if (handChId && client) {
-            try {
-              const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
-              const hand = game[hKey] || [];
-              const btns = hand.slice(0, 25).map((card, idx) =>
-                new ButtonBuilder()
-                  .setCustomId(`heroic_effort_return_${game.gameId}_${defeatedPlayerNum}_${idx}`)
-                  .setLabel(truncateLabel(card))
-                  .setStyle(ButtonStyle.Primary)
-              );
-              const rows = chunkButtonsToRows(btns);
-              const handCh = await fetchGameChannel(client, handChId);
-              await handCh.send({
-                content: '**Heroic Effort** — Choose 1 Command card from your hand to place on the bottom of your deck:',
-                components: rows.slice(0, 5),
-              });
-            } catch (err) {
-              console.error('Heroic Effort return buttons error:', err);
-            }
+      const deck = game[ccDeckKey(defeatedPlayerNum)] || [];
+      if (effEntry?.unique && deck.length > 0) {
+        // Offer the OPTIONAL draw; resolution (draw + bury, or nothing) happens
+        // in handleHeroicEffortDraw.
+        game.pendingHeroicEffortDraw = game.pendingHeroicEffortDraw || {};
+        game.pendingHeroicEffortDraw[defeatedPlayerNum] = { dcName };
+        await logGameAction(game, client,
+          `**Heroic Effort** — unique **${dcName}** defeated: owner may draw 1 Command card.`,
+          { phase: 'ROUND', icon: 'card' });
+        const handChId = getHandChannelId(game, defeatedPlayerNum);
+        if (handChId && client) {
+          try {
+            const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = await import('discord.js');
+            const handCh = await fetchGameChannel(client, handChId);
+            await handCh.send({
+              content: `**Heroic Effort** — **${dcName}** (unique) was defeated. Draw 1 Command card? (If you draw, you then place 1 card from your hand on the bottom of your deck.)`,
+              components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`heroic_effort_draw_${game.gameId}_${defeatedPlayerNum}_yes`).setLabel('Draw 1').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`heroic_effort_draw_${game.gameId}_${defeatedPlayerNum}_no`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
+              )],
+            });
+          } catch (err) {
+            console.error('Heroic Effort draw prompt error:', err);
           }
         }
       }

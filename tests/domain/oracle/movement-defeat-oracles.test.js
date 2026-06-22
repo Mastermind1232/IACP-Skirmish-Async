@@ -238,7 +238,7 @@ describe('B-MVDEFEAT-004: Non-lethal movement damage preserves figure on board',
 
 // ── B-MVDEFEAT-005: Movement defeat fires Heroic Effort ─────────────────────
 describe('B-MVDEFEAT-005: Movement-triggered defeat fires Heroic Effort', () => {
-  it('unique figure killed by movement damage → CC drawn + pending return', async () => {
+  it('unique figure killed by movement damage → offers the optional Heroic Effort draw', async () => {
     const { game, deps, dcMessageMeta, dcHealthState } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
       .withPlayer2Army([{ dcName: 'IG-88' }])
@@ -272,9 +272,11 @@ describe('B-MVDEFEAT-005: Movement-triggered defeat fires Heroic Effort', () => 
     // Position removed
     assert.equal(game.figurePositions[2][ig88FigKey], undefined, 'IG-88 removed from board');
 
-    // Heroic Effort: draw 1 CC from deck
-    assert.equal(game.player2CcDeck.length, deckBefore - 1, 'one card drawn from deck');
-    assert.equal(game.player2CcHand.length, handBefore + 1, 'one card added to hand');
-    assert.ok(game.pendingHeroicEffortReturn?.[2], 'pendingHeroicEffortReturn set for P2');
+    // Heroic Effort (alexanbv 2026-06-22): the draw is OPTIONAL — offer the
+    // may-draw decision; do not auto-draw.
+    assert.ok(game.pendingHeroicEffortDraw?.[2], 'pendingHeroicEffortDraw offered for P2');
+    assert.equal(game.player2CcDeck.length, deckBefore, 'no card auto-drawn from deck');
+    assert.equal(game.player2CcHand.length, handBefore, 'no card auto-added to hand');
+    assert.ok(!game.pendingHeroicEffortReturn?.[2], 'return not armed until a draw is taken');
   });
 });

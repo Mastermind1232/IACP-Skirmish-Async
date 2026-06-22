@@ -1027,6 +1027,7 @@ const ROUND_NULL_FLAGS = [
   'pendingBattlefieldLeadership',
   'pendingScavengedWeaponryTransfer',
   'pendingHeroicEffortReturn',
+  'pendingHeroicEffortDraw',
 ];
 
 const ROUND_ARRAY_FLAGS = [

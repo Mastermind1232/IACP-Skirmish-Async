@@ -292,8 +292,8 @@ describe('B-DEFEAT-007: Nefarious Gains fires as a WHEN_DEFEATED hook', () => {
 
 // ── B-DEFEAT-008: Heroic Effort pending state ───────────────────────────────
 
-describe('B-DEFEAT-008: processFigureDefeat sets Heroic Effort pending state', () => {
-  it('draws CC and sets pendingHeroicEffortReturn when unique figure defeated', async () => {
+describe('B-DEFEAT-008: processFigureDefeat offers the OPTIONAL Heroic Effort draw', () => {
+  it('offers the may-draw decision (no auto-draw) when a unique figure is defeated', async () => {
     // IG-88 is unique. P2 needs [Heroic Effort] in dcList + cards in deck.
     const { game, deps, dcMessageMeta } = createTestGame()
       .withPlayer1Army([{ dcName: 'Stormtrooper (Elite)' }])
@@ -323,19 +323,13 @@ describe('B-DEFEAT-008: processFigureDefeat sets Heroic Effort pending state', (
       source: 'Test',
     });
 
-    // Heroic Effort: draw 1 CC from deck, set pending return state
-    assert.equal(
-      game.player2CcDeck.length, deckBefore - 1,
-      'one card drawn from deck'
-    );
-    assert.equal(
-      game.player2CcHand.length, handBefore + 1,
-      'one card added to hand'
-    );
-    assert.ok(
-      game.pendingHeroicEffortReturn?.[2],
-      'pendingHeroicEffortReturn set for P2'
-    );
+    // alexanbv 2026-06-22: the draw is OPTIONAL — the defeat offers a Draw/Decline
+    // decision (pendingHeroicEffortDraw) and does NOT auto-draw. The actual draw +
+    // bury happen only if the player chooses "Draw 1" (handleHeroicEffortDraw).
+    assert.ok(game.pendingHeroicEffortDraw?.[2], 'pendingHeroicEffortDraw offered for P2');
+    assert.equal(game.player2CcDeck.length, deckBefore, 'no card auto-drawn from deck');
+    assert.equal(game.player2CcHand.length, handBefore, 'no card auto-added to hand');
+    assert.ok(!game.pendingHeroicEffortReturn?.[2], 'return is NOT armed until a draw is taken');
   });
 });
 
@@ -585,21 +579,12 @@ describe('B-DEFEAT-E2E-COMBAT-002: Combat kill triggers Heroic Effort (previousl
     // Position removed
     assert.equal(game.figurePositions[2][ig88FigKey], undefined, 'COMBAT-E2E: IG-88 position removed');
 
-    // Heroic Effort: CC drawn from deck
-    assert.equal(
-      game.player2CcDeck.length, deckBefore - 1,
-      'COMBAT-E2E: Heroic Effort drew 1 card from deck'
-    );
-    assert.equal(
-      game.player2CcHand.length, handBefore + 1,
-      'COMBAT-E2E: Heroic Effort added 1 card to hand'
-    );
-
-    // Heroic Effort: pending return state set
-    assert.ok(
-      game.pendingHeroicEffortReturn?.[2],
-      'COMBAT-E2E: pendingHeroicEffortReturn set for P2'
-    );
+    // Heroic Effort (alexanbv 2026-06-22): the draw is OPTIONAL — a combat kill
+    // of a unique figure OFFERS the may-draw decision; it does not auto-draw.
+    assert.ok(game.pendingHeroicEffortDraw?.[2], 'COMBAT-E2E: Heroic Effort draw offered for P2');
+    assert.equal(game.player2CcDeck.length, deckBefore, 'COMBAT-E2E: no card auto-drawn');
+    assert.equal(game.player2CcHand.length, handBefore, 'COMBAT-E2E: no card auto-added to hand');
+    assert.ok(!game.pendingHeroicEffortReturn?.[2], 'COMBAT-E2E: return not armed until a draw is taken');
   });
 });
 
