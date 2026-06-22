@@ -1341,7 +1341,7 @@
       ]
     },
     "Bodhi Rook": {
-      "abilityText": "Smooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a Power Token while attacking, apply +2 Accuracy to the attack results.",
+      "abilityText": "Smooth Landing: After Deployment, you and each adjacent friendly figure gains 1 movement point.\n\nAir Support: When a friendly figure spends a Power Token while attacking and is not Focused, apply +2 Accuracy to the attack results.",
       "keywords": [
         "TECHNICIAN"
       ],

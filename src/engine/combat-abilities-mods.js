@@ -732,8 +732,10 @@ registerCombatAbility({
 
 // Air Support (Bodhi Rook) [attacker] — +2 Accuracy when a friendly figure
 // spends a Power Token while attacking and the attacker is NOT Focused. Owner
-// (Bodhi) need only be in play (board-wide). alexanbv 2026-05-13: the unfocused
-// gate is the canonical card text.
+// (Bodhi) need only be in play (board-wide). NOTE: the current Air Support card
+// EXPLICITLY says "...and is not Focused" — the unfocused gate below is canonical
+// and correct (alexanbv 2026-05-13, reconfirmed 2026-06-22). An older printing
+// dropped that clause, which is why some text sources lack it; KEEP the gate.
 registerCombatAbility({
   id: 'air_support', name: 'Air Support', windows: ['mods'], side: 'attacker', kind: 'passive',
   applies: (game, combat, side, deps) => {

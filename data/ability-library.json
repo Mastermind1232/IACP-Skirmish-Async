@@ -3840,6 +3840,7 @@
     "Reactive Loyalties": {
       "type": "ccEffect",
       "label": "After attack targeting you resolves: IMPERIAL — attacker suffers 3 Damage; SCUM — gain 3 VPs; REBEL — recover 3 Damage",
+      "affiliationDetermined": true,
       "chooseOne": [
         {
           "label": "IMPERIAL: Attacker suffers 3 Damage",

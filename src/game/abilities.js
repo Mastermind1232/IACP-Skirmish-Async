@@ -107,7 +107,7 @@ import { getFigureSize } from '../data-loader.js';
 import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
-import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID, firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
 
 /**
  * Resolve the figureKey of the specific figure that "plays" a unique-figure
@@ -474,7 +474,16 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: chooseOne — player must pick one option; when choiceIndex is provided, resolve that option
   if (entry.type === 'ccEffect' && Array.isArray(entry.chooseOne) && entry.chooseOne.length > 0) {
-    const choiceIndex = context.choiceIndex;
+    let choiceIndex = context.choiceIndex;
+    // affiliationDetermined (Reactive Loyalties): the option is NOT a player
+    // choice — it's fixed by the playing army's affiliation (alexanbv audit
+    // 2026-06-22: IMPERIAL/SCUM/REBEL). Auto-select the matching option by its
+    // label prefix instead of prompting.
+    if (entry.affiliationDetermined && choiceIndex == null && context.game && context.playerNum) {
+      const _aff = (firstSeenArmyAffiliation(getDcList(context.game, context.playerNum) || [], getDcEffects()) || '').toUpperCase();
+      const _matchIdx = entry.chooseOne.findIndex((o) => String(o.label || '').toUpperCase().startsWith(_aff));
+      if (_aff && _matchIdx >= 0) choiceIndex = _matchIdx;
+    }
     if (choiceIndex == null || choiceIndex < 0 || choiceIndex >= entry.chooseOne.length) {
       const choiceOptions = entry.chooseOne.map((o, i) => o.label || `Option ${i + 1}`);
       return {
