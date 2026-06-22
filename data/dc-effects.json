@@ -1485,7 +1485,8 @@
     "C1-10P \"Chopper\"": {
       "abilityText": "Special Action (Ram): Move up to 2 spaces, then choose an adjacent figure. If that figure is hostile, roll 1 green die. It suffers Damage equal to the Damage results. Then, if that figure is SMALL, push it up to 1 space.\n\nSpecial Action (System Shock): Use while on or adjacent to a terminal. Choose a figure on or adjacent to any terminal. That figure suffers 2 Damage and 1 Strain.",
       "keywords": [
-        "DROID"
+        "DROID",
+        "TECHNICIAN"
       ],
       "subname": "CHOPPER",
       "cost": 3,
@@ -2335,7 +2336,8 @@
     "Doctor Aphra": {
       "abilityText": "Dubious Counterparts: If your army's affiliation is Scum, you may include \"0-0-0\" and \"BT-1\" in your army together. After a friendly DROID resolves \"Invasive Procedure\" or \"Missile Salvo\", that figure may perform 1 additional action.\n\nExcavation: At the start of each round, you may choose 1 Command card in any discard pile that costs 1 or less, except \"Take Initiative\". Once during this round, your player may play that card from the discard pile and then return it to the game box.",
       "keywords": [
-        "SMUGGLER"
+        "SMUGGLER",
+        "TECHNICIAN"
       ],
       "subname": "ROGUE ARCHAEOLOGIST",
       "cost": 4,
@@ -2444,7 +2446,8 @@
       "abilityText": "Forward Emplacement: After deployment, you gain movement points equal to your speed.\n\nTripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks during your activation.",
       "keywords": [
         "TROOPER",
-        "HEAVY WEAPON"
+        "HEAVY WEAPON",
+        "TECHNICIAN"
       ],
       "cost": 5,
       "health": 8,
@@ -2481,7 +2484,8 @@
       "abilityText": "Tripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks each activation.",
       "keywords": [
         "TROOPER",
-        "HEAVY WEAPON"
+        "HEAVY WEAPON",
+        "TECHNICIAN"
       ],
       "cost": 6,
       "health": 5,
@@ -2944,7 +2948,8 @@
     "General Sorin": {
       "abilityText": "Special Action (Bombardment): Choose an adjacent friendly figure. That figure may interrupt to perform an attack. The attack gains Blast 1.\n\nAdvanced Firepower: Adjacent friendly DROIDS and VEHICLES can use your surge abilities.",
       "keywords": [
-        "LEADER"
+        "LEADER",
+        "TECHNICIAN"
       ],
       "subname": "VICIOUS TACTICIAN",
       "cost": 5,
@@ -3755,7 +3760,8 @@
       "keywords": [
         "BRAWLER",
         "LEADER",
-        "SPY"
+        "SPY",
+        "TECHNICIAN"
       ],
       "cost": 5,
       "health": 7,
@@ -3795,7 +3801,8 @@
       "abilityText": "Surge (Bargain): Spend 1 VP to roll 1 green die. For each Damage result, gain 1 VP.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.\n\nScavenged Stock: If your army's affiliation is Scum, you may include up to 3 DROID groups from any other affiliations in your army.",
       "keywords": [
         "SMUGGLER",
-        "LEADER"
+        "LEADER",
+        "TECHNICIAN"
       ],
       "cost": 3,
       "health": 5,
@@ -3831,7 +3838,8 @@
     "Jawa Scavenger (Regular)": {
       "abilityText": "Surge (Harass): After the attack resolves, if it did not miss, the defender suffers 1 Strain.\n\nTake Cover: While defending, you may apply +1 Block and -1 Evade to the defense results.",
       "keywords": [
-        "SMUGGLER"
+        "SMUGGLER",
+        "TECHNICIAN"
       ],
       "cost": 2,
       "health": 3,
@@ -5174,7 +5182,8 @@
     "R2-D2": {
       "abilityText": "Special Action (Scomp Link): If you are adjacent to a terminal, your player draws 1 Command card.\n\nSpecial Action (Service): You or an adjacent friendly DROID or VEHICLE recovers 1 Damage.\n\nLucky: While defending, if you roll a blank result, add +1 Dodge to the defense results.",
       "keywords": [
-        "DROID"
+        "DROID",
+        "TECHNICIAN"
       ],
       "subname": "LOYAL ASTROMECH",
       "cost": 3,
@@ -6675,7 +6684,8 @@
     "Ugnaught Tinkerer (Elite)": {
       "abilityText": "Special Action (Spot Weld): Place the Junk Droid companion in an adjacent space.\n\nSpecial Action (Overclock): The Junk Droid may interrupt to perform a move or attack.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
       "keywords": [
-        "SMUGGLER"
+        "SMUGGLER",
+        "TECHNICIAN"
       ],
       "cost": 5,
       "health": 7,
@@ -6711,7 +6721,8 @@
     "Ugnaught Tinkerer (Regular)": {
       "abilityText": "Special Action (Spot Weld): Place the Junk Droid companion in an adjacent space.\n\nScrap Battalion: The Junk Droid readies at the start of your activation. It activates as though it was part of your group and may use your surge abilities.",
       "keywords": [
-        "SMUGGLER"
+        "SMUGGLER",
+        "TECHNICIAN"
       ],
       "cost": 3,
       "health": 4,
@@ -7162,7 +7173,8 @@
     "Zuckuss": {
       "abilityText": "Mystic Hunter: When you declare an attack, you become Focused.\n\nSurge (Stun Net): After this attack resolves, if it did not miss, the target becomes Stunned.\n\nShared Calculations: While attacking, if a friendly DROID within 3 spaces has line of sight to the target space, you may force the defender to reroll 1 defense die.",
       "keywords": [
-        "HUNTER"
+        "HUNTER",
+        "TECHNICIAN"
       ],
       "subname": "GAND FINDSMAN",
       "cost": 6,
