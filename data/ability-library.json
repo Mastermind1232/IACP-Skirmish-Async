@@ -1761,8 +1761,7 @@
     },
     "Fatal Deception": {
       "type": "ccEffect",
-      "label": "Become Focused; this round False Orders may target figure cost 5 or less within 5 spaces",
-      "applyFocus": true,
+      "label": "This round, False Orders may target a figure cost 5 or less within 5 spaces",
       "falseOrdersUpgrade": {
         "maxCost": 5,
         "maxRange": 5
@@ -1869,11 +1868,10 @@
       "powerTokenGain": 1,
       "isMoveX": true,
       "wiredStatus": "wired",
-      "logMessage": "Gained **1 Power Token**. May move up to 2 spaces, then perform a Melee attack without spending an action; this figure is defeated after the attack resolves.",
+      "logMessage": "Gained **1 Power Token**. May move up to 2 spaces, then perform an attack without spending an action; this figure is defeated after the attack resolves.",
       "freeAttackBonus": true,
       "selfDefeatsAfterAttack": true,
-      "mpBonus": 2,
-      "overrideAttackType": "Melee"
+      "mpBonus": 2
     },
     "find_weakness": {
       "type": "dcSpecial",
@@ -2547,7 +2545,6 @@
     "Hunter Protocol": {
       "type": "ccEffect",
       "label": "Trigger same Surge up to twice (auto-prompted after first surge use)",
-      "attackSurgeBonus": 1,
       "wiredStatus": "wired",
       "surgeDoublingActive": true,
       "logMessage": "During this attack, you may trigger the same surge ability up to twice. You will be prompted after the first surge use."
@@ -2567,10 +2564,6 @@
         {
           "label": "Gain 1 VP",
           "vpGain": 1
-        },
-        {
-          "label": "Become Focused",
-          "applyFocus": true
         }
       ],
       "wiredStatus": "wired"

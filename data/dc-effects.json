@@ -2318,8 +2318,7 @@
       ],
       "surgeAbilities": [
         "damage 2, accuracy 1",
-        "pierce 1",
-        "damage 2, accuracy 1"
+        "pierce 1"
       ],
       "attachment": false,
       "elite": true,
