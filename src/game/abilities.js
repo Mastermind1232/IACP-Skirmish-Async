@@ -8817,21 +8817,36 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: Blood Feud — place on hostile DC; persistent +1 Hit when attacking that group
+  // ccEffect: Blood Feud — Special Action: PLACE this card on a hostile
+  // Deployment card the PLAYER chooses (no current attack / defender — alexanbv
+  // 2026-06-22). When an attack later targets a figure in that group, +1 Hit is
+  // applied (consumed in combat-bridge.js / combat.js via game.bloodFeudTargets).
   if (entry.type === 'ccEffect' && entry.bloodFeudEffect) {
-    const { game, playerNum, combat, dcMessageMeta } = context;
-    const cbt = combat || game?.pendingCombat || game?.combat;
-    if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
-      return { applied: false, manualMessage: 'Resolve manually: play when declaring an attack.' };
-    }
-    // Apply +1 Hit to current attack AND mark the hostile DC for persistent bonus
-    cbt.bonusHits = (cbt.bonusHits || 0) + 1;
-    const defMsgId = cbt.defenderMsgId;
-    if (defMsgId) {
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
+    if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually.' };
+    const oppNum = opponentPlayerNum(playerNum);
+    // Phase 2: a hostile Deployment card was chosen (choiceValue = its msgId).
+    if (chosenFigureKey) {
       game.bloodFeudTargets = game.bloodFeudTargets || {};
-      game.bloodFeudTargets[defMsgId] = playerNum;
+      game.bloodFeudTargets[chosenFigureKey] = playerNum;
+      const _bfMeta = dcMessageMeta?.get?.(chosenFigureKey);
+      const _bfName = _bfMeta?.displayName || _bfMeta?.dcName || 'the chosen group';
+      return { applied: true, logMessage: `**Blood Feud** — placed on **${_bfName}**. Attacks targeting that group gain +1 Damage.`, refreshBoard: true };
     }
-    return { applied: true, logMessage: `**Blood Feud** — +1 Damage this attack. Future attacks on this group also gain +1 Damage.` };
+    // Phase 1: present a picker of hostile Deployment cards with live figures.
+    const _bfOpts = [], _bfVals = [];
+    if (dcMessageMeta) {
+      for (const [mid, meta] of dcMessageMeta) {
+        if (meta.gameId !== game.gameId || meta.playerNum !== oppNum) continue;
+        const liveFks = getFigureKeysForDcMsg(game, oppNum, meta) || [];
+        if (liveFks.length === 0) continue;
+        if (game.bloodFeudTargets?.[mid] === playerNum) continue; // already marked
+        _bfOpts.push(meta.displayName || meta.dcName);
+        _bfVals.push(mid);
+      }
+    }
+    if (_bfOpts.length === 0) return { applied: false, manualMessage: '**Blood Feud** — no hostile Deployment card to place on.' };
+    return { applied: false, requiresChoice: true, choiceOptions: _bfOpts, choiceValues: _bfVals };
   }
 
   // ccEffect: Telekinetic Throw — choose hostile within 3 with LOS, roll 2 blue dice, deal Hits as Damage

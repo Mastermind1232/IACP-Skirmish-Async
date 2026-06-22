@@ -353,11 +353,11 @@ describe('B-STARTACT-009: Hunger Regular is enumerated (not auto-fired)', () => 
   it('enumerateActivatorSoaDescriptors returns hunger_regular when no hostile within 3', async () => {
     const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      figurePositions: { 1: { 'Wampa-1-0': 'a1' }, 2: { 'Rebel-1-0': 'z9' } },
+      figurePositions: { 1: { 'Wampa (Regular)-1-0': 'a1' }, 2: { 'Rebel-1-0': 'z9' } },
       selectedMap: { id: 'test-map' },
     };
     const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Wampa', playerNum: 1, msgId: 'wampa-msg-1',
+      dcName: 'Wampa (Regular)', playerNum: 1, msgId: 'wampa-msg-1',
     });
     assert.ok(descriptors.some(d => d.subPromptKey === 'hunger_regular'));
   });
@@ -388,12 +388,12 @@ describe('B-STARTACT-010: Slice-3 migration — Hunger Regular + FotK both as de
   it('both descriptors enumerated for Wampa with FotK attachment', async () => {
     const { enumerateActivatorSoaDescriptors } = await import('../../../src/game/soa-orchestrator.js');
     const game = {
-      figurePositions: { 1: { 'Wampa-1-0': 'a1' }, 2: {} },
+      figurePositions: { 1: { 'Wampa (Regular)-1-0': 'a1' }, 2: {} },
       p1DcAttachments: { 'wampa-msg-1': ['Focused on the Kill'] },
       selectedMap: { id: 'test-map' },
     };
     const descriptors = enumerateActivatorSoaDescriptors(game, {
-      dcName: 'Wampa', playerNum: 1, msgId: 'wampa-msg-1',
+      dcName: 'Wampa (Regular)', playerNum: 1, msgId: 'wampa-msg-1',
     });
     const ids = descriptors.map(d => d.subPromptKey);
     assert.ok(ids.includes('hunger_regular'), 'hunger_regular enumerated');

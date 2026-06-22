@@ -178,9 +178,9 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
 
   // Hunger Regular (Wampa): if no hostile within 3 spaces, gain 2 MP.
   // Trigger only enumerates when the precondition is met.
-  if (dcName === 'Wampa' && game) {
+  if (dcName === 'Wampa (Regular)' && game) {
     const _hrDgIdx = (game.dcMessageMeta?.get?.(msgId)?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const _hrFk = `Wampa-${_hrDgIdx}-0`;
+    const _hrFk = `Wampa (Regular)-${_hrDgIdx}-0`;
     const _hrPos = game.figurePositions?.[playerNum]?.[_hrFk];
     if (_hrPos) {
       const _hrEnemyNum = opponentPlayerNum(playerNum);
