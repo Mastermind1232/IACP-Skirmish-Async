@@ -1954,19 +1954,30 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // squad_command_focus_* button row; click handler applies Focus). When
   // exactly 1 is eligible, auto-Focus (no meaningful choice). alexanbv
   // 2026-06-21.
-  if (hit && combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
+  // Squad Command (Kayn Somos surge): a SPECIAL surge that resolves even on a
+  // MISS — surges are spent before the miss/accuracy/dodge check, and special
+  // surges (Leia, Kayn, gain-token, recover) still go through on a miss
+  // (alexanbv 2026-06-22). So NO `hit` gate. Range = adjacent (1), extended to
+  // within 3 when Advanced Com Systems is attached to Kayn.
+  if (combat.surgeSquadCommand && game.selectedMap?.id && combat.attackerFigureKey) {
     // ACS check on Kayn's DC msgId.
     const _sqAtkMsgId = combat.attackerMsgId;
     const _sqAtts = (game.p1DcAttachments?.[_sqAtkMsgId] || game.p2DcAttachments?.[_sqAtkMsgId] || []);
     const _sqHasACS = _sqAtts.some((a) => /Advanced Com Systems/i.test(String(a)));
     const _sqRange = _sqHasACS ? 3 : 1;
     const _sqAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
+    // within-N check: isWithinN/getMapData are NOT module-scoped here — take them
+    // from deps (the same source computeCleaveEligibleTargets uses). Without
+    // these the range filter was silently skipped, so Squad Command Focused ANY
+    // friendly TROOPER on the board regardless of distance (alexanbv 2026-06-22).
+    const _sqWithinN = deps?.isWithinN, _sqGetMap = deps?.getMapData;
     if (_sqAtkPos) {
       // Collect ALL eligible adjacent/within-3 friendly TROOPERs.
       const _sqEligible = [];
       for (const [sqFk, sqPos] of Object.entries(game.figurePositions?.[attackerPlayerNum] || {})) {
         if (sqFk === combat.attackerFigureKey || !sqPos) continue;
-        if (typeof isWithinN === 'function' && !isWithinN(sqPos, _sqAtkPos, _sqRange, game.selectedMap.id)) continue;
+        if (typeof _sqWithinN === 'function' && typeof _sqGetMap === 'function'
+          && !_sqWithinN(sqPos, _sqAtkPos, _sqRange, game.selectedMap.id, _sqGetMap)) continue;
         const sqDcName = dcNameFromFigureKey(sqFk);
         const sqEff = getDcEffect(sqDcName);
         const sqKws = (sqEff?.keywords || []).map((k) => String(k).toUpperCase());
