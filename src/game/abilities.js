@@ -7100,9 +7100,10 @@ export function resolveAbility(abilityId, context) {
       const fp = parseCoord(figPos);
       for (const t of terminals) {
         const tp = parseCoord(String(t).toLowerCase());
-        // Adjacent = orthogonal OR diagonal (8-directional / Chebyshev 1),
-        // per alexanbv 2026-06-22.
-        if (Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) === 1) { adjacentTerminal = t; break; }
+        // "On or adjacent" = same space OR orthogonal OR diagonal (Chebyshev
+        // <= 1), per alexanbv 2026-06-22 (companion-adjacency: things in a
+        // companion's own space count as adjacent).
+        if (Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) <= 1) { adjacentTerminal = t; break; }
       }
     }
     if (!adjacentTerminal) {
@@ -7151,12 +7152,14 @@ export function resolveAbility(abilityId, context) {
     const fp = parseCoord(figPos);
     const adjacentTerminals = terminals.filter((t) => {
       const tp = parseCoord(String(t).toLowerCase());
-      // Adjacent = orthogonal OR diagonal (8-directional / Chebyshev 1), per
-      // alexanbv 2026-06-22 — a diagonally-adjacent terminal is a legal target.
-      return Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) === 1;
+      // "On or adjacent" = same space OR orthogonal OR diagonal (8-directional /
+      // Chebyshev <= 1), per alexanbv 2026-06-22: a diagonally-adjacent terminal
+      // is legal, AND a terminal in BD-1's OWN space counts (companion-adjacency
+      // rule — things in a companion's space are adjacent to it).
+      return Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) <= 1;
     });
     if (adjacentTerminals.length === 0) {
-      return { applied: false, manualMessage: '**Terminal Slicing** — BD-1 is not adjacent to a terminal.' };
+      return { applied: false, manualMessage: '**Terminal Slicing** — BD-1 is not on or adjacent to a terminal.' };
     }
     // Phase 1: multiple adjacent → present picker. Phase 2: resolve.
     let chosenTerminal;
