@@ -7100,7 +7100,9 @@ export function resolveAbility(abilityId, context) {
       const fp = parseCoord(figPos);
       for (const t of terminals) {
         const tp = parseCoord(String(t).toLowerCase());
-        if (Math.abs(fp.col - tp.col) + Math.abs(fp.row - tp.row) === 1) { adjacentTerminal = t; break; }
+        // Adjacent = orthogonal OR diagonal (8-directional / Chebyshev 1),
+        // per alexanbv 2026-06-22.
+        if (Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) === 1) { adjacentTerminal = t; break; }
       }
     }
     if (!adjacentTerminal) {
@@ -7149,7 +7151,9 @@ export function resolveAbility(abilityId, context) {
     const fp = parseCoord(figPos);
     const adjacentTerminals = terminals.filter((t) => {
       const tp = parseCoord(String(t).toLowerCase());
-      return Math.abs(fp.col - tp.col) + Math.abs(fp.row - tp.row) === 1;
+      // Adjacent = orthogonal OR diagonal (8-directional / Chebyshev 1), per
+      // alexanbv 2026-06-22 — a diagonally-adjacent terminal is a legal target.
+      return Math.max(Math.abs(fp.col - tp.col), Math.abs(fp.row - tp.row)) === 1;
     });
     if (adjacentTerminals.length === 0) {
       return { applied: false, manualMessage: '**Terminal Slicing** — BD-1 is not adjacent to a terminal.' };
@@ -12694,14 +12698,14 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       const _fmFk = figureKeyForActivation(game, msgId);
       if (_fmFk) {
+        // Face Me! grants a generic free attack — NOT melee-restricted (alexanbv
+        // 2026-06-22). The attack uses the figure's own attack pool/type, so no
+        // pendingOverrideAttackDice melee override is set.
         game.freeAttackBonusPending[_fmFk] = true;
-        // Per alexanbv 2026-05-13: pendingOverrideAttackDice keyed by figureKey.
-        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-        game.pendingOverrideAttackDice[_fmFk] = { type: 'melee' };
       }
       const dcName = dcNameFromFigureKey(chosenFigureKey);
       const { pathStr: _fmPathStr, warnings: _fmWarnings } = computePushPathAndWarnings(game, _fmPrevPos, chosenSpace, oppNum);
-      let _fmLogMsg = `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}${_fmPathStr}. Use the Melee Attack button for 1 free attack.`;
+      let _fmLogMsg = `**Face Me!** — Pushed **${dcName}** to ${String(chosenSpace).toUpperCase()}${_fmPathStr}. Use the Attack button for 1 free attack.`;
       if (_fmWarnings.length > 0) {
         const _fmWarnList = _fmWarnings.map(w => `**${w.name}** (exited adj at ${w.space})`).join(', ');
         _fmLogMsg += `\n⚠️ Exits adjacency to: ${_fmWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
@@ -13010,20 +13014,15 @@ export function resolveAbility(abilityId, context) {
         _lffLogMsg += `\n⚠️ Exits adjacency to: ${_lffWarnList} — opponent may play **Parting Blow** or similar interrupts.`;
       }
       _lffLogMsg += stashPushPartingBlow(game, chosenFigureKey, oppNum, _lffPrevPos, chosenSpace, playerNum);
-      const lffTokenFk = game._lffPendingTokenFigureKey;
-      delete game._lffPendingTokenFigureKey;
-      if (lffTokenFk) {
-        game.pendingPowerTokenGrant = { grants: [{ figureKey: lffTokenFk, figName: dcNameFromFigureKey(lffTokenFk), count: 1 }], channelId: null, playerNum };
-      }
-      return { applied: true, logMessage: _lffLogMsg, refreshBoard: true, requiresPowerTokenChoice: !!lffTokenFk };
+      // Damage token was already granted at Phase 1 (no power-token-type pick).
+      return { applied: true, logMessage: _lffLogMsg, refreshBoard: true };
     }
     // Phase 2a: Move 1 space — pendingMoveX picker per CRR MOVE-017,
     // with a grantPowerToken continuation so the deferred Power Token
     // grant prompt fires AFTER the move completes (matching the prior
     // ordering: Move first, then token-type pick).
     if (chosenFigureKey === 'move1') {
-      const lffTokenFk = game._lffPendingTokenFigureKey;
-      delete game._lffPendingTokenFigureKey;
+      // Damage token was already granted at Phase 1; just run the 1-space move.
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
         remaining: 1,
@@ -13034,15 +13033,13 @@ export function resolveAbility(abilityId, context) {
         threadId: null,
         bypassCosts: true,
         msgId,
-        nextAction: lffTokenFk
-          ? { type: 'grantPowerToken', payload: { figureKey: lffTokenFk, playerNum, count: 1 } }
-          : null,
+        nextAction: null,
       };
       return {
         applied: true,
         pendingMoveXMsgId: msgId,
         activeMsgId: msgId,
-        logMessage: `**Looking for a Fight** — Chose to move 1 space.${lffTokenFk ? ' Power Token prompt will follow the move.' : ''}`,
+        logMessage: `**Looking for a Fight** — Gained 1 Damage Token; chose to move 1 space.`,
       };
     }
     // Phase 2b: Push SMALL hostile — find spaces adjacent to the chosen hostile
@@ -13064,9 +13061,11 @@ export function resolveAbility(abilityId, context) {
       const nm = dcNameFromFigureKey(chosenFigureKey);
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Looking for a Fight** — Push **${nm}** to which space?` };
     }
-    // Phase 1: defer power token choice + present Move/Push choice
-    // (Push branch lists ONLY adjacent SMALL hostiles per canonical card.)
-    game._lffPendingTokenFigureKey = activatorFk;
+    // Phase 1: grant 1 DAMAGE (Hit) Token now — the card reads "Gain 1 Hit
+    // Token, then move/push" (alexanbv 2026-06-22: it's a Damage token, not a
+    // player-chosen power-token type) — then present the Move/Push choice
+    // (Push branch lists ONLY adjacent SMALL hostiles per canonical card).
+    grantPowerTokens(game, activatorFk, 'Damage', 1);
     const mapId = game.selectedMap?.id;
     const adjSmallHostileFks = [];
     if (mapId) {
