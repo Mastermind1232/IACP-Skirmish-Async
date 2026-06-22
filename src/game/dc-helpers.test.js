@@ -101,4 +101,17 @@ describe('figureHasPriorityTarget (FIX 1 — normalized PT detection via passive
     assert.ok(!figureHasPriorityTarget(game, 'NonexistentDC999-1-0'));
     assert.ok(!figureHasPriorityTarget(game, null));
   });
+
+  // alexanbv 2026-06-22: Priority Target is the FLAME TROOPER Squad Upgrade
+  // FIGURE's keyword — scoped to that figure (identified by nickname), NOT the
+  // host group's base figures. The SU figure has a HOST figureKey (e.g.
+  // 'Stormtrooper-1-2') with a 'Flame Trooper' nickname.
+  it('SU scoping: the Flame Trooper SU figure (host figureKey + nickname) HAS Priority Target', () => {
+    const suGame = { figureNicknames: { 'Stormtrooper-1-2': 'Flame Trooper' } };
+    assert.ok(figureHasPriorityTarget(suGame, 'Stormtrooper-1-2'));
+  });
+  it('SU scoping: a base group figure (no SU nickname) does NOT get Priority Target', () => {
+    const suGame = { figureNicknames: { 'Stormtrooper-1-2': 'Flame Trooper' } };
+    assert.ok(!figureHasPriorityTarget(suGame, 'Stormtrooper-1-0'));
+  });
 });

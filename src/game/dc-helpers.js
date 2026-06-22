@@ -4,6 +4,7 @@
  */
 import { getDcEffects, getDcImages } from '../data-loader.js';
 import { truncateLabel } from '../discord/components.js';
+import { squadUpgradeFigureCard } from './squad-upgrades.js';
 
 /**
  * Extract the base DC name from a figure key like "Darth Vader-1-0" → "Darth Vader".
@@ -82,8 +83,14 @@ export function figureHasInTheShadows(game, figureKey) {
  * @returns {boolean}
  */
 export function figureHasPriorityTarget(game, figureKey) {
-  const dcName = dcNameFromFigureKey(figureKey);
-  const eff = getDcEffect(dcName);
+  // Squad Upgrade figure (e.g. Flame Trooper): its keyword abilities — including
+  // Priority Target — come from the SU card and are scoped to the SU FIGURE only,
+  // NOT the host group's base figures (alexanbv 2026-06-22). When this figureKey
+  // is the SU figure, read the SU card's effect; otherwise the host DC's effect.
+  const suCard = squadUpgradeFigureCard(game, figureKey);
+  const eff = suCard
+    ? (getDcEffect(`[${suCard}]`) || getDcEffect(suCard))
+    : getDcEffect(dcNameFromFigureKey(figureKey));
   if (!eff) return false;
   // passives: the normalized keyword home — exact "Priority Target" (case-insensitive)
   if ((eff.passives || []).some((p) => String(p).toLowerCase() === 'priority target')) return true;
