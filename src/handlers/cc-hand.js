@@ -828,6 +828,25 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       _pickedFigureKey = options[0].figureKey;
       _pickedConsume = options[0].consume;
     }
+    // Keyword-anchor picker (alexanbv 2026-06-21): for CCs whose "within N of you"
+    // range anchors on the playing figure but whose play restriction is a KEYWORD
+    // (e.g. Just Business = LEADER), prompt WHICH restriction-satisfying figure is
+    // "you" when 2+ are on the board. Reuses the unified picker UI (kind 'anchor',
+    // no consumption). Only checked when the unique-figure picker did not apply.
+    if (!_pickedFigureKey) {
+      const { getKeywordAnchorPlayerOptions } = await import('../game/unique-figure-ccs.js');
+      const anchorOptions = getKeywordAnchorPlayerOptions(game, playerNum, card);
+      if (anchorOptions.length > 1) {
+        const { presentUniqueCcPlayerPicker } = await import('./fast-learner-picker.js');
+        await presentUniqueCcPlayerPicker(interaction, game, playerNum, card, anchorOptions);
+        saveGames(game.gameId);
+        return;
+      }
+      if (anchorOptions.length === 1) {
+        _pickedFigureKey = anchorOptions[0].figureKey;
+        _pickedConsume = 'none';
+      }
+    }
   }
 
   // Assassinate / mutual-exclude CC lock: block further CCs during this attack

@@ -117,6 +117,7 @@ export async function handleFastLearnerPickMara(interaction, ctx) {
 
 const _KIND_LABEL = {
   named: '',
+  anchor: '',
   fast_learner: ' (Fast Learner)',
   there_is_another: ' (There is Another)',
   a_new_hope: ' (A New Hope)',
@@ -158,8 +159,9 @@ export async function presentUniqueCcPlayerPicker(interaction, game, playerNum, 
   await interaction.message.delete().catch(discordCatch);
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await fetchGameChannel(interaction.client, handId);
+  const _anyConsumes = options.some((o) => o.consume && o.consume !== 'none');
   await withDiscordRetry(() => handChannel.send({
-    content: `Multiple figures can play **${card}**. Choose who plays it — the range is measured from the figure you pick. Fast Learner / A New Hope choices consume that ability.`,
+    content: `Multiple figures can play **${card}**. Choose who plays it — the range is measured from the figure you pick.${_anyConsumes ? ' Fast Learner / A New Hope choices consume that ability.' : ''}`,
     components: [row],
   }));
 }

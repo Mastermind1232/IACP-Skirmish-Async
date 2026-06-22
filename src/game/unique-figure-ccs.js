@@ -14,9 +14,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
-import { getDcEffects } from '../data-loader.js';
+import { getDcEffects, getCcEffect } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { aNewHopeAvailable } from './cc-timing.js';
+import { aNewHopeAvailable, figureMatchesCcRestriction } from './cc-timing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -260,5 +260,44 @@ export function getUniqueCcPlayerOptions(game, playerNum, cardName) {
     }
   }
 
+  return options;
+}
+
+/**
+ * KEYWORD-anchored CCs (alexanbv 2026-06-21): Command cards whose EFFECT range
+ * anchors on the playing figure ("within N spaces of you") but whose play
+ * restriction (playableBy) is a KEYWORD (e.g. LEADER), NOT a named figure. For
+ * these, "you" is whichever restriction-satisfying figure the player chooses to
+ * play the card from — so when 2+ such figures are on the board the player must
+ * be asked WHICH one is the anchor (per the designer rule: any ability that
+ * could affect/select among multiple figures must ask which one / in what order).
+ *
+ * Unique-figure CCs are handled by getUniqueCcPlayerOptions; this set is only the
+ * keyword-restricted, anchor-dependent cards. Appended as the multi-figure-
+ * selection audit surfaces more.
+ */
+const KEYWORD_ANCHORED_CCS = new Set(['Just Business']);
+
+/**
+ * Returns one option per ON-BOARD figure that satisfies a keyword-anchored CC's
+ * play restriction, so the unified picker can ask WHICH figure is "you" (the
+ * range anchor). Empty array when the card is not keyword-anchored, is a
+ * unique-figure CC (handled elsewhere), has no playableBy, or no figure matches.
+ *
+ * @returns {Array<{ figureKey, dcName, displayName, kind:'anchor', consume:'none' }>}
+ */
+export function getKeywordAnchorPlayerOptions(game, playerNum, cardName) {
+  if (!cardName || !KEYWORD_ANCHORED_CCS.has(cardName)) return [];
+  // Unique-figure CCs anchor via getUniqueCcPlayerOptions, not here.
+  if (getUniqueFigureCcEntry(cardName)) return [];
+  const playableBy = getCcEffect(cardName)?.playableBy;
+  if (!playableBy) return [];
+  const options = [];
+  for (const fk of _liveFigureKeys(game, playerNum)) {
+    const dn = dcNameFromFigureKey(fk);
+    if (figureMatchesCcRestriction(game, dn, dn, playableBy)) {
+      options.push({ figureKey: fk, dcName: dn, displayName: dn, kind: 'anchor', consume: 'none' });
+    }
+  }
   return options;
 }
