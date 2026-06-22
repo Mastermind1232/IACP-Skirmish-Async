@@ -4730,9 +4730,9 @@ export async function handleAttackTarget(interaction, ctx) {
         // attacker's power-token bank so it can be spent immediately in
         // the upcoming token phase (or carried).
         game.pendingCombat.attackInfo = { ...game.pendingCombat.attackInfo, dice: [...(game.pendingCombat.attackInfo.dice || []), 'red'] };
-        game.figurePowerTokens = game.figurePowerTokens || {};
-        const _curTokens = game.figurePowerTokens[attackerFigureKey] || [];
-        game.figurePowerTokens[attackerFigureKey] = [..._curTokens, 'Damage'];
+        // Route through grantPowerTokens so the >2 cap / overflow-discard (and
+        // Migs's cap of 3) apply uniformly (alexanbv 2026-06-22 gain-PT pipeline).
+        grantPowerTokens(game, attackerFigureKey, 'Damage', 1);
         await thread.send('**Flawless Execution** — Cad Bane was already Focused: +1 **red** die and +1 **Damage** token (AI default).');
       } else {
         // Human attacker: post die-color + power-token-type pickers.
@@ -6684,13 +6684,17 @@ export async function handleFlawlessToken(interaction, ctx) {
   const typeMap = { damage: 'Damage', surge: 'Surge', block: 'Block', evade: 'Evade' };
   const tokenType = typeMap[typeLower];
   if (!tokenType) return;
-  game.figurePowerTokens = game.figurePowerTokens || {};
-  const _cur = game.figurePowerTokens[pending.attackerFigureKey] || [];
-  game.figurePowerTokens[pending.attackerFigureKey] = [..._cur, tokenType];
+  // Route through grantPowerTokens so the >2 cap / overflow-discard (and Migs's
+  // cap of 3) apply uniformly (alexanbv 2026-06-22 gain-PT pipeline).
+  grantPowerTokens(game, pending.attackerFigureKey, tokenType, 1);
   pending.tokenChosen = tokenType;
   await interaction.channel.send(`**Flawless Execution** — Cad Bane gains 1 **${tokenType}** token (may be spent immediately on this attack).`).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `**Flawless Execution** — +1 ${tokenType} token to Cad Bane.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
   if (pending.dieChosen && pending.tokenChosen) delete game.pendingFlawlessExecution;
+  // If gaining the token pushed the figure over its cap, prompt the discard-down.
+  if (game.pendingPowerTokenOverflow?.length) {
+    await sendPowerTokenOverflowUI(game, game.gameId, interaction.channel, pending.attackerPlayerNum, saveGames).catch(discordCatch);
+  }
   saveGames(game.gameId);
 }
 
