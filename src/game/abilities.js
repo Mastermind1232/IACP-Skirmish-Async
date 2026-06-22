@@ -4432,15 +4432,12 @@ export function resolveAbility(abilityId, context) {
           if (r.maxHp > 0) _rrDamaged.push(`${dcNameFromFigureKey(fk)} -1 (→${r.newHp})`);
         }
       }
-      // Objects within 2 (crates / destructible objects): minimal sync HP decrement.
+      // Objects within 2 (crates / destructible objects) — object-damage pipeline.
       for (const [objId, objPos] of Object.entries(game.objectPositions || {})) {
         if (!objPos || !_rrWithin2(objPos)) continue;
-        const hp = game.objectHealth?.[objId];
-        if (!Array.isArray(hp) || (hp[0] ?? 0) <= 0) continue;
-        hp[0] = Math.max(0, hp[0] - 1);
-        const _objName = game.objectMeta?.[objId]?.name || objId;
-        if (hp[0] <= 0 && game.objectPositions) delete game.objectPositions[objId];
-        _rrDamaged.push(`${_objName} -1${hp[0] <= 0 ? ' (destroyed)' : ''}`);
+        if (!Array.isArray(game.objectHealth?.[objId]) || (game.objectHealth[objId][0] ?? 0) <= 0) continue;
+        const _od = applyObjectDamageSync(game, objId, 1, { attackerPlayerNum: attackerNum, awardObjectiveVp });
+        _rrDamaged.push(`${_od.name} -1${_od.defeated ? ' (destroyed)' : ''}`);
       }
     }
     game.ancillaryTokens = game.ancillaryTokens || {};
@@ -9772,14 +9769,10 @@ export function resolveAbility(abilityId, context) {
               const adjHs = (dcHealthState.get(adjMsgId) || []).slice();
               const adjMatch = adjFk.match(/-(\d+)-(\d+)$/);
               const adjFi = adjMatch ? parseInt(adjMatch[2], 10) : 0;
-              const adjE = adjHs[adjFi];
-              if (adjE) {
-                const [aCur, aMax] = adjE;
-                const aNew = Math.max(0, (aCur ?? aMax) - splashDmg);
-                adjHs[adjFi] = [aNew, aMax ?? aNew];
-                dcHealthState.set(adjMsgId, adjHs);
-                syncHealthStateToList(game, adjPnum, adjMsgId, adjHs);
-                splashParts.push(`**${adjName}** ${splashDmg} Damage (${aCur ?? aMax}→${aNew})`);
+              if (adjHs[adjFi]) {
+                // Splash damage via the defeat-aware pipeline (alexanbv 2026-06-22).
+                const _spl = applyDamageWithDefeatCheck(dcHealthState, game, adjMsgId, adjFi, splashDmg, adjPnum, { sourceLabel: entry.label || abilityId || 'CC ability', attackerPlayerNum: playerNum });
+                splashParts.push(`**${adjName}** ${splashDmg} Damage (${_spl.prevHp}→${_spl.newHp})`);
               }
             } else if (splashDmg > 0) {
               splashParts.push(`**${adjName}** (apply ${splashDmg} Damage manually)`);
@@ -11994,15 +11987,14 @@ export function resolveAbility(abilityId, context) {
         }
       }
     }
-    // Defeat activating figure (set HP to 0)
-    const selfHs = dcHealthState.get(msgId) || [];
+    // Defeat the activating figure via the damage pipeline (alexanbv 2026-06-22):
+    // the self-destruct's defeat must fire when-defeated triggers and credit the
+    // opponent with VP, not silently set HP to 0.
     const actData = game.dcActionsData?.[msgId];
     const selfFigIdx = actData?.selectedFigure ?? 0;
-    if (selfHs[selfFigIdx]) {
-      const [cur, max] = selfHs[selfFigIdx];
-      selfHs[selfFigIdx] = [0, max ?? cur];
-      dcHealthState.set(msgId, selfHs);
-      syncHealthStateToList(game, playerNum, msgId, selfHs);
+    const _sdHs = dcHealthState.get(msgId) || [];
+    if (Array.isArray(_sdHs[selfFigIdx]) && (_sdHs[selfFigIdx][0] ?? 0) > 0) {
+      applyDamageWithDefeatCheck(dcHealthState, game, msgId, selfFigIdx, _sdHs[selfFigIdx][0], playerNum, { sourceLabel: 'Self-Destruct', attackerPlayerNum: opponentPlayerNum(playerNum) });
     }
     const dieDesc = dmg > 0 ? `${dmg} Damage` : 'blank (0 Damage)';
     const adjDesc = results.length ? results.join(', ') : 'No adjacent figures affected.';
