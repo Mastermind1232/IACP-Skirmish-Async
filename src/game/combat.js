@@ -10,6 +10,7 @@
 import { getDiceData, getDcEffects } from '../data-loader.js';
 
 import { getDcEffect } from './dc-helpers.js';
+import { getSurgeBucket } from './surge-buckets.js';
 let _diceStream = null;
 let _diceRecorder = null;
 
@@ -262,13 +263,21 @@ export function parseSurgeEffect(key) {
   const out = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
   // Strip double-surge prefix and parenthetical annotations (e.g. "blast 3 (2 surges)" → "blast 3")
   const k = String(key || '').replace(/^double:/, '').replace(/\s*\([^)]*\)/g, '').toLowerCase().trim();
+  // Route a condition surge to the right gating bucket (the single source of
+  // truth is data/SURGE_BUCKET in surge-buckets.js): 'requires_damage' → the
+  // damage-gated combat.surgeConditions; 'did_not_miss' → the hit-gated
+  // combat.surgeNoMissConditions. So a condition's bucket lives in ONE place
+  // (alexanbv 2026-06-22 — "unify the mapping so the data all lives in one place").
+  const _routeCond = (surgeKey, cond) => {
+    if (getSurgeBucket(surgeKey) === 'did_not_miss') (out.noMissConditions = out.noMissConditions || []).push(cond);
+    else out.conditions.push(cond);
+  };
   // Named surge key shortcuts (cannot be parsed as generic patterns)
-  // Zuckuss Stun Net is an "-ed" surge — "after this attack resolves, if it did
-  // not miss, the target becomes Stunned" — so it resolves on a NOT-MISS even at
-  // 0 damage, unlike the inline "Surge: Stun" keyword (which requires damage).
-  // Routed to the not-miss bucket, not the damage-gated conditions list (alexanbv
-  // 2026-06-22).
-  if (k === 'stun_net') { (out.noMissConditions = out.noMissConditions || []).push('Stun'); return out; }
+  // Zuckuss Stun Net is a 'did_not_miss' surge — "after this attack resolves, if
+  // it did not miss, the target becomes Stunned" — so it resolves on a NOT-MISS
+  // even at 0 damage, unlike the inline "Surge: Stun" keyword (which requires
+  // damage). The bucket comes from the SURGE_BUCKET table.
+  if (k === 'stun_net') { _routeCond('stun_net', 'Stun'); return out; }
   if (k === 'harass') { out.surgeHarass = 1; return out; }
   // Shocking Palm (0-0-0): "The attack misses and the defender becomes
   // Stunned." Distinct from "Set for Stun" (CC) which is a HIT that floors
@@ -338,9 +347,9 @@ export function parseSurgeEffect(key) {
     const blast = p.match(/^blast\s+(\d+)$/); if (blast) { out.blast += parseInt(blast[1], 10); continue; }
     const recover = p.match(/^recover\s+(\d+)$/); if (recover) { out.recover += parseInt(recover[1], 10); continue; }
     const cleave = p.match(/^cleave\s+(\d+)$/); if (cleave) { out.cleave += parseInt(cleave[1], 10); continue; }
-    if (p === 'stun') out.conditions.push('Stun');
-    else if (p === 'weaken') out.conditions.push('Weaken');
-    else if (p === 'bleed') out.conditions.push('Bleed');
+    if (p === 'stun') _routeCond('stun', 'Stun');
+    else if (p === 'weaken') _routeCond('weaken', 'Weaken');
+    else if (p === 'bleed') _routeCond('bleed', 'Bleed');
     // hide/focus in combos: self-effect (attacker gains condition, not target)
     else if (p === 'hide') out.surgeSelfHide = true;
     else if (p === 'focus') out.surgeSelfFocus = true;
