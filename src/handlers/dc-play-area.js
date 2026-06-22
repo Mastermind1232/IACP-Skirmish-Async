@@ -2713,11 +2713,20 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     if (isPounceAttack) {
       delete game.pounceAttackPending[_ahFigureKey];
     } else if (isHeroicAttack) {
+      // Guild Programming (IG-11): "Before you declare each [Rapid Fire] attack,
+      // you become Focused." Re-apply Focus before EACH free attack — the first
+      // attack's Focus came from the card-play; this covers the second (and any
+      // further) Rapid Fire attack even if the first attack spent the Focus.
+      if (game.guildProgrammingRefocus?.[_ahFigureKey]) {
+        applyCondition(game, _ahFigureKey, 'Focus');
+      }
       const _fabCount = game.freeAttackBonusPending[_ahFigureKey];
       if (typeof _fabCount === 'number' && _fabCount > 1) {
         game.freeAttackBonusPending[_ahFigureKey] = _fabCount - 1;
       } else {
         delete game.freeAttackBonusPending[_ahFigureKey];
+        // Rapid Fire's last free attack consumed → drop the re-Focus arm.
+        if (game.guildProgrammingRefocus?.[_ahFigureKey]) delete game.guildProgrammingRefocus[_ahFigureKey];
         // Brutality / Sarlacc Sweep: clear different-target tracker once the
         // last free attack is consumed.
         // Per alexanbv 2026-05-13: per-figureKey.

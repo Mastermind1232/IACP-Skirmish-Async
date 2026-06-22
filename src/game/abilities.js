@@ -6511,6 +6511,15 @@ export function resolveAbility(abilityId, context) {
     for (const fk of figureKeys) {
       applyCondition(game, fk, 'Focus');
     }
+    // Guild Programming (IG-11): "Before you declare EACH attack [of Rapid Fire],
+    // you become Focused." The Focus above covers the FIRST attack; arm a
+    // re-Focus flag so the figure becomes Focused again before the second Rapid
+    // Fire (free) attack — consumed in dc-play-area.js when each free attack is
+    // declared (alexanbv 2026-06-22). Per-figure (ACTIVATION_FIGKEY_FLAGS).
+    if (entry.focusEachRapidFireAttack) {
+      game.guildProgrammingRefocus = game.guildProgrammingRefocus || {};
+      for (const fk of figureKeys) game.guildProgrammingRefocus[fk] = true;
+    }
     if (entry.readyActiveDc) {
       return { applied: true, logMessage: 'Became Focused. Readied active Deployment card.', readyDcMsgIds: [msgId], refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], refreshBoard: true };
     }

@@ -2357,9 +2357,10 @@
     },
     "Guild Programming": {
       "type": "ccEffect",
-      "label": "Become Focused before each Rapid Fire attack",
+      "label": "Become Focused before EACH Rapid Fire attack (re-Focus before the 2nd attack)",
       "applyFocus": true,
-      "wiredStatus": "wired"
+      "wiredStatus": "wired",
+      "focusEachRapidFireAttack": true
     },
     "hair_trigger": {
       "type": "dcSpecial",

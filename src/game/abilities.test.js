@@ -472,6 +472,23 @@ test('resolveAbility Meditation applies Focus (same as Focus)', () => {
   assert.strictEqual(game.figureConditions['Luke Skywalker-1-0']?.includes('Focus'), true);
 });
 
+test('resolveAbility Guild Programming Focuses IG-11 and arms re-Focus for the 2nd Rapid Fire attack', () => {
+  const msgId = 'msg-gp';
+  const game = {
+    gameId: 'g-gp',
+    dcActionsData: { [msgId]: {} },
+    figurePositions: { 1: { 'IG-11-1-0': 'a1' } },
+    figureConditions: {},
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-gp', playerNum: 1, dcName: 'IG-11', displayName: 'IG-11 [Group 1]' }]]);
+  const result = resolveAbility('Guild Programming', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  // First Rapid Fire attack's Focus applied now.
+  assert.strictEqual(game.figureConditions['IG-11-1-0']?.includes('Focus'), true);
+  // Re-Focus armed so the figure becomes Focused again before the 2nd attack.
+  assert.strictEqual(game.guildProgrammingRefocus?.['IG-11-1-0'], true);
+});
+
 test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId provided', () => {
   const msgId = 'msg-rec';
   const healthState = [[3, 6]];
