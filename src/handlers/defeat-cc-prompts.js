@@ -29,11 +29,13 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { clearPendingDefeatCcPrompt, setPendingDefeatCcPrompt } from '../game/interrupts.js';
 import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList, getPlayerId } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
+import { countGameSpaces } from '../game/board-helpers.js';
 import { getDcEffects, getCcEffect } from '../data-loader.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { openCcCounterWindow, registerCcCustomResolve, runCcPlayTriggers } from './cc-hand.js';
 
 /**
@@ -233,12 +235,86 @@ function _ensureDefeatCcResolver() {
   registerCcCustomResolve('defeat_cc', _resolveDefeatCcEffect);
 }
 
+/**
+ * Friendly figures with `keyword` that are within `range` spaces of `pos`.
+ * Used by the Paid in Beskar HUNTER picker so the player only ever chooses an
+ * ELIGIBLE anchor (the within-3 gate is part of the card). Returns figure-level
+ * options ({figureKey, displayName}) — a DC can field multiple figures at
+ * different distances, so the choice is per-figure, not per-DC.
+ */
+function _friendlyKeywordFiguresWithin(game, playerNum, keyword, pos, range) {
+  const out = [];
+  if (!pos) return out;
+  const dcEffects = getDcEffects() || {};
+  const figs = game.figurePositions?.[playerNum] || {};
+  const want = String(keyword).toUpperCase();
+  for (const [fk, fpos] of Object.entries(figs)) {
+    if (!fpos) continue;
+    const dn = dcNameFromFigureKey(fk);
+    const eff = dcEffects[dn] || dcEffects[dn.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+    const kws = (eff?.keywords || []).map((k) => String(k).toUpperCase());
+    if (!kws.includes(want)) continue;
+    if (countGameSpaces(game, pos, fpos) > range) continue;
+    out.push({ figureKey: fk, displayName: dn });
+  }
+  return out;
+}
+
 async function _resolveDefeatCcEffect(game, entry, ctx, client) {
   const { resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, saveGames } = ctx;
   const cardName = entry.card;
   const playerPN = entry.playedBy;
   const gameId = game.gameId;
   const channel = entry.channelId ? await fetchGameChannel(client, entry.channelId) : null;
+
+  // Paid in Beskar (HUNTER, when_defeated): the player chooses WHICH HUNTER
+  // within 3 of the defeated hostile plays it / gains the 2 Block tokens
+  // (alexanbv 2026-06-21 — every selection is a player pick). Offer only
+  // eligible (within-range) HUNTERs; auto-resolve when exactly one.
+  if (cardName === 'Paid in Beskar') {
+    const dPos = entry.defeatedPos ?? null;
+    const range = 3;
+    const eligible = _friendlyKeywordFiguresWithin(game, playerPN, 'HUNTER', dPos, range);
+    const _resolveWith = async (figureKey, displayName) => {
+      if (typeof resolveAbility !== 'function') return;
+      const result = resolveAbility(cardName, {
+        game, playerNum: playerPN, cardName, chosenFigureKey: figureKey,
+        defeatedPos: dPos, defeatedFigureKey: entry.defeatedFigureKey ?? null,
+        dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
+      });
+      if (result?.logMessage && typeof logGameAction === 'function' && client) {
+        const note = result.applied
+          ? `**${cardName}** — Played by **${displayName}**. ${result.logMessage}`
+          : `**${cardName}** — ${result.manualMessage || result.logMessage}`;
+        await logGameAction(game, client, note, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+    };
+    if (eligible.length === 0) {
+      if (typeof logGameAction === 'function' && client) {
+        await logGameAction(game, client, `**${cardName}** — no friendly HUNTER within ${range} spaces of the defeated figure.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+      return;
+    }
+    if (eligible.length === 1) {
+      await _resolveWith(eligible[0].figureKey, eligible[0].displayName);
+      return;
+    }
+    if (channel) {
+      const buttons = eligible.slice(0, 24).map((opt, i) =>
+        new ButtonBuilder()
+          .setCustomId(`defeat_cc_target_${gameId}_${i}`)
+          .setLabel(String(opt.displayName).slice(0, 80))
+          .setStyle(ButtonStyle.Primary),
+      );
+      setPendingDefeatCcPrompt(game, { gameId, playerPN, cardName, phase: 'target-pick', targetOptions: eligible, defeatedPos: dPos, defeatedFigureKey: entry.defeatedFigureKey ?? null });
+      await channel.send({ content: `📜 **${cardName}** — Choose which **HUNTER** (within ${range}) gains the 2 Block Tokens:`, components: chunkButtonsToRows(buttons) }).catch(() => {});
+      if (typeof saveGames === 'function') await saveGames(gameId);
+      return;
+    }
+    // No channel — auto-resolve with the first eligible HUNTER.
+    await _resolveWith(eligible[0].figureKey, eligible[0].displayName);
+    return;
+  }
 
   if (_NEEDS_TARGET_PICKER.has(cardName)) {
     const namedFigure = _CARD_UNIQUE_FIGURE[cardName];
@@ -389,6 +465,10 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
       cardName: pending.cardName,
       msgId: opt.msgId,
       chosenFigureKey: opt.figureKey,
+      // Threaded for Paid in Beskar (within-3 HUNTER pick) so the resolver still
+      // sees the defeated hostile position after the figure choice.
+      defeatedPos: pending.defeatedPos ?? null,
+      defeatedFigureKey: pending.defeatedFigureKey ?? null,
       dcMessageMeta,
       dcHealthState,
       dcExhaustedState,

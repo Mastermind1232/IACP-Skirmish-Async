@@ -1642,6 +1642,51 @@ export async function handleBlackMarket(interaction, ctx) {
   saveGames(game.gameId);
 }
 
+/**
+ * [Black Market] smuggler pick (alexanbv 2026-06-21): when 2+ friendly
+ * SMUGGLERs are alive, the player first chooses WHICH suffers the 1 Strain,
+ * then the draw/discard/return prompt is posted.
+ * Buttons: bm_smug_{gameId}_{msgId}_{playerNum}_{idx}
+ */
+export async function handleBlackMarketSmugglerPick(interaction, ctx) {
+  const { getGame, canActAsPlayer, saveGames } = ctx;
+  await interaction.deferUpdate().catch(discordCatch);
+  const _suffix = parseCustomId(interaction.customId, 'bm_smug_');
+  const _parts = _suffix.split('_');
+  const _gameId = _parts[0];
+  const _mid = _parts[1];
+  const _pn = parseInt(_parts[2], 10);
+  const _idx = parseInt(_parts[3], 10);
+  const game = await requireGame(interaction, getGame, _gameId);
+  if (!game) return;
+  if (!await requirePlayer(interaction, game, interaction.user.id, _pn, canActAsPlayer, 'Only the card owner may respond.')) return;
+  const pending = game.pendingBlackMarket?.[_pn];
+  if (!pending || !Array.isArray(pending.smugglerCandidates)) {
+    await interaction.followUp({ content: '[Black Market] — No pending smuggler choice.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const chosen = pending.smugglerCandidates[_idx];
+  if (!chosen) {
+    await interaction.followUp({ content: '[Black Market] — invalid smuggler.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  pending.smugglerFk = chosen.fk;
+  pending.smugglerMsgId = chosen.msgId;
+  pending.smugglerFigIdx = chosen.figIdx;
+  delete pending.smugglerCandidates;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`bm_draw_${_gameId}_${_mid}_${_pn}`).setLabel(`Draw (spend ${pending.cardCost} VP)`).setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`bm_discard_${_gameId}_${_mid}_${_pn}`).setLabel(`Discard (gain ${pending.cardCost} VP)`).setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`bm_return_${_gameId}_${_mid}_${_pn}`).setLabel('Return to top').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`bm_skip_${_gameId}_${_mid}_${_pn}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+  );
+  await interaction.message.edit({
+    content: `**[Black Market]** — **${chosen.name}** will suffer 1 Strain. Top CC: **${pending.topCard}** (cost ${pending.cardCost}). Choose:`,
+    components: [row],
+  }).catch(discordCatch);
+  saveGames(game.gameId);
+}
+
 // Black Market followup — run the CC draw/discard/return + VP swap
 // AFTER the strain choice resolves.
 import { registerStrainFollowup as _bmRegisterFollowup } from './strain-handler.js';

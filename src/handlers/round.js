@@ -902,36 +902,31 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         const _bmMid = _bmMsgIds[i];
         if (!_bmMid) continue;
         if (isDepletedRemovedFromGame(game, _bmMid)) continue;
-        // Check if this player has a friendly SMUGGLER on the board
+        // Collect ALL alive friendly SMUGGLER figures (alexanbv 2026-06-21:
+        // every selection is a player pick — when 2+ smugglers are alive the
+        // player chooses WHICH suffers the 1 Strain, since strain damages that
+        // figure and can risk a wound).
         const _bmFigPos = game.figurePositions?.[pn] || {};
-        let _bmSmugglerFk = null;
-        let _bmSmugglerMsgId = null;
-        let _bmSmugglerFigIdx = 0;
+        const _bmSmugglers = [];
         for (let di = 0; di < _bmDcList.length; di++) {
           const _bmOtherDc = _bmDcList[di];
           if (!_bmOtherDc || _bmOtherDc.defeated) continue;
           const _bmOtherName = _bmOtherDc.dcName?.replace(/\s*\[.*\]\s*$/, '');
           const _bmOtherEff = _bmEffs[_bmOtherDc.dcName] || _bmEffs[_bmOtherName];
           if (!(_bmOtherEff?.keywords || []).some(k => String(k).toUpperCase() === 'SMUGGLER')) continue;
-          // Found a SMUGGLER DC — find its first alive figure key
+          const _bmFkMid = _bmMsgIds[di];
+          if (!_bmFkMid) continue;
+          const _bmFkHs = dcHealthState.get(_bmFkMid);
           for (const [fk, pos] of Object.entries(_bmFigPos)) {
             if (!fk.startsWith((_bmOtherName || _bmOtherDc.dcName) + '-')) continue;
             if (!pos) continue;
-            // Check if figure is alive (HP > 0)
-            const _bmFkMid = _bmMsgIds[di];
-            if (!_bmFkMid) continue;
-            const _bmFkHs = dcHealthState.get(_bmFkMid);
             const _bmFkIdx = parseFigureKey(fk).figureIndex;
             if (_bmFkHs?.[_bmFkIdx] && Array.isArray(_bmFkHs[_bmFkIdx]) && _bmFkHs[_bmFkIdx][0] > 0) {
-              _bmSmugglerFk = fk;
-              _bmSmugglerMsgId = _bmFkMid;
-              _bmSmugglerFigIdx = _bmFkIdx;
-              break;
+              _bmSmugglers.push({ fk, msgId: _bmFkMid, figIdx: _bmFkIdx, name: dcNameFromFigureKey(fk) });
             }
           }
-          if (_bmSmugglerFk) break;
         }
-        if (!_bmSmugglerFk) continue; // no alive SMUGGLER — skip
+        if (_bmSmugglers.length === 0) continue; // no alive SMUGGLER — skip
         // Peek at top CC deck card
         const _bmDeckKey = pn === 1 ? 'player1CcDeck' : 'player2CcDeck';
         const _bmDeck = game[_bmDeckKey] || [];
@@ -940,23 +935,41 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         const _bmCcEff = getCcEffect(_bmTopCard);
         const _bmCardCost = _bmCcEff?.cost ?? 0;
         const _bmOwnerId = game[`player${pn}Id`];
+        game.pendingBlackMarket = game.pendingBlackMarket || {};
+
+        if (_bmSmugglers.length > 1) {
+          // 2+ smugglers — ask WHICH one suffers the 1 Strain FIRST; the
+          // draw/discard/return prompt follows after the pick (bm_smug handler).
+          game.pendingBlackMarket[pn] = {
+            topCard: _bmTopCard,
+            cardCost: _bmCardCost,
+            smugglerCandidates: _bmSmugglers.map(s => ({ fk: s.fk, msgId: s.msgId, figIdx: s.figIdx, name: s.name })),
+          };
+          const _bmSmugBtns = _bmSmugglers.slice(0, 24).map((s, i) =>
+            new ButtonBuilder().setCustomId(`bm_smug_${gameId}_${_bmMid}_${pn}_${i}`).setLabel(String(s.name).slice(0, 80)).setStyle(ButtonStyle.Primary));
+          await logGameAction(game, client, `<@${_bmOwnerId}> **[Black Market]** — Top CC revealed: **${_bmTopCard}** (cost ${_bmCardCost}). Choose which friendly **SMUGGLER** suffers 1 Strain:`, {
+            components: chunkButtonsToRows(_bmSmugBtns),
+            allowedMentions: { users: [_bmOwnerId] },
+          });
+          continue;
+        }
+
+        // Exactly one smuggler — no pick needed.
+        const _bmOnly = _bmSmugglers[0];
         const _bmRow = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId(`bm_draw_${gameId}_${_bmMid}_${pn}`).setLabel(`Draw (spend ${_bmCardCost} VP)`).setStyle(ButtonStyle.Success),
           new ButtonBuilder().setCustomId(`bm_discard_${gameId}_${_bmMid}_${pn}`).setLabel(`Discard (gain ${_bmCardCost} VP)`).setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId(`bm_return_${gameId}_${_bmMid}_${pn}`).setLabel('Return to top').setStyle(ButtonStyle.Secondary),
           new ButtonBuilder().setCustomId(`bm_skip_${gameId}_${_bmMid}_${pn}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
         );
-        // Store pending state so the handler knows which card/smuggler to apply
-        game.pendingBlackMarket = game.pendingBlackMarket || {};
         game.pendingBlackMarket[pn] = {
           topCard: _bmTopCard,
           cardCost: _bmCardCost,
-          smugglerFk: _bmSmugglerFk,
-          smugglerMsgId: _bmSmugglerMsgId,
-          smugglerFigIdx: _bmSmugglerFigIdx,
+          smugglerFk: _bmOnly.fk,
+          smugglerMsgId: _bmOnly.msgId,
+          smugglerFigIdx: _bmOnly.figIdx,
         };
-        const _bmSmugglerName = dcNameFromFigureKey(_bmSmugglerFk);
-        await logGameAction(game, client, `<@${_bmOwnerId}> **[Black Market]** — Top CC revealed: **${_bmTopCard}** (cost ${_bmCardCost}). A friendly SMUGGLER (**${_bmSmugglerName}**) may suffer 1 Strain. Choose:`, {
+        await logGameAction(game, client, `<@${_bmOwnerId}> **[Black Market]** — Top CC revealed: **${_bmTopCard}** (cost ${_bmCardCost}). A friendly SMUGGLER (**${_bmOnly.name}**) may suffer 1 Strain. Choose:`, {
           components: [_bmRow],
           allowedMentions: { users: [_bmOwnerId] },
         });

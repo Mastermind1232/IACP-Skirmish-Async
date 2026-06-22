@@ -169,7 +169,7 @@ import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } f
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
 import { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleForceExhaustionDiePick, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
-import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleExhaustBallistics, handleExhaustNavUpgrade, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleLastWielderDarksaber, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
+import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleExhaustBallistics, handleExhaustNavUpgrade, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleLastWielderDarksaber, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handleBlackMarketSmugglerPick, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
 import { handleAdaptBlaisePick } from './blaise-adapt.js';
 import { handleDefeatPick } from './defeat-pick.js';
@@ -666,6 +666,7 @@ register('bm_draw_', handleBlackMarket, 'interrupts');
 register('bm_discard_', handleBlackMarket, 'interrupts');
 register('bm_return_', handleBlackMarket, 'interrupts');
 register('bm_skip_', handleBlackMarket, 'interrupts');
+register('bm_smug_', handleBlackMarketSmugglerPick, 'interrupts');
 register('executor_use_', handleExecutor, 'interrupts');
 register('executor_skip_', handleExecutor, 'interrupts');
 register('extra_protection_play_', handleExtraProtection, 'interrupts');

@@ -11113,14 +11113,19 @@ export function resolveAbility(abilityId, context) {
   // anchor fix; mirrors the In the Shadows keyword-CC anchor pattern). The
   // defeated position is threaded in via context.defeatedPos.
   if (entry.type === 'ccEffect' && typeof entry.whenDefeatHostileWithin3GainBlockTokens === 'number') {
-    const { game, playerNum, defeatedPos } = context;
+    const { game, playerNum, defeatedPos, chosenFigureKey } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const tokens = entry.whenDefeatHostileWithin3GainBlockTokens;
     const range = entry.whenDefeatHostileWithin3Range ?? 3;
     const dPos = defeatedPos || null;
     if (!dPos) return { applied: false, manualMessage: `**${entry.label || 'Paid in Beskar'}** — no recently-defeated hostile in context; resolve manually.` };
-    // Anchor on the playing HUNTER figure (or the chosen play-by figure).
-    const hunterFk = resolveKeywordCcFigureKey(game, playerNum, ['HUNTER']);
+    // Anchor on the HUNTER the player CHOSE to play it (alexanbv 2026-06-21:
+    // every selection is a player pick — the defeat-CC picker offers each
+    // eligible HUNTER within range when 2+ are present), else the first live
+    // HUNTER when no choice was threaded.
+    const hunterFk = (chosenFigureKey && game.figurePositions?.[playerNum]?.[chosenFigureKey])
+      ? chosenFigureKey
+      : resolveKeywordCcFigureKey(game, playerNum, ['HUNTER']);
     const hunterPos = hunterFk ? game.figurePositions?.[playerNum]?.[hunterFk] : null;
     if (!hunterFk || !hunterPos) return { applied: true, logMessage: `**${entry.label || 'Paid in Beskar'}** — no eligible HUNTER figure to gain Block tokens.` };
     const dist = countGameSpaces(game, dPos, hunterPos);
