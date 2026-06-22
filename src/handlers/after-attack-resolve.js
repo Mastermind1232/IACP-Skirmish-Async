@@ -441,10 +441,12 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Concussive Bolt: push target 1 space',
     });
   }
-  // Fighting Knife (Verena Talos surge): hit-gated, requires adjacent
-  // hostile. fireFightingKnife re-validates at click time and skips if
-  // there are none.
-  if (combat.surgeFightingKnife && combat._step7Hit && combat.attackerFigureKey) {
+  // Fighting Knife (Verena Talos surge): a special surge that rolls 1 red die
+  // against a CHOSEN adjacent hostile (a different figure than the attack target)
+  // — "After this attack resolves..." with NO "if it does not miss" clause, so it
+  // resolves even when the attack MISSES (alexanbv 2026-06-22). NOT hit-gated.
+  // fireFightingKnife re-validates at click time and skips if there are none.
+  if (combat.surgeFightingKnife && combat.attackerFigureKey) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'fighting_knife',

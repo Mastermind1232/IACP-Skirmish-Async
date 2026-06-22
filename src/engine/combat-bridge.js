@@ -1915,6 +1915,12 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       embedRefreshMsgIds.add(targetMsgId);
       await logGameAction(game, client, `**Harass** — **${combat.target.label}** suffers **${combat.surgeHarass}** Strain`, { phase: 'ROUND', icon: 'attack' });
     }
+  }
+  // Suppression (Biv Bodhrik): "if it did not miss DUE TO ACCURACY" — so it fires
+  // even on an uncancelled-Dodge miss (the Strain amount even counts dodge
+  // results). Gated on accuracy-sufficiency, NOT the full not-miss `hit` flag
+  // (alexanbv 2026-06-22).
+  if (combat._accuracySufficient && targetMsgId) {
     if (combat.surgeSuppressionStrain) {
       const supRoll = combat.defenseRoll || {};
       // Biv Bodhrik "Suppression": Strain = number of Block + Evade + Dodge

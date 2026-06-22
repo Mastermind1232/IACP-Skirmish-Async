@@ -416,6 +416,12 @@ export function computeCombatResult(combat) {
       missReason = `insufficient accuracy (${totalAccuracy} < ${combat.distanceToTarget} distance)`;
     }
   }
+  // Accuracy-sufficient signal (alexanbv 2026-06-22): true when the attack did
+  // NOT miss due to insufficient accuracy (i.e. it hit, OR it missed only because
+  // of an uncancelled Dodge). Effects like Biv Bodhrik's Suppression are gated on
+  // "did not miss due to accuracy", so they still resolve on a Dodge-miss.
+  combat._accuracySufficient = !String(missReason).startsWith('insufficient accuracy');
+  combat._missReason = missReason;
   // Combat Suit (Skirmish Upgrade): reduce total pierce by N, min 0 (already clamped above)
   const defReducePierce = combat.defenderReducePierce || 0;
   const pierceToUse = combat.defenderIgnorePierce ? 0 : Math.max(0, totalPierce - defReducePierce);
