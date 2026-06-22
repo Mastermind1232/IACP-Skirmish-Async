@@ -850,7 +850,12 @@ export function resolveAbility(abilityId, context) {
         parts.push(`+ ${strain} Strain`);
       }
       if (condToApply) {
-        if (applyCondition(game, targetFigureKey, condToApply)) {
+        // Respect condition immunity (Onar Koma, Snowtrooper Elite, etc.) — the
+        // generic applyCondition does not gate on it (alexanbv audit 2026-06-22,
+        // MHD-19 Improper Procedure applied Weaken to immune figures).
+        if (isConditionImmune(game, targetFigureKey)) {
+          parts.push(`is immune to **${condToApply}**`);
+        } else if (applyCondition(game, targetFigureKey, condToApply)) {
           parts.push(`became **${condToApply}**`);
         }
       }
@@ -10005,7 +10010,11 @@ export function resolveAbility(abilityId, context) {
     const hand = (game[handKey] || []).slice();
     const oppHand = (game[oppHandKey] || []).slice();
     const n1 = Math.min(entry.discardRandomFromHand, hand.length);
-    const n2 = Math.min(entry.opponentDiscardRandomFromHand, oppHand.length);
+    // "discard a random Command card; IF YOU DO, your opponent discards 2" — the
+    // opponent discard is conditional on the player actually discarding at least
+    // one card (alexanbv audit 2026-06-22). With an empty hand, n1 = 0 and the
+    // opponent loses nothing.
+    const n2 = n1 > 0 ? Math.min(entry.opponentDiscardRandomFromHand, oppHand.length) : 0;
     const discarded1 = [];
     for (let i = 0; i < n1; i++) {
       const idx = Math.floor(Math.random() * hand.length);

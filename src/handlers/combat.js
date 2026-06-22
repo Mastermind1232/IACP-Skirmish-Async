@@ -2788,9 +2788,12 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const r = applyCunningFlag(combat);
     combat.hasCunning = r.hasCunning;
   } else if (id === 'find_weakness') {
+    // Card: "While attacking, apply +3 Accuracy and -1 Evade to the results."
+    // The Accuracy portion was missing (alexanbv audit 2026-06-22).
     const r = applyFindWeaknessEvade(combat);
     combat.bonusEvade = r.bonusEvade;
-    await thread.send('**Find Weakness** — −1 Evade applied to defense results.').catch(discordCatch);
+    combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3;
+    await thread.send('**Find Weakness** — +3 Accuracy and −1 Evade applied to the attack results.').catch(discordCatch);
   } else if (id === 'scattergun') {
     const atkName = combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || '');
     const sids = (getDcEffectsGlobal()[atkName] || getDcEffectsGlobal()[(atkName || '').replace(/\s*\[.*\]\s*$/, '')])?.specialAbilityIds || [];
