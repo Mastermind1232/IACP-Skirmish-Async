@@ -521,6 +521,22 @@ test('resolveAbility Guild Programming Focuses IG-11 and arms re-Focus for the 2
   assert.strictEqual(game.guildProgrammingRefocus?.['IG-11-1-0'], true);
 });
 
+test('Etiquette and Protocol: excludes the C-3PO source (not self) and pairs hostile×friendly', () => {
+  const game = {
+    gameId: 'g-eap',
+    figurePositions: {
+      1: { 'C-3PO-1-0': 'a1', 'Rebel Trooper-1-0': 'a2' },
+      2: { 'Stormtrooper-1-0': 'b1' },
+    },
+    // no selectedMap → LOS check is permissive; source resolves to C-3PO by name.
+  };
+  const result = resolveAbility('Etiquette and Protocol', { game, playerNum: 1 });
+  assert.strictEqual(result.requiresChoice, true);
+  // C-3PO is the LOS source → cannot be the chosen friendly figure; only the
+  // Rebel Trooper pairs with the hostile Stormtrooper.
+  assert.deepStrictEqual(result.choiceValues, ['Stormtrooper-1-0|Rebel Trooper-1-0']);
+});
+
 test('resolveAbility Recovery recovers 2 damage when dcHealthState and msgId provided', () => {
   const msgId = 'msg-rec';
   const healthState = [[3, 6]];

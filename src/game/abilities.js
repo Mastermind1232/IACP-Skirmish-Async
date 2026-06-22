@@ -14582,7 +14582,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: etiquetteAndProtocolEffect (Etiquette and Protocol) — block attacks between one hostile and one friendly this round
   if (entry.type === 'ccEffect' && entry.etiquetteAndProtocolEffect) {
-    const { game, playerNum, choiceIndex, chosenFigureKey } = context;
+    const { game, playerNum, choiceIndex, chosenFigureKey, dcMessageMeta } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
       // chosenFigureKey is encoded as "hostileFk|friendlyFk"
@@ -14596,8 +14596,30 @@ export function resolveAbility(abilityId, context) {
       return { applied: true, logMessage: `**Etiquette and Protocol** — **${hName}** and **${fName}** cannot declare attacks targeting each other until end of round.` };
     }
     const oppNum = opponentPlayerNum(playerNum);
-    const hostileFks = Object.keys(game.figurePositions?.[oppNum] || {}).filter((fk) => game.figurePositions[oppNum][fk]);
-    const friendlyFks = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => game.figurePositions[playerNum][fk]);
+    const hostileFksAll = Object.keys(game.figurePositions?.[oppNum] || {}).filter((fk) => game.figurePositions[oppNum][fk]);
+    const friendlyFksAll = Object.keys(game.figurePositions?.[playerNum] || {}).filter((fk) => game.figurePositions[playerNum][fk]);
+    // alexanbv 2026-06-22: both chosen figures must be in the LINE OF SIGHT of
+    // the card-playing figure (C-3PO) — NOT in LOS of each other — and C-3PO
+    // cannot choose itself as the friendly figure ("not self"). Resolve the
+    // card-playing figure (the Special Action's activating figure; fall back to
+    // the friendly C-3PO), then filter both lists to figures it can see.
+    let losSourceFk = null;
+    if (dcMessageMeta) {
+      const _eMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+      if (_eMsgId) losSourceFk = figureKeyForActivation(game, _eMsgId);
+    }
+    if (!losSourceFk) losSourceFk = friendlyFksAll.find((fk) => dcNameFromFigureKey(fk) === 'C-3PO') || null;
+    const _eMs = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
+    const _eGfs = context.getFigureSize;
+    const _eSrcPos = losSourceFk ? game.figurePositions?.[playerNum]?.[losSourceFk] : null;
+    // When map/LOS data is unavailable, don't over-filter (resolve permissively).
+    const inLos = (pn, fk) => {
+      if (!_eSrcPos || !_eMs || typeof _eGfs !== 'function') return true;
+      const pos = game.figurePositions?.[pn]?.[fk];
+      return !!pos && hasLineOfSightByCoord(game, _eSrcPos, pos, _eMs, _eGfs);
+    };
+    const hostileFks = hostileFksAll.filter((fk) => inLos(oppNum, fk));
+    const friendlyFks = friendlyFksAll.filter((fk) => fk !== losSourceFk && inLos(playerNum, fk));
     const opts = [];
     const vals = [];
     for (const hfk of hostileFks) {
@@ -14606,7 +14628,7 @@ export function resolveAbility(abilityId, context) {
         vals.push(`${hfk}|${ffk}`);
       }
     }
-    if (!opts.length) return { applied: false, manualMessage: 'No valid figure pairs found. Resolve manually.' };
+    if (!opts.length) return { applied: false, manualMessage: 'No valid figure pairs in your line of sight. Resolve manually.' };
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
