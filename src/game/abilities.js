@@ -8385,7 +8385,9 @@ export function resolveAbility(abilityId, context) {
     const parts = [];
     // "until end of round" cards clear at EOR-phase start; "during this round"
     // cards persist through the EOR phase. Per CSV durationText.
-    const eorCards = new Set(['Survival Instincts', 'Fuel Upgrade', 'Deflection', 'Smuggled Supplies']);
+    // (Deflection is NOT here: its only round-registered effect is the -2
+    // Accuracy, which is 'this-attack' duration — see the deflectAccPenalty block.)
+    const eorCards = new Set(['Survival Instincts', 'Fuel Upgrade', 'Smuggled Supplies']);
     const duration = eorCards.has(cardName) ? 'until-eor' : 'during-round';
     // alexanbv 2026-06-20: "'you' refers to ONLY the figure that played the
     // card." So every "you/your defense results" CC (Take Position, Survival
@@ -8414,6 +8416,10 @@ export function resolveAbility(abilityId, context) {
     }
     // Deflection: -N Accuracy ONLY vs a Ranged attack TARGETING YOU (CSV "when a
     // Ranged attack targeting you is declared") → selfIsSourceFigure + range.
+    // alexanbv 2026-06-22: the penalty applies to ONLY the single declared
+    // attack ("Apply -2 Accuracy to the attack results"), NOT to every Ranged
+    // attack this round — so it's 'this-attack' duration, cleared when that
+    // attack resolves (resolvePendingCombat → clearRoundModifiersThisAttack).
     if (deflectAccPenalty) {
       registerRoundModifier(game, {
         id: `${cardName}:${playerNum}:def-deflect`,
@@ -8421,7 +8427,7 @@ export function resolveAbility(abilityId, context) {
         ownerPlayerNum: playerNum,
         sourceFigureKey,
         side: 'defense',
-        duration,
+        duration: 'this-attack',
         conditions: { selfIsSourceFigure: true, attackType: 'range' },
         effect: { accuracyPenalty: deflectAccPenalty },
       });

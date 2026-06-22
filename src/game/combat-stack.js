@@ -19,6 +19,8 @@
  * Wiring sites are landed in slices 7.2–7.7.
  */
 
+import { clearRoundModifiersThisAttack } from './round-modifiers.js';
+
 /**
  * Save the current `game.pendingCombat` onto `game.combatStack` and clear
  * `pendingCombat` so the caller can initialize a new nested attack.
@@ -104,5 +106,10 @@ export function resolvePendingCombat(game) {
   if (!restored && game.namedCcsPlayedPerTiming?.attack) {
     delete game.namedCcsPlayedPerTiming.attack;
   }
+  // alexanbv 2026-06-22: 'this-attack' defender-reaction modifiers (Deflection's
+  // -2 Accuracy) apply to ONLY the attack they reacted to — drop them now that
+  // this top-level attack has fully resolved. Skip while a nested outer frame is
+  // restored: the outer attack is still in progress and may have its own.
+  if (!restored) clearRoundModifiersThisAttack(game);
   return restored;
 }

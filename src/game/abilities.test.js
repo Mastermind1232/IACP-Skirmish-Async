@@ -1647,7 +1647,9 @@ test('Deflection: registers a Ranged-only, self-figure accuracy-penalty modifier
   // CSV "when a Ranged attack targeting YOU is declared" → self figure + range.
   assert.strictEqual(d.conditions.selfIsSourceFigure, true);
   assert.strictEqual(d.conditions.attackType, 'range');
-  assert.strictEqual(d.duration, 'until-eor');
+  // alexanbv 2026-06-22: the -2 applies to ONLY the attack it reacted to, not
+  // the whole round → 'this-attack' (cleared by clearRoundModifiersThisAttack).
+  assert.strictEqual(d.duration, 'this-attack');
   // Deflection counter-damage still flows through deflectionPending.
   assert.strictEqual(game.deflectionPending?.[1], 1);
 });

@@ -20,7 +20,10 @@
  *     ownerPlayerNum,             // 1|2 — whose army the bonus belongs to
  *     sourceFigureKey | null,     // the card-playing / anchoring figure
  *     side: 'attack' | 'defense',
- *     duration: 'during-round' | 'until-eor',
+ *     duration: 'during-round' | 'until-eor' | 'this-attack',
+ *       // 'this-attack' — a defender reaction (e.g. Deflection's -2 Accuracy)
+ *       // that modifies ONLY the single attack it was played against; cleared by
+ *       // clearRoundModifiersThisAttack when that attack fully resolves.
  *     conditions: {
  *       selfKeyword?,             // 'VEHICLE'|'TROOPER'|'MOBILE'|... — fk's DC keyword
  *       selfIsSourceFigure?,      // true → fk === sourceFigureKey ("you"/"your")
@@ -83,6 +86,21 @@ export function clearRoundModifiersUntilEor(game) {
   if (!game || !Array.isArray(game.activeRoundModifiers)) return;
   game.activeRoundModifiers = game.activeRoundModifiers.filter(
     (d) => d && d.duration !== 'until-eor'
+  );
+}
+
+/**
+ * Clear 'this-attack' descriptors (called when a top-level attack fully resolves
+ * via resolvePendingCombat). These are defender reactions whose modifier applies
+ * to ONLY the attack they were played against (e.g. Deflection's -2 Accuracy),
+ * NOT to every attack for the rest of the round. 'during-round'/'until-eor'
+ * descriptors are left untouched.
+ * @param {object} game
+ */
+export function clearRoundModifiersThisAttack(game) {
+  if (!game || !Array.isArray(game.activeRoundModifiers)) return;
+  game.activeRoundModifiers = game.activeRoundModifiers.filter(
+    (d) => d && d.duration !== 'this-attack'
   );
 }
 

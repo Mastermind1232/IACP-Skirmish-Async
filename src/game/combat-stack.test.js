@@ -6,6 +6,7 @@ import {
   popNestedCombat,
   peekNestedCombat,
   nestedCombatDepth,
+  resolvePendingCombat,
 } from './combat-stack.js';
 
 test('pushNestedCombat moves pendingCombat onto combatStack', () => {
@@ -15,6 +16,33 @@ test('pushNestedCombat moves pendingCombat onto combatStack', () => {
   assert.equal(game.pendingCombat, undefined);
   assert.equal(game.combatStack.length, 1);
   assert.equal(game.combatStack[0], outer);
+});
+
+test("resolvePendingCombat clears 'this-attack' modifiers when a top-level attack resolves", () => {
+  const game = {
+    pendingCombat: { attackerPlayerNum: 1 },
+    activeRoundModifiers: [
+      { id: 'defl', card: 'Deflection', ownerPlayerNum: 1, side: 'defense', duration: 'this-attack', conditions: {}, effect: { accuracyPenalty: 2 } },
+      { id: 'keep', card: 'Take Position', ownerPlayerNum: 1, side: 'defense', duration: 'during-round', conditions: {}, effect: { block: 1 } },
+    ],
+  };
+  assert.equal(resolvePendingCombat(game), false); // top-level, nothing restored
+  const ids = game.activeRoundModifiers.map((d) => d.id);
+  assert.ok(!ids.includes('defl'), "Deflection's this-attack modifier cleared");
+  assert.ok(ids.includes('keep'), 'during-round modifier survives');
+});
+
+test("resolvePendingCombat does NOT clear 'this-attack' while a nested outer frame restores", () => {
+  const outer = { attackerPlayerNum: 1 };
+  const game = {
+    pendingCombat: { attackerPlayerNum: 2 },
+    combatStack: [outer],
+    activeRoundModifiers: [
+      { id: 'defl', card: 'Deflection', ownerPlayerNum: 1, side: 'defense', duration: 'this-attack', conditions: {}, effect: { accuracyPenalty: 2 } },
+    ],
+  };
+  assert.equal(resolvePendingCombat(game), true); // outer restored
+  assert.ok(game.activeRoundModifiers.map((d) => d.id).includes('defl'), 'kept while outer attack still in progress');
 });
 
 test('pushNestedCombat is a no-op when no pendingCombat', () => {

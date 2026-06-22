@@ -1244,7 +1244,7 @@
     },
     "Deflection": {
       "type": "ccEffect",
-      "label": "Until end of round: -2 Accuracy vs Ranged attacks targeting you; after a Ranged attack resolves, attacker suffers 1 Damage",
+      "label": "-2 Accuracy vs the Ranged attack targeting you (this attack only); after that attack resolves, attacker suffers 1 Damage (even on a miss)",
       "roundDeflectionAccuracyPenalty": 2,
       "deflectionCounterDamage": 1,
       "deflectionCounterUnconditional": true,

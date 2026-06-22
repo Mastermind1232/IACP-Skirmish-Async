@@ -593,12 +593,14 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
       });
     }
   }
-  // Deflection (CC, defender): "after attack resolves, attacker suffers
-  // N damage" (unconditional, or only if defender took 0 damage in the
-  // legacy variant). Hit-gated. Pulls game.deflectionPending.
-  if (combat._step7Hit && game?.deflectionPending?.[defPN] && game.deflectionPending[defPN] > 0) {
+  // Deflection (CC, defender): "After the attack is resolved, the attacker
+  // suffers N Damage." alexanbv 2026-06-22: the counter fires EVEN ON A MISS —
+  // the card has no hit/damage clause. So the unconditional variant must NOT be
+  // hit-gated. (The legacy conditional variant still requires a hit that dealt 0
+  // damage.) Pulls game.deflectionPending.
+  if (game?.deflectionPending?.[defPN] && game.deflectionPending[defPN] > 0) {
     const isUncond = !!game.deflectionUnconditional?.[defPN];
-    if (isUncond || (combat._step7Damage || 0) === 0) {
+    if (isUncond || (combat._step7Hit && (combat._step7Damage || 0) === 0)) {
       enqueueAfterAttackEffect(combat, {
         side: 'defender',
         type: 'deflection',

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   registerRoundModifier,
   clearRoundModifiersUntilEor,
+  clearRoundModifiersThisAttack,
   evaluateRoundModifiers,
   evaluateFigureAuras,
   buildFigureAuraDescriptors,
@@ -119,6 +120,17 @@ test('attackType range: Deflection penalty only applies to Ranged attacks', () =
   const melee = evaluateRoundModifiers(game, { side: 'defense', figureKey: 'Greedo-1-0', playerNum: 1, combat: { isRanged: false } });
   assert.strictEqual(ranged.accuracyPenalty, 2);
   assert.strictEqual(melee.accuracyPenalty, 0);
+});
+
+test("clearRoundModifiersThisAttack drops 'this-attack' (Deflection) but keeps during-round/until-eor", () => {
+  const game = newGame();
+  registerRoundModifier(game, { id: 'defl', card: 'Deflection', ownerPlayerNum: 1, sourceFigureKey: 'Greedo-1-0', side: 'defense', duration: 'this-attack', conditions: { selfIsSourceFigure: true, attackType: 'range' }, effect: { accuracyPenalty: 2 } });
+  registerRoundModifier(game, { id: 'dr', card: 'Take Position', ownerPlayerNum: 1, sourceFigureKey: 'Greedo-1-0', side: 'defense', duration: 'during-round', conditions: { selfIsSourceFigure: true }, effect: { block: 1 } });
+  registerRoundModifier(game, { id: 'eor', card: 'Survival Instincts', ownerPlayerNum: 1, sourceFigureKey: 'Greedo-1-0', side: 'defense', duration: 'until-eor', conditions: { selfIsSourceFigure: true }, effect: { evade: 1 } });
+  clearRoundModifiersThisAttack(game);
+  const ids = game.activeRoundModifiers.map((d) => d.id);
+  assert.ok(!ids.includes('defl'), "'this-attack' Deflection cleared after the attack");
+  assert.ok(ids.includes('dr') && ids.includes('eor'), 'during-round/until-eor survive');
 });
 
 test('affiliationScum within 3: Just Business reroll only for Scum figures in range', () => {
