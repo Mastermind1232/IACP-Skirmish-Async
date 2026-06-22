@@ -104,7 +104,7 @@ import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hos
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize } from '../data-loader.js';
-import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive } from './object-damage-pipeline.js';
+import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive, applyObjectDamageSync } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID, firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
@@ -3778,19 +3778,11 @@ export function resolveAbility(abilityId, context) {
           if (entry.affectsObjects && game.objectPositions && game.objectHealth) {
             for (const [objId, objCoord] of Object.entries(game.objectPositions)) {
               if (!objCoord || !affectedSpaces.has(String(objCoord).toLowerCase())) continue;
-              const _objHp = game.objectHealth[objId];
-              if (!Array.isArray(_objHp)) continue;
-              const [cur, max] = _objHp;
-              if ((cur ?? 0) <= 0) continue;
-              const _objPrev = cur;
-              const _objNew = Math.max(0, cur - hits);
-              game.objectHealth[objId] = [_objNew, max];
-              const _objName = game.objectMeta?.[objId]?.name || objId;
-              affected.push(`${_objName} -${hits}HP (${_objPrev}→${_objNew})`);
-              if (_objNew === 0) {
-                _hadDefeats = true;
-                if (game.objectPositions) delete game.objectPositions[objId];
-              }
+              if (!Array.isArray(game.objectHealth[objId]) || (game.objectHealth[objId][0] ?? 0) <= 0) continue;
+              // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+              const _od = applyObjectDamageSync(game, objId, hits, { attackerPlayerNum: playerNum, awardObjectiveVp });
+              affected.push(`${_od.name} -${hits}HP (${_od.prevHp}→${_od.newHp})`);
+              if (_od.defeated) _hadDefeats = true;
             }
           }
           resultParts.push(affected.length ? affected.join(', ') : 'no figures in blast area');
@@ -7502,14 +7494,10 @@ export function resolveAbility(abilityId, context) {
     if (chosenAny && String(chosenAny).startsWith('obj:')) {
       const objId = String(chosenAny).slice(4);
       if (!isObjectAlive(game, objId)) return { applied: false, manualMessage: `**Collateral Damage** — that object is no longer in play.` };
-      const hp = game.objectHealth?.[objId];
-      if (!Array.isArray(hp)) return { applied: false, manualMessage: `**Collateral Damage** — apply ${flatDmg} Damage to the chosen object manually.` };
-      const [cur, max] = hp;
-      const newCur = Math.max(0, (cur ?? 0) - flatDmg);
-      game.objectHealth[objId] = [newCur, max];
-      const objName = game.objectMeta?.[objId]?.name || objId;
-      if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
-      return { applied: true, logMessage: `**Collateral Damage** — **${objName}** suffers **${flatDmg} Damage** (HP: ${cur ?? 0} → ${newCur})${newCur <= 0 ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
+      if (!Array.isArray(game.objectHealth?.[objId])) return { applied: false, manualMessage: `**Collateral Damage** — apply ${flatDmg} Damage to the chosen object manually.` };
+      // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+      const _od = applyObjectDamageSync(game, objId, flatDmg, { attackerPlayerNum: playerNum, awardObjectiveVp });
+      return { applied: true, logMessage: `**Collateral Damage** — **${_od.name}** suffers **${flatDmg} Damage** (HP: ${_od.prevHp} → ${_od.newHp})${_od.defeated ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
     }
     // Phase 2: apply damage to chosen figure
     if (chosenTargetFk || (chosenAny && !String(chosenAny).startsWith('obj:'))) {
@@ -7579,14 +7567,10 @@ export function resolveAbility(abilityId, context) {
     if (targets.length === 1 && targets[0].kind === 'object') {
       // Auto-apply to a single object candidate (sync inline mutation).
       const objId = targets[0].value.slice(4);
-      const hp = game.objectHealth?.[objId];
-      if (Array.isArray(hp)) {
-        const [cur, max] = hp;
-        const newCur = Math.max(0, (cur ?? 0) - flatDmg);
-        game.objectHealth[objId] = [newCur, max];
-        const objName = game.objectMeta?.[objId]?.name || objId;
-        if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
-        return { applied: true, logMessage: `**Collateral Damage** — **${objName}** suffers **${flatDmg} Damage** (HP: ${cur ?? 0} → ${newCur})${newCur <= 0 ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
+      if (Array.isArray(game.objectHealth?.[objId])) {
+        // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+        const _od = applyObjectDamageSync(game, objId, flatDmg, { attackerPlayerNum: playerNum, awardObjectiveVp });
+        return { applied: true, logMessage: `**Collateral Damage** — **${_od.name}** suffers **${flatDmg} Damage** (HP: ${_od.prevHp} → ${_od.newHp})${_od.defeated ? ' — destroyed' : ''}.`, refreshDcEmbed: true };
       }
     }
     // 2+ candidates (figures and/or objects) → choice. Return BOTH choiceValues
@@ -12022,14 +12006,10 @@ export function resolveAbility(abilityId, context) {
           for (const objId of getDamageableObjectsAtCoord(game, coord)) {
             if (objSeen.has(objId) || !isObjectAlive(game, objId)) continue;
             objSeen.add(objId);
-            const hp = game.objectHealth?.[objId];
-            if (!Array.isArray(hp)) continue;
-            const [cur, max] = hp;
-            const newCur = Math.max(0, (cur ?? 0) - dmg);
-            game.objectHealth[objId] = [newCur, max];
-            const objName = game.objectMeta?.[objId]?.name || objId;
-            if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
-            results.push(`**${objName}** ${dmg} Dmg (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`);
+            if (!Array.isArray(game.objectHealth?.[objId])) continue;
+            // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+            const _od = applyObjectDamageSync(game, objId, dmg, { attackerPlayerNum: playerNum, awardObjectiveVp });
+            results.push(`**${_od.name}** ${dmg} Dmg (${_od.prevHp}→${_od.newHp})${_od.defeated ? ' — destroyed' : ''}`);
           }
         }
       }
@@ -12848,14 +12828,10 @@ export function resolveAbility(abilityId, context) {
           for (const objId of getDamageableObjectsAtCoord(game, coord)) {
             if (objSeen.has(objId) || !isObjectAlive(game, objId)) continue;
             objSeen.add(objId);
-            const hp = game.objectHealth?.[objId];
-            if (!Array.isArray(hp)) continue;
-            const [cur, max] = hp;
-            const newCur = Math.max(0, (cur ?? 0) - hitsFromDie);
-            game.objectHealth[objId] = [newCur, max];
-            const objName = game.objectMeta?.[objId]?.name || objId;
-            if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
-            results.push(`**${objName}** ${hitsFromDie} Dmg (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`);
+            if (!Array.isArray(game.objectHealth?.[objId])) continue;
+            // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+            const _od = applyObjectDamageSync(game, objId, hitsFromDie, { attackerPlayerNum: playerNum, awardObjectiveVp });
+            results.push(`**${_od.name}** ${hitsFromDie} Dmg (${_od.prevHp}→${_od.newHp})${_od.defeated ? ' — destroyed' : ''}`);
             _stcObjDamaged = true;
           }
         }

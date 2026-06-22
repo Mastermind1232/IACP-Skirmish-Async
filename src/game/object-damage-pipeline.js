@@ -184,6 +184,43 @@ export function getDamageableObjectsWithinN(game, coord, n) {
  *
  * Returns { applied, prevHp, newHp, defeated, splashTargets, vp }.
  */
+/**
+ * SYNCHRONOUS object-damage entry point (alexanbv 2026-06-22 — all damage goes
+ * through the pipeline). For sync resolvers (resolveAbility handlers, activation
+ * passives) that cannot `await` applyDamageToObject. Handles HP decrement,
+ * position removal on defeat, and the (sync) vpOnDefeat hook. splashOnDefeat
+ * (which needs the async figure-damage pipeline) is returned in `splashPending`
+ * for the caller to resolve if it can; objects with no splashOnDefeat are fully
+ * handled here.
+ *
+ * @param {object} game
+ * @param {string} objectId
+ * @param {number} amount
+ * @param {{attackerPlayerNum?:number, awardObjectiveVp?:Function}} [opts]
+ * @returns {{applied:boolean, prevHp:number, newHp:number, defeated:boolean, vp:number, name:string, splashPending:object|null}}
+ */
+export function applyObjectDamageSync(game, objectId, amount, opts = {}) {
+  const { attackerPlayerNum, awardObjectiveVp } = opts;
+  const hp = game?.objectHealth?.[objectId];
+  const meta = game?.objectMeta?.[objectId] || {};
+  const name = meta.name || objectId;
+  if (!Array.isArray(hp) || (hp[0] ?? 0) <= 0 || !(amount > 0)) {
+    return { applied: false, prevHp: hp?.[0] ?? 0, newHp: hp?.[0] ?? 0, defeated: false, vp: 0, name, splashPending: null };
+  }
+  const [cur, max] = hp;
+  const newHp = Math.max(0, cur - amount);
+  game.objectHealth[objectId] = [newHp, max];
+  if (newHp > 0) return { applied: true, prevHp: cur, newHp, defeated: false, vp: 0, name, splashPending: null };
+  // Defeated — remove from the board and award vpOnDefeat.
+  if (game.objectPositions) delete game.objectPositions[objectId];
+  let vp = 0;
+  if (meta.vpOnDefeat?.amount > 0 && typeof awardObjectiveVp === 'function') {
+    const grantPN = meta.vpOnDefeat.playerNum === 'attacker' ? attackerPlayerNum : meta.vpOnDefeat.playerNum;
+    if (grantPN === 1 || grantPN === 2) { awardObjectiveVp(game, grantPN, meta.vpOnDefeat.amount); vp = meta.vpOnDefeat.amount; }
+  }
+  return { applied: true, prevHp: cur, newHp: 0, defeated: true, vp, name, splashPending: meta.splashOnDefeat || null };
+}
+
 export async function applyDamageToObject(game, ctx, opts) {
   const { objectId, amount, attackerPlayerNum, source } = opts;
   if (!objectId || !amount || amount <= 0) {

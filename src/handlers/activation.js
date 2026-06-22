@@ -13,6 +13,8 @@ import { parseCoord } from '../game/coords.js';
 import { cleanupActivation, isActivationActionInProgress, describeActivationActionInProgress, figureKeyForActivation } from '../game/activation-state.js';
 import { discardOpenMoveGrids } from './movement.js';
 import { applyCondition, filterCondition, dcNameFromFigureKey, parseFigureKey, reduceHp, healHp, getMaxPowerTokens, grantPowerTokens, grantMovementBank, figureChoiceLabels, isConditionImmune, HARMFUL_CONDITIONS } from '../game/index.js';
+import { applyObjectDamageSync } from '../game/object-damage-pipeline.js';
+import { awardObjectiveVp } from '../game/vp-helpers.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { getValidPushDestinations } from '../game/movement.js';
 import { getAllFigureCoords } from '../game/spatial.js';
@@ -1905,13 +1907,10 @@ export async function handleActPassive(interaction, ctx) {
         if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         let resultMsg = `Rolled: **${diceResult}**`;
-        const hp = game.objectHealth?.[objId];
-        if (hits > 0 && Array.isArray(hp)) {
-          const [cur, max] = hp;
-          const newCur = Math.max(0, (cur ?? 0) - hits);
-          game.objectHealth[objId] = [newCur, max];
-          if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
-          resultMsg += `; ${hits} Damage to **${objName}** (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`;
+        if (hits > 0 && Array.isArray(game.objectHealth?.[objId])) {
+          // Object-damage pipeline (alexanbv 2026-06-22): HP + position + vpOnDefeat.
+          const _od = applyObjectDamageSync(game, objId, hits, { attackerPlayerNum: meta.playerNum, awardObjectiveVp });
+          resultMsg += `; ${hits} Damage to **${_od.name}** (${_od.prevHp}→${_od.newHp})${_od.defeated ? ' — destroyed' : ''}`;
         } else if (hits > 0) {
           resultMsg += `; apply ${hits} Damage to **${objName}** manually`;
         }
