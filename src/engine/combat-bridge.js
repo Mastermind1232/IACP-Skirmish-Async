@@ -3491,14 +3491,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         const hs = dcHealthState.get(fMsgId) || [];
         const fkMatch = fk.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          const newCur = Math.max(0, (cur ?? max) - aoeDmg);
-          hs[figIdx] = [newCur, max];
-          dcHealthState.set(fMsgId, hs);
-          syncHealthStateToList(game, defPn, fMsgId, hs);
-          aoeParts.push(`**${dcNameFromFigureKey(fk)}** ${aoeDmg} Dmg (${cur ?? max}\u2192${newCur})`);
+        if (hs[figIdx]) {
+          // Full damage pipeline (alexanbv 2026-06-22): defeat + when-damaged /
+          // when-defeated timings, not a hardcoded HP write.
+          const _bs = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+            figureKey: fk, msgId: fMsgId, figIndex: figIdx, amount: aoeDmg,
+            controllerPlayerNum: defPn, source: 'Bladestorm', combat,
+          });
+          aoeParts.push(`**${dcNameFromFigureKey(fk)}** ${aoeDmg} Dmg (${_bs.prevHp}\u2192${_bs.newHp})`);
           if (!embedRefreshMsgIds.includes(fMsgId)) embedRefreshMsgIds.push(fMsgId);
         }
       }

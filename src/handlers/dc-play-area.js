@@ -4923,7 +4923,6 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
   const meta = dcMessageMeta?.get(msgId);
   const attackerPlayerNum = pending.playerNum;
   const damageLog = [];
-  const defeatedFigures = [];
   // Match figures by FOOTPRINT (Large/Massive figures occupy multiple cells, not
   // just their stored anchor) — spec: "each figure ON a chosen space suffers 2
   // Damage". Each figure is damaged at most once even if it covers multiple chosen
@@ -4942,22 +4941,16 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
       const hs = dcHealthState?.get(fkMsgId) || [];
       const figMatch = fk.match(/-(\d+)-(\d+)$/);
       const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-      const entry = hs[figIdx];
-      if (!entry) continue;
-      const [cur, max] = entry;
-      const newCur = Math.max(0, (cur ?? max) - 2);
-      hs[figIdx] = [newCur, max ?? newCur];
-      dcHealthState?.set(fkMsgId, hs);
-      const dcIds = getDcMessageIds(game, pn);
-      const dcList = getDcList(game, pn);
-      const idx = (dcIds || []).indexOf(fkMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+      if (!hs[figIdx]) continue;
+      // Full damage pipeline (alexanbv 2026-06-22): HP + defeat + when-damaged /
+      // when-defeated timings (applyDamage finalizes defeat internally).
+      const _ob = await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+        figureKey: fk, msgId: fkMsgId, figIndex: figIdx, amount: 2,
+        controllerPlayerNum: pn, attackerPlayerNum,
+        source: 'Orbital Bombardment',
+      });
       const dcName = dcNameFromFigureKey(fk);
-      damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
-      if (newCur <= 0) {
-        damageLog[damageLog.length - 1] += ' **(defeated)**';
-        defeatedFigures.push({ figureKey: fk, playerNum: pn });
-      }
+      damageLog.push(`**${dcName}** (${_ob.prevHp} → ${_ob.newHp} HP)${_ob.wasDefeated ? ' **(defeated)**' : ''}`);
     }
   }
   const spacesStr = pending.spacesChosen.map(s => s.toUpperCase()).join(', ');
@@ -4967,11 +4960,7 @@ export async function handleOrbitalBombardmentSpacePick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Orbital Bombardment** — Bombarded spaces: ${spacesStr}. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
-  for (const df of defeatedFigures) {
-    if (processFigureDefeat) {
-      await processFigureDefeat(game, { defeatedPlayerNum: df.playerNum, figureKey: df.figureKey, attackerPlayerNum: opponentPlayerNum(df.playerNum), source: 'Orbital Bombardment' });
-    }
-  }
+  // Defeats are finalized inside _applyDamage (full pipeline) — no manual loop.
   cleanupSpacePick(game, `${gameId}_${msgId}`);
   clearPendingOrbitalBombardment(game);
   saveGames(game.gameId);
@@ -5007,7 +4996,6 @@ export async function handleBombDropSpacePick(interaction, ctx) {
 
   // Apply 2 damage to each figure on affected spaces
   const damageLog = [];
-  const defeatedFigures = [];
   for (const pn of [1, 2]) {
     const positions = game.figurePositions?.[pn] || {};
     for (const [fk, pos] of Object.entries(positions)) {
@@ -5021,22 +5009,15 @@ export async function handleBombDropSpacePick(interaction, ctx) {
       const hs = dcHealthState?.get(fkMsgId) || [];
       const figMatch = fk.match(/-(\d+)-(\d+)$/);
       const figIdx = figMatch ? parseInt(figMatch[2], 10) : 0;
-      const entry = hs[figIdx];
-      if (!entry) continue;
-      const [cur, max] = entry;
-      const newCur = Math.max(0, (cur ?? max) - 2);
-      hs[figIdx] = [newCur, max ?? newCur];
-      dcHealthState?.set(fkMsgId, hs);
-      const dcIds = getDcMessageIds(game, pn);
-      const dcList = getDcList(game, pn);
-      const idx = (dcIds || []).indexOf(fkMsgId);
-      if (idx >= 0 && dcList?.[idx]) dcList[idx].healthState = [...hs];
+      if (!hs[figIdx]) continue;
+      // Full damage pipeline (alexanbv 2026-06-22): HP + defeat + timings.
+      const _bd = await _applyDamage(game, { dcHealthState, logGameAction, client: interaction.client }, {
+        figureKey: fk, msgId: fkMsgId, figIndex: figIdx, amount: 2,
+        controllerPlayerNum: pn, attackerPlayerNum: pending.playerNum,
+        source: 'Bomb Drop',
+      });
       const dcName = dcNameFromFigureKey(fk);
-      damageLog.push(`**${dcName}** (${cur ?? max} → ${newCur} HP)`);
-      if (newCur <= 0) {
-        damageLog[damageLog.length - 1] += ' **(defeated)**';
-        defeatedFigures.push({ figureKey: fk, playerNum: pn });
-      }
+      damageLog.push(`**${dcName}** (${_bd.prevHp} → ${_bd.newHp} HP)${_bd.wasDefeated ? ' **(defeated)**' : ''}`);
     }
   }
   const resultStr = damageLog.length > 0 ? `Damage: ${damageLog.join(', ')}` : 'No figures affected.';
@@ -5045,11 +5026,7 @@ export async function handleBombDropSpacePick(interaction, ctx) {
     components: [],
   }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, interaction.client, `**Bomb Drop** — Detonated at **${chosenSpace.toUpperCase()}**. ${resultStr}`, { phase: 'ROUND', icon: 'attack' });
-  for (const df of defeatedFigures) {
-    if (processFigureDefeat) {
-      await processFigureDefeat(game, { defeatedPlayerNum: df.playerNum, figureKey: df.figureKey, attackerPlayerNum: opponentPlayerNum(df.playerNum), source: 'Bomb Drop' });
-    }
-  }
+  // Defeats are finalized inside _applyDamage (full pipeline) — no manual loop.
   delete game.pendingBombDrop[msgId];
   saveGames(game.gameId);
 }
