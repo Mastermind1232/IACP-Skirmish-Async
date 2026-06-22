@@ -6444,15 +6444,18 @@ export function resolveAbility(abilityId, context) {
       return { applied: false, manualMessage: 'Resolve manually: play when declaring attack (as the attacker).' };
     }
     // Primary Target: validate target has the highest FIGURE cost of all hostile
-    // figures on the map. alexanbv 2026-06-22: "figure cost, not group cost" —
-    // figure cost = deployment-group cost ÷ number of figures in the group (so a
-    // 3-figure group costing 6 is figure cost 2, NOT 6). Compared per-group since
-    // every figure in a group shares the same figure cost.
+    // figures on the map. alexanbv 2026-06-22: figure cost is the PRINTED second
+    // number on the deployment card (the per-figure cost for a multi-figure
+    // group) — NOT group cost ÷ figures (e.g. Stormtrooper Elite is 7 for 3 →
+    // printed figure cost 3, not 2.33) — and it is NOT modified by attachments.
+    // That printed value is the `subCost` field; single-figure groups have no
+    // subCost so figure cost = the group `cost`. Compared per-group since every
+    // figure in a group shares the same figure cost.
     if (entry.requireHighestCostTarget && dcMessageMeta) {
       const defPn = cbt.defenderPlayerNum ?? opponentPlayerNum(playerNum);
       const targetDcName = dcNameFromFigureKey(cbt.target?.figureKey || '');
       const allEffects = getDcEffects() || {};
-      const figureCostOf = (eff) => (eff?.cost ?? 0) / (eff?.figures || 1);
+      const figureCostOf = (eff) => (eff?.subCost ?? eff?.cost ?? 0);
       const targetFigureCost = figureCostOf(allEffects[targetDcName]);
       // Check all living hostile figures for any with higher figure cost
       const defDcIds = getDcMessageIds(game, defPn) || [];

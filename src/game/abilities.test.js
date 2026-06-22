@@ -440,16 +440,19 @@ test('resolveAbility Primary Target applies Focus and attackBonusHits', () => {
   assert.strictEqual(game.figureConditions['Boba Fett-1-0']?.includes('Focus'), true);
 });
 
-test('Primary Target uses FIGURE cost not group cost (allows highest-figure-cost target despite a higher group-cost hostile)', () => {
-  // AT-ST: group cost 10, 1 figure → figure cost 10.
-  // Alliance Ranger (Elite): group cost 12, 3 figures → figure cost 4.
-  // Target AT-ST IS the highest FIGURE cost (10 > 4), but NOT the highest GROUP
-  // cost (10 < 12). Old group-cost logic wrongly blocked this; figure cost allows.
-  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt2', target: { figureKey: 'AT-ST-1-0' } };
+test('Primary Target uses the PRINTED figure cost (subCost), not group cost ÷ figures', () => {
+  // Jet Trooper (Elite): group cost 7, 2 figures, printed figure cost (subCost) 4
+  //   → cost/figures would be 3.5.
+  // Alliance Ranger (Elite): group cost 12, 3 figures, printed figure cost 4.
+  // Both have printed figure cost 4 → TIE → the target IS (tied) the highest, so
+  // Primary Target is allowed. The old cost/figures logic gave the target 3.5 <
+  // Ranger 4.0 and wrongly REJECTED it. This case discriminates subCost from
+  // cost/figures.
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt2', target: { figureKey: 'Jet Trooper (Elite)-1-0' } };
   const game = {
     gameId: 'g-pt2', dcActionsData: { 'msg-pt2': {} }, pendingCombat: combat,
     figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } }, figureConditions: {},
-    p2DcList: [{ dcName: 'AT-ST' }, { dcName: 'Alliance Ranger (Elite)' }],
+    p2DcList: [{ dcName: 'Jet Trooper (Elite)' }, { dcName: 'Alliance Ranger (Elite)' }],
     p2DcMessageIds: ['m1', 'm2'],
   };
   const dcMessageMeta = new Map([['msg-pt2', { gameId: 'g-pt2', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
@@ -458,17 +461,17 @@ test('Primary Target uses FIGURE cost not group cost (allows highest-figure-cost
   assert.strictEqual(combat.bonusHits, 1);
 });
 
-test('Primary Target rejects when a hostile has a strictly higher FIGURE cost', () => {
-  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt3', target: { figureKey: 'Alliance Ranger (Elite)-1-0' } };
+test('Primary Target rejects when a hostile has a strictly higher printed figure cost', () => {
+  // Target Rebel Trooper (Regular) printed figure cost 2 < AT-ST 10 → not highest.
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, gameId: 'g-pt3', target: { figureKey: 'Rebel Trooper (Regular)-1-0' } };
   const game = {
     gameId: 'g-pt3', dcActionsData: { 'msg-pt3': {} }, pendingCombat: combat,
     figurePositions: { 1: { 'Boba Fett-1-0': 'a1' } }, figureConditions: {},
-    p2DcList: [{ dcName: 'AT-ST' }, { dcName: 'Alliance Ranger (Elite)' }],
+    p2DcList: [{ dcName: 'AT-ST' }, { dcName: 'Rebel Trooper (Regular)' }],
     p2DcMessageIds: ['m1', 'm2'],
   };
   const dcMessageMeta = new Map([['msg-pt3', { gameId: 'g-pt3', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba [Group 1]' }]]);
   const result = resolveAbility('Primary Target', { game, playerNum: 1, combat, dcMessageMeta });
-  // Target Ranger figure cost 4 < AT-ST figure cost 10 → not the highest → rejected.
   assert.strictEqual(result.applied, false);
 });
 
