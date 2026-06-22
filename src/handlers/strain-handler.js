@@ -152,16 +152,15 @@ export async function applyStrain(game, ctx, opts) {
   }
   const source = opts.source || 'Strain';
 
-  // ── Fireproof (Flame Trooper attachment): immune to Strain. Find the
-  //    figure's msgId via dcMessageMeta and check attachments.
-  const _fpMsgId = ctx.findDcMessageIdForFigure?.(game.gameId, controllerPN, figureKey);
-  if (_fpMsgId) {
-    const _fpAtts = (controllerPN === 1 ? game.p1DcAttachments : game.p2DcAttachments)?.[_fpMsgId] || [];
-    if (cardNameIncludes(_fpAtts, 'Flame Trooper')) {
-      const dcName = dcNameFromFigureKey(figureKey);
-      await ctx.logGameAction?.(game, ctx.client, `**Fireproof** — **${dcName}** is immune to Strain from ${source}.`, { phase: 'ROUND', icon: 'card' });
-      return _runStrainFollowup(game, ctx, opts.followup || null);
-    }
+  // ── Fireproof (Flame Trooper Squad Upgrade): immune to Strain — but ONLY the
+  //    Flame Trooper SU FIGURE, not the whole group (alexanbv 2026-06-22). Scope
+  //    per-figure via squadUpgradeFigureCard (matches the Incinerate/Blast paths
+  //    in combat-bridge.js), so base group figures still suffer Strain normally.
+  const { squadUpgradeFigureCard: _fpSuCard } = await import('../game/squad-upgrades.js');
+  if (_fpSuCard(game, figureKey) === 'Flame Trooper') {
+    const dcName = dcNameFromFigureKey(figureKey);
+    await ctx.logGameAction?.(game, ctx.client, `**Fireproof** — **${dcName}** is immune to Strain from ${source}.`, { phase: 'ROUND', icon: 'card' });
+    return _runStrainFollowup(game, ctx, opts.followup || null);
   }
 
   // ── Figurehead (Murne Rin): STRAIN reaction (alexanbv 2026-06-20 —
