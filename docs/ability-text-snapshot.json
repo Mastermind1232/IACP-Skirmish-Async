@@ -505,7 +505,7 @@
     "Stay Down": "Use after resolving \"Close and Personal.\" If the target was not defeated, perform an additional attack with the same target. Then, you become Stunned.",
     "Stealth Tactics": "Use while defending to add 1 white die to your defense pool.",
     "Still Faster Than You": "Use at the start of a hostile figure's activation to interrupt to move 2 spaces and perform an attack targeting a different hostile figure.",
-    "Stimulants": "Use during your activation (does not cost an action). Choose any other friendly or hostile figure: it suffers 1 Damage, then gains 1 movement point and becomes Focused.",
+    "Stimulants": "Use during your activation (does not cost an action). Choose any other adjacent friendly or hostile figure: it suffers 1 Damage, then gains 1 movement point and becomes Focused.",
     "Strategic Shift": "Special Action: A player of your choice shuffles his hand of Command cards into his deck. Then, that player draws 2 cards.",
     "Strength in Numbers": "Use after you resolve a group's activation. You may immediately activate another group. The combined deployment cost of these groups cannot exceed 12.",
     "Stroke of Brilliance": "Use when an attack targeting you is declared. Apply +2 Block and +1 Evade to the defense results.",

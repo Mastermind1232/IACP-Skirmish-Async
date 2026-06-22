@@ -1885,6 +1885,39 @@ export async function handleActPassive(interaction, ctx) {
   } else if (ability === 'durasteelfist') {
     if (choice === 'skip') {
       await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Skipped.`, components: [] }).catch(discordCatch);
+    } else if (choice.startsWith('obj:')) {
+      // Object target (alexanbv 2026-06-22): "Choose 1 adjacent figure OR OBJECT."
+      // Roll 1 green die, apply Hits to the object's health. No push — that only
+      // applies to a SMALL figure.
+      const objId = choice.slice(4);
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      game.roundFigureAbilityUsed[`${meta.dcName}_durasteel_fist_${msgId}`] = true;
+      const faces = getDiceData()?.attack?.green;
+      const objName = game.objectMeta?.[objId]?.name || objId;
+      if (!faces?.length) {
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — Roll 1 green die manually and apply results to **${objName}**.`, components: [] }).catch(discordCatch);
+      } else {
+        const face = faces[Math.floor(Math.random() * faces.length)];
+        const hits = face.dmg ?? 0;
+        const surges = face.surge ?? 0;
+        const dieParts = [];
+        if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
+        if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
+        const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
+        let resultMsg = `Rolled: **${diceResult}**`;
+        const hp = game.objectHealth?.[objId];
+        if (hits > 0 && Array.isArray(hp)) {
+          const [cur, max] = hp;
+          const newCur = Math.max(0, (cur ?? 0) - hits);
+          game.objectHealth[objId] = [newCur, max];
+          if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
+          resultMsg += `; ${hits} Damage to **${objName}** (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`;
+        } else if (hits > 0) {
+          resultMsg += `; apply ${hits} Damage to **${objName}** manually`;
+        }
+        await interaction.message.edit({ content: `🤜 **Durasteel Fist** — ${resultMsg}.`, components: [] }).catch(discordCatch);
+        await logGameAction?.(game, client, `**Durasteel Fist** — Rolled ${diceResult} against ${objName}.`, { phase: 'ACTIVATION', icon: 'activate' });
+      }
     } else {
       const targetFk = choice;
       const targetDcName = dcNameFromFigureKey(targetFk);

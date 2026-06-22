@@ -12834,8 +12834,29 @@ export function resolveAbility(abilityId, context) {
           }
         }
       }
-      const noFigures = hitsFromDie === 0 ? '0 Hits+Surges — no damage.' : results.length ? results.join('; ') : 'No figures in area.';
-      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0 };
+      // alexanbv 2026-06-22: the card hits "each figure OR OBJECT on or adjacent
+      // to that space" — apply the same damage to damageable objects in the area.
+      let _stcObjDamaged = false;
+      if (hitsFromDie > 0 && game.objectHealth) {
+        const objSeen = new Set();
+        for (const coord of affectedSpaces) {
+          for (const objId of getDamageableObjectsAtCoord(game, coord)) {
+            if (objSeen.has(objId) || !isObjectAlive(game, objId)) continue;
+            objSeen.add(objId);
+            const hp = game.objectHealth?.[objId];
+            if (!Array.isArray(hp)) continue;
+            const [cur, max] = hp;
+            const newCur = Math.max(0, (cur ?? 0) - hitsFromDie);
+            game.objectHealth[objId] = [newCur, max];
+            const objName = game.objectMeta?.[objId]?.name || objId;
+            if (newCur <= 0 && game.objectPositions) delete game.objectPositions[objId];
+            results.push(`**${objName}** ${hitsFromDie} Dmg (${cur ?? 0}→${newCur})${newCur <= 0 ? ' — destroyed' : ''}`);
+            _stcObjDamaged = true;
+          }
+        }
+      }
+      const noFigures = hitsFromDie === 0 ? '0 Hits+Surges — no damage.' : results.length ? results.join('; ') : 'No figures or objects in area.';
+      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0, ...(_stcObjDamaged ? { refreshBoard: true } : {}) };
     }
     // Phase 1: space picker within 3 of activating figure
     const boardState = getBoardStateForMovement(game, null);
@@ -13004,10 +13025,26 @@ export function resolveAbility(abilityId, context) {
         return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };
       }
       if (isHostileTarget) {
-        // A surviving HOSTILE recipient becomes Focused and gains 1 MP — but it
-        // moves on the OPPONENT's turn, so note the MP rather than auto-prompting
-        // them mid-our-activation.
-        return { applied: true, logMessage: `**Stimulants** — hostile **${targetName}** suffered 1 Damage; becomes Focused and gains 1 MP (opponent spends on their turn).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+        // A surviving HOSTILE recipient becomes Focused and gains 1 MP. alexanbv
+        // 2026-06-22: that MP is OUT OF ACTIVATION — the OPPONENT gets the option
+        // to spend it IMMEDIATELY (not banked). pendingMoveX keyed to the hostile
+        // (owner = opponent) is spend-at-once and posts the picker to that owner.
+        if (damageMsgId) {
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[damageMsgId] = {
+            remaining: 1,
+            source: 'Stimulants',
+            playerNum: ownerPn,
+            figureKey: damageFk,
+            dcName: dcNameFromFigureKey(damageFk),
+            threadId: null,
+            bypassCosts: false,
+            msgId: damageMsgId,
+            nextAction: null,
+          };
+          return { applied: true, pendingMoveXMsgId: damageMsgId, activeMsgId: damageMsgId, logMessage: `**Stimulants** — hostile **${targetName}** suffered 1 Damage; becomes Focused; opponent gains 1 MP to spend immediately (not banked).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
+        }
+        return { applied: true, logMessage: `**Stimulants** — hostile **${targetName}** suffered 1 Damage and becomes Focused; resolve their 1 MP manually.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
       }
       // Friendly recipient ≠ activator → setupPendingMoveX on their msgId.
       if (!damageMsgId) {
@@ -13035,25 +13072,28 @@ export function resolveAbility(abilityId, context) {
         conditionCardsToPost: ['Focus'],
       };
     }
-    // Phase 1: offer ANY friendly or hostile figure EXCEPT the activating figure.
-    // alexanbv 2026-06-22 errata: "Stimulants no longer costs an action; select
-    // any friendly or hostile figure except yourself." (CC play is already
-    // action-free; "yourself" = the card-playing figure, so groupmates and other
-    // figures are valid, but the activator is not.)
+    // Phase 1: offer ADJACENT friendly or hostile figures EXCEPT the activating
+    // figure. alexanbv 2026-06-22: Stimulants no longer costs an action and may
+    // target any friendly OR hostile figure except yourself — but it STILL
+    // REQUIRES ADJACENCY (to the card-playing figure).
+    const mapId = game.selectedMap?.id;
     const _stimOpp = opponentPlayerNum(playerNum);
     const opts = [];
     const vals = [];
-    for (const pn of [playerNum, _stimOpp]) {
-      for (const fk of Object.keys(game.figurePositions?.[pn] || {})) {
-        if (!game.figurePositions[pn][fk] || fk === activatorFk) continue;
-        const fMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
+    const _stimSeen = new Set();
+    if (mapId) {
+      for (const { figureKey, playerNum: p } of getFiguresAdjacentToTarget(game, activatorFk, mapId)) {
+        if (figureKey === activatorFk || _stimSeen.has(figureKey)) continue;
+        if (p !== playerNum && p !== _stimOpp) continue;
+        _stimSeen.add(figureKey);
+        const fMsgId = findMsgIdForFigureKey(game, p, figureKey, dcMessageMeta);
         const fMeta = fMsgId ? dcMessageMeta.get(fMsgId) : null;
-        const fName = fMeta?.displayName || fMeta?.dcName || dcNameFromFigureKey(fk);
-        opts.push(`${pn === playerNum ? 'Friendly' : 'Hostile'}: ${fName}`);
-        vals.push(fk);
+        const fName = fMeta?.displayName || fMeta?.dcName || dcNameFromFigureKey(figureKey);
+        opts.push(`${p === playerNum ? 'Friendly' : 'Hostile'}: ${fName}`);
+        vals.push(figureKey);
       }
     }
-    if (vals.length === 0) return { applied: false, manualMessage: '**Stimulants** — no other figure to target.' };
+    if (vals.length === 0) return { applied: false, manualMessage: '**Stimulants** — no adjacent figure to target.' };
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 

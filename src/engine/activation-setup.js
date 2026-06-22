@@ -36,6 +36,7 @@ import { enumerateActivatorSoaDescriptors, startSoaResolution, describeChooserPr
 import { join } from 'path';
 
 import { getDcEffect } from '../game/dc-helpers.js';
+import { getDamageableObjectsAtCoord, isObjectAlive } from '../game/object-damage-pipeline.js';
 // ─── Companion helpers (used by activation.js too) ───────────────────────────
 
 /**
@@ -772,16 +773,31 @@ export async function finalizeActivation({
           }
         }
       }
-      if (_dfTargets.length > 0) {
-        const _dfSlice = _dfTargets.slice(0, 24);
+      // alexanbv 2026-06-22: Durasteel Fist may target an adjacent figure OR
+      // OBJECT ("Choose 1 adjacent figure or object"). Add adjacent damageable
+      // objects to the picker (object choices are tagged `obj:<id>`).
+      const _dfObjTargets = [];
+      const _dfObjSeen = new Set();
+      for (const _coord of _dfAdj) {
+        for (const _objId of getDamageableObjectsAtCoord(game, _coord)) {
+          if (_dfObjSeen.has(_objId) || !isObjectAlive(game, _objId)) continue;
+          _dfObjSeen.add(_objId);
+          _dfObjTargets.push({ objId: _objId, name: game.objectMeta?.[_objId]?.name || _objId });
+        }
+      }
+      if (_dfTargets.length > 0 || _dfObjTargets.length > 0) {
+        const _dfSlice = _dfTargets.slice(0, 22);
         const _dfLabels = figureChoiceLabels(_dfSlice.map(({ fk }) => fk));
         const _dfBtns = _dfSlice.map(({ fk }, i) =>
           new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_${fk}`).setLabel(_dfLabels[i]).setStyle(ButtonStyle.Danger)
         );
+        for (const { objId, name } of _dfObjTargets.slice(0, 24 - _dfSlice.length)) {
+          _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_obj:${objId}`).setLabel(`📦 ${name}`.slice(0, 80)).setStyle(ButtonStyle.Danger));
+        }
         _dfBtns.push(new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_durasteelfist_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send({ content: `🤜 **Durasteel Fist** — At any point during this activation, you may target an adjacent figure (roll 1 green die, apply Hits as damage):`, components: chunkButtonsToRows(_dfBtns) }).catch(discordCatch);
+        await thread.send({ content: `🤜 **Durasteel Fist** — At any point during this activation, you may target an adjacent figure or object (roll 1 green die, apply Hits as damage):`, components: chunkButtonsToRows(_dfBtns) }).catch(discordCatch);
       } else {
-        await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures to target.` }).catch(discordCatch);
+        await thread.send({ content: `🤜 **Durasteel Fist** — No adjacent figures or objects to target.` }).catch(discordCatch);
       }
     }
   }

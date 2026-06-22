@@ -4812,7 +4812,7 @@
     },
     "Stimulants": {
       "type": "ccEffect",
-      "label": "Choose any other friendly or hostile figure: it suffers 1 Damage, gains 1 MP, becomes Focused (no action cost)",
+      "label": "Choose any other ADJACENT friendly or hostile figure: it suffers 1 Damage, gains 1 MP, becomes Focused (no action cost)",
       "stimulantsEffect": true,
       "wiredStatus": "wired"
     },

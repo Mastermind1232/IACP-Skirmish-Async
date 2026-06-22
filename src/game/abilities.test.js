@@ -542,14 +542,8 @@ test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile tak
     [actMsg, { gameId: 'g-stim', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }],
     [tgtMsg, { gameId: 'g-stim', playerNum: 2, dcName: 'Stormtrooper (Elite)', displayName: 'Stormtrooper (Elite) [Group 1]' }],
   ]);
-  // Phase 1: picker lists hostiles but NOT the activating figure (self).
-  const g1 = buildGame();
-  const p1 = resolveAbility('Stimulants', { game: g1, playerNum: 1, dcMessageMeta: meta(), dcHealthState: new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]) });
-  assert.strictEqual(p1.requiresChoice, true);
-  assert.ok(p1.choiceValues.includes('Stormtrooper (Elite)-1-0'), 'hostile offered');
-  assert.ok(!p1.choiceValues.includes('Luke Skywalker-1-0'), 'activating figure (self) NOT offered');
-
-  // Phase 2 with the hostile chosen: 1 Damage + it becomes Focused.
+  // Phase 2 with the hostile chosen: 1 Damage + Focus; the opponent gains 1 MP
+  // to spend immediately (pendingMoveX keyed to the hostile's owner, not banked).
   const g2 = buildGame();
   const hs2 = new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]);
   const r = resolveAbility('Stimulants', { game: g2, playerNum: 1, dcMessageMeta: meta(), dcHealthState: hs2, chosenFigureKey: 'Stormtrooper (Elite)-1-0' });
@@ -557,8 +551,14 @@ test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile tak
   assert.deepStrictEqual(hs2.get(tgtMsg)[0], [5, 6], 'hostile took 1 Damage');
   assert.ok((g2.figureConditions['Stormtrooper (Elite)-1-0'] || []).includes('Focus'), 'hostile becomes Focused');
   assert.ok(/hostile/i.test(r.logMessage), 'log notes the hostile target');
-  assert.ok(!g2.pendingMoveX, 'no friendly MP picker armed for a hostile recipient');
+  // Opponent (player 2) gets an immediate 1-MP move on the hostile — not banked.
+  assert.ok(game2HasHostileMp(g2, tgtMsg), 'opponent gains 1 MP to spend immediately on the hostile');
 });
+
+function game2HasHostileMp(game, tgtMsg) {
+  const mv = game.pendingMoveX?.[tgtMsg];
+  return !!mv && mv.remaining === 1 && mv.playerNum === 2 && mv.source === 'Stimulants';
+}
 
 test('Veteran Instincts: constrained pair — 1 attack token (Hit/Surge) + 1 defense token (Block/Evade)', () => {
   const msgId = 'msg-vi';

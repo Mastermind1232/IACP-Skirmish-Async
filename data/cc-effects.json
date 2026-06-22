@@ -1790,7 +1790,7 @@
       "cost": 0,
       "playableBy": "SMUGGLER or TECHNICIAN",
       "timing": "duringActivation",
-      "effect": "Use during your activation (does not cost an action). Choose any other friendly or hostile figure: it suffers 1 Damage, then gains 1 movement point and becomes Focused."
+      "effect": "Use during your activation (does not cost an action). Choose any other adjacent friendly or hostile figure: it suffers 1 Damage, then gains 1 movement point and becomes Focused."
     },
     "Strategic Shift": {
       "cost": 1,
