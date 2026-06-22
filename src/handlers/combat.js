@@ -3871,7 +3871,15 @@ export async function handleAttackTarget(interaction, ctx) {
     }
   }
 
-  const attackerStats = getDcStats(meta.dcName);
+  // Squad Upgrade figure (Flame Trooper / Z-6 Trooper / Mortar Trooper) attacks
+  // with its OWN dice, surges and innate abilities — NOT the host group's
+  // (alexanbv 2026-06-22). When the attacking figure is the SU figure (matched by
+  // nickname), resolve its attack stats from the SU card; the SU card name is
+  // stamped on the combat (suAttackerCard) so the surge list + innate bonuses
+  // also come from it.
+  const _atkFigKeyForStats = `${meta.dcName}-${(meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1}-${figureIndex}`;
+  const _suAttackerCard = squadUpgradeFigureCard(game, _atkFigKeyForStats);
+  const attackerStats = _suAttackerCard ? (getDcStats(_suAttackerCard) || getDcStats(meta.dcName)) : getDcStats(meta.dcName);
   let attackInfo = attackerStats.attack || { dice: ['red'], range: [1, 3] };
 
   // attackTypeOverride (Overheated → 'melee'): per-FIGURE attack-type
@@ -4125,6 +4133,9 @@ export async function handleAttackTarget(interaction, ctx) {
     defenderPlayerNum: opponentPlayerNum(attackerPlayerNum),
     attackerMsgId: msgId,
     attackerDcName: meta.dcName,
+    // The Squad Upgrade figure attacks with the SU card's own dice/surges/innate.
+    // Kept alongside attackerDcName (which stays the host for identity/logs).
+    suAttackerCard: _suAttackerCard || undefined,
     defenderDcName: targetDcName,
     // Snapshot Marksman/Ballistics Matrix "figures don't block" semantic
     // for this attack — read by handleCombatRoll's post-declare LoS probe.

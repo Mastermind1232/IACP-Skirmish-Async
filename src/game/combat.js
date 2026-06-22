@@ -244,10 +244,22 @@ export function getAttackerSurgeAbilities(combat) {
   // but explicitly grant replacement surges (e.g. "using only Surge: +1 Hit,
   // Surge: Pierce 4"), supplied via combat.bonusSurgeAbilities — keep those.
   if (combat.blockSurgeAbilities) return [...(combat?.bonusSurgeAbilities || [])];
-  // Reverse Engineer: use the defender's DC surge abilities instead of the attacker's
-  const surgeDcName = combat.reverseEngineerActive ? (combat.defenderDcName ?? combat.attackerDcName) : combat.attackerDcName;
+  // Reverse Engineer: use the defender's DC surge abilities instead of the
+  // attacker's. Squad Upgrade figure (Flame Trooper / Z-6 / Mortar): use the SU
+  // CARD's own surges, not the host group's (alexanbv 2026-06-22).
+  const surgeDcName = combat.reverseEngineerActive
+    ? (combat.defenderDcName ?? combat.attackerDcName)
+    : (combat.suAttackerCard ? `[${combat.suAttackerCard}]` : combat.attackerDcName);
   const card = getDcEffect(surgeDcName);
-  let base = card?.surgeAbilities || [];
+  let base = [...(card?.surgeAbilities || [])];
+  // An SU figure's innate condition surge spelled out in the card's `abilities`
+  // (e.g. Flame Trooper "Bleed" = Surge: Bleed) → add the Surge: <condition> key.
+  if (combat.suAttackerCard && !combat.reverseEngineerActive) {
+    for (const ab of (card?.abilities || [])) {
+      const k = String(ab).toLowerCase();
+      if (['bleed', 'stun', 'weaken', 'immobilize'].includes(k) && !base.includes(k)) base.push(k);
+    }
+  }
   // Skirmish Upgrade attachments may remove base surge keys (e.g. Focused on the Kill removes "recover 3")
   const removeKeys = combat?.removeSurgeKeys;
   if (removeKeys?.length) {

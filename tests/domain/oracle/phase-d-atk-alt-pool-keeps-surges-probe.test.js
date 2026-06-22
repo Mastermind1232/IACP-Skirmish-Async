@@ -32,9 +32,12 @@ const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('PROBE-PD-ATK-004: alternate-pool attacks retain the attacker DC surge abilities by default', () => {
   it('004a: source — getAttackerSurgeAbilities reads surges keyed on attacker DC (not on dice pool)', () => {
+    // The surge set is keyed on a DC CARD NAME (the attacker DC, or — for a
+    // Squad Upgrade figure — the SU card it attacks with), NEVER on the dice
+    // pool. (alexanbv 2026-06-22 added the SU-card branch + Bleed-from-abilities.)
     assert.match(G_CB_SRC,
-      /export function getAttackerSurgeAbilities\(combat\) \{[\s\S]*?const surgeDcName = combat\.reverseEngineerActive \? \(combat\.defenderDcName \?\? combat\.attackerDcName\) : combat\.attackerDcName;[\s\S]*?const card = getDcEffect\(surgeDcName\);[\s\S]*?let base = card\?\.surgeAbilities \|\| \[\];/,
-      'surge ability set must come from the DC card keyed on attacker name — CRR-ATK-004');
+      /export function getAttackerSurgeAbilities\(combat\) \{[\s\S]*?const surgeDcName = combat\.reverseEngineerActive[\s\S]*?combat\.suAttackerCard \? `\[\$\{combat\.suAttackerCard\}\]` : combat\.attackerDcName[\s\S]*?const card = getDcEffect\(surgeDcName\);[\s\S]*?let base = \[\.\.\.\(card\?\.surgeAbilities \|\| \[\]\)\];/,
+      'surge ability set must come from the DC card keyed on attacker (or SU card) name — CRR-ATK-004');
   });
 
   it('004b: source — the ONLY full opt-out is combat.blockSurgeAbilities (no dice-pool predicate)', () => {

@@ -14,6 +14,7 @@ import {
   recalcAttackTotals,
   recalcDefenseTotals,
   getInnateRerolls,
+  getAttackerSurgeAbilities,
 } from './combat.js';
 
 const emptyMod = { damage: 0, pierce: 0, accuracy: 0, conditions: [], blast: 0, recover: 0, cleave: 0 };
@@ -630,4 +631,18 @@ test('innate passive +1 Hit: bonusHits added to damage', () => {
     bonusHits: 1, // simulating innate +1 Damage
   });
   assert.strictEqual(r.damage, 4); // 3 + 1
+});
+
+test('getAttackerSurgeAbilities: SU figure uses the SU card surges + Surge: Bleed (alexanbv 2026-06-22)', () => {
+  // Host group (Stormtrooper) attacking normally → host surges.
+  const host = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper' });
+  assert.ok(!host.includes('bleed'), 'host Stormtrooper does not get Bleed');
+  // The Flame Trooper Squad Upgrade figure → the SU card's OWN surges
+  // (damage 2 / blast 1) PLUS Surge: Bleed (listed in the card's abilities).
+  const su = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper', suAttackerCard: 'Flame Trooper' });
+  assert.ok(su.includes('damage 2') && su.includes('blast 1'), "uses Flame Trooper's own surges");
+  assert.ok(su.includes('bleed'), 'Flame Trooper gets Surge: Bleed');
+  // bonusSurgeAbilities (CC-granted) still append for the SU figure.
+  const suBonus = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper', suAttackerCard: 'Flame Trooper', bonusSurgeAbilities: ['recover 3'] });
+  assert.ok(suBonus.includes('recover 3'));
 });
