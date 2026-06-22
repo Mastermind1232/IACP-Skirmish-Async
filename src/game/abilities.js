@@ -9623,15 +9623,17 @@ export function resolveAbility(abilityId, context) {
       const healthState = dcHealthState.get(targetMsgId) || [];
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
-      // Damage applies synchronously; strain queues via pendingStrain[]
-      // so apply-ability-result.js routes it through applyStrain (Fireproof
-      // / Headhunter / per-strain choice / Under Duress / Paz). Splash and
-      // selfStrain still take the legacy synchronous path here.
-      const [cur, max] = hs;
+      // Damage routes through the defeat-aware pipeline (alexanbv 2026-06-22 — all
+      // damage goes through the pipeline) so a lethal hit queues a defeat in
+      // game._pendingFigureDefeats (drained by apply-ability-result.js → removes
+      // the figure / awards VP). This matters for e.g. Ambush dealing 2 Damage to
+      // the attacker on-declare: the attacker must actually be DEFEATED so the
+      // attack is then canceled. Strain still queues via pendingStrain[].
       if (damage > 0) {
-        healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
-        dcHealthState.set(targetMsgId, healthState);
-        syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+        applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, targetIdx, damage, oppNum, {
+          sourceLabel: entry.label || abilityId || 'CC ability',
+          attackerPlayerNum: playerNum,
+        });
       }
       const _cahPendingStrain = strain > 0 ? [{
         figureKey: targetFk,

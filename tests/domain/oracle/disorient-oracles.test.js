@@ -110,6 +110,38 @@ describe('ORACLE-DISOR-002: Resolution discards condition and applies Strain', (
   });
 });
 
+// ── chooseAdjacentHostileThen damage now routes through the defeat-aware
+//    pipeline (alexanbv 2026-06-22) — a lethal CC hit queues a figure defeat.
+//    This is the prerequisite for Ambush actually defeating the attacker. ──────
+describe('chooseAdjacentHostileThen lethal damage queues a defeat (pipeline)', () => {
+  it('Force Lightning dealing >= target HP queues game._pendingFigureDefeats', () => {
+    const targetMsgId = 'msg_target';
+    const dcMessageMeta = new Map([
+      ['msg_act', { gameId: 'tg', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [DG 1]' }],
+      [targetMsgId, { gameId: 'tg', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
+    ]);
+    const dcHealthState = new Map([
+      ['msg_act', [[16, 16]]],
+      [targetMsgId, [[2, 6]]], // 2 HP — Force Lightning's 2 Damage is lethal
+    ]);
+    const game = {
+      gameId: 'tg',
+      figurePositions: { 1: { 'Darth Vader-1-0': 'A1' }, 2: { 'Stormtrooper-1-0': 'A2' } },
+      figureConditions: {},
+      p1DcList: [{ dcName: 'Darth Vader', healthState: [[16, 16]] }],
+      p2DcList: [{ dcName: 'Stormtrooper', healthState: [[2, 6]] }],
+      p1DcMessageIds: ['msg_act'],
+      p2DcMessageIds: [targetMsgId],
+      selectedMap: { id: 'tm' },
+    };
+    resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: 'Stormtrooper-1-0' });
+    // Target reduced to 0 and a defeat queued for apply-ability-result.js to drain.
+    assert.deepStrictEqual(dcHealthState.get(targetMsgId)[0], [0, 6], 'target at 0 HP');
+    assert.ok(Array.isArray(game._pendingFigureDefeats) && game._pendingFigureDefeats.some(d => d.figureKey === 'Stormtrooper-1-0'),
+      'a defeat was queued (figure no longer hardcoded-alive at 0 HP)');
+  });
+});
+
 // ── ORACLE-DISOR-003: which-beneficial picker when the figure has BOTH ────────
 describe('ORACLE-DISOR-003: player picks which beneficial condition to discard', () => {
   it('003: figure with Focus AND Hidden → prompts for which to discard, then discards the chosen one', () => {

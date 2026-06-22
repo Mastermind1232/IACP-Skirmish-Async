@@ -5660,6 +5660,17 @@ export async function handleCombatRoll(interaction, ctx) {
     return;
   }
 
+  // General rule (alexanbv 2026-06-22): if the ATTACKER itself was defeated
+  // MID-ATTACK — e.g. by a defender reaction that damages the attacker on-declare
+  // (Ambush's move-adjacent + 2 Damage, Ahsoka / Fennec CCs) — the attack cannot
+  // happen. Skip straight to after-resolve as a miss, exactly like On the Lam
+  // (forceMiss → step 8). A defeated figure has had its board position removed.
+  if (!combat.attackRoll && combat.attackerFigureKey
+      && !game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey]) {
+    await _forceMissAndStep8(thread, game, combat, ctx, `**${combat.attackerDcName}** was defeated before the attack resolved — the attack is canceled.`);
+    return;
+  }
+
   // C4: On the Lam — recheck target eligibility before rolling. Per CRR
   // p.10 (lines 442-446): "if the attacker's line of sight to the target
   // space changes or if the defender moves, the attacker must then re-
