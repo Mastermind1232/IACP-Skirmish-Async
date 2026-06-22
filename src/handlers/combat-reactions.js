@@ -19,6 +19,7 @@ import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDisc
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
 import { filterCondition } from '../game/conditions.js';
 import { getDcEffect } from '../game/dc-helpers.js';
+import { getDiceData } from '../data-loader.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -63,11 +64,21 @@ export async function handleThereIsNoTry(interaction, ctx) {
     game.pendingThereIsNoTry.pickedDieIdx = dieIdx;
     // Build face options based on die color (white/black)
     const color = die.color || 'white';
-    // Standard defense die faces (alexanbv 2026-06-21: the BLACK die has NO Dodge
-    // face). white: 0/0, 1/0, 1/1, dodge; black: 0/0, 1/0, 2/0, 1/1, 0/1.
-    const faceOptions = color === 'black'
-      ? [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 2, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 1 }]
-      : [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 0, dodge: true }];
+    // Derive the selectable faces from the canonical die data (data/dice.json,
+    // the same source the roller uses) so "set to any face" always lists the
+    // die's REAL faces (alexanbv 2026-06-21). Each die has 6 physical faces; we
+    // dedupe to the DISTINCT selectable faces. White has a Dodge face; black does
+    // not. White distinct: 0/0, 0/1, 1/0, 1/1, Dodge. Black distinct: 1/0, 2/0,
+    // 3/0, 0/1.
+    const _seenFaces = new Set();
+    const faceOptions = [];
+    for (const f of (getDiceData().defense?.[color] || [])) {
+      const block = f.block ?? 0, evade = f.evade ?? 0, dodge = !!f.dodge;
+      const k = `${block}|${evade}|${dodge ? 1 : 0}`;
+      if (_seenFaces.has(k)) continue;
+      _seenFaces.add(k);
+      faceOptions.push(dodge ? { block, evade, dodge: true } : { block, evade });
+    }
     const faceBtns = faceOptions.map((face) =>
       new ButtonBuilder()
         .setCustomId(`there_is_no_try_face_${gameId}_${dieIdx}_${face.block ?? 0}_${face.evade ?? 0}_${face.dodge ? 1 : 0}`)
