@@ -1818,31 +1818,56 @@ export const COMBAT_RESOLVERS = {
     },
   },
   elusive: {
+    // 2-stage (alexanbv 2026-06-22): the card reads "choose 1 attack die ... then
+    // remove all symbols on A DEFENSE DIE" — the DEFENDER picks BOTH dice, it is
+    // NOT auto-worst. Stage 1 picks the attack die to nullify; stage 2 (posted as
+    // a combat_modsub follow-up) picks the defense die to nullify.
     prompt: ({ combat }) => {
       const atkDice = combat.attackDiceResults || [];
       const buttons = atkDice.map((d, i) => [String(i), `#${i + 1} ${d.color}: ${d.dmg || 0}H/${d.surge || 0}S/${d.acc || 0}A`.slice(0, 80)]);
       buttons.push(['skip', 'Skip', 'secondary']);
-      return { content: '**Elusive** — choose an attack die to nullify (the worst defense die is also nullified):', buttons };
+      return { content: '**Elusive** — choose an attack die to nullify, then choose a defense die to nullify:', buttons };
     },
-    apply: (choice, { combat, thread }) => {
-      if (choice !== 'skip') {
-        const dieIdx = parseInt(choice, 10);
-        const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
-        if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
-          atkDice[dieIdx] = { ...atkDice[dieIdx], dmg: 0, surge: 0, acc: 0 };
-          combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
-          for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
-          if (defDice && defDice.length > 0) {
-            let wi = 0; let wv = Infinity;
-            for (let di = 0; di < defDice.length; di++) { const v = (defDice[di].block || 0) + (defDice[di].evade || 0) + (defDice[di].dodge ? 100 : 0); if (v < wv) { wv = v; wi = di; } }
-            defDice[wi] = { ...defDice[wi], block: 0, evade: 0, dodge: false };
-            combat.defenseRoll = { block: 0, evade: 0, dodge: false };
-            for (const d of defDice) { combat.defenseRoll.block += (d.block || 0); combat.defenseRoll.evade += (d.evade || 0); if (d.dodge) combat.defenseRoll.dodge = true; }
-          }
-          thread?.send(`**Elusive** — nullified attack die #${dieIdx + 1} and the worst defense die.`).catch(discordCatch);
+    apply: async (choice, { combat, thread, gameId, id }) => {
+      const sk = '_elusive';
+      // Stage 2: the defender chose which defense die to nullify.
+      if (combat[`${sk}Stage`] === 'def') {
+        const defDice = combat.defenseDiceResults;
+        const di = parseInt(choice, 10);
+        if (choice !== 'skip' && defDice && di >= 0 && di < defDice.length) {
+          const oldDef = defDice[di];
+          defDice[di] = { ...oldDef, block: 0, evade: 0, dodge: false };
+          combat.defenseRoll = { block: 0, evade: 0, dodge: false };
+          for (const d of defDice) { combat.defenseRoll.block += (d.block || 0); combat.defenseRoll.evade += (d.evade || 0); if (d.dodge) combat.defenseRoll.dodge = true; }
+          thread?.send(`**Elusive** — nullified defense die #${di + 1} (${oldDef.color}): -${oldDef.block || 0} Block, -${oldDef.evade || 0} Evade${oldDef.dodge ? ', -Dodge' : ''}.`).catch(discordCatch);
+        } else {
+          thread?.send('**Elusive** — no defense die nullified.').catch(discordCatch);
         }
-      } else thread?.send('**Elusive** — Skipped.').catch(discordCatch);
+        delete combat[`${sk}Stage`];
+        combat.elusiveResolved = true;
+        return undefined;
+      }
+      // Stage 1: the defender chose which attack die to nullify.
+      if (choice === 'skip') { combat.elusiveResolved = true; thread?.send('**Elusive** — Skipped.').catch(discordCatch); return undefined; }
+      const dieIdx = parseInt(choice, 10);
+      const atkDice = combat.attackDiceResults; const defDice = combat.defenseDiceResults;
+      if (atkDice && dieIdx >= 0 && dieIdx < atkDice.length) {
+        const oldAtk = atkDice[dieIdx];
+        atkDice[dieIdx] = { ...oldAtk, dmg: 0, surge: 0, acc: 0 };
+        combat.attackRoll = { dmg: 0, surge: 0, acc: 0 };
+        for (const d of atkDice) { combat.attackRoll.dmg += (d.dmg || 0); combat.attackRoll.surge += (d.surge || 0); combat.attackRoll.acc += (d.acc || 0); }
+        thread?.send(`**Elusive** — nullified attack die #${dieIdx + 1} (${oldAtk.color}): -${oldAtk.dmg || 0} Hit, -${oldAtk.surge || 0} Surge, -${oldAtk.acc || 0} Acc.`).catch(discordCatch);
+        // If there are defense dice, the DEFENDER now picks which one to nullify.
+        if (defDice && defDice.length > 0) {
+          combat[`${sk}Stage`] = 'def';
+          const btns = defDice.map((d, i) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${i}_${id}`).setLabel(`#${i + 1} ${d.color}: ${d.block || 0}B/${d.evade || 0}E${d.dodge ? '/Dodge' : ''}`.slice(0, 80)).setStyle(ButtonStyle.Primary));
+          btns.push(new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_skip_${id}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
+          await thread?.send({ content: '**Elusive** — choose a defense die to nullify:', components: chunkButtonsToRows(btns) }).catch(discordCatch);
+          return { followUp: true };
+        }
+      }
       combat.elusiveResolved = true;
+      return undefined;
     },
   },
   crate_block_sink: {

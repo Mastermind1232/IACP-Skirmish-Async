@@ -84,12 +84,36 @@ describe('mods resolvers: defender', () => {
     assert.equal(cBleed.pendingModifiers, undefined); // immediate — nothing deferred
   });
 
-  it('elusive nullifies the chosen attack die + worst defense die; skip resolves', async () => {
-    const c = { attackDiceResults: [{ color: 'red', dmg: 2, surge: 1, acc: 0 }], defenseDiceResults: [{ color: 'white', block: 1, evade: 0 }] };
-    await COMBAT_RESOLVERS.elusive.apply('0', baseArgs(c));
-    assert.equal(c.attackRoll.dmg, 0); assert.equal(c.elusiveResolved, true);
-    const c2 = { attackDiceResults: [{ color: 'red', dmg: 2 }] }; await COMBAT_RESOLVERS.elusive.apply('skip', baseArgs(c2));
-    assert.equal(c2.elusiveResolved, true);
+  it('elusive: 2-stage — pick attack die (stage 1), then PICK defense die (stage 2); not auto-worst', async () => {
+    // Two defense dice: a strong one (#0) and a weak one (#1). Old behavior
+    // auto-nullified the worst (#1). New behavior lets the DEFENDER pick — here
+    // we pick the STRONG die #0, which auto-worst would never have chosen.
+    const c = {
+      attackDiceResults: [{ color: 'red', dmg: 2, surge: 1, acc: 0 }],
+      defenseDiceResults: [{ color: 'white', block: 3, evade: 0 }, { color: 'white', block: 0, evade: 0 }],
+    };
+    const args = { ...baseArgs(c), id: 'elusive' };
+    // Stage 1: pick attack die #0 → nullified, then a follow-up is posted.
+    const r1 = await COMBAT_RESOLVERS.elusive.apply('0', args);
+    assert.equal(c.attackRoll.dmg, 0);
+    assert.equal(r1?.followUp, true, 'stage 1 returns followUp so the gate waits for the defense-die pick');
+    assert.notEqual(c.elusiveResolved, true, 'not resolved until the defense die is chosen');
+    assert.equal(c._elusiveStage, 'def');
+    // Stage 2: pick defense die #0 (the strong one) → nullified.
+    const r2 = await COMBAT_RESOLVERS.elusive.apply('0', args);
+    assert.equal(r2, undefined);
+    assert.equal(c.defenseRoll.block, 0, 'the chosen (strong) defense die was nullified, not the worst');
+    assert.equal(c.elusiveResolved, true);
+    assert.equal(c._elusiveStage, undefined);
+  });
+
+  it('elusive: stage-1 skip resolves immediately; no defense dice resolves after stage 1', async () => {
+    const c2 = { attackDiceResults: [{ color: 'red', dmg: 2 }] };
+    const r = await COMBAT_RESOLVERS.elusive.apply('skip', { ...baseArgs(c2), id: 'elusive' });
+    assert.equal(r, undefined); assert.equal(c2.elusiveResolved, true);
+    const c3 = { attackDiceResults: [{ color: 'red', dmg: 2 }], defenseDiceResults: [] };
+    const r3 = await COMBAT_RESOLVERS.elusive.apply('0', { ...baseArgs(c3), id: 'elusive' });
+    assert.equal(r3, undefined); assert.equal(c3.elusiveResolved, true);
   });
 });
 

@@ -3366,11 +3366,11 @@ export function resolveAbility(abilityId, context) {
           ? (() => { const p = fk.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
           : dcNameFromFigureKey(fk);
         if (validTargetFks.length === 0) return { applied: false, manualMessage: `No adjacent hostile figures for **${entry.label}**.` };
-        if (validTargetFks.length <= maxTgts) {
-          // Auto-target all — no choice needed
-          return _rollAndApplyMulti(validTargetFks);
-        }
-        // More than max — sequential picks
+        // alexanbv 2026-06-22: "Bantha Trample must pick figure." The card reads
+        // "Choose up to 3 adjacent hostile figures" — so the player ALWAYS picks
+        // which (and how many, up to N, via Done selecting), even when N or fewer
+        // are adjacent. No auto-target shortcut: choosing a subset can matter
+        // (avoiding a defeat-triggered reaction, leaving a figure alive, etc.).
         game.pendingMultiTargetRoll = game.pendingMultiTargetRoll || {};
         game.pendingMultiTargetRoll[pendingKey] = { targets: [], allTargets: validTargetFks, max: maxTgts };
         const choices = [...validTargetFks.map(_labelFor), 'Done selecting'];
