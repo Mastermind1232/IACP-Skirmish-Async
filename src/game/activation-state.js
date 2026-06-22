@@ -274,6 +274,8 @@ const ACTIVATION_FIGKEY_FLAGS = [
   'freeAttackDifferentTargets',
   // alexanbv 2026-05-13 ninth-wave: Trample chained-picker continuation.
   'pendingMultiTargetRoll',
+  // Ready Weapons sequential Damage-token distribution picker (per figureKey).
+  'pendingDamageTokenDistribute',
   // alexanbv 2026-05-13 tenth-wave: Payback CC (already keyed by
   // attackerFigureKey at write site; was miscategorized in MSGID list).
   'paybackBonusSurge',
@@ -752,6 +754,7 @@ const ROUND_OBJECT_FLAGS = [
   'barrageTargetSpace',
   'barrageDefenseBonus',
   'pendingMultiTargetRoll',
+  'pendingDamageTokenDistribute',
   // Murne Rin "Field Report" — sequential up-to-2 friendly-figure picker
   // continuation (msgId-keyed); transient within an activation.
   'pendingFieldReport',

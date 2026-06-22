@@ -9934,9 +9934,14 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, requiresPowerTokenChoice: grants.length > 0, logMessage: `Distributed ${totalToAdd} Power Token(s) among figures in your group — choose type.` };
   }
 
-  // ccEffect: damageTokenGainToGroup (Ready Weapons) — distribute N Damage tokens among figures in activating group (auto-assign, no type choice)
+  // ccEffect: damageTokenGainToGroup (Ready Weapons) — "Distribute 3 Damage
+  // Tokens among figures in your group." alexanbv 2026-06-22: the PLAYER chooses
+  // the distribution, one token at a time (it is NOT auto-assigned in figure
+  // order). Sequential picker: each Damage token, pick which group figure gets
+  // it (only figures below their token cap are offered); pending count survives
+  // re-entry on game.pendingDamageTokenDistribute (per activating figureKey).
   if (entry.type === 'ccEffect' && typeof entry.damageTokenGainToGroup === 'number' && entry.damageTokenGainToGroup > 0) {
-    const { game, playerNum, dcMessageMeta } = context;
+    const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress (play as Special Action during your activation).' };
@@ -9945,22 +9950,59 @@ export function resolveAbility(abilityId, context) {
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
     if (figureKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures in group.' };
     game.figurePowerTokens = game.figurePowerTokens || {};
-    let remaining = entry.damageTokenGainToGroup;
-    let totalAdded = 0;
-    const parts = [];
-    for (const fk of figureKeys) {
-      if (remaining <= 0) break;
-      const current = (game.figurePowerTokens[fk] || []).filter(t => t === 'Damage').length;
-      const cap = getMaxPowerTokens(fk) - (game.figurePowerTokens[fk] || []).length;
-      const toAdd = Math.min(remaining, Math.max(0, cap));
-      if (toAdd > 0) {
-        grantPowerTokens(game, fk, 'Damage', toAdd);
-        totalAdded += toAdd;
-        parts.push(`${dcNameFromFigureKey(fk)} +${toAdd}`);
+    const _rwPendKey = figureKeyForActivation(game, msgId) || msgId;
+    game.pendingDamageTokenDistribute = game.pendingDamageTokenDistribute || {};
+    // figures still below their power-token cap (eligible to receive one).
+    const _rwEligible = () => figureKeys.filter((fk) => (game.figurePowerTokens[fk] || []).length < getMaxPowerTokens(fk));
+    // Apply one Damage token to a chosen figure (re-entry), then re-prompt / finish.
+    const _rwGrantOne = (fk) => {
+      grantPowerTokens(game, fk, 'Damage', 1);
+      const st = game.pendingDamageTokenDistribute[_rwPendKey];
+      st.remaining -= 1;
+      st.placed[fk] = (st.placed[fk] || 0) + 1;
+    };
+    const _rwSummary = () => {
+      const st = game.pendingDamageTokenDistribute[_rwPendKey] || { placed: {} };
+      const parts = Object.entries(st.placed).map(([fk, n]) => `${dcNameFromFigureKey(fk)} +${n}`);
+      return parts.length ? parts.join(', ') : 'none';
+    };
+    const _rwPrompt = () => {
+      const st = game.pendingDamageTokenDistribute[_rwPendKey];
+      const eligible = _rwEligible();
+      return {
+        applied: false,
+        requiresChoice: true,
+        choiceOptions: figureChoiceLabels(eligible),
+        targetFigureKeys: eligible,
+        logMessage: `**Ready Weapons** — choose a figure for Damage Token ${(entry.damageTokenGainToGroup - st.remaining) + 1}/${entry.damageTokenGainToGroup} (${st.remaining} left):`,
+      };
+    };
+    // Re-entry: a figure was chosen for the current token.
+    if (chosenFigureKey && game.pendingDamageTokenDistribute[_rwPendKey]) {
+      if (figureKeys.includes(chosenFigureKey) && (game.figurePowerTokens[chosenFigureKey] || []).length < getMaxPowerTokens(chosenFigureKey)) {
+        _rwGrantOne(chosenFigureKey);
       }
-      remaining -= toAdd;
+      const st = game.pendingDamageTokenDistribute[_rwPendKey];
+      if (st.remaining > 0 && _rwEligible().length > 0) return _rwPrompt();
+      delete game.pendingDamageTokenDistribute[_rwPendKey];
+      return { applied: true, logMessage: `**Ready Weapons** — Distributed Damage Tokens: ${_rwSummary()}.`, refreshDcEmbed: true };
     }
-    return { applied: true, logMessage: `Distributed ${totalAdded} Damage Token(s): ${parts.join(', ')}.`, refreshDcEmbed: true };
+    // Initial play: cap the total to what the group can actually hold.
+    const groupCap = figureKeys.reduce((sum, fk) => sum + Math.max(0, getMaxPowerTokens(fk) - (game.figurePowerTokens[fk] || []).length), 0);
+    const total = Math.min(entry.damageTokenGainToGroup, groupCap);
+    if (total <= 0) return { applied: false, manualMessage: '**Ready Weapons** — no figure in your group can hold another Power Token.' };
+    game.pendingDamageTokenDistribute[_rwPendKey] = { remaining: total, placed: {} };
+    // Single eligible figure (or single-figure group) → no real choice; auto-assign all.
+    if (_rwEligible().length === 1) {
+      const only = _rwEligible()[0];
+      while (game.pendingDamageTokenDistribute[_rwPendKey].remaining > 0 && (game.figurePowerTokens[only] || []).length < getMaxPowerTokens(only)) {
+        _rwGrantOne(only);
+      }
+      const summary = _rwSummary();
+      delete game.pendingDamageTokenDistribute[_rwPendKey];
+      return { applied: true, logMessage: `**Ready Weapons** — Distributed Damage Tokens: ${summary}.`, refreshDcEmbed: true };
+    }
+    return _rwPrompt();
   }
 
   // ccEffect: claimInitiative only (I Make My Own Luck) — optional firstActivationFigureName
