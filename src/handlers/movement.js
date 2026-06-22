@@ -1,7 +1,7 @@
 /**
  * Movement handlers: move_mp_, move_adjust_mp_, move_pick_
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { applyStrain } from './strain-handler.js';
 import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { canActAsPlayer } from '../utils/can-act-as-player.js';
@@ -155,14 +155,26 @@ export async function renderMassivePushSpacePrompt(game, client, opts = {}) {
   const entry = queue?.[pending.currentIndex];
   if (!entry) return;
   const prevPos = game.figurePositions?.[entry.playerNum]?.[entry.figureKey];
-  const btns = validSpaces.map((space) =>
-    new ButtonBuilder()
-      .setCustomId(`massive_push_space_${pending.gameId}_${space}`)
-      .setLabel(String(space).toUpperCase())
-      .setStyle(ButtonStyle.Primary)
-  );
-  const rows = [];
-  while (btns.length > 0) rows.push(new ActionRowBuilder().addComponents(btns.splice(0, 5)));
+  // validSpaces can exceed Discord's 25-button limit when a boxed-in MASSIVE
+  // figure's nearest-ring BFS frontier is large (getNearestDisplacementOptions
+  // returns the whole first non-empty ring, MAX_RING 30, no per-ring cap).
+  // Use a StringSelectMenu (25 options, single row) instead of a button grid so
+  // we never silently drop selectable spaces past button #25. The chosen space
+  // arrives via interaction.values[0]; handleMassivePushSpace reads it from there.
+  const truncated = validSpaces.length > 25;
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`massive_push_space_${pending.gameId}_select`)
+    .setPlaceholder(truncated
+      ? `Pick a space (showing first 25 of ${validSpaces.length})`
+      : 'Pick a space')
+    .addOptions(
+      validSpaces.slice(0, 25).map((space) =>
+        new StringSelectMenuOptionBuilder()
+          .setLabel(String(space).toUpperCase())
+          .setValue(String(space))
+      )
+    );
+  const rows = [new ActionRowBuilder().addComponents(select)];
   const from = prevPos ? String(prevPos).toUpperCase() : '?';
   const controllerTag = pending.phase === 'friendly' ? 'your figure' : 'opponent\'s figure';
   // Per alexanbv 2026-05-12: fall through threadId → opts fallback
@@ -175,7 +187,7 @@ export async function renderMassivePushSpacePrompt(game, client, opts = {}) {
   if (!channel) return;
   const sent = await channel.send({
     content: `**Massive Displacement** — Place **${entry.dcName}** (${controllerTag}, currently at **${from}**) to which space?`,
-    components: rows.slice(0, 5),
+    components: rows,
   }).catch(discordCatch);
   if (sent?.id) {
     const { recordPromptMessage, signatureFor } = await import('../engine/prompt-reconciler.js');
@@ -281,7 +293,13 @@ export async function handleMassivePushSpace(interaction, ctx) {
   await interaction.deferUpdate().catch(discordCatch);
   const match = interaction.customId.match(/^massive_push_space_([^_]+)_(.+)$/);
   if (!match) { await interaction.followUp({ content: 'Invalid button.', ephemeral: true }).catch(discordCatch); return; }
-  const [, gameId, chosenSpace] = match;
+  const [, gameId, customIdSpace] = match;
+  // Space picker is now a StringSelectMenu (customId suffix '_select'); the
+  // chosen space arrives via interaction.values[0]. Legacy button customIds
+  // (massive_push_space_<gameId>_<space>) still carry the space in the customId.
+  const chosenSpace = interaction.isStringSelectMenu?.() && interaction.values?.length
+    ? interaction.values[0]
+    : customIdSpace;
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
   if (!game) return;
   const pending = game.pendingMassivePush;

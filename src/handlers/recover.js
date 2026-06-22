@@ -6,7 +6,7 @@
  * getRecoveryPrompts() tells us which players need actions; the legacy
  * recover functions know HOW to reconstruct the Discord prompts.
  */
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import {
   getPlayerId, getDcList, getHandChannelId, getPlayAreaId,
   getActivatedDcIndices, opponentPlayerNum, ccHandKey,
@@ -778,15 +778,22 @@ async function recoverPendingStartOfRound(game, gameId, ctx) {
       if (hand.length > 0) {
         const handId = getHandChannelId(game, pn);
         const handCh = await fetchGameChannel(client, handId);
-        const pickBtns = hand.slice(0, 25).map((card, idx) => new ButtonBuilder()
-          .setCustomId(`rogue_one_return_${gameId}_${pn}_${idx}`)
+        // Hand can exceed 25 cards (no hand-size cap in skirmish), which would
+        // overflow a 25-button grid. Use a StringSelectMenu (25 options, one row);
+        // the chosen card index arrives via interaction.values[0]. customId keeps
+        // the gameId/pn so it routes to handleRogueOneReturn; option values carry
+        // the same index suffix the per-card button customId used.
+        const pickOptions = hand.slice(0, 25).map((card, idx) => new StringSelectMenuOptionBuilder()
           .setLabel(truncateLabel(card))
-          .setStyle(ButtonStyle.Primary)
+          .setValue(String(idx))
         );
-        const pickRows = chunkButtonsToRows(pickBtns);
+        const pickMenu = new StringSelectMenuBuilder()
+          .setCustomId(`rogue_one_return_${gameId}_${pn}`)
+          .setPlaceholder('Choose a card to place on top of your deck')
+          .addOptions(pickOptions);
         await handCh.send({
           content: `**[Recover]** Rogue One — Choose a card to place on top of your deck (${roPending.remaining} remaining):`,
-          components: pickRows,
+          components: [new ActionRowBuilder().addComponents(pickMenu)],
         });
       }
     }

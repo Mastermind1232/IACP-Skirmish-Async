@@ -1647,7 +1647,7 @@ export async function handleDcFigPick(interaction, ctx) {
               const style = c.descId === '__skip_all__' ? ButtonStyle.Secondary : ButtonStyle.Primary;
               return new ButtonBuilder().setCustomId(c.customId).setLabel(c.label).setStyle(style);
             });
-            const _soaRow = new ActionRowBuilder().addComponents(_soaButtons);
+            const _soaRows = chunkButtonsToRows(_soaButtons);
             const _threadId = _ad.threadId;
             if (_threadId) {
               try {
@@ -1655,7 +1655,7 @@ export async function handleDcFigPick(interaction, ctx) {
                 if (_thread) {
                   await _thread.send({
                     content: `\u{2728} **Start-of-Activation** (figure ${figIdx + 1}) — Player ${_soaShape.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
-                    components: [_soaRow],
+                    components: _soaRows,
                   }).catch(discordCatch);
                 }
               } catch { /* non-fatal */ }

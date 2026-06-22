@@ -722,10 +722,9 @@ export async function finalizeActivation({
             const style = c.descId === '__skip_all__' ? ButtonStyle.Secondary : ButtonStyle.Primary;
             return new ButtonBuilder().setCustomId(c.customId).setLabel(c.label).setStyle(style);
           });
-          const _soaRow = new ActionRowBuilder().addComponents(_soaButtons);
           await thread.send({
             content: `\u{2728} **Start-of-Activation** — Player ${_soaShape.ownerPlayerNum}: choose which effect to resolve next, or skip all remaining.`,
-            components: [_soaRow],
+            components: chunkButtonsToRows(_soaButtons),
           }).catch(discordCatch);
         }
       }

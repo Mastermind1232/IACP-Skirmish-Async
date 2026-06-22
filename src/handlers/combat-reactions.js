@@ -63,9 +63,10 @@ export async function handleThereIsNoTry(interaction, ctx) {
     game.pendingThereIsNoTry.pickedDieIdx = dieIdx;
     // Build face options based on die color (white/black)
     const color = die.color || 'white';
-    // Standard defense die faces: white: 0/0, 1/0, 1/1, 0/0/dodge; black: 0/0, 1/0, 2/0, 1/1, 0/1, dodge
+    // Standard defense die faces (alexanbv 2026-06-21: the BLACK die has NO Dodge
+    // face). white: 0/0, 1/0, 1/1, dodge; black: 0/0, 1/0, 2/0, 1/1, 0/1.
     const faceOptions = color === 'black'
-      ? [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 2, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 1 }, { block: 0, evade: 0, dodge: true }]
+      ? [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 2, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 1 }]
       : [{ block: 0, evade: 0 }, { block: 1, evade: 0 }, { block: 1, evade: 1 }, { block: 0, evade: 0, dodge: true }];
     const faceBtns = faceOptions.map((face) =>
       new ButtonBuilder()
@@ -73,7 +74,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
         .setLabel(`${face.block ?? 0}B/${face.evade ?? 0}E${face.dodge ? '/Dodge' : ''}`.slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: [new ActionRowBuilder().addComponents(...faceBtns.slice(0, 5))] }).catch(discordCatch);
+    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: chunkButtonsToRows(faceBtns) }).catch(discordCatch);
     saveGames(game.gameId); return;
   }
   if (type === 'face') {
@@ -304,7 +305,7 @@ export async function handleHunterProtocol(interaction, ctx) {
       _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_bleed_prevention`).setLabel('Spend 1 Surge — Prevent Bleed').setStyle(ButtonStyle.Secondary));
     }
     _hpRows.push(new ButtonBuilder().setCustomId(`combat_surge_${_hpGameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-    if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: [new ActionRowBuilder().addComponents(_hpRows.slice(0, 5))] }).catch(discordCatch);
+    if (_hpThread) await _hpThread.send({ content: `**Spend surge?** **${_hpRemaining}** surge left.`, components: chunkButtonsToRows(_hpRows) }).catch(discordCatch);
   }
   saveGames(_hpGame.gameId); return;
 }

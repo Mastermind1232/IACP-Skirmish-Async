@@ -22,6 +22,7 @@ import { setPendingDefeatPick, clearPendingDefeatPick } from '../game/interrupts
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 const KIND_LABEL = {
   itf: 'Into the Force',
@@ -53,7 +54,7 @@ async function postPickPrompt(game, ctx, payload) {
   const remainingOptions = options.filter(o => !alreadyPicked.includes(o.figureKey));
   if (remainingOptions.length === 0) return false;
 
-  const buttons = remainingOptions.slice(0, 4).map((opt, i) => {
+  const buttons = remainingOptions.map((opt, i) => {
     const idx = options.findIndex(o => o.figureKey === opt.figureKey);
     return new deps.ButtonBuilder()
       .setCustomId(`defeat_pick_${game.gameId}_${kind}_${idx}`)
@@ -80,7 +81,7 @@ async function postPickPrompt(game, ctx, payload) {
     : 'Choose a hostile figure to **Weaken**';
   await thread.send({
     content: `**${label}** — ${verb}${tail}:`,
-    components: [new deps.ActionRowBuilder().addComponents(buttons)],
+    components: chunkButtonsToRows(buttons),
   }).catch(() => {});
   return true;
 }

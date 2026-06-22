@@ -15,7 +15,7 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
+import { buildRowPickerButtons, cleanupSpacePick, chunkButtonsToRows } from '../discord/components.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import {
@@ -153,7 +153,7 @@ export async function sendBlitzTurnPrompt(game, playerNum, ctx) {
 
   // Build group buttons (index into ALL groups for this player, not just undeployed)
   const allGroups = getDeployGroups(game, playerNum);
-  const rows = [];
+  const groupBtns = [];
   for (const g of undeployed) {
     const groupIndex = allGroups.findIndex(
       ag => ag.dcName === g.dcName && ag.dgIndex === g.dgIndex
@@ -161,30 +161,30 @@ export async function sendBlitzTurnPrompt(game, playerNum, ctx) {
     const label = g.figures > 1
       ? `Deploy ${g.dcName} (${g.figures} figures)`
       : `Deploy ${g.dcName}`;
-    rows.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`blitz_group_${gameId}_${playerNum}_${groupIndex}`)
-          .setLabel(label.slice(0, 80))
-          .setStyle(ButtonStyle.Success)
-      )
+    groupBtns.push(
+      new ButtonBuilder()
+        .setCustomId(`blitz_group_${gameId}_${playerNum}_${groupIndex}`)
+        .setLabel(label.slice(0, 80))
+        .setStyle(ButtonStyle.Success)
     );
   }
 
-  // Pass button
-  rows.push(
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`blitz_pass_${gameId}_${playerNum}`)
-        .setLabel('Pass (do not deploy)')
-        .setStyle(ButtonStyle.Secondary)
-    )
+  // Chunk group buttons 5-per-row, capping item rows at 4 so the Pass row
+  // (added as its own final row below) is never dropped (4 item rows + 1 = 5).
+  const itemRows = chunkButtonsToRows(groupBtns).slice(0, 4);
+
+  // Pass button — kept in its own final row so it is always rendered.
+  const passRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`blitz_pass_${gameId}_${playerNum}`)
+      .setLabel('Pass (do not deploy)')
+      .setStyle(ButtonStyle.Secondary)
   );
 
   const deployed = allGroups.length - undeployed.length;
   const msg = await handChannel.send({
     content: `<@${playerId}> **Blitz Deployment** — Your turn. Choose a group to deploy (${deployed}/${allGroups.length} deployed).`,
-    components: rows.slice(0, 5),
+    components: [...itemRows, passRow],
     allowedMentions: { users: [playerId] },
   });
 

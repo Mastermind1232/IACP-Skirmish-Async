@@ -24,6 +24,7 @@ import { applyCondition } from '../game/conditions.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { getMapData, getFigureSize } from '../data-loader.js';
 import { hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints } from '../game/spatial.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 // EoA DC passive abilities resolved as a simple Apply/Skip (no sub-target).
 const EOA_AUTO_APPLY_KEYS = new Set(['hold_the_line', 'shield', 'in_the_shadows', 'unnerving']);
@@ -82,14 +83,13 @@ export async function handleEoaPick(interaction, ctx) {
       await interaction.followUp({ content: 'No adjacent friendly figures.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    const buttons = adj.slice(0, 4).map((fk) =>
+    const buttons = adj.map((fk) =>
       new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_${fk}`).setLabel(dcNameFromFigureKey(fk)).setStyle(ButtonStyle.Primary),
     );
     buttons.push(new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-    const row = new ActionRowBuilder().addComponents(buttons);
     await interaction.message.channel.send({
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
-      components: [row],
+      components: chunkButtonsToRows(buttons),
     }).catch(discordCatch);
   } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
     // Auto-apply DC passive EoA abilities — single Apply/Skip prompt; the

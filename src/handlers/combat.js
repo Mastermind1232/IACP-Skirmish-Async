@@ -3027,13 +3027,13 @@ export async function resumeSurgeChoiceOrResolve(game, gameId, combat, thread, c
   }
   surgeRows.push(...buildRogueOneSurgeButton(game, combat));
   surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-  const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+  const surgeRowsRendered = chunkButtonsToRows(surgeRows);
   // @ the attacker so they get a notification when surge spending opens.
   const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   const atkOwnerId = atkPlayerNum === 1 ? game.player1Id : game.player2Id;
   await thread.send({
     content: `<@${atkOwnerId}> — **Spend surge?** You have **${remaining}** surge left. Choose an ability or Done.`,
-    components: [surgeRow],
+    components: surgeRowsRendered,
     allowedMentions: { users: [atkOwnerId] },
   }).catch(discordCatch);
 }
@@ -9814,7 +9814,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
         .setLabel('Done (no more surge)')
         .setStyle(ButtonStyle.Primary)
     );
-    const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+    const surgeRowsRendered = chunkButtonsToRows(surgeRows);
     const roundSurge = roundAtkSurge;
     const ccSurge = (combat.surgeBonus || 0);
     const surgeDisplay = (ccSurge > 0 || roundSurge > 0 || furyBonus > 0)
@@ -9825,7 +9825,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     const _surgeAtkOwnerId = getPlayerId(game, _surgeAtkPN);
     await thread.send({
       content: `<@${_surgeAtkOwnerId}> — **Spend surge?** You have ${surgeDisplay} surge. Choose an ability or Done.`,
-      components: [surgeRow],
+      components: surgeRowsRendered,
       allowedMentions: { users: [_surgeAtkOwnerId].filter(Boolean) },
     });
     return;
@@ -11087,13 +11087,13 @@ async function _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx) {
   // Rogue One: may still be usable if more donor tokens exist
   surgeRows.push(...buildRogueOneSurgeButton(game, combat));
   surgeRows.push(new ButtonBuilder().setCustomId(`combat_surge_${gameId}_done`).setLabel('Done (no more surge)').setStyle(ButtonStyle.Primary));
-  const surgeRow = new ActionRowBuilder().addComponents(surgeRows.slice(0, 5));
+  const surgeRowsRendered = chunkButtonsToRows(surgeRows);
   // @ the attacker so they get a notification when surge spending opens.
   const atkPlayerNum = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum;
   const atkOwnerId = atkPlayerNum === 1 ? game.player1Id : game.player2Id;
   await thread.send({
     content: `<@${atkOwnerId}> — **Spend surge?** You have **${remaining}** surge left. Choose an ability or Done.`,
-    components: [surgeRow],
+    components: surgeRowsRendered,
     allowedMentions: { users: [atkOwnerId] },
   }).catch(discordCatch);
 }

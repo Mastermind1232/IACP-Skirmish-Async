@@ -2143,7 +2143,12 @@ export async function handleRogueOneReturn(interaction, ctx) {
   const parts = splitCustomId(interaction.customId, 'rogue_one_return_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
-  const cardIdx = parseInt(parts[2], 10);
+  // Index comes from the per-card button customId suffix (parts[2]) OR, when the
+  // recover.js prompt rendered a StringSelectMenu (hand may exceed 25 cards), from
+  // the selected option value in interaction.values[0].
+  const cardIdx = interaction.values?.length
+    ? parseInt(interaction.values[0], 10)
+    : parseInt(parts[2], 10);
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const pending = game[`pendingRogueOne_p${playerNum}`];
