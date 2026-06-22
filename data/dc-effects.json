@@ -2407,7 +2407,10 @@
     },
     "Drokkatta": {
       "abilityText": "Demolish: Once during your activation, you may choose a space within 3 spaces and line of sight. Each figure on or adjacent to that space suffers 1 Damage. Then, place a rubble token in that space and you suffer 1 Strain.\n\nSurge (Shrapnel): Choose one: This attack gains Blast 2, or after this attack resolves, if it did not miss, each figure and object within 2 spaces of the target space suffers 1 Damage.",
-      "keywords": [],
+      "keywords": [
+        "WOOKIEE",
+        "HEAVY WEAPON"
+      ],
       "cost": 9,
       "health": 12,
       "speed": 4,
