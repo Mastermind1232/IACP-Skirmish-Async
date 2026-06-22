@@ -408,6 +408,36 @@ export function hasChooseASideFlamethrower(game, playerNum, figureKey) {
 export function getDiceData() {
   return diceData;
 }
+
+/**
+ * Distinct selectable faces of a die, derived from the canonical dice data
+ * (data/dice.json) — the single source for every die-face picker (There Is No
+ * Try, etc.; alexanbv 2026-06-21). Physical duplicate faces are collapsed.
+ * @param {'attack'|'defense'} type
+ * @param {string} color e.g. 'white' | 'black' | 'red' | 'blue' | 'green' | 'yellow'
+ * @returns {Array<object>} attack faces {acc,dmg,surge}; defense faces {block,evade,dodge?}
+ */
+export function getDistinctDieFaces(type, color) {
+  const faces = getDiceData()?.[type]?.[color] || [];
+  const seen = new Set();
+  const out = [];
+  for (const f of faces) {
+    let key, face;
+    if (type === 'defense') {
+      const block = f.block ?? 0, evade = f.evade ?? 0, dodge = !!f.dodge;
+      key = `${block}|${evade}|${dodge ? 1 : 0}`;
+      face = dodge ? { block, evade, dodge: true } : { block, evade };
+    } else {
+      const acc = f.acc ?? 0, dmg = f.dmg ?? 0, surge = f.surge ?? 0;
+      key = `${acc}|${dmg}|${surge}`;
+      face = { acc, dmg, surge };
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(face);
+  }
+  return out;
+}
 export function getMissionCardsData() {
   return missionCardsData;
 }

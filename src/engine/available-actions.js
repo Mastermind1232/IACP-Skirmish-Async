@@ -17,7 +17,7 @@ import { getBrokenWallEdges } from '../game/movement.js';
 import { dcNameFromFigureKey, isCompanionHostDefeated, figureHasInTheShadows, figureHasPriorityTarget } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower, getDistinctDieFaces } from '../data-loader.js';
 import { getConfig } from '../game/figure-config.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
@@ -1138,9 +1138,11 @@ function getCombatActions(game, playerNum, deps) {
         const dieIdx = tint.pickedDieIdx;
         const die = (combat.defenseDiceResults || [])[dieIdx];
         const color = die?.color || 'white';
-        const faces = color === 'black'
-          ? [{ b: 0, e: 0, d: 0 }, { b: 1, e: 0, d: 0 }, { b: 2, e: 0, d: 0 }, { b: 1, e: 1, d: 0 }, { b: 0, e: 1, d: 0 }, { b: 0, e: 0, d: 1 }]
-          : [{ b: 0, e: 0, d: 0 }, { b: 1, e: 0, d: 0 }, { b: 1, e: 1, d: 0 }, { b: 0, e: 0, d: 1 }];
+        // Distinct selectable faces from the single canonical source
+        // (data/dice.json via getDistinctDieFaces) — same as the interactive
+        // There Is No Try picker (alexanbv 2026-06-21).
+        const faces = getDistinctDieFaces('defense', color)
+          .map((f) => ({ b: f.block ?? 0, e: f.evade ?? 0, d: f.dodge ? 1 : 0 }));
         for (const face of faces) {
           tintActions.push({
             type: 'there_is_no_try_face',
