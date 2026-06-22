@@ -27,6 +27,7 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
+import { applyDamageWithDefeatCheck } from '../game/damage-helpers.js';
 import { markMapDirty } from '../game/game-helpers.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
 import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush, setPendingCrushChoice, clearPendingCrushChoice } from '../game/interrupts.js';
@@ -292,13 +293,11 @@ async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
       const fi = fkM ? parseInt(fkM[2], 10) : 0;
       const hp = hs[fi];
       if (hp) {
-        const [cur, max] = hp;
-        // Damage applies sync; strain via applyStrain pipeline below.
-        const newCur = Math.max(0, (cur ?? max) - 2);
-        hs[fi] = [newCur, max ?? newCur];
-        dcHealthState.set(tMsgId, hs);
-        if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, tMsgId, hs);
-        dmgNote = `2 Damage (HP: ${cur ?? max} → ${newCur}) + 1 Strain (queued)`;
+        // Defeat-aware pipeline (alexanbv 2026-06-22); strain via applyStrain below.
+        const _dbhRes = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, fi, 2, oppNum, {
+          sourceLabel: 'Driven by Hatred', attackerPlayerNum: playerNum,
+        });
+        dmgNote = `2 Damage (HP: ${_dbhRes.prevHp} → ${_dbhRes.newHp}) + 1 Strain (queued)`;
       }
     }
     // Route 1 Strain through applyStrain (Fireproof / Headhunter / per-
@@ -387,11 +386,11 @@ async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
         const hp = hs[figIdx];
         if (hp) {
-          const [cur, max] = hp;
-          hs[figIdx] = [Math.max(0, (cur ?? max) - hits), max];
-          dcHealthState.set(targetMsgId, hs);
-          if (typeof syncHealthStateToList === 'function') syncHealthStateToList(game, oppNum, targetMsgId, hs);
-          resPart = ` — ${hits} Damage (HP: ${cur ?? max} → ${Math.max(0, (cur ?? max) - hits)})`;
+          // Defeat-aware pipeline (alexanbv 2026-06-22).
+          const _hbcRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, oppNum, {
+            sourceLabel: 'Headbutt', attackerPlayerNum: playerNum,
+          });
+          resPart = ` — ${hits} Damage (HP: ${_hbcRes.prevHp} → ${_hbcRes.newHp})`;
         }
       }
     }

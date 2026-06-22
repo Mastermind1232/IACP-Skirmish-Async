@@ -5047,12 +5047,12 @@ export function resolveAbility(abilityId, context) {
     let tokenRefresh = false;
     if (entry.optionalPowerTokenOnConditionDiscard && chosenFigureKey && chosenFigureKey !== 'skip' && dcHealthState) {
       const combo = String(chosenFigureKey).split('+');
-      const selfHs = (dcHealthState.get(msgId) || []).slice();
-      if (selfHs.length > 0 && Array.isArray(selfHs[0])) {
-        const [sCur, sMax] = selfHs[0];
-        selfHs[0] = [Math.max(0, (sCur ?? sMax ?? 0) - 1), sMax];
-        dcHealthState.set(msgId, selfHs);
-        syncHealthStateToList(game, playerNum, msgId, selfHs);
+      if (Array.isArray(dcHealthState.get(msgId)?.[0])) {
+        // Self-damage via the defeat-aware pipeline (alexanbv 2026-06-22); a
+        // self-inflicted defeat is credited to the opponent.
+        applyDamageWithDefeatCheck(dcHealthState, game, msgId, 0, 1, playerNum, {
+          sourceLabel: 'Price of Glory', attackerPlayerNum: opponentPlayerNum(playerNum),
+        });
       }
       const activatingFk = figureKeys[0];
       for (const tok of combo) grantPowerTokens(game, activatingFk, tok, 1);
@@ -7467,14 +7467,13 @@ export function resolveAbility(abilityId, context) {
     const attFigIdx = game.lastAttackAttackerFigureIndex ?? 0;
     const attEntry = attHS[attFigIdx];
     if (!attEntry) return { applied: false, manualMessage: `Resolve manually: attacker suffers ${entry.applyDamageToAttacker} Damage.` };
-    const [aC, aM] = attEntry;
-    const aNew = Math.max(0, (aC ?? aM) - entry.applyDamageToAttacker);
-    attHS[attFigIdx] = [aNew, aM ?? aNew];
-    dcHealthState.set(attMsgId, attHS);
     const attP = game.lastAttackAttackerPlayerNum ?? opponentPlayerNum(playerNum);
-    syncHealthStateToList(game, attP, attMsgId, attHS);
+    // Defeat-aware pipeline (alexanbv 2026-06-22): a lethal counter queues a defeat.
+    const _rlRes = applyDamageWithDefeatCheck(dcHealthState, game, attMsgId, attFigIdx, entry.applyDamageToAttacker, attP, {
+      sourceLabel: 'Reactive Loyalties', attackerPlayerNum: playerNum,
+    });
     const attDcName = attDcList?.[attIdx]?.displayName || attMsgId;
-    return { applied: true, logMessage: `Attacker (**${attDcName}**) suffers **${entry.applyDamageToAttacker} Damage** (HP: ${aC ?? aM} → ${aNew}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [attMsgId] };
+    return { applied: true, logMessage: `Attacker (**${attDcName}**) suffers **${entry.applyDamageToAttacker} Damage** (HP: ${_rlRes.prevHp} → ${_rlRes.newHp}).`, refreshDcEmbed: true, refreshDcEmbedMsgIds: [attMsgId] };
   }
 
   // ccEffect: flatDamageToFigureWithin (Collateral Damage) — pick a figure within N of last attack target, deal N damage
@@ -8665,14 +8664,14 @@ export function resolveAbility(abilityId, context) {
       const healthState = dcHealthState.get(targetMsgId) || [];
       const hs = healthState[targetIdx];
       if (!Array.isArray(hs) || hs.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for target.' };
-      // Damage applies synchronously; strain queues via pendingStrain[]
-      // so apply-ability-result.js routes it through applyStrain (Fireproof
-      // / Headhunter / per-strain choice / Under Duress / Paz).
-      const [cur, max] = hs;
+      // Damage routes through the defeat-aware pipeline (alexanbv 2026-06-22 —
+      // all damage goes through the pipeline) so a lethal hit queues a defeat;
+      // strain queues via pendingStrain[] for applyStrain.
       if (damage > 0) {
-        healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
-        dcHealthState.set(targetMsgId, healthState);
-        syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+        applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, targetIdx, damage, oppNum, {
+          sourceLabel: entry.label || context.cardName || 'CC ability',
+          attackerPlayerNum: playerNum,
+        });
       }
       const _cahPendingStrain = strain > 0 ? [{
         figureKey: chosenFigureKey,
@@ -8813,12 +8812,12 @@ export function resolveAbility(abilityId, context) {
     const healthState = dcHealthState.get(targetMsgId) || [];
     const hs0 = healthState[targetIdx];
     if (!Array.isArray(hs0) || hs0.length < 1) return { applied: true, logMessage: `Gained ${entry.mpBonus} MP.` };
-    // Damage applies synchronously; strain queues via pendingStrain[].
-    const [cur, max] = hs0;
+    // Damage routes through the defeat-aware pipeline; strain queues via pendingStrain[].
     if (damage > 0) {
-      healthState[targetIdx] = [Math.max(0, (cur ?? max ?? 0) - damage), max];
-      dcHealthState.set(targetMsgId, healthState);
-      syncHealthStateToList(game, oppNum, targetMsgId, healthState);
+      applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, targetIdx, damage, oppNum, {
+        sourceLabel: entry.label || context.cardName || 'CC ability',
+        attackerPlayerNum: playerNum,
+      });
     }
     const _cahAutoPendingStrain = strain > 0 ? [{
       figureKey: targetFk,
@@ -8953,15 +8952,13 @@ export function resolveAbility(abilityId, context) {
       }
       const targetMsgId = findMsgIdForFigureKey(game, oppNum, chosenFigureKey, dcMessageMeta);
       if (targetMsgId && dcHealthState && totalHits > 0) {
-        const hs = dcHealthState.get(targetMsgId) || [];
         const fkMatch = chosenFigureKey.match(/-(\d+)-(\d+)$/);
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        const hp = hs[figIdx];
-        if (hp) {
-          const [cur, max] = hp;
-          hs[figIdx] = [Math.max(0, (cur ?? max) - totalHits), max];
-          dcHealthState.set(targetMsgId, hs);
-          syncHealthStateToList(game, oppNum, targetMsgId, hs);
+        if (Array.isArray(dcHealthState.get(targetMsgId)?.[figIdx])) {
+          // Defeat-aware pipeline (alexanbv 2026-06-22): a lethal hit queues a defeat.
+          applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, totalHits, oppNum, {
+            sourceLabel: 'Telekinetic Throw', attackerPlayerNum: playerNum,
+          });
         }
       }
       return { applied: true, logMessage: `**Telekinetic Throw** — Rolled 2 blue dice: [${rollParts.join('], [')}] → **${totalHits} Damage** to **${dcNameFromFigureKey(chosenFigureKey)}**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: targetMsgId ? [targetMsgId] : [] };
@@ -13124,12 +13121,11 @@ export function resolveAbility(abilityId, context) {
         const targetMeta = dcMessageMeta.get(targetMsgId);
         const targetKeys = targetMeta ? getFigureKeysForDcMsg(game, _deOwner, targetMeta) : [chosenFigureKey];
         const fi = Math.max(0, targetKeys.indexOf(chosenFigureKey));
-        const targetHs = (dcHealthState.get(targetMsgId) || []).slice();
-        if (targetHs[fi] && Array.isArray(targetHs[fi])) {
-          const [cur, max] = targetHs[fi];
-          targetHs[fi] = [Math.max(0, (cur ?? max ?? 0) - 1), max];
-          dcHealthState.set(targetMsgId, targetHs);
-          syncHealthStateToList(game, _deOwner, targetMsgId, targetHs);
+        if (Array.isArray(dcHealthState.get(targetMsgId)?.[fi])) {
+          // Defeat-aware pipeline (alexanbv 2026-06-22).
+          applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, fi, 1, _deOwner, {
+            sourceLabel: 'Dark Energy', attackerPlayerNum: playerNum,
+          });
         }
       }
       const { pathStr: _dePathStr, warnings: _deWarnings } = computePushPathAndWarnings(game, _dePrevPos, chosenSpace, _deOwner);
@@ -14982,12 +14978,11 @@ export function resolveAbility(abilityId, context) {
             const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
             const entryHp = healthState[figIdx];
             if (entryHp) {
-              const [cur, max] = entryHp;
-              const newCur = Math.max(0, (cur ?? max) - hits);
-              healthState[figIdx] = [newCur, max ?? newCur];
-              dcHealthState.set(targetMsgId, healthState);
-              syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-              resultParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+              // Defeat-aware pipeline (alexanbv 2026-06-22).
+              const _hbRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, enemyPlayerNum, {
+                sourceLabel: 'Headbutt', attackerPlayerNum: playerNum,
+              });
+              resultParts.push(`${hits} Damage (HP: ${_hbRes.prevHp} → ${_hbRes.newHp})`);
             } else {
               resultParts.push(`apply ${hits} Damage manually`);
             }
@@ -15051,12 +15046,11 @@ export function resolveAbility(abilityId, context) {
               const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
               const entryHp = healthState[figIdx];
               if (entryHp) {
-                const [cur, max] = entryHp;
-                const newCur = Math.max(0, (cur ?? max) - hits);
-                healthState[figIdx] = [newCur, max ?? newCur];
-                dcHealthState.set(targetMsgId, healthState);
-                syncHealthStateToList(game, enemyPlayerNum, targetMsgId, healthState);
-                resParts.push(`${hits} Damage (HP: ${cur ?? max} → ${newCur})`);
+                // Defeat-aware pipeline (alexanbv 2026-06-22).
+                const _hbRes2 = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, enemyPlayerNum, {
+                  sourceLabel: 'Headbutt', attackerPlayerNum: playerNum,
+                });
+                resParts.push(`${hits} Damage (HP: ${_hbRes2.prevHp} → ${_hbRes2.newHp})`);
               }
             }
           }
