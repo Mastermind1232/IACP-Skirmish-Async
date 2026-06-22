@@ -1982,7 +1982,7 @@
     },
     "Wild Fury": {
       "cost": 2,
-      "playableBy": "CREATURE or WOOKIE",
+      "playableBy": "CREATURE or WOOKIEE",
       "timing": "duringActivation",
       "effect": "Use during your activation. You become Focused and may perform multiple attacks during this activation. At the end of your activation, become Stunned and Bleeding.",
       "abilityId": "Wild Fury"

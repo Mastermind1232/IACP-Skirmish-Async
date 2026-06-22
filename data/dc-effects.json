@@ -232,7 +232,7 @@
     "[Fury of Kashyyyk]": {
       "abilityText": "WOOKIEE ONLY\n\nFriendly WOOKIEES gain Reach.\n\nWhen a friendly WOOKIEE suffers 3 or more Damage, that figure becomes Focused.\n\nWhile a friendly elite WOOKIEE is attacking a figure within 2 spaces, if there is another friendly WOOKIEE within 2 spaces of the defender, apply Pierce 1 to the attack results.",
       "keywords": [
-        "WOOKIE"
+        "WOOKIEE"
       ],
       "cost": 1,
       "unique": true,
@@ -2476,7 +2476,10 @@
     },
     "E-Web Engineer (Regular)": {
       "abilityText": "Tripod: During your activation, you cannot voluntarily exit your space if you attack, and you cannot attack if you exit your space.\n\nAssault: You can perform multiple attacks each activation.",
-      "keywords": [],
+      "keywords": [
+        "TROOPER",
+        "HEAVY WEAPON"
+      ],
       "cost": 6,
       "health": 5,
       "speed": 2,
@@ -2811,7 +2814,7 @@
     "Gaarkhan": {
       "abilityText": "Brutal Cleave: After you resolve an attack during your activation, you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die targeting a different figure or object. Limit once per activation.\n\nSpecial Action (Charge): Move a number of spaces up to your Speed. Then, you may perform an attack.",
       "keywords": [
-        "WOOKIE",
+        "WOOKIEE",
         "GUARDIAN",
         "BRAWLER"
       ],
@@ -4273,7 +4276,8 @@
       "abilityText": "Double Action (Shoulder Rush): Move up to 6 spaces and choose an adjacent hostile figure. If that figure is SMALL, push it 1 space and enter the space it exited. If the figure is not SMALL, it is not pushed and KX cannot enter its space, but KX may still attack it. Then perform an attack targeting the chosen figure.\n\nDeference Protocol: Once per round, when a friendly LEADER enters an adjacent space, you may gain 1 Block token.",
       "keywords": [
         "DROID",
-        "BRAWLER"
+        "BRAWLER",
+        "GUARDIAN"
       ],
       "cost": 4,
       "health": 7,
