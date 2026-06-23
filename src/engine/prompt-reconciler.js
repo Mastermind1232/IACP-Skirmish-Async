@@ -130,7 +130,8 @@ async function _deleteRecordedPrompt(game, kind, client) {
     const ch = await fetchGameChannel(client, rec.channelId);
     if (ch) {
       const msg = await ch.messages.fetch(rec.messageId).catch(() => null);
-      if (msg) await msg.delete().catch(() => {});
+      // alexanbv 2026-06-23: keep message (no delete) for traceability — disable its buttons instead
+      if (msg) await msg.edit({ components: [] }).catch(() => {});
     }
   } catch {}
   clearPromptRecord(game, kind);

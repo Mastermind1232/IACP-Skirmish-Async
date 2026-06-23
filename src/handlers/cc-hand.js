@@ -664,7 +664,7 @@ export async function handleCcAttachTo(interaction, ctx) {
       components: handPayload.components,
     }).catch(discordCatch);
   }
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> played **${card}** as an attachment.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   saveGames(game.gameId);
@@ -709,7 +709,7 @@ export async function handleCcPlaySelect(interaction, ctx) {
     new ButtonBuilder().setCustomId(`cc_cancel_play_${gameId}`).setLabel('DO SOMETHING ELSE').setStyle(ButtonStyle.Danger),
   );
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await fetchGameChannel(interaction.client, handId);
   await withDiscordRetry(() => handChannel.send({ embeds: [embed], files, components: [row] }));
@@ -758,7 +758,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     const jammerDiscardKey = ccDiscardKey(jammerOwnerNum);
     game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
     await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);
     return;
   }
@@ -770,13 +770,13 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   const idx = hand.indexOf(card);
   if (idx < 0) {
     await interaction.followUp({ content: "That card isn't in your hand anymore.", ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);
     return;
   }
   if (!isCcPlayableNow(game, playerNum, card)) {
     await interaction.followUp({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);
     return;
   }
@@ -790,7 +790,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       components: [getIllegalCcPlayButtons(gameId)],
     }));
     game.pendingIllegalCcPlay.messageId = msg.id;
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);
     return;
   }
@@ -860,7 +860,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
       components: [getIllegalCcPlayButtons(gameId)],
     }));
     game.pendingIllegalCcPlay.messageId = msg.id;
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);
     return;
   }
@@ -1018,7 +1018,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (_uIdx >= 0) _uHand.splice(_uIdx, 1);
     game[handKey] = _uHand;
     game[discardKey] = (game[discardKey] || []).concat(card);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
     const _uLog = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
     if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
@@ -1069,7 +1069,7 @@ export async function handleCcCancelPlay(interaction, ctx) {
     if (!await requirePlayer(interaction, game, interaction.user.id, game.pendingCcConfirmation.playerNum, canActAsPlayer, 'Not your card to cancel.')) return;
   }
   clearPendingCcConfirmation(game);
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   saveGames(game.gameId);
 }
 
@@ -1649,7 +1649,7 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   }
   // When-discarded subroutine (NOT a play): re-draw passives + Windfall hooks.
   const _disc = fireCcDiscarded(game, playerNum, card, { fromDeck: false });
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
   await logGameAction(game, interaction.client, `<@${interaction.user.id}> discarded **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
   if (_disc.windfallSelfVp > 0) await logGameAction(game, interaction.client, `**Windfall** — P${playerNum} gains **1 VP** (Windfall discarded).`, { icon: 'card' });

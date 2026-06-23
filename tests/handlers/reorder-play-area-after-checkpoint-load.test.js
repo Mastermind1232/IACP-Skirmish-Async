@@ -118,10 +118,11 @@ describe('reorderPlayAreaAfterCheckpointLoad — re-post path runs to completion
       assert.ok(dcMessageMeta.has(id), `dcMessageMeta must include new id ${id}`);
       assert.ok(dcHealthState.has(id), `dcHealthState must include new id ${id}`);
     }
-    // Old messages got deleted.
-    assert.ok(p1Deleted.includes('OLD_P1_DC_0'));
-    assert.ok(p1Deleted.includes('OLD_P1_DC_1'));
-    assert.ok(p2Deleted.includes('OLD_P2_DC_0'));
+    // alexanbv 2026-06-23: old messages are NO LONGER deleted (kept for
+    // traceability) — they are left in place while new interleaved copies
+    // are posted below.
+    assert.equal(p1Deleted.length, 0, 'old P1 messages must NOT be deleted');
+    assert.equal(p2Deleted.length, 0, 'old P2 messages must NOT be deleted');
     // CC attachment data re-keyed under NEW msgId (was the corruption mode —
     // the helper resets game.p1CcAttachments = {} before re-keying).
     assert.ok(

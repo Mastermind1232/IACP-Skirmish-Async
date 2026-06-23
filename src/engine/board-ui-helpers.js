@@ -82,13 +82,7 @@ export async function clearPreGameSetup(game, client) {
   ];
   if (ids.length === 0 && !game.p1HandId && !game.p2HandId) return;
   try {
-    const ch = await fetchGameChannel(client, game.generalId);
-    for (const id of ids) {
-      try {
-        const msg = await ch.messages.fetch(id);
-        await msg.delete();
-      } catch {}
-    }
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     game.generalSetupMessageId = null;
     game.bothReadyMessageId = null;
     game.deploymentZoneMessageId = null;
@@ -97,17 +91,6 @@ export async function clearPreGameSetup(game, client) {
     console.error('Failed to clear pre-game setup:', err);
   }
 
-  // Clear deck-selection artifacts from hand channels
-  for (const handId of [game.p1HandId, game.p2HandId]) {
-    if (!handId) continue;
-    try {
-      const handCh = await fetchGameChannel(client, handId);
-      const msgs = await handCh.messages.fetch({ limit: 50 });
-      for (const msg of msgs.values()) {
-        try { await msg.delete(); } catch {}
-      }
-    } catch (err) {
-      console.error('Failed to clear hand channel setup messages:', err);
-    }
-  }
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
+  // Deck-selection artifacts in hand channels are left in place.
 }

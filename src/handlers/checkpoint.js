@@ -737,13 +737,8 @@ export async function handleCheckpointNewGameConfirm(interaction, ctx) {
 // and best-effort delete them after, to avoid duplicates piling up.
 
 /** Best-effort delete of one message by channel + msgId. Silent on miss. */
-async function _bestEffortDeleteMsg(client, channelId, msgId) {
-  if (!channelId || !msgId) return;
-  try {
-    const ch = await fetchGameChannel(client, channelId);
-    const msg = await ch.messages.fetch(msgId).catch(() => null);
-    if (msg) await msg.delete().catch(() => {});
-  } catch {}
+async function _bestEffortDeleteMsg(_client, _channelId, _msgId) {
+  // alexanbv 2026-06-23: keep message (no delete) for traceability — now a no-op.
 }
 
 /**

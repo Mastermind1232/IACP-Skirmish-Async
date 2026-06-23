@@ -375,15 +375,7 @@ export async function handleDcUnactivate(interaction, ctx) {
   }
   recomputeActivationCounts(game, meta.playerNum);
   await updateActivationsMessage(game, meta.playerNum, client);
-  const threadId = game.dcActionsData?.[msgId]?.threadId;
-  if (threadId) {
-    try {
-      const thread = await fetchGameChannel(client, threadId);
-      if (thread) await thread.delete();
-    } catch (err) {
-      console.error('Failed to delete activation thread on un-activate:', err);
-    }
-  }
+  // alexanbv 2026-06-23: keep activation thread (no delete) for traceability
   if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
   if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
   // next-attack bonuses + Vet Instincts: per-figure 2026-05-09 (multifigure-
@@ -707,15 +699,7 @@ export async function handleDcToggle(interaction, ctx) {
     }
     recomputeActivationCounts(game, meta.playerNum);
     await updateActivationsMessage(game, meta.playerNum, client);
-    const threadId = game.dcActionsData?.[msgId]?.threadId;
-    if (threadId) {
-      try {
-        const thread = await fetchGameChannel(client, threadId);
-        if (thread) await thread.delete();
-      } catch (err) {
-        console.error('Failed to delete activation thread on ready:', err);
-      }
-    }
+    // alexanbv 2026-06-23: keep activation thread (no delete) for traceability
     if (game.movementBank?.[msgId]) delete game.movementBank[msgId];
     if (game.dcActionsData?.[msgId]) delete game.dcActionsData[msgId];
     // next-attack bonuses + Vet Instincts: per-figure 2026-05-09 (multifigure-

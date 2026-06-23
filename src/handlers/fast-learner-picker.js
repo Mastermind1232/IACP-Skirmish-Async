@@ -49,7 +49,7 @@ export async function presentFastLearnerPicker(interaction, game, playerNum, car
   );
 
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await fetchGameChannel(interaction.client, handId);
   await withDiscordRetry(() => handChannel.send({
@@ -67,14 +67,14 @@ async function _resolvePick(interaction, ctx, choice) {
   const pick = game.pendingFastLearnerPick;
   if (!pick) {
     await interaction.followUp({ content: 'No pending Fast Learner choice — picker may have expired.', ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     return;
   }
   if (Date.now() - (pick.ts || 0) > PICK_TTL_MS) {
     clearPendingFastLearnerPick(game);
     saveGames(game.gameId);
     await interaction.followUp({ content: 'Choice expired — replay the card from your hand.', ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pick.playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
@@ -156,7 +156,7 @@ export async function presentUniqueCcPlayerPicker(interaction, game, playerNum, 
     .setStyle(o.kind === 'named' ? ButtonStyle.Primary : ButtonStyle.Secondary));
 
   await interaction.deferUpdate().catch(discordCatch);
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   const handId = getHandChannelId(game, playerNum);
   const handChannel = await fetchGameChannel(interaction.client, handId);
   const _anyConsumes = options.some((o) => o.consume && o.consume !== 'none');
@@ -179,14 +179,14 @@ export async function handleUniqueCcPlayerPick(interaction, ctx) {
   const pick = game.pendingFastLearnerPick;
   if (!pick || !Array.isArray(pick.uccpOptions)) {
     await interaction.followUp({ content: 'No pending choice — picker may have expired.', ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     return;
   }
   if (Date.now() - (pick.ts || 0) > PICK_TTL_MS) {
     clearPendingFastLearnerPick(game);
     saveGames(game.gameId);
     await interaction.followUp({ content: 'Choice expired — replay the card from your hand.', ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     return;
   }
   if (!await requirePlayer(interaction, game, interaction.user.id, pick.playerNum, canActAsPlayer, 'Not your card to confirm.')) return;
@@ -194,7 +194,7 @@ export async function handleUniqueCcPlayerPick(interaction, ctx) {
   const chosen = pick.uccpOptions[chosenIdx];
   if (!chosen) {
     await interaction.followUp({ content: 'That option is no longer valid — replay the card.', ephemeral: true }).catch(discordCatch);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     return;
   }
   const { playerNum, card } = pick;

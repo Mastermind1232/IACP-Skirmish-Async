@@ -77,8 +77,7 @@ export async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, cli
       return;
     }
     if (!hasContent) {
-      const msg = await channel.messages.fetch(attachMsgId);
-      await msg.delete().catch(deps.discordCatch);
+      // alexanbv 2026-06-23: keep message (no delete) for traceability
       attachMsgIds[idx] = null;
       return;
     }
@@ -93,15 +92,7 @@ export async function updateAttachmentMessageForDc(game, playerNum, dcMsgId, cli
 /** Delete move-grid messages for a given moveKey. */
 export async function clearMoveGridMessages(game, moveKey, channel) {
   if (!channel) return;
-  const ids = game.moveGridMessageIds?.[moveKey] || [];
-  for (const id of ids) {
-    try {
-      const msg = await channel.messages.fetch(id);
-      await msg.delete();
-    } catch {
-      // ignore missing messages
-    }
-  }
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   if (game.moveGridMessageIds) delete game.moveGridMessageIds[moveKey];
 }
 
@@ -128,9 +119,7 @@ export async function updateMovementBankMessage(game, msgId, client, deps) {
   if (!threadId) return;
   try {
     if (remaining <= 0 && messageId) {
-      const thread = await fetchGameChannel(client, threadId);
-      const msg = await thread.messages.fetch(messageId).catch(() => null);
-      if (msg) await msg.delete().catch(deps.discordCatch);
+      // alexanbv 2026-06-23: keep message (no delete) for traceability
       bank.messageId = null;
       return;
     }

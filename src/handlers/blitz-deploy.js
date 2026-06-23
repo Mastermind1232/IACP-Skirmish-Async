@@ -114,15 +114,7 @@ function getUndeployedGroups(game, playerNum) {
 // ── UI cleanup ─────────────────────────────────────────────────────────────
 
 async function cleanupBlitzMessages(game, playerNum, client) {
-  const ids = game.blitzDeployment?.uiMessageIds?.[playerNum] || [];
-  if (ids.length === 0) return;
-  const handId = getHandChannelId(game, playerNum);
-  try {
-    const ch = await fetchGameChannel(client, handId);
-    for (const msgId of ids) {
-      try { await (await ch.messages.fetch(msgId)).delete(); } catch {}
-    }
-  } catch {}
+  // alexanbv 2026-06-23: keep messages (no delete) for traceability
   if (game.blitzDeployment?.uiMessageIds) {
     game.blitzDeployment.uiMessageIds[playerNum] = [];
   }

@@ -664,7 +664,7 @@ export async function handleMoveStepModeToggle(interaction, ctx) {
   game.moveGridMessageIds = game.moveGridMessageIds || {};
   if (currentMsgId) {
     game.moveGridMessageIds[moveKey] = (game.moveGridMessageIds[moveKey] || []).filter((id) => id !== currentMsgId);
-    try { await interaction.message.delete(); } catch { /* already gone */ }
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
   }
   await clearMoveGridMessages(game, moveKey, interaction.channel);
   game.moveGridMessageIds[moveKey] = [];
@@ -706,8 +706,9 @@ async function _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgI
   moveState.cacheMaxMp = newMp;
   if (moveState.distanceMessageId) {
     try {
+      // alexanbv 2026-06-23: keep message (no delete) for traceability — disable its buttons instead
       const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
-      await distMsg.delete();
+      await distMsg.edit({ components: [] }).catch(discordCatch);
     } catch { /* already gone */ }
     moveState.distanceMessageId = null;
   }
@@ -903,7 +904,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   // message was erroneous; MP are not forfeited on End Movement.
   if (space === 'done') {
     await clearMoveGridMessages(game, moveKey, interaction.channel);
-    try { await interaction.message.delete(); } catch { /* already gone */ }
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     _cleanupMoveState(game, moveKey, msgId);
     const _mpRemainingNote = mpRemaining > 0 ? ` — **${mpRemaining}** MP remain in bank.` : '';
     await interaction.followUp({ content: `**${displayName}** ended movement${_mpRemainingNote}`, ephemeral: false }).catch(discordCatch);
@@ -916,9 +917,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
   }
 
   await clearMoveGridMessages(game, moveKey, interaction.channel);
-  // Also delete the message the user clicked on (it may have been edited in-place
-  // by the row→cell picker and removed from moveGridMessageIds tracking)
-  try { await interaction.message.delete(); } catch { /* already gone or no perms */ }
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   const boardState = getBoardStateForMovement(game, figureKey);
   if (!boardState) {
     _cleanupMoveState(game, moveKey, msgId);
@@ -1304,29 +1303,15 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     await logGameAction(game, client, `**${pLabel}: ${shortName}** has taken control of a terminal!`, { phase: 'ROUND', icon: 'deploy' });
   }
   if (newMp <= 0) {
-    // Delete all "Pick a destination" messages — grid messages already cleared above;
-    // now also delete the distance message itself so nothing lingers.
+    // alexanbv 2026-06-23: keep the distance message (no delete) for traceability —
+    // disable its buttons instead so no stale clickable destinations remain.
     if (moveState.distanceMessageId) {
       try {
         const distMsg = await interaction.channel.messages.fetch(moveState.distanceMessageId);
-        await distMsg.delete();
+        await distMsg.edit({ components: [] }).catch(discordCatch);
       } catch { /* already gone */ }
     }
-    // Sweep thread for any leftover movement minimap messages (belt-and-suspenders cleanup)
-    const actionsMessageId = game.dcActionsData?.[msgId]?.messageId;
-    if (actionsMessageId && interaction.channel) {
-      try {
-        const msgs = await interaction.channel.messages.fetch({ limit: 30 });
-        for (const [mId, m] of msgs) {
-          if (mId === actionsMessageId) continue; // never delete the DC actions message
-          if (m.author?.id !== client?.user?.id) continue; // only our own messages
-          const hasMoveMinimap = m.attachments?.some(a => a.name === 'move-destinations.png');
-          if (hasMoveMinimap) {
-            try { await m.delete(); } catch { /* already gone */ }
-          }
-        }
-      } catch { /* ignore fetch errors */ }
-    }
+    // alexanbv 2026-06-23: keep leftover movement minimap messages (no delete) for traceability
     const wasPostDeploy = moveState.postDeployReturn;
     _cleanupMoveState(game, moveKey, msgId);
     // Post-deploy movement: advance the post-deploy queue

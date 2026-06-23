@@ -1450,8 +1450,9 @@ export async function handleDeployRow(interaction, ctx) {
   for (const id of oldGridIds) {
     if (id === currentMsgId) continue;
     try {
+      // alexanbv 2026-06-23: keep message (no delete) for traceability — disable its buttons instead
       const msg = await interaction.channel.messages.fetch(id);
-      await msg.delete();
+      await msg.edit({ components: [] }).catch(() => {});
     } catch {}
   }
   try {
@@ -1590,12 +1591,13 @@ export async function handleDeployPick(interaction, ctx) {
       for (const msgId of gridMsgIds) {
         if (msgId === clickedMsgId) continue;
         try {
+          // alexanbv 2026-06-23: keep message (no delete) for traceability — disable its buttons instead
           const msg = await handChannel.messages.fetch(msgId);
-          await msg.delete();
+          await msg.edit({ components: [] }).catch(() => {});
         } catch {}
       }
     } catch (err) {
-      console.error('Failed to delete space grid messages:', err);
+      console.error('Failed to update space grid messages:', err);
     }
     if (game.deploySpaceGridMessageIds) {
       delete game.deploySpaceGridMessageIds[gridKey];
@@ -1803,8 +1805,7 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   clearPendingLoadoutSelection(game);
   saveGames(game.gameId);
 
-  // Remove the loadout picker from the hand channel
-  await interaction.message.delete().catch(discordCatch);
+  // alexanbv 2026-06-23: keep the loadout picker (no delete) for traceability
 
   // Store loadout as a DC attachment and reorder play area so it appears under the DC
   const dcName = dcNameFromFigureKey(figureKey);

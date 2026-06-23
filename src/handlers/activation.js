@@ -590,10 +590,7 @@ export async function handleLiaDeployZone(interaction, ctx) {
     recomputeActivationCounts(game, playerNum);
   }
 
-  // Remove the zone selection message
-  try {
-    await interaction.message.delete();
-  } catch {}
+  // alexanbv 2026-06-23: keep zone selection message (no delete) for traceability
 
   // Fire ONLY the group's WHEN-DEPLOYED abilities (In The Shadows → Hidden,
   // Clawdite Shape → form picker, Imperial Loadout → loadout config). A group
@@ -670,13 +667,7 @@ export async function handleEndTurn(interaction, ctx) {
   game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
   game.lastActivationMsgIdByPlayer[meta.playerNum] = dcMsgId;
   delete game.pendingEndTurn[dcMsgId];
-  if (pending.messageId) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      const endTurnMsg = await ch.messages.fetch(pending.messageId);
-      await endTurnMsg.delete().catch(discordCatch);
-    } catch {}
-  }
+  // alexanbv 2026-06-23: keep message (no delete) for traceability
   // Deterministic end-of-activation effects now handled by applyEndOfActivationEffects()
   // in handleDcEndActivation (shared with headless). Only choice-based effects remain here.
 

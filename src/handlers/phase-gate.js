@@ -155,13 +155,7 @@ async function deleteGateMessages(game, ctx) {
     const handId = getHandChannelId(game, pn);
     const msgId = pn === 1 ? gate.p1MsgId : gate.p2MsgId;
     if (!handId || !msgId) continue;
-    try {
-      const handCh = await fetchGameChannel(client, handId);
-      const msg = await handCh.messages.fetch(msgId);
-      await msg.delete().catch(discordCatch);
-    } catch {
-      // Message already gone — fine
-    }
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
   }
 }
 

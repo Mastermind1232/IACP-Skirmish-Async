@@ -153,7 +153,7 @@ export async function handleRefreshAll(interaction, ctx) {
   try {
     await refreshAllGameComponents(game, client);
     saveGames(game.gameId);
-    await interaction.message.delete().catch(discordCatch);
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
     await interaction.followUp({ content: '✓ Full refresh complete. Reloaded all JSON data, map renderer cache, map, DCs, hands, discard piles.', ephemeral: true }).catch(discordCatch);
   } catch (err) {
     console.error('Failed to refresh all:', err);
@@ -202,14 +202,7 @@ export async function handleUndo(interaction, ctx) {
 
   /** F14 time-travel: remove the original action message from Game Log so it looks exactly as before. */
   if (last.gameLogMessageId && game.generalId) {
-    try {
-      const ch = await fetchGameChannel(client, game.generalId);
-      if (!ch) throw new Error('Channel not found');
-      const msg = await ch.messages.fetch(last.gameLogMessageId).catch(() => null);
-      if (msg) await msg.delete().catch(discordCatch);
-    } catch {
-      // ignore
-    }
+    // alexanbv 2026-06-23: keep message (no delete) for traceability
   }
 
   // === UNIVERSAL SNAPSHOT RESTORE ===
@@ -298,23 +291,16 @@ export async function handleUndo(interaction, ctx) {
       await updateDeployPromptMessages(game, last.playerNum, client).catch(() => {});
     }
   } else if (last.type === 'deployment_zone') {
-    // Delete the deploy-prompt messages that were sent to initiative player's hand
-    if (last.deployMessageIds?.length && last.deployHandChannelId) {
-      try {
-        const handCh = await fetchGameChannel(client, last.deployHandChannelId);
-        for (const msgId of last.deployMessageIds) {
-          const msg = await handCh.messages.fetch(msgId).catch(() => null);
-          if (msg) await msg.delete().catch(discordCatch);
-        }
-      } catch { /* ignore */ }
-    }
-    // Delete old zone picker, repost fresh at the bottom of chat
+    // alexanbv 2026-06-23: keep message (no delete) for traceability — leave
+    // the deploy-prompt messages in place.
+    // Repost zone picker fresh at the bottom of chat
     if (game.generalId && getDeploymentZoneButtons) {
       try {
         const generalChannel = await fetchGameChannel(client, game.generalId);
         if (game.deploymentZoneMessageId) {
+          // alexanbv 2026-06-23: keep old zone picker (no delete) for traceability
           const oldMsg = await generalChannel.messages.fetch(game.deploymentZoneMessageId).catch(() => null);
-          if (oldMsg) await oldMsg.delete().catch(discordCatch);
+          if (oldMsg) await oldMsg.edit({ components: [] }).catch(discordCatch);
         }
         const zoneChooserId = game.deviousSchemeZoneChooser || game.initiativePlayerId;
         const zoneChooserPlayerNum = zoneChooserId === game.player1Id ? 1 : 2;

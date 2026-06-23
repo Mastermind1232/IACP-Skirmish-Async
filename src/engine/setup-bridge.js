@@ -74,21 +74,9 @@ export async function reorderPlayAreaAfterAttachments(game, playerNum, client, d
 
   const channel = await fetchGameChannel(client, channelId);
   const oldDcMsgIds = [...dcMsgIds];
-  const oldAttachMsgIds = [...attachMsgIds];
 
-  // 1. Delete all existing DC messages and attachment messages
-  for (const msgId of oldDcMsgIds) {
-    if (msgId) {
-      try { await (await channel.messages.fetch(msgId)).delete(); }
-      catch (err) { console.error('[reorder] Failed to delete DC msg:', err.message); }
-    }
-  }
-  for (const msgId of oldAttachMsgIds) {
-    if (msgId) {
-      try { await (await channel.messages.fetch(msgId)).delete(); }
-      catch (err) { console.error('[reorder] Failed to delete attachment msg:', err.message); }
-    }
-  }
+  // 1. alexanbv 2026-06-23: keep messages (no delete) for traceability — old DC
+  //    and attachment messages are left in place; new interleaved copies are posted below.
 
   // 2. Re-send in correct interleaved order: DC -> its attachments -> next DC -> ...
   const newDcMsgIds = [];
@@ -244,19 +232,9 @@ async function reorderOnePlayerForLoad(game, playerNum, client, deps) {
 
   const channel = await fetchGameChannel(client, playAreaId);
 
-  // 1. Delete all DC + attachment + companion messages.
-  const allOldIds = [...oldDcIds, ...oldAttIds, ...oldCompIds].filter(Boolean);
-  for (const id of allOldIds) {
-    try {
-      const msg = await channel.messages.fetch(id);
-      await msg.delete();
-    } catch (err) {
-      // 10008 = Unknown Message; tolerate (already gone).
-      if (err && err.code !== 10008) {
-        console.error('[checkpoint reorder] delete failed:', err.message);
-      }
-    }
-  }
+  // 1. alexanbv 2026-06-23: keep messages (no delete) for traceability — old DC,
+  //    attachment, and companion messages are left in place; new interleaved
+  //    copies are posted below.
 
   // 2. Clean up Maps for the now-dead DC msgIds.
   for (const id of oldDcIds) {
