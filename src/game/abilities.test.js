@@ -1332,7 +1332,7 @@ test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if th
   ]);
   const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
-  await drainPendingDamage(game, { dcHealthState });
+  await applyDeferredAbilityEffects(game, { dcHealthState }, result);
   assert.deepStrictEqual(hostileHealth[0], [5, 10]); // 8 - 3 = 5
   const fk = 'Darth Vader-2-0';
   assert.ok(game.figureConditions[fk]?.includes('Stun'));
@@ -1390,7 +1390,7 @@ test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hosti
   ]);
   const result = resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
-  await drainPendingDamage(game, { dcHealthState });
+  await applyDeferredAbilityEffects(game, { dcHealthState }, result);
   assert.deepStrictEqual(hostileHealth[0], [4, 8]); // 6 - 2 = 4
   assert.ok(game.figureConditions['Stormtroopers-2-0']?.includes('Stun'));
 });
