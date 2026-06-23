@@ -51,15 +51,28 @@ function _hasFuryReach(game, playerNum, dcKws) {
   return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
 }
 
-// Drain damage queued by a sync resolveAbility() onto game._pendingDamage
-// through the ONE applyDamage pipeline (alexanbv 2026-06-23 — "ALL damage on
-// the same pipeline, no exceptions"). The handler ctx already carries
-// dcHealthState / processFigureDefeat / logGameAction / client. Idempotent:
-// clears the queue, so a later applyAbilityResult drain is a no-op.
+// Drain the deferred side-effects a sync resolveAbility() produced — strain
+// (pendingStrainCost / pendingStrain) and damage (game._pendingDamage) — through
+// their canonical pipelines (alexanbv 2026-06-23: "ALL damage on the same
+// pipeline, no exceptions" + "Strain to self must go through apply strain").
+// The dcSpecial path never went through applyAbilityResult, so without this
+// dcSpecial strain/damage silently never applied in Discord. Strain first
+// (matches applyAbilityResult ordering; a self strain cost is dealt before the
+// ability resolves), then damage. The handler ctx carries dcHealthState /
+// processFigureDefeat / logGameAction / client. Idempotent.
 async function _drainAbilityDamage(game, ctx, result) {
-  if (!game || (!game._pendingDamage?.length && !result?.pendingDamage?.length)) return;
-  const { drainPendingDamage } = await import('../game/damage-pipeline.js');
-  await drainPendingDamage(game, ctx, result);
+  if (!game) return;
+  const strainQueue = [];
+  if (result?.pendingStrainCost) strainQueue.push(result.pendingStrainCost);
+  if (Array.isArray(result?.pendingStrain)) strainQueue.push(...result.pendingStrain);
+  for (const s of strainQueue) {
+    if (!s?.figureKey || !(s.amount > 0)) continue;
+    await applyStrain(game, ctx, s);
+  }
+  if (game._pendingDamage?.length || result?.pendingDamage?.length) {
+    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+    await drainPendingDamage(game, ctx, result);
+  }
 }
 
 // Ranged attacks are bounded by accuracy roll (see combat.js:~240 — totalAccuracy < distanceToTarget miss),

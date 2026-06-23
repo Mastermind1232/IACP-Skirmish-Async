@@ -239,10 +239,21 @@ function applyReadyDcMsgIds(result, deps) {
 
 /** Process defeatedFigures through the centralized defeat pipeline (VP, position removal, etc.) */
 async function processDefeatedFigures(result, game, deps) {
-  // Drain any damage the (sync) resolveAbility queued onto game._pendingDamage
-  // through the ONE applyDamage pipeline (alexanbv 2026-06-23 — all damage on
-  // the same pipeline, no exceptions). deps carries dcHealthState +
-  // processFigureDefeat, exactly what drainPendingDamage needs.
+  // Drain the deferred side-effects the (sync) resolveAbility produced — strain
+  // (pendingStrainCost / pendingStrain → applyStrain) and damage
+  // (game._pendingDamage → the ONE applyDamage pipeline) (alexanbv 2026-06-23 —
+  // all damage on one pipeline + strain through apply strain). deps carries
+  // dcHealthState + processFigureDefeat. Strain first, then damage.
+  const _strainQueue = [];
+  if (result?.pendingStrainCost) _strainQueue.push(result.pendingStrainCost);
+  if (Array.isArray(result?.pendingStrain)) _strainQueue.push(...result.pendingStrain);
+  if (_strainQueue.length) {
+    const { applyStrain } = await import('../handlers/strain-handler.js');
+    for (const s of _strainQueue) {
+      if (!s?.figureKey || !(s.amount > 0)) continue;
+      await applyStrain(game, deps, s);
+    }
+  }
   if (game?._pendingDamage?.length || result?.pendingDamage?.length) {
     const { drainPendingDamage } = await import('../game/damage-pipeline.js');
     await drainPendingDamage(game, deps, result);

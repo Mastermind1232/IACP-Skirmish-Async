@@ -2651,20 +2651,28 @@ export function resolveAbility(abilityId, context) {
   }
 
   // dcSpecial: informational — manual resolution with instruction message (no automated game-state change)
-  // Supports strainCostToSelf: auto-deducts HP from activating figure if specified.
+  // Supports strainCostToSelf: the activating figure suffers N Strain.
   if (entry.type === 'dcSpecial' && entry.informational && !entry.freeMoveBonus && !entry.nextAttacksBonusHits) {
-    const { game, msgId, dcHealthState, playerNum } = context;
+    const { game, msgId, dcHealthState, playerNum, meta } = context;
     let strainNote = '';
-    if (entry.strainCostToSelf > 0 && game && msgId && dcHealthState) {
+    let _selfStrainCost = null;
+    if (entry.strainCostToSelf > 0 && game && msgId) {
       const selectedFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-      const healthState = dcHealthState.get(msgId) || [];
-      if (healthState[selectedFig]) {
-        const [cur, max] = healthState[selectedFig];
-        const newCur = Math.max(0, (cur ?? max) - entry.strainCostToSelf);
-        healthState[selectedFig] = [newCur, max ?? newCur];
-        dcHealthState.set(msgId, healthState);
-        syncHealthStateToList(game, playerNum, msgId, healthState);
-        strainNote = ` You suffered ${entry.strainCostToSelf} Strain (${cur ?? max} \u2192 ${newCur} HP).`;
+      const _selfMeta = meta || context.dcMessageMeta?.get?.(msgId) || null;
+      const _selfFk = _selfMeta ? getFigureKeysForDcMsg(game, playerNum, _selfMeta)?.[selectedFig] : null;
+      if (_selfFk) {
+        // Route self-cost strain through the canonical applyStrain pipeline
+        // (alexanbv 2026-06-23 \u2014 "Strain to self must go through apply strain"):
+        // Fireproof / Under Duress / Paz / per-strain choice + the strain\u2192damage
+        // conversion (which itself routes through the ONE applyDamage) all fire
+        // there. NOT a direct HP edit.
+        _selfStrainCost = {
+          figureKey: _selfFk,
+          controllerPlayerNum: playerNum,
+          amount: entry.strainCostToSelf,
+          source: entry.label || entry.logMessage || 'Strain cost',
+        };
+        strainNote = ` You suffer ${entry.strainCostToSelf} Strain.`;
       } else {
         strainNote = ` (Apply ${entry.strainCostToSelf} Strain to yourself manually.)`;
       }
@@ -2675,6 +2683,7 @@ export function resolveAbility(abilityId, context) {
       refreshDcEmbed: entry.strainCostToSelf > 0,
       logMessage: (entry.logMessage || entry.label || 'Resolve manually (see rules).') + strainNote,
       manualMessage: entry.logMessage || entry.label,
+      ...(_selfStrainCost ? { pendingStrainCost: _selfStrainCost } : {}),
     };
   }
 
