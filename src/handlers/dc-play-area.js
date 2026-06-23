@@ -51,28 +51,16 @@ function _hasFuryReach(game, playerNum, dcKws) {
   return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
 }
 
-// Drain the deferred side-effects a sync resolveAbility() produced — strain
-// (pendingStrainCost / pendingStrain) and damage (game._pendingDamage) — through
-// their canonical pipelines (alexanbv 2026-06-23: "ALL damage on the same
-// pipeline, no exceptions" + "Strain to self must go through apply strain").
-// The dcSpecial path never went through applyAbilityResult, so without this
-// dcSpecial strain/damage silently never applied in Discord. Strain first
-// (matches applyAbilityResult ordering; a self strain cost is dealt before the
-// ability resolves), then damage. The handler ctx carries dcHealthState /
-// processFigureDefeat / logGameAction / client. Idempotent.
+// Drain the deferred side-effects a sync resolveAbility() produced in the one
+// canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv
+// 2026-06-23). The dcSpecial path never went through applyAbilityResult, so
+// without this dcSpecial strain/damage/conditions silently never applied in
+// Discord. The handler ctx carries dcHealthState / processFigureDefeat /
+// logGameAction / client. Idempotent.
 async function _drainAbilityDamage(game, ctx, result) {
   if (!game) return;
-  const strainQueue = [];
-  if (result?.pendingStrainCost) strainQueue.push(result.pendingStrainCost);
-  if (Array.isArray(result?.pendingStrain)) strainQueue.push(...result.pendingStrain);
-  for (const s of strainQueue) {
-    if (!s?.figureKey || !(s.amount > 0)) continue;
-    await applyStrain(game, ctx, s);
-  }
-  if (game._pendingDamage?.length || result?.pendingDamage?.length) {
-    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
-    await drainPendingDamage(game, ctx, result);
-  }
+  const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+  await applyDeferredAbilityEffects(game, ctx, result);
 }
 
 // Ranged attacks are bounded by accuracy roll (see combat.js:~240 — totalAccuracy < distanceToTarget miss),

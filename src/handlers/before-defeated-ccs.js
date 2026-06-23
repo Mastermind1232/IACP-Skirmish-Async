@@ -126,12 +126,10 @@ export async function handleFireDyingLunge(interaction, ctx) {
       dcExhaustedState,
       combat: game.pendingCombat,
     });
-    // Drain any queued damage through the ONE applyDamage pipeline (alexanbv
-    // 2026-06-23). Idempotent; ctx carries dcHealthState + processFigureDefeat.
-    if (game._pendingDamage?.length || result?.pendingDamage?.length) {
-      const { drainPendingDamage } = await import('../game/damage-pipeline.js');
-      await drainPendingDamage(game, ctx, result);
-    }
+    // Drain queued side-effects in canonical order: strain cost → damage →
+    // strain → conditions (alexanbv 2026-06-23). Idempotent.
+    const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+    await applyDeferredAbilityEffects(game, ctx, result);
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       await logGameAction(game, client, `**Dying Lunge** — ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }

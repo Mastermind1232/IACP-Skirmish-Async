@@ -95,6 +95,27 @@ function queueAbilityDamage(game, payload) {
 }
 
 /**
+ * Queue a TARGET condition (Weaken / Bleed / Stun / …) to be applied AFTER the
+ * ability's damage + strain, per the canonical resolution order
+ * (alexanbv 2026-06-23: damage → strain → conditions). The drain
+ * (applyDeferredAbilityEffects) applies game._pendingConditions last. Mirrors
+ * applyCondition's "newly applied" return so callers log accurately: returns
+ * false (and queues nothing) when the figure is immune or already has it.
+ * Use ONLY for conditions an ability deals to a target alongside damage — a
+ * self-benefit condition (Focus on the acting figure) can stay inline.
+ * @returns {boolean} true if the condition was queued (will newly apply)
+ */
+function queueAbilityCondition(game, figureKey, condition) {
+  if (!game || !figureKey || !condition) return false;
+  if (isConditionImmune(game, figureKey)) return false;
+  const cur = game.figureConditions?.[figureKey] || [];
+  if (cur.includes(condition)) return false;
+  game._pendingConditions = game._pendingConditions || [];
+  game._pendingConditions.push({ figureKey, condition });
+  return true;
+}
+
+/**
  * Get uppercased keywords for a DC by name.
  * @param {string} dcName - DC name (e.g. from dcNameFromFigureKey)
  * @returns {string[]} - uppercased keyword array (e.g. ['MOBILE', 'TROOPER'])
@@ -792,7 +813,7 @@ export function resolveAbility(abilityId, context) {
         }
         const _npcPendingStrain = strain > 0 ? [{ figureKey: targetFigureKey, controllerPlayerNum: null, amount: strain, source: entry.label || 'Force ability' }] : [];
         if (strain > 0) npcParts.push(`+ ${strain} Strain`);
-        if (condToApply && applyCondition(game, targetFigureKey, condToApply)) {
+        if (condToApply && queueAbilityCondition(game, targetFigureKey, condToApply)) {
           npcParts.push(`became **${condToApply}**`);
         }
         // Splash damage to adjacent figures + NPCs (already routes via
@@ -810,7 +831,7 @@ export function resolveAbility(abilityId, context) {
                 if (npcRes.applied) _npcSplashParts.push(`**${adjName}** ${splashDamage} Damage (${npcRes.prevHp}→${npcRes.newHp})`);
               }
               if (splashConditions.length > 0) {
-                for (const c of splashConditions) applyCondition(game, adjFk, c);
+                for (const c of splashConditions) queueAbilityCondition(game, adjFk, c);
               }
               continue;
             }
@@ -878,10 +899,11 @@ export function resolveAbility(abilityId, context) {
       if (condToApply) {
         // Respect condition immunity (Onar Koma, Snowtrooper Elite, etc.) — the
         // generic applyCondition does not gate on it (alexanbv audit 2026-06-22,
-        // MHD-19 Improper Procedure applied Weaken to immune figures).
+        // MHD-19 Improper Procedure applied Weaken to immune figures). Queue the
+        // condition so it lands AFTER damage + strain (alexanbv 2026-06-23 order).
         if (isConditionImmune(game, targetFigureKey)) {
           parts.push(`is immune to **${condToApply}**`);
-        } else if (applyCondition(game, targetFigureKey, condToApply)) {
+        } else if (queueAbilityCondition(game, targetFigureKey, condToApply)) {
           parts.push(`became **${condToApply}**`);
         }
       }
@@ -909,7 +931,7 @@ export function resolveAbility(abilityId, context) {
                 }
               }
               if (splashConditions.length > 0) {
-                const adjToAdd = splashConditions.filter((c) => applyCondition(game, adjFk, c));
+                const adjToAdd = splashConditions.filter((c) => queueAbilityCondition(game, adjFk, c));
                 if (adjToAdd.length > 0) {
                   splashParts.push(`**${adjName}** gains ${adjToAdd.join(', ')}`);
                 }
@@ -935,7 +957,7 @@ export function resolveAbility(abilityId, context) {
               splashParts.push(`**${adjName}** (apply ${splashDamage} Damage manually)`);
             }
             if (splashConditions.length > 0) {
-              const adjToAdd = splashConditions.filter((c) => applyCondition(game, adjFk, c));
+              const adjToAdd = splashConditions.filter((c) => queueAbilityCondition(game, adjFk, c));
               if (adjToAdd.length > 0) {
                 splashParts.push(`**${adjName}** gains ${adjToAdd.join(', ')}`);
               }
@@ -3344,7 +3366,7 @@ export function resolveAbility(abilityId, context) {
               }
             }
             if (entry.rollOneDieSurgeCondition && surges >= 1) {
-              if (applyCondition(game, tFk, entry.rollOneDieSurgeCondition)) {
+              if (queueAbilityCondition(game, tFk, entry.rollOneDieSurgeCondition)) {
                 subParts.push(`**${entry.rollOneDieSurgeCondition}**`);
               }
             }
@@ -3457,7 +3479,7 @@ export function resolveAbility(abilityId, context) {
         }
         const surgeCondition = entry.rollOneDieSurgeCondition;
         if (surgeCondition && surges >= 1) {
-          applyCondition(game, targetFigureKey, surgeCondition);
+          queueAbilityCondition(game, targetFigureKey, surgeCondition);
           resultParts.push(`became **${surgeCondition}**`);
         }
         // Gauntlet Blade: on Surge, grant self a Power Token (player chooses type)
@@ -3637,7 +3659,7 @@ export function resolveAbility(abilityId, context) {
         // rollOneDieSurgeCondition (Dewback Shock Lance: Weaken on a Surge) —
         // apply the condition to the chosen target if a Surge was rolled.
         if (entry.rollOneDieSurgeCondition && surges >= 1) {
-          if (applyCondition(game, targetFigureKey, entry.rollOneDieSurgeCondition)) {
+          if (queueAbilityCondition(game, targetFigureKey, entry.rollOneDieSurgeCondition)) {
             resultParts.push(`becomes **${entry.rollOneDieSurgeCondition}**`);
           }
         }
@@ -3737,13 +3759,13 @@ export function resolveAbility(abilityId, context) {
               if (entry.rollOneDieHostileOnly && pn === playerNum) continue;
               // rollOneDieAreaCondition (Neurotoxin: Weaken): each affected
               // figure gains the condition (independent of the damage rolled).
-              if (entry.rollOneDieAreaCondition) applyCondition(game, fk, entry.rollOneDieAreaCondition);
+              if (entry.rollOneDieAreaCondition) queueAbilityCondition(game, fk, entry.rollOneDieAreaCondition);
               // rollOneDieSurgeCondition (Shock Grenade: Weaken on a Surge):
               // each affected figure gains the condition only if a Surge was
               // rolled. Mirrors the hostileWithinRange branch (abilities.js
               // ~3244) but applies area-wide.
               if (entry.rollOneDieSurgeCondition && surges >= 1) {
-                applyCondition(game, fk, entry.rollOneDieSurgeCondition);
+                queueAbilityCondition(game, fk, entry.rollOneDieSurgeCondition);
               }
               const figMsgId = findMsgIdForFigureKey(game, pn, fk, dcMessageMeta);
               // Fireproof — skip Flame Trooper attached figures from
@@ -3829,7 +3851,7 @@ export function resolveAbility(abilityId, context) {
               if (!coord || !affectedSpacesC.has(String(coord).toLowerCase())) continue;
               if (!entry.includeSelf && _rollOneDieSelfFigureKey && fk === _rollOneDieSelfFigureKey) continue;
               if (entry.rollOneDieHostileOnly && pn === playerNum) continue;
-              if (applyCondition(game, fk, entry.rollOneDieSurgeCondition)) {
+              if (queueAbilityCondition(game, fk, entry.rollOneDieSurgeCondition)) {
                 condAffected.push(`${dcNameFromFigureKey(fk)} becomes **${entry.rollOneDieSurgeCondition}**`);
               }
             }
@@ -4024,7 +4046,7 @@ export function resolveAbility(abilityId, context) {
             parts.push(`+ ${strainAmt} Strain`);
           }
           if (conditions.length) {
-            const added = conditions.filter((c) => applyCondition(game, fk, c));
+            const added = conditions.filter((c) => queueAbilityCondition(game, fk, c));
             if (added.length) parts.push(added.join(', '));
           }
           // fixedAreaDiscardToken (Gar Saxon Flamethrower): discard 1 Power Token per affected figure
@@ -12992,8 +13014,9 @@ export function resolveAbility(abilityId, context) {
       if (wasDefeated) {
         return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage and was **defeated**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, refreshBoard: true };
       }
-      // A surviving figure becomes Focused and gains 1 MP.
-      applyCondition(game, damageFk, 'Focus');
+      // A surviving figure becomes Focused and gains 1 MP. Queue the condition
+      // so it lands AFTER the damage (alexanbv 2026-06-23 order).
+      queueAbilityCondition(game, damageFk, 'Focus');
       if (targetIsActivator) {
         addMovementPoints(game, msgId, 1);
         return { applied: true, logMessage: `**Stimulants** — **${targetName}** suffered 1 Damage; gained 1 MP (banked) and Focus.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: refreshIds, conditionCardsToPost: ['Focus'], refreshMovementBank: true, activeMsgId: msgId };

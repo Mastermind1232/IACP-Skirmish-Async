@@ -97,50 +97,22 @@ export async function applyAbilityResult(result, opts) {
     return { handled: false, requiresChoice: false, requiresSpaceChoice: true };
   }
 
-  // --- Strain via the applyStrain pipeline ---
-  // Two fields:
-  //   - pendingStrainCost: a single { figureKey, controllerPlayerNum,
-  //     amount, source } payload for "ability costs N Strain" — fired
-  //     BEFORE other side effects (granted attack, picker post) per
-  //     IACP "strain is dealt before resolving the ability".
-  //   - pendingStrain: an array of the same payload shape for
-  //     ability-deals-strain effects (defender suffers N Strain, etc.)
-  //     fired in order at the same point.
-  // Both route through applyStrain so Fireproof / Headhunter / Under
-  // Duress / Paz / top-of-deck-discard prompts gate correctly.
-  if (result.applied && (result.pendingStrainCost || (Array.isArray(result.pendingStrain) && result.pendingStrain.length > 0))) {
+  // --- Deferred side-effects in canonical order (alexanbv 2026-06-23) ---
+  // resolveAbility() is SYNC so it can't await the pipelines; it QUEUES strain
+  // cost / damage / dealt strain / conditions and we drain them here in the one
+  // canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS. Damage
+  // routes through the SAME applyDamage combat uses (combat:false) so every
+  // ability/CC damage fires the identical WHEN_DAMAGED / BEFORE_DEFEATED /
+  // WHEN_DEFEATED hooks + Vanish / Clan-of-Two; strain routes through applyStrain
+  // (Fireproof / Under Duress / Paz). Drained BEFORE _pendingFigureDefeats since
+  // applyDamage finalizes its own defeats internally.
+  if (result.applied) {
     try {
-      const { applyStrain } = await import('../handlers/strain-handler.js');
-      const queue = [];
-      if (result.pendingStrainCost) queue.push(result.pendingStrainCost);
-      if (Array.isArray(result.pendingStrain)) queue.push(...result.pendingStrain);
-      for (const sc of queue) {
-        if (!sc || !sc.figureKey || !sc.amount) continue;
-        await applyStrain(game, ctx, {
-          figureKey: sc.figureKey,
-          controllerPlayerNum: sc.controllerPlayerNum,
-          amount: sc.amount,
-          source: sc.source || 'ability strain',
-        });
-      }
+      const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+      await applyDeferredAbilityEffects(game, ctx, result);
     } catch (err) {
-      console.error('[apply-ability-result] strain pipeline failed:', err?.message ?? err);
+      console.error('[apply-ability-result] deferred-effects pipeline failed:', err?.message ?? err);
     }
-  }
-
-  // --- Damage via the SINGLE applyDamage pipeline (alexanbv 2026-06-23) ---
-  // resolveAbility() is SYNC so it cannot await applyDamage; instead it QUEUES
-  // damage onto game._pendingDamage (and/or result.pendingDamage), and we drain
-  // it here through the SAME applyDamage pipeline that combat uses (combat:false).
-  // This guarantees every ability/CC damage fires the identical WHEN_DAMAGED /
-  // BEFORE_DEFEATED / WHEN_DEFEATED hooks + Vanish / Clan-of-Two — never a lesser
-  // path. Drained BEFORE _pendingFigureDefeats since applyDamage finalizes its
-  // own defeats internally.
-  try {
-    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
-    await drainPendingDamage(game, ctx, result);
-  } catch (err) {
-    console.error('[apply-ability-result] damage pipeline failed:', err?.message ?? err);
   }
 
   // --- Ready figures: unexhaust and rebuild DC embed ---

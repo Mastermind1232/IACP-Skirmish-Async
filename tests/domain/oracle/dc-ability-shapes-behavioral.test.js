@@ -29,7 +29,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
-import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
+import { applyDeferredAbilityEffects } from '../../../src/game/damage-pipeline.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -200,7 +200,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
       targetFigureKey: 'Darth Vader-1-0',
     });
     const result = resolveAbility('force_lightning', context);
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // 3 damage to primary target (6 HP → 3)
@@ -226,7 +226,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
     dcHealthState.set(enemyMsgIds['Imperial Officer'], [[6, 6]]);
 
     const result = resolveAbility('force_lightning', context);
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Adjacent hostile takes 1 splash damage (6 → 5)
@@ -247,7 +247,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
     dcHealthState.set('msg_friend_kanan_jarrus', [[8, 8]]);
 
     const result = resolveAbility('force_lightning', context);
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Friendly adjacent takes 1 splash damage (8 → 7)
@@ -317,9 +317,9 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
       'self-only when no enemies on the board');
   });
 
-  it('003b: primary target Weaken does not splash to adjacent', () => {
+  it('003b: primary target Weaken does not splash to adjacent', async () => {
     // Weaken is a primary condition, not a splashCondition — only splashDamage splashes
-    const { context, game } = buildForceLightningContext({
+    const { context, game, dcHealthState } = buildForceLightningContext({
       attackerPos: 'a1',
       enemyPositions: {
         'Darth Vader-1-0': 'a2',
@@ -330,6 +330,7 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
     });
 
     resolveAbility('force_lightning', context);
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
 
     // Primary gets Weaken
     assert.ok(game.figureConditions?.['Darth Vader-1-0']?.includes('Weaken'),
@@ -349,7 +350,7 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
     });
 
     const result = resolveAbility('force_lightning', context);
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Primary still takes damage

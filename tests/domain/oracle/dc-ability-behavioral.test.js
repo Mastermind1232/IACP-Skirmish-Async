@@ -24,7 +24,7 @@ import { cleanupActivation, _registerDcMessageMeta } from '../../../src/game/act
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { handleDcAction } from '../../../src/handlers/dc-play-area.js';
 import { enumerateActivatorSoaDescriptors } from '../../../src/game/soa-orchestrator.js';
-import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
+import { applyDeferredAbilityEffects } from '../../../src/game/damage-pipeline.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -234,7 +234,7 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
     const result = resolveAbility('force_choke', context);
     assert.equal(result.applied, true);
     // Damage routes through the unified applyDamage pipeline; strain via applyStrain.
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
     const healthAfter = dcHealthState.get('msg_enemy');
     assert.equal(healthAfter[0][0], 3, 'HP should be 5 - 2 (damage only) = 3');
     assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');
@@ -391,7 +391,7 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
     const result = resolveAbility('invasive_procedure', context);
     assert.equal(result.applied, true);
     // Damage routes through the unified applyDamage pipeline; strain via applyStrain.
-    await drainPendingDamage(context.game, { dcHealthState });
+    await applyDeferredAbilityEffects(context.game, { dcHealthState });
     const healthAfter = dcHealthState.get('msg_enemy');
     assert.equal(healthAfter[0][0], 3, 'HP should be 4 - 1 (damage only) = 3');
     assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');

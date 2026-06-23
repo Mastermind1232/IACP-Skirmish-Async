@@ -38,28 +38,14 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { openCcCounterWindow, registerCcCustomResolve, runCcPlayTriggers } from './cc-hand.js';
 
-// Drain the deferred side-effects a (sync) resolveAbility produced — strain
-// (pendingStrainCost / pendingStrain → applyStrain) and damage
-// (game._pendingDamage → the ONE applyDamage pipeline). Defeat CCs like Lord of
-// the Sith (Force Choke) deal 2 Damage + 1 Strain here (alexanbv 2026-06-23 —
-// all damage on one pipeline + strain through apply strain). Strain first, then
-// damage. ctx carries dcHealthState + processFigureDefeat. Idempotent.
+// Drain the deferred side-effects a (sync) resolveAbility produced in the one
+// canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv
+// 2026-06-23). Defeat CCs like Lord of the Sith (Force Choke) deal Damage +
+// Strain here. ctx carries dcHealthState + processFigureDefeat. Idempotent.
 async function _drainDefeatCcDamage(game, ctx, result) {
   if (!game) return;
-  const strainQueue = [];
-  if (result?.pendingStrainCost) strainQueue.push(result.pendingStrainCost);
-  if (Array.isArray(result?.pendingStrain)) strainQueue.push(...result.pendingStrain);
-  if (strainQueue.length) {
-    const { applyStrain } = await import('./strain-handler.js');
-    for (const s of strainQueue) {
-      if (!s?.figureKey || !(s.amount > 0)) continue;
-      await applyStrain(game, ctx, s);
-    }
-  }
-  if (game._pendingDamage?.length || result?.pendingDamage?.length) {
-    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
-    await drainPendingDamage(game, ctx, result);
-  }
+  const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+  await applyDeferredAbilityEffects(game, ctx, result);
 }
 
 /**

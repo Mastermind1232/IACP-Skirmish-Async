@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
-import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
+import { applyDeferredAbilityEffects } from '../../../src/game/damage-pipeline.js';
 
 const MAP_ID = 'anchorhead-cantina-bar';
 
@@ -92,7 +92,7 @@ describe('PROBE-TERRO-FLAME-002: Phase 2 applies 1 damage synchronously, queues 
       chosenSpace: 'b1',
     });
     assert.equal(result.applied, true, `should resolve: ${result.logMessage || result.manualMessage}`);
-    await drainPendingDamage(game, { dcHealthState });
+    await applyDeferredAbilityEffects(game, { dcHealthState });
     const trooperHp = dcHealthState.get(trooperMsgId);
     assert.deepStrictEqual(trooperHp, [[3, 4]], 'trooper: 4 HP → 3 HP (1 damage; strain via pipeline)');
     const conds = game.figureConditions?.['Rebel Trooper-1-0'] || [];
@@ -114,7 +114,7 @@ describe('PROBE-TERRO-FLAME-002: Phase 2 applies 1 damage synchronously, queues 
       chosenSpace: 'b1',
     });
     assert.equal(result.applied, true);
-    await drainPendingDamage(game, { dcHealthState });
+    await applyDeferredAbilityEffects(game, { dcHealthState });
     const friendlyHp = dcHealthState.get(friendlyMsgId);
     assert.deepStrictEqual(friendlyHp, [[8, 9]], 'friendly adjacent: 9 HP → 8 HP (1 damage; strain via pipeline)');
     const conds = game.figureConditions?.['Gamorrean Guard-1-0'] || [];

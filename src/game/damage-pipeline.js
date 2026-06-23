@@ -488,6 +488,59 @@ export async function drainPendingDamage(game, ctx, result = null) {
 }
 
 /**
+ * Apply ALL deferred ability/CC side-effects in the canonical IACP resolution
+ * order (alexanbv 2026-06-23):
+ *
+ *   1. pendingStrainCost — a self strain COST ("strain is dealt before
+ *      resolving the ability"), so it fires first.
+ *   2. DAMAGE — game._pendingDamage / result.pendingDamage, through the ONE
+ *      applyDamage pipeline. Damage is dealt BEFORE strain and conditions so a
+ *      lethal hit defeats the figure before the rest would apply.
+ *   3. pendingStrain — strain the ability DEALS to a target, after damage.
+ *   4. pendingConditions — other effects (Weaken, Bleed, discard Power Token,
+ *      …) applied last.
+ *
+ * Every resolveAbility consumer routes through this so the order is identical
+ * no matter which path (Discord dcSpecial, CC play, headless, on-defeat CC)
+ * resolved the ability. Idempotent — clears the queues it drains.
+ *
+ * @param {object} game
+ * @param {object} ctx   — needs dcHealthState; processFigureDefeat for defeats
+ * @param {object} [result] — resolveAbility result carrying the pending* fields
+ */
+export async function applyDeferredAbilityEffects(game, ctx, result = null) {
+  if (!game) return;
+  // 1. Self strain COST — before everything.
+  if (result?.pendingStrainCost?.figureKey && result.pendingStrainCost.amount > 0) {
+    const { applyStrain } = await import('../handlers/strain-handler.js');
+    await applyStrain(game, ctx, result.pendingStrainCost);
+  }
+  // 2. DAMAGE.
+  await drainPendingDamage(game, ctx, result);
+  // 3. Dealt STRAIN.
+  if (Array.isArray(result?.pendingStrain) && result.pendingStrain.length) {
+    const { applyStrain } = await import('../handlers/strain-handler.js');
+    for (const s of result.pendingStrain) {
+      if (!s?.figureKey || !(s.amount > 0)) continue;
+      await applyStrain(game, ctx, s);
+    }
+  }
+  // 4. CONDITIONS / other effects (Weaken, Bleed, discard PT, …).
+  const condQueue = [
+    ...(Array.isArray(result?.pendingConditions) ? result.pendingConditions : []),
+    ...(Array.isArray(game._pendingConditions) ? game._pendingConditions : []),
+  ];
+  if (game._pendingConditions) game._pendingConditions = [];
+  if (condQueue.length) {
+    const { applyCondition } = await import('./conditions.js');
+    for (const c of condQueue) {
+      if (!c?.figureKey || !c.condition) continue;
+      applyCondition(game, c.figureKey, c.condition);
+    }
+  }
+}
+
+/**
  * Synchronous variant of applyDamage for callers that can't await
  * (e.g. resolveAbility's `tempt` branch). Skips async hooks; only
  * runs hooks tagged `sync: true` in their registry entry. Use when

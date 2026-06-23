@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
 import { _registerDcMessageMeta } from './activation-state.js';
-import { drainPendingDamage } from './damage-pipeline.js';
+import { drainPendingDamage, applyDeferredAbilityEffects } from './damage-pipeline.js';
 
 test('getAbility returns library entry for known surge id', () => {
   const entry = getAbility('damage 1');
@@ -549,7 +549,7 @@ test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile tak
   const hs2 = new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]);
   const r = resolveAbility('Stimulants', { game: g2, playerNum: 1, dcMessageMeta: meta(), dcHealthState: hs2, chosenFigureKey: 'Stormtrooper (Elite)-1-0' });
   assert.strictEqual(r.applied, true);
-  await drainPendingDamage(g2, { dcHealthState: hs2 });
+  await applyDeferredAbilityEffects(g2, { dcHealthState: hs2 }, r);
   assert.deepStrictEqual(hs2.get(tgtMsg)[0], [5, 6], 'hostile took 1 Damage');
   assert.ok((g2.figureConditions['Stormtrooper (Elite)-1-0'] || []).includes('Focus'), 'hostile becomes Focused');
   assert.ok(/hostile/i.test(r.logMessage), 'log notes the hostile target');
