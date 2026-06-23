@@ -470,7 +470,10 @@ export async function finalizeActivation({
   }
 
   // B13. Send thread ping (actions buttons + minimap)
-  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(_b12Total, _b12Total)}`;
+  // Actions are per-figure now (B12: _b12PerFig, DC_ACTIONS_PER_ACTIVATION each),
+  // so the opening counter shows the activating figure's full budget. (_b12Total
+  // was a removed group-level total — its dangling ref crashed finalizeActivation.)
+  const pingContent = `<@${ownerId}> — Your activation thread. ${getActionsCounterContent(DC_ACTIONS_PER_ACTIVATION, DC_ACTIONS_PER_ACTIVATION)}`;
   const actMinimap = await getActivationMinimapAttachment(game, msgId);
   const actionsPayload = sanitizeMentions({
     content: pingContent,
