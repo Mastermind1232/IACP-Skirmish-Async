@@ -284,6 +284,12 @@ export async function applyAbilityResult(result, opts) {
   //      helper and the queue drains here without the caller plumbing
   //      defeatedFigures explicitly.
   // Dedupe by figureKey to avoid double-firing if a site happens to do both.
+  // FUTURE — PLAYER-CHOSEN RESOLUTION ORDER (alexanbv 2026-06-23, NOT YET BUILT):
+  // when an ability/effect would defeat MULTIPLE figures, the CONTROLLER OF THE
+  // AFFECTED FIGURES chooses the order they are defeated (in theory every time
+  // 2+). Today this drains in FIXED queue order. When implemented, group these
+  // defeats by defeatedPlayerNum and prompt that controller to order any group
+  // of 2+ before finalizing. Search tag: "PLAYER-CHOSEN RESOLUTION ORDER".
   const _seenDefeats = new Set();
   const _pendingFromQueue = (game._pendingFigureDefeats || []).slice();
   if (Array.isArray(_pendingFromQueue) && _pendingFromQueue.length > 0) {

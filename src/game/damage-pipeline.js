@@ -504,6 +504,17 @@ export async function drainPendingDamage(game, ctx, result = null) {
  * no matter which path (Discord dcSpecial, CC play, headless, on-defeat CC)
  * resolved the ability. Idempotent — clears the queues it drains.
  *
+ * FUTURE — PLAYER-CHOSEN RESOLUTION ORDER (alexanbv 2026-06-23, NOT YET BUILT):
+ * When an ability/effect affects MULTIPLE figures (damage/strain) or MULTIPLE
+ * would be defeated, the IACP rule is that the CONTROLLER OF THE AFFECTED
+ * FIGURES chooses the order each figure resolves — in theory every time there
+ * are 2+. Today these queues drain in FIXED insertion order (no prompt). To
+ * implement: group the queue entries by controllerPlayerNum, and when a group
+ * has 2+ figures, prompt that controller to order them (suspend/resume) before
+ * applying. Mirror the same at the Blast loop (after-attack-fire.js fireBlast),
+ * the multi-figure strain loops, and the figure-defeat finalize. Search tag:
+ * "PLAYER-CHOSEN RESOLUTION ORDER".
+ *
  * @param {object} game
  * @param {object} ctx   — needs dcHealthState; processFigureDefeat for defeats
  * @param {object} [result] — resolveAbility result carrying the pending* fields

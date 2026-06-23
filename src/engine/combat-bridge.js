@@ -1775,6 +1775,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       const _ftBlastAdj = _targetCoordBeforeDefeat
         ? getFiguresAdjacentToCoord(game, _targetCoordBeforeDefeat, game.selectedMap.id, combat.target.figureKey, _targetSizeBeforeDefeat)
         : [];
+      // FUTURE — PLAYER-CHOSEN RESOLUTION ORDER (alexanbv 2026-06-23, NOT YET
+      // BUILT): multi-figure strain (here, Incinerate-on-Blast) is applied per
+      // figure (correct) but in FIXED order. The controller of the affected
+      // figures should choose the order each suffers Strain / is defeated.
+      // Search tag: "PLAYER-CHOSEN RESOLUTION ORDER" (note in damage-pipeline.js).
       for (const { figureKey: _ftBlastFk, playerNum: _ftBlastPn } of _ftBlastAdj) {
         // Fireproof is per-figure: only the Flame Trooper FIGURE itself is immune
         // to Incinerate Blast Strain, not other figures in its group. alexanbv

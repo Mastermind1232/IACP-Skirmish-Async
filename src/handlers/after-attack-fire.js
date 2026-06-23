@@ -98,6 +98,13 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     combat._blastTargetSize,
   );
   const dCtx = { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt };
+  // FUTURE — PLAYER-CHOSEN RESOLUTION ORDER (alexanbv 2026-06-23, NOT YET BUILT):
+  // Blast hits every adjacent figure individually through applyDamage (correct),
+  // but in FIXED adjacency order. The IACP rule is the CONTROLLER OF THE AFFECTED
+  // FIGURES chooses the order each suffers Blast / is defeated (in theory every
+  // time 2+ are hit). When implemented, prompt that controller to order this
+  // `adjacent` list (per controllerPlayerNum group) before the loop. Search tag:
+  // "PLAYER-CHOSEN RESOLUTION ORDER" (canonical note in damage-pipeline.js).
   for (const { figureKey, playerNum } of adjacent) {
     if (playerNum === attackerPlayerNum && ftFireproofFriendly) continue;
     const msgId = findDcMessageIdForFigure?.(game.gameId, playerNum, figureKey);
