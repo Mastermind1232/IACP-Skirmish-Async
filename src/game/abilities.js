@@ -80,6 +80,21 @@ function decrementFigureHealth(hs, figIdx, amount) {
 }
 
 /**
+ * Queue ability/CC DAMAGE onto game._pendingDamage. resolveAbility() is sync and
+ * cannot await, so all ability damage is queued here and drained through the ONE
+ * canonical applyDamage pipeline by apply-ability-result.js — the SAME pipeline
+ * combat uses, firing every WHEN_DAMAGED / BEFORE_DEFEATED / WHEN_DEFEATED hook +
+ * Vanish / Clan-of-Two. NEVER mutate HP directly for damage (alexanbv 2026-06-23).
+ * @param {object} game
+ * @param {{figureKey:string,msgId:string,figIndex?:number,amount:number,controllerPlayerNum?:number,attackerPlayerNum?:number,source?:string}} payload
+ */
+function queueAbilityDamage(game, payload) {
+  if (!game || !payload?.figureKey || !payload?.msgId || !(payload.amount > 0)) return;
+  game._pendingDamage = game._pendingDamage || [];
+  game._pendingDamage.push(payload);
+}
+
+/**
  * Get uppercased keywords for a DC by name.
  * @param {string} dcName - DC name (e.g. from dcNameFromFigureKey)
  * @returns {string[]} - uppercased keyword array (e.g. ['MOBILE', 'TROOPER'])
@@ -805,6 +820,7 @@ export function resolveAbility(abilityId, context) {
               const adjFigIdx = adjFkMatch ? parseInt(adjFkMatch[2], 10) : 0;
               const adjRes = applyDamageWithDefeatCheck(dcHealthState, game, adjMsgId, adjFigIdx, splashDamage, adjEntry.playerNum, {
                 sourceLabel: `${entry.label || 'Force ability'} (splash)`, attackerPlayerNum: playerNum,
+                figureKey: adjFk,
               });
               if (adjRes.maxHp > 0) _npcSplashParts.push(`**${adjName}** ${splashDamage} Damage (${adjRes.prevHp}→${adjRes.newHp})`);
             }
@@ -839,6 +855,7 @@ export function resolveAbility(abilityId, context) {
         const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, damage, _thfTargetOwner, {
           sourceLabel: entry.label || 'Force ability',
           attackerPlayerNum: playerNum,
+          figureKey: targetFigureKey,
         });
         if (dmgRes.maxHp > 0) {
           parts.push(`suffered ${damage} Damage (HP: ${dmgRes.prevHp} → ${dmgRes.newHp})`);
@@ -906,6 +923,7 @@ export function resolveAbility(abilityId, context) {
               const adjRes = applyDamageWithDefeatCheck(dcHealthState, game, adjMsgId, adjFigIdx, splashDamage, adjPnum, {
                 sourceLabel: `${entry.label || 'Force ability'} (splash)`,
                 attackerPlayerNum: playerNum,
+                figureKey: adjFk,
               });
               if (adjRes.maxHp > 0) {
                 splashParts.push(`**${adjName}** ${splashDamage} Damage (${adjRes.prevHp}→${adjRes.newHp})`);
@@ -3975,6 +3993,7 @@ export function resolveAbility(abilityId, context) {
               const dmgRes = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, figIdx, dmgAmt, pn, {
                 sourceLabel: entry.label || 'fixedArea damage',
                 attackerPlayerNum: playerNum || (pn === 1 ? 2 : 1),
+                figureKey: fk,
               });
               if (dmgRes.maxHp > 0) {
                 parts.push(`${dmgAmt} Dmg (HP: ${dmgRes.prevHp}→${dmgRes.newHp})`);
@@ -8658,6 +8677,7 @@ export function resolveAbility(abilityId, context) {
         applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, targetIdx, damage, oppNum, {
           sourceLabel: entry.label || context.cardName || 'CC ability',
           attackerPlayerNum: playerNum,
+          figureKey: chosenFigureKey,
         });
       }
       const _cahPendingStrain = strain > 0 ? [{
@@ -9242,7 +9262,7 @@ export function resolveAbility(abilityId, context) {
           const figIdx = m ? parseInt(m[2], 10) : 0;
           if (!tHs[figIdx]) continue;
           // Damage pipeline (alexanbv 2026-06-22): queues a defeat on a lethal hit.
-          const _r = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, figIdx, hits, tPn, { sourceLabel: 'Whistling Birds', attackerPlayerNum: playerNum });
+          const _r = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, figIdx, hits, tPn, { sourceLabel: 'Whistling Birds', attackerPlayerNum: playerNum, figureKey: fk });
           parts.push(`**${dcNameFromFigureKey(fk)}** ${_r.prevHp} → ${_r.newHp}`);
           if (!refreshIds.includes(tMsgId)) refreshIds.push(tMsgId);
         }

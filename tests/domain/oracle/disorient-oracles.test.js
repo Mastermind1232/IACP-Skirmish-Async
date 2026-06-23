@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { getAbilityLibrary } from '../../../src/data-loader.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // ── Helper: build game state for Disorient resolution ─────────────────────────
 function buildDisorientGame() {
@@ -114,7 +115,7 @@ describe('ORACLE-DISOR-002: Resolution discards condition and applies Strain', (
 //    pipeline (alexanbv 2026-06-22) — a lethal CC hit queues a figure defeat.
 //    This is the prerequisite for Ambush actually defeating the attacker. ──────
 describe('chooseAdjacentHostileThen lethal damage queues a defeat (pipeline)', () => {
-  it('Force Lightning dealing >= target HP queues game._pendingFigureDefeats', () => {
+  it('Force Lightning dealing >= target HP reduces it to 0 and defeats it via the pipeline', async () => {
     const targetMsgId = 'msg_target';
     const dcMessageMeta = new Map([
       ['msg_act', { gameId: 'tg', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [DG 1]' }],
@@ -135,10 +136,18 @@ describe('chooseAdjacentHostileThen lethal damage queues a defeat (pipeline)', (
       selectedMap: { id: 'tm' },
     };
     resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenFigureKey: 'Stormtrooper-1-0' });
-    // Target reduced to 0 and a defeat queued for apply-ability-result.js to drain.
-    assert.deepStrictEqual(dcHealthState.get(targetMsgId)[0], [0, 6], 'target at 0 HP');
-    assert.ok(Array.isArray(game._pendingFigureDefeats) && game._pendingFigureDefeats.some(d => d.figureKey === 'Stormtrooper-1-0'),
-      'a defeat was queued (figure no longer hardcoded-alive at 0 HP)');
+    // resolveAbility is sync: it QUEUES the damage onto game._pendingDamage.
+    assert.ok(Array.isArray(game._pendingDamage) && game._pendingDamage.some(d => d.figureKey === 'Stormtrooper-1-0'),
+      'damage queued for the unified pipeline');
+    // Drain through the SAME applyDamage pipeline combat uses; a lethal hit
+    // reduces HP to 0 and finalizes the defeat via ctx.processFigureDefeat.
+    const defeats = [];
+    await drainPendingDamage(game, {
+      dcHealthState,
+      processFigureDefeat: (_g, rec) => { defeats.push(rec.figureKey); },
+    });
+    assert.deepStrictEqual(dcHealthState.get(targetMsgId)[0], [0, 6], 'target at 0 HP after drain');
+    assert.ok(defeats.includes('Stormtrooper-1-0'), 'figure defeated via the pipeline');
   });
 });
 

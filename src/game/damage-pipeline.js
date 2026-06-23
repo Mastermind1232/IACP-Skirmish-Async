@@ -441,6 +441,53 @@ export async function applyDamage(game, ctx, opts) {
 }
 
 /**
+ * Drain queued ability/CC damage through the SINGLE applyDamage pipeline.
+ *
+ * resolveAbility() is SYNC so it cannot await applyDamage; instead it QUEUES
+ * damage onto game._pendingDamage (and/or result.pendingDamage). This drains
+ * that queue through the SAME applyDamage pipeline combat uses (combat:false),
+ * guaranteeing every ability/CC damage fires the identical WHEN_DAMAGED /
+ * BEFORE_DEFEATED / WHEN_DEFEATED hooks + Vanish / Clan-of-Two — never a lesser
+ * path. applyDamage fires the hooks; the caller finalizes the defeat (VP /
+ * position cleanup) via ctx.processFigureDefeat — the same contract the
+ * strain → damage path uses. Returns the number of damage events applied.
+ *
+ * @param {object} game
+ * @param {object} ctx   — needs dcHealthState; processFigureDefeat for defeats
+ * @param {object} [result] — optional resolveAbility result carrying pendingDamage
+ * @returns {Promise<number>}
+ */
+export async function drainPendingDamage(game, ctx, result = null) {
+  if (!game) return 0;
+  const queue = [
+    ...(Array.isArray(result?.pendingDamage) ? result.pendingDamage : []),
+    ...(Array.isArray(game._pendingDamage) ? game._pendingDamage : []),
+  ];
+  if (game._pendingDamage) game._pendingDamage = [];
+  if (!queue.length) return 0;
+  let applied = 0;
+  for (const d of queue) {
+    if (!d || !d.figureKey || !d.msgId || !(d.amount > 0)) continue;
+    const { wasDefeated } = await applyDamage(game, ctx, {
+      figureKey: d.figureKey, msgId: d.msgId, figIndex: d.figIndex ?? 0,
+      amount: d.amount, controllerPlayerNum: d.controllerPlayerNum,
+      attackerPlayerNum: d.attackerPlayerNum,
+      source: d.source || 'ability', combat: false,
+    });
+    applied++;
+    if (wasDefeated && ctx?.processFigureDefeat) {
+      await ctx.processFigureDefeat(game, {
+        defeatedPlayerNum: d.controllerPlayerNum,
+        figureKey: d.figureKey, msgId: d.msgId,
+        attackerPlayerNum: d.attackerPlayerNum ?? null,
+        source: d.source || 'ability',
+      });
+    }
+  }
+  return applied;
+}
+
+/**
  * Synchronous variant of applyDamage for callers that can't await
  * (e.g. resolveAbility's `tempt` branch). Skips async hooks; only
  * runs hooks tagged `sync: true` in their registry entry. Use when

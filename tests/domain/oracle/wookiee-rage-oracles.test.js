@@ -18,6 +18,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { isCcPlayLegalByRestriction } from '../../../src/game/cc-timing.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // ── Helper: build game state for Wookiee Rage ───────────────────────────────
 function buildWookieeRageGame({ damageSuffered = 3, adjacentHostiles = 1 } = {}) {
@@ -86,7 +87,7 @@ describe('ORACLE-WRAGE-001: playableBy WOOKIEE matches keyword', () => {
 // ── ORACLE-WRAGE-002: Damage scales with damage suffered (max 3) ─────────────
 // Uses direct chosenFigureKey + wookiee_rage_done path to bypass map enumeration.
 describe('ORACLE-WRAGE-002: Damage scales with damage suffered', () => {
-  it('002a: 3 damage suffered → 3 damage to target', () => {
+  it('002a: 3 damage suffered → 3 damage to target', async () => {
     const { game, dcMessageMeta, dcHealthState, hostileMsgIds } = buildWookieeRageGame({ damageSuffered: 3, adjacentHostiles: 1 });
     const targetFk = 'Stormtrooper (Elite)-1-0';
     // Accumulate target
@@ -97,11 +98,12 @@ describe('ORACLE-WRAGE-002: Damage scales with damage suffered', () => {
       chosenFigureKey: 'wookiee_rage_done',
     });
     assert.equal(result.applied, true);
+    await drainPendingDamage(game, { dcHealthState });
     const hp = dcHealthState.get(hostileMsgIds[0]);
     assert.deepStrictEqual(hp, [[3, 6]], 'Target HP should be 6 → 3 (3 Damage)');
   });
 
-  it('002b: 1 damage suffered → 1 damage to target', () => {
+  it('002b: 1 damage suffered → 1 damage to target', async () => {
     const { game, dcMessageMeta, dcHealthState, hostileMsgIds } = buildWookieeRageGame({ damageSuffered: 1, adjacentHostiles: 1 });
     const targetFk = 'Stormtrooper (Elite)-1-0';
     game._wookieeRageTargets = [targetFk];
@@ -110,11 +112,12 @@ describe('ORACLE-WRAGE-002: Damage scales with damage suffered', () => {
       chosenFigureKey: 'wookiee_rage_done',
     });
     assert.equal(result.applied, true);
+    await drainPendingDamage(game, { dcHealthState });
     const hp = dcHealthState.get(hostileMsgIds[0]);
     assert.deepStrictEqual(hp, [[5, 6]], 'Target HP should be 6 → 5 (1 Damage)');
   });
 
-  it('002c: 5 damage suffered → capped at 3 damage per target', () => {
+  it('002c: 5 damage suffered → capped at 3 damage per target', async () => {
     const { game, dcMessageMeta, dcHealthState, hostileMsgIds } = buildWookieeRageGame({ damageSuffered: 5, adjacentHostiles: 1 });
     const targetFk = 'Stormtrooper (Elite)-1-0';
     game._wookieeRageTargets = [targetFk];
@@ -123,6 +126,7 @@ describe('ORACLE-WRAGE-002: Damage scales with damage suffered', () => {
       chosenFigureKey: 'wookiee_rage_done',
     });
     assert.equal(result.applied, true);
+    await drainPendingDamage(game, { dcHealthState });
     const hp = dcHealthState.get(hostileMsgIds[0]);
     assert.deepStrictEqual(hp, [[3, 6]], 'Target HP should be 6 → 3 (capped at 3)');
   });
@@ -145,7 +149,7 @@ describe('ORACLE-WRAGE-003: 0 damage suffered → no damage', () => {
 
 // ── ORACLE-WRAGE-004: Multi-target — 2 targets chosen ────────────────────────
 describe('ORACLE-WRAGE-004: Multi-target damage', () => {
-  it('004: 2 targets each take scaled damage', () => {
+  it('004: 2 targets each take scaled damage', async () => {
     const { game, dcMessageMeta, dcHealthState, hostileMsgIds } = buildWookieeRageGame({ damageSuffered: 2, adjacentHostiles: 2 });
     // Pre-set both targets
     game._wookieeRageTargets = ['Stormtrooper (Elite)-1-0', 'Stormtrooper (Elite)-2-0'];
@@ -154,6 +158,7 @@ describe('ORACLE-WRAGE-004: Multi-target damage', () => {
       chosenFigureKey: 'wookiee_rage_done',
     });
     assert.equal(result.applied, true);
+    await drainPendingDamage(game, { dcHealthState });
     for (const mId of hostileMsgIds) {
       const hp = dcHealthState.get(mId);
       assert.deepStrictEqual(hp, [[4, 6]], `Each target HP should be 6 → 4 (2 Damage)`);

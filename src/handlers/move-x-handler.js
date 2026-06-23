@@ -27,7 +27,6 @@ import { discordCatch } from '../error-handling.js';
 import { getDcEffects, getMapData, getMapTokensData, getFigureSize } from '../data-loader.js';
 import { getFootprintCells, normalizeCoord, edgeKey, shiftCoord, rotateSizeString, parseCoord, colRowToCoord } from '../game/coords.js';
 import { dcNameFromFigureKey } from '../game/index.js';
-import { applyDamageWithDefeatCheck } from '../game/damage-helpers.js';
 import { markMapDirty } from '../game/game-helpers.js';
 import { getReachableSpaces, getMovementKeywords, initMassiveDisplacement, resolveNextDisplacements, getNormalizedFootprint, getMovementProfile, getBoardStateForMovement } from '../game/movement.js';
 import { setPendingMassivePush, setPendingRushPush, setPendingShoulderRush, setPendingCrushChoice, clearPendingCrushChoice } from '../game/interrupts.js';
@@ -293,10 +292,21 @@ async function _runDbhForceChokeContinuation(game, ctx, pending, next) {
       const fi = fkM ? parseInt(fkM[2], 10) : 0;
       const hp = hs[fi];
       if (hp) {
-        // Defeat-aware pipeline (alexanbv 2026-06-22); strain via applyStrain below.
-        const _dbhRes = applyDamageWithDefeatCheck(dcHealthState, game, tMsgId, fi, 2, oppNum, {
-          sourceLabel: 'Driven by Hatred', attackerPlayerNum: playerNum,
+        // Unified damage pipeline (alexanbv 2026-06-22): all suffer-damage
+        // routes through applyDamage so when-damaged / before-defeated /
+        // when-defeated hooks + CC windows fire. Strain via applyStrain below.
+        const { applyDamage } = await import('../game/damage-pipeline.js');
+        const _dbhRes = await applyDamage(game, ctx, {
+          figureKey: targetFigureKey, msgId: tMsgId, figIndex: fi,
+          amount: 2, controllerPlayerNum: oppNum, attackerPlayerNum: playerNum,
+          source: 'Driven by Hatred', combat: false,
         });
+        if (_dbhRes?.wasDefeated && ctx.processFigureDefeat) {
+          await ctx.processFigureDefeat(game, {
+            defeatedPlayerNum: oppNum, figureKey: targetFigureKey, msgId: tMsgId,
+            attackerPlayerNum: playerNum, source: 'Driven by Hatred',
+          });
+        }
         dmgNote = `2 Damage (HP: ${_dbhRes.prevHp} → ${_dbhRes.newHp}) + 1 Strain (queued)`;
       }
     }
@@ -386,10 +396,19 @@ async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
         const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
         const hp = hs[figIdx];
         if (hp) {
-          // Defeat-aware pipeline (alexanbv 2026-06-22).
-          const _hbcRes = applyDamageWithDefeatCheck(dcHealthState, game, targetMsgId, figIdx, hits, oppNum, {
-            sourceLabel: 'Headbutt', attackerPlayerNum: playerNum,
+          // Unified damage pipeline (alexanbv 2026-06-22).
+          const { applyDamage } = await import('../game/damage-pipeline.js');
+          const _hbcRes = await applyDamage(game, ctx, {
+            figureKey: targetFigureKey, msgId: targetMsgId, figIndex: figIdx,
+            amount: hits, controllerPlayerNum: oppNum, attackerPlayerNum: playerNum,
+            source: 'Headbutt', combat: false,
           });
+          if (_hbcRes?.wasDefeated && ctx.processFigureDefeat) {
+            await ctx.processFigureDefeat(game, {
+              defeatedPlayerNum: oppNum, figureKey: targetFigureKey, msgId: targetMsgId,
+              attackerPlayerNum: playerNum, source: 'Headbutt',
+            });
+          }
           resPart = ` — ${hits} Damage (HP: ${_hbcRes.prevHp} → ${_hbcRes.newHp})`;
         }
       }

@@ -128,6 +128,21 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Damage via the SINGLE applyDamage pipeline (alexanbv 2026-06-23) ---
+  // resolveAbility() is SYNC so it cannot await applyDamage; instead it QUEUES
+  // damage onto game._pendingDamage (and/or result.pendingDamage), and we drain
+  // it here through the SAME applyDamage pipeline that combat uses (combat:false).
+  // This guarantees every ability/CC damage fires the identical WHEN_DAMAGED /
+  // BEFORE_DEFEATED / WHEN_DEFEATED hooks + Vanish / Clan-of-Two — never a lesser
+  // path. Drained BEFORE _pendingFigureDefeats since applyDamage finalizes its
+  // own defeats internally.
+  try {
+    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+    await drainPendingDamage(game, ctx, result);
+  } catch (err) {
+    console.error('[apply-ability-result] damage pipeline failed:', err?.message ?? err);
+  }
+
   // --- Ready figures: unexhaust and rebuild DC embed ---
   if (result.applied && result.readyDcMsgIds?.length && dcExhaustedState) {
     for (const id of result.readyDcMsgIds) {

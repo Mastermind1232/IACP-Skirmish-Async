@@ -29,6 +29,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ describe('B-SPLASH-001: Force Lightning Phase 1 — target enumeration', () => {
 // ── B-SPLASH-002: Force Lightning Phase 2 — primary + splash ────────────────────
 
 describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application', () => {
-  it('002a: primary target takes 3 damage + Weaken', () => {
+  it('002a: primary target takes 3 damage + Weaken', async () => {
     const { context, game, dcHealthState, enemyMsgIds } = buildForceLightningContext({
       attackerPos: 'a1',
       enemyPositions: { 'Darth Vader-1-0': 'a2' },
@@ -199,6 +200,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
       targetFigureKey: 'Darth Vader-1-0',
     });
     const result = resolveAbility('force_lightning', context);
+    await drainPendingDamage(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // 3 damage to primary target (6 HP → 3)
@@ -209,7 +211,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
       'primary target gains Weaken');
   });
 
-  it('002b: adjacent hostile takes splash damage', () => {
+  it('002b: adjacent hostile takes splash damage', async () => {
     // Target at a2, adjacent hostile at a3 — splash should hit a3
     const { context, dcHealthState, enemyMsgIds } = buildForceLightningContext({
       attackerPos: 'a1',
@@ -224,6 +226,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
     dcHealthState.set(enemyMsgIds['Imperial Officer'], [[6, 6]]);
 
     const result = resolveAbility('force_lightning', context);
+    await drainPendingDamage(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Adjacent hostile takes 1 splash damage (6 → 5)
@@ -231,7 +234,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
     assert.strictEqual(splashHs[0][0], 5, 'adjacent hostile HP: 6 → 5 (1 splash damage)');
   });
 
-  it('002c: adjacent FRIENDLY also takes splash damage', () => {
+  it('002c: adjacent FRIENDLY also takes splash damage', async () => {
     // Target at a2, friendly at a3 — splash hits ALL adjacent, including friendlies
     const { context, dcHealthState } = buildForceLightningContext({
       attackerPos: 'a1',
@@ -244,6 +247,7 @@ describe('B-SPLASH-002: Force Lightning Phase 2 — primary + splash application
     dcHealthState.set('msg_friend_kanan_jarrus', [[8, 8]]);
 
     const result = resolveAbility('force_lightning', context);
+    await drainPendingDamage(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Friendly adjacent takes 1 splash damage (8 → 7)
@@ -335,7 +339,7 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
       'adjacent figure does NOT gain Weaken — only splashDamage, not splashConditions');
   });
 
-  it('003c: no splash when no adjacent figures exist', () => {
+  it('003c: no splash when no adjacent figures exist', async () => {
     // Only the primary target on the board, nobody adjacent
     const { context, dcHealthState, enemyMsgIds } = buildForceLightningContext({
       attackerPos: 'a1',
@@ -345,6 +349,7 @@ describe('B-SPLASH-003: Force Lightning rejection + invariants', () => {
     });
 
     const result = resolveAbility('force_lightning', context);
+    await drainPendingDamage(context.game, { dcHealthState });
 
     assert.strictEqual(result.applied, true);
     // Primary still takes damage

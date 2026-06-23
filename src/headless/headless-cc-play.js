@@ -239,6 +239,14 @@ function applyReadyDcMsgIds(result, deps) {
 
 /** Process defeatedFigures through the centralized defeat pipeline (VP, position removal, etc.) */
 async function processDefeatedFigures(result, game, deps) {
+  // Drain any damage the (sync) resolveAbility queued onto game._pendingDamage
+  // through the ONE applyDamage pipeline (alexanbv 2026-06-23 — all damage on
+  // the same pipeline, no exceptions). deps carries dcHealthState +
+  // processFigureDefeat, exactly what drainPendingDamage needs.
+  if (game?._pendingDamage?.length || result?.pendingDamage?.length) {
+    const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+    await drainPendingDamage(game, deps, result);
+  }
   if (!result.applied || !result.defeatedFigures?.length || !deps.processFigureDefeat) return;
   for (const df of result.defeatedFigures) {
     await deps.processFigureDefeat(game, {

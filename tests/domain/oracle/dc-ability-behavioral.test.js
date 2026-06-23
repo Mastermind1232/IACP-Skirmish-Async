@@ -24,6 +24,7 @@ import { cleanupActivation, _registerDcMessageMeta } from '../../../src/game/act
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { handleDcAction } from '../../../src/handlers/dc-play-area.js';
 import { enumerateActivatorSoaDescriptors } from '../../../src/game/soa-orchestrator.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
@@ -224,7 +225,7 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
     assert.ok(!result.requiresChoice, 'should not offer choice when no targets');
   });
 
-  it('Phase 2: applies 2 damage synchronously and queues 1 strain via pendingStrain', () => {
+  it('Phase 2: applies 2 damage via the damage pipeline and queues 1 strain via pendingStrain', async () => {
     const { context, dcHealthState } = buildForceChokeContext({
       enemyPositions: { 'Rebel Trooper-1-0': 'c5' },
       choiceIndex: 0,
@@ -232,7 +233,8 @@ describe('B-DC-003: resolveAbility — Force Choke', () => {
     });
     const result = resolveAbility('force_choke', context);
     assert.equal(result.applied, true);
-    // Damage applies synchronously; strain routes through applyStrain pipeline.
+    // Damage routes through the unified applyDamage pipeline; strain via applyStrain.
+    await drainPendingDamage(context.game, { dcHealthState });
     const healthAfter = dcHealthState.get('msg_enemy');
     assert.equal(healthAfter[0][0], 3, 'HP should be 5 - 2 (damage only) = 3');
     assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');
@@ -380,7 +382,7 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
     };
   }
 
-  it('Phase 2: applies 1 damage synchronously, queues 1 strain via pendingStrain, applies Bleed to target + Focus to self', () => {
+  it('Phase 2: applies 1 damage via the damage pipeline, queues 1 strain via pendingStrain, applies Bleed to target + Focus to self', async () => {
     const { context, game, dcHealthState } = buildInvasiveContext({
       enemyPositions: { 'Rebel Trooper-1-0': ADJACENT_POS },
       choiceIndex: 0,
@@ -388,7 +390,8 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
     });
     const result = resolveAbility('invasive_procedure', context);
     assert.equal(result.applied, true);
-    // Damage applies synchronously; strain routes through applyStrain pipeline.
+    // Damage routes through the unified applyDamage pipeline; strain via applyStrain.
+    await drainPendingDamage(context.game, { dcHealthState });
     const healthAfter = dcHealthState.get('msg_enemy');
     assert.equal(healthAfter[0][0], 3, 'HP should be 4 - 1 (damage only) = 3');
     assert.ok(Array.isArray(result.pendingStrain), 'should queue strain');

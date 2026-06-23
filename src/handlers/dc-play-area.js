@@ -51,6 +51,17 @@ function _hasFuryReach(game, playerNum, dcKws) {
   return dcList.some(dc => dc.dcName === '[Fury of Kashyyyk]');
 }
 
+// Drain damage queued by a sync resolveAbility() onto game._pendingDamage
+// through the ONE applyDamage pipeline (alexanbv 2026-06-23 — "ALL damage on
+// the same pipeline, no exceptions"). The handler ctx already carries
+// dcHealthState / processFigureDefeat / logGameAction / client. Idempotent:
+// clears the queue, so a later applyAbilityResult drain is a no-op.
+async function _drainAbilityDamage(game, ctx, result) {
+  if (!game || (!game._pendingDamage?.length && !result?.pendingDamage?.length)) return;
+  const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+  await drainPendingDamage(game, ctx, result);
+}
+
 // Ranged attacks are bounded by accuracy roll (see combat.js:~240 — totalAccuracy < distanceToTarget miss),
 // not by a hard targeting pre-filter. DC data rarely sets attack.range, so the default must not cap ranged
 // targets at 3 spaces. Melee stays adjacent-only; Reach is applied downstream at each call site.
@@ -3217,6 +3228,12 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData,
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually (see rules).' };
+  // Damage from the special routes through the ONE applyDamage pipeline
+  // (alexanbv 2026-06-23). resolveAbility is sync and queues onto
+  // game._pendingDamage; drain it here so when-damaged / before-defeated /
+  // when-defeated hooks + Vanish / Clan-of-Two fire. Idempotent (clears the
+  // queue) so a later applyAbilityResult drain is a no-op.
+  await _drainAbilityDamage(game, ctx, resolveResult);
   // Handle choice-required abilities (e.g. Dual-Bladed Fury: Focus or Reach+Cleave)
   if (!resolveResult.applied && resolveResult.requiresChoice && Array.isArray(resolveResult.choiceOptions) && resolveResult.choiceOptions.length > 0) {
     const choiceButtons = resolveResult.choiceOptions.map((label, i) =>
@@ -3506,6 +3523,7 @@ export async function handleDcAbilityChoice(interaction, ctx) {
     hasLineOfSight: ctx.hasLineOfSight, getRange: ctx.getRange, getMapData: ctx.getMapData,
     findDcMessageIdForFigure: ctx.findDcMessageIdForFigure, getDcEffects: ctx.getDcEffects,
   }) : { applied: false, manualMessage: 'Resolve manually.' };
+  await _drainAbilityDamage(game, ctx, resolveResult);
 
   // False Orders Phase 2: figure chosen → show Move/Attack choice buttons
   if (!resolveResult.applied && resolveResult.falseOrdersActionPick) {
@@ -3743,6 +3761,7 @@ export async function handlePounceSpacePick(interaction, ctx) {
   }
   const meta = dcMessageMeta.get(msgId);
   const result = resolveAbility(abilityId, { game, msgId, meta, playerNum, dcMessageMeta, dcHealthState: ctx.dcHealthState, chosenSpace, targetFigureKey: targetFigureKey || null });
+  await _drainAbilityDamage(game, ctx, result);
   delete game.pendingPounceSpaceChoice[msgId];
 
   // Space choice resolved into a follow-up figure choice (e.g. Headbutt: move → pick adjacent hostile)

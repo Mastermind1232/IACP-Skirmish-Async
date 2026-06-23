@@ -136,6 +136,12 @@ export async function handleFireFinalStand(interaction, ctx) {
       dcExhaustedState,
       combat: game.pendingCombat,
     });
+    // Drain any queued damage through the ONE applyDamage pipeline (alexanbv
+    // 2026-06-23). Idempotent; ctx carries dcHealthState + processFigureDefeat.
+    if (game._pendingDamage?.length || result?.pendingDamage?.length) {
+      const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+      await drainPendingDamage(game, ctx, result);
+    }
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       await logGameAction(game, client, `**Final Stand** — **Baze Malbus** intervenes! ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }

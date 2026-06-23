@@ -159,6 +159,34 @@ export function getDamageState(dcHealthState, msgId, figureIndex) {
  */
 export function applyDamageWithDefeatCheck(dcHealthState, game, msgId, figureIndex, damage, playerNum, opts = {}) {
   const { sourceLabel = '', attackerPlayerNum = null } = opts;
+  // alexanbv 2026-06-23: ALL damage must go through the ONE applyDamage pipeline
+  // (the same one combat uses) so it fires every WHEN_DAMAGED / BEFORE_DEFEATED /
+  // WHEN_DEFEATED hook + Vanish / Clan-of-Two. resolveAbility() is sync and can't
+  // await, so we QUEUE the damage onto game._pendingDamage; apply-ability-result.js
+  // drains it through applyDamage. We do NOT mutate HP here; the return values are
+  // a best-effort estimate (current HP minus amount) for inline log strings only.
+  if (game && opts.__deferToPipeline !== false) {
+    const _hsNow = dcHealthState?.get(msgId);
+    const _entry = Array.isArray(_hsNow?.[figureIndex]) ? _hsNow[figureIndex] : null;
+    const _amt = Math.max(0, parseInt(damage || 0, 10));
+    const _prev = _entry ? (_entry[0] ?? _entry[1] ?? 0) : 0;
+    const _max = _entry ? (_entry[1] ?? _entry[0] ?? 0) : 0;
+    const _new = Math.max(0, _prev - _amt);
+    // Prefer the explicit figureKey the caller already has — reverse-engineering
+    // it from game.p{N}DcMessageIds fails when that list isn't populated (some
+    // unit fixtures, NPC-adjacent splash, etc.) and would silently DROP the damage.
+    const _fk = opts.figureKey || _figureKeyFromMsgIdAndIndex(game, msgId, figureIndex, playerNum);
+    if (_entry && _amt > 0 && _fk && msgId) {
+      game._pendingDamage = game._pendingDamage || [];
+      game._pendingDamage.push({
+        figureKey: _fk, msgId, figIndex: figureIndex, amount: _amt,
+        controllerPlayerNum: playerNum,
+        attackerPlayerNum: attackerPlayerNum ?? undefined,
+        source: sourceLabel || 'ability',
+      });
+    }
+    return { newHp: _new, prevHp: _prev, maxHp: _max, wasDefeated: !!_entry && _amt > 0 && _new <= 0 && _prev > 0, defeatRecord: null, _queued: true };
+  }
   const result = reduceHp(dcHealthState, game, msgId, figureIndex, damage, playerNum);
   let defeatRecord = null;
   if (result.wasDefeated) {

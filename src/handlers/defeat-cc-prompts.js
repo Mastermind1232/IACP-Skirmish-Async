@@ -38,6 +38,16 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { openCcCounterWindow, registerCcCustomResolve, runCcPlayTriggers } from './cc-hand.js';
 
+// Drain damage a (sync) resolveAbility queued onto game._pendingDamage through
+// the ONE applyDamage pipeline (alexanbv 2026-06-23 — all damage on the same
+// pipeline, no exceptions). Defeat CCs like Lord of the Sith (Force Choke) deal
+// damage here. ctx carries dcHealthState + processFigureDefeat. Idempotent.
+async function _drainDefeatCcDamage(game, ctx, result) {
+  if (!game || (!game._pendingDamage?.length && !result?.pendingDamage?.length)) return;
+  const { drainPendingDamage } = await import('../game/damage-pipeline.js');
+  await drainPendingDamage(game, ctx, result);
+}
+
 /**
  * Enumerate alive friendly DCs for a player, optionally filtering by
  * keyword (e.g. GUARDIAN for Retaliation). Returns
@@ -282,6 +292,7 @@ async function _resolveDefeatCcEffect(game, entry, ctx, client) {
         defeatedPos: dPos, defeatedFigureKey: entry.defeatedFigureKey ?? null,
         dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
       });
+      await _drainDefeatCcDamage(game, ctx, result);
       if (result?.logMessage && typeof logGameAction === 'function' && client) {
         const note = result.applied
           ? `**${cardName}** — Played by **${displayName}**. ${result.logMessage}`
@@ -341,6 +352,7 @@ async function _resolveDefeatCcEffect(game, entry, ctx, client) {
           game, playerNum: playerPN, cardName, msgId: opt.msgId, chosenFigureKey: opt.figureKey,
           dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
         });
+        await _drainDefeatCcDamage(game, ctx, result);
         if (result?.logMessage && typeof logGameAction === 'function' && client) {
           const note = result.applied
             ? `**${cardName}** — Played by **${opt.displayName}**. ${result.logMessage}`
@@ -377,6 +389,7 @@ async function _resolveDefeatCcEffect(game, entry, ctx, client) {
       dcMessageMeta, dcHealthState, dcExhaustedState, combat: game.pendingCombat,
       defeatedPos: entry.defeatedPos ?? null, defeatedFigureKey: entry.defeatedFigureKey ?? null,
     });
+    await _drainDefeatCcDamage(game, ctx, result);
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       const note = result.applied
         ? `**${cardName}** — ${result.logMessage}`
@@ -474,6 +487,7 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
       dcExhaustedState,
       combat: game.pendingCombat,
     });
+    await _drainDefeatCcDamage(game, ctx, result);
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       const flNote = opt.viaFastLearner ? ' (via Fast Learner)' : '';
       const note = result.applied
@@ -528,6 +542,7 @@ export async function handleDefeatCcModePick(interaction, ctx) {
       dcExhaustedState,
       combat: game.pendingCombat,
     });
+    await _drainDefeatCcDamage(game, ctx, result);
     if (result?.logMessage && typeof logGameAction === 'function' && client) {
       const note = result.applied
         ? `**${pending.cardName}** — Target **${pending.pickedDisplayName}**. ${result.logMessage}`

@@ -17,6 +17,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 import { getDcStats } from '../../../src/data-loader.js';
 
 const MAP_ID = 'anchorhead-cantina-bar';
@@ -75,7 +76,7 @@ describe('PROBE-SABINE-PARTING-GIFT-001: Phase 1 enumerates spaces within 3', ()
 });
 
 describe('PROBE-SABINE-PARTING-GIFT-002: Phase 2 rolls green die + applies Damage to figures (other-exclusion) and objects', () => {
-  it('hostile on chosen space takes the rolled green-die Damage', () => {
+  it('hostile on chosen space takes the rolled green-die Damage', async () => {
     const orig = Math.random;
     Math.random = () => 0.9; // green face index 5 → dmg 2
     try {
@@ -85,6 +86,7 @@ describe('PROBE-SABINE-PARTING-GIFT-002: Phase 2 rolls green die + applies Damag
         chosenSpace: 'b1',
       });
       assert.equal(result.applied, true, `should resolve: ${result.logMessage || result.manualMessage}`);
+      await drainPendingDamage(game, { dcHealthState });
       assert.deepStrictEqual(dcHealthState.get(trooperMsgId), [[2, 4]], 'trooper: 4 HP → 2 HP (2 Damage rolled)');
     } finally {
       Math.random = orig;

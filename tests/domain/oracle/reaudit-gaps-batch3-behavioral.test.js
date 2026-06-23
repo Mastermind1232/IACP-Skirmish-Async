@@ -12,6 +12,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
+import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // Real map with real adjacency so countGameSpaces / push-space mechanics work.
 const MAP = 'mos-eisley-outskirts';
@@ -139,17 +140,18 @@ describe('Re-audit batch 3: Whistling Birds part 2 — up to 3 figures, friendli
     assert.ok(r.choiceValues.includes('whistling_birds_done'), 'a Done option ends the up-to-3 selection');
   });
 
-  it('chosen friendly figure suffers the rolled Hit damage on Done', () => {
+  it('chosen friendly figure suffers the rolled Hit damage on Done', async () => {
     const { game, dcMessageMeta, dcHealthState } = buildGame();
     const ctx = { game, playerNum: 1, dcMessageMeta, dcHealthState };
     resolveAbility('Whistling Birds', ctx); // arm picker
     resolveAbility('Whistling Birds', { ...ctx, chosenFigureKey: 'Bodhi Rook-1-0' }); // pick friendly
     const done = resolveAbility('Whistling Birds', { ...ctx, chosenFigureKey: 'whistling_birds_done' });
     assert.equal(done.applied, true);
+    await drainPendingDamage(game, { dcHealthState });
     assert.deepEqual(dcHealthState.get('msg_friend'), [[3, 5]], 'friendly suffers 2 Damage (5 → 3)');
   });
 
-  it('caps selection at 3 figures (auto-finalizes on the 3rd pick)', () => {
+  it('caps selection at 3 figures (auto-finalizes on the 3rd pick)', async () => {
     // Build 4 candidates within range; selecting 3 must auto-finalize.
     const dcMessageMeta = new Map();
     dcMessageMeta.set('msg_act', { gameId: 'g', playerNum: 1, dcName: 'Bossk', displayName: 'Bossk [DG 1]' });
@@ -171,6 +173,7 @@ describe('Re-audit batch 3: Whistling Birds part 2 — up to 3 figures, friendli
     resolveAbility('Whistling Birds', { ...ctx, chosenFigureKey: 'Alliance Ranger (Regular)-1-1' });
     const third = resolveAbility('Whistling Birds', { ...ctx, chosenFigureKey: 'Alliance Ranger (Regular)-1-2' });
     assert.equal(third.applied, true, 'the 3rd pick auto-finalizes (up to 3)');
+    await drainPendingDamage(game, { dcHealthState });
     // All three chosen figures take 1 Damage.
     const hs = dcHealthState.get('msg_e');
     assert.deepEqual(hs, [[2, 3], [2, 3], [2, 3]], 'each of the 3 chosen figures suffers 1 Damage');

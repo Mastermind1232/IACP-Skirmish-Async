@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { getAbility, resolveSurgeAbility, getSurgeAbilityLabel, resolveAbility } from './abilities.js';
 import { _registerDcMessageMeta } from './activation-state.js';
+import { drainPendingDamage } from './damage-pipeline.js';
 
 test('getAbility returns library entry for known surge id', () => {
   const entry = getAbility('damage 1');
@@ -524,7 +525,7 @@ test('resolveAbility Guild Programming Focuses IG-11 and arms re-Focus for the 2
   assert.strictEqual(game.guildProgrammingRefocus?.['IG-11-1-0'], true);
 });
 
-test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile takes 1 Damage + Focus', () => {
+test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile takes 1 Damage + Focus', async () => {
   const actMsg = 'msg-stim-act';
   const tgtMsg = 'msg-stim-tgt';
   const buildGame = () => ({
@@ -548,6 +549,7 @@ test('Stimulants (errata): targets any friendly/hostile EXCEPT self; hostile tak
   const hs2 = new Map([[actMsg, [[12, 12]]], [tgtMsg, [[6, 6], [6, 6], [6, 6]]]]);
   const r = resolveAbility('Stimulants', { game: g2, playerNum: 1, dcMessageMeta: meta(), dcHealthState: hs2, chosenFigureKey: 'Stormtrooper (Elite)-1-0' });
   assert.strictEqual(r.applied, true);
+  await drainPendingDamage(g2, { dcHealthState: hs2 });
   assert.deepStrictEqual(hs2.get(tgtMsg)[0], [5, 6], 'hostile took 1 Damage');
   assert.ok((g2.figureConditions['Stormtrooper (Elite)-1-0'] || []).includes('Focus'), 'hostile becomes Focused');
   assert.ok(/hostile/i.test(r.logMessage), 'log notes the hostile target');
@@ -1300,7 +1302,7 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
   assert.strictEqual(result.pendingStrain[0].amount, 4); // round 4
 });
 
-test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if the TARGET is a FORCE USER', () => {
+test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if the TARGET is a FORCE USER', async () => {
   // alexanbv 2026-06-19 / CSV row 665: "If THAT figure [the chosen target] is a
   // FORCE USER, you recover 3 Damage" — the trait gate is on the chosen hostile,
   // not the casting figure. Here the target (Darth Vader) IS a FORCE USER, so the
@@ -1330,6 +1332,7 @@ test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if th
   ]);
   const result = resolveAbility('Force Drain', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
+  await drainPendingDamage(game, { dcHealthState });
   assert.deepStrictEqual(hostileHealth[0], [5, 10]); // 8 - 3 = 5
   const fk = 'Darth Vader-2-0';
   assert.ok(game.figureConditions[fk]?.includes('Stun'));
@@ -1367,7 +1370,7 @@ test('resolveAbility Force Drain does NOT heal when the target is NOT a FORCE US
   assert.deepStrictEqual(dcHealthState.get(msgId)[0], [6, 10]);
 });
 
-test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hostile', () => {
+test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hostile', async () => {
   const msgId = 'msg-fl';
   const hostileMsgId = 'msg-fl-hostile';
   const hostileHealth = [[6, 8]];
@@ -1387,6 +1390,7 @@ test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hosti
   ]);
   const result = resolveAbility('Force Lightning', { game, playerNum: 1, dcMessageMeta, dcHealthState });
   assert.strictEqual(result.applied, true);
+  await drainPendingDamage(game, { dcHealthState });
   assert.deepStrictEqual(hostileHealth[0], [4, 8]); // 6 - 2 = 4
   assert.ok(game.figureConditions['Stormtroopers-2-0']?.includes('Stun'));
 });
@@ -1624,7 +1628,7 @@ test('Celebration: non-unique hostile kill does NOT satisfy condition', () => {
 
 // ── MEDIUM-batch ability fixes (behavioral) ──────────────────────────────
 
-test('Counter Attack: damages the attacker (not a free adjacent hostile) when adjacent and not defeated', () => {
+test('Counter Attack: damages the attacker (not a free adjacent hostile) when adjacent and not defeated', async () => {
   const atkMsgId = 'msg-ca-atk';
   const dcMessageMeta = new Map([
     [atkMsgId, { gameId: 'g-ca', playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [DG 1]' }],
@@ -1644,6 +1648,7 @@ test('Counter Attack: damages the attacker (not a free adjacent hostile) when ad
   const combat = { attackerPlayerNum: 2, attackerFigureKey: 'Stormtrooper-1-0', target: { figureKey: 'Royal Guard-1-0' } };
   const r = resolveAbility('Counter Attack', { game, playerNum: 1, combat, dcMessageMeta, dcHealthState });
   assert.strictEqual(r.applied, true);
+  await drainPendingDamage(game, { dcHealthState });
   // The attacker (Stormtrooper) took 2 damage.
   assert.deepStrictEqual(dcHealthState.get(atkMsgId), [[4, 6]]);
 });
