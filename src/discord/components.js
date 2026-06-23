@@ -483,25 +483,17 @@ export function getCcShuffleDrawButton(gameId) {
   );
 }
 
-/** Play CC (green), Draw CC (green), Discard CC (red). Pass hand/deck to disable when empty. */
+/** Play CC (green). Pass hand to disable when empty.
+ * alexanbv 2026-06-23: the Draw CC / Discard CC buttons were REMOVED — a player
+ * may never arbitrarily draw or discard a Command Card; all CC draw/discard
+ * happens through game effects. Only Play CC remains. */
 export function getCcActionButtons(gameId, hand = [], deck = []) {
   const hasHand = (hand || []).length > 0;
-  const hasDeck = (deck || []).length > 0;
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`cc_play_${gameId}`)
       .setLabel('Play CC')
       .setStyle(ButtonStyle.Success)
-      .setDisabled(!hasHand),
-    new ButtonBuilder()
-      .setCustomId(`cc_draw_${gameId}`)
-      .setLabel('Draw CC')
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(!hasDeck),
-    new ButtonBuilder()
-      .setCustomId(`cc_discard_${gameId}`)
-      .setLabel('Discard CC')
-      .setStyle(ButtonStyle.Danger)
       .setDisabled(!hasHand),
   );
 }

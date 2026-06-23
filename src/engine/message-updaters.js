@@ -520,6 +520,14 @@ export async function updateHandChannelMessages(game, client, deps) {
 export async function refreshHandAndDiscard(game, playerNum, client, ctx) {
   await ctx.updateHandVisualMessage(game, playerNum, client);
   await ctx.updateDiscardPileMessage(game, playerNum, client);
+  // Also refresh the player's HAND CHANNEL (the actual list of cards + Play
+  // buttons) — not just the play-area count. Without this, a played/drawn/
+  // discarded card stayed visible in the hand after a CC resolved (alexanbv
+  // 2026-06-23: "the hand of CCs displayed was not updated" after Planning /
+  // Element). updateHandChannelMessages refreshes both players' hands.
+  if (ctx.updateHandChannelMessages) {
+    await ctx.updateHandChannelMessages(game, client);
+  }
 }
 
 /** Call after changing player1CcHand/player2CcHand to refresh the Play Area hand visual. */

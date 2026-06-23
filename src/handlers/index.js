@@ -502,10 +502,12 @@ register('cc_cancel_play_', handleCcCancelPlay, 'ccHand');
 register('cc_fl_pick_named_', handleFastLearnerPickNamed, 'ccHand');
 register('cc_fl_pick_mara_', handleFastLearnerPickMara, 'ccHand');
 register('cc_uccp_', handleUniqueCcPlayerPick, 'ccHand');
-register('cc_draw_', handleCcDraw, 'ccHand');
+// cc_draw_ / cc_discard_ buttons REMOVED (alexanbv 2026-06-23): no arbitrary
+// draw/discard of Command Cards — all draw/discard happens via game effects.
+// (cc_search_discard_ / cc_close_discard_ / cc_discard_select_ are the discard-
+// PILE viewer + effect-driven discard selection, which stay.)
 register('cc_search_discard_', handleCcSearchDiscard, 'ccHand');
 register('cc_close_discard_', handleCcCloseDiscard, 'ccHand');
-register('cc_discard_', handleCcDiscard, 'ccHand');
 register('cc_choice_', handleCcChoice, 'ccHand');
 register('cc_space_', handleCcSpacePick, 'ccHand');
 register('illegal_cc_ignore_', handleIllegalCcIgnore, 'ccHand');

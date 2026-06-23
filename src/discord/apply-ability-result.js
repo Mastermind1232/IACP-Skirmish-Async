@@ -149,6 +149,13 @@ export async function applyAbilityResult(result, opts) {
     if (updateHandChannelMessages) {
       await updateHandChannelMessages(game, client);
     }
+    // A draw effect almost always also touches the discard pile (Planning /
+    // mulligan-style draw-then-discard), so refresh both players' discard
+    // visuals too — otherwise the discard count goes stale (alexanbv 2026-06-23).
+    if (updateDiscardPileMessage) {
+      await updateDiscardPileMessage(game, 1, client);
+      await updateDiscardPileMessage(game, 2, client);
+    }
   }
 
   // --- Log message (applied) ---
@@ -173,8 +180,10 @@ export async function applyAbilityResult(result, opts) {
   }
 
   // --- Refresh player hand / discard ---
-  if (result.applied && result.refreshHand && updateHandVisualMessage) {
-    await updateHandVisualMessage(game, playerNum, client);
+  if (result.applied && result.refreshHand) {
+    if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client);
+    // Also refresh the actual hand-channel cards, not just the count.
+    if (updateHandChannelMessages) await updateHandChannelMessages(game, client);
   }
   if (result.applied && result.refreshDiscard && updateDiscardPileMessage) {
     await updateDiscardPileMessage(game, playerNum, client);
