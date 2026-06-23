@@ -509,7 +509,7 @@ import {
   getDiscardThreadId, getActivationsMessageId,
   setActivationsRemaining, setActivationsTotal, setActivatedDcIndices,
   ccHandKey, ccDiscardKey, ccDeckKey, ccDrawnKey, ccAttachmentsKey, dcAttachmentsKey,
-  dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey, armyCostModifierKey,
+  dcAttachmentMessageIdsKey, vpKey, deployMetadataKey, deployLabelsKey,
   removeFigurePosition, syncHealthStateToList, recomputeActivationCounts,
 } from './src/game/player-helpers.js';
 import { discordCatch } from './src/error-handling.js';
