@@ -2922,7 +2922,12 @@ export async function _fireOnDeclarePassive(side, id, thread, game, combat, ctx)
     const r = applyConditionWithDie(game, combat.attackerFigureKey, af.cond, combat.attackInfo, af.die);
     if (r.applied) {
       combat.attackInfo = r.attackInfo;
-      await thread.send(`**${af.label}** — auto-Focus: +1 ${af.die} die.`).catch(discordCatch);
+      // BT-1 carries this ability under the name "Assassin", not "Battle
+      // Meditation" (alexanbv 2026-06-24) — use the per-DC label.
+      const label = id === 'battle_meditation'
+        ? battleMeditationLabel(combat.attackerDcName || dcNameFromFigureKey(combat.attackerFigureKey || ''))
+        : af.label;
+      await thread.send(`**${label}** — auto-Focus: +1 ${af.die} die.`).catch(discordCatch);
     }
     return;
   }
