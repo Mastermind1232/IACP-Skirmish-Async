@@ -1,6 +1,5 @@
 export {
   chunkButtonsToRows,
-  getButtonStyle,
   truncateLabel,
   MAX_BUTTONS_PER_ROW,
   MAX_ROWS_PER_MESSAGE,
@@ -29,7 +28,6 @@ export {
   getCelebrationButtons,
   getSelectSquadButton,
   getHandSquadButtons,
-  getKillGameButton,
   getRequestActionButtons,
   getCleaveTargetButtons,
   getFightingKnifeTargetButtons,

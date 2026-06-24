@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
-import { isDcCompanion, hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
+import { hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { figureActionsRemaining } from '../game/activation-state.js';
 
@@ -39,31 +39,6 @@ function _truncLabel(prefix, name, max = MAX_LABEL_LENGTH) {
   if (full.length <= max) return full;
   const maxName = max - prefix.length - 1; // -1 for ellipsis
   return `${prefix}${name.slice(0, maxName)}…`;
-}
-
-/**
- * Area-based button styles per plan 2.5: combat=red, confirm=green, cancel=grey, etc.
- * @param {string} area - 'attack'|'confirm'|'cancel'|'destructive'|'setup'|'movement'|'surge'|'interact'|'primary'|'secondary'
- */
-export function getButtonStyle(area) {
-  switch (area) {
-    case 'attack':
-    case 'destructive':
-      return ButtonStyle.Danger;
-    case 'confirm':
-    case 'setup':
-      return ButtonStyle.Success;
-    case 'cancel':
-    case 'movement':
-    case 'interact':
-    case 'surge':
-      return ButtonStyle.Secondary;
-    case 'primary':
-      return ButtonStyle.Primary;
-    case 'secondary':
-    default:
-      return ButtonStyle.Secondary;
-  }
 }
 
 /**
@@ -537,15 +512,6 @@ export function getSelectSquadButton(gameId, playerNum) {
 
 /** Select Squad button for hand thread (alias). */
 export const getHandSquadButtons = getSelectSquadButton;
-
-export function getKillGameButton(gameId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`kill_game_${gameId}`)
-      .setLabel('Kill Game (testing)')
-      .setStyle(ButtonStyle.Danger),
-  );
-}
 
 /** IMPLEMENTED / REJECTED buttons for bot-requests or bot-feedback-and-requests forum posts. */
 export function getRequestActionButtons(threadId) {

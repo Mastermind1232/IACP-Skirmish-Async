@@ -453,7 +453,6 @@ import {
   getCelebrationButtons,
   getSelectSquadButton,
   getHandSquadButtons,
-  getKillGameButton,
   getRequestActionButtons,
   getCleaveTargetButtons,
   getFightingKnifeTargetButtons,
