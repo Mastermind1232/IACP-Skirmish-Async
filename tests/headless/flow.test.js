@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import { createFlowHarness, PENDING_STATE_KEYS } from './flow-harness.js';
 import { assertSurfaceInvariants, validatePayloadShape } from './flow-invariants.js';
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { openCounterWindow, counterResponder, topAvailableCounters, resolveAndCloseWindow } from '../../src/game/cc-counter-window.js';
+import { openCounterWindow, counterResponder, topAvailableCounters, resolveAndCloseWindow } from '../../src/handlers/cc-pipeline.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

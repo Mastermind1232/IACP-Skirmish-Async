@@ -15,7 +15,7 @@ import { getAvailableActions } from '../../src/engine/available-actions.js';
 import { getDcStats, getMapData } from '../../src/data-loader.js';
 import { getBoardStateForMovement, getMovementProfile, computeMovementCache } from '../../src/game/movement.js';
 import { getPlayableCcFromHand } from '../../src/game/cc-timing.js';
-import { openCounterWindow, counterResponder, topCard, topAvailableCounters } from '../../src/game/cc-counter-window.js';
+import { openCounterWindow, counterResponder, topCard, topAvailableCounters } from '../../src/handlers/cc-pipeline.js';
 
 function buildActionDeps(meta) {
   return {

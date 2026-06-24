@@ -138,10 +138,12 @@ import {
   handleScCcOpen,
   handleScCcSkip,
   handleScCcConfirm,
+} from './cc-hand.js';
+import {
   handleCcCounterNegate,
   handleCcCounterComms,
   handleCcCounterPass,
-} from './cc-hand.js';
+} from './cc-pipeline.js';
 import {
   handleBotmenuKill,
   handleBotmenuKillYes,

@@ -15,7 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFlowHarness, PENDING_STATE_KEYS } from './flow-harness.js';
 import { validatePayloadShape } from './flow-invariants.js';
-import { openCounterWindow, counterResponder, topAvailableCounters } from '../../src/game/cc-counter-window.js';
+import { openCounterWindow, counterResponder, topAvailableCounters } from '../../src/handlers/cc-pipeline.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 

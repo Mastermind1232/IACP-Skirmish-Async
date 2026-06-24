@@ -11,7 +11,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleCcCounterPass } from '../../../src/handlers/cc-hand.js';
+import { handleCcCounterPass } from '../../../src/handlers/cc-pipeline.js';
 
 function harness({ scAvailable }) {
   const sent = [];

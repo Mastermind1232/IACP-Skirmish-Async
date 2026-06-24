@@ -36,7 +36,8 @@ import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { openCcCounterWindow, registerCcCustomResolve, runCcPlayTriggers } from './cc-hand.js';
+import { runCcPlayTriggers } from './cc-hand.js';
+import { openCcCounterWindow, registerCcCustomResolve } from './cc-pipeline.js';
 
 // Drain the deferred side-effects a (sync) resolveAbility produced in the one
 // canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv

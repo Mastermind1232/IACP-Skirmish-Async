@@ -109,7 +109,7 @@ import { getRecoveryReason } from './src/engine/recovery.js';
 import { applyIndiscriminateFireSplash } from './src/handlers/combat-special-effects.js';
 import { buildContext, getAllRequiredDepKeys } from './src/context-factory.js';
 import { resumeCombatGateAfterCc } from './src/handlers/combat.js';
-import { registerCombatGateResume } from './src/game/cc-counter-window.js';
+import { registerCombatGateResume } from './src/handlers/cc-pipeline.js';
 import { replyOrFollowUpWithRetry } from './src/error-handling.js';
 import { captureSnapshot, computeDiff, createEvent, appendToBuffer, getRecentEvents, clearBuffer, clearSeqCounter as clearEventLogSeqCounter } from './src/event-log.js';
 import { translateDiffToEvents } from './src/domain/diff-translator.js';

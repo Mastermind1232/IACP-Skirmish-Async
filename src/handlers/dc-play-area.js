@@ -3,7 +3,8 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
-import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
+import { runCcPlayTriggers } from './cc-hand.js';
+import { openCcCounterWindow } from './cc-pipeline.js';
 import { postMoveXPicker } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';

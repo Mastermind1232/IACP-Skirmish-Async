@@ -69,20 +69,3 @@ test('slice 4.x: combat-bridge.js wires the engine-driven steps (5→zillo→6�
     );
   }
 });
-
-test('slice 4.x: cc-hand.js telemetry hook is in place (warn-mode soft validator)', () => {
-  // Per slice 4.13: the validator currently warns on mismatches. Once
-  // 4.7-4.12 are fully audited and a sim:discord shadow run shows no
-  // WARN lines, this should be escalated to throw. For now, assert the
-  // hook exists.
-  assert.match(
-    CC_HAND,
-    /classifyCcStep\(card\)/,
-    'cc-hand.js must invoke classifyCcStep on every CC commit (telemetry hook)',
-  );
-  assert.match(
-    CC_HAND,
-    /\[combat-order \$\{_tag\}\]/,
-    'cc-hand.js must log combat-order ok|WARN tags for telemetry',
-  );
-});

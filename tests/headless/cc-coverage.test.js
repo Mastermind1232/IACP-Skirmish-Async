@@ -20,7 +20,7 @@ import { isCcPlayableNow, isCcPlayLegalByRestriction } from '../../src/game/cc-t
 import { ccHandKey, ccDiscardKey, ccAttachmentsKey, opponentPlayerNum, getDcList, getDcMessageIds } from '../../src/game/player-helpers.js';
 import { playCommandCardHeadless, canResolveCcHeadless } from '../../src/headless/headless-cc-play.js';
 import { getAvailableActions } from '../../src/engine/available-actions.js';
-import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow } from '../../src/game/cc-counter-window.js';
+import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow } from '../../src/handlers/cc-pipeline.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

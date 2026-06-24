@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   openCounterWindow, counterResponder, topAvailableCounters, pushCounter,
   resolveAndCloseWindow, topCard,
-} from '../../../src/game/cc-counter-window.js';
+} from '../../../src/handlers/cc-pipeline.js';
 
 describe('CC counter-window — open + responder', () => {
   it('opens for a played card and prompts the opponent', () => {

@@ -26,7 +26,6 @@ import { getFootprintCells } from '../game/coords.js';
 import { checkHandDiscardPassiveReshuffle, fireCcDiscarded } from '../game/cc-passive-redraw.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from '../game/adaptive-skills-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { awardObjectiveVp } from '../game/index.js';
 import {
   getPlayerId, getHandChannelId, getSquad, getCcDiscard, getCcDeck, getCcHand,
   getDiscardThreadId,
@@ -40,58 +39,14 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
 import { findSmugglingCompartmentMsgId, setAsideFromHand, SMUGGLING_COMPARTMENT_NAME } from '../game/smuggling-compartment.js';
 import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAside } from './sc-hand-protection.js';
-import { openCounterWindow, counterResponder, topCard, topAvailableCounters, pushCounter, resolveAndCloseWindow, getCombatGateResume } from '../game/cc-counter-window.js';
-import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
-
-// Hand-affecting CCs whose effect must let the opponent exhaust [Smuggling
-// Compartment] AFTER the Negate/Comms window resolves, before the effect.
-// alexanbv 2026-06-17. Stall for Time (cost 0) defers past Negation in
-// handleNegationLetResolve; Collect Intel / Intelligence Leak (cost>0) defer
-// past Comm Disruption via the SC_HAND_CCS branch in handleCcPlaySelect.
-// Strategic Shift IS covered the same way: the SC decision is made BEFORE the
-// card-player chooses which player shuffles (alexanbv 2026-06-19 — "decision to
-// exhaust SC is made before which player is chosen"). The pre-choice scProtect
-// offer goes to the opponent; once they react, the effect resolves into the
-// player/player choice, so the card-player sees the SC exhaust and may then
-// choose themselves (shuffle + draw 2) or the opponent (no effect — protected).
-const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak', 'Strategic Shift']);
-
-// ── Unified recursive CC counter-window (Negate/Comms) — alexanbv 2026-06-17 ──
-// playCC step 3. Built additively (not yet routed into the live play path) so it
-// can be playtested before replacing the legacy pendingNegation/CD flow. Drives
-// the tested orchestrator (cc-counter-window) + rules (cc-counter-rules).
-
-function _ccSpyGroupCount(game, pn) {
-  const dcEffectsData = getDcEffects() || {};
-  const dcList = (pn === 1 ? game.p1DcList : game.p2DcList) || [];
-  return dcList.filter((dc) => dc && !dc.defeated
-    && (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase()).includes('SPY')).length;
-}
-
-/**
- * Open the counter-window for a freshly played card and prompt the opponent.
- * `play` = { card, cost, playedBy, figureKey?, abilityId? }. On resolution this
- * fires resolved non-counter effects and routes cancelled cards to the
- * when-discarded pipeline. NOT yet wired into handleCcPlaySelect.
- */
-// Registry of custom post-counter-window resolvers, keyed by the play
-// descriptor's `customResolve` tag. A card whose effect can't be expressed as a
-// plain resolveAbility (Celebration's VP gain, WHEN_DEFEATED CCs' bespoke
-// pickers, mid-combat reroll reactions) registers a continuation here; it runs
-// from _resolveCcCounterWindow ONLY when the card survives the counter-window.
-// Signature: (game, entry, ctx, client) => Promise<void>. Keeps cross-file
-// continuations decoupled (no circular imports), mirroring registerCombatGateResume.
-const _ccCustomResolvers = {};
-export function registerCcCustomResolve(kind, fn) { _ccCustomResolvers[kind] = fn; }
-
-// Celebration: "after a unique hostile figure is defeated, gain 4 VP." Now
-// counterable like any CC — the VP gain lands here only if it survives.
-registerCcCustomResolve('celebration_vp', async (game, entry, ctx, client) => {
-  awardObjectiveVp(game, entry.playedBy, 4);
-  const pid = getPlayerId(game, entry.playedBy);
-  await ctx.logGameAction?.(game, client, `<@${pid}> played **Celebration** — gained 4 VP.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [pid] } });
-  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-});
+// Unified CC counter-window pipeline (stack model + rules + orchestration).
+// All Negate/Comms counter-window logic lives in cc-pipeline.js; cc-hand.js
+// keeps only the hand-DISPLAY / play-select / deferred-effect-resume logic and
+// calls into the pipeline. NOTE: cc-pipeline.js imports _offerScThenResolveDeferredCc
+// back from this file (it is shared with the standalone SC handlers below) — an
+// intentional ES-module cycle that is safe because all bindings are only used at
+// call time, never at module-eval time.
+import { openCcCounterWindow, registerCcCustomResolve, NEGATION, COMM_DISRUPTION } from './cc-pipeline.js';
 
 /**
  * Resolve the on-board figureKey of the player's Mara Jade (the Adaptive Skills
@@ -112,180 +67,11 @@ function resolveFastLearnerFigureKey(game, playerNum) {
   return null;
 }
 
-export async function openCcCounterWindow(game, gameId, play, ctx, client) {
-  const spyForPlay = (play.card === COMM_DISRUPTION) ? _ccSpyGroupCount(game, play.playedBy) : undefined;
-  openCounterWindow(game, { ...play, spyCount: spyForPlay });
-  await _promptCounterResponder(game, gameId, ctx, client);
-}
-
-async function _promptCounterResponder(game, gameId, ctx, client) {
-  const responder = counterResponder(game);
-  if (!responder) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
-  const top = topCard(game);
-  const spy = _ccSpyGroupCount(game, responder);
-  const hand = game[ccHandKey(responder)] || [];
-  const offer = topAvailableCounters(game, spy).filter((c) => hand.includes(c));
-  if (offer.length === 0) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
-  const chId = getHandChannelId(game, responder);
-  const ch = chId ? await fetchGameChannel(client, chId) : null;
-  if (!ch) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
-  const btns = offer.map((c) => new ButtonBuilder()
-    .setCustomId(c === NEGATION ? `cc_counter_negate_${gameId}` : `cc_counter_comms_${gameId}`)
-    .setLabel(`Play ${c}`).setStyle(ButtonStyle.Danger));
-  btns.push(new ButtonBuilder().setCustomId(`cc_counter_pass_${gameId}`).setLabel('Pass (let it resolve)').setStyle(ButtonStyle.Secondary));
-  const ownerId = getPlayerId(game, responder);
-  await ch.send(sanitizeMentions({
-    content: `<@${ownerId}> Your opponent played **${top.card}**. Cancel it?`,
-    allowedMentions: { users: [ownerId] },
-    components: [new ActionRowBuilder().addComponents(btns)],
-  })).catch(discordCatch);
-}
-
-async function _playCounter(interaction, ctx, counterCard) {
-  const { getGame, saveGames, client, logGameAction } = ctx;
-  const prefix = counterCard === NEGATION ? 'cc_counter_negate_' : 'cc_counter_comms_';
-  const gameId = parseCustomId(interaction.customId, prefix);
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const responder = counterResponder(game);
-  if (!responder || interaction.user.id !== getPlayerId(game, responder)) {
-    await interaction.followUp({ content: 'Only the responding player can counter.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const hand = game[ccHandKey(responder)] || [];
-  if (!hand.includes(counterCard)) {
-    await interaction.followUp({ content: `${counterCard} is no longer in your hand.`, ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const spy = _ccSpyGroupCount(game, responder);
-  const res = pushCounter(game, { card: counterCard, cost: counterCard === NEGATION ? 1 : 2, playedBy: responder, spyCount: spy });
-  if (!res.ok) {
-    await interaction.followUp({ content: res.reason || 'That counter is not legal here.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const hi = hand.indexOf(counterCard);
-  hand.splice(hi, 1);
-  game[ccHandKey(responder)] = hand;
-  game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
-  await interaction.message.edit({ content: `**${counterCard}** played.`, components: [] }).catch(discordCatch);
-  await logGameAction?.(game, client, `<@${interaction.user.id}> played **${counterCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  await _promptCounterResponder(game, gameId, ctx, client);
-  saveGames(game.gameId);
-}
-
-export async function handleCcCounterNegate(interaction, ctx) { await _playCounter(interaction, ctx, NEGATION); }
-export async function handleCcCounterComms(interaction, ctx) { await _playCounter(interaction, ctx, COMM_DISRUPTION); }
-
-export async function handleCcCounterPass(interaction, ctx) {
-  const { getGame, saveGames, client } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cc_counter_pass_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const responder = counterResponder(game);
-  if (!responder || interaction.user.id !== getPlayerId(game, responder)) {
-    await interaction.followUp({ content: 'Only the responding player can pass.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  await interaction.message.edit({ content: 'Passed — the play resolves.', components: [] }).catch(discordCatch);
-  await _resolveCcCounterWindow(game, gameId, ctx, client);
-  saveGames(game.gameId);
-}
-
-// Resolve the stack: fire resolved non-counter effects (step 4 SC prompt + the
-// effect, via the shared deferred-effect machinery); route cancelled cards to
-// the when-discarded pipeline. A counter card's "effect" IS its cancellation, so
-// a resolved counter does nothing further here.
-async function _resolveCcCounterWindow(game, gameId, ctx, client) {
-  const outcome = resolveAndCloseWindow(game);
-  for (const entry of outcome) {
-    const isCounter = entry.card === NEGATION || entry.card === COMM_DISRUPTION;
-    if (entry.status === 'cancelled') {
-      // Cancelled → when-discarded pipeline (Windfall / Built on Hope), NOT resolved.
-      fireCcDiscarded(game, entry.playedBy, entry.card, { fromDeck: false });
-      await ctx.logGameAction?.(game, client, `**${entry.card}** was cancelled (effects suppressed).`, { phase: 'ACTION', icon: 'card' });
-      continue;
-    }
-    if (isCounter) continue;
-    // Custom-resolve cards (Celebration, WHEN_DEFEATED CCs, mid-combat reroll
-    // reactions): their effect runs via a bespoke continuation registered by the
-    // originating handler, NOT the generic resolveAbility path. The continuation
-    // fires ONLY here (resolved, uncancelled) — the cancelled branch above skips
-    // it, so a countered card has no effect. alexanbv 2026-06-19.
-    if (entry.customResolve) {
-      const fn = _ccCustomResolvers[entry.customResolve];
-      if (fn) await fn(game, entry, ctx, client);
-      continue;
-    }
-    // Resolved card → run the Smuggling Compartment step (if it interacts) then
-    // the effect, reusing the deferred-effect path (handles requiresChoice /
-    // PowerToken / Space prompts too). The played card is already in discard.
-    game.pendingCcEffect = {
-      abilityId: entry.abilityId || entry.card, card: entry.card, playedBy: entry.playedBy,
-      msgId: entry.msgId ?? null, fromDc: !!entry.fromDc, scProtect: SC_HAND_CCS.has(entry.card),
-      fastLearnerFigureKey: entry.fastLearnerFigureKey ?? null,
-    };
-    await _offerScThenResolveDeferredCc(game, ctx, client);
-  }
-  if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-  // Combat CC: the attack gate paused for this window — re-drive it (return to
-  // that phase's options) now that the play has resolved or been cancelled.
-  if (game.pendingCombatCcResolve) {
-    const resume = getCombatGateResume();
-    if (resume) await resume(game, client);
-  }
-}
-
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
-import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
-import { classifyCcStep } from '../engine/combat-order-validator.js';
-import { pushCcPlay } from '../engine/combat-counter-window.js';
-
-/**
- * Slice 5.1: push a CC play onto the combat-scoped counter-window stack.
- *
- * Per destruct's 2026-05-05 audit: every CC play opens an opponent-only
- * counter-window. Cancellation suppresses ALL of the canceled CC's effects,
- * including "when discarded" triggers. The stack is recursive — Negation on
- * Brace, Comm Disruption on Negation, etc.
- *
- * Slice 5.1 is data-only: we record the play onto pendingCombat.ccPlayStack.
- * Subsequent slices (5.2+) wire prompts and resolution against this stack.
- *
- * No-op when there is no active combat (counter-window for non-combat CC
- * plays is deferred — Comm Disruption already has a tailored helper).
- */
-function recordCcOnCombatStack(game, playerNum, card) {
-  const cbt = game?.combat || game?.pendingCombat;
-  if (!cbt) return;
-  cbt.ccPlayStack = cbt.ccPlayStack || [];
-  try {
-    const { stack } = pushCcPlay(cbt.ccPlayStack, { ccName: card, playerNum });
-    cbt.ccPlayStack = stack;
-  } catch (_e) {
-    // pushCcPlay refuses same-player counter — surfaces a stale stack
-    // rather than the user's intended new play. Reset to a fresh top-level.
-    cbt.ccPlayStack = [];
-    const { stack } = pushCcPlay(cbt.ccPlayStack, { ccName: card, playerNum });
-    cbt.ccPlayStack = stack;
-  }
-}
-
-/**
- * Read whether a card's most recent play was canceled. (Defensive guard kept
- * in the deferred-resolve path; game.canceledCcs is no longer written by the
- * deleted old window, so this is effectively always false now.)
- */
-function isCcCanceled(game, card) {
-  return Boolean(game?.canceledCcs?.[card]);
-}
-
-/** Clear the canceled flag for a card. Called when the play resolves cleanly. */
-function clearCcCanceled(game, card) {
-  if (game?.canceledCcs) delete game.canceledCcs[card];
-}
 
 /**
  * Unified "a CC was played" trigger subroutine (alexanbv 2026-06-14): fires
@@ -425,10 +211,11 @@ async function _resumeScCcEffect(game, ctx, client) {
 
 /**
  * Offer [Smuggling Compartment] to the deferred CC's target, then resolve the
- * deferred effect if SC isn't available / declined. Called from the no-CD-window
- * path and from handleCommDisruptionSkip (after the CD window closes).
+ * deferred effect if SC isn't available / declined. Called from the counter-
+ * window resolve path in cc-pipeline.js (imported there) and from the standalone
+ * SC handlers below. Exported because cc-pipeline.js depends on it.
  */
-async function _offerScThenResolveDeferredCc(game, ctx, client) {
+export async function _offerScThenResolveDeferredCc(game, ctx, client) {
   const pend = game.pendingCcEffect;
   if (!pend) return;
   // Only hand-affecting CCs (scProtect) offer Smuggling Compartment; other
@@ -847,10 +634,6 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   }
   // Track how many CCs played during this attack (for "first CC" conditions like Assassinate)
   if (_cbt) _cbt.attackCcCount = (_cbt.attackCcCount || 0) + 1;
-  // Slice 5.1: push the CC onto the counter-window stack so future
-  // Negation/CD/recursive counters can resolve against it. Combat-scoped
-  // for now; non-combat CC counter-window deferred.
-  recordCcOnCombatStack(game, playerNum, card);
   // Per destruct 2026-05-07: "Only one copy of a named Command Card can
   // be played per timing instance." Mark this card as played in the
   // current timing bucket so isCcPlayableNow rejects subsequent copies
@@ -864,49 +647,6 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     if (_markTiming) {
       const { markNamedCcPlayed } = await import('../game/named-cc-tracker.js');
       markNamedCcPlayed(game, playerNum, card, _markTiming);
-    }
-  }
-  // Combat-order telemetry (slice 4.13, soft-warn mode): classify the CC
-  // against the canonical CRR step it should fire at per destruct's
-  // 2026-05-05 audit, and log a mismatch when pendingCombat.currentStep
-  // disagrees. The warning is now ALSO surfaced to the game log channel (not
-  // just console) so destruct + adam can see real-game telemetry.
-  //
-  // Why this is soft-warn rather than validate-or-throw: the registry is
-  // currently 27 cards (out of ~200 in the game). Unregistered cards are
-  // benign-skipped here. For registered cards with nuanced sub-step timing
-  // (Hunter Protocol declares Step 4, effect persists Step 5; Lando trio's
-  // pre/post-reroll split; etc.) the validator is intentionally permissive
-  // — escalating to throw without finishing the registry + a clean
-  // sim:discord shadow run would block legitimate plays. Escalation queued
-  // for the slice that completes the registry + parallel-shadow sim.
-  if (_cbt) {
-    const _classification = classifyCcStep(card);
-    if (_classification) {
-      const _legacyStep = _cbt.currentStep || '(unknown)';
-      const _matches = _classification.step === 'counter-window'
-        || _classification.step === _legacyStep;
-      const _tag = _matches ? 'ok' : 'WARN';
-      console.log(`[combat-order ${_tag}] CC '${card}' played at legacy step '${_legacyStep}' — canonical step '${_classification.step}' (${_classification.side}). reason: ${_classification.reason}`);
-      // Slice 4.13 (destruct 2026-05-06): the canonical step transitions
-      // are now wired (slices 4.7-4.12) and locked by audit test
-      // currentstep-transition-audit.test.js. Surface mismatches both as
-      // a console warn AND a game-log entry. Strict-throw mode is
-      // available via env IACP_COMBAT_ORDER_STRICT=1 (used in CI / tests
-      // but NOT default in production — a runtime throw would break
-      // legitimate plays of cards we haven't audited yet, since the
-      // registry is currently 27/~200 cards).
-      if (!_matches && logGameAction && client) {
-        await logGameAction(game, client,
-          `⚠️ **[combat-order]** \`${card}\` played at \`${_legacyStep}\` — canonical step is \`${_classification.step}\` (${_classification.side}). reason: ${_classification.reason}`,
-          { phase: 'ROUND', icon: 'card' }
-        ).catch(discordCatch);
-      }
-      if (!_matches && process.env.IACP_COMBAT_ORDER_STRICT === '1') {
-        throw new Error(
-          `[combat-order strict] CC '${card}' played at '${_legacyStep}' but canonical step is '${_classification.step}'. ${_classification.reason}`,
-        );
-      }
     }
   }
   // Fast Learner (Mara Jade): mark FL used when either (a) the legality check
@@ -1126,17 +866,6 @@ export async function handleCcSpacePick(interaction, ctx) {
     await interaction.followUp({ content: 'That space is not a valid choice.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Slice 5.7 follow-up: suppress effect-firing if a counter (Negation/CD)
-  // canceled this CC while the space-pick prompt was open.
-  if (pending.card && isCcCanceled(game, pending.card)) {
-    clearPendingCcSpaceChoice(game);
-    clearCcCanceled(game, pending.card);
-    if (logGameAction) {
-      await logGameAction(game, client, `**${pending.card}** space choice ignored — card was cancelled by a counter.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
-    }
-    saveGames(game.gameId);
-    return;
-  }
   const result = resolveAbility(pending.abilityId, {
     game,
     playerNum,
@@ -1212,24 +941,6 @@ export async function handleCcChoice(interaction, ctx) {
     return;
   }
   const chosenOption = pending.choiceOptions?.[choiceIndex];
-  // Slice 5.7 follow-up (destruct 2026-05-06): if a counter-window play
-  // (Negation or CD) canceled this CC while the choice prompt was still
-  // open, suppress effect-firing entirely. Without this, a slow user
-  // could click the choice button after the cancel and re-fire the
-  // effect that should have been suppressed.
-  if (pending.card && isCcCanceled(game, pending.card)) {
-    clearPendingCcChoice(game);
-    clearCcCanceled(game, pending.card);
-    await interaction.message.edit({
-      content: `**${pending.card}** was cancelled by a counter — choice ignored, no effect.`,
-      components: [],
-    }).catch(discordCatch);
-    if (logGameAction) {
-      await logGameAction(game, client, `**${pending.card}** choice ignored — card was cancelled by a counter before the choice resolved.`, { phase: 'ACTION', icon: 'card' }).catch(discordCatch);
-    }
-    saveGames(game.gameId);
-    return;
-  }
   const result = resolveAbility(pending.abilityId, {
     game,
     playerNum,

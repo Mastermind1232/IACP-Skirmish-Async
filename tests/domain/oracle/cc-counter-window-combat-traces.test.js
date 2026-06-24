@@ -17,8 +17,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   openCounterWindow, counterResponder, topAvailableCounters, pushCounter, resolveAndCloseWindow,
-} from '../../../src/game/cc-counter-window.js';
-import { NEGATION, COMM_DISRUPTION } from '../../../src/game/cc-counter-rules.js';
+  NEGATION, COMM_DISRUPTION,
+} from '../../../src/handlers/cc-pipeline.js';
 
 // Helper: status map for a finished window.
 function statuses(outcome) { return outcome.map((e) => [e.card, e.status]); }

@@ -5,7 +5,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { canCancelCc, availableCounters, resolveCounterStack, NEGATION, COMM_DISRUPTION } from '../../../src/game/cc-counter-rules.js';
+import { canCancelCc, availableCounters, resolveCounterStack, NEGATION, COMM_DISRUPTION } from '../../../src/handlers/cc-pipeline.js';
 
 describe('canCancelCc — Negation', () => {
   it('cancels a cost-0 card', () => {

@@ -31,7 +31,8 @@ import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { canPlayCC } from '../game/cc-timing.js';
-import { runCcPlayTriggers, openCcCounterWindow } from './cc-hand.js';
+import { runCcPlayTriggers } from './cc-hand.js';
+import { openCcCounterWindow } from './cc-pipeline.js';
 import { _sendPrivateReactionPrompt } from '../engine/combat-bridge.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,

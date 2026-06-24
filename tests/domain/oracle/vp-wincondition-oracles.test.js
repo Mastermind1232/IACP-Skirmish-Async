@@ -79,7 +79,7 @@ describe('ORACLE-VP-003: Every non-defeat VP award site calls checkWinConditions
       vpPattern: /awardObjectiveVp/,
     },
     {
-      file: 'src/handlers/cc-hand.js',
+      file: 'src/handlers/cc-pipeline.js',
       label: 'Celebration',
       vpPattern: /awardObjectiveVp|awardKillVp/,
     },

@@ -227,8 +227,8 @@ import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-d
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { runCcPlayTriggers, openCcCounterWindow, registerCcCustomResolve } from './cc-hand.js';
-import { registerCombatGateResume } from '../game/cc-counter-window.js';
+import { runCcPlayTriggers } from './cc-hand.js';
+import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume } from './cc-pipeline.js';
 import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
@@ -579,7 +579,7 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
 
 /**
  * Re-drive the attack gate after a combat CC's counter-window resolves. Invoked
- * via the registry (registerCombatGateResume) from cc-hand's
+ * via the registry (registerCombatGateResume) from cc-pipeline's
  * _resolveCcCounterWindow once the Negate/Comms window for a combat CC closes —
  * the gate paused on play; this returns to that phase's options. Reconstructs
  * the gate from the stored { window } + pendingCombat (never stores transient

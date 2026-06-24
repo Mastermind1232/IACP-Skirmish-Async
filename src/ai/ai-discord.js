@@ -14,7 +14,7 @@ import { getHandler, getHandlerGroup } from '../handlers/index.js';
 import { buildContext } from '../context-factory.js';
 import { createFakeInteraction } from '../headless/fake-interaction.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
-import { counterResponder } from '../game/cc-counter-window.js';
+import { counterResponder } from '../handlers/cc-pipeline.js';
 import { withAtomicGameLock } from '../game/action-queue.js';
 import { setPendingCcConfirmation } from '../game/interrupts.js';
 

@@ -19,7 +19,8 @@ import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { openCcCounterWindow, runCcPlayTriggers } from './cc-hand.js';
+import { runCcPlayTriggers } from './cc-hand.js';
+import { openCcCounterWindow } from './cc-pipeline.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 
