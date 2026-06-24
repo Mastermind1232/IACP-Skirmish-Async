@@ -3084,6 +3084,12 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   if (combat.attackerMsgId && game.pendingMissileSalvo?.[combat.attackerMsgId]) {
     const ms = game.pendingMissileSalvo[combat.attackerMsgId];
     if (combat.target?.figureKey) ms.targetsFired = [...(ms.targetsFired || []), combat.target.figureKey];
+    // Re-prompt the next salvo die in the attacker's PLAY AREA (activation
+    // thread), per alexanbv 2026-06-24, so the whole salvo lives where the
+    // player manages the figure; the die choice then drops straight into the
+    // target picker (handleMissileSalvoDie). Fall back to the combat thread.
+    const _salvoThreadId = game.dcActionsData?.[combat.attackerMsgId]?.threadId;
+    const _salvoTarget = (_salvoThreadId ? await fetchGameChannel(client, _salvoThreadId).catch(() => null) : null) || thread;
     if (ms.diceAvailable?.length > 0) {
       const salvoOwnerId = getPlayerId(game, combat.attackerPlayerNum);
       const colorStyle = { blue: ButtonStyle.Primary, red: ButtonStyle.Danger, yellow: ButtonStyle.Secondary };
@@ -3091,14 +3097,14 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         new ButtonBuilder().setCustomId(`missile_salvo_die_${c}_${game.gameId}_${combat.attackerMsgId}`).setLabel(`${c.charAt(0).toUpperCase() + c.slice(1)} Die`).setStyle(colorStyle[c] || ButtonStyle.Secondary)
       );
       salvoBtns.push(new ButtonBuilder().setCustomId(`missile_salvo_done_${game.gameId}_${combat.attackerMsgId}`).setLabel('End Salvo').setStyle(ButtonStyle.Success));
-      await thread.send(sanitizeMentions({
+      if (_salvoTarget) await _salvoTarget.send(sanitizeMentions({
         content: `<@${salvoOwnerId}> **Missile Salvo** — ${ms.diceAvailable.length} shot${ms.diceAvailable.length !== 1 ? 's' : ''} remaining. Choose a die for your next attack (different target):`,
         components: [new ActionRowBuilder().addComponents(salvoBtns)],
         allowedMentions: { users: [salvoOwnerId] },
       })).catch(discordCatch);
     } else {
       delete game.pendingMissileSalvo[combat.attackerMsgId];
-      await thread.send('**Missile Salvo** — All shots fired. Salvo complete.').catch(discordCatch);
+      if (_salvoTarget) await _salvoTarget.send('**Missile Salvo** — All shots fired. Salvo complete.').catch(discordCatch);
     }
   }
 
@@ -3200,15 +3206,22 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // fully resolves (incl. defeats) before this runs again, so shot 2/3 targeting
   // reflects the prior shot's board/LoS state.
   const _postAttackerChainButton = async (note) => {
-    if (!thread) return;
-    if (!combat.attackerMsgId) { await thread.send(note).catch(discordCatch); return; }
+    if (!combat.attackerMsgId) { if (thread) await thread.send(note).catch(discordCatch); return; }
     const _acFigIdx = String(combat.attackerFigureKey || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
     const _acOwnerId = getPlayerId(game, combat.attackerPlayerNum);
     const _acBtn = new ButtonBuilder()
       .setCustomId(`granted_attack_${game.gameId}_${combat.attackerMsgId}_f${_acFigIdx}`)
       .setLabel('Declare Attack')
       .setStyle(ButtonStyle.Primary);
-    await thread.send(sanitizeMentions({
+    // Post the Declare Attack button in the attacker's PLAY AREA (its activation
+    // thread) — per alexanbv 2026-06-24, not the combat thread — mirroring the
+    // grantedAttackButton convention; clicking opens a fresh combat thread for
+    // the next sequential shot. Fall back to the combat thread if the activation
+    // thread can't be fetched.
+    const _acThreadId = game.dcActionsData?.[combat.attackerMsgId]?.threadId;
+    const _acTarget = (_acThreadId ? await fetchGameChannel(client, _acThreadId).catch(() => null) : null) || thread;
+    if (!_acTarget) return;
+    await _acTarget.send(sanitizeMentions({
       content: _acOwnerId ? `<@${_acOwnerId}> ${note}` : note,
       components: [new ActionRowBuilder().addComponents(_acBtn)],
       allowedMentions: { users: _acOwnerId ? [_acOwnerId] : [] },
@@ -3436,23 +3449,26 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.forcedAttackTarget = game.forcedAttackTarget || {};
       game.forcedAttackTarget[_capPartner] = combat.defenderFigureKey;
       // The partner figure (not the just-resolved attacker) takes the second
-      // attack — post a Declare Attack button for the partner's DC card.
-      if (thread) {
+      // attack — post a Declare Attack button in the partner's PLAY AREA
+      // (its activation thread), per alexanbv 2026-06-24.
+      {
         const _caPartnerMsgId = findDcMessageIdForFigure(game.gameId, combat.attackerPlayerNum, _capPartner);
         const _caFigIdx = String(_capPartner || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
         const _caOwnerId = getPlayerId(game, combat.attackerPlayerNum);
         const _caNote = `**Coordinated Attack** — the second attack must target the **same figure** (**${dcNameFromFigureKey(combat.defenderFigureKey)}**). Declare it below.`;
-        if (_caPartnerMsgId) {
+        const _caThreadId = _caPartnerMsgId ? game.dcActionsData?.[_caPartnerMsgId]?.threadId : null;
+        const _caTarget = (_caThreadId ? await fetchGameChannel(client, _caThreadId).catch(() => null) : null) || thread;
+        if (_caPartnerMsgId && _caTarget) {
           const _caBtn = new ButtonBuilder()
             .setCustomId(`granted_attack_${game.gameId}_${_caPartnerMsgId}_f${_caFigIdx}`)
             .setLabel(`Declare Attack (${dcNameFromFigureKey(_capPartner)})`.slice(0, 80))
             .setStyle(ButtonStyle.Primary);
-          await thread.send(sanitizeMentions({
+          await _caTarget.send(sanitizeMentions({
             content: _caOwnerId ? `<@${_caOwnerId}> ${_caNote}` : _caNote,
             components: [new ActionRowBuilder().addComponents(_caBtn)],
             allowedMentions: { users: _caOwnerId ? [_caOwnerId] : [] },
           })).catch(discordCatch);
-        } else {
+        } else if (thread) {
           await thread.send(_caNote).catch(discordCatch);
         }
       }
@@ -3702,7 +3718,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     // (Tonfa Strike, Barrage, Saber Orbit, etc.) re-stage the next entry as
     // each attack resolves, so this same path runs for shots 2/3 sequentially,
     // and the board/LoS state reflects the prior shot's outcome.
-    if (_entry.message && thread) {
+    if (_entry.message) {
       const _chainGranteeFk = _entry.figureKey
         || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : combat.target?.figureKey);
       const _chainFigIdx = String(_chainGranteeFk || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
@@ -3717,11 +3733,17 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       const _chainContent = _entry.message.includes(`<@${_chainOwnerId}>`)
         ? _entry.message
         : `<@${_chainOwnerId}> ${_entry.message}`;
-      await thread.send(sanitizeMentions({
-        content: _chainContent,
-        components: [new ActionRowBuilder().addComponents(_chainBtn)],
-        allowedMentions: { users: _chainOwnerId ? [_chainOwnerId] : [] },
-      })).catch(discordCatch);
+      // Post to the grantee's PLAY AREA (its activation thread), per alexanbv
+      // 2026-06-24; fall back to the combat thread if it can't be fetched.
+      const _chainThreadId = game.dcActionsData?.[_entry.msgId]?.threadId;
+      const _chainTarget = (_chainThreadId ? await fetchGameChannel(client, _chainThreadId).catch(() => null) : null) || thread;
+      if (_chainTarget) {
+        await _chainTarget.send(sanitizeMentions({
+          content: _chainContent,
+          components: [new ActionRowBuilder().addComponents(_chainBtn)],
+          allowedMentions: { users: _chainOwnerId ? [_chainOwnerId] : [] },
+        })).catch(discordCatch);
+      }
     }
   }
 }
