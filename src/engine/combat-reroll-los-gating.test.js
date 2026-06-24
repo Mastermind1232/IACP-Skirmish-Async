@@ -41,6 +41,14 @@ describe('Coordinated Hunt (Purge Commander) — LOS-gated reroll', () => {
     const c = { ...combat, attackerDcName: 'Purge Commander (Elite)', attackerFigureKey: 'Purge Commander (Elite)-1-0' };
     assert.ok(idsR('attacker', g, c).includes('reroll:purge_commander_elite:attacker'));
   });
+  it('is NOT offered under noFriendliesActive (Lure / False Orders) — owner LOS branch', () => {
+    assert.ok(!idsR('attacker', game('m3'), { ...combat, noFriendliesActive: true }).includes('reroll:purge_commander_elite:attacker'));
+  });
+  it('is NOT offered under noFriendliesActive even to the Purge Commander itself (self branch)', () => {
+    const g = { selectedMap: MAP, figurePositions: { 1: { 'Purge Commander (Elite)-1-0': 'l3' }, 2: { 'X-2-0': 'a1' } } };
+    const c = { ...combat, attackerDcName: 'Purge Commander (Elite)', attackerFigureKey: 'Purge Commander (Elite)-1-0', noFriendliesActive: true };
+    assert.ok(!idsR('attacker', g, c).includes('reroll:purge_commander_elite:attacker'));
+  });
 });
 
 describe('Shared Calculations (Zuckuss) — friendly DROID within 3 with LOS to target', () => {

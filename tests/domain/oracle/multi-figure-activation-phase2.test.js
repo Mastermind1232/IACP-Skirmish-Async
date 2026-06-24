@@ -11,7 +11,8 @@
  * - dropdown excludes locked figures
  * - action buttons disable when current figure has 0 actions remaining
  * - End Figure button forfeits remaining + locks current figure
- * - selectedFigure cleared when figure locks (force re-pick)
+ * - a figure is NOT auto-locked at 0 actions (alexanbv 2026-06-24): it stays
+ *   selected for banked MP / CCs / EoA until explicitly ended.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,10 +25,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..', '..');
 function readSrc(p) { return readFileSync(join(ROOT, p), 'utf8'); }
 
-test('consumeActionForCurrentFigure: clears selectedFigure when figure locks', () => {
+test('consumeActionForCurrentFigure: does NOT auto-lock at 0 actions (alexanbv 2026-06-24)', () => {
+  // The figure stays SELECTED and UNLOCKED when it spends its last action, so
+  // the player can still spend banked MP, play CCs, and resolve EoA before
+  // explicitly ending it. Locking happens only via End Figure / Done with Xa /
+  // End Group Activation (the handlers, not the action decrement).
   const actionsData = {
-    remaining: 4,
-    total: 4,
     selectedFigure: 0,
     perFigureRemaining: { 0: 2, 1: 2 },
     figureLocked: {},
@@ -38,24 +41,21 @@ test('consumeActionForCurrentFigure: clears selectedFigure when figure locks', (
   assert.equal(actionsData.selectedFigure, 0, 'selectedFigure unchanged');
 
   consumeActionForCurrentFigure(actionsData, 1);
-  assert.equal(actionsData.perFigureRemaining[0], 0);
-  assert.equal(actionsData.figureLocked[0], true, 'locked after 2nd action');
-  assert.equal(actionsData.selectedFigure, null,
-    'selectedFigure cleared so dropdown re-prompts for next figure');
+  assert.equal(actionsData.perFigureRemaining[0], 0, 'budget exhausted');
+  assert.equal(actionsData.figureLocked[0], undefined, 'NOT auto-locked at 0 actions');
+  assert.equal(actionsData.selectedFigure, 0, 'stays selected for banked MP / CCs / EoA');
 });
 
-test('consumeActionForCurrentFigure: 2-action special locks immediately', () => {
+test('consumeActionForCurrentFigure: 2-action special exhausts budget but does NOT auto-lock', () => {
   const actionsData = {
-    remaining: 4,
-    total: 4,
     selectedFigure: 0,
     perFigureRemaining: { 0: 2, 1: 2 },
     figureLocked: {},
   };
   consumeActionForCurrentFigure(actionsData, 2);
   assert.equal(actionsData.perFigureRemaining[0], 0);
-  assert.equal(actionsData.figureLocked[0], true);
-  assert.equal(actionsData.selectedFigure, null);
+  assert.equal(actionsData.figureLocked[0], undefined, 'NOT auto-locked — explicit end required');
+  assert.equal(actionsData.selectedFigure, 0, 'stays selected');
   // Figure 0's budget consumed; figure 1's budget intact
   assert.equal(actionsData.perFigureRemaining[1], 2);
 });

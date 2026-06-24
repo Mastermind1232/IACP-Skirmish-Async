@@ -539,22 +539,14 @@ export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null
     const cur = actionsData.perFigureRemaining[figIdx] ?? 2; // DC_ACTIONS_PER_ACTIVATION
     const next = Math.max(0, cur - cost);
     actionsData.perFigureRemaining[figIdx] = next;
-    if (next === 0) {
-      actionsData.figureLocked = actionsData.figureLocked || {};
-      actionsData.figureLocked[figIdx] = true;
-      // Per destruct 2026-05-07: figure done → force re-pick from
-      // dropdown for next figure. Clear selectedFigure so the action-
-      // button row is replaced with the figure-select dropdown next
-      // render. Locked figures are filtered out of the dropdown
-      // automatically (components.js).
-      actionsData.selectedFigure = null;
-      // Unified activation lock release (alexanbv 2026-05-10): when the
-      // locked figure finishes, release the lock so the next figure
-      // pick OR the paired companion can acquire on its first action.
-      if (game && msgId && game.activationLockKey === `${msgId}_f${figIdx}`) {
-        delete game.activationLockKey;
-      }
-    }
+    // Per alexanbv 2026-06-24: a figure is NOT auto-locked when it spends its
+    // last action. It stays SELECTED (and the lock stays) so the player can
+    // still spend banked MP, play Command Cards, and resolve end-of-activation
+    // stuff before explicitly ending it. The action handlers already refuse new
+    // actions at 0 remaining (figureActionsRemaining guards). The figure ends
+    // only via an explicit choice — End Figure (handleDcEndFigure), Done with Xa
+    // (handleDcSwitchFig), or End Group Activation — each of which locks it,
+    // releases the lock, and fires its per-figure EoA.
   }
 }
 

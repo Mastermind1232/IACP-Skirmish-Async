@@ -228,9 +228,12 @@ export function registerRerollAbilities() {
         const selfCheck = makeCondition({ type: 'attacker_is_self', card: r.card, side: 'attacker' });
         rowCond = losSpec.includeSelf === false
           ? (game, combat) => selfCheck(game, combat) && losCond(game, combat)
-          // "you OR a friendly … in LOS": the owner attacking always qualifies
-          // (self branch), else a friendly with LOS does.
-          : (game, combat) => selfCheck(game, combat) || losCond(game, combat);
+          // "you OR a friendly … in LOS" (Coordinated Hunt): the owner attacking
+          // always qualifies (self branch), else a friendly with LOS does. The
+          // whole ability is a friendly pack mechanic — suppressed under Lure /
+          // False Orders (noFriendliesActive), incl. the self branch (alexanbv
+          // 2026-06-24).
+          : (game, combat) => !combat?.noFriendliesActive && (selfCheck(game, combat) || losCond(game, combat));
       }
       // Attachment rows carry a BRACKETED card name (e.g. "[The Darksaber]") while
       // game.pXDcAttachments stores the bare name — normalize both with

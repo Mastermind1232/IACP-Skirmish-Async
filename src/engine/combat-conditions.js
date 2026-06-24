@@ -119,6 +119,9 @@ export function makeCondition(spec) {
       // Much to Learn/Ezra were over-offered on the owner's own attack).
       const excludeSelf = !!spec.excludeSelf;
       return (game, combat) => {
+        // Lure / False Orders: an "ANOTHER friendly figure within N" aura grants
+        // nothing when no figures are considered friendly (alexanbv 2026-06-24).
+        if (excludeSelf && combat?.noFriendliesActive) return false;
         const aff = affectedFigure(game, combat, side);
         const mapId = game?.selectedMap?.id;
         if (!aff.figureKey || aff.pn == null || !mapId) return false;
@@ -148,6 +151,9 @@ export function makeCondition(spec) {
       const side = spec.side || 'attacker';
       const requireUnique = !!spec.requireUnique;
       return (game, combat) => {
+        // Lure / False Orders: no "another friendly figure" grant when no figures
+        // are considered friendly (alexanbv 2026-06-24).
+        if (combat?.noFriendliesActive) return false;
         const aff = affectedFigure(game, combat, side);
         const mapId = game?.selectedMap?.id;
         if (!aff.figureKey || aff.pn == null || !mapId) return false;
@@ -324,6 +330,10 @@ export function makeCondition(spec) {
       const ownerName = spec.ownerDcName;
       const atkKw = spec.attackerKeyword ? String(spec.attackerKeyword).toUpperCase() : null;
       return (game, combat) => {
+        // Lure of the Dark Side / False Orders: "no figures are considered
+        // friendly during this attack" — a friendly owner (Purge Commander) does
+        // not grant Coordinated Hunt (alexanbv 2026-06-24).
+        if (combat?.noFriendliesActive) return false;
         const mapId = game?.selectedMap?.id;
         const mapSp = mapId ? getMapData(mapId) : null;
         const atkPos = attackerCoord(game, combat);
@@ -350,6 +360,8 @@ export function makeCondition(spec) {
       const n = spec.n ?? 3;
       const excludeSelf = spec.excludeSelf !== false;
       return (game, combat) => {
+        // Lure / False Orders: no friendly figure grants (Shared Calculations).
+        if (combat?.noFriendliesActive) return false;
         const mapId = game?.selectedMap?.id;
         if (!mapId) return false;
         const mapSp = getMapData(mapId);
