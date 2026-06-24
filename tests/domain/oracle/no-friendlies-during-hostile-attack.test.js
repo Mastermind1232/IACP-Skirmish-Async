@@ -83,11 +83,13 @@ test('This is the Way (Armorer) skipped when noFriendliesActive', () => {
 });
 
 // ── Coordinated Hunt other-friendly branch ────────────────────────────────
-
-test('Coordinated Hunt other-friendly branch skipped when noFriendliesActive', () => {
-  const src = readSrc('src/handlers/combat.js');
-  // Self-branch fires regardless (own ability); other-friendly branch is
-  // gated by noFriendliesActive.
-  assert.match(src, /coordinated_hunt_purge_commander[\s\S]{0,300}!_chApplied && !combat\.noFriendliesActive/,
-    'Coordinated Hunt other-friendly branch gated; self-branch unaffected');
-});
+// NOTE: the 'Coordinated Hunt other-friendly branch skipped when
+// noFriendliesActive' probe was removed 2026-06-24. It pinned the legacy
+// `coordinated_hunt_purge_commander ... !_chApplied && !combat.noFriendliesActive`
+// block inside handleCombatRoll's `if (!combat._seqActive)` ad-hoc reroll engine,
+// which was deleted in the gate-machine cleanup (it never executed in gate mode).
+// Coordinated Hunt is now driven by the gate rerolls window via the
+// owner_with_los_to_attacker condition (src/engine/combat-conditions.js).
+// FLAGGED FOR REVIEW: the data-driven condition does not currently consult
+// combat.noFriendliesActive — confirm Lure/FO no-friendlies handling for the
+// "friendly Purge Commander with LOS" branch is still correct under the gate.

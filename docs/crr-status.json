@@ -50,7 +50,8 @@
     "baselineUnused": [
       "deviceRerollGranted",
       "drivenByHatredForceChoke",
-      "pendingBELReorder"
+      "pendingBELReorder",
+      "pendingPostAttackConditions"
     ],
     "baselineTypeMismatchCount": 108
   },

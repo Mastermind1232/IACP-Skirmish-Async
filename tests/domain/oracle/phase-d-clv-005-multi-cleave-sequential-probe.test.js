@@ -9,12 +9,16 @@
  *      the scalar surgeCleave/passiveCleave accumulator: passive Cleave X
  *      loadout keyword, surge Cleave X, Krayt Dragon Fury (Cleave X = Surges
  *      rolled), and Darksaber Strike (Blast → Cleave conversion).
- *   2. In src/engine/combat-bridge.js applyDamageAndFinishCombat, the Cleave
- *      block builds `cleaveQueue` from combat.cleaveSources (falling back to
- *      a single-entry queue built from the scalar sum when cleaveSources is
- *      absent — legacy / one-source paths). The first source is popped, used
- *      as pending.surgeCleave + pending.sourceLabel, and the remainder is
- *      persisted on pending.cleaveQueue for sequential resolution.
+ *   2. In the gate path, each Cleave source is its own step-8 (after_resolve)
+ *      effect: src/handlers/after-attack-fire.js fireCleave computes eligible
+ *      targets via the shared computeCleaveEligibleTargets helper and posts the
+ *      pick via setPendingCleave with surgeCleave = the source amount,
+ *      sourceLabel, and cleaveQueue: [] (empty — handleCleaveTarget returns to
+ *      the step-8 window when this source resolves rather than chaining to a
+ *      "next source" reprompt). The legacy in-bridge applyDamageAndFinishCombat
+ *      cleaveQueue-building block was removed 2026-06-24 in the gate-machine
+ *      cleanup; multiple Cleave sources still resolve one at a time because each
+ *      is enqueued as a separate after_resolve effect, player-ordered.
  *   3. In src/handlers/combat.js handleCleaveTarget, after applying the
  *      current Cleave's damage, if pending.cleaveQueue is non-empty the
  *      handler recomputes an up-to-date eligible-target list via the shared
@@ -35,6 +39,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
 const CB_SRC = readFileSync(resolve(ROOT, 'src/engine/combat-bridge.js'), 'utf8');
 const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
+const AAF_SRC = readFileSync(resolve(ROOT, 'src/handlers/after-attack-fire.js'), 'utf8');
 
 describe('PROBE-PD-CLV-005: multiple Cleave abilities resolve one at a time with independent targets', () => {
   it('005a: source — passive Cleave (loadout) accumulation pushes onto combat.cleaveSources', () => {
@@ -61,16 +66,16 @@ describe('PROBE-PD-CLV-005: multiple Cleave abilities resolve one at a time with
       'Darksaber Blast→Cleave conversion must push onto combat.cleaveSources — CRR-CLV-005');
   });
 
-  it('005e: source — applyDamageAndFinishCombat builds cleaveQueue from combat.cleaveSources', () => {
-    assert.match(CB_SRC,
-      /const cleaveQueue = Array\.isArray\(combat\.cleaveSources\) && combat\.cleaveSources\.length > 0\s*\n\s*\?\s*combat\.cleaveSources\.slice\(\)\s*\n\s*:\s*\(effectiveCleave > 0 \? \[\{ value: effectiveCleave, label: `Cleave \$\{effectiveCleave\}` \}\] : \[\]\);/,
-      'cleaveQueue must be built from combat.cleaveSources (falling back to single-entry queue when absent) — CRR-CLV-005');
+  it('005e: source — gate-path fireCleave computes eligible targets from the shared helper for each Cleave source', () => {
+    assert.match(AAF_SRC,
+      /const cleaveTargets = computeCleaveEligibleTargets\(game, combat, defenderPlayerNum, deps\);/,
+      'fireCleave must build the eligible-target list via computeCleaveEligibleTargets — CRR-CLV-005');
   });
 
-  it('005f: source — initial prompt pops first source off cleaveQueue and persists the remainder on pending.cleaveQueue', () => {
-    assert.match(CB_SRC,
-      /const firstSource = cleaveQueue\.shift\(\);\s*\n\s*setPendingCleave\(game, \{[\s\S]*?surgeCleave: firstSource\.value,[\s\S]*?sourceLabel: firstSource\.label,[\s\S]*?cleaveQueue,/,
-      'initial Cleave prompt must pop first source and persist remaining queue on pending — CRR-CLV-005');
+  it('005f: source — gate-path fireCleave posts the Cleave pick via setPendingCleave with the source amount + label', () => {
+    assert.match(AAF_SRC,
+      /setPendingCleave\(game, \{[\s\S]*?surgeCleave: amount,[\s\S]*?sourceLabel,[\s\S]*?cleaveQueue: \[\],/,
+      'fireCleave must set pending.surgeCleave/sourceLabel and an empty cleaveQueue (per-source step-8 effect) — CRR-CLV-005');
   });
 
   it('005g: source — shared helper computeCleaveEligibleTargets excludes the initial attack target but not prior-Cleaved targets', () => {
@@ -105,10 +110,10 @@ describe('PROBE-PD-CLV-005: multiple Cleave abilities resolve one at a time with
   });
 
   it('005i: source — pending.cleaveQueue is the structural signal for sequential resolution (not a scalar total)', () => {
-    // Grep for pending.cleaveQueue usage: it must exist in both the initial
-    // prompt construction (combat-bridge.js) and the re-prompt handler
-    // (combat.js). This pins the queue as the cross-file contract.
-    assert.match(CB_SRC, /cleaveQueue,/,  'combat-bridge.js must construct pending.cleaveQueue');
+    // pending.cleaveQueue is set by the gate-path emitter (after-attack-fire.js
+    // fireCleave) and read by the re-prompt handler (combat.js handleCleaveTarget).
+    // This pins the queue as the cross-file contract.
+    assert.match(AAF_SRC, /cleaveQueue: \[\],/,  'after-attack-fire.js must construct pending.cleaveQueue');
     assert.match(H_CB_SRC, /pending\.cleaveQueue/, 'combat.js handleCleaveTarget must read pending.cleaveQueue');
   });
 });

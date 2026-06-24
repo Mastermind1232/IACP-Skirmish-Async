@@ -49,6 +49,13 @@ const EMIT_ALLOWLIST = new Set([
   'default_deck_',          // game-tools.js:470 handleDefaultDeck — never wired to UI
   'extra_armor_cancel_',    // round.js:1733 — comment says "kept for backwards compat but no longer used in the new UI"
   'botmenu_recover_',       // recover.js:26 handleBotmenuRecover — superseded by resync_
+  // TODO: confirmed dead. handleVanguardDiePick (dc-play-area.js) — its only UI
+  // emitter was the legacy pre-target die-swap picker (the `if (false)` block in
+  // dc-play-area.js), deleted 2026-06-24 in the gate-machine cleanup. Vanguard
+  // die-swap is now driven live by the on-declare window (od_dieswap_ /
+  // handleOnDeclareDieSwap). Handler + register + the combat.js:~4828
+  // pendingVanguardSwap revert block are now dead; left for user-confirmed removal.
+  'vanguard_pick_',
   'slow_on_draw_resume_',   // alexanbv 2026-05-09 architectural fix: SoTD migrated to combatStack push/pop, no Resume button posted; handler kept for legacy state recovery only
   // Emitted via the shared sc-hand-protection.js offer helper using a dynamic
   // `${idPrefix}_open_`/`_skip_` template (idPrefix='sc_hh'), so the static

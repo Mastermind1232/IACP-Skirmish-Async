@@ -21,10 +21,16 @@
  * the defender could force a reroll on a die the attacker had already
  * decided not to reroll, violating step-3 ordering.
  *
- * New flow: at the start of the reroll phase, build a forced-reroll queue
- * entry for SiS if defenderSpentBlock + an Armorer-with-ability is within
- * 3 of the defender. The entry resolves through the existing forced-reroll
- * UI in step 3.
+ * New flow (gate-machine, 2026-06-24): the legacy hardcoded SiS reroll-queue
+ * build that lived in handleCombatRoll's `if (!combat._seqActive)` ad-hoc reroll
+ * engine was DELETED. SiS is now driven data-first by the gate rerolls window
+ * (src/engine/combat-abilities-rerolls.js), keyed off the dc-effects.json
+ * `survival_is_strength_armorer` ability row (whose text carries the within-4
+ * range and once-per-round limit). The remaining assertions here pin the
+ * surviving invariants in combat.js: no legacy SiS prompt in proceedAfterTokens,
+ * the sub-picker reroll-fired marking, and the absence of a handleCombatPassive
+ * survival branch. The deleted assertions (forced-reroll-queue push / within-4
+ * literal / armorerFigKey on the entry) belonged to the removed legacy block.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,32 +54,6 @@ describe('CRR-COMBAT-SIS-STEP3: Survival is Strength fires in step 3 (forced rer
       'proceedAfterTokens must not render survival passive buttons (moved to step-3 forced-reroll queue)');
     assert.doesNotMatch(body, /survivalFigKey\s*=\s*_sisArmorerFk/,
       'proceedAfterTokens must not assign survivalFigKey (legacy survival prompt removed)');
-  });
-
-  it('forced-reroll queue is populated with a Survival is Strength entry when defenderSpentBlock + Armorer within 3', () => {
-    // The reroll-phase entry must exist alongside Versatile Weaponry / Raider /
-    // Precision / Fyrnock Style — same shape, source = "Survival is Strength".
-    assert.match(H_CB_SRC,
-      /survival_is_strength_armorer[\s\S]*?combat\.forcedRerollQueue\.push\(\{[\s\S]*?source:\s*'Survival is Strength'/,
-      'reroll-phase build must push a SiS entry when the Armorer/condition match');
-  });
-
-  it('SiS range gate is within 4 spaces of the Armorer (IACP 2026-06-21, was 3)', () => {
-    // The isWithinSpaces call that builds the SiS forced-reroll entry must use
-    // a max distance of 4. Match the single-line call so a regression back to 3
-    // fails loudly. The _sisMapSp/_sisDefCoord call lives on one line.
-    const sisCall = H_CB_SRC.match(/isWithinSpaces\(_sisMapSp,[^\n]*_sisDefCoord[^\n]*?,\s*(\d+)\)/);
-    assert.ok(sisCall, 'SiS isWithinSpaces(_sisMapSp, ...) gate must exist');
-    assert.strictEqual(sisCall[1], '4',
-      'Survival is Strength must gate on within-4-spaces-of-the-Armorer (was 3)');
-  });
-
-  it('SiS forced-reroll entry includes armorerFigKey for ability-used tracking', () => {
-    // Without armorerFigKey on the entry, the forced-reroll handler can't mark
-    // roundFigureAbilityUsed — which would let SiS fire repeatedly.
-    assert.match(H_CB_SRC,
-      /source:\s*'Survival is Strength',\s*\n\s*armorerFigKey:\s*_sisFk/,
-      'SiS queue entry must carry armorerFigKey for round-once enforcement');
   });
 
   it('sub-picker handler marks SiS used only after a reroll fires (skip preserves the ability)', () => {

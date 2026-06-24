@@ -923,43 +923,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       if (!_epReentry) {
       // Furious Charge inline disabled 2026-05-09 → fireFuriousCharge
       // (defender step-8 button).
-      if (false && game.conditionalFocusIfDamagedGte?.playerNum === defenderPlayerNum && damage >= game.conditionalFocusIfDamagedGte.threshold) { // eslint-disable-line no-constant-condition
-        if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
-          await logGameAction(game, client, `**Furious Charge** — **${combat.target.label}** is now **Focused** (suffered ${damage} Damage).`, { phase: 'ROUND', icon: 'card' });
-        }
-        game.conditionalFocusIfDamagedGte = null;
-      }
       // Stun Batons inline disabled 2026-05-09 → fireStunBatons (already
       // wired in the dispatcher; enqueue probe lives in
       // enqueueAttackerPerDcEffects and routes through applyStrain so
       // Fireproof / Headhunter / when-damaged hooks fire uniformly).
-      if (false && damage > 0) { // eslint-disable-line no-constant-condition
-        const _sbAttDcName = combat.attackerDcName || '';
-        const _sbAttEff = getDcEffects()?.[_sbAttDcName];
-        if ((_sbAttEff?.passives || []).includes('Stun Batons')) {
-          // Flame Trooper Fireproof: only the Flame Trooper FIGURE is immune.
-          if (squadUpgradeFigureCard(game, combat.target?.figureKey) === 'Flame Trooper') {
-            await logGameAction(game, client, `**Fireproof** — **${combat.target.label}** (Flame Trooper) is immune to Strain from Stun Batons.`, { phase: 'ROUND', icon: 'card' });
-          } else {
-          game.figureConditions = game.figureConditions || {};
-          game.figureConditions[combat.target.figureKey] = game.figureConditions[combat.target.figureKey] || [];
-          // Strain = 1 direct HP damage. destruct 2026-05-08: route
-          // through centralized damage pipeline (when-damaged hooks
-          // fire here too).
-          const _sbResult = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-            figureKey: combat.target.figureKey,
-            msgId: targetMsgId,
-            figIndex: targetFigIndex,
-            amount: 1,
-            controllerPlayerNum: defenderPlayerNum,
-            source: 'Stun Batons',
-            viaStrain: true,
-          });
-          newCur = _sbResult.newHp;
-          await logGameAction(game, client, `\u26A1 **Stun Batons** — **${combat.target.label}** suffers 1 Strain (1 HP damage).`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
       // Critical Hit moved 2026-05-09 to surge-spend phase
       // (handlers/combat.js — applies immediately when the surge is
       // chosen, per user clarification that it's a non-keyword surge).
@@ -967,15 +934,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // self_preservation_hired_gun_elite WHEN_DAMAGED hook in
       // damage-pipeline-hooks.js (correct timing per user: when damage
       // is suffered, not after attack resolves). Inline was double-applying.
-      if (false && newCur > 0) { // eslint-disable-line no-constant-condition
-        const _spDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _spEff = getDcEffects()?.[_spDcName];
-        if ((_spEff?.passives || []).includes('Self-Preservation')) {
-          if (_applyCondition(game, combat.target.figureKey, 'Focus')) {
-            await logGameAction(game, client, `\u{1F6E1}\uFE0F **Self-Preservation** — **${_spDcName}** became **Focused** (suffered damage).`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
       // Fury of Kashyyyk Focus-on-damage — REMOVED 2026-06-16 (alexanbv: "Focus
       // upon damage is a when-damaged effect"). It is the WHEN_DAMAGED hook
       // 'fury_of_kashyyyk' (damage-pipeline-hooks.js), which already fired during
@@ -1005,21 +963,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // order (alexanbv "nothing auto").
       // Nimble (Asajj Ventress) — REMOVED 2026-05-06 (Asajj removed from game
       // per destruct's 2026-05-05 ruling). Session 8.1-8.3 of combat-rebuild.
-      if (false) { // eslint-disable-line no-constant-condition
-        const _nimDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _nimEff = getDcEffects()?.[_nimDcName];
-        if ((_nimEff?.specialAbilityIds || []).includes('nimble_asajj') && combat.defenseRoll) {
-          const _nimTotalBlock = combat.defenseRoll.block || 0;
-          if (_nimTotalBlock > 0) {
-            const _nimMp = _nimTotalBlock * 2;
-            const _nimMsgId = targetMsgId;
-            if (_nimMsgId) {
-              grantMovementBank(game, _nimMsgId, _nimMp);
-            }
-            await logGameAction(game, client, `\u{1F98E} **Nimble** — **${_nimDcName}** gained ${_nimMp} MP (${_nimTotalBlock} Block result${_nimTotalBlock !== 1 ? 's' : ''} \u00D7 2).`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-          }
-        }
-      }
       // Slippery — migrated to step-8 button window (slice 2b, destruct
       // 2026-05-08). Enqueue + fire handler live in
       // src/handlers/after-attack-{resolve,fire}.js. Defender clicks
@@ -1037,115 +980,8 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       // the prior after-attack placement was incorrect timing.
       // Force Deflection inline disabled 2026-05-09 → fireForceDeflection
       // (defender step-8 button).
-      if (false) { // eslint-disable-line no-constant-condition
-        const _fdDefDcName = idx >= 0 ? dcList[idx]?.dcName : dcNameFromFigureKey(combat.target.figureKey);
-        const _fdDefEff = getDcEffects()?.[_fdDefDcName];
-        const _fdDefIsTarget = (_fdDefEff?.specialAbilityIds || []).includes('force_deflection_yoda');
-        let _fdYodaFigKey = null;
-        if (_fdDefIsTarget) {
-          // Yoda is the defender — use Yoda's own figure key for round tracking
-          _fdYodaFigKey = combat.target.figureKey;
-        } else {
-          // Check if any Yoda figure on defender's team is adjacent to the target space AND defender is REBEL
-          const _fdDefAffil = _fdDefEff?.affiliation || '';
-          if (_fdDefAffil === 'Rebel') {
-            const _fdFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
-            const _fdTargetCoord = _fdFriendlyFigs[combat.target.figureKey];
-            if (_fdTargetCoord) {
-              for (const [fk, fCoord] of Object.entries(_fdFriendlyFigs)) {
-                if (fk === combat.target.figureKey) continue;
-                const fDcName = dcNameFromFigureKey(fk);
-                const fEff = getDcEffects()?.[fDcName];
-                if (!(fEff?.specialAbilityIds || []).includes('force_deflection_yoda')) continue;
-                // Check adjacency (within 1 space)
-                if (isWithinN(fCoord, _fdTargetCoord, 1, game.selectedMap?.id)) {
-                  _fdYodaFigKey = fk;
-                  break;
-                }
-              }
-            }
-          }
-        }
-        if (_fdYodaFigKey) {
-          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-          const _fdKey = `${_fdYodaFigKey}_force_deflection`;
-          if (!game.roundFigureAbilityUsed[_fdKey]) {
-            game.roundFigureAbilityUsed[_fdKey] = true;
-            const _fdDiceCount = combat.attackDiceResults?.length || 0;
-            if (_fdDiceCount > 0 && combat.attackerMsgId) {
-              const _fdAtkFigIdx = combat.attackerFigureIndex ?? 0;
-              const { newHp: _fdAtkNew, prevHp: _fdAtkPrev, wasDefeated: _fdAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-                figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _fdAtkFigIdx,
-                amount: _fdDiceCount, controllerPlayerNum: attackerPlayerNum, source: 'Force Deflection', combat,
-              });
-              if (_fdAtkPrev > 0) {
-                _fdNeedsEmbedRefresh = true;
-                const _fdYodaDcName = dcNameFromFigureKey(_fdYodaFigKey);
-                await logGameAction(game, client, `\u{1F535} **Force Deflection** — **${_fdYodaDcName}** deflects! **${combat.attackerDcName}** suffers **${_fdDiceCount} Damage** (${_fdDiceCount} attack dice rolled). HP: ${_fdAtkPrev} \u2192 ${_fdAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-                // Check if attacker was defeated by Force Deflection
-                if (_fdAtkDefeated) {
-                  const _fdAtkDcIds = getDcMessageIds(game, attackerPlayerNum);
-                  const _fdAtkDcIdx = (_fdAtkDcIds || []).indexOf(combat.attackerMsgId);
-                  await processFigureDefeat(game, {
-                    defeatedPlayerNum: attackerPlayerNum,
-                    figureKey: combat.attackerFigureKey,
-                    attackerPlayerNum: defenderPlayerNum,
-                    attackerFigureKey: combat.target.figureKey,
-                    msgId: combat.attackerMsgId,
-                    dcIdx: _fdAtkDcIdx,
-                    dcName: combat.attackerDcName,
-                    source: 'Force Deflection',
-                  }, deps);
-                }
-              }
-            }
-          }
-        }
-      }
       // Distracting Fire inline disabled 2026-05-09 → fireDistractingFire
       // (attacker step-8 button per user 2026-05-09 categorization).
-      if (false) { // eslint-disable-line no-constant-condition
-        const _dfAtkPos = game.figurePositions?.[attackerPlayerNum]?.[combat.attackerFigureKey];
-        if (_dfAtkPos && combat.attackerMsgId && game.selectedMap?.id) {
-          const _dfMapSp = getEffectiveMapSpaces(game, getMapData(game.selectedMap.id));
-          // Scan the defender's side for alive Rebel Pathfinder figures
-          const _dfFriendlyFigs = game.figurePositions?.[defenderPlayerNum] || {};
-          const _dfAtkFp = getFigureFootprint(game, attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
-          for (const [_dfFk, _dfPos] of Object.entries(_dfFriendlyFigs)) {
-            const _dfDcName = dcNameFromFigureKey(_dfFk);
-            const _dfEff = getDcEffects()?.[_dfDcName];
-            if (!(_dfEff?.specialAbilityIds || []).includes('distracting_fire_rebel_pathfinder')) continue;
-            // Check LOS from Pathfinder (full footprint) to attacker (full footprint)
-            const _dfPathFp = getFigureFootprint(game, defenderPlayerNum, _dfFk, getFigureSize);
-            if (!hasFigureLineOfSight(_dfPathFp, _dfAtkFp, _dfMapSp, null)) continue;
-            // Deal 1 Damage to the attacker
-            const _dfAtkFigIdx = combat.attackerFigureIndex ?? 0;
-            const { newHp: _dfAtkNew, prevHp: _dfAtkPrev, wasDefeated: _dfAtkDefeated } = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-              figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: _dfAtkFigIdx,
-              amount: 1, controllerPlayerNum: attackerPlayerNum, source: 'Distracting Fire', combat,
-            });
-            if (_dfAtkPrev > 0) {
-              _fdNeedsEmbedRefresh = true;
-              await logGameAction(game, client, `**Distracting Fire** — **${_dfDcName}** has LOS to attacker **${combat.attackerDcName}**! Attacker suffers **1 Damage**. HP: ${_dfAtkPrev} \u2192 ${_dfAtkNew}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-              if (_dfAtkDefeated) {
-                const _dfAtkDcIds = getDcMessageIds(game, attackerPlayerNum);
-                const _dfAtkDcIdx = (_dfAtkDcIds || []).indexOf(combat.attackerMsgId);
-                await processFigureDefeat(game, {
-                  defeatedPlayerNum: attackerPlayerNum,
-                  figureKey: combat.attackerFigureKey,
-                  attackerPlayerNum: defenderPlayerNum,
-                  attackerFigureKey: combat.target.figureKey,
-                  msgId: combat.attackerMsgId,
-                  dcIdx: _dfAtkDcIdx,
-                  dcName: combat.attackerDcName,
-                  source: 'Distracting Fire',
-                }, deps);
-              }
-            }
-            break; // Only one Distracting Fire trigger per attack
-          }
-        }
-      }
       // You Will Not Deny Me: prevent Fifth Brother from being defeated (restore HP to 1)
       //
       // Slice 5 audit (destruct 2026-05-06): destruct's model is "damage
@@ -1481,112 +1317,11 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Burst Fire / Crippling Blow / Disruptor Rifle / Electro-pulse /
   // Quick Strike all migrated 2026-05-09 to step-8 fire handlers
   // (after-attack-fire.js). Legacy inline blocks disabled below.
-  if (false && game.burstFirePendingMsgId?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
-    const _bfPending = game.burstFirePendingMsgId[combat.attackerMsgId];
-    delete game.burstFirePendingMsgId[combat.attackerMsgId];
-    if (damage > 0 && combat.target?.figureKey) {
-      const _bfMapId = game.selectedMap?.id;
-      const _bfMs = _bfMapId ? getMapData(_bfMapId) : null;
-      const _bfTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-      if (_bfMs && _bfTargetPos) {
-        // Collect all spaces adjacent to the target's footprint (handles multi-space figures)
-        const _bfTargetDcName = dcNameFromFigureKey(combat.target.figureKey);
-        const _bfTargetSize = getFigureSize(_bfTargetDcName) || '1x1';
-        const _bfTargetCells = getFootprintCells(_bfTargetPos, _bfTargetSize);
-        const _bfAdjSet = new Set();
-        for (const _bfCell of _bfTargetCells) {
-          for (const _bfA of (_bfMs.adjacency?.[_bfCell] || [])) _bfAdjSet.add(_bfA);
-        }
-        // Remove the target's own cells from adjacency
-        for (const _bfCell of _bfTargetCells) _bfAdjSet.delete(_bfCell);
-        for (const _bfPn of [1, 2]) {
-          for (const [_bfFk, _bfPos] of Object.entries(game.figurePositions?.[_bfPn] || {})) {
-            // Check if any cell of this figure's footprint is adjacent to the target
-            const _bfFkDcName = dcNameFromFigureKey(_bfFk);
-            const _bfFkSize = getFigureSize(_bfFkDcName) || '1x1';
-            const _bfFkCells = getFootprintCells(_bfPos, _bfFkSize);
-            if (!_bfFkCells.some(c => _bfAdjSet.has(c))) continue;
-            if (_bfFk === combat.target.figureKey) continue;
-            if (isConditionImmune(game, _bfFk)) continue; // Condition Immunity: skip Stun
-            if (_applyCondition(game, _bfFk, 'Stun')) {
-              const _bfDcName = dcNameFromFigureKey(_bfFk);
-              await logGameAction(game, client, `\uD83D\uDCA5 **Burst Fire** \u2014 **${_bfDcName}** (adjacent) is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
-            }
-          }
-        }
-      }
-    }
-  }
   // Crippling Blow inline disabled 2026-05-09 → fireCripplingBlow.
-  if (false && game.cripplingBlowPending?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
-    delete game.cripplingBlowPending[combat.attackerMsgId];
-    if (hit && combat.target?.figureKey) {
-      if (!isConditionImmune(game, combat.target.figureKey)) {
-        if (_applyCondition(game, combat.target.figureKey, 'Stun')) {
-          await logGameAction(game, client, `\u26A1 **Crippling Blow** — **${combat.target.label || dcNameFromFigureKey(combat.target.figureKey)}** is now **Stunned**.`, { phase: 'ROUND', icon: 'attack' });
-        }
-      } else {
-        await logGameAction(game, client, `**Crippling Blow** — **${combat.target.label || dcNameFromFigureKey(combat.target.figureKey)}** is immune to Stun.`, { phase: 'ROUND', icon: 'attack' });
-      }
-    }
-  }
   // Disruptor Rifle inline disabled 2026-05-09 → fireDisruptorRifle.
-  if (false && game.disruptorRiflePending?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
-    delete game.disruptorRiflePending[combat.attackerMsgId];
-    if (hit && targetMsgId) {
-      const _drHS = dcHealthState.get(targetMsgId) || [];
-      const _drEntry = _drHS[targetFigIndex];
-      if (_drEntry) {
-        const [_drCur] = _drEntry;
-        if (_drCur === 1) {
-          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-            figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
-            amount: 1, controllerPlayerNum: defenderPlayerNum,
-            attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-            source: 'Disruptor Rifle', combat,
-          });
-          await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target?.label || ''}** had 1 HP remaining — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' });
-          // Process defeat through canonical pipeline
-          const { idx: _drIdx } = lookupFigureDcIndex(game, defenderPlayerNum, combat.target.figureKey);
-          await processFigureDefeat(game, {
-            defeatedPlayerNum: defenderPlayerNum,
-            figureKey: combat.target.figureKey,
-            attackerPlayerNum,
-            attackerFigureKey: combat.attackerFigureKey,
-            msgId: targetMsgId,
-            dcIdx: _drIdx,
-            dcName: targetDcName,
-            displayName: combat.target.label,
-            source: 'Disruptor Rifle',
-          }, { ...deps, client });
-        }
-      }
-    }
-  }
   // Tonfa Strike inline disabled 2026-05-09 → fireTonfaStrike (chain-attack
   // queued, fires after defender step 8 closes per user spec).
-  if (false && game.tonfaStrikeSecondAttack?.[combat.attackerMsgId]) { // eslint-disable-line no-constant-condition
-    delete game.tonfaStrikeSecondAttack[combat.attackerMsgId];
-    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[combat.attackerFigureKey] = true;
-    await thread.send('**Tonfa Strike** — You may perform an additional attack (use Attack button).');
-  }
   // Barrage inline disabled 2026-05-09 → fireBarrage. Per-figureKey 2026-05-13.
-  if (false && game.barrageSecondAttack?.[combat.attackerFigureKey]) { // eslint-disable-line no-constant-condition
-    delete game.barrageSecondAttack[combat.attackerFigureKey];
-    game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-    game.freeAttackBonusPending[combat.attackerFigureKey] = true;
-    // Store first target's position so second attack target must be within 3 spaces
-    const _barrageTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target?.figureKey];
-    if (_barrageTargetPos) {
-      game.barrageTargetSpace = game.barrageTargetSpace || {};
-      game.barrageTargetSpace[combat.attackerFigureKey] = _barrageTargetPos;
-    }
-    // Mark that the next attack from this figure adds 1 white die to defense pool
-    game.barrageDefenseBonus = game.barrageDefenseBonus || {};
-    game.barrageDefenseBonus[combat.attackerFigureKey] = true;
-    await thread.send('**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.');
-  }
   // Imperial Loadout post-attack effects.
   // Electro-pulse + Quick Strike migrated 2026-05-09 to step-8 fire
   // handlers (after-attack-fire.js); their inline branches gate on `false`.
@@ -1595,71 +1330,10 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   if (combat.loadoutPostAttack) {
     const _lpa = combat.loadoutPostAttack;
     // Electro-pulse (Electrohammer): each other figure adjacent to target suffers 1 Damage
-    if (false && _lpa === 'electro_pulse' && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
-      const _epTargetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-      if (_epTargetPos) {
-        const _epLines = [];
-        for (const [pNum, poses] of [[1, game.figurePositions?.[1] || {}], [2, game.figurePositions?.[2] || {}]]) {
-          for (const [fk, pos] of Object.entries(poses)) {
-            // Slice 6.11 fix (destruct 2026-05-06): "each other figure adjacent
-            // to the target space" excludes the SOURCE (the PT carrying the
-            // Electrohammer), NOT the target. The target itself IS adjacent
-            // to its own space (distance 0) and therefore takes 1 splash
-            // damage too. Previously we excluded the target, which silently
-            // dropped the destruct-canonical case ("target itself takes 1
-            // splash damage; PT does NOT").
-            if (pNum === attackerPlayerNum && fk === combat.attackerFigureKey) continue;
-            if (countGameSpaces(game, pos, _epTargetPos) > 1) continue;
-            const _epFkDcName = dcNameFromFigureKey(fk);
-            const _epMid = getDcMessageIds(game, pNum) || [];
-            const _epDcL = getDcList(game, pNum);
-            const { dgIndex: _epDgIdx, figureIndex: _epFigIdx } = parseFigureKey(fk);
-            const _epMsgId = _epMid.find((mid, idx) => _epDcL?.[idx]?.dcName === _epFkDcName && _epDcL?.[idx]?.dgIndex === _epDgIdx);
-            if (_epMsgId) {
-              await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-                figureKey: fk, msgId: _epMsgId, figIndex: _epFigIdx,
-                amount: 1, controllerPlayerNum: pNum,
-                attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-                source: 'Electro-pulse', combat,
-              });
-            }
-            _epLines.push(`**${_epFkDcName}** suffers 1 Damage`);
-          }
-        }
-        if (_epLines.length > 0) {
-          await logGameAction(game, client, `\u26A1 **Electro-pulse** — Adjacent figures:\n${_epLines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
-        }
-      }
-    }
     // Quick Strike (Electrostaff): if defender rerolled/modified dice, defender suffers 1 Damage.
     // Inline disabled 2026-05-09 → fireQuickStrike.
-    if (false && _lpa === 'quick_strike' && hit && combat.target?.figureKey && targetMsgId) { // eslint-disable-line no-constant-condition
-      const _qsModified = combat.defenderRerolledOrModified;
-      if (_qsModified) {
-        await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-          figureKey: combat.target.figureKey, msgId: targetMsgId, figIndex: targetFigIndex,
-          amount: 1, controllerPlayerNum: defenderPlayerNum,
-          attackerPlayerNum, attackerFigureKey: combat.attackerFigureKey,
-          source: 'Quick Strike', combat,
-        });
-        await logGameAction(game, client, `\u26A1 **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' });
-      }
-    }
     // Flurry of Blows inline disabled 2026-05-09 → fireFlurryOfBlows
     // (chain-attack staged, fires after defender step 8 closes).
-    if (false && _lpa === 'flurry_of_blows' && hit && combat.attackerMsgId) { // eslint-disable-line no-constant-condition
-      const _fobKey = `flurryOfBlows_${combat.attackerFigureKey}`; // per-figure (alexanbv 2026-06-13)
-      if (!game.roundFigureAbilityUsed?.[_fobKey]) {
-        if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
-        game.roundFigureAbilityUsed[_fobKey] = true;
-        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[combat.attackerFigureKey] = true;
-        // Per alexanbv 2026-05-13: keyed by attacker figureKey.
-        game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
-        game.pendingOverrideAttackDice[combat.attackerFigureKey] = { dice: ['green'], type: 'melee', bonusHits: 1 };
-        await thread.send('**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.');
-      }
-    }
   }
   // Clawdite Streetrat Assassin's Blade post-attack: choose an adjacent hostile, roll 1 red die, deal Hits
   if (combat.formPostAttack === 'assassins_blade' && combat.attackerFigureKey) {
@@ -1842,24 +1516,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   }
   // Wild Fury inline disabled 2026-05-09 → fireWildFury (step-8 attacker
   // button). Routes through applyCondition with Condition Immunity filter.
-  if (false && game.pendingPostAttackConditions?.[combat.attackerMsgId] && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
-    let _ppaConditions = game.pendingPostAttackConditions[combat.attackerMsgId];
-    delete game.pendingPostAttackConditions[combat.attackerMsgId];
-    if (Array.isArray(_ppaConditions) && _ppaConditions.length > 0) {
-      // Condition Immunity: filter out harmful conditions for immune figures
-      if (isConditionImmune(game, combat.attackerFigureKey)) {
-        _ppaConditions = _ppaConditions.filter((c) => !HARMFUL_CONDITIONS.includes(c));
-      }
-      if (_ppaConditions.length > 0) {
-        for (const _ppaC of _ppaConditions) {
-          _applyCondition(game, combat.attackerFigureKey, _ppaC);
-        }
-        const _ppaDcName = dcNameFromFigureKey(combat.attackerFigureKey);
-        await logGameAction(game, client, `**Wild Fury** — **${_ppaDcName}** is now **${_ppaConditions.join(' + ')}**.`, { phase: 'ROUND', icon: 'card' });
-        embedRefreshMsgIds.add(combat.attackerMsgId);
-      }
-    }
-  }
   // Dying Lunge / Final Stand: attacker defeats itself after the attack
   // resolves. Per alexanbv 2026-05-13: per-figureKey.
   if (game.selfDefeatsAfterAttackMsgId?.[combat.attackerFigureKey] && combat.attackerFigureKey) {
@@ -2037,25 +1693,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   // Deflection inline disabled 2026-05-09 → fireDeflection (defender step-8).
   const deflectDmg = game.deflectionPending?.[defenderPlayerNum];
   const deflectUnconditional = game.deflectionUnconditional?.[defenderPlayerNum];
-  if (false && deflectDmg && deflectDmg > 0 && hit && (deflectUnconditional || damage === 0)) { // eslint-disable-line no-constant-condition
-    delete game.deflectionPending[defenderPlayerNum];
-    delete game.deflectionUnconditional?.[defenderPlayerNum];
-    const attMsgId = combat.attackerMsgId;
-    const attFigIdx = combat.attackerFigureIndex ?? 0;
-    if (attMsgId) {
-      const _deflectRes = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-        figureKey: combat.attackerFigureKey, msgId: attMsgId, figIndex: attFigIdx,
-        amount: deflectDmg, controllerPlayerNum: attackerPlayerNum,
-        source: 'Deflection', combat,
-      });
-      const deflectMax = dcHealthState.get(attMsgId)?.[attFigIdx]?.[1] ?? 0;
-      if (deflectMax > 0) {
-        embedRefreshMsgIds.add(attMsgId);
-        const defOwnerId = getPlayerId(game, defenderPlayerNum);
-        await logGameAction(game, client, `<@${defOwnerId}> **Deflection** — Attacker suffers **${deflectDmg} Damage**.`, { allowedMentions: { users: [defOwnerId] }, phase: 'ROUND', icon: 'card' });
-      }
-    }
-  }
   // Embed refresh for Blast damage already applied earlier in this function.
   // CRR step 8: full-footprint adjacency for multi-cell defeated targets.
   if (totalBlast > 0 && hit && game.selectedMap?.id) {
@@ -2139,43 +1776,6 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
   combat._step7ResultText = resultText;
   // Legacy block disabled (kept here so blame-history is intact;
   // removal pass when the rest of step-7-inline keywords migrate).
-  if (false) {
-    const effectiveCleave = (combat.surgeCleave || 0) + (combat.passiveCleave || 0);
-    const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0
-      ? combat.cleaveSources.slice()
-      : (effectiveCleave > 0 ? [{ value: effectiveCleave, label: `Cleave ${effectiveCleave}` }] : []);
-    if (hit && damage > 0 && cleaveQueue.length > 0 && game.selectedMap?.id) {
-      const cleaveTargets = computeCleaveEligibleTargets(game, combat, defenderPlayerNum, {
-        getFiguresAdjacentToCoord, getMapData, getEffectiveMapSpaces, isWithinN,
-        hasFigureLineOfSight, getFigureFootprint, getFigureSize, getFigureLabel,
-        getDcEffect, getLoadoutCards: _getLoadoutCardsImpl,
-      });
-      if (cleaveTargets.length > 0) {
-      const firstSource = cleaveQueue.shift();
-      setPendingCleave(game, {
-        gameId: game.gameId,
-        combatThreadId: combat.combatThreadId,
-        surgeCleave: firstSource.value,
-        sourceLabel: firstSource.label,
-        cleaveQueue,
-        attackerPlayerNum,
-        defenderPlayerNum,
-        ownerId,
-        targets: cleaveTargets,
-        resultText,
-        combat,
-        initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-      });
-      const cleaveRows = getCleaveTargetButtons(game.gameId, cleaveTargets);
-      await thread.send(sanitizeMentions({
-        content: `**${firstSource.label}:** <@${ownerId}> \u2014 Choose one eligible target to apply cleave damage:`,
-        allowedMentions: { users: [ownerId] },
-        components: cleaveRows,
-      }));
-        return;
-      }
-    }
-  } // end legacy disabled cleave block
   // destruct 2026-05-08: post-resolve unified window, extracted to
   // runAfterResolveWindow (the body the rebuild's `after_resolve` gate owns).
   // alexanbv 2026-06-15 "proceed with the separation": when the attack walks the
@@ -2391,123 +1991,10 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   // Fighting Knife (Verena Talos): after non-miss, choose adjacent hostile, roll 1 red die, apply hits
   // Fighting Knife inline disabled 2026-05-09 → fireFightingKnife
   // (step-8 attacker button + fromStep8Queue bypass on click handlers).
-  if (false && hit && combat.surgeFightingKnife && combat.attackerFigureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-    const adjHostiles = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id)
-      .filter((c) => c.playerNum === defenderPlayerNum);
-    if (adjHostiles.length > 0) {
-      const targetsWithLabels = adjHostiles.map((c) => {
-        const { msgId: mid, label } = getFigureLabel(game, c.playerNum, c.figureKey);
-        return { figureKey: c.figureKey, playerNum: c.playerNum, label, msgId: mid };
-      });
-      setPendingFightingKnife(game, {
-        gameId: game.gameId,
-        combatThreadId: combat.combatThreadId,
-        attackerPlayerNum: combat.attackerPlayerNum,
-        ownerId,
-        targets: targetsWithLabels,
-        resultText,
-        combat,
-        initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-      });
-      const rows = getFightingKnifeTargetButtons(game.gameId, targetsWithLabels);
-      await thread.send(sanitizeMentions({
-        content: `<@${ownerId}> **Fighting Knife** — Choose an adjacent hostile figure to roll 1 red die:`,
-        allowedMentions: { users: [ownerId] },
-        components: rows,
-      })).catch(discordCatch);
-      return true;
-    }
-  }
   // Concussive Bolt inline disabled 2026-05-09 → fireConcussiveBolt
   // (step-8 attacker button, with fromStep8Queue bypass on click handler).
-  if (false && hit && combat.surgeConcussiveBolt && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-    const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
-    const targetSize = getFigureSize(targetDcName);
-    if (targetSize === '1x1') {
-      const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-      // Only LEGAL push destinations: not blocking, not occupied, not across
-      // a closed door / cliff, not blocked by Spiked Boots.
-      const { getValidPushDestinations } = await import('../game/movement.js');
-      const _pusherDc = dcNameFromFigureKey(combat.attackerFigureKey);
-      const _pusherKws = (getDcStats(_pusherDc)?.keywords || []).map(k => String(k).toUpperCase());
-      const adjSpaces = getValidPushDestinations(game, combat.target.figureKey, defenderPlayerNum, { pusherIsMassive: _pusherKws.includes('MASSIVE') });
-      if (adjSpaces.length > 0) {
-        const { msgId: targetMsgId, label: targetLabel } = getFigureLabel(game, defenderPlayerNum, combat.target.figureKey, targetDcName);
-        setPendingConcussiveBolt(game, {
-          gameId: game.gameId,
-          combatThreadId: combat.combatThreadId,
-          attackerPlayerNum: combat.attackerPlayerNum,
-          defenderPlayerNum,
-          ownerId,
-          figureKey: combat.target.figureKey,
-          figureLabel: String(targetLabel).slice(0, 80),
-          currentPos: targetPos,
-          adjSpaces,
-          resultText,
-          combat,
-          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        });
-        const btns = adjSpaces.slice(0, 24).map((sp) =>
-          new ButtonBuilder().setCustomId(`concussive_bolt_push_${game.gameId}_${sp}`).setLabel(sp.toUpperCase()).setStyle(ButtonStyle.Danger)
-        );
-        btns.push(new ButtonBuilder().setCustomId(`concussive_bolt_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send(sanitizeMentions({
-          content: `<@${ownerId}> **Concussive Bolt** — Push **${targetLabel}** 1 space. Choose a destination:`,
-          allowedMentions: { users: [ownerId] },
-          components: chunkButtonsToRows(btns),
-        })).catch(discordCatch);
-        return true;
-      }
-    }
-  }
   // Spread the Pain inline disabled 2026-05-09 → fireSpreadThePain
   // (step-8 attacker button + fromStep8Queue bypass on advanceSpreadThePain).
-  if (false && hit && combat.spreadThePainConditions?.length > 0 && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-    const conditions = [...combat.spreadThePainConditions];
-    const targetPos = game.figurePositions?.[defenderPlayerNum]?.[combat.target.figureKey];
-    if (targetPos) {
-      const ms = getMapData(game.selectedMap.id);
-      const adjacency = ms?.adjacency || {};
-      const candSpaces = new Set([String(targetPos).toLowerCase(), ...(adjacency[String(targetPos).toLowerCase()] || []).map((s) => String(s).toLowerCase())]);
-      const figuresAtSpaces = [];
-      for (const p of [1, 2]) {
-        for (const [figKey, figPos] of Object.entries(game.figurePositions?.[p] || {})) {
-          if (candSpaces.has(String(figPos).toLowerCase())) {
-            const { msgId: mid, label } = getFigureLabel(game, p, figKey, undefined, 70);
-            figuresAtSpaces.push({ figureKey: figKey, playerNum: p, label, msgId: mid });
-          }
-        }
-      }
-      if (figuresAtSpaces.length > 0) {
-        const firstCond = conditions[0];
-        setPendingSpreadThePain(game, {
-          gameId: game.gameId,
-          combatThreadId: combat.combatThreadId,
-          attackerPlayerNum: combat.attackerPlayerNum,
-          defenderPlayerNum,
-          ownerId,
-          conditions,
-          conditionIdx: 0,
-          resultText,
-          combat,
-          initialEmbedRefreshMsgIds: [...embedRefreshMsgIds],
-        });
-        const btns = figuresAtSpaces.slice(0, 24).map((f) =>
-          new ButtonBuilder()
-            .setCustomId(`spread_pain_fig_${game.gameId}_${f.figureKey}`)
-            .setLabel(f.label)
-            .setStyle(f.playerNum === defenderPlayerNum ? ButtonStyle.Danger : ButtonStyle.Secondary)
-        );
-        btns.push(new ButtonBuilder().setCustomId(`spread_pain_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        await thread.send(sanitizeMentions({
-          content: `<@${ownerId}> **Spread the Pain** — Apply **${firstCond}** to a figure at or adjacent to target (${String(targetPos).toUpperCase()}):`,
-          allowedMentions: { users: [ownerId] },
-          components: chunkButtonsToRows(btns),
-        })).catch(discordCatch);
-        return true;
-      }
-    }
-  }
   // Post-attack reactions: check if defender has Payback, Dangerous Prey, or Right Back At Ya!
   const defenderHand = getCcHand(game, defenderPlayerNum) || [];
   const REACTION_CARDS = [
@@ -2582,41 +2069,6 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   // Fell Swoop inline disabled 2026-05-09 → fireFellSwoop. Fire handler
   // applies Hide + presents Move 2 picker; chain attack waits for
   // defender step 8 to close (combat._pendingChainAttacks).
-  if (false && combat.surgeFellSwoop && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
-    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-    const fsKey = `${combat.attackerFigureKey}_fell_swoop`;
-    if (!game.roundFigureAbilityUsed[fsKey]) {
-      game.roundFigureAbilityUsed[fsKey] = true;
-      _applyCondition(game, combat.attackerFigureKey, 'Hide');
-      // Per alexanbv 2026-05-13: Fell Swoop is per-figure.
-      game.fellSwoopFreeAttack = game.fellSwoopFreeAttack || {};
-      game.fellSwoopFreeAttack[combat.attackerFigureKey] = true;
-      const attName = combat.attackerDisplayName || dcNameFromFigureKey(combat.attackerFigureKey);
-      await thread.send(`**Fell Swoop** — **${attName}** becomes **Hidden** and may **move up to 2 spaces**, then make a free attack.`).catch(discordCatch);
-      // Stamp pendingMoveX with the freeAttackPrompt continuation so
-      // the player gets an explicit "Declare Attack" button after
-      // the move picker drains.
-      const { stampPendingMoveX, postMoveXPicker } = await import('../handlers/move-x-handler.js');
-      stampPendingMoveX(game, {
-        msgId: combat.attackerMsgId,
-        figureKey: combat.attackerFigureKey,
-        playerNum: combat.attackerPlayerNum,
-        spaces: 2,
-        source: 'Fell Swoop',
-        threadId: combat.combatThreadId,
-        nextAction: {
-          type: 'freeAttackPrompt',
-          payload: {
-            msgId: combat.attackerMsgId,
-            playerNum: combat.attackerPlayerNum,
-            figureKey: combat.attackerFigureKey,
-            sourceLabel: 'Fell Swoop',
-          },
-        },
-      });
-      await postMoveXPicker(game, { client, logGameAction, saveGames }, combat.attackerMsgId);
-    }
-  }
   // Mastery (Second Sister): redraw a FORCE USER CC of cost ≤ 1 from discard. Limit once per round.
   if (combat.surgeMastery && combat.attackerFigureKey) {
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
@@ -2817,268 +2269,22 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   const pcOwnerId = getPlayerId(game, combat.attackerPlayerNum);
   // Sidewinder inline disabled 2026-05-09 → fireSidewinder (step-8
   // attacker button posts the same yes/skip prompt).
-  if (false && pcAttIds.includes('sidewinder') && combat.attackerMsgId != null) { // eslint-disable-line no-constant-condition
-    const swKey = combat.attackerFigureKey + '_sidewinder';
-    if (!game.roundFigureAbilityUsed?.[swKey]) {
-      await thread.send(sanitizeMentions({
-        content: `<@${pcOwnerId}> **Sidewinder** — Suffer 1 Strain to move up to 2 spaces? (once per round)`,
-        allowedMentions: { users: [pcOwnerId] },
-        components: [new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`sidewinder_apply_${game.gameId}_${combat.attackerMsgId}_${combat.attackerFigureIndex ?? 0}`).setLabel('Suffer 1 Strain \u2192 Move up to 2 spaces').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId(`sidewinder_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary),
-        )],
-      })).catch(discordCatch);
-    }
-  }
   // Boltslinger inline disabled 2026-05-09 → fireBoltslinger.
-  if (false && pcAttIds.includes('boltslinger') && game.selectedMap?.id && combat.attackerFigureKey) { // eslint-disable-line no-constant-condition
-    const blDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
-    const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
-    const defFigs = game.figurePositions?.[blDefPlayerNum] || {};
-    const boltslingerTargets = [];
-    for (const [fk, pos] of Object.entries(defFigs)) {
-      if (fk === combat.target?.figureKey) continue;
-      if (!isWithinN(atkPos, pos, 3, game.selectedMap.id)) continue;
-      const { label: blLabel } = getFigureLabel(game, blDefPlayerNum, fk);
-      boltslingerTargets.push({ figureKey: fk, playerNum: blDefPlayerNum, label: blLabel });
-    }
-    if (boltslingerTargets.length > 0) {
-      setPendingBoltslinger(game, { gameId: game.gameId, attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: boltslingerTargets });
-      const btns = boltslingerTargets.slice(0, 24).map((t, i) =>
-        new ButtonBuilder().setCustomId(`boltslinger_target_${game.gameId}_${i}`).setLabel(t.label).setStyle(ButtonStyle.Danger)
-      );
-      btns.push(new ButtonBuilder().setCustomId(`boltslinger_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
-      await thread.send(sanitizeMentions({
-        content: `<@${pcOwnerId}> **Boltslinger** — Choose a hostile within 3 spaces to deal 1 Damage (verify LOS):`,
-        allowedMentions: { users: [pcOwnerId] },
-        components: chunkButtonsToRows(btns),
-      })).catch(discordCatch);
-    }
-  }
   // Indiscriminate Fire (Bossk): after attack, if not a miss, choose 1 non-red attack die;
   // each OTHER figure within 2 spaces of target (other than the defender
   // AND other than Bossk himself) suffers Damage = Hits and Strain = Surges
   // on that die. Per destruct 2026-05-08: Bossk excluded.
   // Indiscriminate Fire inline disabled 2026-05-09 → fireIndiscriminateFire.
-  if (false && pcAttIds.includes('indiscriminate_fire') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
-    const ifDefPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
-    const targetPos = game.figurePositions?.[ifDefPlayerNum]?.[combat.target.figureKey];
-    const rolledDice = combat.attackRoll?.dice || [];
-    const nonRedDice = rolledDice.filter((d) => (d.color || '').toLowerCase() !== 'red');
-    if (nonRedDice.length > 0 && targetPos) {
-      const splashTargets = [];
-      for (const pn of [1, 2]) {
-        const figs = game.figurePositions?.[pn] || {};
-        for (const [fk, pos] of Object.entries(figs)) {
-          if (fk === combat.target.figureKey) continue; // defender excluded
-          if (fk === combat.attackerFigureKey) continue; // Bossk himself excluded
-          if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
-          const { label: lbl } = getFigureLabel(game, pn, fk);
-          splashTargets.push({ figureKey: fk, playerNum: pn, label: lbl });
-        }
-      }
-      if (nonRedDice.length === 1) {
-        await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
-      } else {
-        setPendingIndiscriminateFire(game, { attackerPlayerNum: combat.attackerPlayerNum, combatThreadId: combat.combatThreadId, targets: splashTargets, availableDice: nonRedDice });
-        // Attack pools can reach 6 dice (3 base + Focus + Tools + Wild Attack),
-        // so all non-red dice + Skip can exceed one Discord row — multi-row.
-        const ifBtns = nonRedDice.slice(0, 6).map((d, i) =>
-          new ButtonBuilder().setCustomId(`indiscriminate_die_${game.gameId}_${i}`).setLabel(`${String(d.color).slice(0, 1).toUpperCase()}${String(d.color).slice(1)} (${d.dmg}dmg/${d.surge}\u21AF)`).setStyle(ButtonStyle.Secondary)
-        );
-        ifBtns.push(new ButtonBuilder().setCustomId(`indiscriminate_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Primary));
-        await thread.send(sanitizeMentions({
-          content: `<@${pcOwnerId}> **Indiscriminate Fire** — Choose 1 non-red attack die for splash:`,
-          allowedMentions: { users: [pcOwnerId] },
-          components: chunkButtonsToRows(ifBtns),
-        })).catch(discordCatch);
-      }
-    }
-  }
 
   // Heavy Fire inline disabled 2026-05-09 → fireHeavyFire.
-  if (false && game.selectedMap?.id && combat.target?.figureKey && combat.attackerDcName) { // eslint-disable-line no-constant-condition
-    const _hfPlayerNum = combat.attackerPlayerNum;
-    const _hfDcList = getDcList(game, _hfPlayerNum) || [];
-    const _hfDcMsgIds = getDcMessageIds(game, _hfPlayerNum) || [];
-    const _hfIdx = _hfDcList.findIndex(dc => dc.dcName === '[Heavy Fire]');
-    if (_hfIdx >= 0) {
-      const _hfMsgId = _hfDcMsgIds[_hfIdx];
-      const _hfExhausted = _hfMsgId ? (dcExhaustedState.get(_hfMsgId) ?? false) : true;
-      if (!_hfExhausted) {
-        // Check if attacker is VEHICLE or HEAVY WEAPON
-        const _hfAttKws = (getDcKeywords(game)[combat.attackerDcName] || []).map(k => String(k).toUpperCase());
-        if (_hfAttKws.includes('VEHICLE') || _hfAttKws.includes('HEAVY WEAPON')) {
-          // Count printed attack dice
-          const _hfAttEff = getDcEffect(combat.attackerDcName);
-          const _hfPrintedDice = _hfAttEff?.attack?.dice || [];
-          const _hfDiceCount = _hfPrintedDice.length;
-          if (_hfDiceCount > 0) {
-            // Find hostile figures within 2 spaces of target space
-            const _hfDefPN = opponentPlayerNum(_hfPlayerNum);
-            const _hfTargetPos = game.figurePositions?.[_hfDefPN]?.[combat.target.figureKey] || combat._savedTargetPos;
-            if (_hfTargetPos) {
-              const _hfHostiles = [];
-              const _hfDefFigs = game.figurePositions?.[_hfDefPN] || {};
-              for (const [fk, pos] of Object.entries(_hfDefFigs)) {
-                if (!isWithinN(pos, _hfTargetPos, 2, game.selectedMap.id)) continue;
-                const { label: lbl } = getFigureLabel(game, _hfDefPN, fk);
-                _hfHostiles.push({ figureKey: fk, playerNum: _hfDefPN, label: lbl });
-              }
-              if (_hfHostiles.length > 0) {
-                const _hfOwnerId = getPlayerId(game, _hfPlayerNum);
-                const _hfBtns = [
-                  new ButtonBuilder().setCustomId(`heavy_fire_use_${game.gameId}`).setLabel(`Use Heavy Fire (${_hfDiceCount} target${_hfDiceCount !== 1 ? 's' : ''})`).setStyle(ButtonStyle.Danger),
-                  new ButtonBuilder().setCustomId(`heavy_fire_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-                ];
-                setPendingHeavyFire(game, {
-                  attackerPlayerNum: _hfPlayerNum,
-                  attackerFigureKey: combat.attackerFigureKey,
-                  attackerDcName: combat.attackerDcName,
-                  attackerMsgId: combat.attackerMsgId,
-                  combatThreadId: combat.combatThreadId,
-                  hfMsgId: _hfMsgId,
-                  diceCount: _hfDiceCount,
-                  hostiles: _hfHostiles,
-                  chosenTargets: [],
-                  conditionsOwed: 0,
-                });
-                await thread.send(sanitizeMentions({
-                  content: `<@${_hfOwnerId}> **Heavy Fire** — Your **${combat.attackerDcName}** resolved an attack (printed pool: ${_hfDiceCount} dice). Exhaust Heavy Fire to deal 1 Damage to up to ${_hfDiceCount} hostile figure${_hfDiceCount !== 1 ? 's' : ''} within 2 spaces of the target. Then, for each chosen figure, **${combat.attackerDcName}** gains 1 HARMFUL condition of your opponent's choice.`,
-                  allowedMentions: { users: [_hfOwnerId] },
-                  components: [new ActionRowBuilder().addComponents(_hfBtns)],
-                })).catch(discordCatch);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
 
   // Havoc Shot (Fenn Signis): after an attack that didn't miss, suffer
   // 1 Strain to choose up to 2 figures within 2 spaces of the target
   // space in LOS, who suffer 1 Damage. The original target IS eligible
   // to be re-picked (per ruling) — only the attacker is excluded.
   // Havoc Shot inline disabled 2026-05-09 → fireHavocShot.
-  if (false && pcAttIds.includes('havoc_shot') && !resultText.includes('**Miss**') && game.selectedMap?.id && combat.target?.figureKey) { // eslint-disable-line no-constant-condition
-    const _hsTargetPos = game.figurePositions?.[combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)]?.[combat.target.figureKey] || combat._savedTargetPos;
-    const _hsAtkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[combat.attackerFigureKey];
-    if (_hsTargetPos && _hsAtkPos) {
-      const _hsMapSpaces = getMapData(game.selectedMap.id);
-      const _hsAllFootprints = getAllFigureFootprints(game, getFigureSize);
-      const _hsAtkFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
-      const _hsEligible = [];
-      for (const pn of [1, 2]) {
-        for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-          if (!pos || fk === combat.attackerFigureKey) continue;
-          if (!isWithinN(pos, _hsTargetPos, 2, game.selectedMap.id)) continue;
-          const candFp = getFigureFootprint(game, pn, fk, getFigureSize);
-          if (!hasFigureLineOfSight(_hsAtkFp, candFp, _hsMapSpaces, _hsAllFootprints)) continue;
-          const { label: lbl } = getFigureLabel(game, pn, fk);
-          _hsEligible.push({ figureKey: fk, playerNum: pn, label: lbl });
-        }
-      }
-      if (_hsEligible.length > 0) {
-        setPendingHavocShot(game, {
-          gameId: game.gameId,
-          attackerPlayerNum: combat.attackerPlayerNum,
-          attackerMsgId: combat.attackerMsgId,
-          attackerFigureKey: combat.attackerFigureKey,
-          attackerFigureIndex: combat.attackerFigureIndex ?? 0,
-          combatThreadId: combat.combatThreadId,
-          targets: _hsEligible,
-          chosen: [],
-          maxPicks: 2,
-        });
-        const _hsBtns = [
-          new ButtonBuilder().setCustomId(`havoc_shot_use_${game.gameId}`).setLabel('Use Havoc Shot (1 Strain)').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId(`havoc_shot_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-        ];
-        await thread.send(sanitizeMentions({
-          content: `<@${pcOwnerId}> **Havoc Shot** — Suffer 1 Strain to deal 1 Damage to up to 2 figures within 2 spaces of the target in your LOS?`,
-          allowedMentions: { users: [pcOwnerId] },
-          components: [new ActionRowBuilder().addComponents(_hsBtns)],
-        })).catch(discordCatch);
-      }
-    }
-  }
 
   // Deflect inline disabled 2026-05-09 → fireDeflect (defender step-8 button).
-  if (false && combat.isRanged && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-    const _dflDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-    const _dflAtkPN = combat.attackerPlayerNum;
-    // Check defender and adjacent friendlies for deflect
-    const _dflMapSpaces = getMapData(game.selectedMap.id);
-    const _dflAllFootprints = getAllFigureFootprints(game, getFigureSize);
-    // Gather all figures on the defender's team that have deflect and are either the target or adjacent to the target
-    const _dflTargetPos = game.figurePositions?.[_dflDefPN]?.[combat.target.figureKey];
-    const _dflCandidates = [];
-    if (_dflTargetPos) {
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[_dflDefPN] || {})) {
-        if (!pos) continue;
-        const dName = dcNameFromFigureKey(fk);
-        const dEff = getDcEffect(dName);
-        if (!(dEff?.specialAbilityIds || []).includes('deflect')) continue;
-        // Must be the target or adjacent to the target
-        const isSelf = fk === combat.target.figureKey;
-        const isAdj = !isSelf && isWithinN(pos, _dflTargetPos, 1, game.selectedMap.id);
-        if (!isSelf && !isAdj) continue;
-        _dflCandidates.push({ figureKey: fk, pos, dcName: dName });
-      }
-    }
-    for (const _dflCand of _dflCandidates) {
-      // Find hostiles in this figure's LOS
-      const _dflHostiles = [];
-      const _dflCandFp = getFigureFootprint(game, _dflDefPN, _dflCand.figureKey, getFigureSize);
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[_dflAtkPN] || {})) {
-        if (!pos) continue;
-        const candFp = getFigureFootprint(game, _dflAtkPN, fk, getFigureSize);
-        if (!hasFigureLineOfSight(_dflCandFp, candFp, _dflMapSpaces, _dflAllFootprints)) continue;
-        const { label: lbl } = getFigureLabel(game, _dflAtkPN, fk);
-        _dflHostiles.push({ figureKey: fk, playerNum: _dflAtkPN, label: lbl });
-      }
-      if (_dflHostiles.length === 0) continue;
-      const _dflOwnerId = getPlayerId(game, _dflDefPN);
-      if (_dflHostiles.length === 1) {
-        // Auto-apply to the only hostile in LOS
-        const _dflTgt = _dflHostiles[0];
-        const _dflTgtMsgId = findDcMessageIdForFigure(game.gameId, _dflTgt.playerNum, _dflTgt.figureKey);
-        if (_dflTgtMsgId) {
-          const { figureIndex: _dflFigIdx } = parseFigureKey(_dflTgt.figureKey);
-          await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt }, {
-            figureKey: _dflTgt.figureKey, msgId: _dflTgtMsgId, figIndex: _dflFigIdx,
-            amount: 1, controllerPlayerNum: _dflTgt.playerNum,
-            source: 'Deflect (Luke)', combat,
-          });
-          embedRefreshMsgIds.add(_dflTgtMsgId);
-        }
-        await thread.send(`**Deflect** — **${_dflCand.dcName}**: **${_dflTgt.label}** suffers 1 Damage.`).catch(discordCatch);
-        await logGameAction(game, client, `**Deflect** — **${_dflCand.dcName}** redirects 1 Damage to **${_dflTgt.label}**.`, { phase: 'ROUND', icon: 'attack' });
-      } else {
-        // Multiple hostiles — show picker
-        setPendingDeflect(game, {
-          gameId: game.gameId,
-          deflectorPlayerNum: _dflDefPN,
-          deflectorFigureKey: _dflCand.figureKey,
-          deflectorDcName: _dflCand.dcName,
-          combatThreadId: combat.combatThreadId,
-          hostiles: _dflHostiles,
-        });
-        const _dflBtns = _dflHostiles.slice(0, 24).map((t, i) =>
-          new ButtonBuilder().setCustomId(`deflect_pick_${game.gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)
-        );
-        _dflBtns.push(new ButtonBuilder().setCustomId(`deflect_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const _dflRows = chunkButtonsToRows(_dflBtns);
-        await thread.send(sanitizeMentions({
-          content: `<@${_dflOwnerId}> **Deflect** — **${_dflCand.dcName}** may redirect 1 Damage to a hostile in LOS:`,
-          allowedMentions: { users: [_dflOwnerId] },
-          components: _dflRows,
-        })).catch(discordCatch);
-      }
-      break; // Only one Deflect trigger per attack
-    }
-  }
 
   // Sling Barrage (Ewok Warrior Elite): the per-group-mate-LOS attack reroll is
   // consumed by this attack — clear the pending flag so a later attack this
@@ -3148,62 +2354,6 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // CHAIN attack — staged on combat._pendingDefenderChainAttacks which
   // _finishCombatResolution runs BEFORE attacker chain queue per user
   // 2026-05-09 priority spec).
-  if (false) { // eslint-disable-line no-constant-condition
-    const _rfDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-    const _rfDefFk = combat.target?.figureKey;
-    const _rfDefDcName = _rfDefFk ? dcNameFromFigureKey(_rfDefFk) : null;
-    const _rfDefEff = _rfDefDcName ? getDcEffect(_rfDefDcName) : null;
-    const _rfDefIds = _rfDefEff?.specialAbilityIds || [];
-    const _rfHasReturnFire = _rfDefIds.includes('return_fire') || _rfDefIds.includes('return_fire_migs');
-    if (_rfHasReturnFire && _rfDefFk && game.figurePositions?.[_rfDefPN]?.[_rfDefFk]) {
-      const _rfKey = `returnFire_${_rfDefFk}`;
-      if (!game.roundFigureAbilityUsed?.[_rfKey]) {
-        // Han Solo's return_fire requires 0 damage unless Rogue Smuggler upgrade overrides
-        let _rfCanFire = true;
-        if (_rfDefIds.includes('return_fire') && !_rfDefIds.includes('return_fire_migs')) {
-          const _rfDamage = combat._appliedDamage ?? 0;
-          const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
-          const _rfUpgrades = _rfDefMsgId ? (game.p1DcAttachments?.[_rfDefMsgId] || game.p2DcAttachments?.[_rfDefMsgId] || []) : [];
-          const _rfHasRogue = cardNameIncludes(_rfUpgrades, 'Rogue Smuggler');
-          if (_rfDamage > 0 && !_rfHasRogue) _rfCanFire = false;
-        }
-        // Combat-pipeline rebuild (slice 6.5 + 8.4): Stunned figures cannot
-        // declare attacks (CRR p.58). Return Fire is a triggered out-of-
-        // activation attack that requires declaration. If the figure is
-        // Stunned, Return Fire is blocked. EXCEPT YWNDM-on-Fifth-Brother:
-        // condition effects are suppressed (token placed but inert), so the
-        // Stun does not actually block declaration.
-        const _rfDefConds = game.figureConditions?.[_rfDefFk] || [];
-        const _rfEffectsSuppressed = areConditionEffectsSuppressed(game, _rfDefFk);
-        if (_rfCanFire && _rfDefConds.includes('Stun') && !_rfEffectsSuppressed) {
-          _rfCanFire = false;
-          await logGameAction(game, client, `**Return Fire** suppressed — **${_rfDefDcName}** is Stunned and cannot declare an attack.`, { phase: 'ROUND', icon: 'attack' });
-        }
-        if (_rfCanFire) {
-          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-          game.roundFigureAbilityUsed[_rfKey] = true;
-          // Set free attack bonus for the defender
-          const _rfDefMsgId = findDcMessageIdForFigure(game.gameId, _rfDefPN, _rfDefFk);
-          if (_rfDefMsgId) {
-            game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-            game.freeAttackBonusPending[_rfDefFk] = true;
-            // Per alexanbv 2026-05-13: forcedAttackTarget keyed by the
-            // forced figure's figureKey, not the group msgId. Return Fire
-            // forces the defender (now-attacker) onto the original attacker.
-            game.forcedAttackTarget = game.forcedAttackTarget || {};
-            game.forcedAttackTarget[_rfDefFk] = combat.attackerFigureKey;
-            const _rfOwnerId = getPlayerId(game, _rfDefPN);
-            const _rfLabel = _rfDefIds.includes('return_fire_migs') ? 'Return Fire (Migs)' : 'Return Fire';
-            await thread.send(sanitizeMentions({
-              content: `<@${_rfOwnerId}> **${_rfLabel}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Use the **Attack** button on your DC card.`,
-              allowedMentions: { users: [_rfOwnerId] },
-            })).catch(discordCatch);
-            await logGameAction(game, client, `**${_rfLabel}** — **${_rfDefDcName}** may interrupt to attack **${combat.attackerDcName}**.`, { phase: 'ROUND', icon: 'attack' });
-          }
-        }
-      }
-    }
-  }
 
   // Inline target-selection (alexanbv 2026-06-24): the granted/multi-attack
   // continuations below re-arm freeAttackBonusPending on the attacker for the
@@ -3264,57 +2414,6 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // Wanton Destruction inline disabled 2026-05-09 → fireWantonDestruction
   // (step-8 attacker button). Click handlers don't close combat directly,
   // so no fromStep8Queue bypass needed.
-  if (false && combat.target?.figureKey && game.selectedMap?.id) { // eslint-disable-line no-constant-condition
-    const _wdAtkPN = combat.attackerPlayerNum;
-    const _wdDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(_wdAtkPN);
-    const _wdDcList = getDcList(game, _wdAtkPN) || [];
-    const _wdEffects = getDcEffects();
-    for (let _wdI = 0; _wdI < _wdDcList.length; _wdI++) {
-      const _wdDc = _wdDcList[_wdI];
-      if (!_wdDc || _wdDc.defeated) continue;
-      const _wdEff = _wdEffects[_wdDc.dcName];
-      if (!((_wdEff?.specialAbilityIds || []).includes('wanton_destruction_saw'))) continue;
-      // Check Saw is alive (has a figure on the board)
-      const _wdFigs = game.figurePositions?.[_wdAtkPN] || {};
-      const _wdAlive = Object.keys(_wdFigs).some(fk => fk.startsWith(_wdDc.dcName + '-') && _wdFigs[fk]);
-      if (!_wdAlive) continue;
-      // Check player has at least 1 CC in hand
-      const _wdHand = getCcHand(game, _wdAtkPN) || [];
-      if (_wdHand.length === 0) continue;
-      // Find eligible figures within 2 spaces of target (both teams, excluding defender)
-      const _wdTargetPos = game.figurePositions?.[_wdDefPN]?.[combat.target.figureKey] || combat._savedTargetPos;
-      if (!_wdTargetPos) continue;
-      const _wdEligible = [];
-      for (const pn of [1, 2]) {
-        for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
-          if (!pos || fk === combat.target.figureKey) continue;
-          if (!isWithinN(pos, _wdTargetPos, 2, game.selectedMap.id)) continue;
-          const { label: lbl } = getFigureLabel(game, pn, fk);
-          _wdEligible.push({ figureKey: fk, playerNum: pn, label: lbl });
-        }
-      }
-      if (_wdEligible.length === 0) continue;
-      const _wdOwnerId = getPlayerId(game, _wdAtkPN);
-      setPendingWantonDestruction(game, {
-        gameId: game.gameId,
-        ownerPlayerNum: _wdAtkPN,
-        combatThreadId: combat.combatThreadId,
-        targets: _wdEligible,
-        chosen: [],
-        maxPicks: 2,
-      });
-      const _wdBtns = [
-        new ButtonBuilder().setCustomId(`wanton_use_${game.gameId}`).setLabel('Use (discard 1 CC)').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`wanton_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      ];
-      await thread.send(sanitizeMentions({
-        content: `<@${_wdOwnerId}> **Wanton Destruction** — **${_wdDc.dcName}**: Discard 1 CC to deal 1 Damage to up to 2 figures within 2 spaces of the target?`,
-        allowedMentions: { users: [_wdOwnerId] },
-        components: [new ActionRowBuilder().addComponents(_wdBtns)],
-      })).catch(discordCatch);
-      break;
-    }
-  }
 
   // Extra Protection window expiry (alexanbv 2026-05-09): EP is a
   // "when damaged" interrupt — once this combat (the inner where the
@@ -3545,39 +2644,6 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
 
   // Bladestorm inline disabled 2026-05-09 → fireBladestorm (step-8 attacker
   // button, routes through applyDamage so when-damaged hooks fire).
-  if (false && combat.postAttackAoeDamage > 0 && combat.hit) { // eslint-disable-line no-constant-condition
-    const aoeDmg = combat.postAttackAoeDamage;
-    const aoeRange = combat.postAttackAoeRange || 2;
-    const atkFk = combat.attackerFigureKey;
-    const atkPos = game.figurePositions?.[combat.attackerPlayerNum]?.[atkFk];
-    const defPn = combat.defenderPlayerNum;
-    if (atkPos) {
-      const aoeParts = [];
-      for (const [fk, coord] of Object.entries(game.figurePositions?.[defPn] || {})) {
-        if (!coord || fk === combat.defenderFigureKey) continue;
-        const dist = countGameSpaces(game, atkPos, coord);
-        if (dist > aoeRange) continue;
-        const fMsgId = findDcMessageIdForFigure(game.gameId, defPn, fk);
-        if (!fMsgId) continue;
-        const hs = dcHealthState.get(fMsgId) || [];
-        const fkMatch = fk.match(/-(\d+)-(\d+)$/);
-        const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
-        if (hs[figIdx]) {
-          // Full damage pipeline (alexanbv 2026-06-22): defeat + when-damaged /
-          // when-defeated timings, not a hardcoded HP write.
-          const _bs = await _applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
-            figureKey: fk, msgId: fMsgId, figIndex: figIdx, amount: aoeDmg,
-            controllerPlayerNum: defPn, source: 'Bladestorm', combat,
-          });
-          aoeParts.push(`**${dcNameFromFigureKey(fk)}** ${aoeDmg} Dmg (${_bs.prevHp}\u2192${_bs.newHp})`);
-          if (!embedRefreshMsgIds.includes(fMsgId)) embedRefreshMsgIds.push(fMsgId);
-        }
-      }
-      if (aoeParts.length > 0) {
-        await thread.send(`**Bladestorm** — Hostiles within ${aoeRange} spaces: ${aoeParts.join(', ')}`).catch(discordCatch);
-      }
-    }
-  }
   // Blood Feud: check if defender's DC has a persistent Blood Feud marker → auto +1 Hit
   if (combat.hit && game.bloodFeudTargets?.[combat.defenderMsgId] && game.bloodFeudTargets[combat.defenderMsgId] === combat.attackerPlayerNum) {
     // Already applied during CC play for the first attack; for subsequent attacks the bonus is applied in combat.js pre-roll

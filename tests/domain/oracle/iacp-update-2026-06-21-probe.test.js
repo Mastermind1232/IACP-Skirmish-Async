@@ -133,12 +133,11 @@ describe('PROBE-IACP-8: The Armorer aura range increased to 4', () => {
     assert.match(fn, /countGameSpaces\(game, attackerPos, armorerPos\)\s*<=\s*4/,
       'checkThisIsTheWay must gate the attacker to within 4 of the Armorer');
   });
-  it('Survival is Strength (combat.js) gate uses within-4', () => {
-    const cb = readFileSync(new URL('../../../src/handlers/combat.js', import.meta.url), 'utf8');
-    const call = cb.match(/isWithinSpaces\(_sisMapSp,[^\n]*_sisDefCoord[^\n]*?,\s*(\d+)\)/);
-    assert.ok(call);
-    assert.equal(call[1], '4');
-  });
+  // NOTE: the former 'Survival is Strength (combat.js) gate uses within-4' probe
+  // was removed 2026-06-24 — the legacy combat.js hardcoded SiS reroll-queue build
+  // (with the isWithinSpaces(_sisMapSp, ..., 4) literal) was deleted in the
+  // gate-machine cleanup. SiS is now data-driven from the dc-effects.json row
+  // (within-4 wording asserted above), parsed by the gate rerolls window.
 });
 
 describe('PROBE-IACP-9: KX-Series Shoulder Rush rework', () => {

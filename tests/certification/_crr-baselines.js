@@ -124,6 +124,11 @@ export const RF_BASELINE_UNUSED = [
   // pendingBELReorder is read/written via _belGame alias (handlers/interrupts.js);
   // scanner regex requires `game.X`. Real usage exists.
   'pendingBELReorder',
+  // pendingPostAttackConditions — sole writer was the legacy inline post-attack
+  // condition block in combat-bridge.js, deleted 2026-06-24 in the gate-machine
+  // cleanup. Condition application now flows through after-attack-resolve.js.
+  // Registry entry kept for state-recovery/skip-list completeness.
+  'pendingPostAttackConditions',
 ];
 export const RF_BASELINE_TYPE_MISMATCH = [
   'overdriveUsedThisActivation',
