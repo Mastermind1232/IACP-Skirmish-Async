@@ -11,7 +11,7 @@
 // so conditions are evaluated relative to the attacker, not the card holder.
 
 import { dcNameFromFigureKey } from '../game/index.js';
-import { getMapData, getDcEffects, getFigureSize } from '../data-loader.js';
+import { getMapData, getDcEffects, getFigureSize, isDcUnique } from '../data-loader.js';
 import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { getFootprintCells, shiftCoord } from '../game/coords.js';
@@ -113,6 +113,11 @@ export function makeCondition(spec) {
       const card = norm(spec.card);
       const n = spec.n ?? 3;
       const side = spec.side || 'attacker';
+      // "ANOTHER friendly figure within N" (affects_others, no self) — exclude
+      // the owner figure when it IS the affected figure, so the ability is NOT
+      // offered on the owner's own attack (alexanbv 2026-06-24 — Inspiring/Luke,
+      // Much to Learn/Ezra were over-offered on the owner's own attack).
+      const excludeSelf = !!spec.excludeSelf;
       return (game, combat) => {
         const aff = affectedFigure(game, combat, side);
         const mapId = game?.selectedMap?.id;
@@ -126,6 +131,34 @@ export function makeCondition(spec) {
         const team = game.figurePositions?.[aff.pn] || {};
         for (const fk of Object.keys(team)) {
           if (norm(dcNameFromFigureKey(fk)) !== card) continue;
+          if (excludeSelf && fk === aff.figureKey) continue; // "another" — owner ≠ itself
+          for (const oc of figureCells(game, aff.pn, fk)) {
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n)) return true;
+          }
+        }
+        return false;
+      };
+    }
+    // "ANOTHER friendly (unique) figure within N spaces" — a generic aura NOT
+    // tied to a specific owner card: is there any OTHER friendly figure (optionally
+    // a UNIQUE one) within N of the affected figure (alexanbv 2026-06-24 — Much to
+    // Learn / Ezra was usable with no other friendly unique in range).
+    case 'another_friendly_within_n': {
+      const n = spec.n ?? 3;
+      const side = spec.side || 'attacker';
+      const requireUnique = !!spec.requireUnique;
+      return (game, combat) => {
+        const aff = affectedFigure(game, combat, side);
+        const mapId = game?.selectedMap?.id;
+        if (!aff.figureKey || aff.pn == null || !mapId) return false;
+        const mapSp = getMapData(mapId);
+        if (!mapSp) return false;
+        const affCells = figureCells(game, aff.pn, aff.figureKey);
+        if (!affCells.length) return false;
+        const team = game.figurePositions?.[aff.pn] || {};
+        for (const fk of Object.keys(team)) {
+          if (fk === aff.figureKey) continue; // "another" — not the affected figure
+          if (requireUnique && !isDcUnique(dcNameFromFigureKey(fk))) continue;
           for (const oc of figureCells(game, aff.pn, fk)) {
             for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n)) return true;
           }
@@ -480,6 +513,10 @@ export function conditionalGuard(conditional, card, row) {
   if (adjKw) return makeCondition({ type: 'affected_adjacent_to_friendly', keyword: adjKw[1].toUpperCase(), side });
   // "adjacent to a friendly figure" (Cower).
   if (/adjacent to (?:a )?friendly figure/.test(s)) return makeCondition({ type: 'affected_adjacent_to_friendly', side });
+  // "another friendly (unique) figure within N spaces" (Much to Learn / Ezra) —
+  // requires some OTHER friendly (unique) figure within N of the attacker.
+  const afwm = s.match(/another friendly (unique )?figure within (\d+)/);
+  if (afwm) return makeCondition({ type: 'another_friendly_within_n', requireUnique: !!afwm[1], n: parseInt(afwm[2], 10) || 3, side });
   return () => true; // unmodeled prose → no extra restriction yet (TODO: graduate)
 }
 
@@ -560,8 +597,12 @@ function othersPredicate(affectsOthers, ownerCard, side) {
   const s = String(affectsOthers || '').toLowerCase();
   if (!s || s === 'none') return null;
   const wm = s.match(/within\s+(\d+)/);
+  // "ANOTHER friendly figure within/adjacent" → the owner doesn't grant to
+  // ITSELF on its own attack (alexanbv 2026-06-24 — Inspiring/Luke was offered
+  // on Luke's own attack). within_n_of_source honors excludeSelf.
+  const excludeSelf = s.includes('another');
   const range = wm
-    ? makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(wm[1], 10) || 3, side })
+    ? makeCondition({ type: 'within_n_of_source', card: ownerCard, n: parseInt(wm[1], 10) || 3, side, excludeSelf })
     : (s.includes('adjacent') ? makeCondition({ type: 'adjacent_to_source', card: ownerCard, side }) : null);
   if (range) {
     // AND the affected-figure keyword/size filter ("a small figure within 2",
