@@ -60,7 +60,16 @@ export async function driveGateAttackToEnd(game, combat, deps, thread, { maxPass
       const gate = parkedGate(combat);
       if (gate) {
         passes++;
-        await handleModsPick(fakeInteraction(`${gate.prefix}${game.gameId}_done`, client), deps);
+        // Click "Done" AS the player the window is prompted for — handleModsPick
+        // now locks each window to its side's player (alexanbv 2026-06-23), so
+        // pass that side's user id (mirrors the surge call below).
+        const _g = combat[gate.field];
+        const _side = activeSide(_g);
+        const _atkPn = combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1;
+        const _defPn = combat.defenderPlayerNum ?? (_atkPn === 1 ? 2 : 1);
+        const _sidePn = _side === 'attacker' ? _atkPn : _defPn;
+        const _sideId = game[`player${_sidePn}Id`] || '';
+        await handleModsPick(fakeInteraction(`${gate.prefix}${game.gameId}_done`, client, _sideId), deps);
         continue;
       }
       // Surge window (spend_surges step) — the attacker spends/declines surges.

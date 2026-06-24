@@ -2381,6 +2381,22 @@ export async function handleModsPick(interaction, ctx) {
   const combat = game.pendingCombat;
   if (!combat || combat.gameId !== gameId || !combat[cfg.field]) return;
   const gate = combat[cfg.field];
+  // Lock the window to the player it's prompted for (alexanbv 2026-06-23): the
+  // attacker must NOT be able to click the defender's Done/ability buttons (or
+  // vice versa) — doing so desynced the sequence and got it stuck. Guard BEFORE
+  // deferUpdate / clearing the buttons, so a wrong-player click is a no-op that
+  // leaves the window intact for the correct player.
+  const _activeSide = _modsActiveSide(gate);
+  if (_activeSide && !game.isTestGame) {
+    const _sidePn = _activeSide === 'attacker'
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const _sideId = getPlayerId(game, _sidePn);
+    if (_sideId && interaction.user.id !== _sideId) {
+      await interaction.followUp({ content: `That's the ${_activeSide}'s window — only they can use these buttons.`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -2551,6 +2567,18 @@ export async function handleModsSubChoice(interaction, ctx) {
   const gate = combat[_GATE_WINDOWS[window].field];
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   const side = _modsActiveSide(gate);
+  // Lock to the prompted player (alexanbv 2026-06-23) — guard BEFORE deferring /
+  // clearing buttons so a wrong-player click leaves the window intact.
+  if (side && !game.isTestGame) {
+    const _sidePn = side === 'attacker'
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const _sideId = getPlayerId(game, _sidePn);
+    if (_sideId && interaction.user.id !== _sideId) {
+      await interaction.followUp({ content: `That's the ${side}'s window — only they can use these buttons.`, ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
 
