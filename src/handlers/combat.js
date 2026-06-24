@@ -2879,6 +2879,10 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'set_your_sights') {
     combat.bonusPierce = (combat.bonusPierce || 0) + 1;
     await thread.send('**Set Your Sights** (Loku) — target has a Recon token: Pierce 1.').catch(discordCatch);
+  } else if (id === 'distracting') {
+    const r = applyDistractingEvade(combat);
+    combat.bonusEvade = r.bonusEvade;
+    await thread.send('🎭 **Distracting** (Han Solo / C-3PO) — a friendly figure is adjacent to the target: **+1 Evade** for the defender.').catch(discordCatch);
   } else if (id === 'hunker_down') {
     combat.bonusEvade = (combat.bonusEvade || 0) + 1;
     await thread.send('**Hunker Down** (Cara Dune) — adjacent to blocking/impassable/difficult terrain: +1 Evade.').catch(discordCatch);

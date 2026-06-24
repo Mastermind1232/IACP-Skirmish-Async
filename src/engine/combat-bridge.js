@@ -3080,6 +3080,13 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
+  // Sling Barrage (Ewok Warrior Elite): the per-group-mate-LOS attack reroll is
+  // consumed by this attack — clear the pending flag so a later attack this
+  // activation doesn't re-grant it (the rerolls gate reads pendingSlingBarrage).
+  if (combat.attackerFigureKey && game.pendingSlingBarrage?.[combat.attackerFigureKey]) {
+    delete game.pendingSlingBarrage[combat.attackerFigureKey];
+  }
+
   // Missile Salvo: after each salvo attack, record target + show remaining die buttons
   if (combat.attackerMsgId && game.pendingMissileSalvo?.[combat.attackerMsgId]) {
     const ms = game.pendingMissileSalvo[combat.attackerMsgId];

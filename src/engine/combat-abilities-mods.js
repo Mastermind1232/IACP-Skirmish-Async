@@ -26,6 +26,7 @@ import { hasFindWeaknessAbility } from '../game/find-weakness-helpers.js';
 import { hasForestFightersAbility, forestFightersQualifies } from '../game/forest-fighters-helpers.js';
 import { hasAcpScattergun, hasScattergun, scattergunInRange } from '../game/scattergun-helpers.js';
 import { hasExploitWeaknessAbility, defenderHasHarmfulCondition } from '../game/exploit-weakness-helpers.js';
+import { hasDistractingAbility } from '../game/distracting-helpers.js';
 import { makeCondition } from './combat-conditions.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { getFootprintCells } from '../game/coords.js';
@@ -315,6 +316,47 @@ registerCombatAbility({
   },
 });
 
+
+// Distracting (Han Solo / C-3PO) [defender] — gate-rework port 2026-06-24,
+// replaces the legacy _applyDistractingStep4 in handlers/combat.js (deleted with
+// sendModsYn). "While a friendly figure with Distracting is adjacent to the
+// targeted figure, apply +1 Evade to the defense results." Detection: a friendly
+// DEFENDER figure carrying a distracting_* ability is adjacent to (or on) the
+// target space, and NOT carrying Rogue Smuggler (which cancels it). Re-checked
+// at mods because figures can relocate between declare and mods. Effect:
+// _fireModsPassive('distracting' → +1 Evade).
+registerCombatAbility({
+  id: 'distracting', name: 'Distracting (Han Solo / C-3PO)', windows: ['mods'], side: 'defender', kind: 'passive',
+  applies: (game, combat, side, deps) => {
+    const target = combat.target;
+    if (!target || target.isNpc) return false;
+    const defenderPlayerNum = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const targetCoord = target.coord
+      ? String(target.coord).toLowerCase()
+      : (game.figurePositions?.[defenderPlayerNum]?.[target.figureKey] ? String(game.figurePositions[defenderPlayerNum][target.figureKey]).toLowerCase() : null);
+    if (!targetCoord) return false;
+    const mapData = game.selectedMap?.id ? (deps?.getMapData || _getMapData)(game.selectedMap.id) : null;
+    if (!mapData) return false;
+    const getEff = deps?.getDcEffects || _getDcEffects;
+    const within = deps?.isWithinSpaces || _isWithinSpaces;
+    const positions = game.figurePositions?.[defenderPlayerNum] || {};
+    for (const [fk, pos] of Object.entries(positions)) {
+      if (!pos) continue;
+      const eff = getEff()[dcNameFromFigureKey(fk)];
+      if (!hasDistractingAbility(eff?.specialAbilityIds)) continue;
+      if (!within(mapData, String(pos).toLowerCase(), targetCoord, 1)) continue;
+      // Rogue Smuggler (Han upgrade) cancels Distracting.
+      const findMid = deps?.findDcMessageIdForFigure;
+      if (findMid) {
+        const distMsgId = findMid(game.gameId, defenderPlayerNum, fk);
+        const upg = distMsgId ? (game.p1DcAttachments?.[distMsgId] || game.p2DcAttachments?.[distMsgId] || []) : [];
+        if (cardNameIncludes(upg, 'Rogue Smuggler')) continue;
+      }
+      return true; // one Distracting bonus per attack
+    }
+    return false;
+  },
+});
 
 registerCombatAbility({
   id: 'agile', name: 'Agile', windows: ['mods'], side: 'defender', kind: 'interactive',

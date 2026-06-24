@@ -18,8 +18,8 @@ import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './c
 import { stripBrackets } from '../game/card-names.js';
 import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
 import { attachmentsForMsgId } from '../game/squad-upgrades.js';
-import { getMapData } from '../data-loader.js';
-import { isWithinSpaces } from '../game/spatial.js';
+import { getMapData, getFigureSize } from '../data-loader.js';
+import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { chargeGeneratorsActive } from './combat-abilities-mods.js';
 
 const _auraBearerDeps = { getMapData, isWithinSpaces, getDcList, getDcMessageIds };
@@ -401,6 +401,56 @@ export function registerFieldSupplyReroll() {
 }
 
 registerFieldSupplyReroll();
+
+// Sling Barrage (Ewok Warrior Elite) — a SPECIAL-ACTION-triggered attacker reroll:
+// "you may reroll up to 1 attack die per OTHER figure in your group with line of
+// sight to the defender." Armed by the Sling Barrage special action
+// (game.pendingSlingBarrage[figureKey]); the bonus count is DYNAMIC (group-mates
+// with LOS to the defender), so — like the forcedRerollQueue — register a fixed
+// set of SLOTS, slot i offered iff the LOS-bonus count exceeds i. Each slot
+// resolves one attack-die reroll via the generic reroll path. Replaces the legacy
+// detection in handlers/combat.js (deleted with the !_seqActive reroll block).
+// alexanbv 2026-06-24.
+const SLING_BARRAGE_SLOTS = 8;
+export function slingBarrageBonus(game, combat) {
+  const fk = combat?.attackerFigureKey;
+  if (!fk || !game?.pendingSlingBarrage?.[fk]) return 0;
+  const mapId = game?.selectedMap?.id;
+  const defCoord = combat?.target?.coord ? String(combat.target.coord).toLowerCase() : null;
+  if (!mapId || !defCoord) return 0;
+  const mapSp = getMapData(mapId);
+  if (!mapSp) return 0;
+  const parts = String(fk).split('-');
+  if (parts.length < 3) return 0;
+  const groupPrefix = `${parts.slice(0, -1).join('-')}-`;
+  const team = game.figurePositions?.[combat.attackerPlayerNum] || {};
+  let bonus = 0;
+  for (const [ofk, pos] of Object.entries(team)) {
+    if (ofk === fk) continue;
+    if (!ofk.startsWith(groupPrefix)) continue;
+    if (!pos) continue;
+    if (hasLineOfSightByCoord(game, String(pos).toLowerCase(), defCoord, mapSp, getFigureSize)) bonus += 1;
+  }
+  return bonus;
+}
+
+let _slingBarrageRegistered = false;
+export function registerSlingBarrageReroll() {
+  if (_slingBarrageRegistered) return;
+  _slingBarrageRegistered = true;
+  for (let i = 0; i < SLING_BARRAGE_SLOTS; i++) {
+    registerCombatAbility({
+      id: `reroll:sling_barrage:attacker:${i}`, name: 'Sling Barrage', windows: ['rerolls'], side: 'attacker',
+      kind: 'interactive',
+      params: { kind: 'reroll', pool: 'attack', count: 1, colorSwap: false, card: 'Ewok Warrior (Elite)', ability: `Sling Barrage #${i + 1}`, limit: 'once per attack' },
+      applies: (game, combat) => {
+        if (slingBarrageBonus(game, combat) <= i) return false;
+        return selectableDieIndices(combat, { pool: 'attack' }).length > 0;
+      },
+    });
+  }
+}
+registerSlingBarrageReroll();
 
 // ── forcedRerollQueue drain in the GATE rerolls window (gate-rework 2026-06-18) ──
 //

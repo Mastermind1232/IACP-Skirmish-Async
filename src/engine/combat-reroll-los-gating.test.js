@@ -104,6 +104,61 @@ describe('Shared Intuition (4-LOM) — mods passive +1 Damage, LOS-gated', () =>
   });
 });
 
+describe('Distracting (Han Solo / C-3PO) — mods passive +1 Evade, adjacency-gated (gate-rework port)', () => {
+  // A defender figure carrying a distracting_* ability adjacent to the targeted
+  // space grants the defender +1 Evade. l3↔m3 are adjacent on this map.
+  const game = (c3poCell) => ({
+    selectedMap: MAP,
+    figurePositions: { 1: { 'A-1-0': 'a1' }, 2: { 'X-2-0': 'm3', 'C-3P0-2-1': c3poCell } },
+  });
+  const combat = {
+    attackerPlayerNum: 1, defenderPlayerNum: 2,
+    attackerDcName: 'A', attackerFigureKey: 'A-1-0',
+    target: { figureKey: 'X-2-0', coord: 'm3' },
+  };
+  it('registers as an executable mods-window defender passive', () => {
+    const a = getCombatAbility('distracting');
+    assert.deepEqual(a.windows, ['mods']);
+    assert.equal(a.side, 'defender');
+    assert.equal(typeof a.applies, 'function');
+    assert.ok(!a.timingOnly);
+  });
+  it('IS offered when a friendly figure with Distracting is adjacent to the target', () => {
+    assert.ok(idsM('defender', game('l3'), combat).includes('distracting'));
+  });
+  it('is NOT offered when the Distracting figure is not adjacent to the target', () => {
+    assert.ok(!idsM('defender', game('i5'), combat).includes('distracting'));
+  });
+});
+
+describe('Sling Barrage (Ewok Warrior Elite) — rerolls slot per group-mate with LOS to defender (gate-rework port)', () => {
+  // Armed by the special action (game.pendingSlingBarrage[figureKey]); one slot
+  // offered per OTHER group figure with LOS to the defender. m3↔m4 adjacent (LOS).
+  const game = (mateCell, armed = true) => ({
+    selectedMap: MAP,
+    pendingSlingBarrage: armed ? { 'Ewok Warrior (Elite)-1-0': true } : {},
+    figurePositions: { 1: { 'Ewok Warrior (Elite)-1-0': 'l3', 'Ewok Warrior (Elite)-1-1': mateCell }, 2: { 'X-2-0': 'm4' } },
+  });
+  const combat = {
+    attackerPlayerNum: 1, defenderPlayerNum: 2,
+    attackerDcName: 'Ewok Warrior (Elite)', attackerFigureKey: 'Ewok Warrior (Elite)-1-0',
+    target: { figureKey: 'X-2-0', coord: 'm4' }, attackDiceResults: [{ color: 'blue', dmg: 1 }],
+  };
+  it('offers slot 0 when one group-mate has LOS to the defender', () => {
+    assert.ok(idsR('attacker', game('m3'), combat).includes('reroll:sling_barrage:attacker:0'));
+  });
+  it('does NOT offer slot 1 when only one group-mate has LOS (bonus = 1)', () => {
+    assert.ok(!idsR('attacker', game('m3'), combat).includes('reroll:sling_barrage:attacker:1'));
+  });
+  it('is NOT offered when the special action did not arm pendingSlingBarrage', () => {
+    assert.ok(!idsR('attacker', game('m3', false), combat).includes('reroll:sling_barrage:attacker:0'));
+  });
+  it('is NOT offered when the group-mate has no LOS to the defender', () => {
+    // a1 has no LOS to the defender at m4 on this map.
+    assert.ok(!idsR('attacker', game('a1'), combat).includes('reroll:sling_barrage:attacker:0'));
+  });
+});
+
 describe('forcedRerollQueue drain — gate rerolls window surfaces queued grants', () => {
   const game = { selectedMap: MAP, figurePositions: { 1: { 'A-1-0': 'l3' }, 2: { 'B-2-0': 'm3' } } };
   const combat = (queue) => ({

@@ -195,7 +195,9 @@ e('overwhelming_impact', 'Overwhelming Impact (CC)', 'attacker', 'interactive', 
 e('hunter_protocol', 'Hunter Protocol (CC)', 'attacker', 'interactive', ['mods'], 'declared step4, persists into surge double-trigger');
 e('parry', 'Parry (CC)', 'defender', 'interactive', ['mods'], 'applyDefenseBonusBlock/Evade +1');
 e('force_illusion', 'Force Illusion (CC)', 'defender', 'interactive', ['mods'], 'becomes Hidden, modifies results');
-e('distracting', 'Distracting (Han / C-3PO)', 'defender', 'passive', ['mods'], 'friendly distracting adjacent to target → +1 Evade');
+// 'distracting' is now an EXECUTABLE mods passive (combat-abilities-mods.js, +1
+// Evade when a friendly figure with Distracting is adjacent to the target) — no
+// timing-only catalog entry here so it isn't clobbered by the catalog import.
 e('hidden_attacker_surge', 'Hidden (attacker, +1 Surge)', 'attacker', 'passive', ['mods'], 'attacker Hidden + not suppressed → +1 Surge');
 
 // ── AFTER_RESOLVE (CRR step 8) ───────────────────────────────────────────────
