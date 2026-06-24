@@ -280,12 +280,8 @@ import {
   runStartOfRoundContinuation,
   runStatusPhaseAfterEndOfRound,
   runPostDeployPhase,
-  handlePreReroll,
-  handleCombatPassive,
   handleCombatToken,
   handleStatusPhase,
-  sendRerollUI,
-  proceedAfterRerolls,
   sendReadyToResolveRolls,
   sendPowerTokenOverflowUI,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -3532,7 +3528,7 @@ function buildAllDeps() {
     buildDeployRowButtons,
 
     // Combat (imported from handlers)
-    sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls,
+    sendReadyToResolveRolls,
 
     // Mission rules (imported)
     runEndOfRoundRules, runStartOfRoundRules,

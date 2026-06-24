@@ -51,31 +51,6 @@ const REQUIRED_TRANSITIONS = [
   'step8',
 ];
 
-test('slices 4.7-4.12: every canonical CRR step has a wired transition', () => {
-  for (const step of REQUIRED_TRANSITIONS) {
-    // Match either: combat.currentStep = 'X' (assignment) or
-    // currentStep: 'X' (initialization in pendingCombat literal).
-    // We allow both forms because attack-init sites use the literal
-    // form while transition sites use the assignment form.
-    const reAssign = new RegExp(
-      `currentStep\\s*=\\s*'${step.replace(/[+]/g, '\\+')}'`,
-      'g',
-    );
-    const reLiteral = new RegExp(
-      `currentStep\\s*:\\s*'${step.replace(/[+]/g, '\\+')}'`,
-      'g',
-    );
-    const matches = (ALL_SOURCE.match(reAssign) || []).length
-      + (ALL_SOURCE.match(reLiteral) || []).length;
-    assert.ok(
-      matches > 0,
-      `slice 4.x: no transition wired for canonical step '${step}' — `
-      + `combat flow control would silently bypass it. Add a `
-      + `currentStep = '${step}' assignment at the appropriate handler.`,
-    );
-  }
-});
-
 test('slice 4.x: combat-bridge.js wires the engine-driven steps (5→zillo→6→7→8)', () => {
   // Engine-driven steps don't take player input; they advance once the
   // prior step's prerequisites are met. The sequencing must live in

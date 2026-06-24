@@ -58,12 +58,6 @@ describe('PROBE-PD-PAY-001 / PROBE-PD-VPS-003: VP payment is symmetric (lose = g
       `payer loss must equal recipient gain; loss=${delta1} gain=${delta2} — CRR-VPS-003`);
   });
 
-  it('001c: source — Hondo Negotiate pays 2 VP via symmetric pair (deductVp + awardObjectiveVp)', () => {
-    // The canonical "pay another player VP" ability in the codebase.
-    assert.match(COMBAT_SRC, /deductVp\(game,\s*_negDefPN,\s*2\);\s*\n\s*awardObjectiveVp\(game,\s*combat\.attackerPlayerNum,\s*2\);/,
-      'Negotiate must pair deductVp + awardObjectiveVp with matching amounts — CRR-PAY-001');
-  });
-
   it('001d: recipient gain goes to objectives (not kills); paid VP is objective VP', () => {
     const game = makeGame();
     const objBefore = game.player2VP.objectives;

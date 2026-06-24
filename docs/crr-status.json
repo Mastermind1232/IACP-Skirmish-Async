@@ -43,9 +43,9 @@
       "ROUND_NULL_FLAGS": 140,
       "ROUND_ARRAY_FLAGS": 7,
       "ROUND_FALSE_FLAGS": 3,
-      "ROUND_DELETE_FLAGS": 34
+      "ROUND_DELETE_FLAGS": 33
     },
-    "totalUniqueKeys": 303,
+    "totalUniqueKeys": 302,
     "baselineDuplicates": [],
     "baselineUnused": [
       "deviceRerollGranted",
@@ -56,7 +56,7 @@
     "baselineTypeMismatchCount": 108
   },
   "depBagParity": {
-    "totalRequiredDepKeys": 241,
+    "totalRequiredDepKeys": 239,
     "allowedOmissionsCount": 13,
     "allowedOmissions": [
       "buildSquadConfirmText",

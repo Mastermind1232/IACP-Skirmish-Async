@@ -241,6 +241,10 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     // Bib Fortuna not in play → not offered even in a Scum army.
     const noBib = game({ ...g, figurePositions: { 1: { 'Atk-1-0': 'a1' }, 2: { 'Def-1-0': 'c3' } } });
     assert.equal(find(at('attacker', noBib, combat(), deps(eff)), 'illicit_arms'), undefined);
+    // MIGRATED (deleted combat-behavioral reroll cluster): once per attack —
+    // not re-offered after a prior use this attack.
+    const cUsed = combat({ _abilityUsedThisAttack: { 'Bib Fortuna:Illicit Arms': true } });
+    assert.equal(find(at('attacker', g, cUsed, deps(eff)), 'illicit_arms'), undefined);
   });
 
   // ── FIX-2: Zillo Block Boost — defender [Zillo Technique] + a CC in hand
@@ -253,6 +257,20 @@ describe('FIX-1/2/3 mods gating via the timing registry', () => {
     // No Zillo card → not offered.
     const noZt = game({ ...g, p2DcList: [] });
     assert.equal(find(at('defender', noZt, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard'), undefined);
+  });
+
+  // ── MIGRATED from deleted combat-zillo-discard-step4-timing.test.js: the
+  // discard-CC for +1 Block is a once-per-attack option regardless of exhaust.
+  it('zillo_technique_discard (Block Boost): once per attack — not re-offered after a use this attack', () => {
+    const g = game({ p2DcList: [{ dcName: '[Zillo Technique]' }], player2CcHand: ['Tough Luck', 'Element of Surprise'] });
+    // Fresh attack → offered (even with multiple CCs in hand).
+    assert.equal(find(at('defender', g, combat(), deps({ Atk: {}, Def: {} })), 'zillo_technique_discard').kind, 'interactive');
+    // Used once this attack → NOT re-offered (the per-attack flag suppresses it).
+    const cUsed = combat({ _abilityUsedThisAttack: { '[Zillo Technique]:Block Boost': true } });
+    assert.equal(find(at('defender', g, cUsed, deps({ Atk: {}, Def: {} })), 'zillo_technique_discard'), undefined);
+    // An unrelated ability's per-attack mark does NOT block it.
+    const cOther = combat({ _abilityUsedThisAttack: { something_else: true } });
+    assert.equal(find(at('defender', g, cOther, deps({ Atk: {}, Def: {} })), 'zillo_technique_discard').kind, 'interactive');
   });
 
   // ── IACP 2026-06-21: Guidance Systems — LIMIT once per attack; stops at Damage 0

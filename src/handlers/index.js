@@ -29,7 +29,7 @@ import {
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure, handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
-import { handleAttackTarget, handleTargetSquarePick, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatReroll, handleCombatRerollYn, handleCombatModsYn, handleCrossTrainingReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleCombatGateReady, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMtlFacePick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
+import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMtlFacePick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
 import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -167,7 +167,7 @@ import {
 import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleForceExhaustion, handleForceExhaustionDiePick, handleDoubtReroll, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
+import { handleThereIsNoTry, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handleForceExhaustion, handleForceExhaustionDiePick, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleExhaustBallistics, handleExhaustNavUpgrade, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleLastWielderDarksaber, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handleBlackMarketSmugglerPick, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
@@ -308,24 +308,16 @@ register('cover_fire_block_', handleCoverFireBlock, 'combat');
 register('cover_fire_discard_', handleCoverFireDiscard, 'combat');
 register('squad_command_focus_', handleSquadCommandFocus, 'combat');
 register('guidance_systems_', handleGuidanceSystems, 'combat');
-register('combat_resolve_ready_', handleCombatResolveReady, 'combat');
-register('combat_gate_', handleCombatGateReady, 'combat');
 register('aar_fire_', handleAarFire, 'postCombat');
 register('aar_done_atk_', handleAarDone, 'postCombat');
 register('aar_done_def_', handleAarDone, 'postCombat');
 register('combat_roll_', handleCombatRoll, 'combat');
 register('dbh_pick_die_', handleDbhPickDie, 'combat');
 register('combat_surge_', handleCombatSurge, 'combat');
-register('combat_reroll_yn_', handleCombatRerollYn, 'combat');
-register('combat_reroll_', handleCombatReroll, 'combat');
-register('combat_mods_yn_', handleCombatModsYn, 'combat');
 register('merciless_use_', handleMerciless, 'combat');
 register('merciless_skip_', handleMerciless, 'combat');
 register('flawless_die_', handleFlawlessDie, 'combat');
 register('flawless_token_', handleFlawlessToken, 'combat');
-register('ct_reroll_', handleCrossTrainingReroll, 'combat');
-register('pre_reroll_', handlePreReroll, 'combat');
-register('combat_passive_', handleCombatPassive, 'combat');
 register('combat_mods_pick_', handleModsPick, 'combat');
 // Generic gate pick handler also serves the other attack windows (alexanbv
 // 2026-06-15 "build the WHOLE sequence with all the gates"). handleModsPick
@@ -577,13 +569,6 @@ register('slow_on_draw_no_', handleSlowOnTheDraw, 'combatReactions');
 register('slow_on_draw_resume_', handleSlowOnTheDrawResume, 'combatReactions');
 register('force_with_me_pick_', handleForceIsWithMe, 'combatReactions');
 register('force_with_me_skip_', handleForceIsWithMe, 'combatReactions');
-register('power_converter_approve_', handlePowerConverter, 'combatReactions');
-register('power_converter_skip_', handlePowerConverter, 'combatReactions');
-register('power_converter_die_', handlePowerConverter, 'combatReactions');
-register('power_converter_color_', handlePowerConverter, 'combatReactions');
-register('illicit_arms_use_', handleIllicitArms, 'combatReactions');
-register('illicit_arms_skip_', handleIllicitArms, 'combatReactions');
-register('illicit_arms_pick_', handleIllicitArms, 'combatReactions');
 register('force_exhaustion_yes_', handleForceExhaustion, 'combatReactions');
 register('force_exhaustion_no_', handleForceExhaustion, 'combatReactions');
 register('fe_die_pick_', handleForceExhaustionDiePick, 'combatReactions');
@@ -837,7 +822,7 @@ export {
   handleCompanionDeployPick,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatResolveReady, handleCombatRoll, handleCombatSurge, handleCombatReroll, handlePreReroll, handleCombatPassive, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls, handleStrainChoice, handleRogueOneTokenPick, handleCombatGateReady, sendCombatGate, sendOnDeclareTokenWindow } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatRoll, handleCombatSurge, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendReadyToResolveRolls, handleStrainChoice, handleRogueOneTokenPick, sendOnDeclareTokenWindow } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip} from './activation.js';
 export {
   handleMapSelection,
@@ -955,7 +940,7 @@ export { handleBotmenuRecover, handleResync, runRecovery } from './recover.js';
 export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-export { handleThereIsNoTry, handleVetInstincts, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handlePowerConverter, handleIllicitArms, handleDoubtReroll, handleForceIsWithMe } from './combat-reactions.js';
+export { handleThereIsNoTry, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handleForceIsWithMe } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';

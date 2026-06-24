@@ -152,19 +152,6 @@ describe('Combat effects: reroll', () => {
     assert.strictEqual(combat.forcedRerollQueue[0].source, 'Defensive Stance', 'Next entry is Defensive Stance');
   });
 
-  it('customId format combat_reroll parses correctly', () => {
-    const gameId = 'test1';
-    const customId = `combat_reroll_${gameId}_atk_0`;
-    const parts = customId.replace('combat_reroll_', '').split('_');
-    assert.strictEqual(parts[0], gameId, 'gameId parsed');
-    assert.strictEqual(parts[1], 'atk', 'side parsed');
-    assert.strictEqual(parts[2], '0', 'die index parsed');
-
-    const doneId = `combat_reroll_${gameId}_def_done`;
-    const doneParts = doneId.replace('combat_reroll_', '').split('_');
-    assert.strictEqual(doneParts[2], 'done', 'done action parsed');
-  });
-
   it('multiple attack dice track rerolls independently', () => {
     const { game, attackerFk, defenderFk, attackerMsgId, defenderMsgId } = buildCombatGame();
     const combat = buildCombat(game, {
@@ -505,7 +492,6 @@ describe('Combat effects: handler registration', () => {
     const content = fs.readFileSync('src/handlers/index.js', 'utf8');
 
     const requiredPrefixes = [
-      'combat_reroll_',
       'bleed_accept_',
       'bleed_prevent_',
       'celebration_play_',

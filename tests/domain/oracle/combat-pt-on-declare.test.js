@@ -25,20 +25,6 @@ const ROOT = resolve(__dirname, '../../..');
 const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
-  it('dispatchCombatGateAdvance routes on_declare to postRollDiceButton (tokens already spent)', () => {
-    // Per destruct 2026-05-08: tokens are spent inside the per-player
-    // on_declare window (sendOnDeclareTokenWindow), so by the time both
-    // players ack the gate, token phase is done. The on_declare branch
-    // of dispatchCombatGateAdvance goes straight to postRollDiceButton.
-    const fnMatch = H_CB_SRC.match(/async function dispatchCombatGateAdvance\(thread, game, combat, subPhase, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'dispatchCombatGateAdvance body must be locatable');
-    const body = fnMatch[0];
-    assert.match(body, /case 'on_declare':[\s\S]*?await postRollDiceButton\(thread, game, combat, ctx\);/,
-      'dispatchCombatGateAdvance on_declare branch must call postRollDiceButton — tokens done in declare');
-    assert.doesNotMatch(body, /await proceedToTokenPhase\b/,
-      'dispatchCombatGateAdvance must not call the deleted proceedToTokenPhase');
-  });
-
   it('attack-declare site walks the gate sequence; on_declare precedes roll (tokens pre-roll)', () => {
     // Gate cutover (alexanbv 2026-06-16): the declare site runs the gate
     // sequence. The CRR pre-roll-token guarantee now comes from ATTACK_STEPS
@@ -109,15 +95,5 @@ describe('CRR-COMBAT-PT-DECLARE: power-token phase happens pre-roll', () => {
       'autoRollDice must call synth with role=atk');
     assert.match(body, /'def'/,
       'autoRollDice must call synth with role=def');
-  });
-
-  it('proceedAfterRerolls no longer opens token windows (tokens already resolved pre-roll)', () => {
-    const fnMatch = H_CB_SRC.match(/export async function proceedAfterRerolls\(thread, game, combat, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'proceedAfterRerolls body must be locatable');
-    const body = fnMatch[0];
-    assert.doesNotMatch(body, /combat\.tokenPhase = '(attacker|defender)';/,
-      'proceedAfterRerolls must not assign tokenPhase — token phase ran pre-roll — CRR p.50');
-    assert.doesNotMatch(body, /sendTokenWindow\(/,
-      'proceedAfterRerolls must not open a token window — CRR p.50');
   });
 });

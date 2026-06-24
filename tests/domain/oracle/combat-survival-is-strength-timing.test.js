@@ -56,25 +56,6 @@ describe('CRR-COMBAT-SIS-STEP3: Survival is Strength fires in step 3 (forced rer
       'proceedAfterTokens must not assign survivalFigKey (legacy survival prompt removed)');
   });
 
-  it('sub-picker handler marks SiS used only after a reroll fires (skip preserves the ability)', () => {
-    // Per CRR "may" semantics: skipping the SiS prompt should NOT consume the
-    // once-per-round ability. The mark-used must live in the reroll-fired
-    // branch (sub-picker resolution), NOT in the skip/cancel branch.
-    // Post-2026-05-11: controlled cross-side rerolls live inside the
-    // owner's bucket; resolution happens in the sub-picker branch.
-    // Source assertion: SiS-used marking appears in the sub-picker
-    // reroll-fired path.
-    assert.match(H_CB_SRC,
-      /_spEntry\.source === 'Survival is Strength'[\s\S]*?_spEntry\.armorerFigKey[\s\S]*?roundFigureAbilityUsed/,
-      'sub-picker reroll-fired branch must mark SiS used via roundFigureAbilityUsed');
-    // Cancel branch (controlledRerollActiveIdx = null) must not have SiS-specific marking.
-    const cancelHandler = H_CB_SRC.match(/_ctrlOp === 'cancelctrl'[\s\S]*?return;/);
-    if (cancelHandler) {
-      assert.doesNotMatch(cancelHandler[0], /Survival is Strength[\s\S]*?roundFigureAbilityUsed/,
-        'Cancel branch must not mark SiS used — that would defeat the "may" semantics');
-    }
-  });
-
   it('handleCombatPassive no longer has a survival branch (legacy prompt fully removed)', () => {
     assert.doesNotMatch(H_CB_SRC, /} else if \(abilityKey === 'survival'\)/,
       'handleCombatPassive survival branch is dead code under the step-3 flow');

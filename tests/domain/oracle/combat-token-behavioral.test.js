@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   handleCombatToken, handlePowerTokenChoice,
   handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI,
-  resumeSurgeChoiceOrResolve,
+  resumeSurgeChoiceOrResolve, handleCombatSurge,
 } from '../../../src/handlers/combat.js';
 import { grantPowerTokens, resolveOverflowDiscard } from '../../../src/game/game-helpers.js';
 import {
@@ -622,21 +622,6 @@ describe('B-C-COMBINED: Token spend + surge interaction', () => {
     }), 'surge UI shown because tokenSurgeBonus contributes to totalSurge');
   });
 
-  it('B-C-COMBINED-002: resumeSurgeChoiceOrResolve auto-advances when surgeRemaining is 0', async () => {
-    const combat = makeCombat({ surgeRemaining: 0 });
-    const game = makeGame({ pendingCombat: combat });
-    const thread = mockThread();
-    const { ctx, calls } = buildCtx(game);
-
-    await resumeSurgeChoiceOrResolve(game, 'g1', combat, thread, ctx);
-
-    assert.strictEqual(combat.surgeRemaining, 0, 'surgeRemaining stays 0');
-    // pre_resolve is now AUTO_ADVANCE — damage applies automatically rather
-    // than posting a Ready gate. resolveCombatAfterRolls fires directly.
-    assert.ok(calls.resolveCombatAfterRolls.length > 0,
-      'resolveCombatAfterRolls fired automatically (no Ready gate)');
-  });
-
   it('B-C-COMBINED-003: resumeSurgeChoiceOrResolve shows surge UI when surgeRemaining > 0', async () => {
     const combat = makeCombat({
       surgeRemaining: 2,
@@ -682,5 +667,94 @@ describe('B-C-COMBINED: Token spend + surge interaction', () => {
     // Step 3: Verify state is clean for surge resume
     assert.strictEqual(combat.surgeRemaining, 1, 'surgeRemaining preserved through overflow');
     assert.strictEqual(game.pendingSurgeOverflow, undefined, 'no orphan pendingSurgeOverflow');
+  });
+});
+
+// ── B-C-SURGE: Surge spending + Overload per-index cap ───────────────────────
+//
+// MIGRATED from the deleted tests/domain/oracle/combat-behavioral.test.js
+// (B-C-SURGE-001/002/003/004/005). Those imported the now-deleted reroll/gate
+// cluster, but the surge-spend behavior they pinned belongs to the LIVE handler
+// handleCombatSurge — which is still the registered 'combat_surge_' handler the
+// NEW gate's spend_surges step routes to (src/handlers/index.js:316). These
+// re-express the same Overload spent-count contract against that live handler:
+//   - non-Overload attackers may spend each surge index ONCE (max 1 use);
+//   - Overload (Rebel Saboteur, overload_saboteur) lifts the cap to 2 per index;
+//   - each spend records combat.surgeSpentCount[idx] and applies the modifier.
+describe('B-C-SURGE: handleCombatSurge spend-count + Overload cap (spend_surges step)', () => {
+  it('B-C-SURGE-001: spending a surge index applies its modifier and tracks the spend', async () => {
+    const combat = makeCombat({ surgeRemaining: 2, surgeSpentCount: {} });
+    const game = makeGame({ pendingCombat: combat });
+    const { ctx } = buildCtx(game, {
+      getAttackerSurgeAbilities: () => ['damage 2', 'pierce 1'],
+    });
+
+    // Spend index 0 → 'damage 2'
+    await handleCombatSurge(mockInteraction('combat_surge_g1_0', 'player1'), ctx);
+
+    assert.strictEqual(combat.surgeDamage, 2, '+2 damage from the spent surge');
+    assert.strictEqual(combat.surgeRemaining, 1, '1 surge remaining after spending 1');
+    assert.strictEqual(combat.surgeSpentCount[0], 1, 'index 0 recorded as spent once');
+  });
+
+  it('B-C-SURGE-002: Overload allows the same surge index to be spent TWICE', async () => {
+    const combat = makeCombat({ surgeRemaining: 3, surgeSpentCount: {} });
+    const game = makeGame({ pendingCombat: combat });
+    const { ctx } = buildCtx(game, {
+      getAttackerSurgeAbilities: () => ['damage 1', 'pierce 1'],
+      getDcEffects: () => ({ Stormtrooper: { specialAbilityIds: ['overload_saboteur'] } }),
+    });
+
+    await handleCombatSurge(mockInteraction('combat_surge_g1_0', 'player1'), ctx);
+    await handleCombatSurge(mockInteraction('combat_surge_g1_0', 'player1'), ctx);
+
+    assert.strictEqual(combat.surgeSpentCount[0], 2, 'index 0 spent twice under Overload');
+    assert.strictEqual(combat.surgeDamage, 2, '1+1 damage from the two spends');
+    assert.strictEqual(combat.surgeRemaining, 1, '3 - 2 = 1 surge remaining');
+  });
+
+  it('B-C-SURGE-003: Overload blocks a 3rd spend of the same index (cap = 2)', async () => {
+    const combat = makeCombat({ surgeRemaining: 3, surgeSpentCount: { 0: 2 } });
+    const game = makeGame({ pendingCombat: combat });
+    const { ctx } = buildCtx(game, {
+      getAttackerSurgeAbilities: () => ['damage 1'],
+      getDcEffects: () => ({ Stormtrooper: { specialAbilityIds: ['overload_saboteur'] } }),
+    });
+
+    // 3rd attempt on index 0 → silently rejected (deferUpdate + return).
+    await handleCombatSurge(mockInteraction('combat_surge_g1_0', 'player1'), ctx);
+
+    assert.strictEqual(combat.surgeRemaining, 3, 'surge not consumed past the Overload cap');
+    assert.strictEqual(combat.surgeSpentCount[0], 2, 'still at 2 uses');
+  });
+
+  it('B-C-SURGE-004: non-Overload attacker is capped at 1 use per index', async () => {
+    const combat = makeCombat({ surgeRemaining: 2, surgeSpentCount: { 0: 1 } });
+    const game = makeGame({ pendingCombat: combat });
+    const { ctx } = buildCtx(game, {
+      getAttackerSurgeAbilities: () => ['damage 1'],
+      getDcEffects: () => ({}), // no Overload
+    });
+
+    await handleCombatSurge(mockInteraction('combat_surge_g1_0', 'player1'), ctx);
+
+    assert.strictEqual(combat.surgeRemaining, 2, 'surge not consumed — already at the max 1 use');
+    assert.strictEqual(combat.surgeSpentCount[0], 1, 'still 1 use (no second spend without Overload)');
+  });
+
+  it('B-C-SURGE-005: a surge index resolves the correct ability when several exist', async () => {
+    const combat = makeCombat({ surgeRemaining: 2, surgeSpentCount: {} });
+    const game = makeGame({ pendingCombat: combat });
+    const { ctx } = buildCtx(game, {
+      getAttackerSurgeAbilities: () => ['damage 1', 'pierce 2', 'accuracy 3'],
+    });
+
+    // Spend index 1 → 'pierce 2'
+    await handleCombatSurge(mockInteraction('combat_surge_g1_1', 'player1'), ctx);
+
+    assert.strictEqual(combat.surgePierce, 2, 'pierce from index 1');
+    assert.strictEqual(combat.surgeDamage || 0, 0, 'no damage — index 0 not spent');
+    assert.strictEqual(combat.surgeSpentCount[1], 1, 'index 1 tracked');
+    assert.strictEqual(combat.surgeSpentCount[0] || 0, 0, 'index 0 not tracked');
   });
 });

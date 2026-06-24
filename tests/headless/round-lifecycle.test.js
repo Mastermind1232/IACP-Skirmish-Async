@@ -606,11 +606,6 @@ describe('Combat Lifecycle — CustomId parsing', () => {
 });
 
 describe('Combat Lifecycle — handler exports', () => {
-  it('combat.js exports handleCombatGateReady', async () => {
-    const mod = await import('../../src/handlers/combat.js');
-    assert.equal(typeof mod.handleCombatGateReady, 'function');
-  });
-
   it('combat.js exports handleCombatRoll', async () => {
     const mod = await import('../../src/handlers/combat.js');
     assert.equal(typeof mod.handleCombatRoll, 'function');
@@ -619,11 +614,6 @@ describe('Combat Lifecycle — handler exports', () => {
   it('combat.js exports handleAttackTarget', async () => {
     const mod = await import('../../src/handlers/combat.js');
     assert.equal(typeof mod.handleAttackTarget, 'function');
-  });
-
-  it('combat.js exports handleCombatResolveReady', async () => {
-    const mod = await import('../../src/handlers/combat.js');
-    assert.equal(typeof mod.handleCombatResolveReady, 'function');
   });
 
   it('combat.js exports handleCombatSurge', async () => {

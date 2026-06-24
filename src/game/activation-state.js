@@ -1054,10 +1054,8 @@ const ROUND_FALSE_FLAGS = [
 ];
 
 const ROUND_DELETE_FLAGS = [
-  // Per alexanbv 2026-06-13: now a per-player object {1?,2?}, not a boolean,
-  // so it must be DELETED (→ undefined) each round, not reset to false —
-  // the `!...?.[pn]` gate needs undefined to re-allow next round.
-  'powerConverterUsedThisRound',
+  // (powerConverterUsedThisRound removed 2026-06-24 with the legacy
+  // handlePowerConverter handler — no longer written anywhere.)
   'commsJammerActivePlayerNum',
   'partingShotTriggered',
   'onTheLamActive',

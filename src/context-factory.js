@@ -142,7 +142,7 @@ const CONTEXT_GROUPS = {
   combatReactions: [
     ...COMBAT_DEPS,
     // Plus combatReactions-specific deps
-    'canActAsPlayer', 'sendRerollUI', 'proceedAfterRerolls', 'sendReadyToResolveRolls',
+    'canActAsPlayer', 'sendReadyToResolveRolls',
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
     'removeFigurePosition',
   ],

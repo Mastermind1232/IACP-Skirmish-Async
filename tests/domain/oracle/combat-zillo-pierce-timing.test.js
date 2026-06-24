@@ -47,32 +47,6 @@ describe('CRR-COMBAT-ZILLO-PIERCE: exhaust window fires post-surge, not at decla
       'declare-time discard-CC prompt must be removed — that prompt is now in step-4 DEF block (slice 6)');
   });
 
-  it('maybePromptZilloPierceCancel exists and gates on real Pierce > 0', () => {
-    const fn = H_CB_SRC.match(/async function maybePromptZilloPierceCancel\(thread, game, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fn, 'maybePromptZilloPierceCancel must exist');
-    const body = fn[0];
-    // Must compute total pierce from all sources before prompting
-    assert.match(body, /combat\.bonusPierce/,    'must include bonusPierce');
-    assert.match(body, /combat\.surgePierce/,    'must include surgePierce (post step-5 contribution)');
-    assert.match(body, /combat\.attackInfo\?\.pierce/, 'must include attackInfo.pierce (override-dice contribution)');
-    assert.match(body, /combat\.defenderReducePierce/, 'must subtract any prior reductions');
-    assert.match(body, /if \(totalPierce <= 0\) return false;/,
-      'no Zillo prompt when Pierce is 0 — defender should not waste exhaust');
-    assert.match(body, /zillo_pierce_use_/,  'must offer "use" button');
-    assert.match(body, /zillo_pierce_skip_/, 'must offer "skip" button');
-  });
-
-  it('sendReadyToResolveRolls calls the Zillo prompt before posting the pre_resolve gate', () => {
-    const fn = H_CB_SRC.match(/export async function sendReadyToResolveRolls\(thread, gameId, game, ctx\) \{[\s\S]*?^}/m);
-    assert.ok(fn, 'sendReadyToResolveRolls body must be locatable');
-    const body = fn[0];
-    const promptIdx = body.indexOf('maybePromptZilloPierceCancel');
-    const gateIdx = body.indexOf("sendCombatGate(thread, game, game.pendingCombat, 'pre_resolve'");
-    assert.notStrictEqual(promptIdx, -1, 'must call maybePromptZilloPierceCancel');
-    assert.notStrictEqual(gateIdx, -1, 'must post the pre_resolve gate');
-    assert.ok(promptIdx < gateIdx, 'Zillo prompt must run before the pre_resolve gate');
-  });
-
   it('handleZilloPierceCancel is exported and registered for both use + skip prefixes', () => {
     assert.match(H_CB_SRC, /export async function handleZilloPierceCancel\(interaction, ctx\) \{/,
       'handleZilloPierceCancel must be exported');

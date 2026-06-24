@@ -175,8 +175,6 @@ import {
   runStartOfRoundDcEffects,
   runStartOfRoundContinuation,
   runPostDeployPhase,
-  sendRerollUI,
-  proceedAfterRerolls,
   sendReadyToResolveRolls,
   runStatusPhaseAfterEndOfRound,
 } from '../handlers/index.js';
@@ -580,7 +578,7 @@ export function buildHeadlessDeps(options = {}) {
     getDeploySpaceGridRows, buildDeployRowButtons,
 
     // Combat (from handlers)
-    sendRerollUI, proceedAfterRerolls, sendReadyToResolveRolls,
+    sendReadyToResolveRolls,
 
     // Mission rules (real)
     runEndOfRoundRules, runStartOfRoundRules,
