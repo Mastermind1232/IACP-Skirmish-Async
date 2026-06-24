@@ -334,6 +334,10 @@ register('combat_ondeclare_pick_', handleModsPick, 'combat');
 register('combat_rerolls_pick_', handleModsPick, 'combat');
 register('combat_afterresolve_pick_', handleModsPick, 'combat');
 register('combat_special_pick_', handleModsPick, 'combat');
+// zillo window's Done/ability button — was unregistered because its empty
+// window used to auto-skip; now that every window always posts a Done
+// (alexanbv 2026-06-23) it must route or the live zillo window would stall.
+register('combat_zillo_pick_', handleModsPick, 'combat');
 register('combat_modsub_', handleModsSubChoice, 'combat');
 // Tough Luck gate reaction (generic post-reroll: attack die → defender, defense
 // die → attacker may remove the rerolled die's result). alexanbv 2026-06-17.
