@@ -339,6 +339,7 @@ describe('headless combat resolution', () => {
       p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     const dcMeta = fh.getDcMessageMeta();
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
@@ -422,6 +423,7 @@ describe('headless combat resolution', () => {
       },
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     const dcMeta = fh.getDcMessageMeta();
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
@@ -499,6 +501,7 @@ describe('headless combat resolution', () => {
       },
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';
@@ -942,6 +945,7 @@ describe('headless combat resolution', () => {
       },
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';
@@ -1378,6 +1382,7 @@ describe('Recover heals attacker regardless of damage dealt', () => {
       },
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';
@@ -1440,6 +1445,7 @@ describe('Recover heals attacker regardless of damage dealt', () => {
       },
     });
     const game = fh.getGame();
+    game.selfPlay = true; // alexanbv 2026-06-23: self-play sim — empty combat windows auto-pass (live games post a Done)
     game.p1PlayAreaId = 'p1-play-area';
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';

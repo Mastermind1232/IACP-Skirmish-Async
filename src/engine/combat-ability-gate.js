@@ -75,11 +75,11 @@ export function activeSide(gate) {
 function _sideComplete(gate, side) {
   const s = gate[side];
   // A side is complete once its passives have fired AND the player has passed.
-  // A side with no abilities at all is complete only after passives are marked
-  // fired (so the caller still gets one autoResolvePassives call for symmetry)
-  // — but to avoid forcing an empty call, treat zero-ability sides as
-  // auto-complete.
-  if (s.passive.length === 0 && s.interactive.length === 0) return true;
+  // alexanbv 2026-06-23: EVERY side must be prompted to pass (click Done), even
+  // with zero abilities — no window may be auto-skipped. So a zero-ability side
+  // is NOT auto-complete; it stays active until passGate() (the live driver
+  // posts a Done-only window; self-play / runGate auto-pass it). Removing the
+  // old zero-ability short-circuit is what makes empty windows appear.
   return s.passivesFired && s.passed;
 }
 

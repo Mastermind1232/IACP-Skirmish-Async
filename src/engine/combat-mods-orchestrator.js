@@ -31,6 +31,10 @@ import {
  * @param {(side:string,id:string)=>Promise<void>|void} dispatches.firePassive
  * @param {(side:string,pendingIds:string[])=>Promise<void>|void} dispatches.postChooseWindow
  * @param {()=>Promise<void>|void} dispatches.onComplete
+ * @param {boolean} [dispatches.autoPassEmpty] when true (self-play / headless),
+ *   a side with no pending interactive abilities is auto-passed WITHOUT posting
+ *   a window (preserves the old auto-advance so self-play games don't stall on a
+ *   button nobody clicks). Live games leave this false so every window posts.
  */
 export async function driveModsGate(gate, dispatches) {
   if (!gate) { await dispatches.onComplete(); return; }
@@ -43,11 +47,16 @@ export async function driveModsGate(gate, dispatches) {
       if (dispatches.firePassive) await dispatches.firePassive(side, id);
     }
     const pending = pendingInteractive(gate, side);
-    if (pending.length > 0) {
-      if (dispatches.postChooseWindow) await dispatches.postChooseWindow(side, pending);
-      return; // pause for the player's pick/done
+    // alexanbv 2026-06-23: ALWAYS post the choose window for the active side and
+    // pause — even with zero pending abilities the player must click Done; no
+    // window auto-skips. (_postGateChooseWindow always appends the Done button.)
+    // Self-play / headless auto-passes empty sides so it doesn't stall.
+    if (pending.length === 0 && dispatches.autoPassEmpty) {
+      passGate(gate, side);
+      continue;
     }
-    passGate(gate, side); // no interactive abilities for this side → done
+    if (dispatches.postChooseWindow) await dispatches.postChooseWindow(side, pending);
+    return; // pause for the player's pick/done
   }
 }
 

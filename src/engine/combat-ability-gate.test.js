@@ -73,14 +73,25 @@ describe('combat-ability-gate: passives auto-fire, interactive is player-ordered
   });
 });
 
-describe('combat-ability-gate: empty sides auto-complete', () => {
-  it('a side with no abilities does not block; gate with no abilities is complete', () => {
+describe('combat-ability-gate: empty sides still require an explicit pass', () => {
+  // alexanbv 2026-06-23: a side with no abilities is NOT auto-complete — every
+  // side must be prompted to pass (the live driver posts a Done-only window),
+  // so no combat window auto-skips.
+  it('a gate with no abilities still walks attacker→defender, completing only after both pass', () => {
     const g = buildStepGate('step5', []);
+    assert.equal(activeSide(g), 'attacker'); // empty attacker side is active until passed
+    autoResolvePassives(g, 'attacker');
+    passGate(g, 'attacker');
+    assert.equal(activeSide(g), 'defender'); // then the empty defender side
+    autoResolvePassives(g, 'defender');
+    passGate(g, 'defender');
     assert.ok(isGateComplete(g));
-    assert.equal(activeSide(g), null);
 
-    const g2 = buildStepGate('step4-attacker', [D_INT1]); // defender-only
-    assert.equal(activeSide(g2), 'defender'); // attacker side auto-complete (empty)
+    const g2 = buildStepGate('step4-attacker', [D_INT1]); // defender-only abilities
+    assert.equal(activeSide(g2), 'attacker'); // empty attacker side still goes first
+    autoResolvePassives(g2, 'attacker');
+    passGate(g2, 'attacker');
+    assert.equal(activeSide(g2), 'defender');
     autoResolvePassives(g2, 'defender');
     passGate(g2, 'defender');
     assert.ok(isGateComplete(g2));
@@ -134,7 +145,12 @@ describe('combat-ability-gate: a player may pass without resolving any interacti
     const g = buildStepGate('step4-attacker', [A_INT1, A_INT2]);
     autoResolvePassives(g, 'attacker');
     passGate(g, 'attacker'); // declines both
-    assert.equal(activeSide(g), null); // no defender abilities → complete
+    // The empty defender side is still active until it too passes (alexanbv
+    // 2026-06-23: empty sides no longer auto-complete).
+    assert.equal(activeSide(g), 'defender');
+    autoResolvePassives(g, 'defender');
+    passGate(g, 'defender');
+    assert.equal(activeSide(g), null);
     assert.deepEqual(g.attacker.resolved, []);
   });
 });

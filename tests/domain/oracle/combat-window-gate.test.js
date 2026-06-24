@@ -13,7 +13,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildWindowGate } from '../../../src/engine/combat-mods-gate.js';
 import { registerCombatAbility } from '../../../src/engine/combat-timing-registry.js';
-import { runGate, isGateComplete } from '../../../src/engine/combat-ability-gate.js';
+import { runGate, isGateComplete, activeSide, passGate } from '../../../src/engine/combat-ability-gate.js';
 
 const TEST = (g, c) => !!c?._testWindowGate;
 for (const w of ['rerolls', 'after_resolve']) {
@@ -50,8 +50,15 @@ describe('combat window gate: generic builder drives rerolls + after_resolve', (
     });
   }
 
-  it('a window with no eligible abilities builds an empty, already-complete gate', () => {
+  it('a window with no eligible abilities still prompts each side (no auto-skip)', () => {
+    // alexanbv 2026-06-23: an empty window is NOT already-complete — each side
+    // must be prompted to pass (the live driver posts a Done-only window), so
+    // no window auto-skips. The empty gate completes only after both pass.
     const gate = buildWindowGate('rerolls', {}, { _testWindowGate: false }, {});
-    assert.ok(isGateComplete(gate), 'empty gate is complete (drives straight to onComplete)');
+    assert.ok(!isGateComplete(gate), 'empty gate is NOT auto-complete — it prompts both sides');
+    assert.equal(activeSide(gate), 'attacker');
+    passGate(gate, 'attacker');
+    passGate(gate, 'defender');
+    assert.ok(isGateComplete(gate));
   });
 });

@@ -871,6 +871,9 @@ function _windowForPickCustomId(customId) {
 async function _driveGatePath(window, thread, game, combat, ctx) {
   const cfg = _GATE_WINDOWS[window];
   await driveModsGate(combat[cfg.field], {
+    // Self-play / headless: auto-pass empty sides (no live player to click Done),
+    // so the always-post-a-window behavior doesn't stall self-driven games.
+    autoPassEmpty: !!game.selfPlay,
     firePassive: cfg.firePassive ? (side, id) => cfg.firePassive(side, id, thread, game, combat, ctx) : undefined,
     postChooseWindow: (side, pending) => _postGateChooseWindow(window, side, pending, thread, game, combat),
     onComplete: async () => {

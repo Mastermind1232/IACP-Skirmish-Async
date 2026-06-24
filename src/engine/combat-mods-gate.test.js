@@ -46,9 +46,12 @@ describe('combat-mods-gate: builds the mods gate from the registry', () => {
     assert.ok(fired.indexOf('P:attacker:pulse_cannon') < fired.indexOf('I:defender:agile'));
   });
 
-  it('empty gate when no mods abilities present', () => {
+  it('empty gate still prompts each side (no auto-skip)', () => {
+    // alexanbv 2026-06-23: a mods gate with no abilities is NOT auto-complete —
+    // the attacker side is active until passed (the live driver posts a Done-only
+    // window), so no mods window auto-skips.
     const g = buildModsGate(game(), combat({ defenseRoll: { block: 0, dodge: false } }),
       deps({ Atk: { specialAbilityIds: [] }, Def: { specialAbilityIds: [] } }));
-    assert.equal(activeSide(g), null);
+    assert.equal(activeSide(g), 'attacker');
   });
 });

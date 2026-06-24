@@ -44,13 +44,17 @@ describe('combat-mods-orchestrator: event-driven sequencing', () => {
     assert.equal(log.at(-1), 'COMPLETE');
   });
 
-  it('a gate with only passives completes without ever posting a window', async () => {
+  // alexanbv 2026-06-23: by DEFAULT (live games) every side posts a Done window
+  // even with zero interactive abilities — no window auto-skips. The old
+  // auto-advance behavior is preserved only under autoPassEmpty (self-play).
+  it('autoPassEmpty: a gate with only passives completes without posting a window', async () => {
     const g = buildStepGate('mods', [
       { id: 'a-pass', name: 'AP', side: 'attacker', kind: 'passive' },
       { id: 'd-pass', name: 'DP', side: 'defender', kind: 'passive' },
     ]);
     const log = [];
     await driveModsGate(g, {
+      autoPassEmpty: true,
       firePassive: (s, id) => log.push(`P:${s}:${id}`),
       postChooseWindow: () => log.push('WIN'),
       onComplete: () => log.push('COMPLETE'),
@@ -58,9 +62,27 @@ describe('combat-mods-orchestrator: event-driven sequencing', () => {
     assert.deepEqual(log, ['P:attacker:a-pass', 'P:defender:d-pass', 'COMPLETE']);
   });
 
-  it('an empty gate completes immediately', async () => {
+  it('autoPassEmpty: an empty gate completes immediately', async () => {
     const log = [];
-    await driveModsGate(buildStepGate('mods', []), { onComplete: () => log.push('COMPLETE') });
+    await driveModsGate(buildStepGate('mods', []), { autoPassEmpty: true, onComplete: () => log.push('COMPLETE') });
     assert.deepEqual(log, ['COMPLETE']);
+  });
+
+  it('default (live): an empty gate posts a Done window for EACH side before completing', async () => {
+    const g = buildStepGate('mods', []);
+    const log = [];
+    const d = {
+      firePassive: (s, id) => log.push(`P:${s}:${id}`),
+      postChooseWindow: (side, pending) => log.push(`WIN:${side}:[${pending.join(',')}]`),
+      onComplete: () => log.push('COMPLETE'),
+    };
+    await driveModsGate(g, d); // posts empty attacker window, pauses
+    assert.deepEqual(log, ['WIN:attacker:[]']);
+    passModsSide(g, 'attacker');
+    await driveModsGate(g, d); // posts empty defender window, pauses
+    assert.equal(log.at(-1), 'WIN:defender:[]');
+    passModsSide(g, 'defender');
+    await driveModsGate(g, d);
+    assert.equal(log.at(-1), 'COMPLETE');
   });
 });
