@@ -9924,7 +9924,31 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
     });
     return;
   }
-  await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
+  // Nothing to spend (no surges rolled, or no affordable abilities). Self-play
+  // advances straight through; a live game still prompts the attacker with a
+  // Done button so the surge window is never auto-skipped (alexanbv 2026-06-23).
+  if (game.selfPlay) {
+    await sendReadyToResolveRolls(thread, game.gameId, game, ctx);
+    return;
+  }
+  combat.surgeRemaining = totalSurge;
+  combat.surgeDamage = 0;
+  combat.surgePierce = 0;
+  combat.surgeAccuracy = 0;
+  combat.surgeConditions = [];
+  const _noSurgeAtkPN = combat.falseOrdersControllerPlayerNum ?? attackerPlayerNum;
+  const _noSurgeAtkOwnerId = getPlayerId(game, _noSurgeAtkPN);
+  const _noSurgeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`combat_surge_${game.gameId}_done`)
+      .setLabel('Done (no surge to spend)')
+      .setStyle(ButtonStyle.Primary),
+  );
+  await thread.send({
+    content: `<@${_noSurgeAtkOwnerId}> — **No surge to spend** (${totalSurge} surge). Click **Done** to continue.`,
+    components: [_noSurgeRow],
+    allowedMentions: { users: [_noSurgeAtkOwnerId].filter(Boolean) },
+  });
 }
 
 /**
