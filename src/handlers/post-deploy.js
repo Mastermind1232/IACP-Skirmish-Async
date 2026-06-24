@@ -10,14 +10,14 @@ import {
   getPlayerId, getDcList, getDcMessageIds, getDcAttachments,
   getInitiativePlayerNum, opponentPlayerNum, getHandChannelId,
 } from '../game/player-helpers.js';
-import { bottomLeftCoord, normalizeCoord, getFootprintCells, parseSizeString } from '../game/coords.js';
+import { normalizeCoord, getFootprintCells } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
 import { edgeKey } from '../game/coords.js';
 import { getMapTokensData } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
-import { buildRowPickerButtons, chunkButtonsToRows, cleanupSpacePick } from '../discord/components.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 

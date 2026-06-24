@@ -6,8 +6,8 @@
 import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { getDcList, getDcMessageIds, getActivatedDcIndices, getPlayAreaId, dcAttachmentsKey, ccAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, getCcDiscard, getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, healHp, awardObjectiveVp, deductVp, awardKillVp, dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
+import { getDcList, getDcMessageIds, dcAttachmentsKey, ccAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, ccDiscardKey } from '../game/player-helpers.js';
+import { reduceHp, healHp, awardObjectiveVp, deductVp, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';

@@ -501,12 +501,6 @@ function getRoundActiveActions(game, playerNum, deps) {
     if (coverActions.length > 0) return coverActions;
   }
 
-  // Pending Strain Choice (player must resolve strain allocation before continuing)
-  if (game.pendingStrainChoice && Object.keys(game.pendingStrainChoice).length > 0) {
-    const strainActions = getStrainChoiceActions(game, playerNum);
-    if (strainActions.length > 0) return strainActions;
-  }
-
   // Force Vision pending: blocked player must pick a group
   if (game.forceVisionPending && game.forceVisionPending === playerNum) {
     const fvActions = getForceVisionPickActions(game, playerNum);
@@ -1804,42 +1798,6 @@ function getCoverFireActions(game, playerNum) {
     customId: buildCustomId(ACTION_TYPES.COVER_FIRE_SKIP, { gameId }),
     description: 'Skip Cover Fire',
   });
-
-  return actions;
-}
-
-// ── Strain Choice ─────────────────────────────────────────────────────────
-
-function getStrainChoiceActions(game, playerNum) {
-  const pending = game.pendingStrainChoice;
-  if (!pending || !pending.playerNum || pending.playerNum !== playerNum) return [];
-
-  const gameId = game.gameId;
-  const actions = [];
-
-  // Always offer "take all as damage"
-  actions.push({
-    type: ACTION_TYPES.STRAIN_CHOICE_ALLDMG,
-    customId: buildCustomId(ACTION_TYPES.STRAIN_CHOICE_ALLDMG, { gameId }),
-    description: `Take all strain as damage (${pending.amount} HP)`,
-    params: { amount: pending.amount },
-  });
-
-  // Offer CC discard options (1..maxDiscards) — rules: discard from deck top, not hand
-  const deckKey = `player${pending.playerNum}CcDeck`;
-  const deck = game[deckKey] || [];
-  const ccCostPerStrain = pending.ccCostPerStrain || 1;
-  const maxDiscards = pending.amount > 0 ? Math.min(pending.amount, Math.floor(deck.length / ccCostPerStrain)) : 0;
-  for (let i = 1; i <= maxDiscards; i++) {
-    const hpRemaining = pending.amount - i;
-    const ccCost = i * ccCostPerStrain;
-    actions.push({
-      type: ACTION_TYPES.STRAIN_CHOICE_DISCARD,
-      customId: buildCustomId(ACTION_TYPES.STRAIN_CHOICE_DISCARD, { gameId, discardCount: i }),
-      description: `Discard ${ccCost} CC${ccCost > 1 ? 's' : ''}${hpRemaining > 0 ? ` + ${hpRemaining} HP` : ''}`,
-      params: { discardCount: i, ccCost, hpRemaining },
-    });
-  }
 
   return actions;
 }

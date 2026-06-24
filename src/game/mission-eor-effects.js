@@ -43,11 +43,6 @@ export function registerMissionEorEffect(flagName, handler) {
   _registry.set(flagName, handler);
 }
 
-/** Get the registered handler for a flag, or null. */
-export function getMissionEorEffect(flagName) {
-  return _registry.get(flagName) || null;
-}
-
 /**
  * Canonical iteration order for mission EoR effects. Add new effects
  * here when registering them so the dispatch order is stable. Effects
@@ -166,10 +161,6 @@ export function registerMissionSorEffect(flagName, handler) {
   _sorRegistry.set(flagName, handler);
 }
 
-export function getMissionSorEffect(flagName) {
-  return _sorRegistry.get(flagName) || null;
-}
-
 export async function runMissionSorEffects(game, missionStartOfRoundRules, ctx, opts) {
   if (!missionStartOfRoundRules || typeof missionStartOfRoundRules !== 'object') {
     return { pending: false };
@@ -207,12 +198,6 @@ export async function runRemainingMissionSorEffects(game, ctx) {
   }
   delete game._pendingMissionSorEffects;
   return { pending: false };
-}
-
-export function getMissionSorLogVars(game, { clear = false } = {}) {
-  const v = game._pendingMissionSorLogVars || null;
-  if (clear) delete game._pendingMissionSorLogVars;
-  return v;
 }
 
 function _orderedSorFlags(rulesStartOfRound) {

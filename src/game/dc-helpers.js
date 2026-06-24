@@ -58,11 +58,6 @@ export function effectiveDcNameForFigure(game, figureKey) {
   return su ? `[${su}]` : dcNameFromFigureKey(figureKey);
 }
 
-/** The SU-aware DC effect for a figure (its own card's effect). */
-export function effectiveDcEffectForFigure(game, figureKey) {
-  return getDcEffect(effectiveDcNameForFigure(game, figureKey));
-}
-
 /**
  * True when `figureKey` currently has the In the Shadows (CC) effect active.
  * In the Shadows scopes to the single figure that played it (game.roundInTheShadows

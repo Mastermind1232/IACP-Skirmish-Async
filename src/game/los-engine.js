@@ -721,38 +721,4 @@ export function tileToTileLos(fromX, fromY, toX, toY, ctx) {
   return false;
 }
 
-// ── adapter: build the engine ctx from our existing map data shape ─────────
-
-/**
- * Convert our impassableEdges (array of [coordA, coordB] cell pairs) into
- * Nick-style wall segments at integer corners.
- */
-export function impassableEdgesToWalls(edges, parseCoord) {
-  const walls = [];
-  for (const edge of (edges || [])) {
-    if (!edge || edge.length < 2) continue;
-    const a = parseCoord(edge[0]);
-    const b = parseCoord(edge[1]);
-    if (a.col < 0 || b.col < 0) continue;
-    if (a.col === b.col && Math.abs(a.row - b.row) === 1) {
-      // vertically adjacent — horizontal wall at y = max(a.row, b.row)
-      const y = Math.max(a.row, b.row);
-      walls.push([{ x: a.col, y }, { x: a.col + 1, y }]);
-    } else if (a.row === b.row && Math.abs(a.col - b.col) === 1) {
-      // horizontally adjacent — vertical wall at x = max(a.col, b.col)
-      const x = Math.max(a.col, b.col);
-      walls.push([{ x, y: a.row }, { x, y: a.row + 1 }]);
-    }
-    // else: diagonal "edge" — not a single wall segment, skip.
-  }
-  return walls;
-}
-
-export const _internals = {
-  getVerticalEdges, getHorizontalEdges, getIntersections, getTiles,
-  edgeBlocked, tileBlocked, adjacentTilesBlocked,
-  getLosFromCornerToCorner, getLosFromPointToPoint,
-  pathsOverlap, wallSetFromSegments,
-};
-
 export { wallSetFromSegments };

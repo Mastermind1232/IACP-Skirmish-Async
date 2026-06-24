@@ -113,25 +113,6 @@ export function healHpDistributed(dcHealthState, game, msgId, totalAmount, playe
 }
 
 /**
- * Read-only view of a figure's damage state in destruct-model terms.
- * Returns null if no entry. Translates from legacy [cur, max] storage.
- *
- * @param {Map} dcHealthState
- * @param {string} msgId
- * @param {number} figureIndex
- * @returns {{ damage: number, health: number } | null}
- */
-export function getDamageState(dcHealthState, msgId, figureIndex) {
-  const healthState = dcHealthState.get(msgId);
-  if (!healthState || !Array.isArray(healthState[figureIndex])) return null;
-  const [cur, max] = healthState[figureIndex];
-  const health = max ?? cur ?? 0;
-  const curHp = cur ?? max ?? 0;
-  const damage = Math.max(0, health - curHp);
-  return { damage, health };
-}
-
-/**
  * Apply damage to a figure and surface a defeat record if lethal.
  *
  * Per destruct's 2026-05-06 audit: "any time a figure suffers damage you

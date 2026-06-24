@@ -1228,55 +1228,6 @@ describe('headless combat resolution', () => {
       'VP should be base (12) + negative attachment (-5) = 7');
   });
 
-  it('strain discard with empty deck offers only all-damage option', async () => {
-    // Rules: discards come from deck top. If deck is empty, no discard is possible.
-    // getStrainChoiceActions should offer only "take all as damage" — no discard buttons.
-    const { getAvailableActions } = await import('../../src/engine/available-actions.js');
-
-    const fh = createFlowHarness({
-      mapId: 'mos-eisley-outskirts',
-      p1Army: [{ dcName: 'Luke Skywalker' }],
-      p2Army: [{ dcName: 'Stormtrooper (Regular)' }],
-      p1CcDeck: [],   // empty deck
-      p1CcHand: ['CardX', 'CardY'],  // hand has cards, but strain uses deck
-    });
-    const game = fh.getGame();
-    const dcMeta = fh.getDcMessageMeta();
-
-    let p1MsgId = null;
-    for (const [msgId, meta] of dcMeta) {
-      if (meta.playerNum === 1) { p1MsgId = msgId; break; }
-    }
-    const p1FigKey = Object.keys(game.figurePositions[1])[0];
-
-    // Set pending strain
-    game.pendingStrainChoice = {
-      figureKey: p1FigKey,
-      playerNum: 1,
-      amount: 2,
-      headhunterDmg: 0,
-      abilityLabel: 'Test Strain',
-      sourceLabel: 'test',
-      dcName: 'Luke Skywalker',
-      msgId: p1MsgId,
-      figureIndex: 0,
-      threadId: 'test-combat-thread',
-      discardedCount: 0,
-      underDuressActive: false,
-      ccCostPerStrain: 1,
-    };
-
-    // Get available actions for P1
-    const actions = fh.getActions(1);
-    const strainActions = actions.filter(a =>
-      a.type === 'strain_choice_alldmg' || a.type === 'strain_choice_discard'
-    );
-
-    // Only "all damage" should be available — no discard options despite hand having cards
-    assert.equal(strainActions.length, 1, 'only one strain action available');
-    assert.equal(strainActions[0].type, 'strain_choice_alldmg',
-      'only action is take-all-as-damage when deck is empty');
-  });
 });
 
 // ── Weakened removal timing (rules: WEAKENED) ─────────────────────────────────

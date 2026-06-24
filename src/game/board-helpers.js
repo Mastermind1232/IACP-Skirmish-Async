@@ -40,13 +40,6 @@ export function getActiveTerminals(game, mapId) {
   return all.filter((t) => !discardedSet.has(normalizeCoord(t)));
 }
 
-/** True iff the given terminal coord has been discarded this game. */
-export function isTerminalDiscarded(game, coord) {
-  if (!game?.discardedTerminals || !coord) return false;
-  const c = normalizeCoord(coord);
-  return game.discardedTerminals.some((d) => normalizeCoord(d) === c);
-}
-
 /** Compute the set of edge keys for closed (not-yet-opened) doors on the current map. */
 export function getClosedDoorEdges(game) {
   const mapId = game?.selectedMap?.id;

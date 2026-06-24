@@ -17,11 +17,6 @@
  */
 import { canCancelCc, availableCounters, resolveCounterStack } from './cc-counter-rules.js';
 
-/** The open window, or null. */
-export function getCounterWindow(game) {
-  return game?.ccCounterWindow || null;
-}
-
 /** Open a window for a freshly played card (the bottom of a new stack). */
 export function openCounterWindow(game, play) {
   game.ccCounterWindow = { gameId: game.gameId, stack: [play] };
@@ -83,11 +78,6 @@ export function resolveAndCloseWindow(game) {
   const outcome = w.stack.map((e, i) => ({ ...e, status: statuses[i] }));
   delete game.ccCounterWindow;
   return outcome;
-}
-
-/** Abort/clear the window without resolving (e.g. game teardown). */
-export function clearCounterWindow(game) {
-  if (game) delete game.ccCounterWindow;
 }
 
 // ── Combat gate-resume registry ─────────────────────────────────────────────

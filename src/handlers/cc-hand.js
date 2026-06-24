@@ -56,25 +56,6 @@ import { NEGATION, COMM_DISRUPTION } from '../game/cc-counter-rules.js';
 // choose themselves (shuffle + draw 2) or the opponent (no effect — protected).
 const SC_HAND_CCS = new Set(['Stall for Time', 'Collect Intel', 'Intelligence Leak', 'Strategic Shift']);
 
-// Would a Comm Disruption window open for this cost>0 CC? Mirrors the gate in
-// promptCommDisruption (opponent has live friendly SPY groups AND cost <= that
-// count). Used to DEFER a cost>0 CC's effect past the Comms window — Comms must
-// cancel BEFORE the effect resolves, like Negation does for cost-0 (alexanbv
-// 2026-06-17). Degrades safely: if this ever disagrees with promptCommDisruption
-// the worst case is the old resolve-before-Comms behavior, not a break.
-function _commDisruptionWindowWouldOpen(game, playerNum, card, cost) {
-  if (card === 'Comm Disruption' || card === 'Negation') return false;
-  if (!(cost > 0)) return false;
-  const oppNum = opponentPlayerNum(playerNum);
-  const dcEffectsData = getDcEffects() || {};
-  const oppDcList = (oppNum === 1 ? game.p1DcList : game.p2DcList) || [];
-  const spyCount = oppDcList.filter((dc) => {
-    if (!dc || dc.defeated) return false;
-    return (dcEffectsData[dc.dcName]?.keywords || []).map((k) => String(k).toUpperCase()).includes('SPY');
-  }).length;
-  return spyCount > 0 && cost <= spyCount;
-}
-
 // ── Unified recursive CC counter-window (Negate/Comms) — alexanbv 2026-06-17 ──
 // playCC step 3. Built additively (not yet routed into the live play path) so it
 // can be playtested before replacing the legacy pendingNegation/CD flow. Drives
@@ -2083,45 +2064,6 @@ export async function handleCcPlay(interaction, ctx) {
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction */
-export async function handleCcDraw(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, logGameAction, saveGames, client } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cc_draw_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const channelId = interaction.channel?.id;
-  const isP1Hand = channelId === game.p1HandId;
-  const isP2Hand = channelId === game.p2HandId;
-  if (!isP1Hand && !isP2Hand) {
-    await interaction.followUp({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const playerNum = isP1Hand ? 1 : 2;
-  const deckKey = ccDeckKey(playerNum);
-  const handKey = ccHandKey(playerNum);
-  let deck = (game[deckKey] || []).slice();
-  const hand = (game[handKey] || []).slice();
-  if (deck.length === 0) {
-    await interaction.followUp({ content: 'No cards in deck to draw.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const card = deck.shift();
-  hand.push(card);
-  game[deckKey] = deck;
-  game[handKey] = hand;
-  const handPayload = buildHandDisplayPayload(hand, deck, gameId, game, playerNum);
-  handPayload.content = `**Draw CC** — Drew **${card}**.\n\n` + handPayload.content;
-  await interaction.message.edit({
-    content: handPayload.content,
-    embeds: handPayload.embeds,
-    files: handPayload.files || [],
-    components: handPayload.components,
-  }).catch(discordCatch);
-  await updateHandVisualMessage(game, playerNum, client);
-  await logGameAction(game, client, `<@${interaction.user.id}> drew **${card}**`, { allowedMentions: { users: [interaction.user.id] }, icon: 'card' });
-  saveGames(game.gameId);
-}
-
-/** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleCcSearchDiscard(interaction, ctx) {
   const { getGame, buildDiscardPileDisplayPayload, updateDiscardPileMessage, saveGames, client } = ctx;
   const match = interaction.customId.match(/^cc_search_discard_([^_]+)_(\d+)$/);
@@ -2212,33 +2154,4 @@ export async function handleCcCloseDiscard(interaction, ctx) {
   saveGames(game.gameId);
 }
 
-/** @param {import('discord.js').ButtonInteraction} interaction */
-export async function handleCcDiscard(interaction, ctx) {
-  const { getGame } = ctx;
-  const gameId = parseCustomId(interaction.customId, 'cc_discard_');
-  const game = await requireGame(interaction, getGame, gameId);
-  if (!game) return;
-  const channelId = interaction.channel?.id;
-  const isP1Hand = channelId === game.p1HandId;
-  const isP2Hand = channelId === game.p2HandId;
-  if (!isP1Hand && !isP2Hand) {
-    await interaction.followUp({ content: 'Use this in your **Your Hand** thread (inside your Play Area).', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const playerNum = isP1Hand ? 1 : 2;
-  const hand = playerNum === 1 ? (game.player1CcHand || []) : (game.player2CcHand || []);
-  if (hand.length === 0) {
-    await interaction.followUp({ content: 'No cards in hand to discard.', ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  const select = new StringSelectMenuBuilder()
-    .setCustomId(`cc_discard_select_${gameId}`)
-    .setPlaceholder('Choose a card to discard')
-    .addOptions(hand.slice(0, 25).map((c) => new StringSelectMenuOptionBuilder().setLabel(c).setValue(c)));
-  await interaction.followUp({
-    content: '**Discard CC** — Select a card to discard:',
-    components: [new ActionRowBuilder().addComponents(select)],
-    ephemeral: false,
-  });
-}
 

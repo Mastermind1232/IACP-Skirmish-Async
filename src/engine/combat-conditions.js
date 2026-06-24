@@ -16,7 +16,6 @@ import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { getFootprintCells, shiftCoord } from '../game/coords.js';
 import { getEffectiveFigureSize } from '../game/board-helpers.js';
-import { loadAbilitySpec } from './combat-ability-db.js';
 
 /** All board cells a figure occupies (footprint), lowercased. */
 function figureCells(game, pn, figureKey) {
@@ -634,18 +633,6 @@ function othersPredicate(affectsOthers, ownerCard, side) {
  * others-only / both, instead of N×M combined functions (alexanbv 2026-06-16).
  * Reusable at EVERY timing instance, not just combat.
  */
-/**
- * Build the usability condition for a card's ability at a spec timing, looked up
- * from the CSV — so a previously hand-wired ability can use the SAME generic
- * conditionForRow detection (alexanbv "all abilities should use this generic
- * logic"). Falls back to always-true when no matching row exists.
- */
-export function conditionForCard(card, timing) {
-  const rows = loadAbilitySpec().get(String(card || '').toLowerCase()) || [];
-  const row = rows.find((r) => r.timing === timing);
-  return row ? conditionForRow(row) : () => true;
-}
-
 export function conditionForRow(row) {
   const side = (row?.attack_side === 'defender') ? 'defender' : 'attacker';
   const affectsSelf = String(row?.affects_self).toUpperCase() === 'TRUE';

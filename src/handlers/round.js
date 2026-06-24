@@ -2094,13 +2094,6 @@ export async function handleExtraArmorConfirm(interaction, ctx) {
 }
 
 /**
- * Extra Armor cancel: kept for backwards compat but no longer used in the new UI.
- */
-export async function handleExtraArmorCancel(interaction, ctx) {
-  await interaction.deferUpdate().catch(discordCatch);
-}
-
-/**
  * Rule by Fear: player picks 1 card from hand to discard.
  */
 export async function handleRbfDiscard(interaction, ctx) {

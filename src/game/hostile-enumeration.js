@@ -71,16 +71,6 @@ export function npcHostility(npc) {
   return npc.hostileToAll ? 'hostile' : 'neutral';
 }
 
-/** True if the NPC's space costs +1 MP to move through (Thug-style hostility). */
-export function npcCostsMpToMoveThrough(npc) {
-  return npcHostility(npc) === 'hostile';
-}
-
-/** True if the NPC blocks objective/terminal control when adjacent (Thug-style). */
-export function npcBlocksControl(npc) {
-  return npcHostility(npc) === 'hostile';
-}
-
 /**
  * Enumerate every figure in play — regular figures owned by either
  * player AND neutral NPCs (Thugs/Krykna) regardless of hostileToAll.

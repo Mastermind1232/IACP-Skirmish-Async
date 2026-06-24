@@ -385,33 +385,6 @@ export function setPendingNegation(game, payload) {
   pushInterrupt(game, INTERRUPT_TYPES.CC_NEGATION, payload);
 }
 
-/**
- * Mutate the existing pendingNegation in place (e.g. after waitingMsgId is
- * known). Keeps the stack entry's payload reference in sync.
- */
-export function updatePendingNegation(game, mutator) {
-  if (!game?.pendingNegation) return;
-  mutator(game.pendingNegation);
-  // Stack entry's payload IS game.pendingNegation by reference (set above),
-  // so the mutation propagates. But if someone constructed an entry with a
-  // different object, refresh it explicitly.
-  const entry = peekInterrupt(game, INTERRUPT_TYPES.CC_NEGATION);
-  if (entry && entry.payload !== game.pendingNegation) {
-    entry.payload = game.pendingNegation;
-  }
-}
-
-/**
- * Clear the CC_NEGATION interrupt from BOTH the legacy field and the stack.
- */
-export function clearPendingNegation(game) {
-  if (!game) return;
-  delete game.pendingNegation;
-  if (Array.isArray(game.interrupts)) {
-    game.interrupts = game.interrupts.filter((i) => i.type !== INTERRUPT_TYPES.CC_NEGATION);
-  }
-}
-
 /** CC_CHOICE — dual-write helpers. */
 export function setPendingCcChoice(game, payload) {
   if (!game) return;
@@ -502,7 +475,6 @@ export function setPendingStrainChoice(game, payload) { _setDual(game, 'pendingS
 export function clearPendingStrainChoice(game) { _clearDual(game, 'pendingStrainChoice', INTERRUPT_TYPES.STRAIN_CHOICE); }
 
 export function setPendingIllicitArms(game, payload) { _setDual(game, 'pendingIllicitArms', INTERRUPT_TYPES.ILLICIT_ARMS, payload); }
-export function clearPendingIllicitArms(game) { _clearDual(game, 'pendingIllicitArms', INTERRUPT_TYPES.ILLICIT_ARMS); }
 
 export function setPendingWantonDestruction(game, payload) { _setDual(game, 'pendingWantonDestruction', INTERRUPT_TYPES.WANTON_DESTRUCTION, payload); }
 export function clearPendingWantonDestruction(game) { _clearDual(game, 'pendingWantonDestruction', INTERRUPT_TYPES.WANTON_DESTRUCTION); }
@@ -547,7 +519,6 @@ export function setPendingPunishingStrike(game, payload) { _setDual(game, 'pendi
 export function clearPendingPunishingStrike(game) { _clearDual(game, 'pendingPunishingStrike', INTERRUPT_TYPES.PUNISHING_STRIKE); }
 
 export function setPendingPowerConverter(game, payload) { _setDual(game, 'pendingPowerConverter', INTERRUPT_TYPES.POWER_CONVERTER, payload); }
-export function clearPendingPowerConverter(game) { _clearDual(game, 'pendingPowerConverter', INTERRUPT_TYPES.POWER_CONVERTER); }
 
 export function setPendingDeflect(game, payload) { _setDual(game, 'pendingDeflect', INTERRUPT_TYPES.DEFLECT, payload); }
 export function clearPendingDeflect(game) { _clearDual(game, 'pendingDeflect', INTERRUPT_TYPES.DEFLECT); }
@@ -559,7 +530,6 @@ export function setPendingDioFollow(game, payload) { _setDual(game, 'pendingDioF
 export function clearPendingDioFollow(game) { _clearDual(game, 'pendingDioFollow', INTERRUPT_TYPES.DIO_FOLLOW); }
 
 export function setPendingExtraProtection(game, payload) { _setDual(game, 'pendingExtraProtection', INTERRUPT_TYPES.EXTRA_PROTECTION, payload); }
-export function clearPendingExtraProtection(game) { _clearDual(game, 'pendingExtraProtection', INTERRUPT_TYPES.EXTRA_PROTECTION); }
 
 export function setPendingDurasteelFistPush(game, payload) { _setDual(game, 'pendingDurasteelFistPush', INTERRUPT_TYPES.DURASTEEL_FIST_PUSH, payload); }
 export function clearPendingDurasteelFistPush(game) { _clearDual(game, 'pendingDurasteelFistPush', INTERRUPT_TYPES.DURASTEEL_FIST_PUSH); }
@@ -578,9 +548,6 @@ export function clearPendingRogueOneTokenPick(game) { _clearDual(game, 'pendingR
 
 export function setPendingReaction(game, payload) { _setDual(game, 'pendingReaction', INTERRUPT_TYPES.REACTION, payload); }
 export function clearPendingReaction(game) { _clearDual(game, 'pendingReaction', INTERRUPT_TYPES.REACTION); }
-
-export function setPendingCommDisruptionPrompt(game, payload) { _setDual(game, 'pendingCommDisruptionPrompt', INTERRUPT_TYPES.COMM_DISRUPTION_PROMPT, payload); }
-export function clearPendingCommDisruptionPrompt(game) { _clearDual(game, 'pendingCommDisruptionPrompt', INTERRUPT_TYPES.COMM_DISRUPTION_PROMPT); }
 
 export function setPendingIndiscriminateFire(game, payload) { _setDual(game, 'pendingIndiscriminateFire', INTERRUPT_TYPES.INDISCRIMINATE_FIRE, payload); }
 export function clearPendingIndiscriminateFire(game) { _clearDual(game, 'pendingIndiscriminateFire', INTERRUPT_TYPES.INDISCRIMINATE_FIRE); }
@@ -731,9 +698,6 @@ export function clearPendingBELReorder(game) { _clearDual(game, 'pendingBELReord
 
 export function setPendingUnhingedDirector(game, payload) { _setDual(game, 'pendingUnhingedDirector', INTERRUPT_TYPES.UNHINGED_DIRECTOR, payload); }
 export function clearPendingUnhingedDirector(game) { _clearDual(game, 'pendingUnhingedDirector', INTERRUPT_TYPES.UNHINGED_DIRECTOR); }
-
-export function setPendingUnhingedStrain(game, payload) { _setDual(game, 'pendingUnhingedStrain', INTERRUPT_TYPES.UNHINGED_STRAIN, payload); }
-export function clearPendingUnhingedStrain(game) { _clearDual(game, 'pendingUnhingedStrain', INTERRUPT_TYPES.UNHINGED_STRAIN); }
 
 /**
  * MISSION_SOR_REVEAL — boolean flag, not a payload. Set/clear toggle.

@@ -47,7 +47,6 @@ const EMIT_ALLOWLIST = new Set([
   // user confirmation before deletion.
   'refresh_all_',           // game-tools.js:119 handleRefreshAll — superseded by resync_
   'default_deck_',          // game-tools.js:470 handleDefaultDeck — never wired to UI
-  'extra_armor_cancel_',    // round.js:1733 — comment says "kept for backwards compat but no longer used in the new UI"
   'botmenu_recover_',       // recover.js:26 handleBotmenuRecover — superseded by resync_
   // TODO: confirmed dead. handleVanguardDiePick (dc-play-area.js) — its only UI
   // emitter was the legacy pre-target die-swap picker (the `if (false)` block in
@@ -57,19 +56,19 @@ const EMIT_ALLOWLIST = new Set([
   // pendingVanguardSwap revert block are now dead; left for user-confirmed removal.
   'vanguard_pick_',
   'slow_on_draw_resume_',   // alexanbv 2026-05-09 architectural fix: SoTD migrated to combatStack push/pop, no Resume button posted; handler kept for legacy state recovery only
-  // TODO: orphaned by the legacy combat gate-machine cleanup (2026-06-24).
-  // Their only UI emitters lived in the deleted legacy step-4 mods chain
-  // (sendModsYn) / Zillo-pierce prompt (maybePromptZilloPierceCancel). The LIVE
-  // behavior is now driven by the gate engine resolvers (guidance_systems /
-  // zillo_technique_discard / zillo_technique_pierce_cancel via the
-  // combat_mods_pick_ / combat_zillo_pick_ windows). Handlers + register calls
-  // are now dead; left for user-confirmed removal.
-  'guidance_systems_',          // handleGuidanceSystems — engine resolver guidance_systems
-  'zillo_use_yes_',             // handleZilloUseYes — engine resolver zillo_technique_discard
+  // handleCcDiscardSelect (cc-hand.js) is the LIVE StringSelectMenu handler for the
+  // hand-discard flow (also routed via the domain command-router → DiscardCommandCard).
+  // Its only static `cc_discard_select_` emitter lived inside handleCcDiscard, which
+  // was an unregistered, unreachable dead handler removed 2026-06-24. The select
+  // handler is kept (still wired through the command path); its prefix is allowlisted
+  // because the static scan no longer sees a setCustomId literal for it.
+  'cc_discard_select_',
+  // zillo_pierce_* is the LIVE post-surge pierce-cancel handler
+  // (handleZilloPierceCancel). Its prompt is emitted from the gate engine
+  // (combat-abilities-zillo.js), not from a static customId literal the scan
+  // can see, so it stays allowlisted.
   'zillo_pierce_use_',          // handleZilloPierceCancel — engine resolver zillo_technique_pierce_cancel
   'zillo_pierce_skip_',         // handleZilloPierceCancel — engine resolver zillo_technique_pierce_cancel
-  'demoralizing_reveal_use_',   // handleDemoralizingMonologueReveal — legacy step-4 reveal prompt deleted
-  'demoralizing_reveal_skip_',  // handleDemoralizingMonologueReveal — legacy step-4 reveal prompt deleted
   // Emitted via the shared sc-hand-protection.js offer helper using a dynamic
   // `${idPrefix}_open_`/`_skip_` template (idPrefix='sc_hh'), so the static
   // scan can't see them. Live emission verified in sc-hand-protection.js.

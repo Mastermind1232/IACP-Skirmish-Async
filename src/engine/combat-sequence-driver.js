@@ -17,7 +17,7 @@
 import { firstStep, nextStep, isGateStep } from './combat-sequence.js';
 
 /** Enter a step: record it and dispatch to gate vs mechanic. null → complete. */
-export async function enterStep(combat, step, handlers) {
+async function enterStep(combat, step, handlers) {
   combat._seqStep = step ?? null;
   if (step == null) { await handlers.onComplete?.(combat); return; }
   if (isGateStep(step)) await handlers.driveGate(step, combat);

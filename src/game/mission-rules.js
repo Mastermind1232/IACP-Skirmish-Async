@@ -84,6 +84,11 @@ function getNamedAreaController(game, mapId, areaName, getMapTokensDataFn) {
  * (weaponPrototypeCarrierActions) is consumed by components.js when
  * rendering the carrier's button row.
  *
+ * Test-seam: this reader is the dispatch-site witness for the
+ * weaponPrototypeCarrier* keys in the mission-rules-dispatch-parity cert
+ * (the live consumer is combat-bridge.js, which the parity test does not
+ * scan). Keep it even though it has no direct caller.
+ *
  * @param {object} game
  * @returns {{ blockPenalty: number, carrierActions: Array }}
  */
@@ -104,6 +109,10 @@ export function getExperimentalWeaponsRules(game) {
  * These tiny readers expose the rule shape from a centrally-tested file so
  * the dispatch-parity test can recognize the keys, and consumers can opt in
  * to data-driven access without re-walking the rules tree.
+ *
+ * Test-seam: dispatch-site witness for the extractionPointVp key in the
+ * mission-rules-dispatch-parity cert (live consumer is movement.js, which the
+ * parity test does not scan). Keep it even though it has no direct caller.
  *
  * @param {object} game
  * @returns {{ extractionPointVp: ?{vpBase:number,vpPenaltyPerBlockSuffered:number}, crateBlockSink: ?{maxBlockPerAttack:number,healthPerCrate:number}, smallFigureCarryNoAttack: boolean }}

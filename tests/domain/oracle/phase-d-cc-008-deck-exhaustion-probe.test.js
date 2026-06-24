@@ -15,9 +15,10 @@
  *      terminal-bonus draws.
  *   3. Rule by Fear / Rogue One start-of-round draws (src/handlers/round.js):
  *      same `deck.length > 0` gate in the loop.
- *   4. Manual draw button (src/handlers/cc-hand.js): explicit early-return
- *      with a user-facing "No cards in deck to draw." message when the deck
- *      is empty, before any shift().
+ *
+ * (The legacy manual-draw button — handleCcDraw in cc-hand.js — was an
+ *  unregistered, unreachable handler removed 2026-06-24 along with its
+ *  cc_draw_ button. Its empty-deck early-return pin was dropped with it.)
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +30,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
 const ABIL_SRC = readFileSync(resolve(ROOT, 'src/game/abilities.js'), 'utf8');
 const ROUND_SRC = readFileSync(resolve(ROOT, 'src/handlers/round.js'), 'utf8');
-const CCHAND_SRC = readFileSync(resolve(ROOT, 'src/handlers/cc-hand.js'), 'utf8');
 
 describe('PROBE-PD-CC-008: empty CC deck yields no draws', () => {
   it('008a: source — drawCcCards helper gates its draw loop on deck.length > 0', () => {
@@ -54,12 +54,6 @@ describe('PROBE-PD-CC-008: empty CC deck yields no draws', () => {
     assert.match(ROUND_SRC,
       /for \(let d = 0; d < 3 && deck\.length > 0; d\+\+\) \{\s*\n\s*drew\.push\(deck\.shift\(\)\);/,
       'Rogue One draw-3 must gate on deck.length > 0 — CRR-CC-008');
-  });
-
-  it('008d: source — manual draw button early-returns on empty deck before any shift()', () => {
-    assert.match(CCHAND_SRC,
-      /if \(deck\.length === 0\) \{\s*\n\s*await interaction\.followUp\(\{ content: 'No cards in deck to draw\.'/,
-      'Manual draw must bail out with user message when deck is empty — CRR-CC-008');
   });
 
   it('008e: behavioural — drawCcCards returns [] when deck is empty (no throw, no wrap)', async () => {

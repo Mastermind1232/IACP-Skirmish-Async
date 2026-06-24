@@ -107,48 +107,6 @@ describe('Cover Fire pending-state resolution', () => {
 });
 
 describe('Strain Choice pending-state resolution', () => {
-  it('pendingStrainChoice gates available-actions (hard gate)', () => {
-    const meta = createTestGame()
-      .withPlayer1Army([{ dcName: 'Luke Skywalker' }])
-      .withPlayer2Army([{ dcName: 'Darth Vader' }])
-      .inRound(1)
-      .build();
-    const { game } = meta;
-
-    // Manually set pendingStrainChoice as applyStrainToFigure would
-    const p1Fig = Object.keys(game.figurePositions[1])[0];
-    const p1MsgId = [...meta.dcMessageMeta.entries()].find(([, m]) => m.playerNum === 1)?.[0];
-    game.pendingStrainChoice = {
-      figureKey: p1Fig,
-      playerNum: 1,
-      amount: 2,
-      headhunterDmg: 0,
-      abilityLabel: 'Test Strain',
-      sourceLabel: 'test',
-      dcName: 'Luke Skywalker',
-      msgId: p1MsgId,
-      figureIndex: 0,
-      threadId: 'fake-thread',
-      discardedCount: 0,
-      underDuressActive: false,
-      ccCostPerStrain: 1,
-    };
-
-    const actionDeps = buildActionDeps(meta);
-    const actions = getAvailableActions(game, 1, actionDeps);
-    const types = new Set(actions.map(a => a.type));
-
-    // Only strain_choice actions should be offered
-    assert.ok(types.has('strain_choice_alldmg'), 'strain_choice_alldmg offered');
-    assert.ok(!types.has('activate_dc'), 'no activate_dc while strain pending');
-    assert.ok(!types.has('pass_activation_turn'), 'no pass while strain pending');
-
-    // Other player should get no strain actions (it's P1's strain)
-    const p2Actions = getAvailableActions(game, 2, actionDeps);
-    const p2Types = new Set(p2Actions.map(a => a.type));
-    assert.ok(!p2Types.has('strain_choice_alldmg'), 'P2 does not see strain_choice');
-  });
-
   it('strain_resolve_damage resolves and clears pendingStrainEvent', async () => {
     // Strain migration slice 8 (destruct 2026-05-06): the legacy
     // strain_choice_alldmg_ prompt + pendingStrainChoice state were retired.

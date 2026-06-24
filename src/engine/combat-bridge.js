@@ -60,7 +60,7 @@ import {
   postPostResolveWindow as _postPostResolveWindow,
 } from '../handlers/after-attack-resolve.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, setPendingCoverFire, setPendingBoltslinger, setPendingHeavyFire, setPendingLastResort, setPendingWantonDestruction, setPendingHavocShot, setPendingFightingKnife, setPendingSpreadThePain, setPendingPunishingStrike, setPendingDeflect, setPendingExtraProtection, setPendingReaction, setPendingIndiscriminateFire, setPendingConcussiveBolt, setPendingSuppressiveFireMp, setPendingSuppressiveFireOptin, setPendingAssassinsBlade, setPendingSelfDestruct, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate, setPendingExecutorInterrupt } from '../game/interrupts.js';
+import { clearPendingCleave, setPendingCoverFire, setPendingReaction, setPendingSuppressiveFireMp, setPendingSuppressiveFireOptin, setPendingAssassinsBlade, setPendingMastery, setPendingMilitaryEfficiency, setPendingInterrogate } from '../game/interrupts.js';
 
 /**
  * Apply NPC (thug / Krykna / non-player-card) damage to a figure.

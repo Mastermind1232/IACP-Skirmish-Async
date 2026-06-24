@@ -14,7 +14,7 @@ import {
 } from './game-tools.js';
 import { handleSpecialDone } from './special.js';
 import { handleInteractCancel, handleInteractChoice } from './interact.js';
-import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist } from './round.js';
+import { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist } from './round.js';
 import {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -29,7 +29,7 @@ import {
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure, handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
-import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleZilloDiscard, handleZilloUseYes, handleZilloPierceCancel, handleDemoralizingMonologueReveal, handleStrainChoice, handleUnderDuress, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMtlFacePick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
+import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
 import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -126,10 +126,8 @@ import {
   handleCcShuffleDraw,
   handleIKnowEverythingKeep,
   handleCcPlay,
-  handleCcDraw,
   handleCcSearchDiscard,
   handleCcCloseDiscard,
-  handleCcDiscard,
   handleCcChoice,
   handleCcSpacePick,
   handleIllegalCcIgnore,
@@ -248,7 +246,6 @@ register('end_start_of_round_', handleEndStartOfRound, 'startOfRound');
 register('sor_mission_reveal_', handleSorMissionReveal, 'round');
 register('extra_armor_pick_', handleExtraArmorPick, 'round');
 register('extra_armor_confirm_', handleExtraArmorConfirm, 'round');
-register('extra_armor_cancel_', handleExtraArmorCancel, 'round');
 register('rbf_discard_', handleRbfDiscard, 'round');
 register('rogue_one_return_', handleRogueOneReturn, 'round');
 register('ctf_pick_', handleCtfPick, 'round');
@@ -307,7 +304,6 @@ register('cleave_target_', handleCleaveTarget, 'combat');
 register('cover_fire_block_', handleCoverFireBlock, 'combat');
 register('cover_fire_discard_', handleCoverFireDiscard, 'combat');
 register('squad_command_focus_', handleSquadCommandFocus, 'combat');
-register('guidance_systems_', handleGuidanceSystems, 'combat');
 register('aar_fire_', handleAarFire, 'postCombat');
 register('aar_done_atk_', handleAarDone, 'postCombat');
 register('aar_done_def_', handleAarDone, 'postCombat');
@@ -343,7 +339,6 @@ register('dongate_skip_', handleDonGate, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('od_dieswap_', handleOnDeclareDieSwap, 'combat');
 register('def_remove_pick_', handleCqDefPick, 'combat');
-register('mtl_face_', handleMtlFacePick, 'combat');
 register('bl_friendly_', handleBlFriendlyPick, 'combat');
 register('unhinged_director_', handleUnhingedDirectorChoice, 'combat');
 // Unhinged Director Strain absorb handler RETIRED 2026-05-09 — the
@@ -358,18 +353,11 @@ register('rogue_one_token_', handleRogueOneTokenPick, 'combat');
 // applyStrain pipeline → resolved in the interrupts ctx (strain-handler.js).
 register('figurehead_use_', handleFigureheadStrainDecision, 'interrupts');
 register('figurehead_skip_', handleFigureheadStrainDecision, 'interrupts');
-register('lasat_die_', handleLasatDiePick, 'combat');
-register('lasat_face_', handleLasatFacePick, 'combat');
 register('false_orders_action_', handleFalseOrdersAction, 'dcPlayArea');
 register('false_orders_space_', handleFalseOrdersMovePick, 'dcPlayArea');
 register('false_orders_atk_', handleFalseOrdersAtkPick, 'combat');
-register('zillo_discard_skip_', handleZilloDiscard, 'combat');
-register('zillo_discard_', handleZilloDiscard, 'combat');
-register('zillo_use_yes_', handleZilloUseYes, 'combat');
 register('zillo_pierce_use_', handleZilloPierceCancel, 'combat');
 register('zillo_pierce_skip_', handleZilloPierceCancel, 'combat');
-register('demoralizing_reveal_use_', handleDemoralizingMonologueReveal, 'combat');
-register('demoralizing_reveal_skip_', handleDemoralizingMonologueReveal, 'combat');
 // Legacy strain prompt handlers (strain_choice_alldmg_, strain_choice_discard_,
 // ud_deplete_use_, ud_deplete_skip_) retired in slice 8 of the strain
 // migration (destruct 2026-05-06). All voluntary strain now routes through
@@ -809,7 +797,7 @@ export {
 } from './game-tools.js';
 export { handleSpecialDone } from './special.js';
 export { handleInteractCancel, handleInteractChoice } from './interact.js';
-export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleExtraArmorCancel, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist } from './round.js';
+export { handleEndEndOfRound, handleEndStartOfRound, handleSorMissionReveal, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, handleExtraArmorPick, handleExtraArmorConfirm, handleRbfDiscard, handleRogueOneReturn, handleImpCitadel, handleProgrammingOverride, handleCtfPick, handleCtfStrain, handleDoubtFigPick, handleDoubtRemove, handleSmugglingCompartmentReorder, resolveStartOfRoundEffect, handleSpectreCellDist } from './round.js';
 export {
   runPostDeployPhase, advancePostDeployQueue, onPostDeployMovementComplete, onExtraArmorComplete,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -822,7 +810,7 @@ export {
   handleCompanionDeployPick,
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
-export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleGuidanceSystems, handleCombatRoll, handleCombatSurge, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleLasatDiePick, handleLasatFacePick, handleFalseOrdersAtkPick, sendReadyToResolveRolls, handleStrainChoice, handleRogueOneTokenPick, sendOnDeclareTokenWindow } from './combat.js';
+export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleCombatRoll, handleCombatSurge, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, sendReadyToResolveRolls, handleRogueOneTokenPick, sendOnDeclareTokenWindow } from './combat.js';
 export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip} from './activation.js';
 export {
   handleMapSelection,
@@ -916,10 +904,8 @@ export {
   handleCcShuffleDraw,
   handleIKnowEverythingKeep,
   handleCcPlay,
-  handleCcDraw,
   handleCcSearchDiscard,
   handleCcCloseDiscard,
-  handleCcDiscard,
   handleCcChoice,
   handleIllegalCcIgnore,
   handleIllegalCcUnplay,
