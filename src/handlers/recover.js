@@ -18,7 +18,9 @@ import { PHASE_GATE_LABELS } from '../game/phase-gate.js';
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { getRecoveryPrompts, needsRecovery } from '../engine/recovery.js';
 import { clearPendingCcConfirmation } from '../game/interrupts.js';
-import { sendCombatGate, sendOnDeclareTokenWindow } from './combat.js';
+import { restoreGameStateInPlace, clearPendingAndPerMsgIdState } from './checkpoint.js';
+import { repopulateDcMapsForGame } from '../game-state.js';
+import { resolvePendingCombat } from '../game/combat-stack.js';
 
 /**
  * Main recovery handler — called from botmenu Recover button.
@@ -503,77 +505,61 @@ function logRecoveryCrossCheck(actionsDiag, results, gameId) {
 
 async function recoverPendingCombat(game, gameId, ctx) {
   if (game.phase !== 'round_active') return null;
-  const { client, sendReadyToResolveRolls } = ctx;
+  const { client, refreshAllGameComponents } = ctx;
   const combat = game.pendingCombat;
-  if (!combat?.combatThreadId) return null;
+  if (!combat) return null;
 
-  let thread;
-  try {
-    thread = await fetchCombatThread(client, combat.combatThreadId);
-  } catch {
-    return null; // thread gone — cannot recover
+  // Recovery CANCELS an in-flight attack and reverts to the step BEFORE the
+  // attack (alexanbv 2026-06-24). Recovery is meant to restore a game at a
+  // general point; missing the most recent attack is fine — it must just be
+  // robust and never leave the game stuck mid-attack. We do NOT re-enter the
+  // old combat gate machine (sendCombatGate / sendRerollUI / etc.). Strategy:
+  // restore the most recent pre-attack 'attack' undo snapshot; else the most
+  // recent 'activation' snapshot (start of that player's turn); else hard-clear
+  // the in-flight combat state so the player can act again.
+
+  // 1. Archive the combat thread (best-effort — never block recovery on it; the
+  //    thread may be unfetchable after a restart, which is the main reason the
+  //    old recovery "barely worked").
+  if (combat.combatThreadId) {
+    try {
+      const thread = await fetchCombatThread(client, combat.combatThreadId);
+      if (thread) {
+        await thread.send('**[Recover]** Attack cancelled — reverting to before the attack.').catch(() => {});
+        await thread.setArchived(true).catch(() => {});
+      }
+    } catch { /* thread gone — fine */ }
   }
 
-  // No attack roll yet and modify-yn gate still pending → re-post the
-  // on-declare gate via the canonical sendCombatGate (seeds
-  // combat.combatGate state so handleCombatGateReady accepts clicks).
-  // Also re-post the active role's on-declare token window so the
-  // player gets the same combined cards+tokens UI they would have had
-  // pre-restart.
-  const _stepIsPreRoll = combat.currentStep === 'step1+2-attacker'
-    || combat.currentStep === 'step1+2-defender';
-  if (!combat.attackRoll && _stepIsPreRoll) {
-    await thread.send({ content: '**[Recover]** Pre-combat window — re-posting the on-declare gate and token window.' });
-    await sendCombatGate(thread, game, combat, 'on_declare', ctx);
-    const _activeRole = combat.currentStep === 'step1+2-defender' ? 'defender' : 'attacker';
-    await sendOnDeclareTokenWindow(thread, game, combat, _activeRole, ctx);
-    return 'Re-sent on_declare gate + token window';
+  // 2. Restore the most recent pre-attack snapshot (attack → else activation).
+  const stack = Array.isArray(game.undoStack) ? game.undoStack : [];
+  let restoreIdx = -1;
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const e = stack[i];
+    if (e?.snapshot && (e.type === 'attack' || e.type === 'activation')) { restoreIdx = i; break; }
+  }
+  let outcome;
+  if (restoreIdx >= 0) {
+    const entry = stack[restoreIdx];
+    const savedStack = stack.slice(0, restoreIdx); // discard the restored entry + everything after it
+    restoreGameStateInPlace(game, entry.snapshot);
+    game.undoStack = savedStack;
+    try { repopulateDcMapsForGame(gameId); } catch (err) { console.error('recoverPendingCombat: repopulate failed', err); }
+    outcome = `Cancelled in-flight attack; reverted to the '${entry.type}' snapshot before it`;
+  } else {
+    // No snapshot to revert to — hard-clear the in-flight combat so the game is
+    // not stuck (resolvePendingCombat pops any nested frame; clearPendingAnd…
+    // nulls every pending* + dcActionsData/moveInProgress/interrupts/combatStack).
+    resolvePendingCombat(game);
+    clearPendingAndPerMsgIdState(game);
+    outcome = 'Cleared in-flight combat state (no pre-attack snapshot available)';
   }
 
-  // Both ready but no roll yet → re-send combat_roll_ button. Session 11
-  // migration: post-modify-yn the canonical step transitions to 'roll'.
-  if (!combat.attackRoll && combat.currentStep === 'roll') {
-    const rollRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`combat_roll_${gameId}`)
-        .setLabel('Roll Combat Dice')
-        .setStyle(ButtonStyle.Danger)
-    );
-    await thread.send({
-      content: '**[Recover]** Both players ready — click **Roll Combat Dice** to proceed.',
-      components: [rollRow],
-    });
-    return 'Re-sent combat roll button';
+  // 3. Re-render every owned surface so the player lands at a clean action menu.
+  if (refreshAllGameComponents) {
+    try { await refreshAllGameComponents(game, client); } catch (err) { console.error('recoverPendingCombat: refresh failed', err); }
   }
-
-  // Combat sub-phase gate active → re-send gate buttons
-  if (combat.combatGate) {
-    const { sendCombatGate } = await import('./combat.js');
-    await sendCombatGate(thread, game, combat, combat.combatGate.phase, ctx);
-    return `Re-sent combat gate (${combat.combatGate.phase})`;
-  }
-
-  // Reroll phase active → re-send reroll UI
-  if (combat.rerollPhase) {
-    // Import sendRerollUI at the call site to avoid circular dependency
-    const { sendRerollUI } = await import('./combat.js');
-    await sendRerollUI(thread, game, combat, combat.rerollPhase);
-    return `Re-sent reroll UI (${combat.rerollPhase} phase)`;
-  }
-
-  // Attack roll set, defense roll set, no reroll phase → re-send ready to resolve
-  if (combat.attackRoll && combat.defenseRoll && !combat.rerollPhase) {
-    if (sendReadyToResolveRolls) {
-      await sendReadyToResolveRolls(thread, gameId, game, ctx);
-      return 'Re-sent ready-to-resolve-rolls button';
-    }
-  }
-
-  // Fallback: some other sub-phase (token/surge/etc.)
-  await thread.send({
-    content: '**[Recover]** Combat is in progress. If stuck, check for surge spending, token usage, or other pending decisions in this thread.',
-  });
-  return 'Sent combat recovery guidance';
+  return outcome;
 }
 
 // ─── Step 6: Recover setupAttachmentPhase ─────────────────────────────────────
