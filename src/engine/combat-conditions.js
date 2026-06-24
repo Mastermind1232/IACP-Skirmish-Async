@@ -281,6 +281,33 @@ export function makeCondition(spec) {
         return false;
       };
     }
+    // "While YOU or a friendly [keyword] in YOUR line of sight is attacking"
+    // (Coordinated Hunt — Purge Commander). The OWNER figure (ownerDcName) must
+    // be in play; eligible when the attacker IS the owner, OR the attacker has
+    // attackerKeyword AND the owner has LOS to the attacker. This is the correct
+    // model: the LOS source is the OWNER, not "any friendly keyword" — so the
+    // ability is NOT offered when the owner isn't in the game (alexanbv 2026-06-24).
+    case 'owner_with_los_to_attacker': {
+      const ownerName = spec.ownerDcName;
+      const atkKw = spec.attackerKeyword ? String(spec.attackerKeyword).toUpperCase() : null;
+      return (game, combat) => {
+        const mapId = game?.selectedMap?.id;
+        const mapSp = mapId ? getMapData(mapId) : null;
+        const atkPos = attackerCoord(game, combat);
+        if (!mapSp || !atkPos) return false;
+        const atkFk = combat?.attackerFigureKey;
+        const attackerIsOwner = atkFk && dcNameFromFigureKey(atkFk) === ownerName;
+        // The attacking figure must be the owner OR carry the required keyword.
+        if (!attackerIsOwner && atkKw && atkFk && !figureKeywords(atkFk).includes(atkKw)) return false;
+        const team = game.figurePositions?.[combat?.attackerPlayerNum] || {};
+        for (const [fk, pos] of Object.entries(team)) {
+          if (!pos || dcNameFromFigureKey(fk) !== ownerName) continue; // owner figure only
+          if (fk === atkFk) return true; // the owner is the attacker
+          if (hasLineOfSightByCoord(game, String(pos).toLowerCase(), atkPos, mapSp, getFigureSize)) return true;
+        }
+        return false; // owner not in play (or no LOS) → not eligible
+      };
+    }
     // A friendly figure (optionally with KEYWORD) within N of the attacker AND
     // with LOS to the TARGET SPACE — "a friendly DROID within 3 has LOS to the
     // target space" (Shared Calculations, Shared Intuition). `excludeSelf`

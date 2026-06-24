@@ -35,8 +35,11 @@ const _auraBearerDeps = { getMapData, isWithinSpaces, getDcList, getDcMessageIds
 //     forces-defender-reroll row whose base is already attacker_is_self).
 const LOS_REROLL_CONDITIONS = {
   // "While you or a friendly HUNTER in your line of sight is attacking, it may
-  // reroll 1 attack die" — the attacker is the owner OR a friendly HUNTER has LOS.
-  'Purge Commander (Elite)': { type: 'friendly_with_los_to_attacker', keyword: 'HUNTER', includeSelf: true },
+  // reroll 1 attack die" — the OWNER (Purge Commander) must be in play; eligible
+  // when the attacker IS Purge Commander, or a HUNTER attacker is in Purge
+  // Commander's LOS. NOT offered when Purge Commander isn't in the game
+  // (alexanbv 2026-06-24 — it was firing for any HUNTER attacker via includeSelf).
+  'Purge Commander (Elite)': { type: 'owner_with_los_to_attacker', ownerDcName: 'Purge Commander (Elite)', attackerKeyword: 'HUNTER' },
   // "if a friendly DROID within 3 has LOS to the target space, force the defender
   // to reroll 1 defense die" — the owner (Zuckuss) is attacking AND a DROID aura.
   'Zuckuss': { type: 'friendly_within_n_with_los_to_target', keyword: 'DROID', n: 3, includeSelf: false },

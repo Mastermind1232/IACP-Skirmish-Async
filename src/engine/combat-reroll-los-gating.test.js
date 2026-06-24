@@ -13,22 +13,28 @@ const idsR = (side, game, combat) => abilitiesForWindow('rerolls', side, game, c
 const idsM = (side, game, combat) => abilitiesForWindow('mods', side, game, combat, {}).map((a) => a.id);
 
 describe('Coordinated Hunt (Purge Commander) — LOS-gated reroll', () => {
-  // Non-PC attacker (Zeb) at l3 + a friendly Purge Commander HUNTER whose LOS to
-  // the attacker toggles the reroll. The owner-self branch is covered separately.
+  // A friendly HUNTER attacker (Bossk) at l3 + Purge Commander (the OWNER) whose
+  // LOS to that HUNTER attacker toggles the reroll. Per the card the ATTACKER must
+  // be a HUNTER (or Purge Commander itself) and Purge Commander must be in play
+  // (alexanbv 2026-06-24). The owner-self branch is covered separately.
   const game = (pcCell) => ({
     selectedMap: MAP,
-    figurePositions: { 1: { 'Zeb Orrelios-1-0': 'l3', 'Purge Commander (Elite)-1-1': pcCell }, 2: { 'X-2-0': 'a1' } },
+    figurePositions: { 1: { 'Bossk-1-0': 'l3', 'Purge Commander (Elite)-1-1': pcCell }, 2: { 'X-2-0': 'a1' } },
   });
   const combat = {
     attackerPlayerNum: 1, defenderPlayerNum: 2,
-    attackerDcName: 'Zeb Orrelios', attackerFigureKey: 'Zeb Orrelios-1-0',
+    attackerDcName: 'Bossk', attackerFigureKey: 'Bossk-1-0',
     target: { figureKey: 'X-2-0', coord: 'a1' }, attackDiceResults: [{ color: 'blue', dmg: 1 }],
   };
-  it('IS offered when a friendly HUNTER has LOS to the attacker', () => {
+  it('IS offered when Purge Commander (owner) has LOS to the HUNTER attacker', () => {
     assert.ok(idsR('attacker', game('m3'), combat).includes('reroll:purge_commander_elite:attacker'));
   });
-  it('is NOT offered when the friendly HUNTER has no LOS to the attacker', () => {
+  it('is NOT offered when Purge Commander has no LOS to the HUNTER attacker', () => {
     assert.ok(!idsR('attacker', game('i5'), combat).includes('reroll:purge_commander_elite:attacker'));
+  });
+  it('is NOT offered when Purge Commander is not in the game (the reported bug)', () => {
+    const g = { selectedMap: MAP, figurePositions: { 1: { 'Bossk-1-0': 'l3' }, 2: { 'X-2-0': 'a1' } } };
+    assert.ok(!idsR('attacker', g, combat).includes('reroll:purge_commander_elite:attacker'));
   });
   it('IS offered to the Purge Commander itself (self branch)', () => {
     const g = { selectedMap: MAP, figurePositions: { 1: { 'Purge Commander (Elite)-1-0': 'l3' }, 2: { 'X-2-0': 'a1' } } };
