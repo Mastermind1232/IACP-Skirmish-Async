@@ -734,7 +734,7 @@ async function fireTonfaStrike(thread, game, combat, effect, ctx) {
     figureKey: combat.attackerFigureKey,
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
-    message: '**Tonfa Strike** — You may perform an additional attack (use Attack button).',
+    message: '**Tonfa Strike** — You may perform an additional attack. Declare it below.',
   });
 }
 
@@ -760,7 +760,7 @@ async function fireBarrage(thread, game, combat, effect, ctx) {
     flagValue: true,
     barrageTargetSpace: targetPos || null,
     barrageDefenseBonus: true,
-    message: '**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Use the **Attack** button.',
+    message: '**Barrage** — You may perform a second attack (target within 3 of first target, defender +1 white die). Declare it below.',
   });
 }
 
@@ -782,7 +782,7 @@ async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     pendingOverrideAttackDice: { dice: ['green'], type: 'melee', bonusHits: 1 },
-    message: '**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Use the Attack button.',
+    message: '**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Declare it below.',
   });
 }
 
@@ -1754,7 +1754,7 @@ async function fireReturnFire(thread, game, combat, effect, ctx) {
     flagValue: true,
     forcedTargetMsgId: combat.attackerMsgId,
     forcedTargetFigureKey: combat.attackerFigureKey,
-    message: `<@${ownerId}> **${label}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Use the **Attack** button on your DC card.`,
+    message: `<@${ownerId}> **${label}** — Interrupt: perform a free attack targeting **${combat.attackerDcName}**! Declare it below.`,
   });
 }
 

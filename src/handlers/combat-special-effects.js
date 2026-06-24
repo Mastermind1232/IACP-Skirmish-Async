@@ -749,13 +749,35 @@ export async function handleMissileSalvoDie(interaction, ctx) {
     game.freeAttackBonusPending[_msFk] = true;
   }
   await interaction.message.edit({ components: [] }).catch(discordCatch);
-  const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
-  const salvoThread = await fetchCombatThread(client, threadId);
   const ownerId = getPlayerId(game, playerNum);
   const colorLabel = color.charAt(0).toUpperCase() + color.slice(1);
-  const msg = `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Click **Attack** to target a different hostile figure. This attack costs no action.`;
-  if (salvoThread) await salvoThread.send(sanitizeMentions({ content: msg, allowedMentions: { users: [ownerId] } })).catch(discordCatch);
   saveGames(game.gameId);
+  // Inline target-selection (alexanbv 2026-06-24): the target picker is part of
+  // the Missile Salvo flow — the player does NOT click the generic Attack button.
+  // Forward straight into the Attack target picker so the salvo die + +3 Accuracy
+  // override (set above on pendingOverrideAttackDice + freeAttackBonusPending)
+  // flow into the attack. Multi-shot salvos re-present the die buttons after each
+  // attack resolves (combat-bridge.js), so shots 2 and 3 re-enter this same path
+  // with already-fired targets excluded (excludeFigureKeys: targetsFired).
+  if (_msFk) {
+    const threadId = game.pendingMissileSalvo[msgId].threadId || game.dcActionsData?.[msgId]?.threadId;
+    const salvoThread = await fetchCombatThread(client, threadId);
+    if (salvoThread) {
+      await salvoThread.send(sanitizeMentions({
+        content: `<@${ownerId}> **Missile Salvo** — **${colorLabel} die** selected (+3 Accuracy). Choose a target below. This attack costs no action.`,
+        allowedMentions: { users: [ownerId] },
+      })).catch(discordCatch);
+    }
+    const figureIndex = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const newId = `dc_attack_${msgId}_f${figureIndex}`;
+    try {
+      Object.defineProperty(interaction, 'customId', { value: newId, writable: true, configurable: true });
+    } catch {
+      interaction.customId = newId;
+    }
+    const { handleDcAction } = await import('./dc-play-area.js');
+    return handleDcAction(interaction, ctx, 'dc_attack_');
+  }
 }
 
 /** Missile Salvo done: missile_salvo_done_{gameId}_{msgId} */

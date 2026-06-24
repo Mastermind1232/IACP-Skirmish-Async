@@ -3192,6 +3192,29 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
   }
 
+  // Inline target-selection (alexanbv 2026-06-24): the granted/multi-attack
+  // continuations below re-arm freeAttackBonusPending on the attacker for the
+  // next sequential shot. Instead of telling the player to find the generic
+  // Attack button, post a Declare Attack button that drops straight into the
+  // shared Attack target picker (handleGrantedAttack → dc_attack_). Each shot
+  // fully resolves (incl. defeats) before this runs again, so shot 2/3 targeting
+  // reflects the prior shot's board/LoS state.
+  const _postAttackerChainButton = async (note) => {
+    if (!thread) return;
+    if (!combat.attackerMsgId) { await thread.send(note).catch(discordCatch); return; }
+    const _acFigIdx = String(combat.attackerFigureKey || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
+    const _acOwnerId = getPlayerId(game, combat.attackerPlayerNum);
+    const _acBtn = new ButtonBuilder()
+      .setCustomId(`granted_attack_${game.gameId}_${combat.attackerMsgId}_f${_acFigIdx}`)
+      .setLabel('Declare Attack')
+      .setStyle(ButtonStyle.Primary);
+    await thread.send(sanitizeMentions({
+      content: _acOwnerId ? `<@${_acOwnerId}> ${note}` : note,
+      components: [new ActionRowBuilder().addComponents(_acBtn)],
+      allowedMentions: { users: _acOwnerId ? [_acOwnerId] : [] },
+    })).catch(discordCatch);
+  };
+
   // Dual-Wield Pistols (Bo-Katan): after resolving a ranged attack, free ranged attack once/round.
   // IACP 2026-06-21: the Dual-Wield Pistols ability ALSO grants 2 Block Tokens BEFORE performing this
   // once-per-round bonus ranged attack (this is distinct from the Beskar Armor keyword, which grants 2
@@ -3212,7 +3235,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         }
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[combat.attackerFigureKey] = true;
-        await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Use the **Attack** button.`).catch(discordCatch);
+        await _postAttackerChainButton(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Declare it below.`);
         await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** earns a free Ranged attack.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
@@ -3323,7 +3346,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     // Clear the override so the second attack uses normal dice.
     // Per alexanbv 2026-05-13: keyed by attacker figureKey.
     if (game.pendingOverrideAttackDice?.[combat.attackerFigureKey]) delete game.pendingOverrideAttackDice[combat.attackerFigureKey];
-    await thread.send('**The Darksaber** — You may now perform a normal attack (use Attack button).').catch(discordCatch);
+    await _postAttackerChainButton('**The Darksaber** — You may now perform a normal attack. Declare it below.');
   }
   // Battlefield Leadership (Leia Organa): card text "Perform an attack,
   // then choose another friendly figure within 3 spaces. That figure
@@ -3395,7 +3418,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.forcedAttackTarget[combat.attackerFigureKey] = combat.defenderFigureKey;
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Focus Fire' };
-      await thread.send(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Use the Attack button.`).catch(discordCatch);
+      await _postAttackerChainButton(`**Focus Fire** — 1 attack remaining. Must target the **same figure**. Declare it below.`);
     } else {
       delete game.focusFireActive[combat.attackerFigureKey];
     }
@@ -3412,7 +3435,27 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     if (_capPartner && combat.defenderFigureKey) {
       game.forcedAttackTarget = game.forcedAttackTarget || {};
       game.forcedAttackTarget[_capPartner] = combat.defenderFigureKey;
-      await thread.send(`**Coordinated Attack** — the second attack must target the **same figure**. Use the Attack button.`).catch(discordCatch);
+      // The partner figure (not the just-resolved attacker) takes the second
+      // attack — post a Declare Attack button for the partner's DC card.
+      if (thread) {
+        const _caPartnerMsgId = findDcMessageIdForFigure(game.gameId, combat.attackerPlayerNum, _capPartner);
+        const _caFigIdx = String(_capPartner || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
+        const _caOwnerId = getPlayerId(game, combat.attackerPlayerNum);
+        const _caNote = `**Coordinated Attack** — the second attack must target the **same figure** (**${dcNameFromFigureKey(combat.defenderFigureKey)}**). Declare it below.`;
+        if (_caPartnerMsgId) {
+          const _caBtn = new ButtonBuilder()
+            .setCustomId(`granted_attack_${game.gameId}_${_caPartnerMsgId}_f${_caFigIdx}`)
+            .setLabel(`Declare Attack (${dcNameFromFigureKey(_capPartner)})`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary);
+          await thread.send(sanitizeMentions({
+            content: _caOwnerId ? `<@${_caOwnerId}> ${_caNote}` : _caNote,
+            components: [new ActionRowBuilder().addComponents(_caBtn)],
+            allowedMentions: { users: _caOwnerId ? [_caOwnerId] : [] },
+          })).catch(discordCatch);
+        } else {
+          await thread.send(_caNote).catch(discordCatch);
+        }
+      }
     }
     delete game.coordinatedAttackPair;
   }
@@ -3430,7 +3473,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1 };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Multi-Fire' };
-      await thread.send(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (\u22121 Hit). Use the Attack button.`).catch(discordCatch);
+      await _postAttackerChainButton(`**Multi-Fire** — 1 attack remaining. Must target a **different figure** (\u22121 Hit). Declare it below.`);
     } else {
       delete game.multiFireActive[combat.attackerFigureKey];
       if (game.multiFireBlockedTarget?.[combat.attackerFigureKey]) delete game.multiFireBlockedTarget[combat.attackerFigureKey];
@@ -3450,7 +3493,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Overheated' };
-      await thread.send(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Use the Attack button.`).catch(discordCatch);
+      await _postAttackerChainButton(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Declare it below.`);
     } else {
       delete game.overheatedActive[combat.attackerFigureKey];
       // Last thing: attack type becomes Melee for the rest of the round.
@@ -3470,7 +3513,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       // Per alexanbv 2026-05-13: keyed by attacker figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerFigureKey] = { dice: ['red'], type: 'melee', pierce: 0, bonusAccuracy: 0 };
-      await thread.send(`**Saber Orbit** — ${soRemaining} attack${soRemaining !== 1 ? 's' : ''} remaining (1 red die, Melee). Use the Attack button.`).catch(discordCatch);
+      await _postAttackerChainButton(`**Saber Orbit** — ${soRemaining} attack${soRemaining !== 1 ? 's' : ''} remaining (1 red die, Melee). Declare it below.`);
     } else {
       delete game.saberOrbitAttacksRemaining[combat.attackerFigureKey];
       await thread.send('**Saber Orbit** — All attacks resolved.').catch(discordCatch);
@@ -3592,7 +3635,11 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // takes precedence over a second attack from the attacker."
   const _pdca = Array.isArray(combat._pendingDefenderChainAttacks) ? combat._pendingDefenderChainAttacks : [];
   const _pca = Array.isArray(combat._pendingChainAttacks) ? combat._pendingChainAttacks : [];
-  for (const _entry of [..._pdca, ..._pca]) {
+  const _chainQueue = [
+    ..._pdca.map((e) => ({ _entry: e, grantee: 'defender' })),
+    ..._pca.map((e) => ({ _entry: e, grantee: 'attacker' })),
+  ];
+  for (const { _entry, grantee } of _chainQueue) {
     if (!_entry?.msgId) continue;
     if (_entry.flagKey === 'freeAttackBonusPending') {
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -3647,8 +3694,34 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
         game.forcedAttackTarget[_ftFk] = _entry.forcedTargetFigureKey;
       }
     }
+    // Inline target-selection (alexanbv 2026-06-24): post a Declare Attack
+    // button so the chain attack's target picker is part of THIS flow — the
+    // player does NOT hunt for the generic Attack button on the DC card. The
+    // free-attack flags armed above are consumed by handleGrantedAttack →
+    // dc_attack_ → the shared Attack target picker. Multi-attack chains
+    // (Tonfa Strike, Barrage, Saber Orbit, etc.) re-stage the next entry as
+    // each attack resolves, so this same path runs for shots 2/3 sequentially,
+    // and the board/LoS state reflects the prior shot's outcome.
     if (_entry.message && thread) {
-      await thread.send(_entry.message).catch(discordCatch);
+      const _chainGranteeFk = _entry.figureKey
+        || (_entry.msgId === combat.attackerMsgId ? combat.attackerFigureKey : combat.target?.figureKey);
+      const _chainFigIdx = String(_chainGranteeFk || '').match(/-(\d+)-(\d+)$/)?.[2] ?? '0';
+      const _chainPn = grantee === 'defender'
+        ? (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum))
+        : combat.attackerPlayerNum;
+      const _chainOwnerId = getPlayerId(game, _chainPn);
+      const _chainBtn = new ButtonBuilder()
+        .setCustomId(`granted_attack_${game.gameId}_${_entry.msgId}_f${_chainFigIdx}`)
+        .setLabel(`Declare Attack${_entry.source ? ` (${_entry.source})` : ''}`.slice(0, 80))
+        .setStyle(ButtonStyle.Primary);
+      const _chainContent = _entry.message.includes(`<@${_chainOwnerId}>`)
+        ? _entry.message
+        : `<@${_chainOwnerId}> ${_entry.message}`;
+      await thread.send(sanitizeMentions({
+        content: _chainContent,
+        components: [new ActionRowBuilder().addComponents(_chainBtn)],
+        allowedMentions: { users: _chainOwnerId ? [_chainOwnerId] : [] },
+      })).catch(discordCatch);
     }
   }
 }
