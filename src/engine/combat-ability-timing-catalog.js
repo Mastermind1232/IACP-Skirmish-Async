@@ -185,10 +185,14 @@ e('rapid_recalibration', 'Rapid Recalibration (CC)', 'attacker', 'interactive', 
 e('lasat_honor_guard', 'Lasat Honor Guard (Zeb Orrelios)', 'attacker', 'interactive', SP, 'after ALL rerolls, before mods; turn 1 single-symbol die', 'zeb');
 e('zillo_technique_pierce_cancel', 'Zillo Technique (exhaust → cancel 2 Pierce)', 'defender', 'interactive', ZL, 'zillo step: between spend_surges and damage; finalized Pierce>0', 'zillo_exhaust');
 
-// ── MODS (missing from combat-abilities-mods.js — timing-only until wired) ────
-e('guidance_systems', 'Guidance Systems', 'attacker', 'interactive', ['mods'], 'sendModsYn prompt; -1 Hit/+2 Acc per use');
-e('illicit_arms', 'Illicit Arms (Bib Fortuna)', 'attacker', 'interactive', ['mods'], 'sendModsYn; friendly eligible + CC hand');
-e('zillo_technique_discard', 'Zillo Technique (discard CC → +1 Block)', 'defender', 'interactive', ['mods'], 'sendModsYn defender; [Zillo Technique] DC + CC hand');
+// ── MODS ──────────────────────────────────────────────────────────────────────
+// guidance_systems / illicit_arms / zillo_technique_discard are now EXECUTABLE
+// mods abilities in combat-abilities-mods.js. That file is imported BEFORE this
+// catalog (combat-mods-gate.js), so a timing-only entry HERE would be the
+// last-write and would CLOBBER the executable entry back to timing-only —
+// silently dropping the button from the mods window (the live bug alexanbv hit
+// 2026-06-25: Guidance Systems / Illicit Arms / Zillo discard-for-+1-Block never
+// offered). No catalog entry for them here.
 e('assassinate', 'Assassinate (CC)', 'attacker', 'interactive', ['mods'], 'attackBonusHits +3, mutual-exclude');
 e('positioning_advantage', 'Positioning Advantage (CC)', 'attacker', 'interactive', ['mods'], 'attackBonusHits +1');
 e('overwhelming_impact', 'Overwhelming Impact (CC)', 'attacker', 'interactive', ['mods'], 'bonusDamagePerDefenseDie + ignore non-die def');
