@@ -2195,7 +2195,7 @@ export async function handleRogueOneReturn(interaction, ctx) {
  * Channel the Force: player picks a FORCE USER CC from deck to add to hand.
  */
 export async function handleCtfPick(interaction, ctx) {
-  const { getGame, saveGames, updateHandVisualMessage, logGameAction, client, dcHealthState, dcMessageMeta } = ctx;
+  const { getGame, saveGames, updateHandVisualMessage, updateHandChannelMessages, logGameAction, client, dcHealthState, dcMessageMeta } = ctx;
   const parts = splitCustomId(interaction.customId, 'ctf_pick_');
   const gameId = parts[0];
   const playerNum = parseInt(parts[1], 10);
@@ -2305,6 +2305,10 @@ export async function handleCtfPick(interaction, ctx) {
     }
   }
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
+  // Channel the Force ADDS the chosen FORCE USER card to hand — refresh the hand
+  // CHANNEL immediately so the new card's buttons appear now, not next action
+  // (alexanbv 2026-06-25).
+  if (updateHandChannelMessages) await updateHandChannelMessages(game, client).catch(discordCatch);
   saveGames(game.gameId);
 }
 

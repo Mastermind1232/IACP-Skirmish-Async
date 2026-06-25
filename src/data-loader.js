@@ -606,7 +606,13 @@ export function getDcStats(dcName) {
       const filtered = eff.specialAbilityIds.filter((id) => {
         if (PASSIVE_ONLY_IDS.has(id)) return false;
         const entry = lib.abilities?.[id];
-        if (entry?.category === 'passive') return false;
+        // ALL passive categories (passive / passive-aura / passive-auto /
+        // passive-reactive / passive-soa / passive-triggered) are passives — they
+        // are NEVER activated via a Special Action button (alexanbv 2026-06-25:
+        // Director Krennic's 'Unhinged Director', category 'passive-aura', wrongly
+        // surfaced a Special Action button). Previously only the exact 'passive'
+        // category was excluded, so every passive-<suffix> ability leaked a button.
+        if (String(entry?.category || '').startsWith('passive')) return false;
         // Round-boundary abilities (start-of-round / end-of-round triggers)
         // are driven by the SoR/EoR round flow, NOT by an activation-time
         // Special Action button. Without this, e.g. AT-RT's Mortar Launcher

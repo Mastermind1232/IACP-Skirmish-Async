@@ -2689,13 +2689,13 @@ export async function _fireOnDeclarePassive(side, id, thread, game, combat, ctx)
  * Used to keep CC offers OUT of the shared combat thread (hand-secrecy, alexanbv
  * 2026-06-25).
  */
-function _isGateCc(id, ccPn, game) {
+export function _isGateCc(id, ccPn, game) {
   const k = getCombatAbility(id)?.params?.kind;
   if (k === 'cc' || k === 'cc_interactive') return true;
   return _isRerollCcPick(id, ccPn, game);
 }
 
-async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
+export async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
   const cfg = _GATE_WINDOWS[window];
   // False Orders / Lure: the controller acts on the attacker side.
   const sidePlayerNum = side === 'attacker'

@@ -315,13 +315,15 @@ const CONTEXT_GROUPS = {
     'getDcPlayAreaComponents', 'getDcStats', 'getDcActionButtons', 'getActionsCounterContent',
     'getActivationMinimapAttachment', 'updateActivationsMessage',
     'DC_ACTIONS_PER_ACTIVATION', 'logGameAction', 'getCcEffect', 'resolveAbility',
-    'updateHandVisualMessage', 'updateDiscardPileMessage',
+    // updateHandChannelMessages: any ability resolved here that DRAWS cards must
+    // refresh the hand channel immediately (alexanbv 2026-06-25).
+    'updateHandVisualMessage', 'updateHandChannelMessages', 'updateDiscardPileMessage',
   ],
 
   defenderCc: [
     'getGame', 'saveGames', 'client', 'dcMessageMeta', 'getCcEffect',
     'resolveAbility', 'logGameAction', 'updateHandVisualMessage',
-    'updateDiscardPileMessage',
+    'updateHandChannelMessages', 'updateDiscardPileMessage',
   ],
 
   killGame: [
