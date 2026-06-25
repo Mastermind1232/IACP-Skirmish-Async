@@ -449,7 +449,7 @@ export async function handleDonGate(interaction, ctx) {
   await _driveGatePath('rerolls', thread, game, combat, ctx);
   saveGames?.(game.gameId);
 }
-import { activeSide as _modsActiveSide } from '../engine/combat-ability-gate.js';
+import { activeSide as _modsActiveSide, pendingInteractive as _pendingInteractive } from '../engine/combat-ability-gate.js';
 
 /** F10: Send "Ready to resolve rolls" confirmation step in combat thread; caller should return after.
  * Now uses the combat gate system so both players must confirm.
@@ -2112,6 +2112,32 @@ export async function handleModsPick(interaction, ctx) {
       return;
     }
   }
+  // Neutral "Play a Command Card" button → ephemeral PRIVATE list of THIS side's
+  // playable CCs (alexanbv 2026-06-25). Handled BEFORE the deferUpdate/message
+  // clear below so the public window stays intact: the player can play another CC
+  // (re-click Play-CC) or hit Done afterward. The interaction was already
+  // deferUpdate'd by the central dispatcher, so followUp(ephemeral) works and the
+  // public message is untouched. Only the active side reaches here (lock check above).
+  if (pick === 'playcc') {
+    const _ccPn = (_activeSide === 'attacker')
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
+      : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+    const _ccList = (_activeSide ? _pendingInteractive(gate, _activeSide) : []).filter((id) => _isGateCc(id, _ccPn, game));
+    if (!_ccList.length) {
+      await interaction.followUp({ content: '🃏 You have no Command Cards playable in this window right now.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    const _ccBtns = _ccList.map((id) => new ButtonBuilder()
+      .setCustomId(`${cfg.pickPrefix}${gameId}_${id}`)
+      .setLabel((getCombatAbility(id)?.name || id).slice(0, 80))
+      .setStyle(ButtonStyle.Primary));
+    await interaction.followUp({
+      content: '🃏 **Play a Command Card** — only you can see this. Pick one (you can play more, or just hit **Done** in the combat thread when finished):',
+      components: chunkButtonsToRows(_ccBtns),
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
   await interaction.deferUpdate().catch(discordCatch);
   if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
@@ -2657,6 +2683,18 @@ export async function _fireOnDeclarePassive(side, id, thread, game, combat, ctx)
 
 /** Post the player-ordered choose window for a side's pending interactive mods abilities. */
 /** Post a step's player-ordered choose window (generic). */
+/**
+ * Is this gate-window pick a Command-Card PLAY (secret hand info) vs. a public DC
+ * ability? CC plays = registry params.kind 'cc'/'cc_interactive', plus reroll CCs.
+ * Used to keep CC offers OUT of the shared combat thread (hand-secrecy, alexanbv
+ * 2026-06-25).
+ */
+function _isGateCc(id, ccPn, game) {
+  const k = getCombatAbility(id)?.params?.kind;
+  if (k === 'cc' || k === 'cc_interactive') return true;
+  return _isRerollCcPick(id, ccPn, game);
+}
+
 async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
   const cfg = _GATE_WINDOWS[window];
   // False Orders / Lure: the controller acts on the attacker side.
@@ -2664,13 +2702,23 @@ async function _postGateChooseWindow(window, side, pending, thread, game, combat
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
     : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
   const sideId = game[`player${sidePlayerNum}Id`];
-  const btns = pending.map((id) => {
+  // Hand secrecy (alexanbv 2026-06-25): a CC-play button in the SHARED combat
+  // thread reveals the player's hand to the opponent — and its ABSENCE reveals
+  // the player holds no relevant CC. Split offers: public DC-ability buttons go
+  // in the thread; CC plays go behind a NEUTRAL, ALWAYS-PRESENT "Play a Command
+  // Card" button that opens an EPHEMERAL private list (handleModsPick 'playcc').
+  // The Play-CC button shows even with zero playable CC, so presence/absence
+  // leaks nothing. Multi-CC: it stays clickable until the player hits Done.
+  const ccIds = pending.filter((id) => _isGateCc(id, sidePlayerNum, game));
+  const dcIds = pending.filter((id) => !ccIds.includes(id));
+  const btns = dcIds.map((id) => {
     const reg = getCombatAbility(id);
     return new ButtonBuilder()
       .setCustomId(`${cfg.pickPrefix}${game.gameId}_${id}`)
       .setLabel((reg?.name || id).slice(0, 80))
       .setStyle(ButtonStyle.Primary);
   });
+  btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_playcc`).setLabel('🃏 Play a Command Card').setStyle(ButtonStyle.Success));
   btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_done`).setLabel('Done (no more)').setStyle(ButtonStyle.Secondary));
   await thread.send(sanitizeMentions({
     content: `<@${sideId}> **${cfg.title}** (${side}) — resolve your abilities in any order, then **Done**:`,
