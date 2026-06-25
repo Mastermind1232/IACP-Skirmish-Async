@@ -3,7 +3,8 @@
  * Each function takes an explicit `deps` parameter for closed-over dependencies.
  */
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-import { isActivationActionInProgress } from '../game/activation-state.js';
+import { isActivationActionInProgress, figureActionsRemaining } from '../game/activation-state.js';
+import { DC_ACTIONS_PER_ACTIVATION } from '../discord/messages.js';
 import { withDiscordRetry, discordCatch } from '../error-handling.js';
 import { getPlayAreaId } from '../game/player-helpers.js';
 import { groupEffectiveFigures, groupSuFigureHealth } from '../game/squad-upgrades.js';
@@ -196,8 +197,13 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
       const thread = await fetchGameChannel(client, data.threadId);
       const msg = await thread.messages.fetch(data.messageId);
       const components = meta && game ? deps.getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
+      // Per-figure activation (alexanbv 2026-06-13): the old top-level
+      // data.remaining/data.total were removed, so reading them here gave
+      // Math.min(undefined, 2) === NaN ("NaN/2"). Show the SELECTED figure's
+      // remaining out of its per-figure budget (alexanbv 2026-06-25).
+      const _selFig = data.selectedFigure ?? 0;
       const editPayload = {
-        content: deps.getActionsCounterContent(data.remaining, data.total),
+        content: deps.getActionsCounterContent(figureActionsRemaining(data, _selFig), DC_ACTIONS_PER_ACTIVATION),
         components,
       };
       // Per alexanbv 2026-05-12: only render the minimap PNG when map

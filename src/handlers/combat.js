@@ -528,6 +528,11 @@ const _GATE_WINDOWS = {
   special: {
     field: 'specialGate', pickPrefix: 'combat_special_pick_', title: 'Special',
     firePassive: null,
+    // ATTACKER-ONLY conditional window (alexanbv 2026-06-25): the only ability
+    // that lives here is Zeb's Lasat Honor Guard die-turn. Skip the window
+    // entirely (and never prompt the defender) unless the attacker has an
+    // eligible die-turn — it is NOT a bilateral always-prompt window.
+    onlySide: 'attacker',
     onComplete: async (thread, game, combat, ctx) => { delete combat.specialGate; if (ctx._specialGateDone) await ctx._specialGateDone(thread, game, combat); },
   },
   // Zillo Technique exhaust window (pierce-cancel) — its own gate step AFTER
@@ -537,6 +542,10 @@ const _GATE_WINDOWS = {
   zillo: {
     field: 'zilloGate', pickPrefix: 'combat_zillo_pick_', title: 'Zillo Technique',
     firePassive: null,
+    // DEFENDER-ONLY conditional window (alexanbv 2026-06-25): only the defender's
+    // Zillo pierce-cancel lives here. The attacker has NO zillo window — skip it
+    // entirely (and never prompt the attacker) unless the defender is eligible.
+    onlySide: 'defender',
     onComplete: async (thread, game, combat, ctx) => { delete combat.zilloGate; if (ctx._zilloGateDone) await ctx._zilloGateDone(thread, game, combat); },
   },
 };
@@ -670,9 +679,27 @@ function _seqHandlers(thread, game, combat, ctx) {
       }
       const cfg = _GATE_WINDOWS[step];
       const deps = _gateDeps(ctx);
-      c[cfg.field] = step === 'on_declare'
+      const gate = step === 'on_declare'
         ? buildOnDeclareGate(game, c, deps)
         : buildWindowGate(step, game, c, deps);
+      c[cfg.field] = gate;
+      // Single-sided conditional windows (alexanbv 2026-06-25): 'special'
+      // (attacker-only Zeb die-turn) and 'zillo' (defender-only pierce-cancel)
+      // are NOT bilateral always-prompt windows. Mark the irrelevant side
+      // complete so it is never prompted, and SKIP the whole window when the one
+      // relevant side has no eligible ability.
+      if (cfg.onlySide && gate.attacker && gate.defender) {
+        const otherSide = cfg.onlySide === 'attacker' ? 'defender' : 'attacker';
+        gate[otherSide].passivesFired = true;
+        gate[otherSide].passed = true;
+        const rel = gate[cfg.onlySide];
+        const relCount = (rel?.interactive?.length || 0) + (rel?.passive?.length || 0);
+        if (relCount === 0) {
+          delete c[cfg.field];
+          await _advanceSequence(c, _seqHandlers(thread, game, c, ctx));
+          return;
+        }
+      }
       // _driveGatePath drives it (reading cfg.firePassive); its onComplete
       // advances the sequence because c._seqActive is set.
       await _driveGatePath(step, thread, game, c, ctx);
@@ -1690,7 +1717,7 @@ export const COMBAT_RESOLVERS = {
   },
   // ── special (sample) ─────────────────────────────────────────────────────
   zillo_technique_pierce_cancel: {
-    prompt: () => ({ content: '**Zillo Technique** — exhaust to cancel 2 Pierce on this attack?', buttons: [['use', 'Exhaust → -2 Pierce'], ['skip', 'Skip', 'secondary']] }),
+    prompt: () => ({ content: '🛡️ **Zillo Technique** (defender) — Exhaust Zillo to reduce this attack’s **Pierce by 2**?', buttons: [['use', 'Exhaust Zillo → Pierce −2'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { game, combat, thread }) => {
       if (choice === 'use') {
         // EXHAUST the card (alexanbv 2026-06-16 re-audit: the gate path was

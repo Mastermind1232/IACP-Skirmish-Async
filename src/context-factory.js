@@ -81,7 +81,12 @@ const CONTEXT_GROUPS = {
     'getPlayableCcSpecialsForDc', 'getPlayableCcEndOfActivationForDc',
     'getPlayableCcDoubleActionsForDc', 'getCcEffect', 'isCcAttachment',
     'updateAttachmentMessageForDc', 'buildHandDisplayPayload',
-    'updateHandVisualMessage', 'updateDiscardPileMessage', 'updateDcActionsMessage',
+    // updateHandChannelMessages: a draw CC (Planning) played from the DC thread
+    // resolves through this group's ctx; refreshHandAndDiscard + the drewCards
+    // branch refresh the hand CHANNEL via ctx.updateHandChannelMessages. Without
+    // it here the guard no-ops and the drawn cards only appear on the next action
+    // (alexanbv 2026-06-25).
+    'updateHandVisualMessage', 'updateHandChannelMessages', 'updateDiscardPileMessage', 'updateDcActionsMessage',
     'getDcStats', 'getDcEffects', 'getMapData', 'getFigureSize', 'getFootprintCells',
     'getRange', 'hasLineOfSight',
     'hasLineOfSightByCoord', 'hasFigureLineOfSight', 'getFigureFootprint', 'getAllFigureFootprints', 'getFigureSize',
