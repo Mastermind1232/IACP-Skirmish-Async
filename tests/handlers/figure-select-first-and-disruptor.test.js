@@ -129,6 +129,38 @@ describe('(C) host+companion must choose activation order before acting', () => 
   });
 });
 
+describe('(C2) Spot Weld Ready Junk Droid — host-gone clears order-pending', () => {
+  it('companion is NOT order-pending once the host has ended (dcActionsData gone)', () => {
+    // Mirrors the Spot Weld end-of-Ugnaught state: host cleaned up (which also
+    // cleared companionActivatedBefore), JD bank re-created. The JD must render
+    // its buttons (not be re-suppressed by the order gate).
+    const game = { dcActionsData: { comp1: { perFigureRemaining: { 0: 2 }, isCompanion: true, hostMsgId: 'host1' } } };
+    assert.equal(isCompanionOrderPending(game, 'comp1'), false, 'host gone → no order pending → JD acts');
+  });
+  it('still pending while host is active and order unset', () => {
+    const game = { dcActionsData: {
+      host1: { perFigureRemaining: { 0: 2 } },
+      comp1: { perFigureRemaining: { 0: 2 }, isCompanion: true, hostMsgId: 'host1' },
+    } };
+    assert.equal(isCompanionOrderPending(game, 'comp1'), true);
+  });
+});
+
+describe('(C3) Spot Weld wiring exists (source)', () => {
+  it('abilities.js flags the new Junk Droid Ready via _spotWeldReadyJd', async () => {
+    const fs = await import('node:fs'); const url = await import('node:url');
+    const src = fs.readFileSync(url.fileURLToPath(new URL('../../src/game/abilities.js', import.meta.url)), 'utf8');
+    assert.ok(/_spotWeldReadyJd/.test(src), '_spotWeldReadyJd flag set on Spot Weld');
+  });
+  it('activation.js consumes _spotWeldReadyJd and posts the Ready JD action message', async () => {
+    const fs = await import('node:fs'); const url = await import('node:url');
+    const src = fs.readFileSync(url.fileURLToPath(new URL('../../src/handlers/activation.js', import.meta.url)), 'utf8');
+    assert.ok(/_spotWeldReadyJd\.includes\(_swJdMsgId\)/.test(src), 'consumes the flag for this host\'s JD');
+    assert.ok(/is \*\*Ready\*\* \(Spot Weld\)/.test(src), 'posts the Ready JD message');
+    assert.ok(/_spotWeldReadyJd = game\._spotWeldReadyJd\.filter/.test(src), 'consumes (removes) the flag');
+  });
+});
+
 describe('(B-guard) runtime defense-in-depth: handler refuses CC before figure-select', () => {
   it('the _playCcFromDcThread guard exists for multi-figure no-selection', async () => {
     const fs = await import('node:fs');

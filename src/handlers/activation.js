@@ -825,6 +825,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     getDcPlayAreaComponents,
     logGameAction,
     maybeShowEndActivationPhaseButton,
+    getDcActionButtons,
     client,
     saveGames,
   } = ctx;
@@ -1046,6 +1047,40 @@ export async function handleDcEndActivation(interaction, ctx) {
 
   // Update DC card (stays exhausted)
   await updateDcCardMessage(client, game, msgId, ctx, { exhausted: true, errorContext: 'Failed to update DC card after End Activation:' });
+
+  // Spot Weld (Ugnaught): if Spot Weld was used during THIS activation, the
+  // freshly-placed Junk Droid entered Ready and gets a (second) activation AFTER
+  // the Ugnaught finishes — regardless of whether it already activated before
+  // (alexanbv 2026-06-26). Spot Weld (abilities.js) re-creates the JD's
+  // dcActionsData (fresh 2-action bank, messageId:null) and flags
+  // game._spotWeldReadyJd. Here, as the host (Ugnaught) ends, we post a fresh
+  // action message for the Ready JD so the player can activate it. The JD's
+  // re-created bank makes it the paired-active side, so the partial-end below
+  // keeps the turn from passing until the JD also ends. The host's lock was just
+  // released by cleanupActivation, so the JD buttons are usable.
+  if (msgId && Array.isArray(game._spotWeldReadyJd) && game._spotWeldReadyJd.length) {
+    const _swJdMsgId = getCompanionMsgIdForHost(game, msgId);
+    if (_swJdMsgId && game._spotWeldReadyJd.includes(_swJdMsgId)) {
+      const _swJdData = game.dcActionsData?.[_swJdMsgId];
+      if (_swJdData?.isCompanion && !_swJdData.messageId && _swJdData.threadId && typeof getDcActionButtons === 'function') {
+        try {
+          const _swThread = await fetchGameChannel(client, _swJdData.threadId);
+          const _swName = game.movementBank?.[_swJdMsgId]?.displayName || 'Junk Droid';
+          const _swMsg = await _swThread.send(sanitizeMentions({
+            content: `🤖 **${_swName}** is **Ready** (Spot Weld) — it may activate now, after **${displayName}**. Use its buttons, then **End Activation** when done.`,
+            components: getDcActionButtons(_swJdMsgId, _swName, _swName, _swJdData, game),
+            allowedMentions: { users: [] },
+          }));
+          _swJdData.messageId = _swMsg.id;
+          await logGameAction(game, client, `🤖 **Spot Weld** — **${_swName}** is Ready and may activate after **${displayName}**.`, { phase: 'ACTIVATION', icon: 'activate' });
+        } catch (err) {
+          console.error('[spot-weld] failed to post Ready Junk Droid activation message:', err?.message ?? err);
+        }
+      }
+      // Consume the flag so the JD isn't re-offered if the host somehow re-ends.
+      game._spotWeldReadyJd = game._spotWeldReadyJd.filter((id) => id !== _swJdMsgId);
+    }
+  }
 
   // Slice 3 partial end: paired side still active. Skip turn switch and
   // all post-activation hooks (Clan of Two teleport, End Turn prompt,

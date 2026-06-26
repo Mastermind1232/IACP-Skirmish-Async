@@ -580,8 +580,14 @@ export function isCompanionOrderPending(game, msgId) {
   if (!game || !msgId) return false;
   const ad = game.dcActionsData?.[msgId];
   if (!ad) return false;
-  // Companion side: its actionsData names the host it belongs to.
+  // Companion side: its actionsData names the host it belongs to. Order only
+  // matters while the host is ALSO still active this activation — once the host
+  // has ended (its dcActionsData cleaned up, which also clears
+  // companionActivatedBefore), there is no order left to choose and the
+  // companion simply acts. This is also what lets a Spot Weld Ready Junk Droid
+  // render its buttons after the Ugnaught finishes (alexanbv 2026-06-26).
   if (ad.isCompanion && ad.hostMsgId) {
+    if (!game.dcActionsData?.[ad.hostMsgId]) return false;
     return game.companionActivatedBefore?.[ad.hostMsgId] == null;
   }
   // Host side: a live companion's actionsData points back at this msgId.
