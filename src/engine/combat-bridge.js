@@ -2112,14 +2112,14 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     const mastKey = `${combat.attackerFigureKey}_mastery`;
     if (!game.roundFigureAbilityUsed[mastKey]) {
-      // P3 fix (audit 2026-06-26): do NOT stamp the once-per-round limit before
-      // the outcome is known. The Rest-in-Peace block and the no-eligible-cards
-      // exit below redraw NOTHING, so burning the use there permanently disabled
-      // Mastery for the round even though nothing was redrawn. Stamp the limit
-      // only once a redraw is actually offered (the picker is posted). The deeper
-      // ideal — stamping only when a card is committed inside mastery_pick, so a
-      // Skip in the picker also doesn't burn — lives in the cross-file handler
-      // post-combat.js handleMasteryPick and is flagged in the report.
+      // P3 fix (audit 2026-06-26): do NOT stamp the once-per-round limit at OFFER
+      // time. The Rest-in-Peace block and the no-eligible-cards exit redraw
+      // NOTHING, and a player who clicks Skip inside the picker also redraws
+      // nothing — burning the use in any of those cases permanently disabled
+      // Mastery for the round despite no redraw. The stamp now lives EXCLUSIVELY
+      // in the commit branch of post-combat.js handleMasteryPick, so it fires
+      // exactly once, only when a card is actually returned from discard to hand.
+      // mastKey rides along in pendingMastery (masteryKey) so the handler can stamp it.
       // Rest in Peace: block discard-pile retrieval (no redraw -> limit untouched)
       if (game.restInPeaceActive) {
         await thread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
@@ -2134,9 +2134,9 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         if (mastEligible.length === 0) {
           await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost \u2264 1) in your discard pile.`).catch(discordCatch);
         } else {
-          // A redraw is genuinely being offered -> commit the once-per-round limit.
-          game.roundFigureAbilityUsed[mastKey] = true;
-          setPendingMastery(game, { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
+          // A redraw is being offered. Do NOT stamp here — the handler stamps the
+          // limit only when the redraw is committed (Skip leaves it untouched).
+          setPendingMastery(game, { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum, masteryKey: mastKey });
           const mastOwnerId = getPlayerId(game, mastPlayerNum);
           const mastBtns = mastEligible.slice(0, 24).map((cardName, i) =>
             new ButtonBuilder().setCustomId(`mastery_pick_${game.gameId}_${i}`).setLabel(cardName.slice(0, 80)).setStyle(ButtonStyle.Primary)

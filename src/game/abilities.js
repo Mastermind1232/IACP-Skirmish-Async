@@ -4777,6 +4777,10 @@ export function resolveAbility(abilityId, context) {
       hand.splice(idx, 1);
       game[handKey] = hand;
       game[discardKey] = (game[discardKey] || []).concat(toDiscard);
+      // When-discarded subroutine (Built on Hope / De Wanna Wanga / Windfall):
+      // this is a genuine hand discard, so fire the passive hook synchronously
+      // for the discarded card. fireCcDiscarded is a sync state-mutator.
+      fireCcDiscarded(game, playerNum, toDiscard, { fromDeck: false });
       const eff = getCcEffect(toDiscard);
       const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
       const vk = vpKey(playerNum);
@@ -4786,6 +4790,7 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         refreshHand: true,
         refreshDiscard: true,
+        discardedCcs: [toDiscard],
         logMessage: `**Black Market Prices** — discarded **${toDiscard}** (cost ${cost}), gained ${cost} VP.`,
       };
     }
@@ -4840,10 +4845,14 @@ export function resolveAbility(abilityId, context) {
       }
       game[handKey] = hand;
       game[discardKey] = (game[discardKey] || []).concat(discarded);
+      // When-discarded subroutine (Built on Hope / De Wanna Wanga / Windfall):
+      // these are genuine hand discards, so fire the passive hook for each.
+      for (const _c of discarded) fireCcDiscarded(game, playerNum, _c, { fromDeck: false });
       const kept = drew.filter((c) => !discarded.includes(c));
       return {
         applied: true,
         drewCards: kept,
+        discardedCcs: discarded.slice(),
         logMessage: `Drew 2, discarded ${discarded.length} (not LEADER).`,
       };
     }
@@ -4929,7 +4938,7 @@ export function resolveAbility(abilityId, context) {
     // Phase 1 — first entry: draw, then open the discard picker.
     if (chosenOption == null) {
       const drew = drawCcCards(game, playerNum, entry.draw || 1);
-      game.pendingForbiddenKnowledge = { msgId, playerNum, discarded: 0 };
+      game.pendingForbiddenKnowledge = { msgId, playerNum, discarded: 0, discardedNames: [] };
       const hand = uniqueHand();
       if (hand.length === 0) {
         delete game.pendingForbiddenKnowledge;
@@ -4946,11 +4955,13 @@ export function resolveAbility(abilityId, context) {
     }
     if (chosenOption === FK_DONE) {
       const n = st.discarded;
+      const discardedNames = (st.discardedNames || []).slice();
       delete game.pendingForbiddenKnowledge;
       return {
         applied: true,
         refreshHand: true,
         refreshDcEmbed: true,
+        ...(discardedNames.length ? { discardedCcs: discardedNames } : {}),
         logMessage: `**Forbidden Knowledge** — discarded **${n}** Command card${n === 1 ? '' : 's'}; recovered ${n} Damage, gained ${n} MP, and discarded up to ${n} HARMFUL condition${n === 1 ? '' : 's'}.`,
       };
     }
@@ -4961,6 +4972,13 @@ export function resolveAbility(abilityId, context) {
       hand.splice(idx, 1);
       game[handKey] = hand;
       game[discardKey] = [...(game[discardKey] || []), chosenOption];
+      // When-discarded subroutine (Built on Hope / De Wanna Wanga / Windfall):
+      // genuine hand discard, fire the passive hook for this card. NOTE: a
+      // De Wanna Wanga reshuffle moves the card back out of discard — that's
+      // fine; we still record + reveal it as discarded this resolution.
+      fireCcDiscarded(game, playerNum, chosenOption, { fromDeck: false });
+      st.discardedNames = st.discardedNames || [];
+      st.discardedNames.push(chosenOption);
       st.discarded++;
       // recover 1 Damage on the activating group's most-damaged figure
       if (dcHealthState) {
@@ -14392,9 +14410,45 @@ export function resolveAbility(abilityId, context) {
   // so the forced-reroll handler in combat.js can post the reveal-hand
   // prompt after the reroll fires.
   if (entry.type === 'ccEffect' && entry.demoralizingMonologueEffect) {
-    const { game, playerNum, combat } = context;
+    const { game, playerNum, combat, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (!combat) return { applied: false, manualMessage: 'Play during an attack. No active combat found.' };
+
+    // Phase 2 — the "you MAY reveal your hand" choice (re-entry with choiceIndex).
+    // choiceIndex 0 = Reveal hand; 1 = Skip. The forced defense reroll was already
+    // queued in Phase 1 and resolves independently in the rerolls window.
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      if (choiceIndex !== 0) {
+        return { applied: true, logMessage: '**Demoralizing Monologue** — declined to reveal hand; the rerolled die stands.' };
+      }
+      // REVEAL: CCs are normally secret, but this card says REVEAL — show the
+      // attacker's full hand publicly (exception to CC secrecy). The hand still
+      // CONTAINS the in-flight card? No — by the time the effect resolves the
+      // played card is already in discard, so the hand here is the post-play hand.
+      const hand = (game[ccHandKey(playerNum)] || []).slice();
+      const handNote = hand.length
+        ? `revealed hand (${hand.length}): ${hand.map((c) => `**${c}**`).join(', ')}`
+        : 'revealed an empty hand';
+      // "If you reveal 2 or more cards this way, remove the chosen die's results
+      // from the defense results." Arm a flag the combat layer consumes after the
+      // forced reroll resolves (see CROSS-FILE HOOK note below).
+      const qualifies = hand.length >= 2;
+      if (qualifies) {
+        combat.demoralizingMonologueRemoveDie = { casterPlayerNum: playerNum };
+      }
+      const tail = qualifies
+        ? " (2+ cards) — the chosen rerolled defense die's results are removed."
+        : ' (fewer than 2 cards) — the die stands.';
+      return {
+        applied: true,
+        logMessage: `**Demoralizing Monologue** — ${handNote}${tail}`,
+      };
+    }
+
+    // Phase 1 — queue the forced DEFENSE-die reroll (attacker chooses the die),
+    // then offer the optional reveal-hand. The reroll resolves in the rerolls
+    // window; the reveal choice is independent and the removal (if 2+ cards) is
+    // applied by the combat layer against the rerolled die.
     combat.forcedRerollQueue = combat.forcedRerollQueue || [];
     combat.forcedRerollQueue.push({
       controlPlayer: combat.attackerPlayerNum,
@@ -14405,7 +14459,12 @@ export function resolveAbility(abilityId, context) {
       casterPlayerNum: playerNum,
     });
     combat.demoralizingMonologueApplied = true;
-    return { applied: true, logMessage: "**Demoralizing Monologue** — Forced defense-die reroll added (attacker chooses). After reroll, attacker may reveal hand to remove the die's results." };
+    return {
+      applied: false,
+      requiresChoice: true,
+      choiceOptions: ['Reveal hand (remove die results if 2+ cards)', 'Skip reveal'],
+      logMessage: '**Demoralizing Monologue** — Forced defense-die reroll added (attacker chooses the die). You MAY now reveal your hand.',
+    };
   }
 
   // ccEffect: doubleOrNothingEffect (Double or Nothing) — choose a die; reroll it; if same icon type, may double those icons

@@ -238,6 +238,12 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
       sourceMsgId: msgId,
       sourceLabel: 'Madness',
       subPromptKey: 'madness',
+      // Madness is a MANDATORY player-triggered descriptor: the player must
+      // click Resolve to apply the penalty (Strain/Focus) and cannot dodge it
+      // via the bucket-level "Skip all remaining" button. describeChooserPrompt
+      // suppresses that button whenever the current bucket still holds any
+      // mandatory descriptor (the per-prompt Skip is already absent for these).
+      mandatory: true,
       extras: { dcName },
     });
   }
@@ -872,7 +878,16 @@ export function describeChooserPrompt(resolution, gameId) {
     label: d.sourceLabel,
     descId: d.id,
   }));
-  choices.push({ customId: `soa_skip_all_${gameId}`, label: 'Skip all remaining', descId: '__skip_all__' });
+  // Suppress the bucket-level "Skip all remaining" button while any MANDATORY
+  // descriptor (e.g. Madness) is still pending in the current bucket — skip-all
+  // routes through skipCurrentBucket, which would discharge the mandatory
+  // descriptor and dodge its penalty. The player must Resolve each mandatory one
+  // first; once only optional descriptors remain, the button reappears. (No
+  // soft-lock: every mandatory descriptor has its own Resolve button above.)
+  const hasMandatory = bucket.descriptors.some((d) => d.mandatory);
+  if (!hasMandatory) {
+    choices.push({ customId: `soa_skip_all_${gameId}`, label: 'Skip all remaining', descId: '__skip_all__' });
+  }
   return { ownerPlayerNum: bucket.ownerPlayerNum, choices, gameId };
 }
 

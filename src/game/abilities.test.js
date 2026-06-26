@@ -113,6 +113,112 @@ test('resolveAbility Black Market Prices draws 2, then player-chooses a hand car
   assert.strictEqual(game.player1VP.total, 1);
 });
 
+test('resolveAbility Black Market Prices reveals the discarded card name (discardedCcs)', () => {
+  const game = {
+    player1CcDeck: ['Planning', 'Blitz'],
+    player1CcHand: [],
+    player2CcHand: [],
+    player1VP: { total: 0 },
+    gameId: 'g-bmp-reveal',
+  };
+  resolveAbility('Black Market Prices', { game, playerNum: 1 });
+  const phase2 = resolveAbility('Black Market Prices', { game, playerNum: 1, chosenFigureKey: 'Blitz' });
+  assert.strictEqual(phase2.applied, true);
+  // The discarded card name is surfaced for the public reveal.
+  assert.deepStrictEqual(phase2.discardedCcs, ['Blitz']);
+});
+
+test('resolveAbility Planning (non-LEADER) reveals discarded card names (discardedCcs)', () => {
+  const msgId = 'msg-plan-reveal';
+  const game = {
+    player1CcDeck: ['A', 'B', 'C'],
+    player1CcHand: [],
+    player2CcHand: [],
+    gameId: 'g-plan-reveal',
+    dcActionsData: { [msgId]: {} },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-plan-reveal', playerNum: 1, dcName: 'Nexu', displayName: 'Nexu [Group 1]' }]]);
+  const result = resolveAbility('Planning', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, true);
+  assert.ok(Array.isArray(result.discardedCcs));
+  assert.strictEqual(result.discardedCcs.length, 1);
+  // Whatever name was discarded, it must also be present in the discard pile.
+  assert.ok(game.player1CcDiscard.includes(result.discardedCcs[0]));
+});
+
+test('resolveAbility Forbidden Knowledge collects discarded names and reveals them at Done', () => {
+  const msgId = 'msg-fk';
+  const game = {
+    player1CcDeck: ['Drew1'],
+    player1CcHand: ['Card A', 'Card B'],
+    player2CcHand: [],
+    gameId: 'g-fk',
+    dcActionsData: { [msgId]: {} },
+    // minimal figure plumbing so the per-card effects loop is harmless
+    figurePositions: { 1: {}, 2: {} },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-fk', playerNum: 1, dcName: 'Taron Malicos', displayName: 'Taron Malicos' }]]);
+  const dcHealthState = new Map();
+  // Phase 1: draw + open the discard picker.
+  const p1 = resolveAbility('Forbidden Knowledge', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(p1.requiresChoice, true);
+  assert.ok(game.pendingForbiddenKnowledge);
+  // Pick a card to discard.
+  const toDiscard = (game.player1CcHand || [])[0];
+  resolveAbility('Forbidden Knowledge', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenOption: toDiscard });
+  assert.ok(game.player1CcDiscard.includes(toDiscard));
+  // Done: finalize and surface the discarded names.
+  const done = resolveAbility('Forbidden Knowledge', { game, playerNum: 1, dcMessageMeta, dcHealthState, chosenOption: '✓ Done discarding' });
+  assert.strictEqual(done.applied, true);
+  assert.deepStrictEqual(done.discardedCcs, [toDiscard]);
+});
+
+test('resolveAbility Demoralizing Monologue phase 1 queues forced reroll + offers reveal choice', () => {
+  const game = { gameId: 'g-dm', player1CcHand: ['x', 'y'], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackDiceResults: [], defenseDiceResults: [{ color: 'white' }] };
+  const result = resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, false);
+  assert.strictEqual(result.requiresChoice, true);
+  assert.strictEqual(result.choiceOptions.length, 2);
+  // The forced defense-die reroll (attacker-controlled) is queued.
+  const q = combat.forcedRerollQueue || [];
+  assert.strictEqual(q.length, 1);
+  assert.strictEqual(q[0].pool, 'defense');
+  assert.strictEqual(q[0].controlPlayer, 1);
+  assert.strictEqual(q[0].demoralizingMonologue, true);
+});
+
+test('resolveAbility Demoralizing Monologue reveal (2+ cards) arms die-removal flag', () => {
+  const game = { gameId: 'g-dm2', player1CcHand: ['a', 'b', 'c'], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackDiceResults: [], defenseDiceResults: [{ color: 'white' }] };
+  resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat });
+  const reveal = resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat, choiceIndex: 0 });
+  assert.strictEqual(reveal.applied, true);
+  // 3 cards in hand ⇒ qualifies ⇒ arm the cross-file removal flag.
+  assert.ok(combat.demoralizingMonologueRemoveDie);
+  assert.strictEqual(combat.demoralizingMonologueRemoveDie.casterPlayerNum, 1);
+  // The reveal publicly lists the hand card names.
+  assert.ok(reveal.logMessage.includes('**a**'));
+});
+
+test('resolveAbility Demoralizing Monologue reveal with <2 cards does NOT arm removal', () => {
+  const game = { gameId: 'g-dm3', player1CcHand: ['only'], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackDiceResults: [], defenseDiceResults: [{ color: 'white' }] };
+  resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat });
+  const reveal = resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat, choiceIndex: 0 });
+  assert.strictEqual(reveal.applied, true);
+  assert.ok(!combat.demoralizingMonologueRemoveDie);
+});
+
+test('resolveAbility Demoralizing Monologue skip reveal applies without removal', () => {
+  const game = { gameId: 'g-dm4', player1CcHand: ['a', 'b'], player2CcHand: [] };
+  const combat = { attackerPlayerNum: 1, defenderPlayerNum: 2, attackDiceResults: [], defenseDiceResults: [{ color: 'white' }] };
+  resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat });
+  const skip = resolveAbility('Demoralizing Monologue', { game, playerNum: 1, combat, choiceIndex: 1 });
+  assert.strictEqual(skip.applied, true);
+  assert.ok(!combat.demoralizingMonologueRemoveDie);
+});
+
 test('resolveAbility draw with empty deck: draws what is available', () => {
   const game = { player1CcDeck: ['Only'], player2CcDeck: [], player1CcHand: [], player2CcHand: [] };
   const result = resolveAbility('Planning', { game, playerNum: 1 });

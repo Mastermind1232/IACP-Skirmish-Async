@@ -172,6 +172,19 @@ export async function applyAbilityResult(result, opts) {
     }
   }
 
+  // --- Discarded-CC public reveal ---
+  // CCs are normally SECRET, but a card DISCARDED as a cost/effect (Black Market
+  // Prices, Planning, Forbidden Knowledge) becomes public knowledge — both
+  // players see what left the hand (so they know which when-discarded passives,
+  // e.g. Built on Hope / De Wanna Wanga / Windfall, may have fired). The resolver
+  // already fired fireCcDiscarded() synchronously; here we only surface the names.
+  if (result.applied && Array.isArray(result.discardedCcs) && result.discardedCcs.length && logGameAction) {
+    for (const _dc of result.discardedCcs) {
+      if (!_dc) continue;
+      await logGameAction(game, client, `🃏 discarded **${_dc}** — revealed.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
+    }
+  }
+
   // --- Manual message (not applied) ---
   if (!result.applied && result.manualMessage) {
     if (logGameAction) {

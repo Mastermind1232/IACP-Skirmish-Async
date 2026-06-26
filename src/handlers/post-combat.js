@@ -231,7 +231,7 @@ export async function handleMasteryPick(interaction, ctx) {
   const mastGame = await requireGame(interaction, getGame, mastGameId, { silent: true });
   if (!mastGame) return;
   if (!mastGame.pendingMastery) { await interaction.followUp({ content: 'No pending Mastery choice.', ephemeral: true }).catch(discordCatch); return; }
-  const { attackerPlayerNum: mastAPN, discardKey: mastDK, eligible: mastEl, resultText: mastRT, combat: mastCombat, initialEmbedRefreshMsgIds: mastEmbed, defenderPlayerNum: mastDPN } = mastGame.pendingMastery;
+  const { attackerPlayerNum: mastAPN, discardKey: mastDK, eligible: mastEl, resultText: mastRT, combat: mastCombat, initialEmbedRefreshMsgIds: mastEmbed, defenderPlayerNum: mastDPN, masteryKey: mastMK } = mastGame.pendingMastery;
   const mastOwnerId = mastAPN === 1 ? mastGame.player1Id : mastGame.player2Id;
   if (interaction.user.id !== mastOwnerId) { await interaction.followUp({ content: 'Only the attacker can resolve Mastery.', ephemeral: true }).catch(discordCatch); return; }
   await interaction.deferUpdate().catch(discordCatch);
@@ -253,6 +253,14 @@ export async function handleMasteryPick(interaction, ctx) {
       const mastHandKey = ccHandKey(mastAPN);
       mastGame[mastHandKey] = mastGame[mastHandKey] || [];
       mastGame[mastHandKey].push(mastCard);
+      // Stamp the once-per-round limit ONLY here, when a redraw is actually
+      // committed (a card moved discard -> hand). The offer site in combat-bridge.js
+      // no longer stamps, so Skip-in-picker, Rest-in-Peace blocks, and
+      // no-eligible-cards exits all leave Mastery available for the round.
+      if (mastMK) {
+        mastGame.roundFigureAbilityUsed = mastGame.roundFigureAbilityUsed || {};
+        mastGame.roundFigureAbilityUsed[mastMK] = true;
+      }
       const mastThread = await fetchCombatThread(client, mastCombat.combatThreadId);
       if (mastThread) await mastThread.send(`**Mastery** — **${mastCard}** returned from discard to hand.`).catch(discordCatch);
       await updateHandChannelMessages(mastGame, client).catch(discordCatch);
@@ -262,10 +270,10 @@ export async function handleMasteryPick(interaction, ctx) {
   const mastCThread = await fetchCombatThread(client, mastCombat.combatThreadId);
   if (mastCThread) {
     const triggered = await checkPostCombatSurges(mastGame, mastCombat, mastRT, new Set(mastEmbed), mastCThread, mastOwnerId, mastDPN);
-    if (triggered) { saveGames(game.gameId); return; }
+    if (triggered) { saveGames(mastGame.gameId); return; }
   }
   await finishCombatResolution(mastGame, mastCombat, mastRT, new Set(mastEmbed), client);
-  saveGames(game.gameId);
+  saveGames(mastGame.gameId);
   return;
 }
 

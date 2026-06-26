@@ -879,6 +879,13 @@ const ROUND_OBJECT_FLAGS = [
   'calmingPresenceUsed',
   'jynHairTriggerUsed',
   'chirrutOneWithForceUsed',
+  // Bo-Katan "Dual-Wield Pistols" — figureKey-keyed map of the deferred
+  // 2-Block grant contingent on a bonus Ranged attack being performed.
+  // Self-guards via an embedded `round` field, but also reset to {} here
+  // at the round boundary like the other figureKey/msgId-keyed maps so it
+  // never carries stale entries across rounds (matches the
+  // `game.dwpBlockGrantPending = game.dwpBlockGrantPending || {}` guard).
+  'dwpBlockGrantPending',
 ];
 
 const ROUND_NULL_FLAGS = [
