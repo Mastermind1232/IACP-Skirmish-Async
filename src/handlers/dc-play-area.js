@@ -1985,6 +1985,78 @@ export async function handleGrantedAttack(interaction, ctx) {
   return handleDcAction(interaction, ctx, 'dc_attack_');
 }
 
+/**
+ * Out-of-activation free Special Action interrupt (Jundland Terror, and any
+ * future "interrupt to perform a Special Action" effect).
+ *
+ * customId: jt_special_<gameId>_<msgId>_<specialIdx>
+ *
+ * Resolves the chosen NATIVE Special Action for the grantee figure NOW, at 0
+ * action cost, WITHOUT an active activation. Rather than re-implement the
+ * dozens of special-resolution branches, it synthesizes a minimal activation
+ * context — game.dcActionsData[msgId] (selectedFigure = the figure's index,
+ * no threadId so updateDcActionsMessage no-ops) + a freeSpecialActionPending
+ * marker (which handleDcAction already treats as a 0-cost, marker-consuming
+ * special) — then re-dispatches dc_special_<idx>_<msgId> into the standard
+ * handleDcAction special pipeline (mirrors handleGrantedAttack). Attack-specials
+ * (Tusken Cycler), multi-target picks (Trample), pounce/space-pick, etc. all
+ * flow through the existing pipeline. The marker is consumed by handleDcAction
+ * after the special resolves, so it never lingers onto a real next activation.
+ */
+export async function handleJtSpecial(interaction, ctx) {
+  // customId: jt_special_<gameId>_<msgId>_f<figIdx>_<specialIdx>
+  const m = interaction.customId.match(/^jt_special_(.+)_f(\d+)_(\d+)$/);
+  if (!m) {
+    await interaction.followUp({ content: 'Invalid free-special button.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // suffix = <gameId>_<msgId>; gameIds don't contain `_`, so split on the first.
+  const suffix = m[1];
+  const _jtFigIdx = parseInt(m[2], 10);
+  const specialIdx = parseInt(m[3], 10);
+  const _u = suffix.indexOf('_');
+  if (_u < 0) {
+    await interaction.followUp({ content: 'Invalid free-special button (malformed id).', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const gameId = suffix.slice(0, _u);
+  const msgId = suffix.slice(_u + 1);
+  const { getGame, dcMessageMeta } = ctx;
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  const meta = dcMessageMeta.get(msgId);
+  if (!meta) {
+    await interaction.followUp({ content: 'This DC is no longer tracked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // The chosen figure index is threaded in the customId (Tusken Raiders deploy
+  // as a multi-figure group, so the special must run as the EXACT figure picked
+  // in Phase 1 — not group-figure 0).
+  const figIdx = _jtFigIdx;
+  const _dgIdx = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
+  const figureKey = `${meta.dcName}-${_dgIdx}-${figIdx}`;
+  // Synthesize a minimal, out-of-activation activation context so the standard
+  // special pipeline can run. No threadId → updateDcActionsMessage no-ops.
+  game.dcActionsData = game.dcActionsData || {};
+  if (!game.dcActionsData[msgId]) {
+    game.dcActionsData[msgId] = { selectedFigure: figIdx };
+  } else {
+    game.dcActionsData[msgId].selectedFigure = figIdx;
+  }
+  // 0-cost marker: handleDcAction reads freeSpecialActionPending to set the
+  // effective action cost to 0 and consumes it after the special resolves.
+  game.freeSpecialActionPending = game.freeSpecialActionPending || {};
+  game.freeSpecialActionPending[figureKey] = { from: 'Jundland Terror' };
+  // Re-dispatch as a normal native special action click.
+  const _newId = `dc_special_${specialIdx}_${msgId}`;
+  try {
+    Object.defineProperty(interaction, 'customId', { value: _newId, writable: true, configurable: true });
+  } catch {
+    interaction.customId = _newId;
+  }
+  return handleDcAction(interaction, ctx, 'dc_special_');
+}
+
 export async function handleDcAction(interaction, ctx, buttonKey) {
   const {
     getGame,

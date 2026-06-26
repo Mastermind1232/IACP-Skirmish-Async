@@ -1967,6 +1967,23 @@ function _jundlandMeta(msgId) {
   _registerDcMessageMeta(m);
   return m;
 }
+// Bantha Rider has a real Special Action (Trample) — used to exercise the
+// per-special Phase 2 listing + the immediate (non-deferred) special branch.
+function _banthaGame(msgId) {
+  return {
+    gameId: 'g-jt', player1Id: 'P1', player2Id: 'P2',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { 'Bantha Rider-1-0': 'a1' }, 2: {} },
+    freeAttackBonusPending: {},
+    freeSpecialActionPending: {},
+    pendingMoveX: {},
+  };
+}
+function _banthaMeta(msgId) {
+  const m = new Map([[msgId, { gameId: 'g-jt', playerNum: 1, dcName: 'Bantha Rider', displayName: 'Bantha Rider [Group 1]' }]]);
+  _registerDcMessageMeta(m);
+  return m;
+}
 
 test('Jundland Terror Phase 1 prompts which Tusken/Bantha figure plays it', () => {
   const msgId = 'jt-1';
@@ -1977,15 +1994,29 @@ test('Jundland Terror Phase 1 prompts which Tusken/Bantha figure plays it', () =
   assert.deepStrictEqual(r.choiceValues, ['Tusken Raider-1-0']);
 });
 
-test('Jundland Terror Phase 2a prompts Attack vs Special after figure pick', () => {
+test('Jundland Terror Phase 2 lists Attack only for a figure with no specials', () => {
   const msgId = 'jt-2';
   const game = _jundlandGame(msgId);
   const dcMessageMeta = _jundlandMeta(msgId);
+  // Base "Tusken Raider" has no native Special Action → Attack is the only option.
   const r = resolveAbility('Jundland Terror', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'Tusken Raider-1-0' });
   assert.strictEqual(r.requiresChoice, true);
-  assert.deepStrictEqual(r.choiceOptions, ['Jundland: Attack', 'Jundland: Special Action']);
-  assert.deepStrictEqual(r.choiceValues, ['Tusken Raider-1-0', 'Tusken Raider-1-0']);
+  assert.deepStrictEqual(r.choiceOptions, ['Jundland: Attack']);
+  assert.deepStrictEqual(r.choiceValues, ['Tusken Raider-1-0']);
   // Not yet committed: EOR flag stays unset until a mode is chosen.
+  assert.ok(!game.jundlandTerrorPlayedThisEor);
+});
+
+test('Jundland Terror Phase 2 lists Attack PLUS each Special Action the figure has', () => {
+  const msgId = 'jt-2b';
+  const game = _banthaGame(msgId);
+  const dcMessageMeta = _banthaMeta(msgId);
+  const r = resolveAbility('Jundland Terror', { game, playerNum: 1, dcMessageMeta, chosenFigureKey: 'Bantha Rider-1-0' });
+  assert.strictEqual(r.requiresChoice, true);
+  // Attack first, then one option per native special (Bantha Rider → Trample),
+  // each carrying its render-position special index encoded as `#<idx>`.
+  assert.deepStrictEqual(r.choiceOptions, ['Jundland: Attack', 'Jundland: Special: Trample #0']);
+  assert.deepStrictEqual(r.choiceValues, ['Bantha Rider-1-0', 'Bantha Rider-1-0']);
   assert.ok(!game.jundlandTerrorPlayedThisEor);
 });
 
@@ -2001,23 +2032,29 @@ test('Jundland Terror Attack mode arms free attack + 2 MP + EOR gate', () => {
   assert.strictEqual(game.freeAttackBonusPending['Tusken Raider-1-0'], true);
   assert.ok(!game.freeSpecialActionPending['Tusken Raider-1-0']);
   assert.strictEqual(game.pendingMoveX[msgId]?.remaining, 2);
+  assert.strictEqual(game.pendingMoveX[msgId]?.nextAction?.type, 'freeAttackPrompt');
   assert.strictEqual(game.jundlandTerrorPlayedThisEor, true);
 });
 
-test('Jundland Terror Special mode arms free special action + 2 MP + EOR gate', () => {
+test('Jundland Terror Special mode arms an IMMEDIATE special picker (NOT freeSpecialActionPending)', () => {
   const msgId = 'jt-4';
-  const game = _jundlandGame(msgId);
-  const dcMessageMeta = _jundlandMeta(msgId);
+  const game = _banthaGame(msgId);
+  const dcMessageMeta = _banthaMeta(msgId);
   const r = resolveAbility('Jundland Terror', {
     game, playerNum: 1, dcMessageMeta,
-    chosenFigureKey: 'Tusken Raider-1-0', chosenOption: 'Jundland: Special Action',
+    chosenFigureKey: 'Bantha Rider-1-0', chosenOption: 'Jundland: Special: Trample #0',
   });
   assert.strictEqual(r.applied, true);
-  assert.ok(game.freeSpecialActionPending['Tusken Raider-1-0']);
-  assert.strictEqual(game.freeSpecialActionPending['Tusken Raider-1-0'].from, 'Jundland Terror');
-  // Special mode does NOT also arm a free attack.
-  assert.ok(!game.freeAttackBonusPending['Tusken Raider-1-0']);
+  // The special is resolved NOW via a freeSpecialPrompt Move-X continuation —
+  // it must NOT defer to next activation via freeSpecialActionPending.
+  assert.ok(!game.freeSpecialActionPending['Bantha Rider-1-0']);
+  assert.ok(!game.freeAttackBonusPending['Bantha Rider-1-0']);
   assert.strictEqual(game.pendingMoveX[msgId]?.remaining, 2);
+  const next = game.pendingMoveX[msgId]?.nextAction;
+  assert.strictEqual(next?.type, 'freeSpecialPrompt');
+  assert.strictEqual(next?.payload?.specialIdx, 0);
+  assert.strictEqual(next?.payload?.specialLabel, 'Trample');
+  assert.strictEqual(next?.payload?.figureKey, 'Bantha Rider-1-0');
   assert.strictEqual(game.jundlandTerrorPlayedThisEor, true);
 });
 

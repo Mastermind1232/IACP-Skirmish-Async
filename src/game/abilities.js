@@ -139,6 +139,23 @@ function getKeywordsUpper(dcName) {
   return (getDcEffects()?.[dcName]?.keywords || []).map(k => String(k).toUpperCase());
 }
 
+/**
+ * Enumerate the activatable Special Actions a figure's DC currently has,
+ * mirroring the render path (components.js getDcActionButtons → getDcStats().specials)
+ * and the dispatch path (dc-play-area.js handleDcAction → specialAbilityIds[specialIdx]).
+ * The returned `index` is the SAME render-position index the dc_special_<idx>_<msgId>
+ * button uses, so it can be re-dispatched into handleDcAction without re-aligning.
+ * @param {string} dcName - DC name (already stripped to the effects key, e.g. 'Bantha Rider')
+ * @returns {{ label: string, index: number }[]}
+ */
+function getNativeSpecialActionsForDc(dcName) {
+  const base = (dcName || '').replace(/\s*\[.*\]\s*$/, '').trim();
+  let stats = getDcStats(dcName);
+  if (!stats?.specials?.length && base && base !== dcName) stats = getDcStats(base);
+  const specials = stats?.specials || [];
+  return specials.map((label, index) => ({ label: String(label), index }));
+}
+
 /** Look up DC stats by name (handles display variants). */
 function getStatsForDc(dcName) {
   const map = getDcEffects() || {};
@@ -154,7 +171,7 @@ import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfil
 import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
 import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
-import { getFigureSize } from '../data-loader.js';
+import { getFigureSize, getDcStats } from '../data-loader.js';
 import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive, applyObjectDamageSync } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
@@ -12242,12 +12259,14 @@ export function resolveAbility(abilityId, context) {
   //
   // IMMEDIATE-EOR resolution (2026-06-26): the 2 MP are granted via the
   // out-of-activation Move-X picker (posted NOW to the game log by the
-  // apply-ability layer from pendingMoveXMsgId), and the free ATTACK is
-  // presented NOW in the EOR window by chaining a freeAttackPrompt nextAction
-  // off that picker (mirrors Overload Drive / Fell Swoop). The free SPECIAL
-  // ACTION still rides freeSpecialActionPending → next activation, because no
-  // out-of-activation standalone special-action picker exists yet (see flag
-  // below); the attack branch is the fully-immediate path.
+  // apply-ability layer from pendingMoveXMsgId). Phase 2 presents Attack PLUS
+  // one option per Special Action the chosen figure actually has. BOTH the free
+  // ATTACK and the chosen free SPECIAL ACTION are now presented + resolved NOW
+  // in the EOR window by chaining a nextAction off that picker — freeAttackPrompt
+  // (attack) or freeSpecialPrompt (special). The special path no longer rides
+  // freeSpecialActionPending → next activation; the freeSpecialPrompt continuation
+  // (move-x-handler) posts a jt_special_ button → handleJtSpecial, which resolves
+  // the chosen special immediately at 0 action cost, out of activation.
   // G37/C21: max 1 copy per EOR phase.
   if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenOption } = context;
@@ -12257,19 +12276,36 @@ export function resolveAbility(abilityId, context) {
     // Mode markers carried by the Attack-vs-Special choice (Phase 2b). The
     // chained choice round-trips chosenFigureKey via choiceValues, so the mode
     // is distinguished by chosenOption.
+    // Phase 2 option encoding. Mode is carried entirely by chosenOption (the
+    // chosenFigureKey is round-tripped via choiceValues). Attack is a single
+    // fixed option; each Special Action the figure actually has gets its own
+    // option, with the render-position special index encoded as `#<idx>` so
+    // Phase 2b can re-dispatch the exact dc_special_<idx> into handleDcAction.
     const _JT_ATTACK = 'Jundland: Attack';
-    const _JT_SPECIAL = 'Jundland: Special Action';
-    const _jtIsMode = chosenOption === _JT_ATTACK || chosenOption === _JT_SPECIAL;
-    // Phase 2a: a figure was picked but no mode yet → prompt Attack vs Special.
+    const _JT_SPECIAL_PREFIX = 'Jundland: Special: ';
+    const _jtIsAttack = chosenOption === _JT_ATTACK;
+    const _jtSpecialMatch = typeof chosenOption === 'string' && chosenOption.startsWith(_JT_SPECIAL_PREFIX)
+      ? chosenOption.match(/ #(\d+)$/)
+      : null;
+    const _jtIsSpecial = !!_jtSpecialMatch;
+    const _jtIsMode = _jtIsAttack || _jtIsSpecial;
+    // Phase 2a: a figure was picked but no mode yet → list Attack PLUS one
+    // option per Special Action that figure has. All directly selectable.
     if (chosenFigureKey && !_jtIsMode) {
       const targetName = dcNameFromFigureKey(chosenFigureKey);
+      const specials = getNativeSpecialActionsForDc(targetName);
+      const choiceOptions = [_JT_ATTACK, ...specials.map((s) => `${_JT_SPECIAL_PREFIX}${s.label} #${s.index}`)];
+      const choiceValues = choiceOptions.map(() => chosenFigureKey);
+      const _specText = specials.length
+        ? ` or a **Special Action** (${specials.map((s) => s.label).join(', ')})`
+        : ' (no Special Actions available — Attack only)';
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: [_JT_ATTACK, _JT_SPECIAL],
-        choiceValues: [chosenFigureKey, chosenFigureKey],
+        choiceOptions,
+        choiceValues,
         chosenFigureKey,
-        manualMessage: `**Jundland Terror** — **${targetName}**: choose **Attack** or **Special Action**.`,
+        manualMessage: `**Jundland Terror** — **${targetName}**: choose **Attack**${_specText}.`,
       };
     }
     // Phase 2b: figure + mode chosen → grant 2 MP and arm the chosen interrupt.
@@ -12280,16 +12316,21 @@ export function resolveAbility(abilityId, context) {
       if (!targetMsgId) {
         return { applied: false, manualMessage: `**Jundland Terror** — could not locate **${targetName}**'s play area; resolve manually.` };
       }
-      const wantsSpecial = chosenOption === _JT_SPECIAL;
+      const wantsSpecial = _jtIsSpecial;
+      const _jtSpecialIdx = _jtIsSpecial ? parseInt(_jtSpecialMatch[1], 10) : -1;
+      let _jtSpecialLabel = '';
       if (wantsSpecial) {
-        // FREE SPECIAL ACTION: surface ALL of the chosen figure's special
-        // actions at 0 cost on its next activation. The render path
-        // (getDcActionButtons) reads freeSpecialActionPending[figureKey] to
-        // render the natives at cost 0; the dispatch path (dc-play-area.js)
-        // reads it to skip the action charge and consume the marker. Mirrors
-        // the Choose-a-Side Gar Saxon Flamethrower special injection.
-        game.freeSpecialActionPending = game.freeSpecialActionPending || {};
-        game.freeSpecialActionPending[chosenFigureKey] = { from: 'Jundland Terror' };
+        // FREE SPECIAL ACTION (immediate EOR interrupt): chain a
+        // freeSpecialPrompt nextAction off the 2-MP Move-X picker so the chosen
+        // special is resolved NOW, out of activation, at 0 action cost (NOT
+        // deferred to next activation via freeSpecialActionPending). The
+        // continuation (move-x-handler _runFreeSpecialPromptContinuation) posts
+        // a single jt_special_<gameId>_<msgId>_<idx> button → handleJtSpecial,
+        // which re-dispatches dc_special_<idx>_<msgId> into the standard special
+        // pipeline (resolveAbility + applyAbilityResult) with a synthesized,
+        // 0-cost, out-of-activation context.
+        const _m = (chosenOption || '').match(/^Jundland: Special: (.+) #\d+$/);
+        _jtSpecialLabel = _m ? _m[1] : 'Special Action';
       } else {
         // FREE ATTACK (immediate EOR interrupt): arm freeAttackBonusPending and
         // chain a freeAttackPrompt nextAction off the 2-MP Move-X picker, so the
@@ -12297,15 +12338,16 @@ export function resolveAbility(abilityId, context) {
         // activation) once the move drains — not deferred to next activation.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[chosenFigureKey] = true;
-        // Legacy advertise-flag (Bantha Rider Trample / Tusken Cycler attack-
-        // specials still ride the granted attack); kept for back-compat.
+        // Legacy advertise-flag (kept for back-compat); attack-specials such as
+        // Tusken Cycler run their own attack via the special branch above.
         game.jundlandTerrorSpecialOption = game.jundlandTerrorSpecialOption || {};
         game.jundlandTerrorSpecialOption[chosenFigureKey] = true;
       }
       // Out-of-activation 2-MP grant on a non-activating friendly →
       // setupPendingMoveX, bypassCosts: false. The MP picker posts immediately
-      // (pendingMoveXMsgId below). For the attack mode, chain the immediate
-      // free-attack prompt; the special mode stays armed for next activation.
+      // (pendingMoveXMsgId below). Both modes chain an IMMEDIATE EOR-window
+      // continuation off the picker: freeAttackPrompt (attack) or
+      // freeSpecialPrompt (the chosen Special Action).
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[targetMsgId] = {
         remaining: 2,
@@ -12316,7 +12358,17 @@ export function resolveAbility(abilityId, context) {
         threadId: null,
         bypassCosts: false,
         msgId: targetMsgId,
-        nextAction: wantsSpecial ? null : {
+        nextAction: wantsSpecial ? {
+          type: 'freeSpecialPrompt',
+          payload: {
+            msgId: targetMsgId,
+            playerNum,
+            figureKey: chosenFigureKey,
+            specialIdx: _jtSpecialIdx,
+            specialLabel: _jtSpecialLabel,
+            sourceLabel: 'Jundland Terror',
+          },
+        } : {
           type: 'freeAttackPrompt',
           payload: {
             msgId: targetMsgId,
@@ -12327,7 +12379,7 @@ export function resolveAbility(abilityId, context) {
         },
       };
       const _modeText = wantsSpecial
-        ? 'may interrupt to perform a **free Special Action** on their next activation'
+        ? `may interrupt to perform a **free Special Action** (**${_jtSpecialLabel}**) now (after spending the 2 MP)`
         : 'may interrupt to perform a **free attack** now (after spending the 2 MP)';
       return {
         applied: true,

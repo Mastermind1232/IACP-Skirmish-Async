@@ -201,6 +201,13 @@ async function _runFinishPickerNextAction(game, ctx, msgId, pending, nextAction)
     // the explicit "Declare Attack" prompt so the player gets the
     // continuation as a click instead of a side-channel flag.
     await _runFreeAttackPromptContinuation(game, ctx, pending, nextAction);
+  } else if (nextAction.type === 'freeSpecialPrompt') {
+    // Generic "after the move, perform a free Special Action" continuation.
+    // Used by Jundland Terror (immediate EOR interrupt). Posts a single
+    // "Perform <Special>" button that routes to handleJtSpecial, which
+    // resolves the chosen native special NOW at 0 action cost, out of
+    // activation — mirrors freeAttackPrompt's out-of-activation attack button.
+    await _runFreeSpecialPromptContinuation(game, ctx, pending, nextAction);
   } else if (nextAction.type === 'rushPostMove') {
     await _runRushPostMoveContinuation(game, ctx, pending);
   } else if (nextAction.type === 'shoulderRushPostMove') {
@@ -904,6 +911,69 @@ async function _runFreeAttackPromptContinuation(game, ctx, pending, next) {
     }
   }
   await logGameAction?.(game, client, content, { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'attack', interrupt: true });
+}
+
+/**
+ * REUSABLE "interrupt to perform a Special Action" continuation. Posts a
+ * single button that, when clicked, resolves a specific NATIVE Special
+ * Action for the grantee figure NOW — out of activation, at 0 action cost.
+ *
+ * The button routes to handleJtSpecial (dc-play-area.js), which synthesizes a
+ * minimal, 0-cost, out-of-activation activation context and re-dispatches the
+ * exact dc_special_<idx>_<msgId> into the standard special pipeline
+ * (handleDcAction → resolveAbility + applyAbilityResult). This means every
+ * special branch (Trample target picker, Tusken Cycler's own attack, pounce
+ * space-pick, etc.) is reused without re-implementation.
+ *
+ * Other effects that need an immediate free Special Action can chain a
+ * { type: 'freeSpecialPrompt', payload: { msgId, playerNum, figureKey,
+ *   specialIdx, specialLabel, sourceLabel } } nextAction off their Move-X
+ * picker (or call postFreeSpecialPrompt directly).
+ */
+async function _runFreeSpecialPromptContinuation(game, ctx, pending, next) {
+  const payload = next.payload || {};
+  await postFreeSpecialPrompt(game, ctx, {
+    msgId: payload.msgId || pending.msgId,
+    playerNum: payload.playerNum || pending.playerNum,
+    figureKey: payload.figureKey || pending.figureKey,
+    specialIdx: payload.specialIdx,
+    specialLabel: payload.specialLabel,
+    sourceLabel: payload.sourceLabel || pending.source || 'Free Special Action',
+    threadId: pending.threadId,
+    dcName: pending.dcName,
+  });
+}
+
+/**
+ * Post the out-of-activation "Perform <Special>" interrupt button.
+ * customId: jt_special_<gameId>_<msgId>_<specialIdx>
+ * @param {object} opts - { msgId, playerNum, figureKey, specialIdx, specialLabel, sourceLabel, threadId?, dcName? }
+ */
+export async function postFreeSpecialPrompt(game, ctx, opts) {
+  const { client, logGameAction } = ctx;
+  const { msgId, playerNum, figureKey, specialIdx, specialLabel, sourceLabel } = opts;
+  if (!msgId || specialIdx == null || specialIdx < 0) return;
+  const granteeName = opts.dcName || dcNameFromFigureKey(figureKey);
+  const ownerId = getPlayerId(game, playerNum);
+  const label = `Perform ${specialLabel || 'Special Action'} (${granteeName})`.slice(0, 80);
+  // Thread the chosen figure's index so a multi-figure group (Tusken Raiders
+  // deploy as a group) resolves the special as the EXACT figure picked in
+  // Phase 1, not group-figure 0. figureKey = "<DcName>-<dg>-<figIdx>".
+  const _figIdx = (String(figureKey || '').match(/-(\d+)$/) || [])[1] ?? '0';
+  const btn = new ButtonBuilder()
+    .setCustomId(`jt_special_${game.gameId}_${msgId}_f${_figIdx}_${specialIdx}`)
+    .setLabel(label)
+    .setStyle(ButtonStyle.Primary);
+  const row = new ActionRowBuilder().addComponents(btn);
+  const content = `<@${ownerId}> 🪕 **${sourceLabel || 'Free Special Action'}** — click below to perform **${specialLabel || 'the Special Action'}** with **${granteeName}** now (free, 0 actions).`;
+  if (opts.threadId) {
+    const thread = await fetchCombatThread(client, opts.threadId);
+    if (thread) {
+      await thread.send({ content, components: [row], allowedMentions: { users: [ownerId] } }).catch(discordCatch);
+      return;
+    }
+  }
+  await logGameAction?.(game, client, content, { components: [row], allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 
 // ── Multi-figure MP-gain sequencing ──────────────────────────────────

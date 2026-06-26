@@ -87,6 +87,7 @@ import {
   handleDcEndFigure,
   handleDcFigPick,
   handleGrantedAttack,
+  handleJtSpecial,
   handleGrantedMove,
   handlePounceSpacePick,
   handlePounceSkipPush,
@@ -465,6 +466,7 @@ register('dc_wa_slam_', handleDcWaSlam, 'dcPlayArea');
 register('dc_end_figure_', handleDcEndFigure, 'dcPlayArea');
 register('dc_fig_pick_', handleDcFigPick, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
+register('jt_special_', handleJtSpecial, 'dcPlayArea');
 register('granted_move_', handleGrantedMove, 'dcPlayArea');
 register('soa_pick_', handleSoaPick, 'dcPlayArea');
 register('soa_fire_', handleSoaFire, 'dcPlayArea');
@@ -878,6 +880,7 @@ export {
   handleDcEndFigure,
   handleDcFigPick,
   handleGrantedAttack,
+  handleJtSpecial,
   handleGrantedMove,
   handlePounceSpacePick,
   handlePounceSkipPush,
