@@ -2715,6 +2715,15 @@ export function _isGateCc(id, ccPn, game) {
 }
 
 export async function _postGateChooseWindow(window, side, pending, thread, game, combat) {
+  // ARCHITECTURE NOTE (alexanbv 2026-06-25): this is the UNIFIED gate window's
+  // choose-ability poster, with the neutral "Play a Command Card" secrecy button
+  // below (handleModsPick 'playcc'). The "After Attack Resolves" window is the
+  // ONE combat window NOT driven from here — it lives in
+  // src/handlers/after-attack-resolve.js (postPostResolveWindow + the aar_*
+  // handlers) and has its OWN copy of the Play-CC secrecy button. Any change to
+  // this CC-secrecy / button-locking pattern must be mirrored THERE too until
+  // after_resolve is migrated onto this gate framework. See the big ARCHITECTURE
+  // NOTE on postPostResolveWindow.
   const cfg = _GATE_WINDOWS[window];
   // False Orders / Lure: the controller acts on the attacker side.
   const sidePlayerNum = side === 'attacker'

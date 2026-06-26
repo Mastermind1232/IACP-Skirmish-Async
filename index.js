@@ -282,6 +282,7 @@ import {
   runPostDeployPhase,
   handleCombatToken,
   handleStatusPhase,
+  handleCcConfirmPlay,
   sendReadyToResolveRolls,
   sendPowerTokenOverflowUI,
   cleanupCompanionEmbedDeps, createCompanionDcEmbed,
@@ -3528,6 +3529,9 @@ function buildAllDeps() {
 
     // Combat (imported from handlers)
     sendReadyToResolveRolls,
+    // After-resolve "Play a Command Card" (aar_ccpick_) routes through the
+    // normal confirm path; injected so the postCombat ctx can call it.
+    handleCcConfirmPlay,
 
     // Mission rules (imported)
     runEndOfRoundRules, runStartOfRoundRules,

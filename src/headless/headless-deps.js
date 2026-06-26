@@ -177,6 +177,7 @@ import {
   runPostDeployPhase,
   sendReadyToResolveRolls,
   runStatusPhaseAfterEndOfRound,
+  handleCcConfirmPlay,
 } from '../handlers/index.js';
 
 import { sendPhaseGateMessages } from '../handlers/phase-gate.js';
@@ -579,6 +580,9 @@ export function buildHeadlessDeps(options = {}) {
 
     // Combat (from handlers)
     sendReadyToResolveRolls,
+    // After-resolve "Play a Command Card" (aar_ccpick_) routes through the
+    // normal confirm path; provided so headless can drive it too.
+    handleCcConfirmPlay,
 
     // Mission rules (real)
     runEndOfRoundRules, runStartOfRoundRules,

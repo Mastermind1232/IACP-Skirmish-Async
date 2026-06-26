@@ -30,7 +30,7 @@ import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeTog
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
 import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
-import { handleAarFire, handleAarDone } from './after-attack-resolve.js';
+import { handleAarFire, handleAarDone, handleAarPlayCc, handleAarCcPick } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
   handleMapSelection,
@@ -309,6 +309,12 @@ register('squad_command_focus_', handleSquadCommandFocus, 'combat');
 register('aar_fire_', handleAarFire, 'postCombat');
 register('aar_done_atk_', handleAarDone, 'postCombat');
 register('aar_done_def_', handleAarDone, 'postCombat');
+// Neutral "Play a Command Card" button + its ephemeral pick list (alexanbv
+// 2026-06-25). These route an after-attack CC play through the normal pipeline
+// via ctx.handleCcConfirmPlay — so the postCombat ctx group must supply that
+// handler + the deps it destructures (see context-factory.js postCombat).
+register('aar_playcc_', handleAarPlayCc, 'postCombat');
+register('aar_ccpick_', handleAarCcPick, 'postCombat');
 register('combat_roll_', handleCombatRoll, 'combat');
 register('dbh_pick_die_', handleDbhPickDie, 'combat');
 register('combat_surge_', handleCombatSurge, 'combat');

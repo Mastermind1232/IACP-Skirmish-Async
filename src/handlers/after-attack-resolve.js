@@ -32,11 +32,14 @@ import {
 } from '../engine/after-attack-queue.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
-import { getPlayerId, opponentPlayerNum } from '../game/player-helpers.js';
+import { getPlayerId, opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame } from '../utils/guards.js';
 import { fireEffect } from './after-attack-fire.js';
 import { abilitiesForWindow } from '../engine/combat-timing-registry.js';
+import { getPlayableReactionCardsForTiming, isCcPlayableNow } from '../game/cc-timing.js';
+import { setPendingCcConfirmation } from '../game/interrupts.js';
+import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
  * Component 1 of the after_resolve menu (alexanbv 2026-06-16: "after resolves
@@ -627,10 +630,35 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
 }
 
 /**
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║ ARCHITECTURE NOTE — this window is NOT on the unified gate framework.      ║
+ * ╠══════════════════════════════════════════════════════════════════════════╣
+ * ║ The "After Attack Resolves" window (this `postPostResolveWindow`) is the   ║
+ * ║ ONE combat window that does NOT run on the unified gate machinery in       ║
+ * ║ src/handlers/combat.js (`_GATE_WINDOWS` / `driveModsGate` /                ║
+ * ║ `_postGateChooseWindow` / `handleModsPick`). It has its OWN button-posting ║
+ * ║ (here) and its OWN handlers (the `aar_*` family below: `aar_fire_`,        ║
+ * ║ `aar_done_atk_`/`aar_done_def_`, and now `aar_playcc_`/`aar_ccpick_`).     ║
+ * ║                                                                            ║
+ * ║ CONSEQUENCE: any change to combat-window UX (CC-secrecy, the neutral       ║
+ * ║ "Play a Command Card" button, wrong-player button-locking, etc.) must be   ║
+ * ║ applied HERE TOO — it will NOT be inherited from the gate code path. The   ║
+ * ║ Play-CC button (added 2026-06-25, alexanbv) mirrors the gate's secrecy     ║
+ * ║ pattern in combat.js `_postGateChooseWindow` (~2717) + `handleModsPick`    ║
+ * ║ `'playcc'` branch (~2133); keep the two in sync until unified.             ║
+ * ║                                                                            ║
+ * ║ TODO / FUTURE (memory: project_combat_pipeline_rework): migrate the        ║
+ * ║ `after_resolve` step ONTO the unified gate framework so there is ONE code  ║
+ * ║ path (one Play-CC implementation, one lock, one secrecy rule). Until then  ║
+ * ║ this duplication is load-bearing and intentional.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
+ *
  * Render and post the post-resolve window for one side. Each pending
- * effect for that side gets a Primary button with its label; a Done
- * button finishes the window. If the queue is empty for this side,
- * skips the prompt and advances directly.
+ * effect for that side gets a Primary button with its label; a neutral,
+ * ALWAYS-PRESENT "🃏 Play a Command Card" button (secrecy: shown even with
+ * zero playable CCs so its presence/absence leaks nothing) opens an ephemeral
+ * private list; a Done button finishes the window. The window NEVER
+ * auto-advances on an empty queue — the player must press Done.
  */
 export async function postPostResolveWindow(thread, game, combat, side, ctx) {
   if (!combat) return;
@@ -662,6 +690,22 @@ export async function postPostResolveWindow(thread, game, combat, side, ctx) {
       .setCustomId(`aar_fire_${game.gameId}_${eff.id}`)
       .setLabel(eff.label.slice(0, 80))
       .setStyle(ButtonStyle.Primary),
+  );
+  // Neutral, ALWAYS-PRESENT "Play a Command Card" button (alexanbv 2026-06-25).
+  // Mirrors the gate's CC-secrecy pattern (combat.js _postGateChooseWindow): a
+  // CC-play button in the SHARED combat thread would reveal the player's hand
+  // to the opponent — and its ABSENCE would reveal that they hold no relevant
+  // CC. So this neutral button is shown UNCONDITIONALLY (even with zero playable
+  // CCs); clicking it opens an EPHEMERAL private list (handleAarPlayCc) that
+  // only the owner sees. The public window stays up, so the player can play
+  // multiple CCs then hit Done. `_sideShort` ('atk'|'def') matches the
+  // aar_done_atk_/aar_done_def_ convention.
+  const _sideShort = side === 'attacker' ? 'atk' : 'def';
+  buttons.push(
+    new ButtonBuilder()
+      .setCustomId(`aar_playcc_${game.gameId}_${_sideShort}`)
+      .setLabel('🃏 Play a Command Card')
+      .setStyle(ButtonStyle.Success),
   );
   // Two literal customId variants so the handler-emit parity scanner
   // can find both `aar_done_atk_` and `aar_done_def_` prefixes in src/.
@@ -776,6 +820,157 @@ export async function handleAarDone(interaction, ctx) {
   const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (thread) await _advanceFromSide(thread, game, combat, side, ctx);
   saveGames?.(game.gameId);
+}
+
+// After-attack timing sets per side — kept identical to the private-reaction
+// prompt in src/engine/combat-bridge.js (~2343-2357) so the Play-CC list offers
+// EXACTLY the cards that were already auto-prompted privately. If those sets
+// change, update both places (see ARCHITECTURE NOTE on postPostResolveWindow —
+// this window is not on the unified gate framework).
+const _AAR_DEF_TIMINGS = [
+  'afterAttackTargetingYouResolved',
+  'afterAttack',
+  'afterDamage',
+  'afterYouResolveAttackTargetingFigure',
+];
+const _AAR_ATK_TIMINGS = [
+  'afterAttack',
+  'afterYouResolveAttackTargetingFigure',
+  'afterYouResolveAttackThatDidNotMissDueToAccuracy',
+  'afterHostileFigureSuffersDamage',
+];
+
+/**
+ * Map the after-resolve window's `side` token ('atk'|'def') to the owning
+ * playerNum, mirroring postPostResolveWindow's ownerPN logic (False Orders /
+ * Lure controller plays the attacker side).
+ */
+function _aarSidePlayerNum(combat, sideShort) {
+  return sideShort === 'atk'
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+}
+
+/**
+ * `aar_playcc_<gameId>_<atk|def>` — the neutral "Play a Command Card" button.
+ * Owner-only. Computes THAT side's after-attack-playable CCs (via the canonical
+ * getPlayableReactionCardsForTiming pipeline), stashes them on
+ * game._aarCcChoices[side] (so index→card mapping avoids putting card names in
+ * customIds — same opponent-secrecy reason as the gate), and follows up with an
+ * EPHEMERAL private list (one button per card). The PUBLIC window is left
+ * untouched so the player can play more CCs or hit Done afterward. The central
+ * dispatcher already deferUpdate'd this interaction, so followUp(ephemeral)
+ * works without acknowledging/clearing the public message.
+ */
+export async function handleAarPlayCc(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const m = interaction.customId.match(/^aar_playcc_([^_]+)_(atk|def)$/);
+  if (!m) return;
+  const [, gameId, sideShort] = m;
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) return;
+  // Owner check — mirror handleAarDone (only the owning side may use the button).
+  const ownerPN = _aarSidePlayerNum(combat, sideShort);
+  const ownerId = getPlayerId(game, ownerPN);
+  if (ownerId && interaction.user.id !== ownerId && !game.isTestGame) {
+    await interaction.followUp({ content: 'That button is for the other side.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const timings = sideShort === 'atk' ? _AAR_ATK_TIMINGS : _AAR_DEF_TIMINGS;
+  const cards = getPlayableReactionCardsForTiming(game, ownerPN, timings)
+    .map((c) => c.cardName);
+  if (!cards.length) {
+    await interaction.followUp({
+      content: 'You have no Command Cards playable in this window right now.',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
+  // Stash for the pick handler (index → card) — keeps card names OUT of customIds.
+  game._aarCcChoices = game._aarCcChoices || {};
+  game._aarCcChoices[sideShort] = cards;
+  saveGames?.(game.gameId);
+  const btns = cards.slice(0, 24).map((card, i) => new ButtonBuilder()
+    .setCustomId(`aar_ccpick_${gameId}_${sideShort}_${i}`)
+    .setLabel(String(card).slice(0, 80))
+    .setStyle(ButtonStyle.Primary));
+  await interaction.followUp({
+    content: '🃏 **Play a Command Card** — only you can see this. Pick one (you can play more, or just hit **Done** in the combat thread when finished):',
+    components: chunkButtonsToRows(btns),
+    ephemeral: true,
+  }).catch(discordCatch);
+}
+
+/**
+ * `aar_ccpick_<gameId>_<atk|def>_<index>` — pick a card from the ephemeral list.
+ * Re-validates (still in hand + still timing-legal), then PLAYS it through the
+ * normal CC pipeline by staging pendingCcConfirmation and invoking
+ * ctx.handleCcConfirmPlay (which routes through openCcCounterWindow →
+ * Negate/Comms counter-window → resolve). We also set pendingCombatCcResolve
+ * (kind 'after_attack') BEFORE the play so that, once the counter-window closes,
+ * the after-resolve window is re-posted (resumeCombatGateAfterCc, registered in
+ * root index.js) — matching the existing after-attack CC path in
+ * after-attack-fire.js fireGateAbility. The public window is never torn down.
+ */
+export async function handleAarCcPick(interaction, ctx) {
+  const { getGame, saveGames } = ctx;
+  const m = interaction.customId.match(/^aar_ccpick_([^_]+)_(atk|def)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, sideShort, idxStr] = m;
+  const index = Number(idxStr);
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  const combat = game.pendingCombat;
+  if (!combat) return;
+  const ownerPN = _aarSidePlayerNum(combat, sideShort);
+  const ownerId = getPlayerId(game, ownerPN);
+  if (ownerId && interaction.user.id !== ownerId && !game.isTestGame) {
+    await interaction.followUp({ content: 'That button is for the other side.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const card = game._aarCcChoices?.[sideShort]?.[index];
+  if (!card) {
+    await interaction.followUp({ content: 'That card choice is no longer available — re-open Play a Command Card.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Re-validate at click time: still in hand + still timing-legal.
+  const hand = getCcHand(game, ownerPN) || [];
+  if (!hand.includes(card)) {
+    await interaction.followUp({ content: `**${card}** is no longer in your hand.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!isCcPlayableNow(game, ownerPN, card)) {
+    await interaction.followUp({ content: `**${card}** can't be played right now (wrong timing).`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // Stage the play, then route through the existing confirm path. handleCcConfirmPlay
+  // reads pendingCcConfirmation, re-checks timing/legality, and opens the counter
+  // window. pendingCombatCcResolve survives that call → resumeCombatGateAfterCc
+  // re-posts THIS window after the counter window resolves/cancels.
+  setPendingCcConfirmation(game, { playerNum: ownerPN, card, ts: Date.now() });
+  game.pendingCombatCcResolve = {
+    kind: 'after_attack',
+    effectSide: sideShort === 'atk' ? 'attacker' : 'defender',
+    gameId: game.gameId,
+  };
+  saveGames?.(game.gameId);
+  if (typeof ctx.handleCcConfirmPlay !== 'function') {
+    // Defensive: if the postCombat ctx didn't supply the confirm handler, the
+    // play can't be routed. Surface it rather than silently dropping the click.
+    await interaction.followUp({ content: '⚠️ Internal error: CC play path unavailable.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  // handleCcConfirmPlay parses its gameId from interaction.customId via the
+  // 'cc_confirm_play_' prefix. Our customId is 'aar_ccpick_…', so present a
+  // proxy interaction with a rewritten customId (this is the same customId-
+  // rewrite trick index.js uses for select→button adapters). The interaction is
+  // already deferUpdate'd and handleCcConfirmPlay only ever followUp()s, so the
+  // proxy needs no other surface beyond the real interaction's methods/fields.
+  const _proxy = Object.create(interaction);
+  _proxy.customId = `cc_confirm_play_${gameId}`;
+  await ctx.handleCcConfirmPlay(_proxy, ctx);
 }
 
 /**

@@ -165,6 +165,16 @@ const CONTEXT_GROUPS = {
     // (Escalating Hostility, …) actually apply (re-audit fix); applyAbilityResult
     // is imported directly by the fire handler.
     'resolveAbility',
+    // After-resolve "Play a Command Card" (aar_playcc_ / aar_ccpick_, alexanbv
+    // 2026-06-25): handleAarCcPick routes the play through handleCcConfirmPlay,
+    // which destructures the CC-play deps below from ctx. handleCcConfirmPlay is
+    // itself injected via ctx so this non-gate window can reuse the hand-channel
+    // confirm path without re-implementing it. (See ARCHITECTURE NOTE in
+    // after-attack-resolve.js: this window is not on the unified gate framework.)
+    'handleCcConfirmPlay',
+    'isCcAttachment', 'isCcPlayableNow', 'isCcPlayLegalByRestriction',
+    'buildHandDisplayPayload', 'updateHandVisualMessage', 'updateDiscardPileMessage',
+    'getIllegalCcPlayButtons', 'getCommandCardImagePath', 'pushUndo',
   ],
 
   activation: [
