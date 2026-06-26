@@ -568,6 +568,19 @@ export function computeCombatResult(combat) {
   if (attackerHidden) details += ` | **Hidden** (attacker +1 surge)`;
   if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
   if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly Spin**: Dodge cancelled`;
+  // Show the damage math (alexanbv 2026-06-26: "list total damage results minus
+  // total block results — show the work for your damage calculation").
+  if (hit) {
+    const _totalDmgResults = (roll.dmg || 0) + (surgeD || 0) + (bonusHits || 0) + (perDefDieDamage || 0);
+    const _blkAdj = [];
+    if (pierceToUse > 0) _blkAdj.push(`−${pierceToUse} Pierce`);
+    if (surgeCancel > 0) _blkAdj.push(`−${surgeCancel} Cancel`);
+    const _blkNote = _blkAdj.length ? ` (${blockForCalc} block ${_blkAdj.join(' ')})` : '';
+    let _calc = `🧮 **Damage:** ${_totalDmgResults} damage − ${effectiveBlock} block${_blkNote}`;
+    if (defenderDamageReduction > 0) _calc += ` − ${defenderDamageReduction} reduction`;
+    _calc += ` = **${damage}**`;
+    details += `\n${_calc}`;
+  }
   let resultText = `${headline}\n${details}`;
 
   return { hit, damage, effectiveBlock, resultText };
