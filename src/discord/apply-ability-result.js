@@ -269,13 +269,28 @@ export async function applyAbilityResult(result, opts) {
   // --- Notify DC activation thread of conditions/effects (new message, not just minimap update) ---
   if (result.applied && result.refreshDcEmbed && result.logMessage) {
     const idsToNotify = [...new Set([...(result.refreshDcEmbedMsgIds || []), ...(msgId ? [msgId] : [])])];
+    // Out-of-combat die rolls (Neurostim, Headbutt, Trample, Telekinetic Throw,
+    // Terminal Protocol, Set the Charges, Force cards, etc.) attach the rolled
+    // faces on result.rollImageDice so we can SHOW THE DIE FACE here, mirroring
+    // combat. Render only ONCE (first notified thread); other threads get text.
+    const _rollDice = Array.isArray(result.rollImageDice) && result.rollImageDice.length
+      ? result.rollImageDice
+      : null;
+    let _rollImagePosted = false;
     for (const id of idsToNotify) {
       const data = game.dcActionsData?.[id];
       if (!data?.threadId) continue;
       try {
         const thread = await fetchGameChannel(client, data.threadId);
         if (!thread) continue;
-        await withDiscordRetry(() => thread.send({ content: enforceContentLimit(`💡 ${result.logMessage}`) })).catch(discordCatch);
+        const content = enforceContentLimit(`💡 ${result.logMessage}`);
+        if (_rollDice && !_rollImagePosted) {
+          const { postDieRollResult } = await import('./dice-renderer.js');
+          await postDieRollResult(thread, { content, dice: _rollDice });
+          _rollImagePosted = true;
+        } else {
+          await withDiscordRetry(() => thread.send({ content })).catch(discordCatch);
+        }
       } catch (err) {
         console.error('Failed to send CC effect to DC thread:', err);
       }

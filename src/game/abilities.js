@@ -23,6 +23,21 @@ import { registerRoundModifier } from './round-modifiers.js';
 import { detectPushPartingBlow } from './movement-interrupts.js';
 
 /**
+ * Roll one ATTACK die by color, returning the resolved face PLUS its faceIdx so
+ * the Discord layer can render the actual rolled die face (mirroring combat).
+ * Returns null when dice data is unavailable. No Discord — pure data; the index
+ * travels up on result.rollImageDice and apply-ability-result.js renders it.
+ */
+function rollAttackFaceWithIdx(color) {
+  const norm = String(color || '').toLowerCase();
+  const faces = getDiceData().attack?.[norm];
+  if (!faces?.length) return null;
+  const faceIdx = Math.floor(Math.random() * faces.length);
+  const face = faces[faceIdx] || {};
+  return { color: norm, faceIdx, acc: face.acc ?? 0, dmg: face.dmg ?? 0, surge: face.surge ?? 0 };
+}
+
+/**
  * After a PUSH relocates a hostile figure, run Parting Blow (C23) exit-detection
  * on the pushed figure's (from → to) and, if it exited a space adjacent to an
  * enemy BRAWLER holding Parting Blow, stash game.pendingPartingBlow so the PB
@@ -2169,9 +2184,9 @@ export function resolveAbility(abilityId, context) {
     // Phase 2: target chosen — roll yellow die and apply result
     if (choiceIndex != null && targetFigureKey) {
       const tName = dcNameFromFigureKey(targetFigureKey);
-      const faces = getDiceData().attack?.yellow;
-      if (!faces?.length) return { applied: false, manualMessage: 'Dice data unavailable.' };
-      const face = faces[Math.floor(Math.random() * faces.length)];
+      const rolled = rollAttackFaceWithIdx('yellow');
+      if (!rolled) return { applied: false, manualMessage: 'Dice data unavailable.' };
+      const face = rolled;
       const hits = face.dmg ?? 0;
       const surges = face.surge ?? 0;
       const parts = [];
@@ -2188,7 +2203,7 @@ export function resolveAbility(abilityId, context) {
         effectParts.push(`**${tName}** gained 1 **Surge Token**`);
       }
       if (effectParts.length === 0) effectParts.push('no effect');
-      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true, rollImageDice: [rolled] };
     }
     // Phase 1: enumerate adjacent friendly figures
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -2207,9 +2222,9 @@ export function resolveAbility(abilityId, context) {
       // Auto-select and roll
       const tFk = validTargets[0];
       const tName = dcNameFromFigureKey(tFk);
-      const faces = getDiceData().attack?.yellow;
-      if (!faces?.length) return { applied: false, manualMessage: 'Dice data unavailable.' };
-      const face = faces[Math.floor(Math.random() * faces.length)];
+      const rolled = rollAttackFaceWithIdx('yellow');
+      if (!rolled) return { applied: false, manualMessage: 'Dice data unavailable.' };
+      const face = rolled;
       const hits = face.dmg ?? 0;
       const surges = face.surge ?? 0;
       const parts = [];
@@ -2226,7 +2241,7 @@ export function resolveAbility(abilityId, context) {
         effectParts.push(`**${tName}** gained 1 **Surge Token**`);
       }
       if (effectParts.length === 0) effectParts.push('no effect');
-      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**Neurostim** — Targeting **${tName}**. Rolled 1 yellow die: **${diceResult}**. ${effectParts.join('; ')}.`, refreshDcEmbed: true, rollImageDice: [rolled] };
     }
     return {
       applied: false,
@@ -3317,9 +3332,9 @@ export function resolveAbility(abilityId, context) {
         // Helper: roll once and apply to all targets
         const _rollAndApplyMulti = (targets) => {
           const color = entry.rollOneDie;
-          const faces = getDiceData().attack?.[color.toLowerCase()];
-          if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
-          const face = faces[Math.floor(Math.random() * faces.length)];
+          const rolled = rollAttackFaceWithIdx(color);
+          if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
+          const face = rolled;
           const hits = face.dmg ?? 0;
           const surges = face.surge ?? 0;
           const dieParts = [];
@@ -3377,6 +3392,7 @@ export function resolveAbility(abilityId, context) {
             applied: true,
             logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. ${parts.join('; ')}.`,
             refreshDcEmbed: true,
+            rollImageDice: [rolled],
             ...(_trampleHadDefeats ? { refreshBoard: true } : {}),
           };
         };
@@ -3431,9 +3447,9 @@ export function resolveAbility(abilityId, context) {
       // Phase 2: target chosen → roll die, apply damage + optional surge condition
       if (targetFigureKey) {
         const color = entry.rollOneDie;
-        const faces = getDiceData().attack?.[color.toLowerCase()];
-        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
-        const face = faces[Math.floor(Math.random() * faces.length)];
+        const rolled = rollAttackFaceWithIdx(color);
+        if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = rolled;
         const hits = face.dmg ?? 0;
         const surges = face.surge ?? 0;
         const dieParts = [];
@@ -3555,6 +3571,7 @@ export function resolveAbility(abilityId, context) {
           freeAction: !!entry.freeAction,
           logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
+          rollImageDice: [rolled],
           ...(_adjHadDefeats ? { refreshBoard: true } : {}),
         };
         if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1 && game.pendingPowerTokenGrant) {
@@ -3625,9 +3642,9 @@ export function resolveAbility(abilityId, context) {
           game.roundFigureAbilityUsed[`${_hwrSelfFk}_${abilityId}`] = true;
         }
         const color = entry.rollOneDie;
-        const faces = getDiceData().attack?.[color.toLowerCase()];
-        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
-        const face = faces[Math.floor(Math.random() * faces.length)];
+        const rolled = rollAttackFaceWithIdx(color);
+        if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = rolled;
         const hits = face.dmg ?? 0;
         const surges = face.surge ?? 0;
         const dieParts = [];
@@ -3672,6 +3689,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** —${mpNote} Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
+          rollImageDice: [rolled],
           refreshMovementBank: mpCost > 0,
           activeMsgId: msgId,
           ...(_hwrHadDefeats ? { refreshBoard: true } : {}),
@@ -3718,9 +3736,9 @@ export function resolveAbility(abilityId, context) {
       // Phase 2: space chosen → roll die, apply damage to all figures on or adjacent to that space
       if (chosenSpace) {
         const color = entry.rollOneDie;
-        const faces = getDiceData().attack?.[color.toLowerCase()];
-        if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
-        const face = faces[Math.floor(Math.random() * faces.length)];
+        const rolled = rollAttackFaceWithIdx(color);
+        if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die manually and apply results.` };
+        const face = rolled;
         const hits = face.dmg ?? 0;
         const surges = face.surge ?? 0;
         const dieParts = [];
@@ -3866,6 +3884,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           logMessage: `**${entry.label}** — Space **${spaceUpper}** targeted. Rolled 1 ${entry.rollOneDie} die: **${diceResult}**. ${resultParts.join('. ') || 'No effect.'}`,
           refreshDcEmbed: hits > 0 || _condOnlyApplied,
+          rollImageDice: [rolled],
           ...(_hadDefeats ? { refreshBoard: true } : {}),
         };
       }
@@ -3963,9 +3982,9 @@ export function resolveAbility(abilityId, context) {
 
     // ── Plain rollOneDie: report results only (Slam, Smash) ──
     const color = entry.rollOneDie;
-    const faces = getDiceData().attack?.[color.toLowerCase()];
-    if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die and apply results manually.` };
-    const face = faces[Math.floor(Math.random() * faces.length)];
+    const rolled = rollAttackFaceWithIdx(color);
+    if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die and apply results manually.` };
+    const face = rolled;
     const hits = face.dmg ?? 0;
     const surges = face.surge ?? 0;
     const acc = face.acc ?? 0;
@@ -3979,6 +3998,7 @@ export function resolveAbility(abilityId, context) {
     return {
       applied: true,
       logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**${surgeMsg}${noteMsg}`,
+      rollImageDice: [rolled],
     };
   }
 
@@ -8987,11 +9007,13 @@ export function resolveAbility(abilityId, context) {
     const oppNum = opponentPlayerNum(playerNum);
     if (chosenFigureKey) {
       // Phase 2: roll 2 blue dice and apply Hits as damage
-      const faces = getDiceData().attack?.blue || [];
       let totalHits = 0;
       const rollParts = [];
+      const _ttDice = [];
       for (let i = 0; i < 2; i++) {
-        const face = faces[Math.floor(Math.random() * faces.length)];
+        const rolled = rollAttackFaceWithIdx('blue');
+        const face = rolled || {};
+        if (rolled) _ttDice.push(rolled);
         totalHits += face?.dmg ?? 0;
         const p = []; if (face?.dmg) p.push(`${face.dmg} Hit`); if (face?.surge) p.push(`${face.surge} Surge`); if (face?.acc) p.push(`${face.acc} Acc`);
         rollParts.push(p.length ? p.join('/') : 'blank');
@@ -9008,7 +9030,7 @@ export function resolveAbility(abilityId, context) {
           });
         }
       }
-      return { applied: true, logMessage: `**Telekinetic Throw** — Rolled 2 blue dice: [${rollParts.join('], [')}] → **${totalHits} Damage** to **${dcNameFromFigureKey(chosenFigureKey)}**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: targetMsgId ? [targetMsgId] : [] };
+      return { applied: true, logMessage: `**Telekinetic Throw** — Rolled 2 blue dice: [${rollParts.join('], [')}] → **${totalHits} Damage** to **${dcNameFromFigureKey(chosenFigureKey)}**.`, refreshDcEmbed: true, refreshDcEmbedMsgIds: targetMsgId ? [targetMsgId] : [], rollImageDice: _ttDice };
     }
     // Phase 1: find hostiles within 3 + LOS
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -9183,17 +9205,18 @@ export function resolveAbility(abilityId, context) {
         if (owner) allChosen.push({ fk, pn: owner });
       }
     }
-    const faces = getDiceData().attack?.[cardConfig.dieColor] || [];
-    if (!faces.length) {
+    const rolled = rollAttackFaceWithIdx(cardConfig.dieColor);
+    if (!rolled) {
       delete game.pendingForceCardPick;
       return { applied: false, manualMessage: `Roll 1 ${cardConfig.dieColor} die manually.` };
     }
-    const face = faces[Math.floor(Math.random() * faces.length)];
+    const _fcDice = [rolled];
+    const face = rolled;
     const dieVal = face[cardConfig.dieField] ?? 0;
     delete game.pendingForceCardPick;
 
     if (allChosen.length === 0) {
-      return { applied: true, logMessage: `**${cardConfig.card}** — No figures chosen. Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** — no effect.` };
+      return { applied: true, logMessage: `**${cardConfig.card}** — No figures chosen. Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** — no effect.`, rollImageDice: _fcDice };
     }
 
     if (cardConfig.effect === 'strain') {
@@ -9202,18 +9225,19 @@ export function resolveAbility(abilityId, context) {
       }));
       const names = allChosen.map(({ fk }) => dcNameFromFigureKey(fk)).join(', ');
       if (dieVal === 0) {
-        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Strain applied to ${names}.` };
+        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Strain applied to ${names}.`, rollImageDice: _fcDice };
       }
       return {
         applied: true,
         logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → ${dieVal} Strain to ${names} (queued via applyStrain).`,
         pendingStrain,
+        rollImageDice: _fcDice,
       };
     }
 
     if (cardConfig.effect === 'damage') {
       if (dieVal === 0) {
-        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Damage applied.` };
+        return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no Damage applied.`, rollImageDice: _fcDice };
       }
       const refreshIds = [];
       const parts = [];
@@ -9234,13 +9258,14 @@ export function resolveAbility(abilityId, context) {
         logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → ${dieVal} Damage to chosen.\n${parts.join(', ')}`,
         refreshDcEmbed: true,
         refreshDcEmbedMsgIds: refreshIds,
+        rollImageDice: _fcDice,
       };
     }
 
     // heal
     const healAmt = dieVal;
     if (healAmt === 0) {
-      return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no recovery.` };
+      return { applied: true, logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **0 ${cardConfig.dieLabel}** — no recovery.`, rollImageDice: _fcDice };
     }
     const refreshIds = [];
     const parts = [];
@@ -9270,6 +9295,7 @@ export function resolveAbility(abilityId, context) {
       logMessage: `**${cardConfig.card}** — Rolled 1 ${cardConfig.dieColor} die: **${dieVal} ${cardConfig.dieLabel}** → recover ${healAmt} Damage on chosen.\n${parts.length ? parts.join(', ') : 'No damaged figures chosen.'}`,
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: refreshIds,
+      rollImageDice: _fcDice,
     };
   }
 
@@ -11979,9 +12005,9 @@ export function resolveAbility(abilityId, context) {
     if (!figureKeys.length) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const mapId = game.selectedMap?.id;
     if (!mapId) return { applied: false, manualMessage: 'Resolve manually: map not loaded.' };
-    const faces = getDiceData().attack?.green;
-    if (!faces?.length) return { applied: false, manualMessage: 'Resolve manually: dice data missing.' };
-    const face = faces[Math.floor(Math.random() * faces.length)];
+    const rolled = rollAttackFaceWithIdx('green');
+    if (!rolled) return { applied: false, manualMessage: 'Resolve manually: dice data missing.' };
+    const face = rolled;
     const dmg = face.dmg ?? 0;
     const results = [];
     const seenMsgIds = new Set();
@@ -12064,6 +12090,7 @@ export function resolveAbility(abilityId, context) {
       applied: true,
       logMessage: `**Terminal Protocol** — Rolled 1 green die: **${dieDesc}**. ${adjDesc} **${meta.dcName}** is defeated (HP → 0).`,
       refreshDcEmbed: true,
+      rollImageDice: [rolled],
     };
   }
 
@@ -12815,12 +12842,15 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
     if (chosenSpace) {
       // Phase 2: roll blue die, apply total to adjacent figures
-      const diceData = getDiceData?.();
-      const blueFaces = diceData?.attack?.blue || [];
-      const faceIdx = Math.floor(Math.random() * Math.max(blueFaces.length, 1));
-      const face = blueFaces[faceIdx] || {};
+      const rolled = rollAttackFaceWithIdx('blue');
+      const face = rolled || {};
+      const faceIdx = rolled?.faceIdx ?? -1;
       const hitsFromDie = (face.dmg || 0) + (face.surge ? 1 : 0);
-      const dieLabel = face.label || JSON.stringify(face);
+      // Human-readable face label (no more JSON dump). e.g. "2 Damage, 1 Surge" / "Blank".
+      const _stcLabelParts = [];
+      if (face.dmg) _stcLabelParts.push(`${face.dmg} Damage`);
+      if (face.surge) _stcLabelParts.push(`${face.surge} Surge`);
+      const dieLabel = _stcLabelParts.length ? _stcLabelParts.join(', ') : 'Blank';
       const boardState = getBoardStateForMovement(game, null);
       const spaceNorm = String(chosenSpace).toLowerCase();
       const adjRaw = boardState?.mapSpaces?.adjacency?.[spaceNorm] || [];
@@ -12863,7 +12893,7 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const noFigures = hitsFromDie === 0 ? '0 Hits+Surges — no damage.' : results.length ? results.join('; ') : 'No figures or objects in area.';
-      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0, ...(_stcObjDamaged ? { refreshBoard: true } : {}) };
+      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0, ...(rolled ? { rollImageDice: [rolled] } : {}), ...(_stcObjDamaged ? { refreshBoard: true } : {}) };
     }
     // Phase 1: space picker within 3 of activating figure
     const boardState = getBoardStateForMovement(game, null);
@@ -14944,9 +14974,9 @@ export function resolveAbility(abilityId, context) {
     // Phase 3: target chosen → roll die, apply damage
     if (targetFigureKey) {
       const color = entry.headbuttDie || 'red';
-      const faces = getDiceData().attack?.[color.toLowerCase()];
-      if (!faces?.length) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
-      const face = faces[Math.floor(Math.random() * faces.length)];
+      const rolled = rollAttackFaceWithIdx(color);
+      if (!rolled) return { applied: false, manualMessage: `Roll 1 ${color} die manually.` };
+      const face = rolled;
       const hits = face.dmg ?? 0;
       const dieParts = [];
       if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
@@ -14991,6 +15021,7 @@ export function resolveAbility(abilityId, context) {
         applied: true,
         logMessage: `**${entry.label}** — Rolled 1 ${color} die: **${diceResult}**. **${targetName}** ${resultParts.join(', ') || 'unaffected'}.`,
         refreshDcEmbed: true,
+        rollImageDice: [rolled],
       };
     }
 
@@ -15017,9 +15048,9 @@ export function resolveAbility(abilityId, context) {
           ? (() => { const p = singleTarget.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
           : dcNameFromFigureKey(singleTarget);
         const color = entry.headbuttDie || 'red';
-        const faces = getDiceData().attack?.[color.toLowerCase()];
-        if (!faces?.length) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Roll 1 ${color} die against **${_stLabel}** manually.`, refreshBoard: true };
-        const face = faces[Math.floor(Math.random() * faces.length)];
+        const rolled = rollAttackFaceWithIdx(color);
+        if (!rolled) return { applied: true, logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Roll 1 ${color} die against **${_stLabel}** manually.`, refreshBoard: true };
+        const face = rolled;
         const hits = face.dmg ?? 0;
         const dieParts = [];
         if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
@@ -15057,6 +15088,7 @@ export function resolveAbility(abilityId, context) {
           logMessage: `**${entry.label}** — Moved to **${String(chosenSpace).toUpperCase()}**. Rolled 1 ${color} die: **${diceResult}**. **${tName}** ${resParts.join(', ') || 'unaffected'}.`,
           refreshDcEmbed: true,
           refreshBoard: true,
+          rollImageDice: [rolled],
         };
       }
       // Multiple adjacent hostiles: let player choose

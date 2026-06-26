@@ -103,7 +103,14 @@ export async function applyIndiscriminateFireSplash(game, attackerPlayerNum, com
     await updateDcCardMessage(client, game, mid, ctx);
   }
   const msg = `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`;
-  await thread.send(msg).catch(discordCatch);
+  // Show the rolled splash die FACE in the combat thread (mirrors the attack roll
+  // reveal). The chosen die carries faceIdx from the combat roll.
+  try {
+    const { postDieRollResult } = await import('../discord/dice-renderer.js');
+    await postDieRollResult(thread, { content: msg, dice: [die] });
+  } catch {
+    await thread.send(msg).catch(discordCatch);
+  }
   await logGameAction(game, client, `**Indiscriminate Fire** — ${dieDesc}:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' });
   saveGames(game.gameId);
 }
@@ -546,7 +553,16 @@ export async function handleFightingKnifeTarget(interaction, ctx) {
   }
   const dieDesc = `${die.dmg}dmg${die.surge ? `/${die.surge}\u21AF` : ''}`;
   await logGameAction(game, client, `**Fighting Knife** — ${target.label}: rolled 1 red die (${dieDesc}), dealt **${hits}** damage`, { phase: 'ROUND', icon: 'attack' });
-  await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} \u2192 **${hits} Damage**.`).catch(discordCatch);
+  // Show the rolled die FACE in the combat thread (mirrors the attack roll reveal).
+  try {
+    const { postDieRollResult } = await import('../discord/dice-renderer.js');
+    await postDieRollResult(thread, {
+      content: `**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} \u2192 **${hits} Damage**.`,
+      dice: [die],
+    });
+  } catch {
+    await thread.send(`**Fighting Knife** — Rolled 1 red die on **${target.label}**: ${dieDesc} \u2192 **${hits} Damage**.`).catch(discordCatch);
+  }
   if (pending.fromStep8Queue) {
     try {
       const { postPostResolveWindow } = await import('./after-attack-resolve.js');

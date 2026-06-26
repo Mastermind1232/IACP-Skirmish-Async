@@ -22,6 +22,32 @@ import { exhaustAttachment, isAttachmentExhausted } from '../game/card-state-hel
 import { figureKeyForActivation } from '../game/activation-state.js';
 import { cardNameIncludes } from '../game/card-names.js';
 
+/**
+ * Render a single rolled die FACE to a Discord attachment (mirrors combat).
+ * Returns an array suitable for logGameAction's `files` option, or [] on any
+ * failure — never throws into the interrupt flow. `die` = { color, faceIdx, ... }.
+ */
+async function _renderDieFiles(die) {
+  try {
+    if (!die || !(die.faceIdx >= 0)) return [];
+    const { renderAttackDiceImage } = await import('../discord/dice-renderer.js');
+    const img = await renderAttackDiceImage([die]).catch(() => null);
+    if (!img) return [];
+    const { AttachmentBuilder } = await import('discord.js');
+    return [new AttachmentBuilder(img, { name: 'die-roll.png' })];
+  } catch {
+    return [];
+  }
+}
+
+/** Compact text label for a red attack die face (e.g. "2 Damage, 1 Surge" / "Blank"). */
+function _formatRedFace(face) {
+  const parts = [];
+  if (face?.dmg) parts.push(`${face.dmg} Damage`);
+  if (face?.surge) parts.push(`${face.surge} Surge`);
+  return parts.length ? parts.join(', ') : 'Blank';
+}
+
 // ── 1. Still Faster Than You ────────────────────────────────────────────────
 export async function handleStillFaster(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
@@ -309,9 +335,13 @@ export async function handleSelfDestructProbe(interaction, ctx) {
   // Use: roll 1 red die, apply Hits to adjacent hostile figures, defeat probe
   const _sdpDiceData = getDiceData ? getDiceData() : null;
   const _sdpFaces = _sdpDiceData?.attack?.red || [];
-  const _sdpFace = _sdpFaces[Math.floor(Math.random() * Math.max(_sdpFaces.length, 1))] || {};
+  const _sdpFaceIdx = _sdpFaces.length ? Math.floor(Math.random() * _sdpFaces.length) : -1;
+  const _sdpFace = _sdpFaces[_sdpFaceIdx] || {};
   const _sdpHits = _sdpFace.dmg ?? 0;
-  const _sdpFaceLabel = `${_sdpHits}H`;
+  // Show the rolled die FACE in the game log (mirrors combat). Render to a buffer
+  // and attach it to the roll-result message via logGameAction's `files`.
+  const _sdpFiles = await _renderDieFiles({ color: 'red', faceIdx: _sdpFaceIdx, dmg: _sdpHits, surge: _sdpFace.surge ?? 0 });
+  const _sdpFaceLabel = _formatRedFace(_sdpFace);
   const _sdpPos = (() => { for (const [, pos] of Object.entries(_sdpGame.figurePositions?.[_sdpMeta.playerNum] || {})) { const fk = `${_sdpMeta.dcName}-1-0`; return _sdpGame.figurePositions?.[_sdpMeta.playerNum]?.[fk] || null; } return null; })();
   let _sdpResultLog = `Rolled red die: **${_sdpFaceLabel}** — `;
   const _sdpDamaged = [];
@@ -372,7 +402,7 @@ export async function handleSelfDestructProbe(interaction, ctx) {
     amount: 9999, controllerPlayerNum: _sdpMeta.playerNum,
     source: 'Self-Destruct (probe defeats itself)',
   });
-  await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog}`, { phase: 'ROUND', icon: 'attack' });
+  await logGameAction(_sdpGame, client, `**Self-Destruct** — ${_sdpMeta.displayName || _sdpMeta.dcName}: ${_sdpResultLog}`, { phase: 'ROUND', icon: 'attack', ...(_sdpFiles.length ? { files: _sdpFiles } : {}) });
   const _sdpFigureKey = `${_sdpMeta.dcName}-1-0`;
   await processFigureDefeat(_sdpGame, {
     defeatedPlayerNum: _sdpMeta.playerNum,
@@ -419,9 +449,12 @@ export async function _runSelfDestructExplode(game, pending, ctx) {
   const combat = game.pendingCombat;
   const diceData = getDiceData ? getDiceData() : null;
   const faces = diceData?.attack?.red || [];
-  const face = faces[Math.floor(Math.random() * Math.max(faces.length, 1))] || {};
+  const _sdcFaceIdx = faces.length ? Math.floor(Math.random() * faces.length) : -1;
+  const face = faces[_sdcFaceIdx] || {};
   const hits = face.dmg ?? 0;
   const faceLabel = `${hits} Hit${hits === 1 ? '' : 's'}`;
+  // Show the rolled die FACE in the game log (mirrors combat).
+  const _sdcFiles = await _renderDieFiles({ color: 'red', faceIdx: _sdcFaceIdx, dmg: hits, surge: face.surge ?? 0 });
   const figKey = combat?.target?.figureKey;
   // Read CURRENT position (may have just been updated by movement pick).
   const pos = figKey ? game.figurePositions?.[pending.defenderPlayerNum]?.[figKey] : null;
@@ -480,7 +513,7 @@ export async function _runSelfDestructExplode(game, pending, ctx) {
   } else {
     resultLog += 'No hits.';
   }
-  await logGameAction(game, client, `**Self-Destruct Protocol** — ${combat?.target?.label || 'Figure'}: ${resultLog}`, { phase: 'ROUND', icon: 'attack' });
+  await logGameAction(game, client, `**Self-Destruct Protocol** — ${combat?.target?.label || 'Figure'}: ${resultLog}`, { phase: 'ROUND', icon: 'attack', ...(_sdcFiles.length ? { files: _sdcFiles } : {}) });
   // Process defeats from the explosion (canonical defeat pipeline).
   for (const df of defeated) {
     if (processFigureDefeat) {
@@ -694,9 +727,12 @@ export async function handleLastResort(interaction, ctx) {
     // Roll 1 red die, apply Hit results as Damage to adjacent figures (both players)
     const _lrDiceData = getDiceData ? getDiceData() : null;
     const _lrFaces = _lrDiceData?.attack?.red || [];
-    const _lrFace = _lrFaces[Math.floor(Math.random() * Math.max(_lrFaces.length, 1))] || {};
+    const _lrFaceIdx = _lrFaces.length ? Math.floor(Math.random() * _lrFaces.length) : -1;
+    const _lrFace = _lrFaces[_lrFaceIdx] || {};
     const _lrHits = _lrFace.dmg ?? 0;
-    const _lrFaceLabel = `${_lrHits}H`;
+    // Show the rolled die FACE in the game log (mirrors combat).
+    const _lrFiles = await _renderDieFiles({ color: 'red', faceIdx: _lrFaceIdx, dmg: _lrHits, surge: _lrFace.surge ?? 0 });
+    const _lrFaceLabel = _formatRedFace(_lrFace);
     const _lrFigKey = _lrCombat?.target?.figureKey;
     const _lrPos = _lrFigKey ? _lrGame.figurePositions?.[_lrPending.defenderPlayerNum]?.[_lrFigKey] : null;
     let _lrResultLog = `Rolled red die: **${_lrFaceLabel}** — `;
@@ -774,7 +810,7 @@ export async function handleLastResort(interaction, ctx) {
     } else {
       _lrResultLog += 'No hits.';
     }
-    await logGameAction(_lrGame, client, `**Last Resort** — ${_lrCombat?.target?.label || 'Figure'}: ${_lrResultLog}`, { phase: 'ROUND', icon: 'attack' });
+    await logGameAction(_lrGame, client, `**Last Resort** — ${_lrCombat?.target?.label || 'Figure'}: ${_lrResultLog}`, { phase: 'ROUND', icon: 'attack', ...(_lrFiles.length ? { files: _lrFiles } : {}) });
     // Process defeats of figures damaged by the explosion
     for (const _lrDf of _lrDefeated) {
       if (processFigureDefeat) {

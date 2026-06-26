@@ -5,6 +5,7 @@
  * Discord-only: not used by headless / oracle / engine paths.
  */
 import { createCanvas, loadImage } from 'canvas';
+import { AttachmentBuilder } from 'discord.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -78,4 +79,64 @@ export async function renderAttackDiceImage(diceResults) {
 
 export async function renderDefenseDiceImage(diceResults) {
   return _renderRow(diceResults);
+}
+
+function _cap(s) {
+  return (s?.[0]?.toUpperCase() || '') + (s?.slice(1) || '');
+}
+
+/**
+ * Compact text description of one or more rolled dice faces, reused for the
+ * image-render fallback and for terse out-of-combat roll reveals.
+ * Attack example: "Red: 2 Damage, 1 Surge" or "Yellow: Blank".
+ * Defense example: "White: 1 Block, 1 Evade" or "White: Dodge" / "White: Blank".
+ * `dice` items carry the resolved face fields (acc/dmg/surge or block/evade/dodge).
+ */
+export function formatDieFaces(dice, defense = false) {
+  if (!Array.isArray(dice) || dice.length === 0) return '';
+  return dice
+    .map((d) => {
+      const color = _cap(d?.color || '');
+      const parts = [];
+      if (defense) {
+        if (d?.dodge) parts.push('Dodge');
+        if (d?.block) parts.push(`${d.block} Block`);
+        if (d?.evade) parts.push(`${d.evade} Evade`);
+      } else {
+        if (d?.dmg) parts.push(`${d.dmg} Damage`);
+        if (d?.surge) parts.push(`${d.surge} Surge`);
+        if (d?.acc) parts.push(`${d.acc} Accuracy`);
+      }
+      const body = parts.length ? parts.join(', ') : 'Blank';
+      return color ? `${color}: ${body}` : body;
+    })
+    .join('; ');
+}
+
+/**
+ * Shared out-of-combat roll reveal: renders the rolled die face image and posts
+ * it to the activation thread (mirroring how combat shows the face). Never throws
+ * into the ability flow — all Discord/render calls are `.catch`-guarded.
+ *
+ * - `thread`  the activation thread (may be null in headless/self-play → text no-op)
+ * - `content` the message text (e.g. "X rolled a die")
+ * - `dice`    array of `{ color, faceIdx, ...faceFields }`
+ * - `defense` true to render/format as a defense die
+ *
+ * On image success, posts `{ content, files:[die-roll.png] }`. On render failure
+ * (or no thread / no faces), posts `content` plus a compact text fallback.
+ */
+export async function postDieRollResult(thread, { content, dice, defense = false } = {}) {
+  const fallback = formatDieFaces(dice, defense);
+  const textMsg = fallback ? `${content}  [${fallback}]` : content;
+  if (!thread || typeof thread.send !== 'function') return;
+  const render = defense ? renderDefenseDiceImage : renderAttackDiceImage;
+  const img = await render(dice).catch(() => null);
+  if (img) {
+    await thread
+      .send({ content, files: [new AttachmentBuilder(img, { name: 'die-roll.png' })] })
+      .catch(() => {});
+  } else {
+    await thread.send(textMsg).catch(() => {});
+  }
 }

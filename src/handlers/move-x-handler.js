@@ -380,7 +380,21 @@ async function _runHeadbuttRollContinuation(game, ctx, pending, next) {
       await logGameAction?.(game, client, `**${label}** — Roll 1 ${dieColor} die against **${dcNameFromFigureKey(targetFigureKey)}** manually.`, { phase: 'ROUND', icon: 'card' });
       return;
     }
-    const face = faces[Math.floor(Math.random() * faces.length)];
+    const _hbFaceIdx = Math.floor(Math.random() * faces.length);
+    const face = faces[_hbFaceIdx];
+    // Show the rolled die FACE in the activation thread (mirrors combat).
+    try {
+      if (pending.threadId) {
+        const _hbThread = await fetchCombatThread(client, pending.threadId).catch(() => null);
+        if (_hbThread) {
+          const { postDieRollResult } = await import('../discord/dice-renderer.js');
+          await postDieRollResult(_hbThread, {
+            content: `🎲 **${label}** — rolled 1 ${dieColor} die:`,
+            dice: [{ color: dieColor, faceIdx: _hbFaceIdx, dmg: face.dmg ?? 0, surge: face.surge ?? 0, acc: face.acc ?? 0 }],
+          });
+        }
+      }
+    } catch { /* never block the ability flow on the reveal */ }
     const hits = face.dmg ?? 0;
     const dieParts = [];
     if (hits) dieParts.push(`${hits} Hit${hits !== 1 ? 's' : ''}`);
@@ -454,7 +468,21 @@ async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
     await logGameAction?.(game, client, '**Whistling Birds** — Roll 1 red die manually (dice data unavailable).', { phase: 'ROUND', icon: 'card' });
     return;
   }
-  const face = faces[Math.floor(Math.random() * faces.length)];
+  const _wbFaceIdx = Math.floor(Math.random() * faces.length);
+  const face = faces[_wbFaceIdx];
+  // Show the rolled die FACE in the activation thread (mirrors combat).
+  try {
+    if (pending.threadId) {
+      const _wbThread = await fetchCombatThread(client, pending.threadId).catch(() => null);
+      if (_wbThread) {
+        const { postDieRollResult } = await import('../discord/dice-renderer.js');
+        await postDieRollResult(_wbThread, {
+          content: '🎲 **Whistling Birds** — rolled 1 red die:',
+          dice: [{ color: 'red', faceIdx: _wbFaceIdx, dmg: face.dmg ?? 0, surge: face.surge ?? 0, acc: face.acc ?? 0 }],
+        });
+      }
+    }
+  } catch { /* never block the ability flow on the reveal */ }
   const hits = face.dmg ?? 0;
   if (hits === 0) {
     await logGameAction?.(game, client, '**Whistling Birds** — Rolled 1 red die: **0 Hits** — no Damage applied.', { phase: 'ROUND', icon: 'card' });
