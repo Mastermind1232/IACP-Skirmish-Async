@@ -816,7 +816,29 @@ async function _advanceFromSide(thread, game, combat, side, ctx) {
     await withDiscordRetry(() => thread.send({ content: '✅ **Combat complete.**' })).catch(discordCatch);
   }
   if (typeof ctx.afterAttackClose === 'function') {
+    // Self-play / inline drain: the runAfterResolveWindow closure is still on the
+    // stack, with its captured crossing-locals.
     await ctx.afterAttackClose(thread, game, combat);
+  } else if (ctx.checkPostCombatSurges && ctx.finishCombatResolution) {
+    // LIVE "Done" click (handleAarDone, 'postCombat' ctx): the afterAttackClose
+    // closure was discarded when the window posted buttons, so rebuild the close
+    // from the crossing-locals stashed on combat by runAfterResolveWindow. THIS
+    // is what actually clears game.pendingCombat (via finishCombatResolution →
+    // resolvePendingCombat) on the normal no-reaction combat — without it,
+    // pendingCombat lingered after every combat (alexanbv 2026-06-26).
+    const a = combat._aarCloseArgs || {};
+    const resultText = a.resultText ?? '';
+    const embedRefreshMsgIds = new Set(a.embedRefreshMsgIds || []);
+    const ownerId = a.ownerId;
+    const defenderPlayerNum = a.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+    const fkTriggered = await ctx.checkPostCombatSurges(game, combat, resultText, embedRefreshMsgIds, thread, ownerId, defenderPlayerNum);
+    if (!fkTriggered) await ctx.finishCombatResolution(game, combat, resultText, embedRefreshMsgIds, ctx.client);
+  } else {
+    // No close mechanism available at all — must not silently leave pendingCombat
+    // hanging. Hard-clear as a last resort (logged upstream by the activation
+    // auto-recovery, which now should never trigger for a normal combat).
+    const { resolvePendingCombat } = await import('../game/combat-stack.js');
+    resolvePendingCombat(game);
   }
 }
 

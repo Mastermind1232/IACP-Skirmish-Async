@@ -6,8 +6,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { getCcEffectsData, getDcEffects, getMapData, getFigureSize, getDeploymentZones, getDcStats, getLoadoutCards, getFormCards } from '../data-loader.js';
 import { finalizeActivation, getCompanionForDc, formatCompanionStats, getPairedActiveMsgId, getCompanionMsgIdForHost } from '../engine/activation-setup.js';
 import { applyEndOfActivationEffects } from '../engine/activation-effects.js';
-import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer, hasAnyInterrupts } from '../game/interrupts.js';
-import { resolvePendingCombat } from '../game/combat-stack.js';
+import { clearPendingTokenDistribution, setPendingItWillBeAlright, clearPendingItWillBeAlright, clearPendingGeneralsOrders, clearPendingConspire, setPendingDurasteelFistPush, setPendingWookSlamPush, clearPendingWookSlamPush, setPendingTrustedAlly, clearPendingTrustedAlly, setPendingMotivation, clearPendingMotivation, setPendingLieInAmbush, clearPendingLieInAmbush, clearPendingScavengedWeaponryTransfer } from '../game/interrupts.js';
 import { isFigurelessDc } from '../game/dc-helpers.js';
 import { filterValidTopLeftSpaces } from '../engine/utils.js';
 import { parseCoord } from '../game/coords.js';
@@ -56,25 +55,6 @@ import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, truncateLabel } from '../discord/components.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
-
-/**
- * A pending combat is STALE (safe to auto-clear at End Activation) only when it
- * has structurally finished but pendingCombat was never cleared: NO open gate
- * window, NO pending interrupt/reaction, NO deferred after-resolve, NO queued
- * chain attack, and NO nested outer combat frame. A genuinely live combat
- * returns false and keeps blocking (alexanbv 2026-06-25).
- */
-const _COMBAT_GATE_FIELDS = ['onDeclareGate', 'rerollsGate', 'modsGate', 'specialGate', 'zilloGate', 'afterResolveGate', 'combatGate'];
-function _isPendingCombatStale(game) {
-  const c = game?.pendingCombat;
-  if (!c) return false;
-  if (_COMBAT_GATE_FIELDS.some((f) => c[f])) return false;
-  if (hasAnyInterrupts(game)) return false;
-  if (c._afterResolveArgs) return false;
-  if ((c._pendingChainAttacks?.length || 0) + (c._pendingDefenderChainAttacks?.length || 0) > 0) return false;
-  if (Array.isArray(game.combatStack) && game.combatStack.length > 0) return false;
-  return true;
-}
 
 /**
  * Determine the companion (if any) for a given DC, considering both
@@ -869,21 +849,13 @@ export async function handleDcEndActivation(interaction, ctx) {
   // target picks (non-movement pendingSpacePick), and SoA chooser
   // buckets still block as before.
   discardOpenMoveGrids(game, msgId);
-  // Auto-clear a STALE pending combat (alexanbv 2026-06-25): a combat that has
-  // structurally finished but whose pendingCombat wasn't cleared (e.g. the
-  // after-resolve close path skipped finishCombatResolution) would leave the
-  // player permanently blocked behind "combat in progress," forcing the manual
-  // Force-Clear band-aid every combat. A combat is STALE (safe to clear) only
-  // when it has NO open gate window, NO pending interrupt/reaction, NO deferred
-  // after-resolve, and NO queued chain attack — i.e. nothing left to resolve. A
-  // genuinely live combat keeps blocking.
-  let _blockReason = describeActivationActionInProgress(game, msgId);
-  if (_blockReason?.startsWith('combat in progress') && _isPendingCombatStale(game)) {
-    resolvePendingCombat(game);
-    game._pendingSave = true;
-    if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, '🧹 Cleared a finished-but-stale combat so the activation could end (auto-recovery).', { phase: 'ROUND', icon: 'attack' }).catch(() => {});
-    _blockReason = describeActivationActionInProgress(game, msgId);
-  }
+  // The after-resolve close now clears game.pendingCombat itself on the live
+  // "Done" click (after-attack-resolve.js _advanceFromSide → finishCombat
+  // resolution → resolvePendingCombat), so a normal combat no longer leaves a
+  // stale pendingCombat here. If one DOES linger (a genuine bug), surface it via
+  // the Force-Clear button below rather than silently masking it (alexanbv
+  // 2026-06-26: the auto-clear band-aid was removed once the root cause was fixed).
+  const _blockReason = describeActivationActionInProgress(game, msgId);
   if (_blockReason) {
     console.warn(`[end-activation] Blocked for msgId=${msgId}: ${_blockReason}`);
     // Per alexanbv 2026-05-12: a rebuild that interrupts an attack can

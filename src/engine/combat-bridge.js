@@ -1965,6 +1965,21 @@ export async function runAfterResolveWindow(thread, game, combat, { resultText, 
       if (!fkTriggered) await _finishCombatResolution(_g, _c, resultText, embedRefreshMsgIds, client);
     },
   };
+  // Stash the close crossing-locals on combat so the LIVE after-resolve "Done"
+  // click can reconstruct the close (alexanbv 2026-06-26 root-cause fix). The
+  // _aaCtx.afterAttackClose closure above only survives the self-play / inline
+  // drain; on the live path the window posts buttons and that closure is
+  // discarded — the Done click (handleAarDone, 'postCombat' ctx group) has no
+  // afterAttackClose, so finishCombatResolution → resolvePendingCombat never ran
+  // and pendingCombat lingered after EVERY combat. _advanceFromSide('defender')
+  // reads this to rebuild the close from ctx.checkPostCombatSurges/
+  // finishCombatResolution (both in the postCombat ctx group).
+  combat._aarCloseArgs = {
+    resultText,
+    embedRefreshMsgIds: [...(embedRefreshMsgIds || [])],
+    ownerId,
+    defenderPlayerNum,
+  };
   await _postPostResolveWindow(thread, game, combat, 'attacker', _aaCtx);
 }
 
