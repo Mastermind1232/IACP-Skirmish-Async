@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { enqueueAttackerPerDcEffects } from '../../src/handlers/after-attack-resolve.js';
 import { getAfterAttackEffects } from '../../src/engine/after-attack-queue.js';
 import { getDcActionButtons } from '../../src/discord/components.js';
+import { isCompanionOrderPending } from '../../src/game/activation-state.js';
 
 function _disruptorCombat(targetHp) {
   const combat = {
@@ -76,6 +77,55 @@ describe('(B) multi-figure group must pick a figure before any CC is playable', 
   it('End Group Activation stays available before figure-select (player can abort)', () => {
     const ids = _renderGroup({ selectedFigure: null, perFigureRemaining: { 0: 2, 1: 2 } });
     assert.ok(ids.some((id) => id === 'dc_end_activation_m1'), 'End Group Activation present');
+  });
+});
+
+// ── (C) host+companion must choose activation order first ──────────────────
+function _hostCompanionGame(orderSet) {
+  const game = { gameId: 'g2', player1CcDrawn: true, player2CcDrawn: true,
+    dcActionsData: {
+      host1: { perFigureRemaining: { 0: 2 }, figureLocked: {} },
+      comp1: { perFigureRemaining: { 0: 2 }, figureLocked: {}, isCompanion: true, hostMsgId: 'host1' },
+    },
+  };
+  if (orderSet) game.companionActivatedBefore = { host1: 'before' };
+  return game;
+}
+function _renderSingle(msgId, dcName, game) {
+  const helpers = {
+    getDcStats: () => ({ figures: 1, specials: [], specialCosts: [], specialMpCosts: [], keywords: [] }),
+    getPlayableCcSpecialsForDc: () => ['Urgency'],
+    getPlayableCcDoubleActionsForDc: () => [],
+    getPlayableCcEndOfActivationForDc: () => [],
+  };
+  const rows = getDcActionButtons(msgId, dcName, dcName, game.dcActionsData[msgId], game, helpers);
+  return rows.flatMap((r) => r.components.map((c) => c.data.custom_id || c.data.customId || ''));
+}
+
+describe('(C) host+companion must choose activation order before acting', () => {
+  it('isCompanionOrderPending: true for host+live-companion with order unset, false once set', () => {
+    assert.equal(isCompanionOrderPending(_hostCompanionGame(false), 'host1'), true, 'host pending');
+    assert.equal(isCompanionOrderPending(_hostCompanionGame(false), 'comp1'), true, 'companion pending (keyed on host)');
+    assert.equal(isCompanionOrderPending(_hostCompanionGame(true), 'host1'), false, 'host resolved');
+    assert.equal(isCompanionOrderPending(_hostCompanionGame(true), 'comp1'), false, 'companion resolved');
+  });
+  it('non-companion DC is never order-pending', () => {
+    const g = { dcActionsData: { solo: { perFigureRemaining: { 0: 2 } } } };
+    assert.equal(isCompanionOrderPending(g, 'solo'), false);
+  });
+  it('order pending → host shows NO Move/Attack/CC, only End Activation', () => {
+    const ids = _renderSingle('host1', 'Ugnaught Tinkerer', _hostCompanionGame(false));
+    assert.ok(!ids.some((id) => id.startsWith('dc_move_') || id.startsWith('dc_attack_') || id.startsWith('dc_interact_')), 'action row suppressed');
+    assert.ok(!ids.some((id) => id.startsWith('dc_cc_special_')), 'CC suppressed');
+    assert.ok(ids.some((id) => id === 'dc_end_activation_host1'), 'End Activation still present');
+  });
+  it('order pending → companion message also suppresses its action row', () => {
+    const ids = _renderSingle('comp1', 'Junk Droid', _hostCompanionGame(false));
+    assert.ok(!ids.some((id) => id.startsWith('dc_move_') || id.startsWith('dc_attack_')), 'companion action row suppressed');
+  });
+  it('order chosen → host action buttons appear', () => {
+    const ids = _renderSingle('host1', 'Ugnaught Tinkerer', _hostCompanionGame(true));
+    assert.ok(ids.some((id) => id.startsWith('dc_move_host1')), 'Move appears once order chosen');
   });
 });
 

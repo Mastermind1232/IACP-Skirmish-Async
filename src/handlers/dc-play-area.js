@@ -40,7 +40,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { finalizeActivation } from '../engine/activation-setup.js';
-import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation, figureActionsRemaining, grantActionToFigure } from '../game/activation-state.js';
+import { cleanupActivation, consumeActionForCurrentFigure, figureKeyForActivation, figureActionsRemaining, grantActionToFigure, isCompanionOrderPending } from '../game/activation-state.js';
 import { isAphraAlive, applyDubiousCounterpartsActionBump } from '../game/dubious-counterparts-helpers.js';
 
 import { getDcEffect, figureHasPriorityTarget } from '../game/dc-helpers.js';
@@ -884,6 +884,12 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
     const _figCount = _ad?.perFigureRemaining ? Object.keys(_ad.perFigureRemaining).length : 1;
     if (_figCount > 1 && (_ad?.selectedFigure == null || _ad.selectedFigure >= _figCount)) {
       await interaction.followUp({ content: 'Select which figure is activating first — that figure completes its activation before the next is chosen.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+    // Host+companion: the activation order must be chosen before any CC is played
+    // (alexanbv 2026-06-26). Mirrors the figure-select-first guard above.
+    if (isCompanionOrderPending(game, msgId)) {
+      await interaction.followUp({ content: 'Choose which activates first (host or companion) before playing a Command Card.', ephemeral: true }).catch(discordCatch);
       return;
     }
   }

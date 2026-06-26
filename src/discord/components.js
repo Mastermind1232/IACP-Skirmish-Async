@@ -3,7 +3,7 @@ import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
 import { hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { figureActionsRemaining } from '../game/activation-state.js';
+import { figureActionsRemaining, isCompanionOrderPending } from '../game/activation-state.js';
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS_PER_MESSAGE = 5;
@@ -1044,6 +1044,17 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // have an implicit figure 0 and are unaffected.
   const _mustPickFigureFirst = figures > 1 && !(selectedFigure != null && selectedFigure < figures);
 
+  // alexanbv 2026-06-26: host+companion must choose activation ORDER before any
+  // action — same intent as figure-select-first, but companions are SEPARATE DCs
+  // (own msgId) so the figures>1 check above can't see them. When the order is
+  // still pending, suppress the action/CC rows on BOTH the host and the companion
+  // message; the player picks via the companion_order SoA prompt. (Hosts +
+  // companions are single-figure, so this co-occurs with the figures===1 branch.)
+  const _companionOrderPending = isCompanionOrderPending(game, msgId);
+  // Unified "must make the first-choice before acting" gate for the post-action
+  // rows (specials / CCs / overdrive / attachment-exhaust).
+  const _blockForSelection = _mustPickFigureFirst || _companionOrderPending;
+
   const rows = [];
 
   if (figures > 1) {
@@ -1118,6 +1129,11 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
         rows.push(new ActionRowBuilder().addComponents(...figButtons.slice(0, 5)));
       }
     }
+  } else if (_companionOrderPending) {
+    // Host or companion, activation order not yet chosen: suppress the action
+    // row entirely. The player must first pick who activates first via the
+    // companion_order SoA prompt (posted separately); once chosen, this clears
+    // and lock-based serialization (one side completes before the other) applies.
   } else {
     const moveLbl = toTheLimitActive ? 'Move (blocked)' : 'Move';
     // Single unified branch — Stun blocks Move/Attack only; Interact +
@@ -1183,7 +1199,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(spendRow);
     }
   }
-  if (specials.length > 0 && rows.length < 5 && !_mustPickFigureFirst) {
+  if (specials.length > 0 && rows.length < 5 && !_blockForSelection) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
       // Jundland free special: this native special is offered at 0 cost.
@@ -1229,7 +1245,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(new ActionRowBuilder().addComponents(...specialBtns.slice(i, i + 5)));
     }
   }
-  if (game && rows.length < 5 && !_mustPickFigureFirst) {
+  if (game && rows.length < 5 && !_blockForSelection) {
     const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);
     const ccSpecials = playableCc.slice(0, 5);
     if (ccSpecials.length > 0) {
@@ -1244,7 +1260,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // Double Action CCs: shown when 2 actions remain; disabled when < 2 actions or Stunned
-  if (game && !noActions && rows.length < 5 && !_mustPickFigureFirst) {
+  if (game && !noActions && rows.length < 5 && !_blockForSelection) {
     const playableCcDouble = getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName);
     const ccDoubles = playableCcDouble.slice(0, 5);
     if (ccDoubles.length > 0) {
@@ -1262,7 +1278,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // End-of-Activation CCs: shown and enabled only when all actions are spent
-  if (game && noActions && rows.length < 5 && !_mustPickFigureFirst) {
+  if (game && noActions && rows.length < 5 && !_blockForSelection) {
     const playableEoa = getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName);
     const eoaCards = playableEoa.slice(0, 5);
     if (eoaCards.length > 0) {
@@ -1277,7 +1293,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // Overdrive: DROID may take 1 damage for +1 action (shown when CC is active and actions remain)
-  if (game?.roundDroidExtraActionCostDamage && !noActions && rows.length < 5 && !_mustPickFigureFirst) {
+  if (game?.roundDroidExtraActionCostDamage && !noActions && rows.length < 5 && !_blockForSelection) {
     const dcKws = (getDcStats(dcName)?.keywords || []).map((k) => String(k).toUpperCase());
     if (dcKws.includes('DROID')) {
       const _odFigKey = `${dcName}-${dgIndex}-0`;
@@ -1299,7 +1315,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // non-native button injection pattern (Choose-a-Side flamethrower). Each
   // button is disabled-absent when the attachment is already exhausted; the
   // round boundary (round.js) re-arms it.
-  if (game && rows.length < 5 && !_mustPickFigureFirst) {
+  if (game && rows.length < 5 && !_blockForSelection) {
     const _exBtns = [];
     // Ballistics Matrix / Navigation Upgrade are COMMAND-card attachments
     // (placed via ccAttachmentsKey → p[12]CcAttachments), not skirmish-upgrade

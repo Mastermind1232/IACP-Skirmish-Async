@@ -708,7 +708,7 @@ export async function handleSoaPick(interaction, ctx) {
  * the chooser (or completion message).
  */
 export async function handleSoaFire(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, logGameAction, dcMessageMeta, dcHealthState } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction, dcMessageMeta, dcHealthState, updateDcActionsMessage } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const suffix = parseCustomId(interaction.customId, 'soa_fire_');
   // suffix = `${gameId}_${descId}_${choiceKey}` — gameId has no `_`, descId may
@@ -1004,6 +1004,15 @@ export async function handleSoaFire(interaction, ctx) {
     } else {
       await interaction.followUp({ content: `Unknown companion order choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
+    }
+    // Re-render the host + companion action messages now that the order is set
+    // (alexanbv 2026-06-26). Their action rows were SUPPRESSED at activation
+    // start (isCompanionOrderPending → getDcActionButtons hides them until the
+    // order is chosen); without this refresh the buttons would never reappear.
+    // This also makes the activation-lock disable visible on the second side.
+    if (typeof updateDcActionsMessage === 'function') {
+      await updateDcActionsMessage(game, _hostMsgId, client).catch(discordCatch);
+      if (_companionMsgId) await updateDcActionsMessage(game, _companionMsgId, client).catch(discordCatch);
     }
 
   // --- Advanced Weapons Research (Director Krennic) ---

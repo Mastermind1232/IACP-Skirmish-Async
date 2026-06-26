@@ -561,6 +561,35 @@ export function figureActionsRemaining(actionsData, figureIndex) {
   return actionsData.perFigureRemaining?.[idx] ?? 2; // DC_ACTIONS_PER_ACTIVATION
 }
 
+/**
+ * alexanbv 2026-06-26: a HOST+COMPANION pair must choose its activation ORDER
+ * (who activates first) before ANY action is taken — the parallel of the
+ * multi-figure "pick which figure activates first" rule. Companions are SEPARATE
+ * DCs (own msgId + own dcActionsData), so the figures>1 gate doesn't catch them.
+ * Returns true when this msgId belongs to a host with a live companion (or is the
+ * companion) AND the order hasn't been chosen yet (companionActivatedBefore
+ * [hostMsgId] unset). The order is chosen via the `companion_order` SoA prompt
+ * (soa-handler.js), which sets companionActivatedBefore + acquires the activation
+ * lock on the chosen side. Once set, this returns false and normal lock-based
+ * serialization (one side completes before the other) takes over.
+ *
+ * Ugnaught/Junk Droid: Scrap Battalion readies the JD at activation start and the
+ * order prompt still fires — picking JD-first is allowed and honored here.
+ */
+export function isCompanionOrderPending(game, msgId) {
+  if (!game || !msgId) return false;
+  const ad = game.dcActionsData?.[msgId];
+  if (!ad) return false;
+  // Companion side: its actionsData names the host it belongs to.
+  if (ad.isCompanion && ad.hostMsgId) {
+    return game.companionActivatedBefore?.[ad.hostMsgId] == null;
+  }
+  // Host side: a live companion's actionsData points back at this msgId.
+  const hasLiveCompanion = Object.values(game.dcActionsData || {})
+    .some((d) => d?.isCompanion && d.hostMsgId === msgId);
+  return hasLiveCompanion && game.companionActivatedBefore?.[msgId] == null;
+}
+
 /** True if ANY figure of this DC still has actions left (group-done aggregate, computed per-figure). */
 export function anyFigureHasActions(actionsData) {
   if (!actionsData) return false;
