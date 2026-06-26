@@ -1078,6 +1078,14 @@ function _makeForcedRerollResolver({ slot, side }) {
       const res = _rerollDie(combat, ctx, { pool: p, index: idx });
       if (res.ok) await thread?.send(`**${entry.source || 'Granted Reroll'}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
       else await thread?.send(`**${entry.source || 'Granted Reroll'}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
+      // Demoralizing Monologue (Moff Gideon): record which DEFENSE die the
+      // attacker chose to reroll so computeCombatResult can REMOVE that die's
+      // results when the attacker revealed 2+ cards
+      // (combat.demoralizingMonologueRemoveDie). Captured here — the only point
+      // that knows the chosen index — and consumed at scoring. alexanbv 2026-06-26.
+      if (res.ok && entry.demoralizingMonologue && p === 'defense') {
+        combat.demoralizingMonologueDieIndex = idx;
+      }
       // Decrement the consumed grant; clear it when exhausted.
       entry.remaining = (entry.remaining ?? 1) - 1;
       return undefined;

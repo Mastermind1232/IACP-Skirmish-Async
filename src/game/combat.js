@@ -388,6 +388,29 @@ export function parseSurgeEffect(key) {
 export function computeCombatResult(combat) {
   const roll = combat.attackRoll;
   const defRoll = combat.defenseRoll;
+  // Demoralizing Monologue (Moff Gideon, attacker CC): the attacker forced a
+  // reroll of one DEFENSE die (combat.demoralizingMonologueDieIndex, captured by
+  // the forced-reroll resolver) and then revealed 2+ cards
+  // (combat.demoralizingMonologueRemoveDie armed by the reveal handler). When both
+  // are present, REMOVE that die's results from the defense — subtract its
+  // block/evade/dodge from the SAME aggregate the result uses (defRoll =
+  // combat.defenseRoll), clamped at 0. Guard with a consumed flag so a re-run of
+  // computeCombatResult doesn't double-subtract (it can be called more than once
+  // across the resolve pipeline). alexanbv 2026-06-26 — Tough Luck ordering is a
+  // non-issue per the designer (the defender wouldn't remove its own defense die).
+  if (combat.demoralizingMonologueRemoveDie
+      && combat.demoralizingMonologueDieIndex != null
+      && !combat._demoralizingMonologueConsumed) {
+    const idx = combat.demoralizingMonologueDieIndex;
+    const die = (combat.defenseDiceResults || [])[idx];
+    if (die) {
+      const dDodge = typeof die.dodge === 'number' ? die.dodge : (die.dodge ? 1 : 0);
+      defRoll.block = Math.max(0, (defRoll.block || 0) - (die.block || 0));
+      defRoll.evade = Math.max(0, (defRoll.evade || 0) - (die.evade || 0));
+      defRoll.dodge = Math.max(0, (defRoll.dodge || 0) - dDodge);
+    }
+    combat._demoralizingMonologueConsumed = true;
+  }
   const surgeD = combat.surgeDamage || 0;
   const surgeP = combat.surgePierce || 0;
   const bonusPierce = combat.bonusPierce || 0;

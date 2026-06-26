@@ -203,6 +203,7 @@ describe('CC Full Catalog: every CC has valid ability wiring', async () => {
   const { getAbility } = await import('../../src/game/abilities.js');
 
   for (const cardName of Object.keys(ccData.cards)) {
+    if (cardName.startsWith('_')) continue; // skip metadata annotation keys
     it(`${cardName} has resolvable ability entry`, () => {
       const effect = ccData.cards[cardName];
       assert.ok(effect, `${cardName} missing from cc-effects.json`);
@@ -224,6 +225,9 @@ describe('CC Full Catalog: every CC has valid ability wiring', async () => {
 describe('DC Full Catalog: every DC has valid data structure', () => {
   const dcCards = dcData.cards || dcData;
   for (const dcName of Object.keys(dcCards)) {
+    // Skip underscore-prefixed metadata keys (e.g. "_Cal_Kestis_audit_note" — a
+    // string annotation, not a card), matching tests/headless/data-integrity.test.js.
+    if (dcName.startsWith('_')) continue;
     it(`${dcName} has valid structure`, () => {
       const dc = dcCards[dcName];
       assert.ok(dc, `${dcName} missing from dc-effects.json`);

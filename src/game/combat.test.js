@@ -666,3 +666,69 @@ test('getAttackerSurgeAbilities: SU figure uses the SU card SURGES only (innate 
   const suBonus = getAttackerSurgeAbilities({ attackerDcName: 'Stormtrooper', suAttackerCard: 'Flame Trooper', bonusSurgeAbilities: ['recover 3'] });
   assert.ok(suBonus.includes('recover 3'));
 });
+
+// --- Demoralizing Monologue (Moff Gideon, attacker CC) — die-removal consumer ---
+// The attacker forces a reroll of one defense die (index captured by the
+// forced-reroll resolver onto combat.demoralizingMonologueDieIndex) and reveals
+// 2+ cards (arms combat.demoralizingMonologueRemoveDie). computeCombatResult then
+// removes that die's results from the defense aggregate (combat.defenseRoll).
+
+test('Demoralizing Monologue: flag armed + die index removes that die block from defense', () => {
+  const combat = {
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 2, evade: 0 }, // 2 block total across the dice
+    defenseDiceResults: [{ block: 1, evade: 0 }, { block: 1, evade: 0 }],
+    demoralizingMonologueRemoveDie: { casterPlayerNum: 1 },
+    demoralizingMonologueDieIndex: 0, // attacker rerolled die #0 (rolled 1 block)
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+  };
+  const r = computeCombatResult(combat);
+  // Die #0's 1 block removed → only 1 block remains → 4 dmg - 1 block = 3.
+  assert.strictEqual(r.damage, 3);
+  assert.strictEqual(r.effectiveBlock, 1);
+  assert.strictEqual(combat.defenseRoll.block, 1, 'defense block reduced by the chosen die');
+});
+
+test('Demoralizing Monologue: flag NOT armed leaves defense unchanged', () => {
+  const combat = {
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 2, evade: 0 },
+    defenseDiceResults: [{ block: 1, evade: 0 }, { block: 1, evade: 0 }],
+    // demoralizingMonologueRemoveDie NOT set (revealed < 2 cards)
+    demoralizingMonologueDieIndex: 0,
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+  };
+  const r = computeCombatResult(combat);
+  assert.strictEqual(r.damage, 2); // 4 dmg - 2 block, untouched
+  assert.strictEqual(combat.defenseRoll.block, 2, 'defense block unchanged');
+});
+
+test('Demoralizing Monologue: removes evade and dodge of the chosen die; clamps at 0', () => {
+  const combat = {
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 1, dodge: 1 },
+    defenseDiceResults: [{ block: 0, evade: 1, dodge: 1 }],
+    demoralizingMonologueRemoveDie: { casterPlayerNum: 1 },
+    demoralizingMonologueDieIndex: 0,
+    surgeCancelDodge: true, // ignore the dodge-miss path; we only assert the totals
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+  };
+  computeCombatResult(combat);
+  assert.strictEqual(combat.defenseRoll.evade, 0, 'evade removed');
+  assert.strictEqual(combat.defenseRoll.dodge, 0, 'dodge removed');
+});
+
+test('Demoralizing Monologue: idempotent — a second computeCombatResult does not double-subtract', () => {
+  const combat = {
+    attackRoll: { acc: 2, dmg: 4, surge: 0 },
+    defenseRoll: { block: 2, evade: 0 },
+    defenseDiceResults: [{ block: 1, evade: 0 }, { block: 1, evade: 0 }],
+    demoralizingMonologueRemoveDie: { casterPlayerNum: 1 },
+    demoralizingMonologueDieIndex: 0,
+    surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+  };
+  computeCombatResult(combat);
+  const r2 = computeCombatResult(combat);
+  assert.strictEqual(combat.defenseRoll.block, 1, 'still only one die removed');
+  assert.strictEqual(r2.damage, 3);
+});
