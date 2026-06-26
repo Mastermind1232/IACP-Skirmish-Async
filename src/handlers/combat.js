@@ -533,6 +533,7 @@ const _GATE_WINDOWS = {
     // entirely (and never prompt the defender) unless the attacker has an
     // eligible die-turn — it is NOT a bilateral always-prompt window.
     onlySide: 'attacker',
+    noCcPlay: true, // no CCs live in this step (alexanbv 2026-06-26)
     onComplete: async (thread, game, combat, ctx) => { delete combat.specialGate; if (ctx._specialGateDone) await ctx._specialGateDone(thread, game, combat); },
   },
   // Zillo Technique exhaust window (pierce-cancel) — its own gate step AFTER
@@ -546,6 +547,10 @@ const _GATE_WINDOWS = {
     // Zillo pierce-cancel lives here. The attacker has NO zillo window — skip it
     // entirely (and never prompt the attacker) unless the defender is eligible.
     onlySide: 'defender',
+    // The only choice is Exhaust-or-not — no submenu, no CCs. Label Done "Skip"
+    // so the window reads [Exhaust Zillo Technique → Pierce −2] [Skip] (alexanbv 2026-06-26).
+    noCcPlay: true,
+    doneLabel: 'Skip',
     onComplete: async (thread, game, combat, ctx) => { delete combat.zilloGate; if (ctx._zilloGateDone) await ctx._zilloGateDone(thread, game, combat); },
   },
 };
@@ -1097,12 +1102,16 @@ function _makeExhaustBonusResolver({ card, effect, label }) {
  *        a short description of what was spent (or null to abort)
  *   bonus(combat) → mutate combat to apply the stat bonus; return its label
  */
-function _makeSpendResourceResolver({ name, options, spend, bonus }) {
+function _makeSpendResourceResolver({ name, options, spend, bonus, ephemeral = false }) {
   return {
+    // ephemeral:true → the sub-choice prompt is posted privately to the picking
+    // player (handleModsPick) instead of the shared combat thread. Used for
+    // CC-discard resolvers (Zillo Block-Boost, Illicit Arms) whose options list
+    // the player's HAND — posting them publicly leaks the hand (alexanbv 2026-06-26).
     prompt: ({ game, combat }) => {
       const opts = options(game, combat) || [];
-      if (opts.length === 0) return { content: `**${name}** — nothing to spend.`, buttons: [['skip', 'OK', 'secondary']] };
-      return { content: `**${name}** — choose a resource to spend:`, buttons: [...opts, ['skip', 'Skip', 'secondary']] };
+      if (opts.length === 0) return { content: `**${name}** — nothing to spend.`, buttons: [['skip', 'OK', 'secondary']], ephemeral };
+      return { content: `**${name}** — choose a resource to spend:`, buttons: [...opts, ['skip', 'Skip', 'secondary']], ephemeral };
     },
     apply: async (choice, args) => {
       const { thread } = args;
@@ -1717,23 +1726,24 @@ export const COMBAT_RESOLVERS = {
   },
   // ── special (sample) ─────────────────────────────────────────────────────
   zillo_technique_pierce_cancel: {
-    prompt: () => ({ content: '🛡️ **Zillo Technique** (defender) — Exhaust Zillo to reduce this attack’s **Pierce by 2**?', buttons: [['use', 'Exhaust Zillo → Pierce −2'], ['skip', 'Skip', 'secondary']] }),
-    apply: (choice, { game, combat, thread }) => {
-      if (choice === 'use') {
-        // EXHAUST the card (alexanbv 2026-06-16 re-audit: the gate path was
-        // cancelling 2 Pierce for free every attack). Re-find the defender's
-        // [Zillo Technique] msgId (mirrors the detection in combat-abilities-zillo.js).
-        const defPN = combat.defenderPlayerNum;
-        const dcList = getDcList(game, defPN) || [];
-        const dcMsgIds = getDcMessageIds(game, defPN) || [];
-        let ztMsgId = null;
-        for (let i = 0; i < dcList.length; i++) {
-          if (dcList[i]?.dcName === '[Zillo Technique]') { ztMsgId = dcMsgIds[i] || null; break; }
-        }
-        if (ztMsgId) exhaustAttachment(game, ztMsgId, 'Zillo Technique');
-        combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2;
-        thread?.send('**Zillo Technique** — Exhausted: cancels 2 Pierce.').catch(discordCatch);
-      } else thread?.send('**Zillo Technique** — Skipped.').catch(discordCatch);
+    // NO sub-prompt (alexanbv 2026-06-26): the zillo window itself is the
+    // Exhaust/Skip choice — its only button is "Exhaust Zillo Technique → Pierce
+    // −2" (this resolver, applies directly on pick) and the window's "Skip"
+    // (Done) declines. No submenu, no CCs in this step.
+    apply: (_choice, { game, combat, thread }) => {
+      // EXHAUST the card (alexanbv 2026-06-16 re-audit: the gate path was
+      // cancelling 2 Pierce for free every attack). Re-find the defender's
+      // [Zillo Technique] msgId (mirrors the detection in combat-abilities-zillo.js).
+      const defPN = combat.defenderPlayerNum;
+      const dcList = getDcList(game, defPN) || [];
+      const dcMsgIds = getDcMessageIds(game, defPN) || [];
+      let ztMsgId = null;
+      for (let i = 0; i < dcList.length; i++) {
+        if (dcList[i]?.dcName === '[Zillo Technique]') { ztMsgId = dcMsgIds[i] || null; break; }
+      }
+      if (ztMsgId) exhaustAttachment(game, ztMsgId, 'Zillo Technique');
+      combat.defenderReducePierce = (combat.defenderReducePierce || 0) + 2;
+      thread?.send('🛡️ **Zillo Technique** — Exhausted: this attack’s Pierce reduced by 2.').catch(discordCatch);
       combat.zilloPierceResolved = true;
     },
   },
@@ -1762,6 +1772,7 @@ export const COMBAT_RESOLVERS = {
   // CC hand as options.
   illicit_arms: _makeSpendResourceResolver({
     name: 'Illicit Arms (Bib Fortuna)',
+    ephemeral: true, // lists the attacker's HAND — keep it private
     options: (game, combat) => [...new Set(getCcHand(game, combat.attackerPlayerNum) || [])].map((c) => [c, c]),
     spend: (choice, { game, combat }) => _discardCcFromHand(game, combat.attackerPlayerNum, choice) && `Command card "${choice}"`,
     bonus: (combat) => { combat.bonusHits = (combat.bonusHits || 0) + 1; return '+1 Damage'; },
@@ -1769,7 +1780,8 @@ export const COMBAT_RESOLVERS = {
   // Zillo Technique — Block Boost ([Zillo Technique] upgrade) — discard 1 Command
   // card → +1 Block (defender). DISTINCT from the pierce-cancel exhaust.
   zillo_technique_discard: _makeSpendResourceResolver({
-    name: 'Zillo Technique (Block Boost)',
+    name: 'Zillo Technique: discard a Command Card → +1 Block',
+    ephemeral: true, // lists the defender's HAND — keep it private
     options: (game, combat) => {
       const defPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
       return [...new Set(getCcHand(game, defPn) || [])].map((c) => [c, c]);
@@ -2227,7 +2239,14 @@ export async function handleModsPick(interaction, ctx) {
       if (p?.buttons) {
         const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
           new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
-        await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+        if (p.ephemeral) {
+          // Hand-revealing sub-choice (CC-discard): post PRIVATELY to the picking
+          // player so the opponent never sees their hand (alexanbv 2026-06-26).
+          // The interaction was already deferUpdate'd, so followUp(ephemeral) works.
+          await interaction.followUp({ content: p.content, components: rows, ephemeral: true }).catch(discordCatch);
+        } else {
+          await thread.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+        }
         // wait for the sub-choice (handleModsSubChoice resolves + re-drives)
       } else {
         delete combat._lastRerolledDie;
@@ -2718,8 +2737,12 @@ export async function _postGateChooseWindow(window, side, pending, thread, game,
       .setLabel((reg?.name || id).slice(0, 80))
       .setStyle(ButtonStyle.Primary);
   });
-  btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_playcc`).setLabel('🃏 Play a Command Card').setStyle(ButtonStyle.Success));
-  btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_done`).setLabel('Done (no more)').setStyle(ButtonStyle.Secondary));
+  // Windows that have no CCs (Special = Zeb die-turn, Zillo = exhaust) omit the
+  // Play-CC button (alexanbv 2026-06-26).
+  if (!cfg.noCcPlay) {
+    btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_playcc`).setLabel('🃏 Play a Command Card').setStyle(ButtonStyle.Success));
+  }
+  btns.push(new ButtonBuilder().setCustomId(`${cfg.pickPrefix}${game.gameId}_done`).setLabel(cfg.doneLabel || 'Done (no more)').setStyle(ButtonStyle.Secondary));
   await thread.send(sanitizeMentions({
     content: `<@${sideId}> **${cfg.title}** (${side}) — resolve your abilities in any order, then **Done**:`,
     components: chunkButtonsToRows(btns),

@@ -77,13 +77,18 @@ describe('on_declare resolvers: Vanguard + EE-3 (die→red swaps)', () => {
   });
 });
 
-describe('special-step resolver: Zillo Technique (pierce cancel)', () => {
+describe('zillo-step resolver: Zillo Technique (pierce cancel)', () => {
   const t = { send: async () => ({}) };
-  it('use → reduces pierce by 2; skip → no change', async () => {
-    const c = {}; await COMBAT_RESOLVERS.zillo_technique_pierce_cancel.apply('use', { game: {}, combat: c, thread: t, ctx: {} });
+  // alexanbv 2026-06-26: no sub-prompt — picking the ability button directly
+  // exhausts (apply ignores its choice arg); "Skip" is the zillo window's Done
+  // (passModsSide), which never calls this resolver. So apply ALWAYS reduces
+  // Pierce by 2 + marks resolved.
+  it('apply directly exhausts → reduces pierce by 2', async () => {
+    const c = {}; await COMBAT_RESOLVERS.zillo_technique_pierce_cancel.apply(null, { game: {}, combat: c, thread: t, ctx: {} });
     assert.equal(c.defenderReducePierce, 2); assert.equal(c.zilloPierceResolved, true);
-    const c2 = {}; await COMBAT_RESOLVERS.zillo_technique_pierce_cancel.apply('skip', { game: {}, combat: c2, thread: t, ctx: {} });
-    assert.equal(c2.defenderReducePierce, undefined); assert.equal(c2.zilloPierceResolved, true);
+  });
+  it('has NO sub-prompt (the window itself is the Exhaust/Skip choice)', () => {
+    assert.equal(COMBAT_RESOLVERS.zillo_technique_pierce_cancel.prompt, undefined);
   });
 });
 

@@ -15,7 +15,7 @@ import { cardNameIncludes } from '../game/card-names.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 
 registerCombatAbility({
-  id: 'zillo_technique_pierce_cancel', name: 'Zillo Technique', windows: ['zillo'], side: 'defender', kind: 'interactive',
+  id: 'zillo_technique_pierce_cancel', name: 'Exhaust Zillo Technique → Pierce −2', windows: ['zillo'], side: 'defender', kind: 'interactive',
   applies: (game, combat) => {
     if (combat.zilloPierceCancelPrompted || combat.zilloPierceResolved || combat.target?.isNpc) return false;
     const defPN = combat.defenderPlayerNum;

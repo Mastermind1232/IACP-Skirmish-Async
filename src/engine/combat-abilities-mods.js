@@ -429,7 +429,7 @@ export function zilloBlockBoostEligible(game, combat) {
   return (getDcList(game, defPn) || []).some((dc) => (dc?.dcName || dc || '') === '[Zillo Technique]');
 }
 registerCombatAbility({
-  id: 'zillo_technique_discard', name: 'Zillo Technique (Block Boost)', windows: ['mods'], side: 'defender', kind: 'interactive',
+  id: 'zillo_technique_discard', name: 'Zillo Technique: discard a Command Card → +1 Block', windows: ['mods'], side: 'defender', kind: 'interactive',
   params: { card: '[Zillo Technique]', ability: 'Block Boost', limit: 'once per attack' },
   applies: (game, combat) => {
     if (combat._abilityUsedThisAttack?.['[Zillo Technique]:Block Boost']) return false;
