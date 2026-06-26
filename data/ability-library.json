@@ -1144,7 +1144,7 @@
       "type": "dcSpecial",
       "category": "passive",
       "label": "Dead Precise",
-      "description": "While attacking, if you did not move during this activation, apply +2 Accuracy.",
+      "description": "When an attacking figure within 3 spaces of Ko-Tun spent a Power Token, it may reroll 1 attack die and apply -1 Dodge to the attack results.",
       "wiredStatus": "wired"
     },
     "dead_weight_pardon_bokatan": {
@@ -2213,11 +2213,10 @@
     },
     "Furious Charge": {
       "type": "ccEffect",
-      "label": "After attack on you: if suffered 3+ Damage, become Focused (auto-applied)",
-      "applyFocus": true,
+      "label": "After attack on you: if suffered 3+ Damage, ready your Deployment card (auto-applied)",
       "wiredStatus": "wired",
       "conditionalFocusIfDamagedGte": 3,
-      "logMessage": "Became Focused (auto-applied when you suffered 3+ Damage from this attack)."
+      "logMessage": "Deployment card readied (auto-applied when you suffered 3+ Damage from this attack)."
     },
     "fury_wookiee_elite": {
       "type": "dcSpecial",

@@ -1364,8 +1364,10 @@ export const COMBAT_RESOLVERS = {
         const { combat, thread } = a;
         const dr = combat.defenseRoll || {};
         if (dr.dodge) {
-          combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
-          await thread?.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+          // Convert EACH Dodge — scale by the counted Dodge value.
+          const _dod = typeof dr.dodge === 'number' ? dr.dodge : 1;
+          combat.defenseRoll = { block: (dr.block || 0) + 2 * _dod, evade: (dr.evade || 0) + 1 * _dod, dodge: false };
+          await thread?.send(`**Defensive Stance** — ${_dod} Dodge converted to +${2 * _dod} Block, +${1 * _dod} Evade.`).catch(discordCatch);
         }
       }
       return r;
@@ -1452,14 +1454,28 @@ export const COMBAT_RESOLVERS = {
       combat.agileJetTrooperApplied = true;
     },
   },
+  take_cover: {
+    prompt: () => ({ content: '**Take Cover** (Jawa Scavenger) — apply **+1 Block and -1 Evade**?', buttons: [['apply', 'Apply (+1 Block, -1 Evade)'], ['skip', 'Skip', 'secondary']] }),
+    apply: (choice, { combat, thread }) => {
+      if (choice === 'apply') {
+        const bump = applyTakeCoverBonus({ bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
+        combat.bonusBlock = bump.bonusBlock;
+        combat.bonusEvade = bump.bonusEvade;
+        thread?.send('**Take Cover** — Applied +1 Block, -1 Evade.').catch(discordCatch);
+      } else thread?.send('**Take Cover** — Skipped.').catch(discordCatch);
+      combat.takeCoverResolved = true;
+    },
+  },
   call_the_shots: {
     prompt: () => ({ content: '**Call the Shots** — apply +2 Accuracy, +1 Hit, or +1 Surge?', buttons: [['acc', '+2 Accuracy'], ['hit', '+1 Hit'], ['surge', '+1 Surge'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { game, combat, thread }) => {
+      // Once-per-round limit is spent ONLY when a bonus is actually applied; Skip
+      // must not burn Call the Shots (spec: "you MAY apply ..."). Mirrors get_down.
       const fk = _findModsFigKey('call_the_shots', game, combat);
-      if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; }
-      if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; thread?.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
-      else if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
-      else if (choice === 'surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
+      const _ctsStamp = () => { if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; } };
+      if (choice === 'acc') { _ctsStamp(); combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; thread?.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
+      else if (choice === 'hit') { _ctsStamp(); combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
+      else if (choice === 'surge') { _ctsStamp(); combat.surgeBonus = (combat.surgeBonus || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
       else thread?.send('**Call the Shots** — Skipped.').catch(discordCatch);
       combat.callTheShotsResolved = true;
     },
@@ -2583,11 +2599,9 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     const bump = applySlipperyBonus({ bonusAccuracy: combat.bonusAccuracy });
     combat.bonusAccuracy = bump.bonusAccuracy;
     await thread.send('**Slippery** — Defender applies -2 Accuracy to the attack.').catch(discordCatch);
-  } else if (id === 'take_cover') {
-    const bump = applyTakeCoverBonus({ bonusBlock: combat.bonusBlock, bonusEvade: combat.bonusEvade });
-    combat.bonusBlock = bump.bonusBlock;
-    combat.bonusEvade = bump.bonusEvade;
-    await thread.send('**Take Cover** — Defender applies +1 Block, -1 Evade.').catch(discordCatch);
+  // 'take_cover' is now INTERACTIVE (Apply/Skip) — handled by
+  // COMBAT_RESOLVERS.take_cover, not this passive branch (CSV resolution=prompt,
+  // "you MAY apply +1 Block and -1 Evade").
   } else if (id === 'gamorrean_honor_guard') {
     const { bonusBlock } = applyGamorreanHonorGuardBonus(combat);
     combat.bonusBlock = bonusBlock;
@@ -2665,9 +2679,12 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   // gate; its +2 Damage now lands here via the generic 'pending_modifiers_drain'
   // above). No mods-passive branch needed.
   } else if (id === 'defensive_stance') {
+    // "Convert EACH Dodge to 2 Block and 1 Evade" — Dodge is COUNTED, so scale
+    // by the rolled Dodge count (mirrors Wookiee Avenger, src/game/combat.js).
     const dr = combat.defenseRoll || {};
-    combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
-    await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+    const _dod = typeof dr.dodge === 'number' ? dr.dodge : (dr.dodge ? 1 : 0);
+    combat.defenseRoll = { block: (dr.block || 0) + 2 * _dod, evade: (dr.evade || 0) + 1 * _dod, dodge: false };
+    await thread.send(`**Defensive Stance** — ${_dod} Dodge converted to +${2 * _dod} Block, +${1 * _dod} Evade.`).catch(discordCatch);
   } else if (id === 'lucky') {
     // R2-D2 Lucky — automatic: a BLANK defense-die result is present, so add +1
     // Dodge. combat.bonusDodge is summed into total Dodge at resolution
@@ -2675,9 +2692,28 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.bonusDodge = (combat.bonusDodge || 0) + 1;
     await thread.send('🍀 **Lucky** (R2-D2) — rolled a blank result: **+1 Dodge**.').catch(discordCatch);
   } else if (id === 'soresu') {
+    // Convert EACH Dodge → +2 Block / +1 Evade (Dodge is counted), then — per
+    // the card — if the rerolling (defending) figure is NOT a FORCE USER, Kanan
+    // suffers 1 Strain. (Previously the conditional Strain was never applied.)
     const dr = combat.defenseRoll || {};
-    combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
-    await thread.send('**Soresu Form** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
+    const _dod = typeof dr.dodge === 'number' ? dr.dodge : (dr.dodge ? 1 : 0);
+    combat.defenseRoll = { block: (dr.block || 0) + 2 * _dod, evade: (dr.evade || 0) + 1 * _dod, dodge: false };
+    await thread.send(`**Soresu Form** — ${_dod} Dodge converted to +${2 * _dod} Block, +${1 * _dod} Evade.`).catch(discordCatch);
+    // Rerolling figure = the defender (combat.target). If it lacks FORCE USER,
+    // Kanan (combat.soresuFormFigKey) suffers 1 Strain.
+    const _kananFk = combat.soresuFormFigKey;
+    const _defFk = combat.target?.figureKey;
+    if (_kananFk && _defFk) {
+      const _eff = getDcEffectsGlobal() || {};
+      const _defName = dcNameFromFigureKey(_defFk);
+      const _e = _eff[_defName] || _eff[(_defName || '').replace(/\s*\[.*\]\s*$/, '')];
+      const _kws = [...(_e?.keywords || []), ...(_e?.traits || [])].map((k) => String(k).toUpperCase());
+      if (!_kws.includes('FORCE USER')) {
+        const _defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+        await applyStrain(game, ctx, { figureKey: _kananFk, controllerPlayerNum: _defPN, amount: 1, source: 'Soresu Form' });
+        await thread.send('**Soresu Form** — rerolling figure is not a FORCE USER: Kanan suffers 1 Strain.').catch(discordCatch);
+      }
+    }
     combat.soresuFormFigKey = null;
   }
 }
@@ -4742,14 +4778,23 @@ export async function _forceMissAndStep8(thread, game, combat, ctx, message) {
   // The attacker-side enqueuer is hit/damage-gated internally, so it
   // safely skips Blast / Cleave / damage-conditions on a miss.
   try {
-    const { enqueueAttackerStep8Effects, enqueueDefenderStep8Effects, postPostResolveWindow } = await import('./after-attack-resolve.js');
+    const { enqueueAttackerStep8Effects, enqueueDefenderStep8Effects, enqueueAttackerPerDcEffects, enqueueAfterResolveGateAbilities, postPostResolveWindow } = await import('./after-attack-resolve.js');
     const _step8Deps = {
       getDcEffects: ctx.getDcEffects,
       findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
       dcNameFromFigureKey,
     };
+    // alexanbv ruling 2026-06-26: the FULL after-attack window fires on a forced
+    // miss (discard conditions like Focus/Hidden, after-resolve DC abilities, gate
+    // after-resolve abilities) — not just the Return-Fire/token subset. Damage-
+    // gated effects (Blast/Cleave/conditions needing >0 damage) self-skip since
+    // _step7Damage=0; surge-only abilities (Fighting Knife) correctly can't fire
+    // because no dice were rolled (spend-surges step skipped). Enqueue all four
+    // sources, same as the normal runAfterResolveWindow.
     enqueueAttackerStep8Effects(combat);
+    enqueueAttackerPerDcEffects(combat, game, _step8Deps);
     enqueueDefenderStep8Effects(combat, game, _step8Deps);
+    enqueueAfterResolveGateAbilities(combat, game, _step8Deps);
     if (thread) {
       await postPostResolveWindow(thread, game, combat, 'defender', ctx);
       await postPostResolveWindow(thread, game, combat, 'attacker', ctx);
@@ -4925,16 +4970,16 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (_heldRollFlow && role === 'atk' && !combat.attackRoll && !combat.defenseRoll) {
     if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (**${getPlayerDisplayName(game, effectiveAttackerPlayerNum, interaction.client)}**) may roll attack dice.`)) return;
-    const baseDice = combat.attackInfo?.dice || [];
-    const bonusDice = combat.attackBonusDice || 0;
-    const bonusColors = combat.attackBonusDiceColors || [];
-    const primaryColor = baseDice[0] || 'red';
-    let dice = [...baseDice];
-    for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
-    const removeMax = combat.attackPoolRemoveMax || 0;
-    if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
-    const keepMax = combat.attackPoolKeepMax;
-    if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    // Run for Cover (defender removes 1) / Savage Vigor (attacker keeps 2): when
+    // the pool offers a real choice, post the attack-die picker and wait for it.
+    const _atkTrim = _resolveAttackPoolTrim(combat);
+    if (_atkTrim.needPicker) {
+      await _postAttackDiePicker(thread, game, combat, _atkTrim.pool, _atkTrim.target, _atkTrim.owner, _atkTrim.mode);
+      await interaction.followUp({ content: `⏳ Pick ${_atkTrim.target} attack die${_atkTrim.target > 1 ? 's' : ''} to ${_atkTrim.mode === 'keep' ? 'keep' : 'remove'} — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
+    }
+    let dice = _atkTrim.dice;
     const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
     if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
       const toAdd = addYellowUntil - dice.length;
@@ -5076,16 +5121,16 @@ export async function handleCombatRoll(interaction, ctx) {
 
   if (!combat.attackRoll) {
     if (!await requirePlayer(interaction, game, interaction.user.id, effectiveAttackerPlayerNum, canActAsPlayer, `Only the attacker (**${getPlayerDisplayName(game, effectiveAttackerPlayerNum, interaction.client)}**) may roll attack dice.`)) return;
-    const baseDice = combat.attackInfo?.dice || [];
-    const bonusDice = combat.attackBonusDice || 0;
-    const bonusColors = combat.attackBonusDiceColors || [];
-    const primaryColor = baseDice[0] || 'red';
-    let dice = [...baseDice];
-    for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
-    const removeMax = combat.attackPoolRemoveMax || 0;
-    if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
-    const keepMax = combat.attackPoolKeepMax;
-    if (typeof keepMax === 'number' && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+    // Run for Cover (defender removes 1) / Savage Vigor (attacker keeps 2): when
+    // the pool offers a real choice, post the attack-die picker and wait for it.
+    const _atkTrim = _resolveAttackPoolTrim(combat);
+    if (_atkTrim.needPicker) {
+      await _postAttackDiePicker(thread, game, combat, _atkTrim.pool, _atkTrim.target, _atkTrim.owner, _atkTrim.mode);
+      await interaction.followUp({ content: `⏳ Pick ${_atkTrim.target} attack die${_atkTrim.target > 1 ? 's' : ''} to ${_atkTrim.mode === 'keep' ? 'keep' : 'remove'} — see the picker prompt.`, ephemeral: true }).catch(discordCatch);
+      saveGames(game.gameId);
+      return;
+    }
+    let dice = _atkTrim.dice;
     const addYellowUntil = combat.attackPoolAddYellowUntilTotal;
     if (typeof addYellowUntil === 'number' && addYellowUntil > 0 && dice.length < addYellowUntil) {
       const toAdd = addYellowUntil - dice.length;
@@ -6733,6 +6778,7 @@ export async function handleCombatSurge(interaction, ctx) {
       if (mod.replaceWithStun) combat.attackResultReplaceWithStun = true; // Set for Stun (CC): hit, damage>0 gated
       if (mod.missAndStun) combat.attackMissAndStun = true; // Shocking Palm (0-0-0): MISS + unconditional Stun
       if (mod.surgeCancelDodge) combat.surgeCancelDodge = true;
+      if (mod.surgeDeadlySpinDodge) combat.surgeDeadlySpinDodge = true; // Deadly Spin: -1 Dodge (counted)
       if (mod.surgeHarass) combat.surgeHarass = (combat.surgeHarass || 0) + mod.surgeHarass;
       if (mod.surgeSquadCommand) combat.surgeSquadCommand = true;
       if (mod.surgeStalkPrey) combat.surgeStalkPrey = true;
@@ -8016,6 +8062,144 @@ export async function handleCqDefPick(interaction, ctx) {
     await interaction.message.channel.send(`✅ Removing **${picks}** from defender's pool.`).catch(discordCatch);
   } else {
     await interaction.message.channel.send(`Picked **${chosenColor}** #${idx + 1}. Pick ${target - combat._defPickRemoveIdxList.length} more.`).catch(discordCatch);
+  }
+  if (saveGames) saveGames(game.gameId);
+}
+
+/**
+ * Build the attacker's attack-die POOL (base + bonus dice colors), before any
+ * remove/keep trimming. Shared by both attack-roll sites and the attack-die
+ * picker so the index space the picker shows matches the pool that gets rolled.
+ */
+function _buildAttackPool(combat) {
+  const baseDice = combat.attackInfo?.dice || [];
+  const bonusDice = combat.attackBonusDice || 0;
+  const bonusColors = combat.attackBonusDiceColors || [];
+  const primaryColor = baseDice[0] || 'red';
+  const dice = [...baseDice];
+  for (let i = 0; i < bonusDice; i++) dice.push(bonusColors[i] ?? primaryColor);
+  return dice;
+}
+
+/**
+ * Resolve a choice-driven attack-pool trim for Run for Cover (defender chooses
+ * 1+ die to REMOVE) / Savage Vigor (attacker chooses 2 to KEEP). Returns:
+ *   { needPicker, owner, mode, target, pool } when a picker must be posted, or
+ *   { dice }                                   when no choice is needed.
+ * `combat._atkPickIdxList` (set by the picker handler) takes precedence and is
+ * consulted to produce the final dice list. No-choice cases keep the legacy
+ * slice() behavior (single-die pools, homogeneous, or no flag).
+ */
+function _resolveAttackPoolTrim(combat) {
+  const pool = _buildAttackPool(combat);
+  const removeMax = combat.attackPoolRemoveMax || 0;
+  const keepMax = (typeof combat.attackPoolKeepMax === 'number') ? combat.attackPoolKeepMax : null;
+  // How many dice the player must pick, and who picks: Run for Cover (defender,
+  // remove N) takes precedence over Savage Vigor (attacker, keep N); a pool can
+  // realistically carry only one of these flags per attack.
+  let mode = null, target = 0, owner = null;
+  if (removeMax > 0) {
+    mode = 'remove';
+    target = Math.min(removeMax, pool.length);
+    owner = combat.defenderPlayerNum ?? (combat.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null);
+  } else if (keepMax != null && keepMax > 0 && pool.length > keepMax) {
+    mode = 'keep';
+    target = keepMax;
+    owner = combat.attackerPlayerNum;
+  }
+  // If a pick list is already recorded, apply it.
+  if (Array.isArray(combat._atkPickIdxList) && combat._atkPickIdxList.length > 0 && pool.length > 1) {
+    const picked = new Set(combat._atkPickIdxList);
+    const dice = combat._atkPickMode === 'keep'
+      ? pool.filter((_, i) => picked.has(i))   // keep the picked dice
+      : pool.filter((_, i) => !picked.has(i)); // remove the picked dice
+    return { dice };
+  }
+  // Only offer a picker when there is a real choice (heterogeneous pool with
+  // >1 die and more dice than the trim leaves). Otherwise fall back to slice().
+  const distinctColors = new Set(pool.map((c) => String(c).toLowerCase())).size;
+  const picksMeaningful = mode && pool.length > 1 && target > 0 && target < pool.length && distinctColors > 1;
+  if (picksMeaningful && owner != null) {
+    return { needPicker: true, owner, mode, target, pool };
+  }
+  // No meaningful choice — preserve legacy deterministic trim.
+  let dice = [...pool];
+  if (removeMax > 0) dice = dice.slice(0, Math.max(0, dice.length - removeMax));
+  if (keepMax != null && keepMax > 0 && dice.length > keepMax) dice = dice.slice(0, keepMax);
+  return { dice };
+}
+
+/**
+ * Post the attack-die picker (Run for Cover / Savage Vigor). One button per
+ * pool die; pings the OWNER (defender for remove, attacker for keep). The
+ * `handleAtkPick` handler accumulates picks into combat._atkPickIdxList and the
+ * next attack-roll click consumes them. Mirrors _postDefenseDieRemovePicker.
+ */
+async function _postAttackDiePicker(thread, game, combat, pool, target, owner, mode) {
+  const ownerId = getPlayerId(game, owner);
+  const verb = mode === 'keep' ? 'Keep' : 'Remove';
+  const buttons = pool.map((color, idx) =>
+    new ButtonBuilder()
+      .setCustomId(`atk_die_pick_${game.gameId}_${idx}`)
+      .setLabel(`${verb} ${color} die #${idx + 1}`)
+      .setStyle(mode === 'keep' ? ButtonStyle.Primary : ButtonStyle.Danger),
+  );
+  combat._atkPickPool = pool;
+  combat._atkPickTargetCount = target;
+  combat._atkPickMode = mode;
+  combat._atkPickOwnerPN = owner;
+  combat._atkPickIdxList = combat._atkPickIdxList || [];
+  const what = mode === 'keep' ? 'keep' : 'remove';
+  await thread.send(sanitizeMentions({
+    content: `<@${ownerId}> — Pick **${target}** attack die${target > 1 ? 's' : ''} to ${what} from the attack pool [${pool.join(', ')}]:`,
+    allowedMentions: { users: [ownerId] },
+    components: [new ActionRowBuilder().addComponents(buttons)],
+  })).catch(discordCatch);
+}
+
+/**
+ * atk_die_pick_{gameId}_{idx}: owner picks an attack die (remove → Run for
+ * Cover, keep → Savage Vigor). Picks accumulate in combat._atkPickIdxList; once
+ * length === target, the next attack Roll click proceeds with the trimmed pool.
+ */
+export async function handleAtkDiePick(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const m = interaction.customId.match(/^atk_die_pick_([^_]+)_(\d+)$/);
+  if (!m) return;
+  const [, gameId, idxStr] = m;
+  const idx = parseInt(idxStr, 10);
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  if (!combat || combat.gameId !== gameId) {
+    await interaction.followUp({ content: 'No pending combat.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  const ownerPN = combat._atkPickOwnerPN;
+  if (!await requirePlayer(interaction, game, interaction.user.id, ownerPN, canActAsPlayer, 'Only the choosing player may pick.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  const pool = combat._atkPickPool || [];
+  const target = combat._atkPickTargetCount || 1;
+  const mode = combat._atkPickMode || 'remove';
+  combat._atkPickIdxList = combat._atkPickIdxList || [];
+  if (idx < 0 || idx >= pool.length) {
+    await interaction.followUp({ content: 'Invalid die index.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (combat._atkPickIdxList.includes(idx)) {
+    await interaction.followUp({ content: 'That die is already picked.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  combat._atkPickIdxList.push(idx);
+  const chosenColor = pool[idx];
+  const verb = mode === 'keep' ? 'Keeping' : 'Removing';
+  if (combat._atkPickIdxList.length >= target) {
+    try { await interaction.message.edit({ components: [] }).catch(discordCatch); } catch {}
+    const picks = combat._atkPickIdxList.map((i) => `${pool[i]} #${i + 1}`).join(', ');
+    await interaction.message.channel.send(`✅ ${verb} **${picks}** ${mode === 'keep' ? 'in' : 'from'} the attack pool. The attacker may now roll.`).catch(discordCatch);
+  } else {
+    await interaction.message.channel.send(`Picked **${chosenColor}** #${idx + 1}. Pick ${target - combat._atkPickIdxList.length} more.`).catch(discordCatch);
   }
   if (saveGames) saveGames(game.gameId);
 }

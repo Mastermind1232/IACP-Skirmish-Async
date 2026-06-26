@@ -3636,6 +3636,13 @@ export function resolveAbility(abilityId, context) {
       const maxRange = entry.rollOneDieTargetRange || 3;
       const requiresLos = entry.rollOneDieRequiresLos !== false;
       const mpCost = entry.rollOneDieMpCost || 0;
+      // allowFriendly: Dewback Rider Shock Lance reads "Choose A FIGURE within 2
+      // spaces" (any figure, friend or foe), not just hostiles. Opt-in flag —
+      // when set, friendly figures are enumerated too and damage is routed to
+      // the target's actual owning player. (Mirrors targetHostileFigure's
+      // allowFriendly at :824.) The library entry carries no flag, so Shock
+      // Lance is matched by its abilityId here.
+      const _hwrAllowFriendly = !!entry.allowFriendly || abilityId === 'shock_lance_dewback';
       // Compute the activating figure key for per-figure once-per-X gating.
       const _hwrActD = game?.dcActionsData?.[msgId];
       const _hwrSelF = _hwrActD?.selectedFigure ?? 0;
@@ -3678,7 +3685,12 @@ export function resolveAbility(abilityId, context) {
         if (surges) dieParts.push(`${surges} Surge${surges !== 1 ? 's' : ''}`);
         const diceResult = dieParts.length ? dieParts.join(', ') : 'blank';
         const totalDmg = hits; // only Hits count as damage
-        const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
+        // Resolve the target's actual owner: enemy by default, but with
+        // allowFriendly the chosen figure may be friendly, so prefer the player
+        // whose figurePositions actually contains it.
+        const enemyPlayerNum = (_hwrAllowFriendly && game.figurePositions?.[playerNum || 1]?.[targetFigureKey])
+          ? (playerNum || 1)
+          : opponentPlayerNum(playerNum || 1);
         const resultParts = [];
         // Slice 6.13 ext (centralized): use applyDamageWithDefeatCheck.
         let _hwrHadDefeats = false;
@@ -3737,17 +3749,25 @@ export function resolveAbility(abilityId, context) {
       const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
       if (!mapId || !activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
       const enemyPlayerNum = opponentPlayerNum(playerNum || 1);
-      const enemyPositions = game.figurePositions?.[enemyPlayerNum] || {};
+      // Enumerate candidates: enemies always; friendlies too when allowFriendly
+      // (Shock Lance). Exclude the activating figure itself from friendly picks.
+      const candidatePositions = { ...(game.figurePositions?.[enemyPlayerNum] || {}) };
+      if (_hwrAllowFriendly) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
+          if (fk === activatingFigureKey) continue;
+          candidatePositions[fk] = pos;
+        }
+      }
       const { hasLineOfSightByCoord: losCheck, getFigureSize: gfs } = context;
       const validTargets = [];
-      for (const [fk, pos] of Object.entries(enemyPositions)) {
+      for (const [fk, pos] of Object.entries(candidatePositions)) {
         if (!pos) continue;
         const dist = countGameSpaces(game, activatingPos, pos);
         if (dist > maxRange) continue;
         if (requiresLos && typeof losCheck === 'function' && !losCheck(game, activatingPos, pos, getMapData(mapId), gfs)) continue;
         validTargets.push({ figureKey: fk, dist });
       }
-      if (validTargets.length === 0) return { applied: false, manualMessage: `No hostile figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
+      if (validTargets.length === 0) return { applied: false, manualMessage: `No ${_hwrAllowFriendly ? '' : 'hostile '}figures within ${maxRange} spaces${requiresLos ? ' and LOS' : ''}. **${entry.label}** has no valid targets.` };
       return {
         applied: false,
         requiresChoice: true,
@@ -6533,11 +6553,14 @@ export function resolveAbility(abilityId, context) {
     const entry_ = healthState[targetIdx];
     if (!Array.isArray(entry_) || entry_.length < 1) return { applied: false, manualMessage: 'Resolve manually: no health state for defender.' };
     let n = entry.defenderStrain;
-    // Escalating Hostility: +1 Strain per other copy of this card in the discard pile
+    // Escalating Hostility: +1 Strain per OTHER copy of this card in the discard
+    // pile. The just-played copy is already pushed to discard (cc-hand.js:813)
+    // BEFORE this resolves, so subtract 1 to exclude it (otherwise n=2 instead
+    // of 1 when no other copies exist).
     if (entry.defenderStrainPlusDiscardCopies && context.cardName && playerNum) {
       const discardKey = ccDiscardKey(playerNum);
       const discard = game[discardKey] || [];
-      const copiesInDiscard = discard.filter(c => c === context.cardName).length;
+      const copiesInDiscard = Math.max(0, discard.filter(c => c === context.cardName).length - 1);
       n += copiesInDiscard;
     }
     // defenderStrain (Escalating Hostility, Toxic Dart, etc.): the
@@ -7726,9 +7749,9 @@ export function resolveAbility(abilityId, context) {
   // ccEffect: conditionalFocusIfDamagedGte (Furious Charge) — become Focused if suffered >= N damage from this attack
   if (entry.type === 'ccEffect' && typeof entry.conditionalFocusIfDamagedGte === 'number') {
     const { game, playerNum } = context;
-    if (!game || !playerNum) return { applied: false, manualMessage: `Become Focused if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack (resolve manually).` };
+    if (!game || !playerNum) return { applied: false, manualMessage: `Ready this figure's Deployment card if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack (resolve manually).` };
     game.conditionalFocusIfDamagedGte = { playerNum, threshold: entry.conditionalFocusIfDamagedGte };
-    return { applied: true, logMessage: `**Furious Charge** — will automatically become Focused if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack.` };
+    return { applied: true, logMessage: `**Furious Charge** — this figure's Deployment card will automatically be **readied** if you suffer ${entry.conditionalFocusIfDamagedGte}+ Damage from this attack.` };
   }
 
   // ccEffect: nextAttackBonusPierce (Expose Weakness) — CSV row 641/642: "Choose an
@@ -10515,35 +10538,15 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: readyOwnDeploymentCard + endOfRoundSelfDamage (Blaze of Glory) — choiceOptions = your DCs; chosenOption = displayName to ready
   if (entry.type === 'ccEffect' && entry.readyOwnDeploymentCard && typeof entry.endOfRoundSelfDamage === 'number') {
-    const { game, playerNum, dcMessageMeta, chosenOption } = context;
+    const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    if (!chosenOption) {
-      const choiceOptions = [];
-      for (const [, meta] of dcMessageMeta) {
-        if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
-        const name = meta.displayName || meta.dcName;
-        if (name) choiceOptions.push(name);
-      }
-      if (choiceOptions.length === 0) return { applied: false, manualMessage: 'No Deployment cards to ready.' };
-      return {
-        applied: false,
-        requiresChoice: true,
-        choiceOptions,
-        choiceCount: choiceOptions.length,
-        manualMessage: 'Choose which Deployment card to ready.',
-      };
-    }
-    const nameLower = String(chosenOption).toLowerCase().trim();
-    let targetMsgId = null;
-    for (const [msgId, meta] of dcMessageMeta) {
-      if (meta.gameId !== game.gameId || meta.playerNum !== playerNum) continue;
-      const displayName = meta.displayName || meta.dcName || '';
-      if ((displayName || '').toLowerCase() === nameLower || displayName.toLowerCase().includes(nameLower) || nameLower.includes(displayName.toLowerCase())) {
-        targetMsgId = msgId;
-        break;
-      }
-    }
-    if (!targetMsgId) return { applied: false, manualMessage: `Could not find Deployment card matching "${chosenOption}".` };
+    // Blaze of Glory is unique to IG-88 and reads "Ready YOUR Deployment card" —
+    // it readies the ACTIVATING IG-88 figure's own DC, not any DC the player
+    // chooses. Resolve the activating DC via findActiveActivationMsgId (the
+    // readyOwnDeploymentCard pattern Son of Skywalker uses at :15417) instead of
+    // offering a free menu of every DC.
+    const targetMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: no IG-88 activation in progress to ready your Deployment card.' };
     const dcList = getDcList(game, playerNum) || [];
     const dcMessageIds = getDcMessageIds(game, playerNum) || [];
     const idx = dcMessageIds.indexOf(targetMsgId);
@@ -10558,7 +10561,7 @@ export function resolveAbility(abilityId, context) {
     };
     return {
       applied: true,
-      logMessage: `Readied your Deployment card. At end of round you will suffer ${entry.endOfRoundSelfDamage} Damage.`,
+      logMessage: `**Blaze of Glory** — Readied **${dcMessageMeta.get(targetMsgId)?.displayName || dcMessageMeta.get(targetMsgId)?.dcName || "IG-88's"}** Deployment card. At end of round it will suffer ${entry.endOfRoundSelfDamage} Damage.`,
       readyDcMsgIds: [targetMsgId],
       refreshDcEmbed: true,
       refreshDcEmbedMsgIds: [targetMsgId],
@@ -11266,14 +11269,17 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.pickpocketVpByAccuracy) {
     const { game, playerNum, choiceIndex } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const accuracy = choiceIndex != null && choiceIndex >= 0 && choiceIndex <= 3 ? choiceIndex : null;
+    // A green attack die has NO accuracy-0 face — every face shows 1/2/3
+    // accuracy. Offer ['1','2','3'] mapping accuracy = choiceIndex + 1 (no
+    // impossible "0 (miss)" option).
+    const accuracy = choiceIndex != null && choiceIndex >= 0 && choiceIndex <= 2 ? choiceIndex + 1 : null;
     if (accuracy === null) {
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: ['0 (miss)', '1', '2', '3'],
-        choiceCount: 4,
-        manualMessage: 'Roll 1 green die; enter the Accuracy result (0–3). Opponent loses that many VP and you gain that many VP.',
+        choiceOptions: ['1', '2', '3'],
+        choiceCount: 3,
+        manualMessage: 'Roll 1 green die; enter the Accuracy result (1–3). Opponent loses that many VP and you gain that many VP.',
       };
     }
     const oppNum = opponentPlayerNum(playerNum);
@@ -12230,10 +12236,18 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: jundlandTerrorEffect (Jundland Terror) — choose ONE
-  // friendly Tusken Raider / Bantha Rider; chosen figure gains 2 MP
-  // (end-of-round, out-of-activation → picker, no bank) and may
-  // interrupt to perform an attack (free-attack flag persists for
-  // their next activation).
+  // friendly Tusken Raider / Bantha Rider; chosen figure gains 2 MP and
+  // "may interrupt to perform an attack or Special Action" as an IMMEDIATE
+  // end-of-round interrupt (CSV end_of_round).
+  //
+  // IMMEDIATE-EOR resolution (2026-06-26): the 2 MP are granted via the
+  // out-of-activation Move-X picker (posted NOW to the game log by the
+  // apply-ability layer from pendingMoveXMsgId), and the free ATTACK is
+  // presented NOW in the EOR window by chaining a freeAttackPrompt nextAction
+  // off that picker (mirrors Overload Drive / Fell Swoop). The free SPECIAL
+  // ACTION still rides freeSpecialActionPending → next activation, because no
+  // out-of-activation standalone special-action picker exists yet (see flag
+  // below); the attack branch is the fully-immediate path.
   // G37/C21: max 1 copy per EOR phase.
   if (entry.type === 'ccEffect' && entry.jundlandTerrorEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey, chosenOption } = context;
@@ -12277,8 +12291,10 @@ export function resolveAbility(abilityId, context) {
         game.freeSpecialActionPending = game.freeSpecialActionPending || {};
         game.freeSpecialActionPending[chosenFigureKey] = { from: 'Jundland Terror' };
       } else {
-        // FREE ATTACK: rides on the standard freeAttackBonusPending flag for the
-        // figure's next-activation interrupt.
+        // FREE ATTACK (immediate EOR interrupt): arm freeAttackBonusPending and
+        // chain a freeAttackPrompt nextAction off the 2-MP Move-X picker, so the
+        // "Declare Attack" prompt is posted NOW (to the game log, out of
+        // activation) once the move drains — not deferred to next activation.
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[chosenFigureKey] = true;
         // Legacy advertise-flag (Bantha Rider Trample / Tusken Cycler attack-
@@ -12287,8 +12303,9 @@ export function resolveAbility(abilityId, context) {
         game.jundlandTerrorSpecialOption[chosenFigureKey] = true;
       }
       // Out-of-activation 2-MP grant on a non-activating friendly →
-      // setupPendingMoveX, bypassCosts: false. The chosen interrupt (free attack
-      // or free special) stays armed for the figure's next activation.
+      // setupPendingMoveX, bypassCosts: false. The MP picker posts immediately
+      // (pendingMoveXMsgId below). For the attack mode, chain the immediate
+      // free-attack prompt; the special mode stays armed for next activation.
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[targetMsgId] = {
         remaining: 2,
@@ -12299,16 +12316,24 @@ export function resolveAbility(abilityId, context) {
         threadId: null,
         bypassCosts: false,
         msgId: targetMsgId,
-        nextAction: null,
+        nextAction: wantsSpecial ? null : {
+          type: 'freeAttackPrompt',
+          payload: {
+            msgId: targetMsgId,
+            playerNum,
+            figureKey: chosenFigureKey,
+            sourceLabel: 'Jundland Terror',
+          },
+        },
       };
       const _modeText = wantsSpecial
-        ? 'may interrupt to perform a **free Special Action**'
-        : 'may interrupt to perform a **free attack**';
+        ? 'may interrupt to perform a **free Special Action** on their next activation'
+        : 'may interrupt to perform a **free attack** now (after spending the 2 MP)';
       return {
         applied: true,
         pendingMoveXMsgId: targetMsgId,
         activeMsgId: targetMsgId,
-        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and ${_modeText} on their next activation.`,
+        logMessage: `**Jundland Terror** — **${targetName}** gains **2 MP** (spend at once, no bank) and ${_modeText}.`,
       };
     }
     // Phase 1: enumerate friendly Tusken / Bantha figures on the board.
@@ -12404,9 +12429,38 @@ export function resolveAbility(abilityId, context) {
     // cards are stashed on game.pendingBuiltOnHope.
     if (game.pendingBuiltOnHope?.[playerNum] && (choiceIndex === 0 || choiceIndex === 1)) {
       const pend = game.pendingBuiltOnHope[playerNum];
+      // Phase 3b: the side (top/bottom) was already chosen and we are now
+      // resolving the ORDER of the 2 remaining cards (CSV: "in any order").
+      // pend.side is 'top' | 'bottom'; choiceIndex picks which card is placed
+      // FIRST (closest to the top when side='top', closest to the bottom when
+      // side='bottom') — see ordering construction below.
+      if (pend.awaitingOrder && pend.remaining.length === 2) {
+        const deck = [...(game[deckKey] || [])];
+        // choiceIndex 0 → original order; choiceIndex 1 → swapped order.
+        const ordered = choiceIndex === 1 ? [pend.remaining[1], pend.remaining[0]] : [pend.remaining[0], pend.remaining[1]];
+        // `ordered` is listed top-of-result-first. top of deck = end of array.
+        if (pend.side === 'top') deck.push(...[...ordered].reverse());
+        else deck.unshift(...ordered);
+        game[deckKey] = deck;
+        delete game.pendingBuiltOnHope[playerNum];
+        return { applied: true, logMessage: `**Built on Hope** — Drew 1 Command card from top 3. Other 2 card(s) placed on ${pend.side} of deck in the chosen order.` };
+      }
+      // Phase 3a: side chosen. If 2 cards remain, the card lets you place them
+      // "in any order" — offer the relative ordering as a follow-up instead of
+      // a fixed top-of-deck-first order. With only 1 card, order is moot.
+      if (pend.remaining.length >= 2) {
+        const side = choiceIndex === 0 ? 'top' : 'bottom';
+        game.pendingBuiltOnHope[playerNum] = { remaining: pend.remaining, side, awaitingOrder: true };
+        return {
+          requiresChoice: true,
+          choiceOptions: [
+            `Order: keep shown order on ${side}`,
+            `Order: reverse the 2 cards on ${side}`,
+          ],
+        };
+      }
       const deck = [...(game[deckKey] || [])];
-      // (top of deck = end of array). 0 = top, 1 = bottom. Ordering within the
-      // group preserves the order shown to the player (top-of-deck-first).
+      // (top of deck = end of array). 0 = top, 1 = bottom. Single remaining card.
       if (choiceIndex === 0) deck.push(...[...pend.remaining].reverse());
       else deck.unshift(...pend.remaining);
       game[deckKey] = deck;
@@ -14475,17 +14529,24 @@ export function resolveAbility(abilityId, context) {
     // Determine attacker info from combat
     const attackerFk = combat?.attackerFigureKey || null;
     const attackerPn = combat?.attackerPlayerNum || opponentPlayerNum(playerNum);
-    // Check adjacency (for 3 dmg vs 1 dmg)
+    // Check adjacency (for 3 dmg vs 1 dmg) and the CSV "within 4 spaces of the
+    // attacker" conditional (row 597). The reaction path enforces within-4 in
+    // post-combat.js:103; the hand path must too — otherwise the 1/3 damage
+    // applies by adjacency alone with no range gate.
+    const _dpAttackerPos = attackerFk ? game.figurePositions?.[attackerPn]?.[attackerFk] : null;
     let isAdjacent = false;
-    if (actPos && attackerFk) {
-      const attackerPos = game.figurePositions?.[attackerPn]?.[attackerFk];
-      if (attackerPos) {
-        const boardState = getBoardStateForMovement(game, null);
-        const adjRaw = boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || [];
-        isAdjacent = adjRaw.map((s) => String(s).toLowerCase()).includes(String(attackerPos).toLowerCase());
-      }
+    if (actPos && _dpAttackerPos) {
+      const boardState = getBoardStateForMovement(game, null);
+      const adjRaw = boardState?.mapSpaces?.adjacency?.[String(actPos).toLowerCase()] || [];
+      isAdjacent = adjRaw.map((s) => String(s).toLowerCase()).includes(String(_dpAttackerPos).toLowerCase());
     }
+    const _dpWithin4 = !!(actPos && _dpAttackerPos && countGameSpaces(game, actPos, _dpAttackerPos) <= 4);
     if (choiceIndex !== undefined && choiceIndex !== null) {
+      // Short-circuit: if Fennec is not within 4 spaces of the attacker, the
+      // card does nothing (mirror post-combat.js:103). Still resolve cleanly.
+      if (attackerFk && !_dpWithin4) {
+        return { applied: true, logMessage: '**Dangerous Prey** — no effect (not within 4 spaces of the attacker).' };
+      }
       const dmg = choiceIndex === 0 ? (isAdjacent ? 3 : 1) : 0;
       let dmgNote = `Apply ${dmg} Dmg to attacker manually`;
       if (dmg > 0 && attackerFk && dcHealthState) {
@@ -14496,20 +14557,39 @@ export function resolveAbility(abilityId, context) {
           const fi = fkM ? parseInt(fkM[2], 10) : 0;
           if (hs[fi]) {
             // Damage pipeline (alexanbv 2026-06-22) — credits the card-player.
-            const _r = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, fi, dmg, attackerPn, { sourceLabel: entry.label || abilityId || 'CC ability', attackerPlayerNum: playerNum, figureKey: fk });
+            const _r = applyDamageWithDefeatCheck(dcHealthState, game, figMsgId, fi, dmg, attackerPn, { sourceLabel: entry.label || abilityId || 'CC ability', attackerPlayerNum: playerNum, figureKey: attackerFk });
             dmgNote = `${dmg} Dmg (HP: ${_r.prevHp}→${_r.newHp})`;
           }
         }
       }
-      // Grant 2 MP to Fennec
-      if (msgId) {
-        addMovementPoints(game, msgId, 2);
+      // Move up to 2 spaces (Move-X picker, bypassCosts:true per CRR MOVE-017),
+      // NOT a flat 2-MP grant — matches the reaction path (post-combat.js:120).
+      let _dpPmxMsgId = null;
+      if (msgId && actKeys.length) {
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[msgId] = {
+          remaining: 2,
+          source: 'Dangerous Prey',
+          playerNum,
+          figureKey: actKeys[0],
+          dcName: meta?.dcName || dcNameFromFigureKey(actKeys[0]),
+          threadId: null,
+          bypassCosts: true,
+          msgId,
+          nextAction: null,
+        };
+        _dpPmxMsgId = msgId;
       }
       const atkName = attackerFk ? dcNameFromFigureKey(attackerFk) : 'attacker';
-      return { applied: true, logMessage: `**Dangerous Prey** — **${atkName}**: ${dmgNote}${isAdjacent ? ' (adjacent — 3 dmg)' : ' (within 4 — 1 dmg)'}. Fennec gains 2 MP.`, refreshDcEmbed: dmg > 0 };
+      return {
+        applied: true,
+        logMessage: `**Dangerous Prey** — **${atkName}**: ${dmgNote}${isAdjacent ? ' (adjacent — 3 dmg)' : ' (within 4 — 1 dmg)'}. Fennec may move up to 2 spaces.`,
+        refreshDcEmbed: dmg > 0,
+        ...(_dpPmxMsgId ? { pendingMoveXMsgId: _dpPmxMsgId, activeMsgId: _dpPmxMsgId } : {}),
+      };
     }
     const dmgLabel = isAdjacent ? '3 Damage (adjacent)' : attackerFk ? '1 Damage (within 4)' : '1 Damage';
-    return { requiresChoice: true, choiceOptions: [`Apply ${dmgLabel} to attacker + move 2`, 'Just move 2 (skip damage)'] };
+    return { requiresChoice: true, choiceOptions: [`Apply ${dmgLabel} to attacker + move up to 2`, 'Just move up to 2 (skip damage)'] };
   }
 
   // ccEffect: rightBackAtYaEffect (Right Back At Ya!) — attacker suffers 1 dmg (3 if Block Token spent)
@@ -14717,8 +14797,19 @@ export function resolveAbility(abilityId, context) {
   // friendly Mobile figures gain Personal Combat Shield (SCUM) or Gar Saxon's
   // Flamethrower (IMPERIAL)." The Choose a Side figure itself is EXCLUDED ("other").
   if (entry.type === 'ccEffect' && entry.chooseASideEffect) {
-    const { game, playerNum, dcMessageMeta, choiceIndex } = context;
+    const { game, playerNum, dcMessageMeta } = context;
+    let { choiceIndex } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
+    // Part 2 is MANDATORY and affiliation-keyed (SCUM → Personal Combat Shield,
+    // IMPERIAL → Gar Saxon's Flamethrower), NOT a free player choice. Derive the
+    // branch from the playing army's affiliation and auto-apply (mirrors the
+    // affiliationDetermined / firstSeenArmyAffiliation pattern at :529-537). Only
+    // fall through to the prompt when the affiliation is genuinely ambiguous.
+    if (choiceIndex == null) {
+      const _csAff = (firstSeenArmyAffiliation(getDcList(game, playerNum) || [], getDcEffects()) || '').toUpperCase();
+      if (_csAff === 'SCUM') choiceIndex = 0;
+      else if (_csAff === 'IMPERIAL') choiceIndex = 1;
+    }
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     // The activating (card-playing) figure — excluded by "OTHER friendly Mobile".
     const selfFigureKeys = msgId ? getFigureKeysForDcMsg(game, playerNum, dcMessageMeta?.get(msgId)) : [];
@@ -14842,19 +14933,19 @@ export function resolveAbility(abilityId, context) {
         ...(_navStrainPayload ? { pendingStrainCost: _navStrainPayload } : {}),
       };
     }
-    const dcEffects = getDcEffects();
-    const droidFks = [];
-    const droidLabels = [];
-    for (const [fk] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-      const dcN = dcNameFromFigureKey(fk);
-      const kws = (dcEffects[dcN]?.keywords || []).map((k) => String(k).toUpperCase());
-      if (kws.includes('DROID')) { droidFks.push(fk); droidLabels.push(dcN); }
-    }
-    if (!droidFks.length) {
-      const strainNote = applyStrain();
-      return { applied: true, logMessage: `**Navigation Upgrade** — ${strainNote}. No friendly DROIDs on board. Placed as Attachment (exhaust during DROID activation for +1 MP).`, refreshDcEmbed: true };
-    }
-    return { requiresChoice: true, choiceOptions: droidLabels.map((n) => `Give 1 MP to ${n}`), choiceValues: droidFks };
+    // INITIAL PLAY (part 1) — CSV row 750 part 1 is ONLY "Take 1 Strain and place
+    // this card" as a READY attachment. The +1 MP DROID grant is the SEPARATE
+    // part-2 EXHAUST action, surfaced later as its own button on a friendly
+    // DROID's activation (handleExhaustNavUpgrade in handlers/interrupts.js). So
+    // on first play we must NOT force an immediate DROID MP-grant choice; just
+    // pay the strain (queued through the applyStrain pipeline) and place the
+    // attachment ready with no MP granted.
+    return {
+      applied: true,
+      logMessage: '**Navigation Upgrade** — 1 Strain (queued). Placed as a **readied** Attachment — exhaust it during a friendly DROID\'s activation for +1 MP.',
+      refreshDcEmbed: true,
+      ...(_navStrainPayload ? { pendingStrainCost: _navStrainPayload } : {}),
+    };
   }
 
   // ccEffect: findsmanMeditationEffect (Findsman Meditation) — pick opponent group; Zuckuss may interrupt their first action

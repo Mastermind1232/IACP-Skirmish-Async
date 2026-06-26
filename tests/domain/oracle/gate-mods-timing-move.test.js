@@ -92,10 +92,14 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     assert.equal(combat.bonusAccuracy || 0, 0, 'no Slippery → no accuracy change');
   });
 
-  it('Take Cover (Jawa Scavenger): +1 Block / -1 Evade applied once via the mods window', async () => {
+  it('Take Cover (Jawa Scavenger): now INTERACTIVE — does NOT auto-apply in the passive pass', async () => {
+    // alexanbv audit 2026-06-26 (P2): Take Cover is "you MAY apply +1 Block and
+    // -1 Evade" — re-registered kind:'interactive' so the forced -1 Evade downside
+    // is no longer auto-applied. The mods passive pass must NOT touch it now; the
+    // +1 Block / -1 Evade only land when the defender clicks Apply.
     const combat = await attackInto('Jawa Scavenger (Regular)');
-    assert.equal(combat.bonusBlock, 1, 'Take Cover must apply +1 Block exactly once');
-    assert.equal(combat.bonusEvade, -1, 'Take Cover must apply -1 Evade exactly once');
+    assert.equal(combat.bonusBlock || 0, 0, 'Take Cover no longer auto-applies +1 Block (interactive)');
+    assert.equal(combat.bonusEvade || 0, 0, 'Take Cover no longer auto-applies -1 Evade (interactive)');
   });
 
   it('Gamorrean Honor Guard: +1 Block on a ranged attack, once', async () => {

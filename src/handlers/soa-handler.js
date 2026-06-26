@@ -201,14 +201,22 @@ export async function handleSoaPick(interaction, ctx) {
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'mounted') {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Gain 3 MP)').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-    );
+    // Mounted is an AUTO-GRANT, not a choice (alexanbv 2026-06-26): "Mounted
+    // CAN be an auto grant, the MP are always banked, timing doesn't matter."
+    // Grant 3 MP immediately into the same bank the old Apply path used
+    // (grantMovementBank keyed by sourceMsgId), then consume the descriptor
+    // and advance the chooser. No Skip option. Informational log only.
+    grantMovementBank(game, desc.sourceMsgId, 3);
     await interaction.message.channel.send({
-      content: `\u{1F40E} **Mounted** — **${displayName}** may gain **3 MP** at start of activation:`,
-      components: [row],
+      content: `\u{1F40E} **Mounted** — **${displayName}** gains **3 MP** (auto, banked).`,
     }).catch(discordCatch);
+    if (ctx.logGameAction) {
+      await ctx.logGameAction(game, ctx.client, `\u{1F40E} **Mounted** — ${displayName} gained 3 MP.`, { phase: 'ROUND', icon: 'card' });
+    }
+    consumeDescriptor(game, desc.id);
+    await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+    saveGames(game.gameId);
+    return;
   } else if (desc.subPromptKey === 'hunger_regular') {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Gain 2 MP)').setStyle(ButtonStyle.Primary),
@@ -237,12 +245,15 @@ export async function handleSoaPick(interaction, ctx) {
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'madness') {
+    // Madness is MANDATORY but player-triggered (alexanbv 2026-06-26): the
+    // player picks WHEN (other Start-of-Round effects can add/remove CCs from
+    // hand, so order matters) — but it CANNOT be skipped. Only a single
+    // "Resolve Madness" button; no Skip/decline. It stays pending until used.
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Apply (Strain + Focus, if hand ≤ 2)').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`soa_fire_${gameId}_${desc.id}_apply`).setLabel('Resolve Madness').setStyle(ButtonStyle.Primary),
     );
     await interaction.message.channel.send({
-      content: `\u{1F4A2} **Madness** — **${displayName}**: if you have ≤2 Command Cards in hand at fire time, suffer **1 Strain** and become **Focused**:`,
+      content: `\u{1F4A2} **Madness** — **${displayName}**: mandatory — if you have ≤2 Command Cards in hand when resolved, suffer **1 Strain** and become **Focused**. Resolve when ready (must be resolved before this activation proceeds):`,
       components: [row],
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'into_the_fray') {
@@ -484,7 +495,7 @@ export async function handleSoaPick(interaction, ctx) {
       return;
     }
     await interaction.message.channel.send({
-      content: `\u{1F9E0} **Long-Laid Plans** — **${displayName}** distributes **${desc.extras?.remainingCount ?? 1}** Power Tokens (each a different type) among friendlies within 3:`,
+      content: `\u{1F9E0} **Long-Laid Plans** — **${displayName}** distributes **${desc.extras?.remainingCount ?? 1}** Power Tokens (each a different type) among friendlies:`,
       components: _soaFigTokenComponents(gameId, desc.id, candidates, types, 'Skip remaining'),
     }).catch(discordCatch);
   } else if (desc.subPromptKey === 'arms_distribution') {
@@ -825,18 +836,8 @@ export async function handleSoaFire(interaction, ctx) {
       return;
     }
 
-  // --- Mounted (Captain Terro / Kuiil / Dewback) ---
-  } else if (desc.subPromptKey === 'mounted') {
-    if (choiceKey === 'apply') {
-      grantMovementBank(game, desc.sourceMsgId, 3);
-      await interaction.message.edit({ content: `\u{1F40E} **Mounted** — **${displayName}** gained **3 MP**.`, components: [] }).catch(discordCatch);
-      if (logGameAction) await logGameAction(game, client, `\u{1F40E} **Mounted** — ${displayName} gained 3 MP.`, { phase: 'ROUND', icon: 'card' });
-    } else if (choiceKey === 'skip') {
-      await interaction.message.edit({ content: `\u{1F40E} **Mounted** — Skipped.`, components: [] }).catch(discordCatch);
-    } else {
-      await interaction.followUp({ content: `Unknown Mounted choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
-      return;
-    }
+  // --- Mounted (Captain Terro / Kuiil / Dewback): auto-granted in
+  // handleSoaPick (alexanbv 2026-06-26), never reaches the fire handler. ---
 
   // --- Hunger Regular (Wampa) ---
   } else if (desc.subPromptKey === 'hunger_regular') {
@@ -905,10 +906,10 @@ export async function handleSoaFire(interaction, ctx) {
       } else {
         await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Hand size is ${hand.length} (>2); no effect.`, components: [] }).catch(discordCatch);
       }
-    } else if (choiceKey === 'skip') {
-      await interaction.message.edit({ content: `\u{1F4A2} **Madness** — Skipped.`, components: [] }).catch(discordCatch);
     } else {
-      await interaction.followUp({ content: `Unknown Madness choice: ${choiceKey}`, ephemeral: true }).catch(discordCatch);
+      // Madness is mandatory + cannot be skipped (alexanbv 2026-06-26). The
+      // only valid choiceKey is 'apply' (the "Resolve Madness" button).
+      await interaction.followUp({ content: `Madness must be resolved (no Skip): ${choiceKey}`, ephemeral: true }).catch(discordCatch);
       return;
     }
 

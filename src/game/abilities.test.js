@@ -1557,24 +1557,28 @@ test('resolveAbility Roar with chosenFigureKey applies Stun to hostile figures',
   assert.ok(game.figureConditions['Nexu-2-0']?.includes('Stun'));
 });
 
-test('resolveAbility Blaze of Glory first call returns DC choice list', () => {
+test('resolveAbility Blaze of Glory requires an active IG-88 activation', () => {
+  // Corrected behavior (audit 2026-06-26): Blaze of Glory is unique to IG-88
+  // and readies the ACTIVATING figure's own DC — it no longer offers a free
+  // menu of every DC. With no active activation it returns a manualMessage.
   const msgId = 'msg-bog';
-  const game = { gameId: 'g-bog' };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
+  const game = { gameId: 'g-bog' }; // no dcActionsData → no active activation
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog', playerNum: 1, dcName: 'IG-88', displayName: 'IG-88 [Group 1]' }]]);
   const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta });
-  assert.strictEqual(result.requiresChoice, true);
-  assert.ok(result.choiceOptions?.includes('Luke [Group 1]'));
+  assert.strictEqual(result.applied, false);
+  assert.ok(result.manualMessage);
 });
 
-test('resolveAbility Blaze of Glory second call readies DC and sets EOR damage', () => {
+test('resolveAbility Blaze of Glory readies the activating DC and sets EOR damage', () => {
   const msgId = 'msg-bog2';
   const game = {
     gameId: 'g-bog2',
+    dcActionsData: { [msgId]: { remaining: 2 } }, // active activation
     p1DcMessageIds: [msgId],
-    p1DcList: [{ dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]', exhausted: true }],
+    p1DcList: [{ dcName: 'IG-88', displayName: 'IG-88 [Group 1]', exhausted: true }],
   };
-  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke [Group 1]' }]]);
-  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta, chosenOption: 'Luke [Group 1]' });
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'IG-88', displayName: 'IG-88 [Group 1]' }]]);
+  const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.strictEqual(game.p1DcList[0].exhausted, false);
   assert.strictEqual(game.endOfRoundSelfDamage[1].damage, 3);

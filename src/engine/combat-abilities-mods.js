@@ -506,9 +506,12 @@ registerCombatAbility({
   },
 });
 
-// Take Cover (Jawa Scavenger) — while defending, +1 Block and -1 Evade.
+// Take Cover (Jawa Scavenger) — CSV resolution=prompt: "you MAY apply +1 Block
+// and -1 Evade". INTERACTIVE (Apply/Skip) so the defender is never forced to eat
+// the -1 Evade downside when they would decline (mirrors 'agile'). Resolver:
+// COMBAT_RESOLVERS.take_cover in handlers/combat.js.
 registerCombatAbility({
-  id: 'take_cover', name: 'Take Cover', windows: ['mods'], side: 'defender', kind: 'passive',
+  id: 'take_cover', name: 'Take Cover', windows: ['mods'], side: 'defender', kind: 'interactive',
   applies: (game, combat, side, deps) => {
     const dcName = defenderDcNameOf(combat);
     return !!dcName && hasTakeCoverAbility(ids(eff(deps, dcName)));

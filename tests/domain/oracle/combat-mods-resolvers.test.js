@@ -31,6 +31,19 @@ describe('mods resolvers: attacker', () => {
     assert.equal(c3.surgeBonus, 1);
   });
 
+  it('call_the_shots skip applies no bonus and burns no once-per-round limit', async () => {
+    // Audit fix (P3): Skip must not stamp roundFigureAbilityUsed. With no bonus
+    // chosen the resolver records nothing on the limit map and adds no modifier.
+    const g = { figurePositions: { 1: {} }, selectedMap: { id: 'm' }, roundFigureAbilityUsed: {} };
+    const c = { attackerPlayerNum: 1, attackerFigureKey: 'X-1-0' };
+    await COMBAT_RESOLVERS.call_the_shots.apply('skip', baseArgs(c, g));
+    assert.equal(c.callTheShotsResolved, true);
+    assert.equal(c.bonusAccuracy, undefined);
+    assert.equal(c.bonusHits, undefined);
+    assert.equal(c.surgeBonus, undefined);
+    assert.deepEqual(g.roundFigureAbilityUsed, {});
+  });
+
   it('heavy_repeater skip resolves without strain', async () => {
     const c = {}; await COMBAT_RESOLVERS.heavy_repeater.apply('skip', baseArgs(c));
     assert.equal(c.heavyRepeaterResolved, true);
@@ -63,6 +76,15 @@ describe('mods resolvers: defender', () => {
     const c = { defenseRoll: { block: 1 } }; await COMBAT_RESOLVERS.agile.apply('apply', baseArgs(c));
     assert.equal(c.agileJetTrooperApplied, true);
     assert.equal((c.bonusEvade || 0), 1); // 1 block → 1 evade
+  });
+
+  it('take_cover (Jawa): apply → +1 Block / -1 Evade; skip → declines the downside', async () => {
+    // Audit fix (P2/P3): interactive may-prompt — Skip must NOT force the -1 Evade.
+    const cA = {}; await COMBAT_RESOLVERS.take_cover.apply('apply', baseArgs(cA));
+    assert.equal(cA.bonusBlock, 1); assert.equal(cA.bonusEvade, -1); assert.equal(cA.takeCoverResolved, true);
+    const cS = {}; await COMBAT_RESOLVERS.take_cover.apply('skip', baseArgs(cS));
+    assert.equal(cS.takeCoverResolved, true);
+    assert.equal(cS.bonusBlock, undefined); assert.equal(cS.bonusEvade, undefined);
   });
 
   it('get_down block/evade', async () => {
@@ -199,6 +221,20 @@ describe('mods passives: auto-fire effects', () => {
     assert.equal(c1.defenseRoll.dodge, false); assert.equal(c1.defenseRoll.block, 2); assert.equal(c1.defenseRoll.evade, 1);
     const c2 = { defenseRoll: { block: 1, dodge: true }, soresuFormFigKey: 'K-1-0' }; await _fireModsPassive('defender', 'soresu', thread, {}, c2, {});
     assert.equal(c2.defenseRoll.dodge, false); assert.equal(c2.defenseRoll.block, 3); assert.equal(c2.soresuFormFigKey, null);
+  });
+  it('defensive_stance + soresu scale by the Dodge COUNT (convert EACH Dodge)', async () => {
+    // Audit fix (P7): 2 Dodge → +4 Block / +2 Evade, not a flat +2 / +1.
+    const c1 = { defenseRoll: { block: 1, evade: 0, dodge: 2 } }; await _fireModsPassive('defender', 'defensive_stance', thread, {}, c1, {});
+    assert.equal(c1.defenseRoll.dodge, false);
+    assert.equal(c1.defenseRoll.block, 1 + 2 * 2); // 5
+    assert.equal(c1.defenseRoll.evade, 0 + 1 * 2); // 2
+    // Soresu (no target → no Kanan-strain branch): 3 Dodge → +6 Block / +3 Evade.
+    const c2 = { defenseRoll: { block: 0, evade: 0, dodge: 3 }, soresuFormFigKey: 'K-1-0' };
+    await _fireModsPassive('defender', 'soresu', thread, {}, c2, {});
+    assert.equal(c2.defenseRoll.dodge, false);
+    assert.equal(c2.defenseRoll.block, 6);
+    assert.equal(c2.defenseRoll.evade, 3);
+    assert.equal(c2.soresuFormFigKey, null);
   });
   it('lucky logs without throwing', async () => {
     await assert.doesNotReject(() => _fireModsPassive('defender', 'lucky', thread, {}, {}, {}));

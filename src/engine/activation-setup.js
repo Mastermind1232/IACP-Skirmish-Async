@@ -858,19 +858,23 @@ export async function finalizeActivation({
   }
 
   // D15. Droid Kit (Iden Versio): NOT SoA per destruct 2026-05-07 —
-  // fires anytime during activation. Per destruct: Dio in same space →
-  // gain a **Damage** token only (NOT all 4 token types — the previous
-  // 4-button picker was a bug). Single Apply / Skip prompt.
+  // fires anytime during activation. Per alexanbv 2026-06-26: "CSV is
+  // correct, the player can gain any token of choice." Restore the 4-way
+  // token picker (Damage / Surge / Block / Evade); the activation.js handler's
+  // tokenMap already supports all four.
   if (dcName === 'Iden Versio') {
     const _dkDgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _dkSelfFk = `${dcName}-${_dkDgIndex}-0`;
     const _dkResult = detectDroidKitTrigger(game, playerNum, _dkSelfFk);
     if (_dkResult.applicable) {
       const dkRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_damage`).setLabel('Apply (Gain 1 Damage Token)').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_damage`).setLabel('Damage').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_surge`).setLabel('Surge').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_block`).setLabel('Block').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_evade`).setLabel('Evade').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`act_passive_${gameId}_${msgId}_droidkit_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
-      await thread.send({ content: `🤖 **Droid Kit** — At any point during this activation, while **Dio** is in **${displayName}**'s space, you may gain **1 Damage Token**:`, components: [dkRow] }).catch(discordCatch);
+      await thread.send({ content: `🤖 **Droid Kit** — At any point during this activation, while **Dio** is in **${displayName}**'s space, you may gain **1 Power Token** of your choice:`, components: [dkRow] }).catch(discordCatch);
     } else {
       await thread.send({ content: `🤖 **Droid Kit** — ${_dkResult.reason}; no Damage Token available.` }).catch(discordCatch);
     }

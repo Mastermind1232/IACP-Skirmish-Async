@@ -29,7 +29,7 @@ import {
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure, handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
-import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleKtpRegularGate, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
+import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleKtpRegularGate, handleAtkDiePick, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleDonGate, handleSquadCommandFocus } from './combat.js';
 import { handleAarFire, handleAarDone, handleAarPlayCc, handleAarCcPick } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -349,6 +349,7 @@ register('dongate_skip_', handleDonGate, 'combat');
 register('combat_token_', handleCombatToken, 'combat');
 register('od_dieswap_', handleOnDeclareDieSwap, 'combat');
 register('def_remove_pick_', handleCqDefPick, 'combat');
+register('atk_die_pick_', handleAtkDiePick, 'combat');
 register('bl_friendly_', handleBlFriendlyPick, 'combat');
 register('unhinged_director_', handleUnhingedDirectorChoice, 'combat');
 // Unhinged Director Strain absorb handler RETIRED 2026-05-09 — the

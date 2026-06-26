@@ -1403,11 +1403,15 @@ WHEN_DEFEATED_HOOKS.push({
   probe: (game, opts) => {
     if (!opts.figureKey || !opts.controllerPlayerNum) return false;
     if (!opts.defeatedPos) return false;
-    // Defeated figure must be non-GUARDIAN (per card text).
+    // Defeated figure must be non-GUARDIAN and non-companion (per card text).
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const eff = getDcEffects()?.[dcName];
     const kws = (eff?.keywords || []).map(k => String(k).toUpperCase());
     if (kws.includes('GUARDIAN')) return false;
+    // A defeated companion figure (its own entry carries `companion`) does not
+    // trigger Vengeance/Forward Vengeance — mirrors the GUARDIAN exclusion and
+    // the dedicated forward_vengeance_royal_guard_elite move hook below.
+    if (eff?.companion) return false;
     // Same-side RG must exist adjacent to defeated position.
     const ms = getMapData(game.selectedMap?.id);
     const adj = (ms?.adjacency?.[String(opts.defeatedPos).toLowerCase()] || [])

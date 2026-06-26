@@ -36,7 +36,9 @@ const BATCH = [
   ['Force Rush',            ['mpBonus']],
   ['Force Surge',           ['mpBonus', 'chooseAdjacentHostileThen']],
   ['Fuel Upgrade',          ['vehicleDefenseBonusEvadeRound', 'vehicleSpeedBonusRound']],
-  ['Furious Charge',        ['applyFocus', 'conditionalFocusIfDamagedGte']],
+  // applyFocus removed 2026-06-26 (audit P11): it was inert/stale — the live
+  // effect readies the DC. conditionalFocusIfDamagedGte stays (load-bearing).
+  ['Furious Charge',        ['conditionalFocusIfDamagedGte']],
   ['Get Behind Me!',        ['mpBonus', 'attackTargetSwap', 'getsBehindMe']],
   ['Grisly Contest',        ['chooseAdjacentHostileThen']],
   ['Guild Programming',     ['applyFocus']],

@@ -121,13 +121,21 @@ describe('Built on Hope → top/bottom placement choice', () => {
     // one card moved to hand, top-3 removed from deck pending placement
     assert.equal(game.player1CcHand.length, 1, '1 card drawn to hand');
   });
-  it('choosing BOTTOM places remaining cards at the bottom of the deck', () => {
+  it('choosing BOTTOM with 2 cards offers an ordering step, then places them at the bottom', () => {
     const game = makeGame();
     resolveAbility('Built on Hope', { game, playerNum: 1, choiceIndex: 0 });
     const before = [...game.player1CcDeck];
+    // With 2 non-chosen cards remaining, CSV "in any order" → choosing BOTTOM
+    // surfaces a relative-ordering choice rather than finishing immediately.
     const r2 = resolveAbility('Built on Hope', { game, playerNum: 1, choiceIndex: 1 });
-    assert.equal(r2.applied, true);
-    assert.ok(/bottom/i.test(r2.logMessage), 'log notes bottom placement');
+    assert.ok(r2.requiresChoice, 'ordering choice offered for the 2 remaining cards');
+    assert.equal(r2.choiceOptions.length, 2, 'keep-order vs reverse-order');
+    assert.ok(game.pendingBuiltOnHope?.[1]?.awaitingOrder, 'awaiting-order state stashed');
+    assert.equal(game.pendingBuiltOnHope[1].side, 'bottom');
+    // Resolve the ordering (keep shown order) → final placement at the bottom.
+    const r3 = resolveAbility('Built on Hope', { game, playerNum: 1, choiceIndex: 0 });
+    assert.equal(r3.applied, true);
+    assert.ok(/bottom/i.test(r3.logMessage), 'log notes bottom placement');
     // bottom = front of array; the two non-chosen cards now lead the deck.
     assert.equal(game.player1CcDeck.length, before.length + 2);
     assert.ok(!game.pendingBuiltOnHope?.[1], 'pending state cleared');

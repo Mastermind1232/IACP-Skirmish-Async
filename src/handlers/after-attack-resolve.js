@@ -162,12 +162,12 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   const _atkDcName = combat.attackerDcName;
   const _atkEff = _atkDcName ? getDcEffects()?.[_atkDcName] : null;
   const _atkIds = _atkEff?.specialAbilityIds || [];
-  // Leg Hydraulics (Tress Hacnua): "after resolving an attack, gain 1 MP"
+  // Leg Hydraulics (Tress Hacnua): "after resolving an attack, move up to 1 space"
   if (_atkIds.includes('leg_hydraulics_tress') && combat.attackerMsgId) {
     enqueueAfterAttackEffect(combat, {
       side: 'attacker',
       type: 'leg_hydraulics',
-      label: 'Leg Hydraulics: gain 1 MP',
+      label: 'Leg Hydraulics: move up to 1 space',
     });
   }
   // Brutal Cleave (Gaarkhan): "after you resolve an attack DURING YOUR
@@ -613,8 +613,10 @@ export function enqueueDefenderStep8Effects(combat, game, deps) {
   // suffers N Damage." alexanbv 2026-06-22: the counter fires EVEN ON A MISS —
   // the card has no hit/damage clause. So the unconditional variant must NOT be
   // hit-gated. (The legacy conditional variant still requires a hit that dealt 0
-  // damage.) Pulls game.deflectionPending.
-  if (game?.deflectionPending?.[defPN] && game.deflectionPending[defPN] > 0) {
+  // damage.) Pulls game.deflectionPending. The card triggers only on a RANGED
+  // attack targeting you (library `deflectionRangedOnly`), so gate the counter
+  // on combat.isRanged — Melee attacks do not provoke the counter-damage.
+  if (combat.isRanged && game?.deflectionPending?.[defPN] && game.deflectionPending[defPN] > 0) {
     const isUncond = !!game.deflectionUnconditional?.[defPN];
     if (isUncond || (combat._step7Hit && (combat._step7Damage || 0) === 0)) {
       enqueueAfterAttackEffect(combat, {

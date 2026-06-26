@@ -354,7 +354,8 @@ test('computeCombatResult surgeCancelDodge overrides dodge', () => {
   });
   assert.strictEqual(r.hit, true);
   assert.strictEqual(r.damage, 5);
-  assert.ok(r.resultText.includes('Deadly Spin'));
+  // surgeCancelDodge is the blanket cancel (Deadly surge); label now reads "Deadly".
+  assert.ok(r.resultText.includes('Deadly'));
 });
 
 test('computeCombatResult maxDamageToDefender caps damage', () => {
@@ -565,10 +566,31 @@ test('parseSurgeEffect critical_hit returns pierce 2 + flag', () => {
   assert.strictEqual(r.surgeCriticalHit, true);
 });
 
-test('parseSurgeEffect deadly_spin returns cleave 3 + cancel dodge', () => {
+test('parseSurgeEffect deadly_spin returns cleave 3 + -1 dodge (not full cancel)', () => {
   const r = parseSurgeEffect('deadly_spin');
   assert.strictEqual(r.cleave, 3);
-  assert.strictEqual(r.surgeCancelDodge, true);
+  // Deadly Spin is -1 Dodge (counted), routed via surgeDeadlySpinDodge — NOT a
+  // blanket surgeCancelDodge (which would cancel ALL dodge regardless of count).
+  assert.strictEqual(r.surgeDeadlySpinDodge, true);
+  assert.strictEqual(r.surgeCancelDodge, undefined);
+});
+
+test('computeCombatResult Deadly Spin -1 Dodge: 1 dodge → hit, 2 dodge → still miss', () => {
+  // 1 rolled Dodge minus 1 from Deadly Spin = 0 → hits.
+  const r1 = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 0, evade: 0, dodge: 1 },
+    surgeDeadlySpinDodge: true,
+  });
+  assert.strictEqual(r1.hit, true);
+  assert.strictEqual(r1.damage, 5);
+  // 2 rolled Dodge minus 1 = 1 → still a Dodge miss.
+  const r2 = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 5, surge: 0 },
+    defenseRoll: { block: 0, evade: 0, dodge: 2 },
+    surgeDeadlySpinDodge: true,
+  });
+  assert.strictEqual(r2.hit, false);
 });
 
 test('parseSurgeEffect shrapnel returns surgeShrapnel marker, not auto-blast', () => {

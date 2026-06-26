@@ -3282,17 +3282,18 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     game.specialActionUsedThisActivation = game.specialActionUsedThisActivation || {};
     if (_sauFk) game.specialActionUsedThisActivation[_sauFk] = (game.specialActionUsedThisActivation[_sauFk] || 0) + 1;
   }
-  // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action
+  // Expertise (Ko-Tun Feralo): once per activation, using a Special grants 1 extra action.
+  // Tracked on the per-activation actionsData (expertiseUsedByFig, keyed by figure
+  // index) so the limit resets each activation — NOT round-scoped, so a figure
+  // granted a second activation in the same round can use Expertise again.
   if (buttonKey === 'dc_special_' && abilityId !== 'expertise' && actionsData) {
     const selectedFigure = actionsData?.selectedFigure ?? 0;
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
-    const expertiseFk = `${meta.dcName}-${dgIndex}-${selectedFigure}`;
-    const expertiseKey = expertiseFk + '_expertise';
     const effects = getDcEffects?.() || {};
     const effectEntry = effects[meta.dcName] || effects[meta.dcName?.replace(/\s*\[.*\]\s*$/, '')];
-    if ((effectEntry?.specialAbilityIds || []).includes('expertise') && !game.roundFigureAbilityUsed?.[expertiseKey]) {
-      if (!game.roundFigureAbilityUsed) game.roundFigureAbilityUsed = {};
-      game.roundFigureAbilityUsed[expertiseKey] = true;
+    const expertiseUsedThisActivation = !!actionsData.expertiseUsedByFig?.[selectedFigure];
+    if ((effectEntry?.specialAbilityIds || []).includes('expertise') && !expertiseUsedThisActivation) {
+      if (!actionsData.expertiseUsedByFig) actionsData.expertiseUsedByFig = {};
+      actionsData.expertiseUsedByFig[selectedFigure] = true;
       grantActionToFigure(actionsData, actionsData.selectedFigure ?? 0, 1, DC_ACTIONS_PER_ACTIVATION);
       await updateDcActionsMessage(game, msgId, client);
       const thread = interaction.channel;

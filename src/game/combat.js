@@ -294,7 +294,10 @@ export function parseSurgeEffect(key) {
   if (k === 'shocking_palm') { out.missAndStun = true; return out; }
   if (k === 'squad_command') { out.surgeSquadCommand = true; return out; }
   if (k === 'stalk_prey') { out.surgeStalkPrey = true; return out; }
-  if (k === 'deadly_spin') { out.surgeCancelDodge = true; out.cleave = 3; return out; }
+  // Deadly Spin (The Grand Inquisitor): "-1 Dodge ... gains Cleave 3". Dodge is
+  // COUNTED — route through the -1 dodge path (combat.bonusDodge -= 1, clamped),
+  // NOT surgeCancelDodge (which would cancel ALL dodge regardless of count).
+  if (k === 'deadly_spin') { out.surgeDeadlySpinDodge = true; out.cleave = 3; return out; }
   if (k === 'deadly') { out.surgeCancelDodge = true; return out; }
   // Shrapnel (Drokkatta) — per alexanbv 2026-05-10: card text "Choose one:
   // This attack gains Blast 2, or after this attack resolves, if it did
@@ -429,6 +432,9 @@ export function computeCombatResult(combat) {
   // combat.bonusDodge (negative). Sum dice-rolled + bonus, clamp at 0.
   // Per destruct 2026-05-08: Dodge is counted, not binary.
   if (combat.conclusionDodgeCancel) combat.bonusDodge = (combat.bonusDodge || 0) - 1;
+  // Deadly Spin (Grand Inquisitor): -1 Dodge (counted), clamped by the Math.max
+  // below — leaves a 2-Dodge roll at 1 Dodge (still a miss). NOT a full cancel.
+  if (combat.surgeDeadlySpinDodge) combat.bonusDodge = (combat.bonusDodge || 0) - 1;
   const _totalDodge = Math.max(0, (defRoll.dodge || 0) + (combat.bonusDodge || 0));
   if (_totalDodge > 0 && !combat.surgeCancelDodge) {
     hit = false;
@@ -567,7 +573,8 @@ export function computeCombatResult(combat) {
   if (defenderHidden) details += ` | **Hidden** (defender -2 accuracy)`;
   if (attackerHidden) details += ` | **Hidden** (attacker +1 surge)`;
   if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
-  if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly Spin**: Dodge cancelled`;
+  if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly**: Dodge cancelled`;
+  if (defRoll.dodge && combat.surgeDeadlySpinDodge) details += ` | **Deadly Spin**: -1 Dodge`;
   // Show the damage math (alexanbv 2026-06-26: "list total damage results minus
   // total block results — show the work for your damage calculation").
   if (hit) {

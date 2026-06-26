@@ -86,6 +86,16 @@ describe('mods-window abilities via the timing registry', () => {
     assert.equal(find(at('defender', game(), withBlank, d), 'lucky').kind, 'passive');
   });
 
+  it('Take Cover (Jawa) is INTERACTIVE (may apply +1 Block / -1 Evade), not auto-passive', () => {
+    // CSV resolution=prompt: the -1 Evade downside must be declinable (audit fix).
+    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['take_cover_jawa_reg'] } });
+    const out = at('defender', game(), combat(), d);
+    assert.equal(find(out, 'take_cover').kind, 'interactive');
+    // Elite variant likewise.
+    const dE = deps({ Atk: {}, Def: { specialAbilityIds: ['take_cover_jawa_elite'] } });
+    assert.equal(find(at('defender', game(), combat(), dE), 'take_cover').kind, 'interactive');
+  });
+
   it('attacker query returns no defender abilities and vice-versa', () => {
     const d = deps({ Atk: { specialAbilityIds: ['spray_fire_heavy_stormtrooper'] }, Def: { specialAbilityIds: ['defensible_sc2m'] } });
     assert.equal(find(at('attacker', game(), combat(), d), 'defensible'), undefined);

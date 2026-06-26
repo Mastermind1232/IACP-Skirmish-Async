@@ -6,18 +6,22 @@
  *   defense dice pools, they are resolved before rolling (Step 2 setup)."
  *
  * Implementation: `src/handlers/combat.js` gathers every pool-mutation
- *   input BEFORE the sole `rollAttackDice(dice)` call site:
- *     - base dice: `const baseDice = combat.attackInfo?.dice || [];`
+ *   input BEFORE the `rollAttackDice(dice)` call site:
+ *     - base dice: `_buildAttackPool` (`const dice = [...baseDice];`)
  *     - additive: `combat.attackBonusDice`, `combat.attackBonusDiceColors`
- *     - subtractive: `combat.attackPoolRemoveMax`
- *     - capping: `combat.attackPoolKeepMax`
+ *     - subtractive: `combat.attackPoolRemoveMax`  (Run for Cover)
+ *     - capping: `combat.attackPoolKeepMax`        (Savage Vigor)
+ *       The remove/keep trims are now CHOICE-DRIVEN: `_resolveAttackPoolTrim`
+ *       returns `{dice}` for the deterministic (no-choice) case and
+ *       `{needPicker,...}` when the defender (Run for Cover) / attacker
+ *       (Savage Vigor) must pick which die — the picker posts and the next
+ *       Roll click consumes `combat._atkPickIdxList`. Either way the trimmed
+ *       `dice` is fixed BEFORE `rollAttackDice`.
  *     - minimum-fill: `combat.attackPoolAddYellowUntilTotal`
  *     - override: `game.pendingOverrideAttackDice[msgId]` is consumed
  *       earlier in the same handler (before the `if (!combat.attackRoll)`
  *       gate), rewriting `attackInfo` and being DELETED before the roll.
- *   The `rollAttackDice(dice)` call is the single dice-resolution site
- *   — every mutation listed above is applied to `dice` before that
- *   call. computeCombatResult never re-rolls; it consumes `combat.attackRoll`.
+ *   computeCombatResult never re-rolls; it consumes `combat.attackRoll`.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,25 +34,37 @@ const ROOT = resolve(__dirname, '../../..');
 const H_CB_SRC = readFileSync(resolve(ROOT, 'src/handlers/combat.js'), 'utf8');
 
 describe('PROBE-PD-ATK-018: pool modifications resolve BEFORE the roll (Step 2 setup)', () => {
-  it('018a: source — the attack pool is a single `let dice = [...baseDice];` accumulator', () => {
+  it('018a: source — the attack pool is a `const dice = [...baseDice];` accumulator (in _buildAttackPool)', () => {
     assert.match(H_CB_SRC,
-      /const baseDice = combat\.attackInfo\?\.dice \|\| \[\];[\s\S]*?let dice = \[\.\.\.baseDice\];/,
+      /const baseDice = combat\.attackInfo\?\.dice \|\| \[\];[\s\S]*?const dice = \[\.\.\.baseDice\];/,
       'attack pool must start as a mutable copy of base dice — CRR-ATK-018');
   });
 
-  it('018b: source — pool mutations are gathered in a single pre-roll block', () => {
+  it('018b: source — bonus/remove/keep trims resolve via _resolveAttackPoolTrim before fill + roll', () => {
+    // _resolveAttackPoolTrim folds the base+bonus pool build, the Run-for-Cover
+    // (attackPoolRemoveMax) removal and the Savage-Vigor (attackPoolKeepMax) cap
+    // (now choice-driven) into one helper, returning the trimmed `dice` BEFORE
+    // the minimum-fill block and the single rollAttackDice site.
     assert.match(H_CB_SRC,
-      /let dice = \[\.\.\.baseDice\];[\s\S]*?for \(let i = 0; i < bonusDice; i\+\+\) dice\.push\(bonusColors\[i\] \?\? primaryColor\);[\s\S]*?const removeMax = combat\.attackPoolRemoveMax \|\| 0;\s*\n\s*if \(removeMax > 0\) dice = dice\.slice\(0, Math\.max\(0, dice\.length - removeMax\)\);[\s\S]*?const keepMax = combat\.attackPoolKeepMax;[\s\S]*?const addYellowUntil = combat\.attackPoolAddYellowUntilTotal;[\s\S]*?const result = rollAttackDice\(dice\);/,
-      'bonus/remove/keep/fill mutations must all precede rollAttackDice — CRR-ATK-018');
+      /const removeMax = combat\.attackPoolRemoveMax \|\| 0;[\s\S]*?const keepMax = \(typeof combat\.attackPoolKeepMax === 'number'\)[\s\S]*?if \(removeMax > 0\) dice = dice\.slice\(0, Math\.max\(0, dice\.length - removeMax\)\);[\s\S]*?if \(keepMax != null && keepMax > 0 && dice\.length > keepMax\) dice = dice\.slice\(0, keepMax\);/,
+      '_resolveAttackPoolTrim must build the pool and apply remove/keep trims pre-roll — CRR-ATK-018');
+    // The roll branches consume the trimmed dice then run the minimum-fill block
+    // immediately before the roll.
+    assert.match(H_CB_SRC,
+      /let dice = _atkTrim\.dice;\s*\n\s*const addYellowUntil = combat\.attackPoolAddYellowUntilTotal;[\s\S]*?const result = rollAttackDice\(dice\);/,
+      'trimmed dice + minimum-fill must precede rollAttackDice — CRR-ATK-018');
   });
 
-  it('018c: source — the rollAttackDice call is uniquely downstream of the mutation block', () => {
+  it('018c: source — the rollAttackDice call is uniquely downstream of the pool-trim call', () => {
     const rollIdx = H_CB_SRC.indexOf('const result = rollAttackDice(dice);');
-    const mutBlockIdx = H_CB_SRC.indexOf('const baseDice = combat.attackInfo?.dice || [];');
-    assert.ok(mutBlockIdx > 0, 'mutation block start must be locatable');
+    // The pool mutations are now resolved by _resolveAttackPoolTrim, CALLED in
+    // each roll branch before the roll (the helper itself is defined lower in
+    // the file but JS-hoisted). Anchor the order check on the first call site.
+    const mutBlockIdx = H_CB_SRC.indexOf('const _atkTrim = _resolveAttackPoolTrim(combat);');
+    assert.ok(mutBlockIdx > 0, 'pool-trim call must be locatable');
     assert.ok(rollIdx > 0, 'rollAttackDice call must be locatable');
     assert.ok(rollIdx > mutBlockIdx,
-      'rollAttackDice must follow the mutation block in source order — CRR-ATK-018');
+      'rollAttackDice must follow the pool-trim call in source order — CRR-ATK-018');
     const rollHits = (H_CB_SRC.match(/const result = rollAttackDice\(dice\);/g) || []).length;
     // 2026-05-04: held-roll feature added a second rollAttackDice site for
     // the first-press path (computes silently, holds the result until the

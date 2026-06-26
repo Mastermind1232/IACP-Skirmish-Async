@@ -16,6 +16,7 @@ import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js'
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect, effectiveDcNameForFigure } from '../game/dc-helpers.js';
+import { grantPowerTokens as _grantPowerTokensHelper } from '../game/game-helpers.js';
 import { isDcUnique } from '../data-loader.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
@@ -224,6 +225,28 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   // Engine advances zillo-window → step6 (accuracy) → step7 (damage). Marked
   // here at function entry; finer-grained transitions are slice 6+ work.
   if (combat.currentStep === 'zillo-window') combat.currentStep = 'step6';
+
+  // Dual-Wield Pistols (Bo-Katan): deferred Block-token grant + once-per-round
+  // limit. The card's "Before performing this bonus Ranged attack, you gain 2
+  // Block Tokens" is CONTINGENT on actually performing the bonus attack — so the
+  // offer site (checkPostCombatSurges) only stamps a pending marker; the grant
+  // and the once-per-round flag fire HERE, when the bonus attack is actually
+  // performed (its rolls resolve). Declining the bonus never burns the limit and
+  // never grants tokens. Stale markers (left over from a forfeited bonus in a
+  // prior round) are dropped without granting. See P3 / audit 2026-06-26.
+  if (combat.attackerFigureKey && game.dwpBlockGrantPending?.[combat.attackerFigureKey]) {
+    const _dwpPend = game.dwpBlockGrantPending[combat.attackerFigureKey];
+    delete game.dwpBlockGrantPending[combat.attackerFigureKey];
+    if (_dwpPend && _dwpPend.round === (game.currentRound || 1)) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      if (_dwpPend.dwpKey) game.roundFigureAbilityUsed[_dwpPend.dwpKey] = true;
+      if (_dwpPend.grantBlock) {
+        _grantPowerTokensHelper(game, combat.attackerFigureKey, 'Block', 2);
+        const _dwpName = _dwpPend.dcName || dcNameFromFigureKey(combat.attackerFigureKey);
+        await logGameAction(game, client, `**Dual-Wield Pistols** — **${_dwpName}** gains 2 Block Tokens before her bonus Ranged attack.`, { phase: 'ROUND', icon: 'attack' });
+      }
+    }
+  }
 
   // Two scope variants:
   //   nextAttacksBonusHits[figureKey] — per-figure (Size Advantage,
@@ -2089,8 +2112,15 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
     game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
     const mastKey = `${combat.attackerFigureKey}_mastery`;
     if (!game.roundFigureAbilityUsed[mastKey]) {
-      game.roundFigureAbilityUsed[mastKey] = true;
-      // Rest in Peace: block discard-pile retrieval
+      // P3 fix (audit 2026-06-26): do NOT stamp the once-per-round limit before
+      // the outcome is known. The Rest-in-Peace block and the no-eligible-cards
+      // exit below redraw NOTHING, so burning the use there permanently disabled
+      // Mastery for the round even though nothing was redrawn. Stamp the limit
+      // only once a redraw is actually offered (the picker is posted). The deeper
+      // ideal — stamping only when a card is committed inside mastery_pick, so a
+      // Skip in the picker also doesn't burn — lives in the cross-file handler
+      // post-combat.js handleMasteryPick and is flagged in the report.
+      // Rest in Peace: block discard-pile retrieval (no redraw -> limit untouched)
       if (game.restInPeaceActive) {
         await thread.send('**Mastery** — Blocked by **Rest in Peace** (cannot retrieve from discard piles this round).').catch(discordCatch);
       } else {
@@ -2104,6 +2134,8 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
         if (mastEligible.length === 0) {
           await thread.send(`**Mastery** — No eligible FORCE USER Command cards (cost \u2264 1) in your discard pile.`).catch(discordCatch);
         } else {
+          // A redraw is genuinely being offered -> commit the once-per-round limit.
+          game.roundFigureAbilityUsed[mastKey] = true;
           setPendingMastery(game, { gameId: game.gameId, attackerPlayerNum: mastPlayerNum, discardKey: mastDiscardKey, eligible: mastEligible, resultText, combat, initialEmbedRefreshMsgIds: [...embedRefreshMsgIds], defenderPlayerNum });
           const mastOwnerId = getPlayerId(game, mastPlayerNum);
           const mastBtns = mastEligible.slice(0, 24).map((cardName, i) =>
@@ -2403,24 +2435,36 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   // Dual-Wield Pistols (Bo-Katan): after resolving a ranged attack, free ranged attack once/round.
   // IACP 2026-06-21: the Dual-Wield Pistols ability ALSO grants 2 Block Tokens BEFORE performing this
   // once-per-round bonus ranged attack (this is distinct from the Beskar Armor keyword, which grants 2
-  // Block AFTER DEPLOYMENT via post-deploy.js). The tokens here are granted at the moment the bonus
-  // attack is offered — i.e. before she performs it.
+  // Block AFTER DEPLOYMENT via post-deploy.js).
+  //
+  // P3 fix (audit 2026-06-26): both the 2 Block Tokens AND the once-per-round
+  // limit are CONTINGENT on actually performing the bonus attack ("Before
+  // performing this bonus Ranged attack..."). They must NOT be granted/burned at
+  // offer time — declining would otherwise pocket 2 free tokens and permanently
+  // disable the ability for the round. So here we ONLY post the Declare-Attack
+  // button + arm the free-attack flag, and stash a pending marker. The grant +
+  // roundFigureAbilityUsed flag fire in resolveCombatAfterRolls when the bonus
+  // attack's rolls actually resolve (see the dwpBlockGrantPending consumer above).
   if (combat.isRanged && combat.attackerFigureKey && combat.attackerMsgId) {
     const _dwpEff = getDcEffect(combat.attackerDcName);
     if ((_dwpEff?.specialAbilityIds || []).includes('dual_wield_pistols_bokatan')) {
       const _dwpKey = `dualWieldPistols_${combat.attackerFigureKey}`;
-      if (!game.roundFigureAbilityUsed?.[_dwpKey]) {
-        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-        game.roundFigureAbilityUsed[_dwpKey] = true;
-        // Dual-Wield Pistols: gain 2 Block Tokens BEFORE the bonus ranged attack.
-        if ((_dwpEff?.specialAbilityIds || []).includes('dual_wield_block_bokatan')) {
-          grantPowerTokens(game, combat.attackerFigureKey, 'Block', 2);
-          await thread.send(`**Dual-Wield Pistols** — **${combat.attackerDcName}** gains 2 **Block Tokens** before her bonus Ranged attack.`).catch(discordCatch);
-          await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** gains 2 Block Tokens.`, { phase: 'ROUND', icon: 'attack' });
-        }
+      // Don't re-offer if the limit is already burned (a prior bonus attack this
+      // round committed it) OR a bonus offer is already pending resolution.
+      const _dwpAlreadyPending = !!game.dwpBlockGrantPending?.[combat.attackerFigureKey];
+      if (!game.roundFigureAbilityUsed?.[_dwpKey] && !_dwpAlreadyPending) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         game.freeAttackBonusPending[combat.attackerFigureKey] = true;
-        await _postAttackerChainButton(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Declare it below.`);
+        // Stash the contingent grant; committed only when the bonus attack is performed.
+        game.dwpBlockGrantPending = game.dwpBlockGrantPending || {};
+        game.dwpBlockGrantPending[combat.attackerFigureKey] = {
+          round: game.currentRound || 1,
+          dwpKey: _dwpKey,
+          dcName: combat.attackerDcName,
+          // Only grant Block if the figure actually carries the block sub-ability.
+          grantBlock: (_dwpEff?.specialAbilityIds || []).includes('dual_wield_block_bokatan'),
+        };
+        await _postAttackerChainButton(`**Dual-Wield Pistols** — **${combat.attackerDcName}** may perform a free Ranged attack! Declare it below. (Gain 2 Block Tokens when you perform it.)`);
         await logGameAction(game, client, `**Dual-Wield Pistols** — **${combat.attackerDcName}** earns a free Ranged attack.`, { phase: 'ROUND', icon: 'attack' });
       }
     }
