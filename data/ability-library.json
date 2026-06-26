@@ -1458,6 +1458,7 @@
     "dual_bladed_fury": {
       "type": "dcSpecial",
       "label": "Dual-Bladed Fury",
+      "actionCost": 0,
       "chooseOne": [
         {
           "label": "Reach + Cleave 2",
@@ -2115,6 +2116,7 @@
       "type": "dcSpecial",
       "label": "Force Throw",
       "description": "Suffer 1 Strain to push a SMALL figure within 3 spaces up to 2 spaces.",
+      "actionCost": 0,
       "strainCostToSelf": 1,
       "pushTargetWithinRange": {
         "range": 3,
@@ -3439,6 +3441,7 @@
       "type": "dcSpecial",
       "label": "Order Hit",
       "description": "Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.",
+      "actionCost": 2,
       "chooseFriendlyToFocus": true,
       "skipFocus": true,
       "choiceRequiresElite": true,
@@ -4544,6 +4547,7 @@
       "label": "Smash",
       "description": "Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.",
       "oncePer": "activation",
+      "actionCost": 0,
       "wiredStatus": "wired",
       "rollOneDie": "red",
       "rollOneDieTarget": "adjacentHostile",

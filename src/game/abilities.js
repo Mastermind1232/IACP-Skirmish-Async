@@ -628,6 +628,19 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
+    // oncePer:'round' enforcement (Wrist Cord). Compute the activating figure
+    // key (figureKey-scoped → automatically per-figure within the round) and
+    // gate, mirroring the rollOneDieTarget guard at :3623/:3640.
+    const _ptwrSelF = game?.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+    const _ptwrDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const _ptwrDgI = _ptwrDgM ? _ptwrDgM[1] : '1';
+    const _ptwrSelfFk = meta?.dcName ? `${meta.dcName}-${_ptwrDgI}-${_ptwrSelF}` : null;
+    if (entry.oncePer === 'round' && _ptwrSelfFk) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      if (game.roundFigureAbilityUsed[`${_ptwrSelfFk}_${abilityId}`]) {
+        return { applied: false, manualMessage: `**${label}** — already used this round by **${dcNameFromFigureKey(_ptwrSelfFk)}**.` };
+      }
+    }
     // Resolve which player owns a given figure key (needed when targeting friendly or any figure)
     const _findOwner = (fk) => {
       if (game.figurePositions?.[1]?.[fk] != null) return 1;
@@ -656,6 +669,11 @@ export function resolveAbility(abilityId, context) {
       if (entry.mpCostToActivate) {
         const _mpFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         consumeMovementPoints(game, msgId, entry.mpCostToActivate, _mpFigIdx);
+      }
+      // Mark oncePer:'round' used after the push commits (Wrist Cord).
+      if (entry.oncePer === 'round' && _ptwrSelfFk) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`${_ptwrSelfFk}_${abilityId}`] = true;
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = dcNameFromFigureKey(targetFigureKey);
@@ -2362,6 +2380,11 @@ export function resolveAbility(abilityId, context) {
           // when granted MP out-of-activation via Order Hit).
           return {
             applied: true,
+            // alexanbv audit 2026-06-26 (P1): Order Hit is a Double Action
+            // Special — the actual action charge reads resolveResult.doubleAction
+            // (dc-play-area.js), so surface it here (entry.actionCost:2 in the
+            // library) to charge 2 actions, matching the now-2-action gate.
+            doubleAction: entry.actionCost === 2,
             logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP${entry.grantMpToTarget > 0 ? ' (spend now — remainder lost when the interrupt resolves)' : ''}.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
             refreshDcEmbed: true,
             refreshDcEmbedMsgIds: [tgtMsgId],
@@ -2975,8 +2998,11 @@ export function resolveAbility(abilityId, context) {
     // Each attack-bound flag is keyed by the activating figure's key
     // so siblings in a multi-figure group don't share state.
     const _afkActivating = figureKeyForActivation(game, msgId);
-    // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed
-    if (entry.label === 'Stay Down') {
+    // Stay Down: mark to apply Stun to the attacker figure when the free attack is consumed.
+    // Match on abilityId (the card name) — the library entry's `label` is a long
+    // descriptive string, so the old `label==='Stay Down'` guard never armed it
+    // (mirrors the Burst Fire fix below).
+    if (entry.label === 'Stay Down' || abilityId === 'Stay Down') {
       game.stayDownPendingMsgId = game.stayDownPendingMsgId || {};
       if (_afkActivating) game.stayDownPendingMsgId[_afkActivating] = true;
     }
@@ -4115,6 +4141,13 @@ export function resolveAbility(abilityId, context) {
         const _spent = consumeMovementPoints(game, msgId, entry.mpCost, _mpFigIdx2);
         if (_spent > 0) results.push(`spent ${_spent} MP`);
       }
+      // Mark oncePer:'round' used after the area effect resolves (Wrist
+      // Flamethrower). figureKey-scoped → per figure within the round. Only
+      // 'round' (NOT 'activation') cases routed through this handler are set.
+      if (entry.oncePer === 'round' && _faeSelfFigureKey) {
+        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+        game.roundFigureAbilityUsed[`${_faeSelfFigureKey}_${abilityId}`] = true;
+      }
       const spaceUpper = String(chosenSpace).toUpperCase();
       return {
         applied: true,
@@ -4131,6 +4164,15 @@ export function resolveAbility(abilityId, context) {
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
+    // oncePer:'round' enforcement (Wrist Flamethrower). figureKey-scoped → per
+    // figure within the round, mirroring rollOneDieTarget at :3623/:3640. Only
+    // round (NOT activation) cases routed through this handler are gated here.
+    if (entry.oncePer === 'round' && activatingFigureKey) {
+      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+      if (game.roundFigureAbilityUsed[`${activatingFigureKey}_${abilityId}`]) {
+        return { applied: false, manualMessage: `**${entry.label}** — already used this round by **${dcNameFromFigureKey(activatingFigureKey)}**.` };
+      }
+    }
     const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
     if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
     const boardState = getBoardStateForMovement(game, null);
@@ -5678,7 +5720,16 @@ export function resolveAbility(abilityId, context) {
   // Per alexanbv 2026-05-10: honor explicit context.msgId so out-of-
   // activation plays (Retaliation→Move via defeat-CC picker) target the
   // chosen DC instead of relying on activation lookup.
-  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+  //
+  // EXCLUDE cards that ALSO carry `chooseAdjacentHostileThen` (Ambush,
+  // Force Surge): their MP is a Move-X that precedes a forced/chosen
+  // adjacent-hostile damage step, handled by the dedicated mpBonus +
+  // chooseAdjacentHostileThen dispatch below (which wires the cahTargetPick
+  // continuation / Ambush attacker-targeting). Without this exclusion that
+  // dedicated handler was unreachable and the cards just granted a bare move
+  // with NO damage at all (audit 2026-06-26).
+  if (entry.type === 'ccEffect' && typeof entry.mpBonus === 'number' && entry.mpBonus > 0
+      && !entry.chooseAdjacentHostileThen) {
     const { game, playerNum, dcMessageMeta, cardName, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
     const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
@@ -6358,6 +6409,13 @@ export function resolveAbility(abilityId, context) {
     if ((_sbrRecoverDcEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
       return { applied: true, logMessage: '**Sustained by Rage** — cannot recover Damage.' };
     }
+    // Dioxis Fumes: non-DROID figures cannot recover Strain (HP) this round.
+    if (game.roundDioxisActive) {
+      const _dxIsDroid = ((getStatsForDc(actMeta?.dcName)?.keywords) || []).some((k) => /^droid$/i.test(k));
+      if (!_dxIsDroid) {
+        return { applied: true, logMessage: '**Dioxis Fumes** — non-DROID figures cannot recover Strain this round.' };
+      }
+    }
     const healthState = dcHealthState.get(actMsgId) || [];
     if (!healthState.length) return { applied: false, manualMessage: 'Resolve manually: no health state for this DC.' };
     const n = entry.recoverDamage;
@@ -6855,6 +6913,13 @@ export function resolveAbility(abilityId, context) {
     const _sbrDcEff = meta?.dcName ? (getDcEffects()?.[meta.dcName]) : null;
     if ((_sbrDcEff?.specialAbilityIds || []).includes('sustained_by_rage')) {
       return { applied: true, logMessage: '**Sustained by Rage** — cannot recover Damage.' };
+    }
+    // Dioxis Fumes: non-DROID figures cannot recover Strain (HP) this round.
+    if (game.roundDioxisActive) {
+      const _dxIsDroid2 = ((getStatsForDc(meta?.dcName)?.keywords) || []).some((k) => /^droid$/i.test(k));
+      if (!_dxIsDroid2) {
+        return { applied: true, logMessage: '**Dioxis Fumes** — non-DROID figures cannot recover Strain this round.' };
+      }
     }
     const healthState = dcHealthState.get(msgId);
     if (!healthState?.length || !Array.isArray(healthState[0])) return { applied: false, manualMessage: 'Resolve manually: no health state found for this figure.' };
@@ -8715,6 +8780,76 @@ export function resolveAbility(abilityId, context) {
     const { damage = 0, strain = 0 } = cah;
     const totalDamage = damage + strain;
     const oppNum = opponentPlayerNum(playerNum);
+    // ── Ambush (CC, combat-spec.csv row 531): a DEFENDER reaction at
+    // attack:on_declare — "Interrupt to move 4 spaces to a space adjacent to
+    // the attacker, then THE ATTACKER suffers 2 Damage." The generic move-X +
+    // free-pick path (a) doesn't constrain the move to end adjacent to the
+    // attacker and (b) lets the player pick ANY adjacent hostile to damage.
+    // This branch forces the damage onto the attacker (no choice), mirroring
+    // cah.targetAttacker (Counter Attack). It still grants the 4-space move via
+    // pendingMoveX, but with no free-target picker (the target is the attacker).
+    // NOTE: the engine's pendingMoveX has no "must end adjacent to figure X"
+    // constraint, so the move-end adjacency is surfaced to the player as a
+    // reminder rather than hard-enforced.
+    if ((abilityId === 'Ambush' || entry.ambushTargetsAttacker) && !chosenFigureKey) {
+      const _amCbt = context.combat || game.combat || game.pendingCombat;
+      const _amAttackerFk = _amCbt?.attackerFigureKey;
+      if (!_amCbt || !_amAttackerFk) {
+        return { applied: false, manualMessage: '**Ambush** — no attacker context. Resolve manually.' };
+      }
+      const _amAttackerPN = _amCbt.attackerPlayerNum ?? oppNum;
+      // "you" = the defender of the resolved attack (must not be defeated).
+      const _amDefenderFk = _amCbt.target?.figureKey;
+      const _amDefenderPos = _amDefenderFk ? game.figurePositions?.[playerNum]?.[_amDefenderFk] : null;
+      if (!_amDefenderPos) {
+        return { applied: false, manualMessage: '**Ambush** — you were defeated; cannot interrupt.' };
+      }
+      // Grant the 4-space free move (no free-target picker continuation — the
+      // damage target is forced to the attacker). The move should END adjacent
+      // to the attacker per the card; surfaced as a reminder.
+      if (entry.isMoveX && typeof entry.mpBonus === 'number' && entry.mpBonus > 0) {
+        const _amMsgId = findMsgIdForFigureKey(game, playerNum, _amDefenderFk, dcMessageMeta);
+        if (_amMsgId) {
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[_amMsgId] = {
+            remaining: entry.mpBonus,
+            source: entry.label || 'Ambush',
+            playerNum,
+            figureKey: _amDefenderFk,
+            dcName: dcNameFromFigureKey(_amDefenderFk) || '',
+            threadId: null,
+            bypassCosts: true,
+            msgId: _amMsgId,
+            nextAction: null,
+          };
+        }
+      }
+      // Apply 2 Damage to THE ATTACKER (no choice), via the defeat-aware pipeline.
+      const _amAttMsgId = findMsgIdForFigureKey(game, _amAttackerPN, _amAttackerFk, dcMessageMeta);
+      let _amDmgNote = `apply ${damage} Damage to the attacker manually`;
+      if (_amAttMsgId && dcHealthState) {
+        const _amHs = dcHealthState.get(_amAttMsgId) || [];
+        const _amM = _amAttackerFk.match(/-(\d+)-(\d+)$/);
+        const _amFi = _amM ? parseInt(_amM[2], 10) : 0;
+        if (_amHs[_amFi]) {
+          const _amR = applyDamageWithDefeatCheck(dcHealthState, game, _amAttMsgId, _amFi, damage, _amAttackerPN, {
+            sourceLabel: 'Ambush',
+            attackerPlayerNum: playerNum,
+            figureKey: _amAttackerFk,
+          });
+          _amDmgNote = `${damage} Damage (HP: ${_amR.prevHp}→${_amR.newHp})`;
+        }
+      }
+      const _amAttName = dcNameFromFigureKey(_amAttackerFk);
+      return {
+        applied: true,
+        logMessage: `**Ambush** — Move up to ${entry.mpBonus} space${entry.mpBonus !== 1 ? 's' : ''} to a space **adjacent to the attacker**, then the attacker **${_amAttName}** suffers ${_amDmgNote}.`,
+        refreshBoard: true,
+        refreshDcEmbed: !!_amAttMsgId,
+        ...(_amAttMsgId ? { refreshDcEmbedMsgIds: [_amAttMsgId] } : {}),
+        ...(game.pendingMoveX && _amDefenderFk ? { pendingMoveXMsgId: findMsgIdForFigureKey(game, playerNum, _amDefenderFk, dcMessageMeta) } : {}),
+      };
+    }
     // Second call: apply damage/conditions to chosen target (MP was already granted)
     if (chosenFigureKey) {
       if (!dcHealthState) return { applied: false, manualMessage: 'Resolve manually: health state required.' };
@@ -14205,8 +14340,19 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.lordOfTheSithEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'No active DC found. Resolve manually.' };
+    // Lord of the Sith fires when a hostile is defeated — which is frequently
+    // OUT of the owner's activation. Anchor on the Darth Vader figure that
+    // plays the unique-figure CC (mirrors the Miracle Worker /
+    // resolvePlayingFigureKeyForUniqueCc pattern) instead of requiring an
+    // active activation msgId, then derive that figure's DC msgId. (Falls back
+    // to the active activation msgId if the anchor can't be resolved.)
+    let msgId = null;
+    const _lotsVaderFk = resolveUniqueFigureCcFigureKey(game, playerNum, 'Lord of the Sith');
+    if (_lotsVaderFk) {
+      msgId = findMsgIdForFigureKey(game, playerNum, _lotsVaderFk, dcMessageMeta);
+    }
+    if (!msgId) msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: '**Lord of the Sith** — could not locate Darth Vader. Resolve manually.' };
     // Phase 3: Force Choke chosen figure — 2 Damage applies sync, 1
     // Strain queues via pendingStrain[] for applyStrain pipeline.
     if (chosenFigureKey) {

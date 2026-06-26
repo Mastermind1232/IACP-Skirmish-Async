@@ -16,7 +16,7 @@ import { registerCombatAbility } from './combat-timing-registry.js';
 import { selectableDieIndices } from './combat-reroll.js';
 import { conditionForRow, makeCondition, limitGuard, abilityLimitKey } from './combat-conditions.js';
 import { stripBrackets } from '../game/card-names.js';
-import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
+import { isAttachmentExhausted, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId, isDcDepleted } from '../game/card-state-helpers.js';
 import { attachmentsForMsgId } from '../game/squad-upgrades.js';
 import { getMapData, getFigureSize } from '../data-loader.js';
 import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
@@ -49,6 +49,24 @@ const LOS_REROLL_CONDITIONS = {
 };
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+// DEPLETE-cost reroll upgrades (Doubt): resolve the owning DC/upgrade message id
+// by (bare) card name for a player — mirrors cc-timing.js `_aNewHopeMsgId`.
+// Depletable upgrade cards live in the player's DC list with a bracketed name and
+// a parallel msgId. Returns the FIRST matching msgId (depleted or not) so callers
+// can both gate on isDcDepleted and deplete it. alexanbv 2026-06-26.
+export function depletableCardMsgId(game, playerNum, bareName) {
+  if (!game || (playerNum !== 1 && playerNum !== 2) || !bareName) return null;
+  const list = getDcList(game, playerNum) || [];
+  const mids = getDcMessageIds(game, playerNum) || [];
+  const want = String(bareName).toLowerCase();
+  for (let i = 0; i < list.length; i++) {
+    const raw = typeof list[i] === 'object' ? (list[i].dcName || list[i].displayName) : list[i];
+    if (stripBrackets(String(raw || '')).toLowerCase() === want && mids[i]) return mids[i];
+  }
+  return null;
+}
+
 function deriveCount(effect) {
   const m = String(effect || '').toLowerCase().match(/reroll\s+(?:up to\s+)?(\d+)/);
   return m ? (parseInt(m[1], 10) || 1) : 1;
@@ -63,7 +81,7 @@ export function registerRerollAbilities() {
   for (const rows of loadAbilitySpec().values()) {
     for (const r of rows) {
       if (r.timing !== 'attack:rerolls') continue;
-      const side = (r.attack_side === 'attacker' || r.attack_side === 'defender') ? r.attack_side : null;
+      let side = (r.attack_side === 'attacker' || r.attack_side === 'defender') ? r.attack_side : null;
       if (!side) continue;
       const card = r.card;
       // Rapid Recalibration is a die-SWITCH (set a face), not a reroll — it's
@@ -101,6 +119,16 @@ export function registerRerollAbilities() {
       // ATTACKER's ability, but it rerolls a DEFENSE die and is usable while the
       // owner is attacking (alexanbv 2026-06-16 re-audit). Pool = defense.
       const forcesDefenderReroll = /force the defender to reroll/i.test(r.effect || '');
+      // Doubt ([Doubt] Upgrade) — the CSV row carries attack_side='attacker'
+      // because the POOL is the attacker's dice, but Doubt is the DEFENDER's
+      // disruption upgrade ("Deplete this card while a HOSTILE figure is attacking
+      // to choose 1 attack die; your opponent must reroll that die"). The owner is
+      // the figure being attacked = the DEFENDER. Special-case it (mirroring the
+      // forcesDefenderReroll inversion, but the opposite direction): register on
+      // the DEFENDER side targeting the ATTACK pool so the right player is prompted.
+      // alexanbv 2026-06-26 (audit fix — was offered attacker-side, wrong player).
+      const isDoubt = stripBrackets(card) === 'Doubt';
+      if (isDoubt) side = 'defender';
       let id = `reroll:${slug(card)}:${side}`;
       if (seen.has(id)) {
         // A second reroll ability on the same card+side (e.g. HK's Versatile
@@ -117,7 +145,8 @@ export function registerRerollAbilities() {
       // regardless of side (attack dice belong to the attacker). alexanbv 2026-06-17.
       const playerThatRolled = /player that rolled it must reroll|player that rolled it/i.test(r.effect || '');
       let pool;
-      if (forcesDefenderReroll) pool = 'defense';
+      if (isDoubt) pool = 'attack'; // defender-owned, but rerolls an ATTACK die
+      else if (forcesDefenderReroll) pool = 'defense';
       else if (playerThatRolled) {
         pool = /choose\s+(?:1|one)\s+attack die/i.test(r.effect || '') ? 'attack'
           : /choose\s+(?:1|one)\s+defense die/i.test(r.effect || '') ? 'defense'
@@ -166,6 +195,14 @@ export function registerRerollAbilities() {
       const isExhaustCard = (r.card_type === 'Attachment' || r.card_type === 'Upgrade') && /exhaust/i.test(r.effect || '');
       const isAura = /another friendly|friendly figure within|within \d/i.test(`${r.effect || ''} ${r.conditional || ''}`);
       if (isExhaustCard && !isAura) params.exhaustOnUse = stripBrackets(card);
+      // DEPLETE-cost reroll upgrades (Doubt: "Deplete this card ... reroll that
+      // die"). Unlike exhaust, the card is DEPLETED on use (a per-deck-cycle limit,
+      // not per-round). Detect /deplete/i and thread the bare card name; the gate's
+      // _markGateAbilityUsed deplete-helper consumes it on use, and `applies` gates
+      // on the card NOT already being depleted. alexanbv 2026-06-26 (audit fix —
+      // the cost was previously uncharged because only /exhaust/ was detected).
+      const isDepleteCard = (r.card_type === 'Attachment' || r.card_type === 'Upgrade') && /deplete/i.test(r.effect || '');
+      if (isDepleteCard) params.depleteOnUse = stripBrackets(card);
       // AURA exhaust attachments (Trusted Ally — worn by a friendly figure within
       // N spaces of the attacker) exhaust the BEARER's DC, not the attacker's own
       // (alexanbv 2026-06-18 FIX-4). The bearer msgId is located via
@@ -276,6 +313,12 @@ export function registerRerollAbilities() {
           if (params.exhaustOnUse) {
             const mid = combatSelfAttachmentMsgId(combat, side);
             if (mid && isAttachmentExhausted(game, mid, params.exhaustOnUse)) return false;
+          }
+          // DEPLETE abilities (Doubt): offer only while the card is NOT depleted.
+          // Resolve the card's msgId from the OWNER (this side's player) and gate.
+          if (params.depleteOnUse) {
+            const mid = depletableCardMsgId(game, pn, params.depleteOnUse);
+            if (mid && isDcDepleted(game, mid)) return false;
           }
           if (pool === 'any') {
             return selectableDieIndices(combat, { pool: 'attack' }).length

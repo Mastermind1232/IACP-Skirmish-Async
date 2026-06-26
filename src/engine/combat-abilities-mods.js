@@ -469,10 +469,21 @@ registerCombatAbility({
   applies: (game, combat) => !!combat.defenseRoll?.dodge && !!combat.soresuFormFigKey && !!combat.target?.figureKey,
 });
 
+// R2-D2 Lucky — "While defending, if you roll a BLANK result, add +1 Dodge"
+// (automatic). The trigger is a BLANK defense-die face (0 Block, 0 Evade, no
+// Dodge) present in the roll — NOT a rolled Dodge (the old predicate gated on
+// combat.defenseRoll.dodge, the inverse of the actual trigger). Detect via the
+// per-die faces in combat.defenseDiceResults. alexanbv 2026-06-26 (audit fix).
+export function hasBlankDefenseFace(combat) {
+  const dice = combat?.defenseDiceResults;
+  if (!Array.isArray(dice)) return false;
+  return dice.some((d) => (d?.block || 0) === 0 && (d?.evade || 0) === 0 && !d?.dodge);
+}
 registerCombatAbility({
   id: 'lucky', name: 'Lucky', windows: ['mods'], side: 'defender', kind: 'passive',
   applies: (game, combat, side, deps) => {
-    if (!combat.defenseRoll?.dodge || !combat.target?.figureKey) return false;
+    if (!combat.target?.figureKey) return false;
+    if (!hasBlankDefenseFace(combat)) return false;
     return ids(eff(deps, dcNameFromFigureKey(combat.target.figureKey))).includes('lucky_r2d2');
   },
 });

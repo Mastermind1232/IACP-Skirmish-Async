@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { abilitiesForWindow, getCombatAbility } from './combat-timing-registry.js';
 import './combat-mods-gate.js'; // self-registers the data-driven reroll detection
 import { markDieRerolled, dieId } from './combat-reroll-lock.js';
+import { depletableCardMsgId } from './combat-abilities-rerolls.js';
+import { depleteDc, isDcDepleted } from '../game/card-state-helpers.js';
 
 // Cara Dune: an UNCONDITIONAL DC attacker reroll row in docs/combat-spec.csv →
 // registered data-driven as reroll:cara_dune:attacker. As a DC self-ability its
@@ -102,5 +104,47 @@ describe('rerolls gate: Field Supply token-spend reroll (FIX 2)', () => {
     // A FRESH attack with the same flags → offered again (per-attack limit).
     assert.ok(ids(played, fsCombat({ attackerSpentHitOrSurgeToken: true })).includes(FS),
       'fresh attack → offered again');
+  });
+});
+
+// Doubt ([Doubt] Upgrade) — the CSV row is attack_side='attacker' (the POOL is the
+// attacker's dice), but Doubt is the DEFENDER's disruption upgrade with a DEPLETE
+// cost. The data-driven loop must (1) register it DEFENDER-side / attack-pool, and
+// (2) attach a deplete cost gated on isDcDepleted. alexanbv 2026-06-26 (audit fix).
+describe('rerolls gate: Doubt — defender-side attack-pool reroll with a deplete cost', () => {
+  const DOUBT = 'reroll:doubt:defender';
+  const doubtGame = (extra = {}) => ({
+    gameId: 'g', p1DcList: [], p1DcMessageIds: [],
+    p2DcList: [{ dcName: '[Doubt]' }], p2DcMessageIds: ['mDoubt'], ...extra,
+  });
+  const doubtCombat = () => ({
+    attackerPlayerNum: 1, defenderPlayerNum: 2,
+    attackDiceResults: [{ color: 'blue', dmg: 0, surge: 0, acc: 1 }],
+  });
+  const defIds = (g, c) => abilitiesForWindow('rerolls', 'defender', g, c, {}).map((a) => a.id);
+
+  it('registers DEFENDER-side, ATTACK pool, with a deplete cost (not attacker-side)', () => {
+    const reg = getCombatAbility(DOUBT);
+    assert.ok(reg, 'Doubt should register on the defender side as reroll:doubt:defender');
+    assert.equal(reg.side, 'defender');
+    assert.equal(reg.params?.pool, 'attack');
+    assert.equal(reg.params?.depleteOnUse, 'Doubt');
+    // It must NOT be registered attacker-side (the wrong-player bug).
+    assert.ok(!getCombatAbility('reroll:doubt:attacker'), 'must NOT be registered attacker-side');
+  });
+
+  it('offered to the DEFENDER who owns Doubt, only while the card is NOT depleted', () => {
+    assert.ok(defIds(doubtGame(), doubtCombat()).includes(DOUBT), 'held + ready → offered to defender');
+    const depleted = doubtGame({ p2DepletedDcMessageIds: ['mDoubt'] });
+    assert.ok(!defIds(depleted, doubtCombat()).includes(DOUBT), 'depleted → not offered');
+  });
+
+  it('depletableCardMsgId resolves the owner upgrade msgId for the deplete cost', () => {
+    const game = doubtGame();
+    const mid = depletableCardMsgId(game, 2, 'Doubt');
+    assert.equal(mid, 'mDoubt');
+    assert.equal(isDcDepleted(game, mid), false);
+    depleteDc(game, mid, 2);
+    assert.equal(isDcDepleted(game, mid), true);
   });
 });

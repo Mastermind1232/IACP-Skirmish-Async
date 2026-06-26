@@ -527,9 +527,15 @@ export function getMovementProfile(dcName, figureKey, game) {
       break;
     }
   }
-  // Mortar Trooper Haul: treat blocking and impassable terrain as difficult terrain
+  // Mortar Trooper Haul: treat blocking and impassable terrain as difficult terrain.
+  // Haul is the Mortar Trooper SU FIGURE's OWN ability — it benefits only that
+  // figure, not the base group-mates (e.g. Shoretroopers) sharing the [Mortar
+  // Trooper] attachment. So gate on the MOVING figure actually BEING the Mortar
+  // Trooper SU figure (squadUpgradeFigureCard === 'Mortar Trooper', already
+  // computed above as _suCard), mirroring the Guidance Systems scoping fix
+  // (combat-abilities-mods.js:228-239), not mere group-level attachment presence.
   let hasMortarHaul = false;
-  if (figureKey && game) {
+  if (figureKey && game && _suCard === 'Mortar Trooper') {
     const _mhDcName = dcNameFromFigureKey(figureKey);
     for (const pn of [1, 2]) {
       if (!(figureKey in (game.figurePositions?.[pn] || {}))) continue;

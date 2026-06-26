@@ -2321,3 +2321,120 @@ test('Emperor may target a HOSTILE figure within 4 (gap 9)', () => {
   assert.strictEqual(result.requiresChoice, true);
   assert.ok(result.targetFigureKeys.includes('Rebel Trooper-1-0'), 'hostile figure within 4 is targetable');
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// Overnight audit HIGH fixes (2026-06-26): Stay Down guard, Wrist Cord /
+// Wrist Flamethrower oncePer:'round', Ambush forces damage onto the attacker.
+// ───────────────────────────────────────────────────────────────────────────
+
+test('Stay Down arms the post-attack Stun (guard matches abilityId, not the long label)', () => {
+  // Bug: the guard was `entry.label === 'Stay Down'`, but the library label is
+  // a long descriptive string, so stayDownPendingMsgId was never set. The fix
+  // also matches on abilityId === 'Stay Down'.
+  const msgId = 'msg-staydown';
+  const figureKey = 'Stormtroopers-1-0';
+  const game = {
+    gameId: 'g-sd',
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'a1' } },
+  };
+  const dcMessageMeta = new Map([[msgId, { gameId: 'g-sd', playerNum: 1, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Stay Down', { game, playerNum: 1, dcMessageMeta, msgId });
+  assert.strictEqual(result.applied, true, 'free attack granted');
+  assert.ok(game.stayDownPendingMsgId, 'stayDownPendingMsgId object created');
+  assert.strictEqual(game.stayDownPendingMsgId[figureKey], true, 'Stun pending armed for the activating figure');
+});
+
+test('Wrist Cord enforces oncePer:round per figure (push branch)', () => {
+  // Bug: the pushTargetWithinRange branch never read/wrote the round flag, so
+  // it re-fired while 2 MP remained. The fix gates on
+  // game.roundFigureAbilityUsed[`${figureKey}_wrist_cord`].
+  const msgId = 'msg-wristcord';
+  const figureKey = 'Boba Fett-1-0';
+  const game = {
+    gameId: 'g-wc',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    dcActionsData: { [msgId]: { selectedFigure: 0 } },
+    figurePositions: { 1: { [figureKey]: 'a1' }, 2: { 'Rebel Trooper-1-0': 'a2' } },
+    // Pre-mark used this round → the branch must short-circuit.
+    roundFigureAbilityUsed: { [`${figureKey}_wrist_cord`]: true },
+  };
+  const meta = { gameId: 'g-wc', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba Fett [Group 1]' };
+  const dcMessageMeta = new Map([[msgId, meta]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('wrist_cord', { game, playerNum: 1, meta, msgId, dcMessageMeta });
+  assert.strictEqual(result.applied, false, 'blocked — already used this round');
+  assert.ok(/already used this round/i.test(result.manualMessage || ''), 'round-limit message surfaced');
+});
+
+test('Wrist Cord round flag is keyed per figure (not group-wide)', () => {
+  // figureKey-scoped → a sibling figure in the same group is NOT blocked.
+  const msgId = 'msg-wristcord2';
+  const figA = 'Boba Fett-1-0';
+  const figB = 'Boba Fett-1-1';
+  const game = {
+    gameId: 'g-wc2',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    dcActionsData: { [msgId]: { selectedFigure: 1 } }, // figure B is acting
+    figurePositions: { 1: { [figA]: 'a1', [figB]: 'b1' }, 2: { 'Rebel Trooper-1-0': 'a2' } },
+    roundFigureAbilityUsed: { [`${figA}_wrist_cord`]: true }, // only A used it
+  };
+  const meta = { gameId: 'g-wc2', playerNum: 1, dcName: 'Boba Fett', displayName: 'Boba Fett [Group 1]' };
+  const dcMessageMeta = new Map([[msgId, meta]]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('wrist_cord', { game, playerNum: 1, meta, msgId, dcMessageMeta });
+  // Figure B is not blocked → proceeds to enumerate targets (requiresChoice) or
+  // a no-targets manual message; the key point is it is NOT the round-limit block.
+  assert.ok(!/already used this round/i.test(result.manualMessage || ''), 'sibling figure B is not round-limited');
+});
+
+test('Ambush forces 2 Damage onto THE ATTACKER (no free target pick) and grants the move', async () => {
+  // Bug: routed through the generic move-X handler with no damage step at all
+  // (the dedicated chooseAdjacentHostileThen handler was unreachable). The fix
+  // excludes cah cards from the generic mpBonus handler and adds an Ambush
+  // branch that forces the damage onto the attacker (mirrors cah.targetAttacker).
+  const defMsgId = 'msg-ambush-def';
+  const attMsgId = 'msg-ambush-att';
+  const defFk = 'Ewok Warrior-1-0';
+  const attFk = 'Stormtroopers-1-0';
+  const attHealth = [[10, 10]];
+  const dcHealthState = new Map([[attMsgId, attHealth]]);
+  const game = {
+    gameId: 'g-ambush',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { [defFk]: 'a1' }, 2: { [attFk]: 'a2' } },
+    p2DcMessageIds: [attMsgId],
+    p2DcList: [{ dcName: 'Stormtroopers', healthState: [[10, 10]] }],
+    // Combat context: defender being attacked declares Ambush on the attacker.
+    combat: {
+      attackerFigureKey: attFk,
+      attackerPlayerNum: 2,
+      target: { figureKey: defFk },
+    },
+  };
+  const dcMessageMeta = new Map([
+    [defMsgId, { gameId: 'g-ambush', playerNum: 1, dcName: 'Ewok Warrior', displayName: 'Ewok Warrior [Group 1]' }],
+    [attMsgId, { gameId: 'g-ambush', playerNum: 2, dcName: 'Stormtroopers', displayName: 'Stormtroopers [Group 1]' }],
+  ]);
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Ambush', { game, playerNum: 1, dcMessageMeta, dcHealthState });
+  assert.strictEqual(result.applied, true, 'Ambush resolves');
+  // 2 Damage applied to THE ATTACKER (no choice prompt).
+  assert.strictEqual(result.requiresChoice, undefined, 'no free target pick');
+  await applyDeferredAbilityEffects(game, { dcHealthState }, result);
+  assert.deepStrictEqual(dcHealthState.get(attMsgId)[0], [8, 10], 'attacker took exactly 2 Damage');
+  // 4-space move granted to the defender (no free-pick continuation).
+  assert.ok(game.pendingMoveX?.[defMsgId], 'move-X granted to the defender');
+  assert.strictEqual(game.pendingMoveX[defMsgId].remaining, 4, '4-space move');
+  assert.strictEqual(game.pendingMoveX[defMsgId].nextAction, null, 'no free-target picker continuation');
+});
+
+test('Ambush aborts cleanly with no combat/attacker context', () => {
+  const game = { gameId: 'g-ambush2', figurePositions: { 1: {}, 2: {} } };
+  const dcMessageMeta = new Map();
+  _registerDcMessageMeta(dcMessageMeta);
+  const result = resolveAbility('Ambush', { game, playerNum: 1, dcMessageMeta });
+  assert.strictEqual(result.applied, false);
+  assert.ok(/attacker context/i.test(result.manualMessage || ''), 'manual fallback when no attacker context');
+});

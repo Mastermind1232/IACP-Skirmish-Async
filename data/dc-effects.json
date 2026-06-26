@@ -3749,6 +3749,12 @@
         "Scheme",
         "Order Hit"
       ],
+      "specialCosts": [
+        1,
+        1,
+        1,
+        2
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,

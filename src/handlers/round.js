@@ -1119,6 +1119,12 @@ async function _runInitiativeSwapAndContinue(game, gameId, interaction, ctx, log
   game.roundAbilityUsed = {};
   // Deadly Precision (CC) is a "this round" effect — clear it each new round.
   game.deadlyPrecisionActive = {};
+  // Dioxis Fumes (CC) — "non-DROID figures cannot recover Strain for the rest
+  // of this round" is a "this round" restriction that must persist through the
+  // EOR phase (so it is NOT cleared in clearUntilEndOfRoundFlags). Clear it at
+  // the round boundary alongside the other "this round" flags. Consumed by the
+  // Strain-recovery gates in abilities.js (recoverDamage / recoverSelf).
+  game.roundDioxisActive = false;
   // There is Another (Leia CC) relaxes CC play-legality for one round — clear it.
   game.thereIsAnotherActive = {};
   // Hold Ground (CC): "until the end of the round" — clear the holder each round

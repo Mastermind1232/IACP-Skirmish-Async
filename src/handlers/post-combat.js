@@ -95,17 +95,17 @@ export async function handleReactionUse(interaction, ctx) {
     // NOT a bank grant. Fires out of own activation (defender side
     // during attacker's turn).
     const attackerPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigKey];
-    const bosskPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
+    const fennecPos = game.figurePositions?.[defenderPlayerNum]?.[targetFigKey];
     // CSV row 597 conditional "you are within 4 spaces of the attacker" — if the
     // defender is >4 from the attacker, the card does nothing (defense-in-depth;
     // the offer in combat-bridge.js already filters on this). Fall through to the
     // finish/cleanup logic below either way.
-    if (!attackerPos || !bosskPos || countGameSpaces(game, bosskPos, attackerPos) > 4) {
+    if (!attackerPos || !fennecPos || countGameSpaces(game, fennecPos, attackerPos) > 4) {
       if (thread) await thread.send(`**Dangerous Prey** — no effect (not within 4 spaces of the attacker).`).catch(discordCatch);
     } else {
       const ms = getMapData(game.selectedMap?.id);
-      const adjSet = new Set((ms?.adjacency?.[String(bosskPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
-      const isAdj = attackerPos && bosskPos && adjSet.has(String(attackerPos).toLowerCase());
+      const adjSet = new Set((ms?.adjacency?.[String(fennecPos).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
+      const isAdj = attackerPos && fennecPos && adjSet.has(String(attackerPos).toLowerCase());
       const dmg = isAdj ? 3 : 1;
       const atkMsgId = attackerMsgId || findDcMessageIdForFigure(game.gameId, attackerPlayerNum, attackerFigKey);
       const attackerName = dcNameFromFigureKey(attackerFigKey);

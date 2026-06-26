@@ -37,6 +37,7 @@ const ccList = [...allCCs].sort();
 const CONTEXT_DEPENDENT_CCS = new Set([
   // B1: Defender timing
   'Brace for Impact', 'Knowledge and Defense', 'Parry',
+  'Ambush', // defender reaction — needs attacker context (damages the attacker)
   // B2: Post-attack timing
   'Collateral Damage', 'Reduce to Rubble',
   // B3: Special Action (excluded from play_cc)
@@ -313,6 +314,42 @@ describe('CC Coverage: context-dependent CCs', () => {
 
     assert.ok(result.applied || result.logMessage,
       `Reduce to Rubble did not resolve: ${JSON.stringify(result)}`);
+  });
+
+  test('Ambush resolves as a defender reaction (damages the attacker)', () => {
+    // Ambush (alexanbv audit 2026-06-26): a DEFENDER reaction — move adjacent to
+    // the attacker, then THE ATTACKER suffers 2 Damage. Needs an attacker context
+    // with a surviving defender; in a generic no-combat context it correctly
+    // returns a manualMessage, so it lives here with a real attack context.
+    const p1Army = [{ dcName: 'Rebel Trooper (Regular)' }];
+    const p2Army = [{ dcName: 'Heavy Stormtrooper (Elite)' }];
+
+    const { game, dcMessageMeta, dcHealthState, dcExhaustedState } = createTestGame()
+      .withMap('mos-eisley-outskirts')
+      .withMissionVariant('a')
+      .withPlayer1Army(p1Army)
+      .withPlayer2Army(p2Army)
+      .inRound(1)
+      .build();
+
+    const p1Figs = Object.keys(game.figurePositions?.[1] || {}); // defender ("you")
+    const p2Figs = Object.keys(game.figurePositions?.[2] || {}); // attacker
+    const combat = {
+      attackerFigureKey: p2Figs[0],
+      attackerPlayerNum: 2,
+      target: { figureKey: p1Figs[0] },
+    };
+
+    const effectData = getCcEffect('Ambush');
+    const abilityId = effectData?.abilityId ?? 'Ambush';
+    const result = resolveAbility(abilityId, {
+      game, playerNum: 1, cardName: 'Ambush',
+      dcMessageMeta, dcHealthState, dcExhaustedState,
+      combat,
+    });
+
+    assert.ok(result.applied || result.logMessage,
+      `Ambush did not resolve with attacker context: ${JSON.stringify(result)}`);
   });
 
   // ── B3: Special Action CCs (test resolveAbility directly) ─────────────────

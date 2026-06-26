@@ -127,3 +127,35 @@ describe('SU figure model — movement profile from the SU card', () => {
     assert.equal(prof.isMobile, false);
   });
 });
+
+describe('SU figure model — Haul scoped to the Mortar Trooper SU figure only', () => {
+  // Haul is the Mortar Trooper SU figure's OWN ability (terrain-cost waiver:
+  // treat blocking + impassable terrain as difficult). It must benefit ONLY that
+  // figure, not the base Shoretroopers/host group-mates that merely share the
+  // [Mortar Trooper] attachment — mirroring the Guidance Systems scoping fix.
+  // A game where the Stormtrooper group carries the [Mortar Trooper] attachment
+  // and 'Stormtrooper-1-2' is the SU figure, 'Stormtrooper-1-0' a base figure.
+  function gameWithMortarAttachment() {
+    return {
+      figureNicknames: { 'Stormtrooper-1-2': 'Mortar Trooper' },
+      figurePositions: { 1: { 'Stormtrooper-1-0': 'a1', 'Stormtrooper-1-1': 'a2', 'Stormtrooper-1-2': 'a3' } },
+      p1DcList: [{ dcName: HOST }],
+      p1DcMessageIds: ['msg-st-1'],
+      p1DcAttachments: { 'msg-st-1': ['Mortar Trooper'] },
+    };
+  }
+
+  it('the Mortar Trooper SU figure GETS the Haul terrain waiver', () => {
+    const game = gameWithMortarAttachment();
+    const prof = getMovementProfile(HOST, 'Stormtrooper-1-2', game);
+    assert.equal(prof.treatBlockingAsDifficult, true, 'SU figure treats blocking as difficult');
+    assert.equal(prof.treatImpassableAsDifficult, true, 'SU figure treats impassable as difficult');
+  });
+
+  it('a base Shoretrooper in the same group does NOT get Haul (no over-grant)', () => {
+    const game = gameWithMortarAttachment();
+    const prof = getMovementProfile(HOST, 'Stormtrooper-1-0', game);
+    assert.equal(prof.treatBlockingAsDifficult, false, 'base figure does NOT treat blocking as difficult');
+    assert.equal(prof.treatImpassableAsDifficult, false, 'base figure does NOT treat impassable as difficult');
+  });
+});

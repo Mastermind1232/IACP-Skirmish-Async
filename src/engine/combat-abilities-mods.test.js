@@ -69,12 +69,21 @@ describe('mods-window abilities via the timing registry', () => {
     assert.equal(find(at('defender', game(), combat({ defensibleResolved: true }), d), 'defensible').kind, 'interactive');
   });
 
-  it('defender Dodge passives appear only on a dodge', () => {
-    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['defensive_stance', 'lucky_r2d2'] } });
+  it('defender Defensive Stance passive appears only on a dodge', () => {
+    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['defensive_stance'] } });
     assert.equal(find(at('defender', game(), combat(), d), 'defensive_stance'), undefined);
     const dodge = at('defender', game(), combat({ defenseRoll: { dodge: true } }), d);
     assert.equal(find(dodge, 'defensive_stance').kind, 'passive');
-    assert.equal(find(dodge, 'lucky').kind, 'passive');
+  });
+
+  it('R2-D2 Lucky passive appears only on a BLANK defense-die result (not a dodge)', () => {
+    const d = deps({ Atk: {}, Def: { specialAbilityIds: ['lucky_r2d2'] } });
+    // A dodge (no blank face) does NOT trigger Lucky — it triggers on a blank.
+    const dodgeOnly = combat({ defenseRoll: { dodge: true }, defenseDiceResults: [{ block: 1, evade: 0, dodge: false }, { block: 0, evade: 0, dodge: true }] });
+    assert.equal(find(at('defender', game(), dodgeOnly, d), 'lucky'), undefined);
+    // A blank face (0 block / 0 evade / no dodge) DOES trigger Lucky.
+    const withBlank = combat({ defenseRoll: { block: 1, dodge: false }, defenseDiceResults: [{ block: 1, evade: 0, dodge: false }, { block: 0, evade: 0, dodge: false }] });
+    assert.equal(find(at('defender', game(), withBlank, d), 'lucky').kind, 'passive');
   });
 
   it('attacker query returns no defender abilities and vice-versa', () => {

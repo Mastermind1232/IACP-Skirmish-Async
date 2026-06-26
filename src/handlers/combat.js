@@ -242,7 +242,7 @@ import { stashPendingModifier, drainPendingModifiers, applyPendingEffect } from 
 import { driveModsGate, recordModsChoice, passModsSide } from '../engine/combat-mods-orchestrator.js';
 import { startSequence as _startSequence, advanceSequence as _advanceSequence } from '../engine/combat-sequence-driver.js';
 import { rerollDie as _rerollDie, selectableDieIndices as _selectableDieIndices } from '../engine/combat-reroll.js';
-import { pendingForcedRerolls } from '../engine/combat-abilities-rerolls.js';
+import { pendingForcedRerolls, depletableCardMsgId } from '../engine/combat-abilities-rerolls.js';
 import { auraGrantedSurges as _auraGrantedSurges, scrapBattalionGrantedSurges as _scrapBattalionGrantedSurges } from '../engine/surge-auras.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
 import { markAbilityUsed as _markAbilityUsed, limitGuard as _limitGuard, abilityLimitKey as _abilityLimitKey } from '../engine/combat-conditions.js';
@@ -273,6 +273,19 @@ function _markGateAbilityUsed(game, combat, pick) {
     const deps = { getMapData, isWithinSpaces: _isWithinSpaces, getDcList, getDcMessageIds };
     const mid = auraAttachmentBearerMsgId(game, combat, p.auraExhaustOnUse, p.auraRange ?? 3, deps, true);
     if (mid) exhaustAttachment(game, mid, p.auraExhaustOnUse);
+  }
+  // DEPLETE-on-use (Doubt): the upgrade's cost is "Deplete this card" — deplete
+  // it on the OWNER (reg.side's player) the moment the reroll resolves, so the
+  // per-deck-cycle limit (gated in `applies` via isDcDepleted) is enforced.
+  // alexanbv 2026-06-26 (audit fix).
+  if (p?.depleteOnUse) {
+    const ownerPN = reg.side === 'attacker'
+      ? combat.attackerPlayerNum
+      : (combat.defenderPlayerNum ?? (combat.attackerPlayerNum ? opponentPlayerNum(combat.attackerPlayerNum) : null));
+    if (ownerPN) {
+      const mid = depletableCardMsgId(game, ownerPN, p.depleteOnUse);
+      if (mid) depleteDc(game, mid, ownerPN);
+    }
   }
 }
 
@@ -2656,7 +2669,11 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
     await thread.send('**Defensive Stance** — Dodge converted to +2 Block, +1 Evade.').catch(discordCatch);
   } else if (id === 'lucky') {
-    await thread.send('🍀 **Lucky** — if R2-D2 rolled a blank, +1 Dodge is added at resolution.').catch(discordCatch);
+    // R2-D2 Lucky — automatic: a BLANK defense-die result is present, so add +1
+    // Dodge. combat.bonusDodge is summed into total Dodge at resolution
+    // (src/game/combat.js). No prompt (resolution=automatic). alexanbv 2026-06-26.
+    combat.bonusDodge = (combat.bonusDodge || 0) + 1;
+    await thread.send('🍀 **Lucky** (R2-D2) — rolled a blank result: **+1 Dodge**.').catch(discordCatch);
   } else if (id === 'soresu') {
     const dr = combat.defenseRoll || {};
     combat.defenseRoll = { block: (dr.block || 0) + 2, evade: (dr.evade || 0) + 1, dodge: false };
@@ -4268,12 +4285,33 @@ export async function handleAttackTarget(interaction, ctx) {
           ktpApplied = true;
         }
       }
-      // Regular: optional — remind defender they may spend 1 Strain to deal 1 Strain to attacker
-      if (!ktpApplied && hasKtpRegularAbility(fkAbilityIds)) {
+      // Regular: INTERACTIVE — defender MAY suffer 1 Strain; if they do, the
+      // attacker also suffers 1 Strain (limit 1 per attack). Mirrors the Elite
+      // automation but routed through an Apply/Skip prompt addressed to the
+      // defender (handleKtpRegularGate). Once-per-attack flag combat._ktpRegularUsed.
+      // alexanbv 2026-06-26 (audit fix — was a prose reminder only).
+      if (!ktpApplied && hasKtpRegularAbility(fkAbilityIds) && !game.pendingCombat?._ktpRegularUsed) {
         // Check: target space must not contain a friendly GUARDIAN
         const targetFigKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
         if (!targetFigKws.includes('GUARDIAN')) {
-          await thread.send(`**Keep the Peace** reminder — **${fkDcName}** is adjacent to the target space. Defender may suffer 1 Strain to make the attacker suffer 1 Strain.`);
+          // Stash the once-per-attack pending state on the combat so the gate
+          // handler can resolve it (route strain to BOTH figures) exactly once.
+          game.pendingCombat._ktpRegular = {
+            defenderFigureKey: fk,
+            defenderPlayerNum,
+            attackerFigureKey,
+            attackerPlayerNum,
+            dcName: fkDcName,
+          };
+          const defOwnerId = game[`player${defenderPlayerNum}Id`] ?? '';
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`ktpreg_use_${game.pendingCombat.gameId}`).setLabel('Suffer 1 Strain → Strain attacker').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`ktpreg_skip_${game.pendingCombat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+          );
+          await thread.send(sanitizeMentions({
+            content: `**Keep the Peace** — <@${defOwnerId}> **${fkDcName}** is adjacent to the target space. You MAY suffer 1 Strain; if you do, the attacker suffers 1 Strain.`,
+            components: [row], allowedMentions: { users: defOwnerId ? [defOwnerId] : [] },
+          })).catch(discordCatch);
           ktpApplied = true;
         }
       }
@@ -5375,6 +5413,69 @@ export async function handleMerciless(interaction, ctx) {
   if (thread) await thread.send(`⚡ **Merciless** — **${_mercInfo.targetLabel}** suffers 1 Damage.`).catch(discordCatch);
   combat.mercilessUsed = true;
   delete combat.mercilessAvailable;
+  saveGames(game.gameId);
+}
+
+/**
+ * Keep the Peace (Wing Guard REGULAR) gate — the defender's optional Strain
+ * exchange. `ktpreg_use_<gameId>` makes the DEFENDER suffer 1 Strain and, if
+ * successful, the ATTACKER suffers 1 Strain too. `ktpreg_skip_<gameId>` declines.
+ * Once-per-attack: combat._ktpRegularUsed is set on resolve so it cannot re-fire.
+ * Routed through applyStrain on BOTH figures so the per-strain CC-discard /
+ * Headhunter prompts fire. alexanbv 2026-06-26 (audit fix).
+ *
+ * NOTE: requires registration in src/handlers/index.js (the interaction router):
+ *   register('ktpreg_use_',  handleKtpRegularGate, 'combat');
+ *   register('ktpreg_skip_', handleKtpRegularGate, 'combat');
+ * (index.js is outside this change's editable scope — see the task report.)
+ */
+export async function handleKtpRegularGate(interaction, ctx) {
+  const { getGame, replyIfGameEnded, saveGames } = ctx;
+  const isUse = interaction.customId.startsWith('ktpreg_use_');
+  const gameId = parseCustomId(interaction.customId, isUse ? 'ktpreg_use_' : 'ktpreg_skip_');
+  const game = await requireGame(interaction, getGame, gameId);
+  if (!game) return;
+  if (await replyIfGameEnded(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const ktp = combat?._ktpRegular;
+  if (!combat || !ktp || combat._ktpRegularUsed) {
+    await interaction.followUp({ content: 'Keep the Peace is no longer available.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+  if (!await requirePlayer(interaction, game, interaction.user.id, ktp.defenderPlayerNum, canActAsPlayer, 'Only the defender may resolve Keep the Peace.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  // Disable the buttons so the choice can't be repeated.
+  try {
+    const _disabledRows = (interaction.message?.components || []).map((row) => {
+      const newRow = new ActionRowBuilder();
+      for (const c of row.components) newRow.addComponents(ButtonBuilder.from(c).setDisabled(true));
+      return newRow;
+    });
+    if (_disabledRows.length > 0) await interaction.message.edit({ components: _disabledRows }).catch(discordCatch);
+  } catch { /* non-fatal */ }
+  // Mark used FIRST so a re-entrant strain prompt can't re-trigger this gate.
+  combat._ktpRegularUsed = true;
+  delete combat._ktpRegular;
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  if (!isUse) {
+    if (thread) await thread.send('**Keep the Peace** — Skipped.').catch(discordCatch);
+    saveGames(game.gameId);
+    return;
+  }
+  // Defender suffers 1 Strain; if they do, the attacker suffers 1 Strain too.
+  await applyStrain(game, ctx, {
+    figureKey: ktp.defenderFigureKey,
+    controllerPlayerNum: ktp.defenderPlayerNum,
+    amount: 1,
+    source: `Keep the Peace (${ktp.dcName})`,
+  });
+  await applyStrain(game, ctx, {
+    figureKey: ktp.attackerFigureKey,
+    controllerPlayerNum: ktp.attackerPlayerNum,
+    amount: 1,
+    source: `Keep the Peace (${ktp.dcName})`,
+  });
+  if (thread) await thread.send(`**Keep the Peace** (${ktp.dcName}) — defender suffered 1 Strain; the attacker suffers 1 Strain.`).catch(discordCatch);
   saveGames(game.gameId);
 }
 

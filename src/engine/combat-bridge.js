@@ -2014,7 +2014,7 @@ export async function checkPostCombatSurges(game, combat, resultText, embedRefre
   const defenderHand = getCcHand(game, defenderPlayerNum) || [];
   const REACTION_CARDS = [
     { name: 'Payback', targetDcName: 'Dengar' },
-    { name: 'Dangerous Prey', targetDcName: 'Bossk' },
+    { name: 'Dangerous Prey', targetDcName: 'Fennec Shand' },
     { name: "Right Back At Ya!", targetDcName: 'Ahsoka Tano' },
   ];
   combat.promptedReactions = combat.promptedReactions || new Set();
