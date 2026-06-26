@@ -14144,9 +14144,9 @@ export function resolveAbility(abilityId, context) {
           [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         game[deckKey] = deck;
-        // Per alexanbv 2026-05-13: Command cards are SECRET. Log only
-        // the count, not the chosen card name.
-        return { applied: true, logMessage: `**Devotion** — Drew 1 Command card from deck. Deck shuffled (${deck.length} cards remaining).` };
+        // Per alexanbv 2026-06-26: Devotion says REVEAL — show the drawn card
+        // to BOTH players (exception to CC secrecy). Inline the card name.
+        return { applied: true, logMessage: `**Devotion** — Drew & revealed **${cardName}** from deck. Deck shuffled (${deck.length} cards remaining).` };
       }
       // Phase 2: figure chosen → search deck for cards matching figure's traits
       const dcName = dcNameFromFigureKey(chosenFigureKey);
@@ -14192,10 +14192,9 @@ export function resolveAbility(abilityId, context) {
           [deck[i], deck[j]] = [deck[j], deck[i]];
         }
         game[deckKey] = deck;
-        // Per alexanbv 2026-05-13: Command cards are SECRET. The
-        // matching DC name is public (figure on board), but the drawn
-        // card name is not.
-        return { applied: true, logMessage: `**Devotion** — Drew 1 Command card matching **${dcName}**. Deck shuffled (${deck.length} cards remaining).` };
+        // Per alexanbv 2026-06-26: Devotion says REVEAL — show the drawn card
+        // to BOTH players (exception to CC secrecy). Inline the card name.
+        return { applied: true, logMessage: `**Devotion** — Drew & revealed **${cardName}** matching **${dcName}**. Deck shuffled (${deck.length} cards remaining).` };
       }
       return { requiresChoice: true, choiceOptions: matches.map(c => `Draw: ${c}`), choiceValues: matches.map(c => `devotion_draw|${c}`) };
     }
@@ -15890,14 +15889,14 @@ export function resolveAbility(abilityId, context) {
     }
     game[deckKey] = deck;
     game[handKey] = [...(game[handKey] || []), chosenOption];
-    // Per alexanbv 2026-05-13: Command cards are SECRET. Don't reveal
-    // the chosen card name in the public log. (apply-ability-result
-    // will refresh the private hand visual for the drawing player.)
+    // Per alexanbv 2026-06-26: this card says REVEAL — "reveal" abilities show
+    // the card to BOTH players (exception to CC secrecy). Inline the chosen
+    // card name into the public log.
     return {
       applied: true,
       drewCards: [chosenOption],
       refreshHand: true,
-      logMessage: `**${entry.label}** — Searched deck and added 1 card to hand. Deck shuffled.`,
+      logMessage: `**${entry.label}** — Searched deck and revealed **${chosenOption}**, added to hand. Deck shuffled.`,
     };
   }
 

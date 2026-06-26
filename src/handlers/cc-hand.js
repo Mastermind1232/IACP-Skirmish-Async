@@ -1348,6 +1348,45 @@ export async function handleCcDiscardSelect(interaction, ctx) {
   saveGames(game.gameId);
 }
 
+/**
+ * Central choke point for discarding a Command card from a player's hand.
+ *
+ * Per alexanbv 2026-06-26: whenever a CC is DISCARDED it is REVEALED to both
+ * players (exception to CC secrecy). This helper unifies that behaviour for
+ * cost-discards (Zillo Technique, Illicit Arms/Bib Fortuna) so they BOTH:
+ *   1. move the card hand → discard pile, and
+ *   2. reveal it publicly via logGameAction, and
+ *   3. fire the when-discarded passive subroutine (fireCcDiscarded) so
+ *      Built on Hope / De Wanna Wanga / Windfall still trigger.
+ *
+ * @param {object} game
+ * @param {number} playerNum - whose hand the card leaves
+ * @param {string} card - card name to discard
+ * @param {object} deps
+ * @param {import('discord.js').Client} deps.client
+ * @param {Function} deps.logGameAction
+ * @returns {Promise<{ moved: boolean } & ReturnType<typeof fireCcDiscarded>>}
+ */
+export async function discardCc(game, playerNum, card, { client, logGameAction } = {}) {
+  const hand = game[ccHandKey(playerNum)] || [];
+  const i = hand.indexOf(card);
+  if (i < 0) return { moved: false, redrawn: [], windfallSelfVp: 0, recordedCost: 0 };
+  hand.splice(i, 1);
+  game[ccHandKey(playerNum)] = hand;
+  game[ccDiscardKey(playerNum)] = (game[ccDiscardKey(playerNum)] || []).concat(card);
+  // Public reveal — discarding a CC shows it to BOTH players.
+  if (logGameAction) {
+    await logGameAction(game, client, `🃏 **P${playerNum}** discarded **${card}** — revealed.`, { icon: 'card' });
+  }
+  // When-discarded subroutine: re-draw passives (Built on Hope / De Wanna Wanga)
+  // + Windfall hooks. fromDeck:false → this is a hand discard.
+  const _disc = fireCcDiscarded(game, playerNum, card, { fromDeck: false });
+  if (logGameAction && _disc.windfallSelfVp > 0) {
+    await logGameAction(game, client, `**Windfall** — P${playerNum} gains **1 VP** (Windfall discarded).`, { icon: 'card' });
+  }
+  return { moved: true, ..._disc };
+}
+
 /** @param {import('discord.js').ButtonInteraction} interaction */
 export async function handleSquadConfirm(interaction, ctx) {
   const { getGame, pendingSquadConfirm, PENDING_ILLEGAL_TTL_MS, applySquadSubmission } = ctx;

@@ -227,7 +227,7 @@ import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-d
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { runCcPlayTriggers } from './cc-hand.js';
+import { runCcPlayTriggers, discardCc } from './cc-hand.js';
 import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume } from './cc-pipeline.js';
 import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
@@ -1138,16 +1138,10 @@ function _makeSpendResourceResolver({ name, options, spend, bonus, ephemeral = f
   };
 }
 
-/** Discard a specific Command card from a player's hand → discard pile. Returns the card name discarded, or null. */
-function _discardCcFromHand(game, playerNum, cardName) {
-  const hand = game[ccHandKey(playerNum)] || [];
-  const i = hand.indexOf(cardName);
-  if (i < 0) return null;
-  hand.splice(i, 1);
-  game[ccHandKey(playerNum)] = hand;
-  game[ccDiscardKey(playerNum)] = (game[ccDiscardKey(playerNum)] || []).concat(cardName);
-  return cardName;
-}
+// _discardCcFromHand was removed (alexanbv 2026-06-26): the Illicit Arms /
+// Zillo Technique cost-discards now route through the central discardCc choke
+// point (imported from cc-hand.js) so the card is REVEALED publicly AND
+// when-discarded passives fire.
 
 /** Mods-step convenience wrapper (existing call sites unchanged). */
 async function _driveModsGatePath(thread, game, combat, ctx) {
@@ -1803,7 +1797,13 @@ export const COMBAT_RESOLVERS = {
     name: 'Illicit Arms (Bib Fortuna)',
     ephemeral: true, // lists the attacker's HAND — keep it private
     options: (game, combat) => [...new Set(getCcHand(game, combat.attackerPlayerNum) || [])].map((c) => [c, c]),
-    spend: (choice, { game, combat }) => _discardCcFromHand(game, combat.attackerPlayerNum, choice) && `Command card "${choice}"`,
+    // Route the cost-discard through the central discardCc choke point so it
+    // REVEALS the card publicly AND fires when-discarded passives (Built on
+    // Hope / De Wanna Wanga / Windfall). alexanbv 2026-06-26.
+    spend: async (choice, { game, combat, ctx }) => {
+      const res = await discardCc(game, combat.attackerPlayerNum, choice, { client: ctx?.client, logGameAction: ctx?.logGameAction });
+      return res.moved ? `Command card "${choice}"` : null;
+    },
     bonus: (combat) => { combat.bonusHits = (combat.bonusHits || 0) + 1; return '+1 Damage'; },
   }),
   // Zillo Technique — Block Boost ([Zillo Technique] upgrade) — discard 1 Command
@@ -1815,9 +1815,12 @@ export const COMBAT_RESOLVERS = {
       const defPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
       return [...new Set(getCcHand(game, defPn) || [])].map((c) => [c, c]);
     },
-    spend: (choice, { game, combat }) => {
+    spend: async (choice, { game, combat, ctx }) => {
       const defPn = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-      return _discardCcFromHand(game, defPn, choice) && `Command card "${choice}"`;
+      // Central discardCc choke point: REVEAL publicly + fire when-discarded
+      // passives. alexanbv 2026-06-26.
+      const res = await discardCc(game, defPn, choice, { client: ctx?.client, logGameAction: ctx?.logGameAction });
+      return res.moved ? `Command card "${choice}"` : null;
     },
     bonus: (combat) => { combat.bonusBlock = (combat.bonusBlock || 0) + 1; return '+1 Block'; },
   }),
@@ -2214,6 +2217,13 @@ export async function handleModsPick(interaction, ctx) {
       if (_ccHi >= 0) _ccHand.splice(_ccHi, 1);
       game[ccHandKey(ccPn)] = _ccHand;
       game[ccDiscardKey(ccPn)] = (game[ccDiscardKey(ccPn)] || []).concat(_ccCard);
+      // Public reveal of the played gate CC (alexanbv 2026-06-26): a PLAYED CC
+      // is revealed to both players. The gate-play path otherwise only surfaces
+      // the card privately when a counter is offered. Match the hand-play style.
+      {
+        const _ccPid = getPlayerId(game, ccPn);
+        await ctx.logGameAction?.(game, interaction.client, `<@${_ccPid}> played command card **${_ccCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _ccPid ? [_ccPid] : [] } });
+      }
       // The play happened — mark the gate ability used now.
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
@@ -2249,6 +2259,11 @@ export async function handleModsPick(interaction, ctx) {
       if (_rHi >= 0) _rHand.splice(_rHi, 1);
       game[ccHandKey(_rPn)] = _rHand;
       game[ccDiscardKey(_rPn)] = (game[ccDiscardKey(_rPn)] || []).concat(_rCard);
+      // Public reveal of the played reroll gate CC (alexanbv 2026-06-26).
+      {
+        const _rPid = getPlayerId(game, _rPn);
+        await ctx.logGameAction?.(game, interaction.client, `<@${_rPid}> played command card **${_rCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _rPid ? [_rPid] : [] } });
+      }
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
       _ensureRerollCcResolver();
