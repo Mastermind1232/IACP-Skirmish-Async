@@ -1800,6 +1800,12 @@ async function fireGateAbility(thread, game, combat, effect, ctx) {
     if (hi >= 0) hand.splice(hi, 1);
     game[ccHandKey(pn)] = hand;
     game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
+    // Public play-reveal: announce the after-attack CC to both players (matches
+    // the hand-play reveal style) before triggers / the counter-window open.
+    const _aaPid = getPlayerId(game, pn);
+    if (typeof ctx.logGameAction === 'function' && ctx.client) {
+      await ctx.logGameAction(game, ctx.client, `<@${_aaPid}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _aaPid ? [_aaPid] : [] } });
+    }
     // On-play triggers (Hunt Dissent, Adapt).
     await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
     // Pause the after-attack window: store the resume descriptor (kind

@@ -2511,6 +2511,12 @@ export async function handleToughLuckGate(interaction, ctx) {
     delete combat._pendingToughLuck;
     _ensureToughLuckResolver();
     game.pendingCombatCcResolve = { window: 'rerolls', gameId: game.gameId };
+    // Public play-reveal: announce Tough Luck to both players (matches the
+    // sibling gate-CC reveals retrofitted 2026-06-26) before the counter-window.
+    const _tlPid = getPlayerId(game, tlPlayerNum);
+    if (typeof ctx.logGameAction === 'function' && interaction.client) {
+      await ctx.logGameAction(game, interaction.client, `<@${_tlPid}> played command card **Tough Luck**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _tlPid ? [_tlPid] : [] } });
+    }
     await runCcPlayTriggers(game, tlPlayerNum, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
     await openCcCounterWindow(game, game.gameId, {
       card: 'Tough Luck', cost: 0, playedBy: tlPlayerNum, abilityId: 'Tough Luck',

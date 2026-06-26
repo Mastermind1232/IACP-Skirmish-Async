@@ -1116,6 +1116,13 @@ export async function handleCelebrationPlay(interaction, ctx) {
   clearPendingCelebration(game);
   await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
   await interaction.message.edit({ content: `**Celebration** — played.`, components: [] }).catch(discordCatch);
+  // Public play-reveal: the edit above is hand-channel-only, so announce the play
+  // to both players (matches the hand-play reveal style) — Celebration is then
+  // announced even if it never reaches a counter-window.
+  const _celPid = getPlayerId(game, attackerPlayerNum);
+  if (typeof logGameAction === 'function' && client) {
+    await logGameAction(game, client, `<@${_celPid}> played command card **Celebration**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _celPid ? [_celPid] : [] } });
+  }
   // On-play triggers, then the unified counter-window: Celebration is counterable;
   // the +4 VP lands via the 'celebration_vp' resolver only if not cancelled.
   await runCcPlayTriggers(game, attackerPlayerNum, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });

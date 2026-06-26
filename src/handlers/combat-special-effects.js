@@ -1277,19 +1277,16 @@ export async function handleWantonCcPick(interaction, ctx) {
   const wd = game.pendingWantonDestruction;
   if (!await requirePlayer(interaction, game, interaction.user.id, wd.ownerPlayerNum, canActAsPlayer, 'Not your choice.')) return;
   // Find and discard the CC card
-  const hKey = ccHandKey(wd.ownerPlayerNum);
-  const dKey = ccDiscardKey(wd.ownerPlayerNum);
-  const hand = game[hKey] || [];
+  const hand = game[ccHandKey(wd.ownerPlayerNum)] || [];
   const uniqueCards = [...new Set(hand)];
   const cardIdx = parseInt(idxStr, 10);
   const cardName = uniqueCards[cardIdx];
   if (!cardName) return;
-  // Remove from hand, add to discard
-  const hIdx = hand.indexOf(cardName);
-  if (hIdx >= 0) hand.splice(hIdx, 1);
-  game[hKey] = hand;
-  game[dKey] = [...(game[dKey] || []), cardName];
-  await logGameAction(game, client, `**Wanton Destruction** — Discarded **${cardName}**.`, { phase: 'ROUND', icon: 'card' });
+  // Route through the central discardCc helper: hand→discard + public reveal +
+  // fireCcDiscarded (when-discarded passives). Replaces the manual splice/push
+  // and the redundant raw discard log (discardCc emits its own reveal line).
+  const { discardCc } = await import('./cc-hand.js');
+  await discardCc(game, wd.ownerPlayerNum, cardName, { client, logGameAction });
   // Show figure picker — Discord allows max 25 buttons (5 rows x 5); reserve 1 for Done
   const btns = wd.targets.slice(0, 24).map((t, i) =>
     new ButtonBuilder().setCustomId(`wanton_pick_${gameId}_${i}`).setLabel(t.label.slice(0, 80)).setStyle(ButtonStyle.Danger)

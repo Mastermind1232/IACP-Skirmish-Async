@@ -2111,17 +2111,17 @@ export async function handleRbfDiscard(interaction, ctx) {
   const game = await requireGame(interaction, getGame, gameId);
   if (!game) return;
   const handKey = ccHandKey(playerNum);
-  const discKey = ccDiscardKey(playerNum);
   const hand = game[handKey] || [];
   if (cardIdx < 0 || cardIdx >= hand.length) {
     await interaction.followUp({ content: 'Invalid card selection.', ephemeral: true }).catch(discordCatch);
     return;
   }
-  const card = hand.splice(cardIdx, 1)[0];
-  game[discKey] = game[discKey] || [];
-  game[discKey].push(card);
-  game[handKey] = hand;
-  await logGameAction(game, client, `📜 **Rule by Fear** — **P${playerNum}** discarded 1 CC.`);
+  const card = hand[cardIdx];
+  // Route through the central discardCc helper: hand→discard + public reveal
+  // (names the card) + fireCcDiscarded (when-discarded passives). Replaces the
+  // manual splice/push and the count-only "discarded 1 CC" log.
+  const { discardCc } = await import('./cc-hand.js');
+  await discardCc(game, playerNum, card, { client, logGameAction });
   await interaction.message.edit({ components: [] }).catch(discordCatch);
   if (updateHandVisualMessage) await updateHandVisualMessage(game, playerNum, client).catch(discordCatch);
   if (updateDiscardPileMessage) await updateDiscardPileMessage(game, playerNum, client).catch(discordCatch);

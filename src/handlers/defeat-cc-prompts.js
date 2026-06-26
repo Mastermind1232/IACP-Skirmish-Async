@@ -219,6 +219,12 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   const _defeatedPos = pending.defeatedPos ?? null;
   const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
   clearPendingDefeatCcPrompt(game);
+  // Public play-reveal: announce the played card to both players (matches the
+  // hand-play reveal style) before triggers / the counter-window open.
+  const _defeatPid = getPlayerId(game, playerPN);
+  if (typeof logGameAction === 'function' && client) {
+    await logGameAction(game, client, `<@${_defeatPid}> played command card **${cardName}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _defeatPid ? [_defeatPid] : [] } });
+  }
   await runCcPlayTriggers(game, playerPN, { client, logGameAction, dcMessageMeta, saveGames });
   const _dcCost = getCcEffect(cardName)?.cost;
   await openCcCounterWindow(game, gameId, {
