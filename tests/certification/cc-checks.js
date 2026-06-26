@@ -19,6 +19,18 @@ const abilityLib = JSON.parse(readFileSync('data/ability-library.json', 'utf-8')
 // Only duringActivation CCs appear as hand-play buttons during activation
 const REAL_PATH_TIMINGS = ['duringActivation'];
 
+// Purely-reactive timings for which isCcPlayableNow INTENTIONALLY returns false:
+// these CCs (Negation, Comm Disruption, Tough Luck) are never offered in the
+// proactive "Play CC" hand dropdown — they fire through dedicated reactive prompt
+// flows (negation_play_ / comm_disruption_play_ / tlgate_*) when the trigger
+// occurs. Like specialAction/doubleActionSpecial, their L3-positive proof is a
+// restriction check, not an isCcPlayableNow === true check (which can never be
+// true here by product design — see cc-timing.js). Matched case-insensitively.
+const REACTIVE_NEVER_HAND_TIMINGS = new Set([
+  'whencommandcardplayed',
+  'afteropponentreroll',
+]);
+
 // All other timings must use fallback because:
 // - startOfRound/endOfRound: SoR/EoR windows don't generate CC play actions
 // - specialAction/doubleActionSpecial: played as DC special, not from hand
@@ -142,10 +154,13 @@ function checkL3LegalPositive(cardName, effect) {
   try {
     const timing = effect.timing;
 
-    // specialAction and doubleActionSpecial CCs are played from DC buttons, not hand.
-    // isCcPlayableNow correctly returns false for these timings.
-    // L3+ for these checks restriction only (the DC must match playableBy).
-    if (timing === 'specialAction' || timing === 'doubleActionSpecial') {
+    // specialAction/doubleActionSpecial CCs are played from DC buttons, and the
+    // reactive REACTIVE_NEVER_HAND_TIMINGS CCs fire through dedicated prompt flows
+    // — none of these surface in the hand dropdown, so isCcPlayableNow correctly
+    // returns false for them. L3+ for these verifies restriction only (the DC must
+    // match playableBy); arming isCcPlayableNow is not applicable.
+    if (timing === 'specialAction' || timing === 'doubleActionSpecial'
+        || REACTIVE_NEVER_HAND_TIMINGS.has(String(timing).toLowerCase().trim())) {
       // Just check restriction validity with a matching army
       const armyOpts = getArmyForPlayableBy(cardName, effect.playableBy);
       if (!armyOpts) return { pass: true, reason: 'Skipped: no matching DC' };

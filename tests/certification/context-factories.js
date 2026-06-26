@@ -4,8 +4,8 @@
  * Zero randomness — all state is explicit.
  *
  * isCcPlayableNow checks getCcPlayContext which uses:
- *   startOfRound: game.currentRound && game.roundActivationMessageId && !game.roundActivationButtonShown
- *   duringActivation: game.currentActivationTurnPlayerId === playerId && !game.endOfRoundWhoseTurn
+ *   startOfRound: game.currentRound && !!game.startOfRoundWhoseTurn (SoR window flag, holds a player ID)
+ *   duringActivation: !inSorWindow && game.currentActivationTurnPlayerId === playerId && !game.endOfRoundWhoseTurn
  *   endOfRound: game.endOfRoundWhoseTurn === playerId
  *   duringAttack: !!(game.combat || game.pendingCombat)
  *   isAttacker: duringAttack && combat.attackerPlayerNum === playerNum
@@ -102,11 +102,13 @@ function registerFactory(keys, fn) {
 function createStartOfRoundContext(opts = {}) {
   const built = buildBase(opts);
   const playerNum = opts.playerNum || 1;
+  const playerId = playerNum === 1 ? built.game.player1Id : built.game.player2Id;
 
-  // isCcPlayableNow checks: game.currentRound && game.roundActivationMessageId && !game.roundActivationButtonShown
+  // getCcPlayContext gates startOfRound on: game.currentRound && !!game.startOfRoundWhoseTurn
+  // (the authoritative Start-of-Round window flag, which holds the player ID whose SoR
+  // turn it is). duringActivation/duringRound are suppressed while this flag is set.
   built.game.currentRound = built.game.round || 1;
-  built.game.roundActivationMessageId = 'fake-round-msg';
-  built.game.roundActivationButtonShown = false;
+  built.game.startOfRoundWhoseTurn = playerId;
   // Clear activation turn so duringActivation is false
   built.game.currentActivationTurnPlayerId = null;
   built.game.endOfRoundWhoseTurn = null;
@@ -138,7 +140,7 @@ function createDuringActivationContext(opts = {}) {
 registerFactory([
   'duringActivation', 'startOfActivation', 'endOfActivation',
   'specialAction', 'doubleActionSpecial',
-  'afterSpecialOrInteract', 'afterSpecial',
+  'afterSpecial',
   'whileYouDeclareAttack', 'beforeYouDeclareAttack',
   'whenHostileFigureEntersAdjacentSpace', 'whenHostileFigureEntersSpaceWithin3Spaces',
   'whenYouEndMovementInSpacesWithOtherFigures',
@@ -161,6 +163,18 @@ registerFactory([
   'blackMarketPrices', 'other',
   'afterHostileFigureSuffersDamage', 'afterAttackHostileFigureSuffersDamage',
 ], createDuringActivationContext);
+
+// ── afterSpecialOrInteract ────────────────────────────────────────
+// All in a Day's Work: isCcPlayableNow requires ctx.duringActivation AND
+// game.specialOrInteractResolvedThisActivation (set when a Special Action or
+// Interact resolves; wiped at activation end).
+function createAfterSpecialOrInteractContext(opts = {}) {
+  const built = createDuringActivationContext(opts);
+  built.game.specialOrInteractResolvedThisActivation = true;
+  syncToHarness(built);
+  return built;
+}
+registerFactory(['afterSpecialOrInteract'], createAfterSpecialOrInteractContext);
 
 // ── endOfRound ────────────────────────────────────────────────────
 
@@ -201,10 +215,29 @@ function createDuringAttackContext(opts = {}) {
   return { ...built, playerNum };
 }
 registerFactory([
-  'duringAttack', 'afterAttack', 'afterAttackDice',
+  'duringAttack',
   'whileAttackingBeforeDefenderRerolls',
   'whenAnotherFriendlyTrooperDeclaresAttackTargetingInYourLineOfSight',
+  // whenYouDeclareAttack → isCcPlayableNow requires ctx.duringAttack && ctx.isAttacker
+  // (combat exists with the CC player as attacker). Previously fell through to the
+  // duringActivation fallback (no combat) so isCcPlayableNow returned false.
+  'whenYouDeclareAttack',
+  'whenYouDeclareAttackTargetingHostileWithHighestFigureCost',
 ], createDuringAttackContext);
+
+// ── afterAttack (attacker, with a recent defeat) ──────────────────
+// Most afterAttack CCs only need ctx.duringAttack, but Glory of the Kill also
+// requires ctx.recentDefeat (game.lastDefeatInfo set). Setting lastDefeatInfo is
+// harmless for the other afterAttack cards (their gate is just duringAttack).
+function createAfterAttackContext(opts = {}) {
+  const built = createDuringAttackContext(opts);
+  built.game.lastDefeatInfo = { figureKey: 'Stormtrooper-1-0', playerNum: 2 };
+  syncToHarness(built);
+  return built;
+}
+registerFactory([
+  'afterAttack', 'afterAttackDice',
+], createAfterAttackContext);
 
 // ── whileDefending (defender perspective) ─────────────────────────
 
