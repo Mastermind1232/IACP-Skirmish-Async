@@ -231,7 +231,8 @@
         ],
         "assertions": [
           "PROBE-PD-MOVE-004: Move-action grants MP equal to Speed",
-          "dc-play-area Move branch computes speed = getEffectiveSpeed and seeds movementBank.total with it",
+          "Move-action handler must derive grant amount from getEffectiveSpeed — CRR-MOVE-004",
+          "Move-action handler must seed perFig[figureIndex].remaining with currentMp + speed — CRR-MOVE-004",
           "getEffectiveSpeed returns the DC stat-line speed when no modifiers apply"
         ]
       },
@@ -257,7 +258,7 @@
       "evidence": {
         "type": "unit_test",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
           "initializes movement bank from scratch",
@@ -321,13 +322,13 @@
       "evidence": {
         "type": "unit_test",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js",
+          "tests/headless/activation-combat-deep.test.js",
           "src/game/abilities.test.js"
         ],
         "assertions": [
           "initializes movement bank from scratch",
           "adds to existing movement bank",
-          "resolveAbility Urgency (Speed+2) with active activation applies MP"
+          "resolveAbility Urgency (Speed+2) banks immediate-spend MP usable on movement AND MP-cost abilities"
         ]
       },
       "reviewedBy": {
@@ -353,7 +354,7 @@
         "type": "direct_oracle",
         "files": [
           "tests/domain/oracle/movement-profile-mobile-probes.test.js",
-          "tests/headless/activation-combat-deep-tests.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
           "non-Mobile / non-Massive figures cannot cross blocking terrain",
@@ -473,11 +474,11 @@
           "tests/domain/oracle/phase-d-move-mp-interleave-probe.test.js"
         ],
         "assertions": [
-          "012a: source — dc_spend_mp_ handler is registered",
-          "012b: source — SpendMp button is surfaced whenever movementBank.remaining > 0",
-          "012c: source — SpendMp bypasses the no-actions-remaining gate",
-          "012d: source — SpendMp reuses existing bank MP (no speed addition)",
-          "012e: source — SpendMp does NOT decrement actionsData.remaining"
+          "dc_spend_mp_ must be registered as a dcPlayArea button — CRR-MOVE-012",
+          "SpendMp button appears whenever bank has MP (no gate on prior action taken) — CRR-MOVE-012",
+          "SpendMp must be allowed even when actions are exhausted — CRR-MOVE-012",
+          "SpendMp path uses currentMp (bank.remaining) without adding speed — CRR-MOVE-012",
+          "per-figure action consumption must be gated behind !isSpendMp — CRR-MOVE-012"
         ]
       },
       "notes": "movementBank is msgId-keyed (activation-scoped); SpendMp bypasses the actions-remaining gate, reuses existing bank MP, and never deducts an action — so MP granted by Move or free-move persists and can be spent before or after another action in the same activation.",
@@ -632,15 +633,14 @@
         "files": [
           "tests/domain/oracle/phase-d-move-017-move-x-ignores-costs-probe.test.js",
           "src/game/abilities.js",
-          "src/handlers/movement.js",
+          "src/handlers/move-x-handler.js",
           "src/game/activation-state.js"
         ],
         "assertions": [
-          "game.moveXBypassActive[msgId] = true",
-          "if (game.moveXBypassActive?.[msgId])",
-          "ignoreFigureCost = true",
-          "ignoreDifficult = true",
-          "'moveXBypassActive'"
+          "move-x picker must return cost=1 when bypassCosts is true — CRR-MOVE-017",
+          "move-x picker must decrement remaining by the step cost — CRR-MOVE-017",
+          "move-x-handler must export setupPendingMoveX — CRR-MOVE-017",
+          "pendingMoveX must appear in ROUND_OBJECT_FLAGS — CRR-MOVE-017"
         ]
       },
       "reviewedBy": {
@@ -974,13 +974,13 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js",
+          "tests/headless/activation-combat-deep.test.js",
           "tests/domain/oracle/los-06-energy-shield-probes.test.js",
-          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js",
+          "tests/domain/oracle/los-slice2-probes.test.js",
           "tests/domain/oracle/phase-d-los-figure-blocker-probe.test.js"
         ],
         "assertions": [
-          "a3 → a5 across closed door between a3|a4 returns false",
+          "LOS should be blocked by closed door between c3 and c4",
           "b3 → e3 with shield on c3 (between) returns false",
           "2x2 attacker — only back cell has LOS past a blocker",
           "a3 → e3 with figure on c3 returns false"
@@ -1086,12 +1086,14 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js"
+          "tests/domain/oracle/los-06-energy-shield-edge-cases-probe.test.js",
+          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js",
+          "tests/domain/oracle/los-destruct-oracle.test.js"
         ],
         "assertions": [
-          "shields at a2 AND b1 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]",
-          "shield at a2 AND wall between b1|b2 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]",
-          "walls a1|a2 AND b1|b2 both terminate at corner (0.5,0.5) → LOS BLOCKED [CRR p.22]"
+          "Two shields at a threaded corner (c2+c3) must corner-block LOS from ",
+          "intersectionBlocksPath state machine missing — CRR p.22 corner rules not implemented.",
+          "expected LOS="
         ]
       },
       "reviewedBy": {
@@ -1280,10 +1282,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
-          "a3 → a5 across closed door between a3|a4 returns false"
+          "LOS should be blocked by wall between a2 and a3",
+          "LOS should be blocked by closed door between c3 and c4"
         ]
       },
       "reviewedBy": {
@@ -1339,14 +1342,14 @@
         "type": "invariant_pin",
         "files": [
           "tests/domain/oracle/phase-d-los-016-non-intersecting-rays-probe.test.js",
-          "src/game/spatial.js"
+          "src/game/los-engine.js"
         ],
         "assertions": [
-          "for (const [ax, ay] of aCorners) {",
-          "if (visibleTargetCorners >= 2) return true;",
-          "const INSET = 0.49;",
-          "return t > EPS && t < 1 - EPS && u > EPS && u < 1 - EPS;",
-          "if (count >= 2) { cornerBlocked = true; break; }"
+          "LOS must fix a single source corner per determination — CRR-LOS-016",
+          "if (pathsOverlap(aCorner, d1, d2)) continue;",
+          "for (const aCorner of [att.tl, att.tr, att.bl, att.br])",
+          "function intersectionBlocksPath(",
+          "engine must not reintroduce INSET — corners must be exact integers"
         ]
       },
       "reviewedBy": {
@@ -1785,9 +1788,9 @@
           "src/handlers/combat.js"
         ],
         "assertions": [
-          "018a: source — the attack pool is a single `let dice = [...baseDice];` accumulator",
-          "018b: source — pool mutations are gathered in a single pre-roll block",
-          "018c: source — the rollAttackDice call is uniquely downstream of the mutation block",
+          "018a: source — the attack pool is a `const dice = [...baseDice];` accumulator (in _buildAttackPool)",
+          "018b: source — bonus/remove/keep trims resolve via _resolveAttackPoolTrim before fill + roll",
+          "018c: source — the rollAttackDice call is uniquely downstream of the pool-trim call",
           "018d: source — pendingOverrideAttackDice is consumed BEFORE the roll (rewrites attackInfo, then deletes)",
           "018e: source — override rewrites attackInfo.dice (not the rolled result)",
           "018f: source — combat.attackRoll is assigned exclusively from the rollAttackDice result",
@@ -1819,13 +1822,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-handler-oracles.test.js"
+          "src/engine/combat-reroll.test.js"
         ],
         "assertions": [
-          "005a: attack die reroll updates totals correctly",
-          "Replaced die is exactly the fixture",
-          "Unchanged die preserved",
-          "Totals are exact sum of current dice array"
+          "rerolls a die, locks it (binary flag), and recalcs the pool totals",
+          "die 0 is now flagged rerolled",
+          "totals recalculated: die0 (2/1/3) + die1 (1/0/0)"
         ]
       },
       "reviewedBy": {
@@ -1850,12 +1852,14 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-handler-oracles.test.js",
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/engine/combat-reroll.test.js",
+          "tests/domain/oracle/combat-reroll-lock.test.js"
         ],
         "assertions": [
-          "005c: G12 — second reroll on same die index rejected",
-          "B-C-REROLL-004: forced reroll respects G12 — rejects already-rerolled die"
+          "a rerolled die cannot be selected again (lock excludes it)",
+          "die 0 locked out; only die 1 selectable",
+          "locks a die for EVERYONE once rerolled (attacker reroll blocks defender)",
+          "rerolled die is locked for the other side too"
         ]
       },
       "reviewedBy": {
@@ -1919,7 +1923,7 @@
           "tests/domain/oracle/combat-oracles.test.js"
         ],
         "assertions": [
-          "003a: defender weakened — reduces effective block after pierce",
+          "003a: defender weakened — block is NOT reduced by Weakened (only by pierce)",
           "006a: ranged attack misses due to Hidden penalty — acc 4 vs distance 4, Hidden → miss",
           "006c: melee attack unaffected by Hidden — acc 0, Hidden → still hits"
         ]
@@ -1946,11 +1950,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "tests/domain/oracle/combat-token-behavioral.test.js"
         ],
         "assertions": [
-          "B-C-SURGE-003: Overload blocks 3rd use of same surge index",
-          "B-C-SURGE-004: non-Overload unit blocked after 1 use"
+          "B-C-SURGE-003: Overload blocks a 3rd spend of the same index (cap = 2)",
+          "B-C-SURGE-004: non-Overload attacker is capped at 1 use per index",
+          "still 1 use (no second spend without Overload)"
         ]
       },
       "reviewedBy": {
@@ -2110,7 +2115,7 @@
         ],
         "assertions": [
           "resolveCombatAfterRolls must be the sole post-rolls resolver",
-          "Slow-on-the-Draw must null pendingCombat"
+          "Slow-on-the-Draw must clear pendingCombat via resolvePendingCombat (cancel-and-replace, not mid-state resume) — CRR-ATK-028"
         ]
       },
       "implementationArea": "src/engine/combat-bridge.js"
@@ -2402,8 +2407,8 @@
           "tests/domain/oracle/dc-ability-behavioral.test.js"
         ],
         "assertions": [
-          "Phase 2: applies 2 damage + 1 strain to chosen target",
-          "HP should be 5 - 3 = 2"
+          "Phase 2: applies 2 damage via the damage pipeline and queues 1 strain via pendingStrain",
+          "HP should be 5 - 2 (damage only) = 3"
         ]
       },
       "reviewedBy": {
@@ -2476,8 +2481,8 @@
           "tests/domain/oracle/accuracy-penalty-oracles.test.js"
         ],
         "assertions": [
-          "001: Take Cover sets roundDefenseAccuracyPenalty, not roundDefenseBonusEvade",
-          "003: Both CCs in same round produce cumulative −4 accuracy penalty"
+          "Take Cover applies −2 Accuracy",
+          "Source figure vs Ranged: combined −4"
         ]
       },
       "reviewedBy": {
@@ -2631,10 +2636,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
-          "isAdjacentCoords is true for distance=1"
+          "getRange returns Manhattan distance",
+          "assert.strictEqual(getRange('a1', 'a1'), 0);"
         ]
       },
       "notes": "isAdjacentCoords probe asserts !isAdjacentCoords(c3, c3) inline — a figure at its own coord is not adjacent to itself. Suite title matches the probe block containing the self-adjacency negative case.",
@@ -2746,9 +2752,9 @@
           "tests/domain/oracle/phase-d-adj-blocking-terrain-probe.test.js"
         ],
         "assertions": [
-          "007a: source — getRange is pure Manhattan, not terrain-aware",
-          "007b: source — isAdjacentCoords is defined as getRange === 1",
-          "007d: behavior — blocking-terrain occupant at distance 1 is still adjacent"
+          "must build adjacencySet from precomputed map adjacency graph — CRR-ADJ-007",
+          "getFiguresAdjacentToCoord must not read mapSpaces.blocking — CRR-ADJ-007 (terrain of occupant does not gate adjacency)",
+          "occupant at distance 1 must be detected as adjacent regardless of its space terrain — CRR-ADJ-007"
         ]
       },
       "reviewedBy": {
@@ -2970,7 +2976,7 @@
       "evidence": {
         "type": "unit_test",
         "files": [
-          "tests/headless/combat-effects-tests.js"
+          "tests/headless/combat-effects.test.js"
         ],
         "assertions": [
           "Bleed accept reduces HP by 1 (simulated)",
@@ -3002,15 +3008,13 @@
         "files": [
           "tests/domain/oracle/phase-d-bled-003-bleeding-not-voluntary-strain-probe.test.js",
           "src/handlers/combat-special-effects.js",
-          "src/engine/combat-bridge.js",
-          "src/handlers/combat.js"
+          "src/engine/combat-bridge.js"
         ],
         "assertions": [
-          "handleBleedResolve must reduce HP directly on accept",
+          "handleBleedResolve must apply damage via the centralized pipeline on accept — CRR-BLED-003",
           "handleBleedResolve must not invoke applyStrainToFigure",
           "Bleeding prompt must say \"suffers 1 damage\"",
-          "applyStrainToFigure helper must exist with an abilityLabel parameter",
-          "no applyStrainToFigure call site may be labeled as Bleeding"
+          "no applyStrain call site may be labeled as Bleeding"
         ]
       },
       "reviewedBy": {
@@ -3128,6 +3132,7 @@
         "files": [
           "src/handlers/combat.js",
           "src/engine/combat-bridge.js",
+          "src/handlers/after-attack-resolve.js",
           "tests/domain/oracle/phase-d-clv-005-multi-cleave-sequential-probe.test.js"
         ],
         "assertions": [
@@ -3135,7 +3140,7 @@
           "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _cv, label: `Cleave ${_cv} (surge)` });",
           "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _kdfX, label: `Cleave ${_kdfX} (Krayt Dragon Fury)` });",
           "(combat.cleaveSources = combat.cleaveSources || []).push({ value: _dsCv, label: `Cleave ${_dsCv} (Darksaber Blast→Cleave)` });",
-          "const cleaveQueue = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0",
+          "const cleaveSources = Array.isArray(combat.cleaveSources) && combat.cleaveSources.length > 0",
           "export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, deps)",
           "const nextSource = cleaveQueue.shift();"
         ]
@@ -3376,16 +3381,14 @@
       "evidence": {
         "type": "invariant_pin",
         "files": [
-          "tests/domain/oracle/phase-d-cs-ability-user-frame-probe.test.js",
-          "src/game/spatial.js"
+          "tests/domain/oracle/phase-d-cs-ability-user-frame-probe.test.js"
         ],
         "assertions": [
-          "004a: source — getFiguresWithinRange takes a single `coord` reference argument",
-          "004b: source — distance inside getFiguresWithinRange is getRange(coord, …) with coord as first arg",
-          "004c: source — getFiguresAdjacentTo is a thin wrapper that reuses the same reference coord",
-          "004d: behavior — a figure at a1 sees self at distance 0 and a figure at a3 at distance 2",
-          "004e: behavior — frame-of-reference swap: same two figures, range-from-other-figure flips the count semantic",
-          "004f: source — the range-gate inside getFiguresWithinRange uses the computed d vs range (no coord swap)"
+          "isWithinN must take posA (ability-user) as the first arg — CRR-CS-004",
+          "BFS must seed visited from posA — CRR-CS-004",
+          "adjacency lookups must originate from the reference coord — CRR-CS-004",
+          "same coord must be within 0 from the reference — CRR-CS-004",
+          "distant figure must not appear (reference frame is the ability-user, not the candidate) — CRR-CS-004"
         ]
       },
       "reviewedBy": {
@@ -3683,15 +3686,14 @@
         "files": [
           "tests/domain/oracle/phase-d-mis-recover-not-damage-gated-probe.test.js",
           "src/engine/combat-bridge.js",
-          "src/handlers/combat.js"
+          "src/handlers/combat.js",
+          "src/handlers/after-attack-resolve.js"
         ],
         "assertions": [
-          "004a: source — Recover heal branch has no hit/damage guard; only surgeRecover > 0 + attacker-msg + SbR opt-out",
-          "004b: source — rule intent is documented: \"heal attacker even if attack dealt 0 damage\"",
-          "004c: source — Recover heal lives OUTSIDE (after) the hit/damage branch chain",
-          "004d: source — by contrast, Cleave IS damage-gated (hit && damage > 0) — demonstrates the gate pattern Recover lacks",
-          "004e: source — surgeRecover accumulates during surge-spending with no hit/damage predicate",
-          "004f: source — embed-refresh for Recover triggers even on 0-damage (attacker HP embed must update on heal)"
+          "Recover enqueue must require only surgeRecover > 0 + attackerMsg, no hit/damage gate — CRR-MIS-004",
+          "Recover non-damage-gated rule must be commented at the enqueue site — CRR-MIS-004",
+          "Sustained-by-Rage must zero surgeRecover before the queue is built — CRR-MIS-004 + SbR rule",
+          "surgeRecover accumulator must exist (surge spending happens regardless of hit) — CRR-MIS-004"
         ]
       },
       "reviewedBy": {
@@ -3831,15 +3833,18 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-oracles.test.js",
+          "src/handlers/combat.js",
           "src/game/conditions.js",
-          "src/game/conditions.test.js"
+          "src/game/conditions.test.js",
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
-          "003a: defender weakened — reduces effective block after pierce",
-          "003b: attacker weakened — reduces damage after block subtraction",
+          "const _weakenSurgePenalty = _attackerWeakened ? 1 : 0;",
+          "const _weakenEvadePenalty = _defenderWeakened ? 1 : 0;",
           "HARMFUL_CONDITIONS = ['Stun', 'Bleed', 'Weaken']",
-          "contains Stun, Bleed, Weaken"
+          "contains Stun, Bleed, Weaken",
+          "attacker Weakened does NOT reduce damage at computeCombatResult layer (-1 surge applied upstream)",
+          "defender Weakened reduces Evade (not block) — block unchanged at this layer"
         ]
       },
       "reviewedBy": {
@@ -4122,12 +4127,12 @@
           "tests/domain/oracle/phase-d-blocking-terrain-occupant-visibility-probe.test.js"
         ],
         "assertions": [
-          "009a: source — hasLineOfSight skips the target cell from the blocking-cell check",
-          "009b: source — getRange is pure Manhattan, terrain-blind",
-          "009c: source — isAdjacentCoords is getRange === 1 (terrain-blind)",
-          "009d: behavior — distance to a space that would hold a blocking-terrain occupant is grid Manhattan",
-          "009e: behavior — hasLineOfSight to a target cell that is itself in blocking works (no self-block)",
-          "009f: behavior — non-target blocking cells still block LOS (invariant does not break other rules)"
+          "attacker (a1) and target (c1) auto-excluded from blockers — CRR-MSV-009 / CRR-MOB-003",
+          "isWithinN must not read blocking — counting spaces to a blocking-terrain occupant must work — CRR-MSV-009 / CRR-MOB-003",
+          "adjacency must not read blocking — a blocking-terrain occupant is still adjacent — CRR-MSV-009 / CRR-MOB-003",
+          "spaces counted to neighbor regardless of occupant terrain — CRR-MSV-009 / CRR-MOB-003",
+          "LOS to a blocking-terrain target cell succeeds because the target self-skips — CRR-MSV-009 / CRR-MOB-003",
+          "a blocking cell in the middle of the line still blocks LOS — CRR-MSV-009 / CRR-MOB-003 only lifts the target-self case"
         ]
       },
       "reviewedBy": {
@@ -4320,7 +4325,7 @@
           "ignoreBlocking: isMassive || isMobile",
           "const profile = getMovementProfile(dcName, figureKey, game);",
           "const blocked = !profile.ignoreBlocking && [...footprint].some((cell) => board.blockingSet.has(cell));",
-          "if (validSpaces.length === 0) {"
+          "profile.ignoreBlocking || !board.blockingSet.has(cell)"
         ]
       },
       "reviewedBy": {
@@ -4345,7 +4350,7 @@
       "evidence": {
         "type": "unit_test",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
           "locks voluntary movement after Massive push",
@@ -4377,12 +4382,12 @@
           "tests/domain/oracle/phase-d-blocking-terrain-occupant-visibility-probe.test.js"
         ],
         "assertions": [
-          "009a: source — hasLineOfSight skips the target cell from the blocking-cell check",
-          "009b: source — getRange is pure Manhattan, terrain-blind",
-          "009c: source — isAdjacentCoords is getRange === 1 (terrain-blind)",
-          "009d: behavior — distance to a space that would hold a blocking-terrain occupant is grid Manhattan",
-          "009e: behavior — hasLineOfSight to a target cell that is itself in blocking works (no self-block)",
-          "009f: behavior — non-target blocking cells still block LOS (invariant does not break other rules)"
+          "009a: behavior — hasLineOfSight excludes attacker AND target cells from figure-blocking check",
+          "009b: source — isWithinN BFS does not read mapSpaces.blocking (terrain of occupant does not gate counting)",
+          "009c: source — getFiguresAdjacentToCoord does not read mapSpaces.blocking",
+          "009d: behavior — isWithinN counts spaces to a blocking-terrain occupant correctly",
+          "009f: behavior — hasLineOfSight to a target cell that is itself in blocking works (no self-block)",
+          "009g: behavior — non-target blocking cells still block LOS (invariant does not break other rules)"
         ]
       },
       "reviewedBy": {
@@ -4678,11 +4683,10 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/engine/combat-reroll.test.js"
         ],
         "assertions": [
-          "B-C-REROLL-003: handleCombatReroll forced reroll decrements remaining and marks rerolled",
-          "B-C-REROLL-007: attacker voluntary reroll marks index and decrements remaining"
+          "rerolls a die, locks it (binary flag), and recalcs the pool totals"
         ]
       },
       "reviewedBy": {
@@ -4707,10 +4711,10 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/engine/combat-reroll.test.js"
         ],
         "assertions": [
-          "B-C-REROLL-004: forced reroll respects G12 — rejects already-rerolled die"
+          "a rerolled die cannot be selected again (lock excludes it)"
         ]
       },
       "reviewedBy": {
@@ -4888,14 +4892,14 @@
         ],
         "assertions": [
           "006a: source — pushFigureToNearestValid defined as the BFS push helper",
-          "006b: source — pushFigureToNearestValid BFS uses orthogonal-only moveVectors",
+          "006b: source — pushFigureToNearestValid BFS uses cardinal-only for LARGE figures",
           "006c: source — large-figure movement expander rejects diagonal neighbours",
           "006d: source — pushFigure (the write path) never rotates the figure",
-          "006e: behavior — a direct pushFigureToNearestValid BFS simulation takes only orthogonal steps",
+          "006e: behavior — a LARGE-figure pushFigureToNearestValid BFS step takes only orthogonal moves",
           "006f: behavior — large-figure diagonal guard predicate matches CRR semantics",
-          "push BFS must NOT contain diagonal moveVectors — CRR-PSH-006",
           "large figures must be diagonal-disallowed in getNeighborStates — CRR-PSH-006",
-          "pushFigure body must not touch figureOrientations (no rotate on push) — CRR-PSH-006/LF-007"
+          "pushFigure body must not touch figureOrientations (no rotate on push) — CRR-PSH-006/LF-007",
+          "large-figure BFS must NOT reach any diagonal neighbour — CRR-PSH-006"
         ]
       },
       "reviewedBy": {
@@ -5545,10 +5549,10 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/game/strain-resolver.test.js"
         ],
         "assertions": [
-          "B-C-STRAIN-001: alldmg path applies full HP damage"
+          "resolveSingleStrainChoice TAKE_DAMAGE returns damageInflicted=1"
         ]
       },
       "reviewedBy": {
@@ -5573,10 +5577,10 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/game/strain-resolver.test.js"
         ],
         "assertions": [
-          "B-C-STRAIN-003: discard path reduces deck and applies remaining as HP"
+          "resolveSingleStrainChoice DISCARD_DECK_TOP moves 1 card from deck → discard"
         ]
       },
       "reviewedBy": {
@@ -5629,10 +5633,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/game/damage-pipeline.test.js"
         ],
         "assertions": [
-          "B-C-STRAIN-002: lethal strain triggers processFigureDefeat"
+          "it('defeating damage applies and returns wasDefeated=true', async () => {",
+          "assert.equal(result.wasDefeated, true);"
         ]
       },
       "reviewedBy": {
@@ -5671,10 +5676,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/game/damage-pipeline.test.js"
         ],
         "assertions": [
-          "HP reduced from 5 to 2 (3 damage)"
+          "it('non-defeating damage applies and returns wasDefeated=false', async () => {",
+          "assert.equal(result.prevHp, 5);",
+          "assert.equal(result.newHp, 3);"
         ]
       },
       "reviewedBy": {
@@ -5703,8 +5710,8 @@
           "tests/domain/oracle/dc-ability-behavioral.test.js"
         ],
         "assertions": [
-          "Phase 2: applies 2 damage + 1 strain to chosen target",
-          "HP should be 5 - 3 = 2"
+          "it('Phase 2: applies 2 damage via the damage pipeline and queues 1 strain via pendingStrain', async () => {",
+          "assert.equal(healthAfter[0][0], 3, 'HP should be 5 - 2 (damage only) = 3');"
         ]
       },
       "reviewedBy": {
@@ -5808,10 +5815,8 @@
         ],
         "assertions": [
           "max-HP reduction must be clamped to ≥ 0 — CRR-DMG-008",
-          "current HP must be clamped to the resulting Health — CRR-DMG-008",
-          "order must be: suffer damage → reduce max → clamp current — CRR-DMG-008",
-          "defeat must fire when clamped current reaches 0 — CRR-DMG-008",
-          "Adrenaline-driven defeat must be self-inflicted (no VP) — CRR-DMG-008",
+          "current HP must be clamped to the resulting Health (no damage) — CRR-DMG-008",
+          "Adrenaline revert must not defeat figures — the card never harms your WOOKIEEs",
           "only round.js may reduce maxHp — CRR-DMG-008 single enforcement site"
         ]
       },
@@ -6027,7 +6032,7 @@
         "assertions": [
           "game-state.js must declare both depletion arrays — CRR-DPL-002",
           "isDepletedRemovedFromGame must be a pure read — CRR-DPL-002",
-          "no source file may reset, splice, pop, shift, or delete either depletion array — CRR-DPL-002",
+          "no source file may reset, splice, pop, shift, delete, or bypass-push either depletion array — CRR-DPL-002",
           "no end-of-mission depletion-reset helper may exist in skirmish — CRR-DPL-002",
           "mission-rules.js must terminate via game.ended — CRR-DPL-002",
           "mission-rules.js must not reset depletion arrays — CRR-DPL-002",
@@ -6407,11 +6412,13 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js"
+          "tests/domain/oracle/los-06-energy-shield-edge-cases-probe.test.js",
+          "tests/domain/oracle/los-destruct-oracle.test.js"
         ],
         "assertions": [
-          "shields at a2 AND b1 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]",
-          "shield at a2 AND wall between b1|b2 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]"
+          "positive control: two non-source shields at a threaded corner DO block",
+          "Two shields at a threaded corner (c2+c3) must corner-block LOS from ",
+          "expected LOS="
         ]
       },
       "reviewedBy": {
@@ -6894,10 +6901,7 @@
           "src/engine/combat-bridge.js"
         ],
         "assertions": [
-          "game-state.js must declare crateHealth alongside other object containers — CRR-OBJ-005",
-          "no non-crate object may have an HP field — CRR-OBJ-005",
-          "only combat-bridge.js may apply damage to objects — CRR-OBJ-005",
-          "no src file may apply Math.max(0, -) damage decrement to any non-crate object container — CRR-OBJ-005",
+          "'objectHealth', 'objectPositions', 'objectMeta'",
           "Cleave must not target non-crate objects — CRR-OBJ-005",
           "no non-crate object container may be subject to damage math — CRR-OBJ-005",
           "CRR-AOJ-001 must be covered (crate-destruction flow pinned) — CRR-OBJ-005 context"
@@ -6951,7 +6955,7 @@
         "assertions": [
           "002a: source — init-dc-state.js reads figureCount from stats.figures (default 1)",
           "002b: source — init-dc-state.js loops figureCount times to create one slot per figure",
-          "002c: source — game-readers.js reads the same stats.figures field at runtime",
+          "isGroupDefeated must detect defeat by figure prefix (counts the SU figure) — CRR-GRP-002",
           "002d: data — multi-figure groups carry figures >= 2 in dc-effects.json"
         ]
       },
@@ -7016,12 +7020,12 @@
           "src/discord/components.js"
         ],
         "assertions": [
-          "handleDcSwitchFig must null selectedFigure",
-          "available-actions.js must read selectedFigure as the single current figure",
-          "available-actions.js must gate action-offering on data.remaining > 0",
+          "handleDcSwitchFig must null selectedFigure — CRR-GRP-004",
+          "available-actions.js must read selectedFigure as the single current figure — CRR-GRP-004",
+          "available-actions.js must gate action-offering on anyFigureHasActions(data) — CRR-ACT-003",
           "dc-play-area.js must read actionsData.selectedFigure uniformly",
-          "Move button must embed f${selectedFigure}",
-          "no src file may declare a parallel-figure activation container"
+          "Move button must embed f${selectedFigure} — CRR-GRP-004",
+          "no src file may declare a parallel-figure activation container — CRR-GRP-004"
         ]
       },
       "reviewedBy": {
@@ -7226,13 +7230,13 @@
           "tests/domain/oracle/phase-d-ter-terrain-is-per-space-probe.test.js",
           "data/map-spaces.json",
           "src/game/movement.js",
-          "src/handlers/combat.js"
+          "src/engine/combat-conditions.js"
         ],
         "assertions": [
           "map-spaces.json must have maps block",
-          "movement.js must build terrain as a per-space coord",
-          "combat.js must read terrain per-space via terrain[s]",
-          "no src file may declare a runtime encompass-region helper"
+          "movement.js must build terrain as a per-space coord→type map — CRR-TER-001",
+          "combat-conditions.js near_terrain_type must read terrain per-space (mapSp.terrain[coord]) — CRR-TER-001",
+          "no src file may declare a runtime encompass-region helper — CRR-TER-001 (rule is baked at data-authoring time)"
         ]
       },
       "reviewedBy": {
@@ -7356,11 +7360,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
-          "PROBE-LOS-SLICE2-001: closed door edge blocks LOS",
-          "Closed door between a3|a4 must block LOS from a3 to a5."
+          "LOS-19 regression: closed door edge blocks LOS",
+          "LOS should be blocked by closed door between c3 and c4"
         ]
       },
       "reviewedBy": {
@@ -7385,10 +7389,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/domain/oracle/movement-legality-behavioral.test.js"
         ],
         "assertions": [
-          "Closed door between a3|a4 must block adjacency LOS a3 → a4."
+          "003a: closed door blocks direct r11→r12 movement",
+          "r12 not reachable at 1 MP — door r11|r12 closed",
+          "closed door edge in movementBlockingSet"
         ]
       },
       "reviewedBy": {
@@ -7414,13 +7420,13 @@
         "type": "direct_oracle",
         "files": [
           "tests/domain/oracle/movement-legality-behavioral.test.js",
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
           "B-MVLEG-003: Door blocks/allows movement (mos-eisley-outskirts)",
           "003a: closed door blocks direct r11→r12 movement",
           "r12 not reachable at 1 MP — door r11|r12 closed",
-          "PROBE-LOS-SLICE2-001: closed door edge blocks LOS"
+          "LOS-19 regression: closed door edge blocks LOS"
         ]
       },
       "reviewedBy": {
@@ -7816,12 +7822,15 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/wasskah-breakable-walls-probes.test.js",
-          "tests/domain/oracle/los-06-diagonal-corner-probes.test.js"
+          "src/game/spatial.test.js",
+          "src/game/los-engine.js",
+          "tests/domain/oracle/wasskah-breakable-walls-probes.test.js"
         ],
         "assertions": [
-          "PROBE-WASS-002: activates only when both endpoints are difficult",
-          "shield at a2 AND wall between b1|b2 → LOS BLOCKED at corner (0.5,0.5) [CRR p.28]"
+          "returns 2 when wall forces detour",
+          "blocks LOS through blocking terrain",
+          "if (coincidentWallBlocks(walls, sx, sy, ex, ey)) return false;",
+          "PROBE-WASS-002: activates only when both endpoints are difficult"
         ]
       },
       "reviewedBy": {
@@ -8756,7 +8765,7 @@
           "pass handler must read the opponent activations remaining — CRR-APH-006",
           "pass must be rejected when otherRem <= myRem — CRR-APH-006",
           "legal pass must flip turn to otherPlayerId — CRR-APH-006",
-          "pass button must render only when current player is strictly behind — CRR-APH-006"
+          "updateRoundActivationMessage must render the pass button only when current turn-player is strictly behind — CRR-APH-006"
         ]
       },
       "reviewedBy": {
@@ -8862,11 +8871,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-reactions-behavioral.test.js"
+          "tests/domain/oracle/tough-luck-discrete.test.js"
         ],
         "assertions": [
-          "skip path clears pendingToughLuck without mutating dice",
-          "TL clears pendingToughLuck on both remove and skip"
+          "pending state cleared after use",
+          "card not consumed on skip",
+          "second reroll must not re-offer Tough Luck after the single copy was used"
         ]
       },
       "reviewedBy": {
@@ -8908,8 +8918,8 @@
           "tests/domain/oracle/sor-sequencing-probes.test.js"
         ],
         "assertions": [
-          "004a: P1 has initiative → P1 Brush logs before P2 Brush",
-          "004b: P2 has initiative → P2 Brush logs before P1 Brush"
+          "004a: P1 has initiative → P1 Brash logs before P2 Brash",
+          "004b: P2 has initiative → P2 Brash logs before P1 Brash"
         ]
       },
       "reviewedBy": {
@@ -9064,7 +9074,7 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/headless/destruct-general-tests.js"
+          "tests/headless/destruct-general.test.js"
         ],
         "assertions": [
           "companions cost 0 (explicit or undefined = 0)"
@@ -10510,11 +10520,11 @@
       "evidence": {
         "type": "unit_test",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
           "adds to existing movement bank",
-          "game.movementBank.msg1.remaining, 4"
+          "game.movementBank.msg1.perFig[0].remaining, 4"
         ]
       },
       "reviewedBy": {
@@ -10539,7 +10549,7 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/headless/activation-combat-deep-tests.js",
+          "tests/headless/activation-combat-deep.test.js",
           "tests/domain/oracle/accumulation-soak-behavioral.test.js",
           "tests/domain/oracle/final-sentinels-behavioral.test.js",
           "tests/domain/oracle/activation-cost-behavioral.test.js"
@@ -11120,12 +11130,9 @@
           "tests/domain/oracle/phase-d-aoj-object-destruction-probe.test.js"
         ],
         "assertions": [
-          "direct-attack path must init HP, subtract with floor, destroy at <=0, and delete cratePositions — CRR-AOJ-001",
-          "Blast splash path must init HP, subtract with floor, destroy at <=0, and delete cratePositions — CRR-AOJ-001",
-          "there must be ≥2 destruction-threshold sites (direct + blast), both using <= 0 — CRR-AOJ-001",
-          "no destruction site may use strict < 0 — CRR-AOJ-001",
-          "damage subtraction must be clamped to ≥ 0 at both damage sites — CRR-AOJ-001",
-          "destruction must delete cratePositions entry at each damage path — CRR-AOJ-001",
+          "applyDamageToObject must subtract with non-negative floor — CRR-AOJ-001",
+          "defeat threshold must trigger at newHp == 0 (not < 0) — CRR-AOJ-001",
+          "destruction must delete objectPositions[objectId] — CRR-AOJ-001",
           "destruction log must state \"destroyed\" — CRR-AOJ-001"
         ]
       },
@@ -11180,11 +11187,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/los-slice2-probes.test.js"
+          "tests/headless/activation-combat-deep.test.js"
         ],
         "assertions": [
-          "a3 → a5 across closed door between a3|a4 returns false",
-          "a3 → a4 adjacency through the closed door returns false"
+          "LOS-19 regression: closed door edge blocks LOS",
+          "LOS should be blocked by closed door between c3 and c4"
         ]
       },
       "notes": "Door edge-adjacency rule is exercised by los-slice2-probes (and documented in the Door Adjacency Rule memory: doors only openable from edge-sharing spaces, not diagonals).",
@@ -11254,12 +11261,11 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/headless/cc-coverage.test.js",
-          "tests/domain/oracle/combat-reactions-behavioral.test.js"
+          "tests/headless/cc-coverage.test.js"
         ],
         "assertions": [
-          "Urgency should be in P1 discard",
-          "Negation in discard pile"
+          "Urgency removed from P1 hand",
+          "Urgency in P1 discard"
         ]
       },
       "reviewedBy": {
@@ -11322,7 +11328,7 @@
           "if (!playableBy || playableBy.toLowerCase() === 'any figure') return { legal: true };",
           "const alternatives = playableBy.split(/\\s+or\\s+/i)",
           "const restriction = isCcPlayLegalByRestriction(game, playerNum, card);",
-          "game.pendingIllegalCcPlay = { playerNum, card, reason: restriction.reason };"
+          "setPendingIllegalCcPlay(game, { playerNum, card, reason: restriction.reason });"
         ]
       },
       "notes": "isCcPlayLegalByRestriction matches effect.playableBy against DC affiliation/name/keywords, handles ' or ' alternatives, and covers Devout/Fallen Master/Adaptive Skills/Fast Learner modifiers. cc-hand play path parks illegal plays in pendingIllegalCcPlay before the card resolves.",
@@ -11356,10 +11362,10 @@
         "assertions": [
           "PLAY_CC_SPECIAL: 'play_cc_special',",
           "PLAY_CC_DOUBLE: 'play_cc_double',",
-          "if (deps.getPlayableCcSpecialsForDc && data.remaining >= 1) {",
-          "if (deps.getPlayableCcDoubleActionsForDc && data.remaining >= 2) {",
-          "if (data && typeof data.remaining === 'number') data.remaining = Math.max(0, data.remaining - 1);",
-          "if (data && typeof data.remaining === 'number') data.remaining = 0;"
+          "if (deps.getPlayableCcSpecialsForDc && figureActionsRemaining(data, figureIndex) >= 1) {",
+          "if (deps.getPlayableCcDoubleActionsForDc && figureActionsRemaining(data, figureIndex) >= 2) {",
+          "if (data && !_isFreeAction) consumeActionForCurrentFigure(data, 1, game, msgId);",
+          "if (data) consumeActionForCurrentFigure(data, DC_ACTIONS_PER_ACTIVATION, game, msgId);"
         ]
       },
       "notes": "Available-actions gates Special-Action CCs on remaining>=1 (offered with actionCost:1) and Double-Action CCs on remaining>=2 (actionCost:2). dc-play-area._playCcFromDcThread decrements remaining by 1 for Special Action and zeroes it for Double Action.",
@@ -11387,16 +11393,14 @@
         "files": [
           "tests/domain/oracle/phase-d-cc-008-deck-exhaustion-probe.test.js",
           "src/game/abilities.js",
-          "src/handlers/round.js",
-          "src/handlers/cc-hand.js"
+          "src/handlers/round.js"
         ],
         "assertions": [
           "for (let i = 0; i < n && deck.length > 0; i++) {",
           "for (let i = 0; i < p1DrawCount && p1Deck.length > 0; i++) {",
           "for (let i = 0; i < p2DrawCount && p2Deck.length > 0; i++) {",
           "for (let d = 0; d < 2 && deck.length > 0; d++) {",
-          "for (let d = 0; d < 3 && deck.length > 0; d++) {",
-          "if (deck.length === 0) {"
+          "for (let d = 0; d < 3 && deck.length > 0; d++) {"
         ]
       },
       "notes": "Every CC-draw site gates on deck.length > 0: drawCcCards helper (ability-driven), Status-Phase base+terminal+RHC draws, Rule by Fear draw-2, Rogue One draw-3, manual draw button (explicit early-return with user message).",
@@ -11719,9 +11723,9 @@
         ],
         "assertions": [
           "canEndOnOccupied: isMassive,",
-          "const canEnd = !isOccupied || profile.canEndOnOccupied;",
           "export function collectOverlappingFigures",
-          "CRR-INCP-004"
+          "Massive movement profile must set canEndOnOccupied: true — CRR-INCP-004",
+          "collectOverlappingFigures must include every overlapping figure (no companion/incap exemption) — CRR-INCP-004"
         ]
       },
       "reviewedBy": {
@@ -11810,13 +11814,15 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-oracles.test.js"
+          "tests/domain/oracle/combat-oracles.test.js",
+          "src/handlers/combat.js"
         ],
         "assertions": [
-          "003a: defender weakened — reduces effective block after pierce",
-          "003b: attacker weakened — reduces damage after block subtraction",
-          "003c: attacker weakened can reduce damage to 0",
-          "003e: both weakened — defender weaken then attacker weaken in sequence"
+          "ORACLE-COMBAT-003: Weakened (no damage/block modification in computeCombatResult)",
+          "const _weakenSurgePenalty = _attackerWeakened ? 1 : 0;",
+          "const _weakenEvadePenalty = _defenderWeakened ? 1 : 0;",
+          "const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty + _hiddenSurgeBonus);",
+          "const totalEvade = Math.max(0, defRoll.evade + (_evadeNonDieDropped ? 0 : ((combat.bonusEvade || 0) + roundEvade)) - _weakenEvadePenalty);"
         ]
       },
       "notes": "Weakened is the canonical negative-symbol source (-1 attack / -1 block). Combat-oracles 003a/b/c/e pin positive/negative cancellation semantics across attacker and defender.",
@@ -11866,8 +11872,8 @@
         "assertions": [
           "001a: behavior — deductVp(N) + awardObjectiveVp(N) preserves total VP across both players",
           "001b: behavior — payment amount is the same number on both sides (no asymmetry)",
-          "001c: source — Hondo Negotiate pays 2 VP via symmetric pair (deductVp + awardObjectiveVp)",
-          "001d: recipient gain goes to objectives (not kills); paid VP is objective VP"
+          "001d: recipient gain goes to objectives (not kills); paid VP is objective VP",
+          "deductVp(game, defPN, 2); awardObjectiveVp(game, combat.attackerPlayerNum, 2);"
         ]
       },
       "reviewedBy": {
@@ -12046,7 +12052,7 @@
           "005b: source — there is exactly one promotion to defender inside advanceTokenPhase (no loop-back to attacker)",
           "005c: source — handleCombatToken guards on tokenPhase match (second click after spend is rejected because tokenPhase is null)",
           "005d: source — each of the three spend branches (direct / squad-cohesion / wild) ends with exactly one advanceTokenPhase call",
-          "005e: source — sendTokenWindow is opened at most once per attack per role; every opener first sets tokenPhase to match",
+          "005e: source — every sendTokenWindow call site sets combat.tokenPhase first",
           "005f: source — after a spend, the spent token is removed from the figure pool (one-way consumption)"
         ]
       },
@@ -12108,7 +12114,7 @@
           "tests/domain/oracle/surge-legality-probes.test.js"
         ],
         "assertions": [
-          "001: Bossk → [\"damage 2\", \"pierce 2\"]",
+          "001: Bossk → [\"pierce 2\"]",
           "004a: Bossk spending both surges (damage 2 + pierce 2) → correct final damage"
         ]
       },
@@ -12982,12 +12988,12 @@
       "evidence": {
         "type": "direct_oracle",
         "files": [
-          "tests/domain/oracle/combat-behavioral.test.js"
+          "src/game/strain-resolver.test.js"
         ],
         "assertions": [
-          "B-C-PEND-001: handleStrainChoice alldmg clears pendingStrainChoice",
-          "B-C-PEND-002: handleStrainChoice discard path clears pendingStrainChoice",
-          "B-C-STRAIN-001: alldmg path applies full HP damage"
+          "resolveSingleStrainChoice TAKE_DAMAGE returns damageInflicted=1",
+          "resolveSingleStrainChoice DISCARD_DECK_TOP moves 1 card from deck → discard",
+          "resolveSingleStrainChoice DISCARD_DECK_TOP empty deck falls through to damage"
         ]
       },
       "notes": "Strain-as-damage + CC-discard-to-prevent pinned by combat-behavioral B-C-PEND-001/002 and B-C-STRAIN-001.",
