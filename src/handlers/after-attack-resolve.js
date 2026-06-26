@@ -33,6 +33,7 @@ import {
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread } from '../discord/channel-helpers.js';
 import { getPlayerId, opponentPlayerNum, getCcHand } from '../game/player-helpers.js';
+import { parseFigureKey } from '../game/dc-helpers.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame } from '../utils/guards.js';
 import { fireEffect } from './after-attack-fire.js';
@@ -268,16 +269,28 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
       label: 'Crippling Blow: Stun defender',
     });
   }
-  // Disruptor Rifle (Imperial Loadout): if attack hit AND defender at
-  // exactly 1 HP, deal 1 more damage (defeat). Eligibility re-checked at
-  // fire time because step-8 effects may have lowered HP further.
-  // (Per-figureKey 2026-05-13.)
+  // Disruptor Rifle (Snowtrooper / Mandalorian / Imperial Loadout): if attack
+  // hit AND defender is currently at exactly 1 HP, deal 1 more damage (defeat).
+  // alexanbv 2026-06-26: the button must ONLY be OFFERED when the target is at
+  // 1 HP — previously it was enqueued on every non-miss and silently no-op'd at
+  // fire time when the target wasn't at 1 HP. We read post-attack HP here (the
+  // after-resolve window is built after main damage applied). Eligibility is
+  // STILL re-checked at fire time (fireDisruptorRifle) because queued step-8
+  // effects may lower HP further between offer and click. Snowtrooper + Mando
+  // share the same disruptorRiflePending flag + 'Disruptor Rifle' label, so this
+  // one gate governs both. (Per-figureKey 2026-05-13.)
   if (game?.disruptorRiflePending?.[combat.attackerFigureKey] && combat._step7Hit && combat.target?.figureKey) {
-    enqueueAfterAttackEffect(combat, {
-      side: 'attacker',
-      type: 'disruptor_rifle',
-      label: 'Disruptor Rifle: Execute (1 HP)',
-    });
+    const _drIdx = parseFigureKey(combat.target.figureKey)?.figureIndex;
+    const _drCur = (combat.target.msgId != null && _drIdx != null)
+      ? deps?.dcHealthState?.get?.(combat.target.msgId)?.[_drIdx]?.[0]
+      : null;
+    if (_drCur === 1) {
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'disruptor_rifle',
+        label: 'Disruptor Rifle: Execute (1 HP)',
+      });
+    }
   }
   // Electro-pulse (Electrohammer post-attack): each other figure adjacent
   // to the target's space suffers 1 Damage. Source PT excluded; target

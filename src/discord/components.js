@@ -1034,6 +1034,16 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // the Choose-a-Side Gar Saxon Flamethrower 0-cost injection.
   const _jtFreeSpecial = !!game?.freeSpecialActionPending?.[_figureKeyForOncePerAct];
 
+  // alexanbv 2026-06-26: when a MULTI-FIGURE group activates, the FIRST thing
+  // that must happen is the player picks WHICH figure activates — that figure
+  // completes its whole activation, then the next is picked (any order). Until a
+  // figure is chosen, NOTHING else may be surfaced: no special actions, no MP
+  // spend, no Command Cards (Urgency etc. were playable before figure-select —
+  // the reported bug), no overdrive/attachment exhausts. The figure-pick buttons
+  // (rendered below) + End Group Activation stay available. Single-figure groups
+  // have an implicit figure 0 and are unaffected.
+  const _mustPickFigureFirst = figures > 1 && !(selectedFigure != null && selectedFigure < figures);
+
   const rows = [];
 
   if (figures > 1) {
@@ -1173,7 +1183,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(spendRow);
     }
   }
-  if (specials.length > 0 && rows.length < 5) {
+  if (specials.length > 0 && rows.length < 5 && !_mustPickFigureFirst) {
     const specialBtns = specials.slice(0, 5).map((name, idx) => {
       const alreadyUsed = specialsUsed.includes(idx);
       // Jundland free special: this native special is offered at 0 cost.
@@ -1219,7 +1229,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       rows.push(new ActionRowBuilder().addComponents(...specialBtns.slice(i, i + 5)));
     }
   }
-  if (game && rows.length < 5) {
+  if (game && rows.length < 5 && !_mustPickFigureFirst) {
     const playableCc = getPlayableCcSpecialsForDc(game, playerNum, dcName, displayName);
     const ccSpecials = playableCc.slice(0, 5);
     if (ccSpecials.length > 0) {
@@ -1234,7 +1244,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // Double Action CCs: shown when 2 actions remain; disabled when < 2 actions or Stunned
-  if (game && !noActions && rows.length < 5) {
+  if (game && !noActions && rows.length < 5 && !_mustPickFigureFirst) {
     const playableCcDouble = getPlayableCcDoubleActionsForDc(game, playerNum, dcName, displayName);
     const ccDoubles = playableCcDouble.slice(0, 5);
     if (ccDoubles.length > 0) {
@@ -1252,7 +1262,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // End-of-Activation CCs: shown and enabled only when all actions are spent
-  if (game && noActions && rows.length < 5) {
+  if (game && noActions && rows.length < 5 && !_mustPickFigureFirst) {
     const playableEoa = getPlayableCcEndOfActivationForDc(game, playerNum, dcName, displayName);
     const eoaCards = playableEoa.slice(0, 5);
     if (eoaCards.length > 0) {
@@ -1267,7 +1277,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     }
   }
   // Overdrive: DROID may take 1 damage for +1 action (shown when CC is active and actions remain)
-  if (game?.roundDroidExtraActionCostDamage && !noActions && rows.length < 5) {
+  if (game?.roundDroidExtraActionCostDamage && !noActions && rows.length < 5 && !_mustPickFigureFirst) {
     const dcKws = (getDcStats(dcName)?.keywords || []).map((k) => String(k).toUpperCase());
     if (dcKws.includes('DROID')) {
       const _odFigKey = `${dcName}-${dgIndex}-0`;
@@ -1289,7 +1299,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // non-native button injection pattern (Choose-a-Side flamethrower). Each
   // button is disabled-absent when the attachment is already exhausted; the
   // round boundary (round.js) re-arms it.
-  if (game && rows.length < 5) {
+  if (game && rows.length < 5 && !_mustPickFigureFirst) {
     const _exBtns = [];
     // Ballistics Matrix / Navigation Upgrade are COMMAND-card attachments
     // (placed via ccAttachmentsKey → p[12]CcAttachments), not skirmish-upgrade

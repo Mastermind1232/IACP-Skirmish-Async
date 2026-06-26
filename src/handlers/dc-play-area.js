@@ -873,6 +873,20 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this activation can play a CC here.')) return;
+  // alexanbv 2026-06-26: for a MULTI-FIGURE group, a figure must be selected
+  // before any CC (Urgency etc.) can be played — that figure activates first
+  // and completes its whole activation. The UI hides these buttons pre-select;
+  // this is the defense-in-depth guard against a stale/raced click. perFigure-
+  // Remaining holds one key per EFFECTIVE figure (base + Squad Upgrade), so its
+  // key-count is the figure count. Single-figure groups (implicit figure 0) pass.
+  {
+    const _ad = game.dcActionsData?.[msgId];
+    const _figCount = _ad?.perFigureRemaining ? Object.keys(_ad.perFigureRemaining).length : 1;
+    if (_figCount > 1 && (_ad?.selectedFigure == null || _ad.selectedFigure >= _figCount)) {
+      await interaction.followUp({ content: 'Select which figure is activating first — that figure completes its activation before the next is chosen.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
   const ownerId = getPlayerId(game, meta.playerNum);
   const playable = getCardList(game, meta.playerNum, meta.dcName, meta.displayName);
   const card = playable[idx];
