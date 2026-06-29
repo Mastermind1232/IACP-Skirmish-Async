@@ -2495,6 +2495,9 @@ export function resolveAbility(abilityId, context) {
       const _ffDgIdx = _ffDgMatch ? _ffDgMatch[1] : '1';
       const _ffSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _ffFigureKey = `${meta?.dcName || 'unknown'}-${_ffDgIdx}-${_ffSelFig}`;
+      if ((game.figureConditions?.[_ffFigureKey] || []).includes('Stun')) {
+        return { applied: false, manualMessage: `**Focus Fire** — **${dcNameFromFigureKey(_ffFigureKey)}** is **Stunned** and cannot attack.` };
+      }
       // Grant a free attack for the second shot; after first attack resolves, grant another
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[_ffFigureKey] = { from: 'Focus Fire' };
@@ -2516,6 +2519,9 @@ export function resolveAbility(abilityId, context) {
       const _mfDgIdx = _mfDgMatch ? _mfDgMatch[1] : '1';
       const _mfSelFig = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
       const _mfFigureKey = `${meta?.dcName || 'unknown'}-${_mfDgIdx}-${_mfSelFig}`;
+      if ((game.figureConditions?.[_mfFigureKey] || []).includes('Stun')) {
+        return { applied: false, manualMessage: `**Multi-Fire** — **${dcNameFromFigureKey(_mfFigureKey)}** is **Stunned** and cannot attack.` };
+      }
       // Grant a free attack for the second shot
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[_mfFigureKey] = { from: 'Multi-Fire' };
@@ -3263,6 +3269,9 @@ export function resolveAbility(abilityId, context) {
       const _chDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
       const _chDgI = _chDgM ? _chDgM[1] : '1';
       const _chFkActive = `${meta.dcName}-${_chDgI}-${_chSelF}`;
+      if ((game.figureConditions?.[_chFkActive] || []).includes('Stun')) {
+        return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_chFkActive)}** is **Stunned** and cannot move.` };
+      }
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
         remaining: speed,
@@ -4249,7 +4258,8 @@ export function resolveAbility(abilityId, context) {
     // posts the burst-space picker, which routes the chosen space back to
     // resolveAbility(abilityId, {chosenSpace}) → Phase 2 above. (The previous
     // code ignored freeMoveBonus on this path — alexanbv 2026-06-19.)
-    if (typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.fixedAreaRequiresAdjacentHostile && msgId) {
+    const _faeStunned = (game.figureConditions?.[activatingFigureKey] || []).includes('Stun');
+    if (typeof entry.freeMoveBonus === 'number' && entry.freeMoveBonus > 0 && !entry.fixedAreaRequiresAdjacentHostile && msgId && !_faeStunned) {
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
         remaining: entry.freeMoveBonus,
@@ -4285,6 +4295,14 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'dcSpecial' && entry.missileSalvoStart) {
     const { game, msgId, meta, playerNum } = context;
     if (!game || !msgId) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const _msActD = game.dcActionsData?.[msgId];
+    const _msSelF = _msActD?.selectedFigure ?? 0;
+    const _msDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const _msDgI = _msDgM ? _msDgM[1] : '1';
+    const _msFk = meta?.dcName ? `${meta.dcName}-${_msDgI}-${_msSelF}` : null;
+    if (_msFk && (game.figureConditions?.[_msFk] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_msFk)}** is **Stunned** and cannot attack.` };
+    }
     const threadId = game.dcActionsData?.[msgId]?.threadId || null;
     game.pendingMissileSalvo = game.pendingMissileSalvo || {};
     game.pendingMissileSalvo[msgId] = { gameId: game.gameId, playerNum, threadId, diceAvailable: ['blue', 'red', 'yellow'], targetsFired: [] };
@@ -4325,6 +4343,9 @@ export function resolveAbility(abilityId, context) {
       _nextAction = { type: 'shoulderRushPostMove', payload: { msgId, playerNum: _pn, figureKey: _figureKey } };
     } else if (entry.freeAttackBonus) {
       _nextAction = { type: 'freeAttackPrompt', payload: { msgId, playerNum: _pn, figureKey: _figureKey, sourceLabel: entry.label || 'Free Attack' } };
+    }
+    if (_figureKey && (game.figureConditions?.[_figureKey] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_figureKey)}** is **Stunned** and cannot move.` };
     }
     // Stamp pendingMoveX state synchronously; the caller posts the
     // picker UI when it sees pendingMoveXMsgId on the result.
@@ -4372,6 +4393,9 @@ export function resolveAbility(abilityId, context) {
       .filter(k => k.startsWith((meta.dcName || '') + '-'));
     const _othSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const _othFigureKey = _othFigureKeys[_othSelectedIdx] || _othFigureKeys[0] || null;
+    if (_othFigureKey && (game.figureConditions?.[_othFigureKey] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_othFigureKey)}** is **Stunned** and cannot move.` };
+    }
     let _pmxMsgId = null;
     if (_othFigureKey) {
       game.pendingMoveX = game.pendingMoveX || {};
@@ -15453,6 +15477,9 @@ export function resolveAbility(abilityId, context) {
       };
     }
 
+    if ((game.figureConditions?.[activatingFigureKey] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(activatingFigureKey)}** is **Stunned** and cannot move.` };
+    }
     // Phase 1: stamp pendingMoveX (2-space picker per CRR MOVE-017) +
     // headbuttRoll continuation. After the picker drains, the
     // continuation enumerates adjacent hostiles from the figure's
