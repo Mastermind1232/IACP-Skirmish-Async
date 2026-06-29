@@ -250,86 +250,6 @@ describe('Combat effects: conditions', () => {
     assert.ok(game.figureConditions[fk]?.includes('Weaken'), 'Weaken NOT removed due to disarm lock');
   });
 
-  it('pendingBleeding structure is correct', () => {
-    const { game, p1Fks } = buildCombatGame();
-    const fk = p1Fks[0];
-
-    game.pendingBleeding = {
-      playerNum: 1,
-      figureKey: fk,
-      displayName: dcNameFromFigureKey(fk),
-    };
-
-    assert.strictEqual(game.pendingBleeding.playerNum, 1);
-    assert.strictEqual(game.pendingBleeding.figureKey, fk);
-    assert.ok(game.pendingBleeding.displayName.length > 0, 'Has display name');
-  });
-
-  it('bleed_accept customId format is correct', () => {
-    const gameId = 'test1';
-    const fk = 'Stormtrooper-0-0';
-    const customId = `bleed_accept_${gameId}_1_${fk}`;
-    const parts = customId.replace('bleed_accept_', '').split('_');
-    assert.strictEqual(parts[0], gameId);
-    assert.strictEqual(parseInt(parts[1], 10), 1, 'playerNum');
-    assert.strictEqual(parts.slice(2).join('_'), fk, 'figureKey preserved');
-  });
-
-  it('bleed_prevent customId format is correct', () => {
-    const gameId = 'test1';
-    const fk = 'Stormtrooper-0-0';
-    const customId = `bleed_prevent_${gameId}_1_${fk}`;
-    const parts = customId.replace('bleed_prevent_', '').split('_');
-    assert.strictEqual(parts[0], gameId);
-    assert.strictEqual(parseInt(parts[1], 10), 1);
-    assert.strictEqual(parts.slice(2).join('_'), fk);
-  });
-
-  it('Bleed accept reduces HP by 1 (simulated)', () => {
-    const { game, p1Fks } = buildCombatGame();
-    const fk = p1Fks[0];
-    applyCondition(game, fk, 'Bleed');
-
-    // Simulate bleed_accept: reduce current HP by 1
-    const dcList = getDcList(game, 1);
-    const msgIds = getDcMessageIds(game, 1) || [];
-    // Find the DC index for this figure
-    const dcName = dcNameFromFigureKey(fk);
-    const dcIdx = dcList.findIndex(d => d.dcName === dcName);
-    if (dcIdx >= 0 && dcList[dcIdx].healthState?.[0]) {
-      const originalHp = dcList[dcIdx].healthState[0][0];
-      dcList[dcIdx].healthState[0][0] = Math.max(0, originalHp - 1);
-
-      assert.strictEqual(dcList[dcIdx].healthState[0][0], originalHp - 1, 'HP reduced by 1');
-    }
-
-    filterCondition(game, fk, 'Bleed');
-    assert.ok(!(game.figureConditions?.[fk] || []).includes('Bleed'), 'Bleed removed after accept');
-  });
-
-  it('Bleed prevent discards top CC from deck (simulated)', () => {
-    const { game, p1Fks } = buildCombatGame({
-      p1CcHand: ['Son of Skywalker'],
-      p1CcDeck: ['Take Initiative', 'Element of Surprise', 'Urgency'],
-    });
-    const fk = p1Fks[0];
-    applyCondition(game, fk, 'Bleed');
-
-    const deckBefore = game.player1CcDeck.length;
-    const discardBefore = (game.player1CcDiscard || []).length;
-
-    // Simulate bleed_prevent: discard top card from deck
-    game.player1CcDiscard = game.player1CcDiscard || [];
-    const topCard = game.player1CcDeck.shift();
-    game.player1CcDiscard.push(topCard);
-
-    assert.strictEqual(game.player1CcDeck.length, deckBefore - 1, 'Deck lost 1 card');
-    assert.strictEqual(game.player1CcDiscard.length, discardBefore + 1, 'Discard gained 1 card');
-    assert.strictEqual(topCard, 'Take Initiative', 'Top card discarded');
-
-    filterCondition(game, fk, 'Bleed');
-    assert.ok(!(game.figureConditions?.[fk] || []).includes('Bleed'), 'Bleed removed after prevent');
-  });
 });
 
 // ── Suite 3: (removed) ───────────────────────────────────────────────────────
@@ -492,8 +412,6 @@ describe('Combat effects: handler registration', () => {
     const content = fs.readFileSync('src/handlers/index.js', 'utf8');
 
     const requiredPrefixes = [
-      'bleed_accept_',
-      'bleed_prevent_',
       'celebration_play_',
       'celebration_pass_',
       'extra_armor_pick_',

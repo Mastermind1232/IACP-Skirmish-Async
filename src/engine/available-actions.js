@@ -75,20 +75,6 @@ export function getAvailableActions(game, playerNum, deps = {}) {
     const choiceActions = getDcAbilityChoiceActions(game, playerNum, deps);
     if (choiceActions.length > 0) return choiceActions;
   }
-  // Bleeding prompt (headless only): figure owner must accept or prevent
-  if (game.pendingBleeding) {
-    const bl = game.pendingBleeding;
-    if (playerNum === bl.playerNum) {
-      const gameId = game.gameId;
-      const ccDeckLen = (game[playerNum === 1 ? 'player1CcDeck' : 'player2CcDeck'] || []).length;
-      return [
-        { type: 'bleed_accept', customId: `bleed_accept_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: ${bl.displayName} takes 1 damage` },
-        { type: 'bleed_prevent', customId: `bleed_prevent_${gameId}_${playerNum}_${bl.figureKey}`, description: `Bleeding: prevent (discard CC, ${ccDeckLen} left)`, disabled: ccDeckLen === 0 },
-      ].filter(a => !a.disabled);
-    }
-    return [];
-  }
-
   // Post-deploy queue: player must pick which interactive ability to resolve next
   if (game.postDeployQueue?.awaitingOrder) {
     const q = game.postDeployQueue;

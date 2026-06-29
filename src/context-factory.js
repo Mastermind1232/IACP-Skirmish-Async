@@ -28,7 +28,7 @@ const COMBAT_DEPS = [
   'calculateKillVp', 'checkHuntDissent', 'checkThisIsTheWay', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
   'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
-  'sendBleedingPrompt', 'processFigureDefeat',
+  'processFigureDefeat',
   'getMapData', 'getEffectiveMapSpaces', 'isWithinN', 'getFigureLabel',
   // findFigureheadFigure: applyStrain (called from combat-path strain like
   // Heavy Repeater / weapon strain costs) consults it to fire the Figurehead
@@ -95,7 +95,7 @@ const CONTEXT_GROUPS = {
     'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
     'getMovementMinimapAttachment', 'clearMoveGridMessages',
     'getLegalInteractOptions', 'FIGURE_LETTERS', 'resolveAbility',
-    'sendBleedingPrompt', 'updateMovementBankMessage',
+    'updateMovementBankMessage',
     'getCommandCardImagePath', 'getConditionCardPath', 'buildBoardMapPayload',
     'findDcMessageIdForFigure', 'isGroupDefeated', 'checkWinConditions',
     'getMapAttachmentForSpaces',
@@ -124,7 +124,7 @@ const CONTEXT_GROUPS = {
     'resolveMassivePush', 'updateMovementBankMessage', 'getMovementPath',
     'pushUndo', 'logGameAction', 'countTerminalsControlledByPlayer',
     'getMovementMinimapAttachment', 'buildBoardMapPayload',
-    'updateDcActionsMessage', 'repostDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
+    'updateDcActionsMessage', 'repostDcActionsMessage', 'getDcStats', 'dcHealthState',
     'saveGames', 'client',
     'processFigureDefeat',
   ],
@@ -278,7 +278,7 @@ const CONTEXT_GROUPS = {
   interact: [
     'getGame', 'dcMessageMeta', 'dcHealthState', 'getLegalInteractOptions',
     'getDcStats', 'getDcEffects', 'updateDcActionsMessage', 'logGameAction',
-    'sendBleedingPrompt', 'saveGames', 'pushUndo', 'getMissionTokenLabel',
+    'saveGames', 'pushUndo', 'getMissionTokenLabel',
   ],
 
   refreshMap: [

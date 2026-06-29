@@ -197,7 +197,6 @@ import {
   buildFavoritesListPayload,
 } from './favorites.js';
 import {
-  handleBleedResolve,
   handleSidewinderApply, handleSidewinderSkip,
   handleBoltslingerTarget, handleBoltslingerSkip,
   handleIndiscriminateFireDie, handleIndiscriminateFireSkip,
@@ -728,8 +727,6 @@ register('prototype_pick_', handlePrototypePick, 'mapEvents');
 register('prototype_skip_', handlePrototypeSkip, 'mapEvents');
 
 // --- Combat special effects ---
-register('bleed_accept_', handleBleedResolve, 'combatSpecialEffects');
-register('bleed_prevent_', handleBleedResolve, 'combatSpecialEffects');
 register('sidewinder_apply_', handleSidewinderApply, 'combatSpecialEffects');
 register('sidewinder_skip_', handleSidewinderSkip, 'combatSpecialEffects');
 register('boltslinger_target_', handleBoltslingerTarget, 'combatSpecialEffects');
@@ -948,7 +945,6 @@ export { applyStrain, handleStrainUdDeplete, handleStrainUdSkip, handleStrainCho
 export { handleDevaronDoorOpen, handleDevaronCratePush, handleDevaronCrateDone, handleKryknaPush, handleKryknaPlace, handleKryknaPlaceSkip, handleKryknaPlacePick, handleFluctuationSwap, handleFluctuationSkip, handleArmsDistributePick, handleArmsDistributeSkip, handlePrototypePick, handlePrototypeSkip, handlePrototypeDestPick } from './map-events.js';
 export { buildFavoritesListPayload, handleFavNameModal, handleFavRenameModal, handleFavListRenameModal } from './favorites.js';
 export {
-  handleBleedResolve,
   handleSidewinderApply, handleSidewinderSkip,
   handleBoltslingerTarget, handleBoltslingerSkip,
   handleIndiscriminateFireDie, handleIndiscriminateFireSkip,

@@ -174,7 +174,7 @@ import {
 import {
   applyNpcDamageToFigure as _applyNpcDamageToFigurePure,
   applyDirectDamageToFigure as _applyDirectDamageToFigurePure,
-  sendBleedingPrompt as _sendBleedingPromptPure,
+
   resolveCombatAfterRolls as _resolveCombatAfterRollsPure,
   applyDamageAndFinishCombat as _applyDamageAndFinishCombatPure,
   checkPostCombatSurges as _checkPostCombatSurgesPure,
@@ -1468,13 +1468,6 @@ const filterCondition = _filterCondition;
 const isConditionImmune = _isConditionImmune;
 const HARMFUL_CONDITIONS = _HARMFUL_CONDITIONS;
 
-/** Send a Bleeding damage prompt to the given channel. Offers "Take 1 damage" or "Prevent (discard CC)". */
-async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName) {
-  return _sendBleedingPromptPure(game, channel, figureKey, playerNum, displayName, {
-    ccDeckKey, ButtonBuilder, ButtonStyle, ActionRowBuilder, discordCatch,
-  });
-}
-
 /** Check if a Figurehead-capable figure is available to intercept damage for targetFigureKey. Returns { figureKey, msgId, figIndex, label } or null. */
 function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey) {
   return _findFigureheadFigurePure(game, defenderPlayerNum, targetFigureKey, {
@@ -1525,7 +1518,6 @@ async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultTex
     checkPostCombatSurges,
     finishCombatResolution,
     normalizeCoord,
-    sendBleedingPrompt,
   });
 }
 
@@ -1564,7 +1556,6 @@ async function runAfterResolveWindow(thread, game, combat, { resultText, embedRe
     checkPostCombatSurges,
     finishCombatResolution,
     normalizeCoord,
-    sendBleedingPrompt,
   });
 }
 
@@ -3560,7 +3551,7 @@ function buildAllDeps() {
     isDepletedRemovedFromGame, getPlayableCcSpecialsForDc,
     getPlayableCcEndOfActivationForDc, getPlayableCcDoubleActionsForDc,
     getDcStats, getEffectiveSpeed, getMovementMinimapAttachment,
-    clearMoveGridMessages, getLegalInteractOptions, sendBleedingPrompt,
+    clearMoveGridMessages, getLegalInteractOptions,
     getCommandCardImagePath, findDcMessageIdForFigure, findFigureheadFigure, isGroupDefeated,
     checkWinConditions, applyDamageAndFinishCombat, finishCombatResolution,
     checkPostCombatSurges, resolveCombatAfterRolls, runAfterResolveWindow, hasActionsRemainingInGame,

@@ -175,31 +175,6 @@ export async function applyDirectDamageToFigure(game, playerNum, figKey, msgId, 
 }
 
 /**
- * Send a Bleeding damage prompt to the given channel.
- * Offers "Take 1 damage" or "Prevent (discard CC)".
- */
-export async function sendBleedingPrompt(game, channel, figureKey, playerNum, displayName, deps) {
-  const { ccDeckKey, ButtonBuilder, ButtonStyle, ActionRowBuilder, discordCatch } = deps;
-
-  const deckKey = ccDeckKey(playerNum);
-  const deckCount = (game[deckKey] || []).length;
-  const acceptBtn = new ButtonBuilder()
-    .setCustomId(`bleed_accept_${game.gameId}_${playerNum}_${figureKey}`)
-    .setLabel('Take 1 damage')
-    .setStyle(ButtonStyle.Danger);
-  const preventBtn = new ButtonBuilder()
-    .setCustomId(`bleed_prevent_${game.gameId}_${playerNum}_${figureKey}`)
-    .setLabel(`Prevent (discard CC, ${deckCount} left)`)
-    .setStyle(ButtonStyle.Primary)
-    .setDisabled(deckCount === 0);
-  const row = new ActionRowBuilder().addComponents(acceptBtn, preventBtn);
-  await channel.send({
-    content: `\u{1FA78} **Bleeding** — **${displayName}** suffers 1 damage after resolving their action. Take damage or discard top CC to prevent?`,
-    components: [row],
-  }).catch(discordCatch);
-}
-
-/**
  * Resolve combat after rolls (and optional surge).
  * Applies damage, VP, updates embeds/board, clears pendingCombat.
  */

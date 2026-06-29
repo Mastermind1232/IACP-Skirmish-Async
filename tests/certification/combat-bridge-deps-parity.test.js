@@ -137,7 +137,6 @@ function extractWrapperDepsObject(idxSrc, pureCallName, depsArgIndex) {
 const PARITY_CASES = [
   ['applyNpcDamageToFigure',   '_applyNpcDamageToFigurePure',     5],
   ['applyDirectDamageToFigure','_applyDirectDamageToFigurePure',  8],
-  ['sendBleedingPrompt',       '_sendBleedingPromptPure',         5],
   ['resolveCombatAfterRolls',  '_resolveCombatAfterRollsPure',    3],
   ['applyDamageAndFinishCombat','_applyDamageAndFinishCombatPure',4],
   ['checkPostCombatSurges',    '_checkPostCombatSurgesPure',      7],

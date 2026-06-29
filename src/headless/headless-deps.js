@@ -271,7 +271,6 @@ export function buildHeadlessDeps(options = {}) {
   const repostRoundActivationMessage = noopAsync;
   const refreshAllGameComponents = noopAsync;
   const sendRoundActivationPhaseMessage = noopAsync;
-  const sendBleedingPrompt = noopAsync;
   const sendDeckIllegalAlert = noopAsync;
   const sendSquadConfirmation = noopAsync;
   const postDevaronDoorButtons = noopAsync;
@@ -350,7 +349,6 @@ export function buildHeadlessDeps(options = {}) {
     updateAttachmentMessageForDc, updateMovementBankMessage, ensureMovementBankMessage,
     updateDcActionsMessage, repostDcActionsMessage, updateHandChannelMessages, updateHandVisualMessage,
     sendPowerTokenOverflowUI: noopAsync,
-    sendBleedingPrompt,
     applyIndiscriminateFireSplash: noopAsync,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments, getNicknamesForDcMessage,
     buildBoardMapPayload,
@@ -627,7 +625,7 @@ export function buildHeadlessDeps(options = {}) {
     // Resync rebuilds DC side-channel Maps for in-Discord recovery; in
     // headless these maps are already managed externally — noop is safe.
     repopulateDcMapsForGame: () => {},
-    sendBleedingPrompt, sendDeckIllegalAlert, sendSquadConfirmation,
+    sendDeckIllegalAlert, sendSquadConfirmation,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons,
     postArmsDistributionPrompt, postPrototypeMovePrompt,
     updateDeployPromptMessages, getDcPlayAreaComponents,

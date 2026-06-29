@@ -30,9 +30,9 @@ describe('ORACLE-DEFEAT-001: Converted defeat sites use processFigureDefeat', ()
       marker: 'Indiscriminate Fire',
     },
     {
-      file: 'src/handlers/combat-special-effects.js',
-      label: 'Bleeding defeat',
-      marker: 'Bleeding',
+      file: 'src/handlers/strain-handler.js',
+      label: 'Bleeding defeat (via applyStrain)',
+      marker: 'processFigureDefeat',
     },
     {
       file: 'src/handlers/activation.js',
@@ -225,17 +225,6 @@ describe('ORACLE-DEFEAT-004: Strike Me Down VP reduction preserved', () => {
     assert.ok(src.includes('baseCost - 3'), 'Strike Me Down should reduce VP cost by 3');
     assert.ok(src.includes('awardVp: false'), 'Strike Me Down should pass awardVp: false to processFigureDefeat');
     assert.ok(src.includes('awardKillVp'), 'Strike Me Down should manually award reduced VP');
-  });
-});
-
-// ── ORACLE-DEFEAT-005: Bleeding bespoke cleanup preserved ────────────────────
-describe('ORACLE-DEFEAT-005: Bleeding retains bespoke pending-state cleanup', () => {
-  it('Bleeding still cleans up dcActionsData and movementBank after defeat', () => {
-    const src = readSrc('src/handlers/combat-special-effects.js');
-    assert.ok(src.includes('dcActionsData'), 'Bleeding should still clean up dcActionsData');
-    assert.ok(src.includes('movementBank'), 'Bleeding should still clean up movementBank');
-    assert.ok(src.includes('pendingDcAbilityChoice'), 'Bleeding should still clean up pendingDcAbilityChoice');
-    assert.ok(src.includes('pendingPounceSpaceChoice'), 'Bleeding should still clean up pendingPounceSpaceChoice');
   });
 });
 
