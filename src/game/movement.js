@@ -4,44 +4,53 @@
 
 /**
  * Build the set of cells "edge or corner adjacent to a wall" for use by
- * Wall Run (Cal Kestis). A wall is an impassable edge between two
- * 4-adjacent cells; the cells on either side are edge-adjacent, and the
- * 4 cells at the wall's two endpoints are corner-adjacent (perpendicular
- * to the wall axis). Per destruct 2026-05-07: "Wall Run means 8-direction
- * adjacency as always in this game."
+ * Wall Run (Cal Kestis). Walls are black lines on the map — represented
+ * as MISSING cardinal adjacency between two on-map cells (distinct from
+ * impassable edges / dotted-red and blocking edges / solid-red which ARE
+ * in the adjacency graph but are blocked by edge sets). Per destruct:
+ * "Wall Run means 8-direction adjacency as always in this game."
  *
- * @param {Array<Array<string>>} impassableEdges - [[a,b], ...] from mapSpaces
+ * @param {object} mapSpaces - { spaces, adjacency, ... } from getMapData
  * @returns {Set<string>} normalized coords of wall-adjacent cells
  */
-function buildWallAdjacentSet(impassableEdges) {
+function buildWallAdjacentSet(mapSpaces) {
   const result = new Set();
-  for (const edge of (impassableEdges || [])) {
-    if (!Array.isArray(edge) || edge.length < 2) continue;
-    const aRaw = edge[0], bRaw = edge[1];
-    if (!aRaw || !bRaw) continue;
-    const a = normalizeCoord(aRaw);
-    const b = normalizeCoord(bRaw);
-    result.add(a);
-    result.add(b);
-    const pA = parseCoord(a);
-    const pB = parseCoord(b);
-    if (pA.col < 0 || pA.row < 0 || pB.col < 0 || pB.row < 0) continue;
-    const dc = pB.col - pA.col;
-    const dr = pB.row - pA.row;
-    if (dc !== 0 && dr === 0) {
-      // Horizontal pair → vertical wall between them; corners share row±1
-      for (const off of [-1, 1]) {
-        result.add(colRowToCoord(pA.col, pA.row + off));
-        result.add(colRowToCoord(pB.col, pB.row + off));
-      }
-    } else if (dc === 0 && dr !== 0) {
-      // Vertical pair → horizontal wall between them; corners share col±1
-      for (const off of [-1, 1]) {
-        result.add(colRowToCoord(pA.col + off, pA.row));
-        result.add(colRowToCoord(pB.col + off, pB.row));
+  if (!mapSpaces) return result;
+  const spacesArr = mapSpaces.spaces || [];
+  const spacesSet = new Set(spacesArr.map(normalizeCoord));
+  const rawAdj = mapSpaces.adjacency || {};
+  // Pre-normalize adjacency for O(1) lookup
+  const normAdj = {};
+  for (const [cell, neighbors] of Object.entries(rawAdj)) {
+    normAdj[normalizeCoord(cell)] = new Set((neighbors || []).map(normalizeCoord));
+  }
+  for (const cellRaw of spacesArr) {
+    const cell = normalizeCoord(cellRaw);
+    const { col, row } = parseCoord(cell);
+    const adjSet = normAdj[cell] || new Set();
+    // Check 4 cardinal neighbors; missing adjacency to an on-map neighbor = wall
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const neighborNorm = normalizeCoord(colRowToCoord(col + dc, row + dr));
+      if (!spacesSet.has(neighborNorm)) continue; // off-map edge, not a wall
+      if (adjSet.has(neighborNorm)) continue; // connected — no wall here
+      // Missing adjacency → black-line wall between cell and neighbor
+      result.add(cell);
+      result.add(neighborNorm);
+      // Corner cells perpendicular to the wall axis
+      if (dc !== 0) {
+        // Horizontal neighbor → vertical wall; corners above/below each cell
+        for (const off of [-1, 1]) {
+          result.add(normalizeCoord(colRowToCoord(col, row + off)));
+          result.add(normalizeCoord(colRowToCoord(col + dc, row + off)));
+        }
+      } else {
+        // Vertical neighbor → horizontal wall; corners left/right of each cell
+        for (const off of [-1, 1]) {
+          result.add(normalizeCoord(colRowToCoord(col + off, row)));
+          result.add(normalizeCoord(colRowToCoord(col + off, row + dr)));
+        }
       }
     }
-    // Diagonal walls (rare in IA): edge-only treatment.
   }
   result.delete('');
   return result;
@@ -476,9 +485,9 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
       }
     }
   }
-  // Wall Run (Cal Kestis): cells edge/corner-adjacent to any impassable wall.
-  // Consumed by evaluateMovementStep when profile.wallRunActive is set.
-  const wallAdjacentSet = buildWallAdjacentSet(effectiveImpassable);
+  // Wall Run (Cal Kestis): cells edge/corner-adjacent to any black-line wall
+  // (missing cardinal adjacency). Consumed by evaluateMovementStep.
+  const wallAdjacentSet = buildWallAdjacentSet(mapSpaces);
   return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet };
 }
 
@@ -613,7 +622,7 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
     movementBlockingSet,
     impassableEdgeSet,
     spacesSet,
-    wallAdjacentSet: buildWallAdjacentSet(effectiveImpassable),
+    wallAdjacentSet: buildWallAdjacentSet(mapSpaces),
   };
   if (hostileOccupiedSet != null) {
     board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
