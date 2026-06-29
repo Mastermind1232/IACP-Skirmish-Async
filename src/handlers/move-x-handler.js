@@ -500,7 +500,7 @@ async function _runWhistlingBirdsRollContinuation(game, ctx, pending, next) {
     await logGameAction?.(game, client, `**Whistling Birds** — rolled **${hits}** but activator position is missing; resolve manually.`, { phase: 'ROUND', icon: 'card' });
     return;
   }
-  const { countGameSpaces } = await import('../game/movement.js').catch(() => ({}));
+  const { countGameSpaces } = await import('../game/board-helpers.js').catch(() => ({}));
   // CSV (docs/combat-spec.csv:870): "Choose up to 3 FIGURES within 2 spaces ...
   // each suffers Damage equal to the Hit results." Target is "figures" (friendly
   // OR hostile, excluding only the activator) and the controlling player CHOOSES
@@ -1223,7 +1223,7 @@ async function _runSequenceAfterAction(game, ctx, afterAction) {
       const keyword = String(afterAction.keyword || '').toUpperCase();
       const within = afterAction.withinSpaces || 4;
       const { getDcEffects } = await import('../data-loader.js').catch(() => ({}));
-      const { countGameSpaces } = await import('../game/movement.js').catch(() => ({}));
+      const { countGameSpaces } = await import('../game/board-helpers.js').catch(() => ({}));
       const { grantPowerTokens } = await import('../game/index.js').catch(() => ({}));
       const dcEffects = typeof getDcEffects === 'function' ? getDcEffects() : {};
       const grantedNames = [];

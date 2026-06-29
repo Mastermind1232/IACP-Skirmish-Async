@@ -28,6 +28,7 @@ import { hasLineOfSight, countSpaces } from './spatial.js';
 import { getBrokenWallEdges } from './movement.js';
 import { dcNameFromFigureKey, figureHasInTheShadows, figureHasPriorityTarget } from './dc-helpers.js';
 import { edgeKey } from './coords.js';
+import { getClosedDoorEdges } from './board-helpers.js';
 
 import { getDcEffect } from './dc-helpers.js';
 // Camouflage reciprocal: figures with these abilities do not block LOS for
@@ -111,8 +112,9 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
   // destination has NO LOS to it (does not apply to same-team LOS — the
   // source must be a "hostile figure" per the card). alexanbv 2026-06-20.
   if (fromPN && toPN && fromPN !== toPN && figureHasInTheShadows(game, toFigureKey)) {
+    const _itsBlockedEdges = getClosedDoorEdges(game);
     const itsDist = Math.min(...fromFp.map((ac) => Math.min(...toFp.map((tc) =>
-      countSpaces(effMs, String(ac).toLowerCase(), String(tc).toLowerCase())))));
+      countSpaces(effMs, String(ac).toLowerCase(), String(tc).toLowerCase(), _itsBlockedEdges)))));
     if (itsDist >= 4) return false;
   }
   // Build figure-blocking-coords using the picker's canonical helper
@@ -148,7 +150,8 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
         // In the Shadows (CC) rides the same reciprocal blocking exclusion.
         if (pn !== fromPN
             && ((fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
-          const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase())));
+          const _camoBlockedEdges = getClosedDoorEdges(game);
+          const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase(), _camoBlockedEdges)));
           if (dist >= 4) continue;
         }
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);

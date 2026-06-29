@@ -15,7 +15,7 @@ import { squadUpgradeOnGroup, effectiveFigureCount } from '../game/squad-upgrade
 import { getPlayableReactionCardsForTiming } from '../game/cc-timing.js';
 import { bottomLeftCoord, edgeKey, normalizeCoord, getFootprintCells } from '../game/coords.js';
 import { countSpaces } from '../game/spatial.js';
-import { countGameSpaces } from '../game/board-helpers.js';
+import { countGameSpaces, getClosedDoorEdges } from '../game/board-helpers.js';
 import { getBrokenWallEdges, getEffectiveMapSpaces, getImmediateStepSpaces } from '../game/movement.js';
 import { isForcedStepByStepForFigure } from '../game/forced-step-movement.js';
 import { COLORS } from '../discord/colors.js';
@@ -1114,7 +1114,8 @@ export function buildFigureBlockingCoords(game, playerNum, attackerPos, attacker
       if (thisPn === enemyPlayerNum && _camoMs
           && ((fkEff?.specialAbilityIds || []).some(id => CAMO_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
         const fkPosLc = String(pos).toLowerCase();
-        const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc)));
+        const _camoBe = getClosedDoorEdges(game);
+        const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc, _camoBe)));
         if (dist >= 4) continue;
       }
       const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
