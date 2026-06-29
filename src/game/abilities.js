@@ -4003,6 +4003,9 @@ export function resolveAbility(abilityId, context) {
           .filter(k => k.startsWith((_meta?.dcName || '') + '-'));
         const _rdSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         const _rdFigureKey = _rdFigureKeys[_rdSelectedIdx] || _rdFigureKeys[0] || null;
+        if (_rdFigureKey && (game.figureConditions?.[_rdFigureKey] || []).includes('Stun')) {
+          return { applied: false, manualMessage: `**${entry.label || 'Move and Attack'}** — **${dcNameFromFigureKey(_rdFigureKey)}** is **Stunned** and cannot move.` };
+        }
         if (_rdFigureKey && _rdpn) {
           game.pendingMoveX = game.pendingMoveX || {};
           game.pendingMoveX[msgId] = {
@@ -5729,6 +5732,9 @@ export function resolveAbility(abilityId, context) {
     const _jjSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const _jjFigKey = _jjFigKeys[_jjSelectedIdx] || _jjFigKeys[0] || null;
     if (!_jjFigKey) return { applied: false, manualMessage: `**${entry.label}** — could not locate the activating figure; resolve manually.` };
+    if ((game.figureConditions?.[_jjFigKey] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_jjFigKey)}** is **Stunned** and cannot move.` };
+    }
     const _jjOrigin = game.figurePositions?.[playerNum]?.[_jjFigKey];
     const _jjMapId = game.selectedMap?.id;
     const _jjMs = _jjMapId ? getMapData(_jjMapId) : null;
@@ -15497,6 +15503,9 @@ export function resolveAbility(abilityId, context) {
     // SELECTED figure, not hardcoded figure 0 (else figure 1 would teleport figure 0).
     const _plSelIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const fk = figureKeys[_plSelIdx] || figureKeys[0];
+    if ((game.figureConditions?.[fk] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label || 'Pounce'}** — **${dcNameFromFigureKey(fk)}** is **Stunned** and cannot move.` };
+    }
     if (!chosenSpace) {
       // First call: enumerate empty spaces within pounceRange using the IACP
       // "counting spaces" rule (per destruct 2026-05-07): impassable terrain
