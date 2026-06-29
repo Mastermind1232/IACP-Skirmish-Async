@@ -3,51 +3,86 @@
  */
 
 /**
- * Build the set of cells "edge or corner adjacent to a wall" for use by
- * Wall Run (Cal Kestis). Walls are black lines on the map — represented
- * as MISSING cardinal adjacency between two on-map cells (distinct from
- * impassable edges / dotted-red and blocking edges / solid-red which ARE
- * in the adjacency graph but are blocked by edge sets). Per destruct:
- * "Wall Run means 8-direction adjacency as always in this game."
+ * Build the set of cells "edge or corner adjacent to a wall" for Wall Run.
  *
- * @param {object} mapSpaces - { spaces, adjacency, ... } from getMapData
+ * Walls are the black lines on map tiles. They are stored explicitly:
+ * - Nick-native maps (mapSpaces.nickLos present): walls in nick-los.json
+ *   as unit segments [{x,y},{x,y}] in nick's coordinate frame. Converted
+ *   back to our (col,row) frame via the inverse of the map's transform.
+ * - Legacy maps: wallEdges field, or impassableEdges minus movementBlockingEdges
+ *   (same heuristic used by the LOS engine for these maps).
+ *
+ * Per destruct: "Wall Run means 8-direction adjacency as always in this game."
+ *
+ * @param {object} mapSpaces - map data from getMapData (may include nickLos)
  * @returns {Set<string>} normalized coords of wall-adjacent cells
  */
 function buildWallAdjacentSet(mapSpaces) {
   const result = new Set();
   if (!mapSpaces) return result;
-  const spacesArr = mapSpaces.spaces || [];
-  const spacesSet = new Set(spacesArr.map(normalizeCoord));
-  const rawAdj = mapSpaces.adjacency || {};
-  // Pre-normalize adjacency for O(1) lookup
-  const normAdj = {};
-  for (const [cell, neighbors] of Object.entries(rawAdj)) {
-    normAdj[normalizeCoord(cell)] = new Set((neighbors || []).map(normalizeCoord));
-  }
-  for (const cellRaw of spacesArr) {
-    const cell = normalizeCoord(cellRaw);
-    const { col, row } = parseCoord(cell);
-    const adjSet = normAdj[cell] || new Set();
-    // Check 4 cardinal neighbors; missing adjacency to an on-map neighbor = wall
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const neighborNorm = normalizeCoord(colRowToCoord(col + dc, row + dr));
-      if (!spacesSet.has(neighborNorm)) continue; // off-map edge, not a wall
-      if (adjSet.has(neighborNorm)) continue; // connected — no wall here
-      // Missing adjacency → black-line wall between cell and neighbor
-      result.add(cell);
-      result.add(neighborNorm);
-      // Corner cells perpendicular to the wall axis
-      if (dc !== 0) {
-        // Horizontal neighbor → vertical wall; corners above/below each cell
+  const nl = mapSpaces.nickLos;
+  if (nl) {
+    // Nick-native: walls are axis-aligned unit segments in nick's (x,y) frame.
+    // Inverse transform: from nick (nx, ny) → our (col, row).
+    const tx = nl.transform.x, ty = nl.transform.y;
+    const fromNick = (nx, ny) => {
+      const xSrc = (nx - tx.offset) / tx.scale;
+      const ySrc = (ny - ty.offset) / ty.scale;
+      let col, row;
+      if (tx.from === 'col') { col = xSrc; } else { row = xSrc; }
+      if (ty.from === 'col') { col = ySrc; } else { row = ySrc; }
+      return { col: Math.round(col), row: Math.round(row) };
+    };
+    const addNick = (nx, ny) => {
+      const { col, row } = fromNick(nx, ny);
+      if (col < 0 || row < 0) return;
+      const c = normalizeCoord(colRowToCoord(col, row));
+      if (c) result.add(c);
+    };
+    for (const wall of (nl.walls || [])) {
+      const [p1, p2] = wall;
+      const wdx = p2.x - p1.x, wdy = p2.y - p1.y;
+      if (wdy === 0 && wdx !== 0) {
+        // Horizontal wall at nick y=Y: separates cells at (X,Y-1) from (X,Y)
+        const Y = p1.y, Xmin = Math.min(p1.x, p2.x), Xmax = Math.max(p1.x, p2.x);
+        for (let X = Xmin; X < Xmax; X++) { addNick(X, Y - 1); addNick(X, Y); }
+        // Corners at wall endpoints
+        addNick(Xmin - 1, Y - 1); addNick(Xmin - 1, Y);
+        addNick(Xmax,     Y - 1); addNick(Xmax,     Y);
+      } else if (wdx === 0 && wdy !== 0) {
+        // Vertical wall at nick x=X: separates cells at (X-1,Y) from (X,Y)
+        const X = p1.x, Ymin = Math.min(p1.y, p2.y), Ymax = Math.max(p1.y, p2.y);
+        for (let Y = Ymin; Y < Ymax; Y++) { addNick(X - 1, Y); addNick(X, Y); }
+        // Corners at wall endpoints
+        addNick(X - 1, Ymin - 1); addNick(X, Ymin - 1);
+        addNick(X - 1, Ymax);     addNick(X, Ymax);
+      }
+    }
+  } else {
+    // Legacy maps: use wallEdges (explicit) or impassableEdges - movementBlockingEdges.
+    // This matches how spatial.js's LOS engine identifies walls for these maps.
+    const mbeSet = new Set((mapSpaces.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
+    const wallEdges = mapSpaces.wallEdges
+      ?? (mapSpaces.impassableEdges || []).filter((e) => !mbeSet.has(edgeKey(e[0], e[1])));
+    for (const edge of (wallEdges || [])) {
+      if (!Array.isArray(edge) || edge.length < 2) continue;
+      const a = normalizeCoord(String(edge[0]).toLowerCase());
+      const b = normalizeCoord(String(edge[1]).toLowerCase());
+      result.add(a);
+      result.add(b);
+      const pA = parseCoord(a);
+      const pB = parseCoord(b);
+      if (pA.col < 0 || pA.row < 0 || pB.col < 0 || pB.row < 0) continue;
+      const dc = pB.col - pA.col, dr = pB.row - pA.row;
+      if (dc !== 0 && dr === 0) {
         for (const off of [-1, 1]) {
-          result.add(normalizeCoord(colRowToCoord(col, row + off)));
-          result.add(normalizeCoord(colRowToCoord(col + dc, row + off)));
+          result.add(colRowToCoord(pA.col, pA.row + off));
+          result.add(colRowToCoord(pB.col, pB.row + off));
         }
-      } else {
-        // Vertical neighbor → horizontal wall; corners left/right of each cell
+      } else if (dc === 0 && dr !== 0) {
         for (const off of [-1, 1]) {
-          result.add(normalizeCoord(colRowToCoord(col + off, row)));
-          result.add(normalizeCoord(colRowToCoord(col + off, row + dr)));
+          result.add(colRowToCoord(pA.col + off, pA.row));
+          result.add(colRowToCoord(pB.col + off, pB.row));
         }
       }
     }
