@@ -260,6 +260,7 @@ export function buildHeadlessDeps(options = {}) {
   const updateMovementBankMessage = noopAsync;
   const ensureMovementBankMessage = noopAsync;
   const updateDcActionsMessage = noopAsync;
+  const repostDcActionsMessage = noopAsync;
   const updateHandChannelMessages = noopAsync;
   const updateHandVisualMessage = noopAsync;
   const updateDiscardPileMessage = noopAsync;
@@ -347,7 +348,7 @@ export function buildHeadlessDeps(options = {}) {
     normalizeCoord, computeCombatResult, getBoardStateForMovement,
     findFigureheadFigure: _findFigureheadFigure,
     updateAttachmentMessageForDc, updateMovementBankMessage, ensureMovementBankMessage,
-    updateDcActionsMessage, updateHandChannelMessages, updateHandVisualMessage,
+    updateDcActionsMessage, repostDcActionsMessage, updateHandChannelMessages, updateHandVisualMessage,
     sendPowerTokenOverflowUI: noopAsync,
     sendBleedingPrompt,
     applyIndiscriminateFireSplash: noopAsync,
@@ -618,7 +619,7 @@ export function buildHeadlessDeps(options = {}) {
 
     // Locally-defined stubs
     updateAttachmentMessageForDc, updateMovementBankMessage,
-    ensureMovementBankMessage, updateDcActionsMessage,
+    ensureMovementBankMessage, updateDcActionsMessage, repostDcActionsMessage,
     updateHandChannelMessages, updateHandVisualMessage,
     updateDiscardPileMessage, updatePlayAreaDcButtons,
     clearMoveGridMessages, maybeShowEndActivationPhaseButton, updateRoundActivationMessage, repostRoundActivationMessage,

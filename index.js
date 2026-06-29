@@ -243,6 +243,7 @@ import {
   updateMovementBankMessage as _updateMovementBankMessagePure,
   ensureMovementBankMessage as _ensureMovementBankMessagePure,
   updateDcActionsMessage as _updateDcActionsMessagePure,
+  repostDcActionsMessage as _repostDcActionsMessagePure,
   updateHandChannelMessages as _updateHandChannelMessagesPure,
   updateHandVisualMessage as _updateHandVisualMessagePure,
   updateDiscardPileMessage as _updateDiscardPileMessagePure,
@@ -1609,7 +1610,7 @@ async function finishCombatResolution(game, combat, resultText, embedRefreshMsgI
     renderDcEmbed,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getDcUpgradeAttachments, getNicknamesForDcMessage,
     buildBoardMapPayload,
-    updateDcActionsMessage, ensureMovementBankMessage, updateMovementBankMessage,
+    updateDcActionsMessage, repostDcActionsMessage, ensureMovementBankMessage, updateMovementBankMessage,
     sendPowerTokenOverflowUI,
     applyIndiscriminateFireSplash,
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
@@ -1726,6 +1727,15 @@ async function updateDcActionsMessage(game, msgId, client, opts) {
     shouldShowEndActivationPhaseButton, EmbedBuilder, GAME_PHASES, PHASE_COLOR,
     getInitiativePlayerNum, getInitiativePlayerZoneLabel, saveGames,
     suppressFinishedPrompt: !!opts?.suppressFinishedPrompt,
+  });
+}
+
+async function repostDcActionsMessage(game, msgId, client) {
+  return _repostDcActionsMessagePure(game, msgId, client, {
+    dcMessageMeta, getActionsCounterContent, getDcActionButtons,
+    getActivationMinimapAttachment, discordCatch, getPlayAreaId,
+    renderDcEmbed, getDcPlayAreaComponents,
+    getPlayerId, ACTION_ICONS, logGameAction,
   });
 }
 
@@ -3542,7 +3552,7 @@ function buildAllDeps() {
     updateHandVisualMessage, updatePlayAreaDcButtons,
     sendRoundActivationPhaseMessage, runStartOfRoundDcEffects, runStartOfRoundContinuation, runStatusPhaseAfterEndOfRound, runPostDeployPhase, sendPhaseGateMessages,
     buildDiscardPileDisplayPayload, updateDiscardPileMessage,
-    updateAttachmentMessageForDc, updateDcActionsMessage,
+    updateAttachmentMessageForDc, updateDcActionsMessage, repostDcActionsMessage,
     buildDcEmbedAndFiles, getConditionsForDcMessage, getNicknamesForDcMessage, getDcPlayAreaComponents,
     buildBoardMapPayload, getMapAttachmentForSpaces, ensureMovementBankMessage,
     updateMovementBankMessage, getConditionCardPath, getDcActionButtons,

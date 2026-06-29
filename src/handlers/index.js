@@ -239,7 +239,7 @@ register('clear_stale_combat_', handleClearStaleCombat, 'clearStaleCombat');
 register('undo_', handleUndo, 'undo');
 register('kill_game_', handleKillGame, 'killGame');
 register('default_deck_', handleDefaultDeck, 'defaultDeck');
-register('special_done_', handleSpecialDone);
+register('special_done_', handleSpecialDone, 'dcPlayArea');
 register('interact_cancel_', handleInteractCancel, 'interactCancel');
 register('interact_choice_', handleInteractChoice, 'interact');
 

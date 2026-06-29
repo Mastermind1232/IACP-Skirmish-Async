@@ -908,8 +908,10 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     _cleanupMoveState(game, moveKey, msgId);
     const _mpRemainingNote = mpRemaining > 0 ? ` — **${mpRemaining}** MP remain in bank.` : '';
     await interaction.followUp({ content: `**${displayName}** ended movement${_mpRemainingNote}`, ephemeral: false }).catch(discordCatch);
-    // Restore activation buttons (figure selector, Move/Attack/etc.)
-    if (ctx.updateDcActionsMessage) {
+    // Re-post activation modal at thread bottom so player sees it without scrolling
+    if (ctx.repostDcActionsMessage) {
+      await ctx.repostDcActionsMessage(game, msgId, client).catch(() => {});
+    } else if (ctx.updateDcActionsMessage) {
       await ctx.updateDcActionsMessage(game, msgId, client).catch(() => {});
     }
     saveGames(game.gameId);

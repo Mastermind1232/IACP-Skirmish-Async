@@ -287,6 +287,111 @@ export async function updateDcActionsMessage(game, msgId, client, deps) {
 }
 
 /**
+ * Re-post the activation modal (minimap + action buttons) as a NEW message at
+ * the bottom of the activation thread, so the player sees it without scrolling.
+ *
+ * Called after:
+ *   - movement ends (Done)
+ *   - an attack fully resolves
+ *   - a special action's Done button is clicked
+ *
+ * Parallel to updateDcActionsMessage but sends a fresh thread message instead of
+ * editing the buried one. Updates data.messageId to the new message so subsequent
+ * updateDcActionsMessage calls target it.
+ */
+export async function repostDcActionsMessage(game, msgId, client, deps) {
+  const data = game.dcActionsData?.[msgId];
+  if (!data?.threadId) return;
+  const meta = deps.dcMessageMeta.get(msgId);
+  const displayName = meta?.displayName || meta?.dcName || '';
+
+  // EoA effects (mirrors updateDcActionsMessage)
+  if (data.figureLocked && meta) {
+    data.figureEoaFired = data.figureEoaFired || {};
+    for (const figIdxStr of Object.keys(data.figureLocked)) {
+      const figIdx = parseInt(figIdxStr, 10);
+      if (!data.figureLocked[figIdx] || data.figureEoaFired[figIdx]) continue;
+      try {
+        const { applyEndOfActivationEffects } = await import('./activation-effects.js');
+        const { applied: _figEoa } = applyEndOfActivationEffects(game, {
+          dcName: meta.dcName, playerNum: meta.playerNum, displayName, msgId, figureIndex: figIdx,
+        });
+        if (Array.isArray(_figEoa) && deps.logGameAction) {
+          for (const eff of _figEoa) {
+            await deps.logGameAction(game, client, eff.message, { phase: 'ROUND', icon: 'activate' }).catch(() => {});
+          }
+        }
+      } catch { /* non-fatal */ }
+      data.figureEoaFired[figIdx] = true;
+    }
+  }
+
+  // Send new message + refresh play-area embed in parallel
+  const _repostTask = (async () => {
+    try {
+      const thread = await fetchGameChannel(client, data.threadId);
+      if (!thread) return;
+      const components = meta && game ? deps.getDcActionButtons(msgId, meta.dcName, displayName, data, game) : [];
+      const _selFig = data.selectedFigure ?? 0;
+      const payload = sanitizeMentions({
+        content: deps.getActionsCounterContent(figureActionsRemaining(data, _selFig), DC_ACTIONS_PER_ACTIVATION),
+        components,
+      });
+      // Always attach fresh minimap on repost
+      const actMinimap = await deps.getActivationMinimapAttachment(game, msgId);
+      if (actMinimap) {
+        payload.files = [actMinimap];
+        data._minimapEverRendered = true;
+        data._minimapRenderedVersion = game?._mapStateVersion || 0;
+      }
+      const newMsg = await withDiscordRetry(() => thread.send(payload));
+      data.messageId = newMsg.id;
+      if (actMinimap) data._minimapRenderedForMessageId = newMsg.id;
+    } catch (err) {
+      console.error('repostDcActionsMessage: thread send failed:', err?.message ?? err);
+    }
+  })();
+
+  const _playAreaEditTask = (async () => {
+    if (!(meta && game)) return;
+    try {
+      const _chId = deps.getPlayAreaId(game, meta.playerNum);
+      const _ch = await fetchGameChannel(client, _chId);
+      if (!_ch) return;
+      const _dcMsg = await _ch.messages.fetch(msgId).catch(() => null);
+      if (!_dcMsg) return;
+      const { embed: _emb, files: _files } = await deps.renderDcEmbed(game, msgId, deps, { exhausted: true, actionsData: data });
+      const _comps = deps.getDcPlayAreaComponents(msgId, true, game, meta.dcName);
+      await _dcMsg.edit({ embeds: [_emb], files: _files, components: _comps }).catch(deps.discordCatch);
+    } catch (_err) {
+      console.error('repostDcActionsMessage: play-area edit failed:', _err?.message ?? _err);
+    }
+  })();
+
+  await Promise.all([_repostTask, _playAreaEditTask]);
+
+  // Finished-all-actions prompt (mirrors updateDcActionsMessage)
+  if (data?.remaining === 0 && meta && !isActivationActionInProgress(game, msgId)) {
+    game.dcFinishedPinged = game.dcFinishedPinged || {};
+    if (!game.dcFinishedPinged[msgId] && !game.pendingEndTurn?.[msgId]) {
+      const ownerId = deps.getPlayerId(game, meta.playerNum);
+      try {
+        const ch = await fetchGameChannel(client, game.generalId);
+        const icon = deps.ACTION_ICONS?.activate || '⚡';
+        const timestamp = `<t:${Math.floor(Date.now() / 1000)}:t>`;
+        await ch.send(sanitizeMentions({
+          content: `${icon} ${timestamp} — <@${ownerId}> (**Player ${meta.playerNum}**) **${displayName}** finished all actions. Press **End Activation** in the activation thread when ready.`,
+          allowedMentions: { users: [ownerId] },
+        }));
+        game.dcFinishedPinged[msgId] = true;
+      } catch (err) {
+        console.error('repostDcActionsMessage: finished prompt failed:', err?.message ?? err);
+      }
+    }
+  }
+}
+
+/**
  * Single source of truth for the round-activation message in general
  * channel. Handles BOTH variants:
  *

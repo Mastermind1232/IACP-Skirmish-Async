@@ -2258,7 +2258,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     grantMovementBank, grantPowerTokens,
     renderDcEmbed,
     buildBoardMapPayload,
-    updateDcActionsMessage, ensureMovementBankMessage, updateMovementBankMessage,
+    updateDcActionsMessage, repostDcActionsMessage, ensureMovementBankMessage, updateMovementBankMessage,
     sendPowerTokenOverflowUI,
     applyIndiscriminateFireSplash,
     ButtonBuilder, ButtonStyle, ActionRowBuilder,
@@ -2738,7 +2738,8 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
   })();
   const _dcRefreshTask = (async () => {
     if (!combat.attackerMsgId) return;
-    await updateDcActionsMessage(game, combat.attackerMsgId, client).catch(discordCatch);
+    const _repostFn = repostDcActionsMessage || updateDcActionsMessage;
+    await _repostFn(game, combat.attackerMsgId, client).catch(discordCatch);
   })();
   await Promise.all([_boardPostTask, _dcRefreshTask]);
   // G73: Power Token Overflow — if any tokens were granted beyond the cap during combat

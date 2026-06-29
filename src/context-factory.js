@@ -7,7 +7,7 @@
 const COMBAT_DEPS = [
   'getGame', 'replyIfGameEnded', 'dcMessageMeta', 'dcHealthState',
   'findDcMessageIdForFigure', 'getDcStats', 'getDcEffects',
-  'updateDcActionsMessage', 'updateActivationsMessage',
+  'updateDcActionsMessage', 'repostDcActionsMessage', 'updateActivationsMessage',
   'updateAttachmentMessageForDc', 'logGameAction', 'isGroupDefeated',
   'checkWinConditions', 'finishCombatResolution', 'checkPostCombatSurges',
   'ACTION_ICONS', 'ThreadAutoArchiveDuration', 'resolveCombatAfterRolls', 'runAfterResolveWindow',
@@ -86,7 +86,7 @@ const CONTEXT_GROUPS = {
     // branch refresh the hand CHANNEL via ctx.updateHandChannelMessages. Without
     // it here the guard no-ops and the drawn cards only appear on the next action
     // (alexanbv 2026-06-25).
-    'updateHandVisualMessage', 'updateHandChannelMessages', 'updateDiscardPileMessage', 'updateDcActionsMessage',
+    'updateHandVisualMessage', 'updateHandChannelMessages', 'updateDiscardPileMessage', 'updateDcActionsMessage', 'repostDcActionsMessage',
     'getDcStats', 'getDcEffects', 'getMapData', 'getFigureSize', 'getFootprintCells',
     'getRange', 'hasLineOfSight',
     'hasLineOfSightByCoord', 'hasFigureLineOfSight', 'getFigureFootprint', 'getAllFigureFootprints', 'getFigureSize',
@@ -124,7 +124,7 @@ const CONTEXT_GROUPS = {
     'resolveMassivePush', 'updateMovementBankMessage', 'getMovementPath',
     'pushUndo', 'logGameAction', 'countTerminalsControlledByPlayer',
     'getMovementMinimapAttachment', 'buildBoardMapPayload',
-    'updateDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
+    'updateDcActionsMessage', 'repostDcActionsMessage', 'sendBleedingPrompt', 'getDcStats', 'dcHealthState',
     'saveGames', 'client',
     'processFigureDefeat',
   ],
