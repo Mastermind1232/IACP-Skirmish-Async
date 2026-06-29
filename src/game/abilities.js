@@ -4003,10 +4003,8 @@ export function resolveAbility(abilityId, context) {
           .filter(k => k.startsWith((_meta?.dcName || '') + '-'));
         const _rdSelectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         const _rdFigureKey = _rdFigureKeys[_rdSelectedIdx] || _rdFigureKeys[0] || null;
-        if (_rdFigureKey && (game.figureConditions?.[_rdFigureKey] || []).includes('Stun')) {
-          return { applied: false, manualMessage: `**${entry.label || 'Move and Attack'}** — **${dcNameFromFigureKey(_rdFigureKey)}** is **Stunned** and cannot move.` };
-        }
-        if (_rdFigureKey && _rdpn) {
+        const _rdStunned = (game.figureConditions?.[_rdFigureKey] || []).includes('Stun');
+        if (_rdFigureKey && _rdpn && !_rdStunned) {
           game.pendingMoveX = game.pendingMoveX || {};
           game.pendingMoveX[msgId] = {
             remaining: entry.freeMoveBonus,
