@@ -771,6 +771,8 @@ function evaluateMovementStep(current, neighbor, board, profile) {
           crossedImpassableAsDifficult = true;
           continue;
         }
+        // Wall Run: may cross impassable walls (not doors) when destination is wall-adjacent.
+        if (profile.wallRunActive && board.impassableEdgeSet?.has(ek) && board.wallAdjacentSet?.has(cell)) continue;
         return null;
       }
     }
