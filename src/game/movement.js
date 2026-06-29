@@ -488,7 +488,13 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
   // Wall Run (Cal Kestis): cells edge/corner-adjacent to any black-line wall
   // (missing cardinal adjacency). Consumed by evaluateMovementStep.
   const wallAdjacentSet = buildWallAdjacentSet(mapSpaces);
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet };
+  // Wall Run edge waiver: impassable edges (dotted red) + blocking edges (solid red).
+  // Doors are NOT included — Wall Run is terrain-based, not door-opening.
+  const wallRunPassableEdgeSet = new Set([
+    ...impassableEdgeSet,
+    ...(mapSpaces.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])),
+  ]);
+  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet, wallRunPassableEdgeSet };
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
@@ -623,6 +629,10 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
     impassableEdgeSet,
     spacesSet,
     wallAdjacentSet: buildWallAdjacentSet(mapSpaces),
+    wallRunPassableEdgeSet: new Set([
+      ...new Set((effectiveImpassable).map((e) => edgeKey(e[0], e[1]))),
+      ...(mapSpaces.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])),
+    ]),
   };
   if (hostileOccupiedSet != null) {
     board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
@@ -780,6 +790,9 @@ function evaluateMovementStep(current, neighbor, board, profile) {
           crossedImpassableAsDifficult = true;
           continue;
         }
+        // Wall Run: may cross impassable (dotted red) or blocking (solid red) edges
+        // when the destination cell is wall-adjacent. Doors are excluded.
+        if (profile.wallRunActive && board.wallRunPassableEdgeSet?.has(ek) && board.wallAdjacentSet?.has(cell)) continue;
         return null;
       }
     }
