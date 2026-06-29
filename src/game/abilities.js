@@ -4352,9 +4352,7 @@ export function resolveAbility(abilityId, context) {
     } else if (entry.freeAttackBonus) {
       _nextAction = { type: 'freeAttackPrompt', payload: { msgId, playerNum: _pn, figureKey: _figureKey, sourceLabel: entry.label || 'Free Attack' } };
     }
-    // i_am_one_with_the_force fires at start of a HOSTILE's activation (reaction
-    // timing, out of Chirrut's own activation) so Stun does not apply.
-    if (_figureKey && abilityId !== 'i_am_one_with_the_force' && (game.figureConditions?.[_figureKey] || []).includes('Stun')) {
+    if (_figureKey && (game.figureConditions?.[_figureKey] || []).includes('Stun')) {
       return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_figureKey)}** is **Stunned** and cannot move.` };
     }
     // Stamp pendingMoveX state synchronously; the caller posts the
