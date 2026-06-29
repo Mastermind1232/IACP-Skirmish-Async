@@ -3260,10 +3260,10 @@ export function resolveAbility(abilityId, context) {
     if (!game || !msgId || !meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const dcStats = getStatsForDc(meta.dcName);
     const speed = typeof dcStats?.speed === 'number' ? dcStats.speed : 4;
-    // Charge (alexanbv 2026-05-11): route through pendingMoveX picker
-    // (forced move, single window) with bypassCosts=true rather than
-    // banking MP. Wall Run still uses the bank path (no freeMoveAsMoveX).
-    if (entry.freeMoveAsMoveX) {
+    // Charge and Wall Run both route through pendingMoveX picker (never bank MP).
+    // Wall Run also sets figureWallRunActive before the picker fires so movement.js
+    // waives terrain costs in cells edge/corner-adjacent to a wall.
+    if (entry.freeMoveAsMoveX || entry.wallRun) {
       const _chActD = game.dcActionsData?.[msgId];
       const _chSelF = _chActD?.selectedFigure ?? 0;
       const _chDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
@@ -3272,10 +3272,14 @@ export function resolveAbility(abilityId, context) {
       if ((game.figureConditions?.[_chFkActive] || []).includes('Stun')) {
         return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_chFkActive)}** is **Stunned** and cannot move.` };
       }
+      if (entry.wallRun) {
+        game.figureWallRunActive = game.figureWallRunActive || {};
+        game.figureWallRunActive[_chFkActive] = true;
+      }
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[msgId] = {
         remaining: speed,
-        source: entry.label || 'Charge',
+        source: entry.label || (entry.wallRun ? 'Wall Run' : 'Charge'),
         playerNum,
         figureKey: _chFkActive,
         dcName: meta.dcName,
@@ -3288,44 +3292,18 @@ export function resolveAbility(abilityId, context) {
         game.freeAttackBonusPending = game.freeAttackBonusPending || {};
         if (_chFkActive) game.freeAttackBonusPending[_chFkActive] = true;
       }
-      const _chExtraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : '';
+      const _chExtraMsg = entry.freeAttackBonus
+        ? ' Then your next attack costs no action.'
+        : entry.wallRun
+          ? ' You may ignore terrain in cells edge or corner adjacent to a wall during this movement.'
+          : '';
       return {
         applied: true,
-        logMessage: entry.logMessage || `**${entry.label || 'Charge'}** — Move up to ${speed} spaces${entry.freeMoveBypassCosts ? ' (ignoring terrain costs)' : ''}.${_chExtraMsg}`,
+        logMessage: entry.logMessage || `**${entry.label || (entry.wallRun ? 'Wall Run' : 'Charge')}** — Move up to ${speed} spaces${entry.freeMoveBypassCosts ? ' (ignoring terrain costs)' : ''}.${_chExtraMsg}`,
         pendingMoveXMsgId: msgId,
         activeMsgId: msgId,
       };
     }
-    const _wrStunActD = game.dcActionsData?.[msgId];
-    const _wrStunSelF = _wrStunActD?.selectedFigure ?? 0;
-    const _wrStunDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-    const _wrStunDgI = _wrStunDgM ? _wrStunDgM[1] : '1';
-    const _wrStunFk = `${meta.dcName}-${_wrStunDgI}-${_wrStunSelF}`;
-    if ((game.figureConditions?.[_wrStunFk] || []).includes('Stun')) {
-      return { applied: false, manualMessage: `**${entry.label || 'Wall Run'}** — **${dcNameFromFigureKey(_wrStunFk)}** is **Stunned** and cannot move.` };
-    }
-    addMovementPoints(game, msgId, speed);
-    // Charge (and similar): also grant a free attack after the move
-    if (entry.freeAttackBonus) {
-      game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-      const _chFk = figureKeyForActivation(game, msgId);
-      if (_chFk) game.freeAttackBonusPending[_chFk] = true;
-    }
-    // Wall Run: tag the activating figure so movement.js waives difficult-
-    // terrain MP cost in cells edge/corner-adjacent to a wall. Cleared at
-    // activation end via clearActivationDcEffects.
-    if (entry.wallRun) {
-      const _wrActions = game.dcActionsData?.[msgId];
-      const _wrSelFig = _wrActions?.selectedFigure ?? 0;
-      const _wrDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-      const _wrDgI = _wrDgM ? _wrDgM[1] : '1';
-      const _wrFk = `${meta.dcName}-${_wrDgI}-${_wrSelFig}`;
-      game.figureWallRunActive = game.figureWallRunActive || {};
-      game.figureWallRunActive[_wrFk] = true;
-    }
-    const label = entry.label || 'Wall Run';
-    const extraMsg = entry.freeAttackBonus ? ' Then your next attack costs no action.' : ' You may ignore terrain in cells edge or corner adjacent to a wall during this movement.';
-    return { applied: true, logMessage: entry.logMessage || `**${label}** — Gained ${speed} free movement points (your Speed).${extraMsg}`, refreshMovementBank: true, activeMsgId: msgId };
   }
 
   // dcSpecial/ccEffect: rollOneDie (Slam, Smash, Grenadier, Parting Gift) — roll one die with optional targeting
