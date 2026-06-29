@@ -286,12 +286,14 @@ export function getFigureAdjacentCoordsFromSet(game, playerNum, figureKey, mapId
   if (!pos) return [];
   const dcName = dcNameFromFigureKey(figureKey);
   const footprint = getFootprintCells(pos, getEffectiveFigureSize(game, figureKey, dcName));
+  const closedDoors = getClosedDoorEdges(game);
   const result = new Set();
   for (const c of footprint) {
     const n = normalizeCoord(c);
     if (coordSet.has(n)) result.add(n);
     for (const adj of adjacency[n] || []) {
       const na = normalizeCoord(adj);
+      if (closedDoors.has(edgeKey(n, na))) continue;
       if (coordSet.has(na)) result.add(na);
     }
     // Geometric fallback: blocking-terrain targets (mission panels) are excluded from the

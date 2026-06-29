@@ -237,6 +237,31 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords, 
   }
   const blockingIntersections = [...biMap.values()];
 
+  // Energy shield / smoke corner-blocking (CRR p.28): a corner shared by
+  // a shield/smoke cell AND a wall endpoint (or another shield cell) blocks LOS.
+  // cornerBlockingTiles are the shield/smoke cells set by _buildLosEffectiveMs.
+  let legacyBlockingCornerSet = null;
+  const shieldCellsLegacy = [];
+  for (const cell of (mapSpaces?.cornerBlockingTiles || [])) {
+    const p = parseCoord(String(cell).toLowerCase());
+    if (p.col >= 0) shieldCellsLegacy.push({ x: p.col, y: p.row });
+  }
+  if (shieldCellsLegacy.length > 0) {
+    const cornerCount = new Map();
+    const bump = (x, y) => { const k = `${x},${y}`; cornerCount.set(k, (cornerCount.get(k) || 0) + 1); };
+    for (const w of walls) { bump(w[0].x, w[0].y); bump(w[1].x, w[1].y); }
+    for (const s of shieldCellsLegacy) {
+      bump(s.x, s.y); bump(s.x + 1, s.y); bump(s.x, s.y + 1); bump(s.x + 1, s.y + 1);
+    }
+    legacyBlockingCornerSet = new Set();
+    for (const s of shieldCellsLegacy) {
+      for (const [cx, cy] of [[s.x, s.y], [s.x + 1, s.y], [s.x, s.y + 1], [s.x + 1, s.y + 1]]) {
+        if ((cornerCount.get(`${cx},${cy}`) || 0) >= 2) legacyBlockingCornerSet.add(`${cx},${cy}`);
+      }
+    }
+    if (legacyBlockingCornerSet.size === 0) legacyBlockingCornerSet = null;
+  }
+
   return nickLineOfSight(a.col, a.row, b.col, b.row, {
     walls,
     blockingTiles,
@@ -245,6 +270,7 @@ export function hasLineOfSight(coord1, coord2, mapSpaces, figureBlockingCoords, 
     blockers,
     offMapTiles: [],
     spireTiles: [],
+    blockingCornerSet: legacyBlockingCornerSet,
   });
 }
 
@@ -396,7 +422,7 @@ export function hasFigureLineOfSight(fromFootprint, toFootprint, mapSpaces, figu
  * @param {number} maxDist
  * @returns {boolean}
  */
-export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
+export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges = null) {
   if (!mapSpaces?.adjacency || !coordA || !coordB) return false;
   const a = coordA.toLowerCase(), b = coordB.toLowerCase();
   if (a === b) return true;
@@ -407,6 +433,10 @@ export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist) {
     for (const c of frontier) {
       for (const adj of (mapSpaces.adjacency[c] || [])) {
         const s = String(adj).toLowerCase();
+        if (blockedEdges) {
+          const ek = [c, s].sort().join('|');
+          if (blockedEdges.has(ek)) continue;
+        }
         if (s === b) return true;
         if (!visited.has(s)) { visited.add(s); next.push(s); }
       }

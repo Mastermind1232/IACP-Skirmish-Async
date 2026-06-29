@@ -11,6 +11,7 @@
 
 import { getMapData as _getMapData, getDcEffects as _getDcEffects, getFigureSize as _getFigureSize } from '../data-loader.js';
 import { isWithinSpaces as _isWithinSpaces } from '../game/spatial.js';
+import { getClosedDoorEdges } from '../game/board-helpers.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { hasSprayFireAbility } from '../game/spray-fire-helpers.js';
@@ -101,11 +102,12 @@ registerCombatAbility({
     const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
     if (!atkCoord || !mapSp) return false;
     const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const blockedEdges = getClosedDoorEdges(game);
     for (const [fk, pos] of Object.entries(friendly)) {
       if (fk === combat.attackerFigureKey) continue;
       if (!ids(eff(deps, dcNameFromFigureKey(fk))).includes('call_the_shots_hera')) continue;
       if (game.roundFigureAbilityUsed?.[`${fk}_call_the_shots`]) continue;
-      if (within(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) return true;
+      if (within(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3, blockedEdges)) return true;
     }
     return false;
   },
@@ -339,12 +341,13 @@ registerCombatAbility({
     if (!mapData) return false;
     const getEff = deps?.getDcEffects || _getDcEffects;
     const within = deps?.isWithinSpaces || _isWithinSpaces;
+    const blockedEdges = getClosedDoorEdges(game);
     const positions = game.figurePositions?.[defenderPlayerNum] || {};
     for (const [fk, pos] of Object.entries(positions)) {
       if (!pos) continue;
       const eff = getEff()[dcNameFromFigureKey(fk)];
       if (!hasDistractingAbility(eff?.specialAbilityIds)) continue;
-      if (!within(mapData, String(pos).toLowerCase(), targetCoord, 1)) continue;
+      if (!within(mapData, String(pos).toLowerCase(), targetCoord, 1, blockedEdges)) continue;
       // Rogue Smuggler (Han upgrade) cancels Distracting.
       const findMid = deps?.findDcMessageIdForFigure;
       if (findMid) {
@@ -400,10 +403,11 @@ registerCombatAbility({
     const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
     if (!defCoord || !mapSp) return false;
     const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const blockedEdges = getClosedDoorEdges(game);
     for (const [ofk, pos] of Object.entries(friendly)) {
       if (!ids(eff(deps, dcNameFromFigureKey(ofk))).includes('get_down_onar')) continue;
       if (game.roundFigureAbilityUsed?.[`${ofk}_get_down`]) continue;
-      if (within(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2)) return true;
+      if (within(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2, blockedEdges)) return true;
     }
     return false;
   },
@@ -691,12 +695,13 @@ registerCombatAbility({
     const targetPos = game.figurePositions?.[defPn]?.[combat.target.figureKey];
     if (!mapSp || !targetPos) return false;
     const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const blockedEdges = getClosedDoorEdges(game);
     const friendly = game.figurePositions?.[atkPn] || {};
     for (const [fk, pos] of Object.entries(friendly)) {
       if (fk === combat.attackerFigureKey) continue;
       const kws = (eff(deps, dcNameFromFigureKey(fk))?.keywords || []).map((k) => String(k).toUpperCase());
       if (!kws.includes('WOOKIEE')) continue;
-      if (within(mapSp, String(pos).toLowerCase(), String(targetPos).toLowerCase(), 2)) return true;
+      if (within(mapSp, String(pos).toLowerCase(), String(targetPos).toLowerCase(), 2, blockedEdges)) return true;
     }
     return false;
   },
@@ -724,6 +729,7 @@ registerCombatAbility({
     const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
     if (defPn == null || !mapSp) return false;
     const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+    const blockedEdges = getClosedDoorEdges(game);
     const targetCells = _figureCellsFor(game, defPn, targetFk, deps);
     if (!targetCells.length) return false;
     const team = game.figurePositions?.[defPn] || {};
@@ -736,7 +742,7 @@ registerCombatAbility({
       const atts = msgId ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
       if (cardNameIncludes(atts, 'Wookiee Avenger')) continue;
       for (const oc of _figureCellsFor(game, defPn, fk, deps)) {
-        for (const tc of targetCells) if (within(mapSp, oc, tc, 1)) return true;
+        for (const tc of targetCells) if (within(mapSp, oc, tc, 1, blockedEdges)) return true;
       }
     }
     return false;
@@ -752,6 +758,7 @@ function _friendlyWithAbilityNearTarget(game, combat, deps, { ability, ownerPn, 
   const mapSp = D(deps, 'getMapData', _getMapData)(game.selectedMap?.id);
   if (defPn == null || ownerPn == null || !targetFk || !mapSp) return false;
   const within = D(deps, 'isWithinSpaces', _isWithinSpaces);
+  const blockedEdges = getClosedDoorEdges(game);
   const targetCells = _figureCellsFor(game, defPn, targetFk, deps);
   if (!targetCells.length) return false;
   const team = game.figurePositions?.[ownerPn] || {};
@@ -759,7 +766,7 @@ function _friendlyWithAbilityNearTarget(game, combat, deps, { ability, ownerPn, 
     if (excludeFigureKey && fk === excludeFigureKey) continue;
     if (!ids(eff(deps, dcNameFromFigureKey(fk))).includes(ability)) continue;
     for (const oc of _figureCellsFor(game, ownerPn, fk, deps)) {
-      for (const tc of targetCells) if (within(mapSp, oc, tc, 1)) return true;
+      for (const tc of targetCells) if (within(mapSp, oc, tc, 1, blockedEdges)) return true;
     }
   }
   return false;

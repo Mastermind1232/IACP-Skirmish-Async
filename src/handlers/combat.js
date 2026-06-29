@@ -18,6 +18,7 @@ import { getMapData, getMapTokensData, getDcEffects as getDcEffectsGlobal, getDc
 import { getConfig } from '../game/figure-config.js';
 import { figureMpRemaining, consumeMovementPoints } from '../game/game-helpers.js';
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
+import { getClosedDoorEdges } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
@@ -1338,11 +1339,12 @@ export const COMBAT_RESOLVERS = {
         const mapSp = game.selectedMap?.id ? getMapData(game.selectedMap.id) : null;
         const defPos = combat.target?.figureKey ? game.figurePositions?.[defPN]?.[combat.target.figureKey] : null;
         const eff = getDcEffectsGlobal() || {};
+        const _soresuBlockedEdges = getClosedDoorEdges(game);
         for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
           const fn = dcNameFromFigureKey(fk);
           const fe = eff[fn] || eff[(fn || '').replace(/\s*\[.*\]\s*$/, '')];
           if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
-          if (mapSp && defPos && _isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3)) {
+          if (mapSp && defPos && _isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3, _soresuBlockedEdges)) {
             combat.soresuFormFigKey = fk; // resolve-step handler does the Dodge conversion + Kanan strain
             break;
           }
@@ -2330,6 +2332,7 @@ function _findModsFigKey(id, game, combat) {
     return all[n] || all[(n || '').replace(/\s*\[.*\]\s*$/, '')] || null;
   };
   const mapSp = getMapData(game.selectedMap?.id);
+  const blockedEdges = getClosedDoorEdges(game);
   if (id === 'call_the_shots') {
     const friendly = game.figurePositions?.[combat.attackerPlayerNum] || {};
     const atkCoord = friendly[combat.attackerFigureKey];
@@ -2338,7 +2341,7 @@ function _findModsFigKey(id, game, combat) {
       if (fk === combat.attackerFigureKey) continue;
       if (!(effOf(fk)?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
       if (game.roundFigureAbilityUsed?.[`${fk}_call_the_shots`]) continue;
-      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3)) return fk;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3, blockedEdges)) return fk;
     }
   } else if (id === 'get_down') {
     const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
@@ -2348,7 +2351,7 @@ function _findModsFigKey(id, game, combat) {
     for (const [fk, pos] of Object.entries(friendly)) {
       if (!(effOf(fk)?.specialAbilityIds || []).includes('get_down_onar')) continue;
       if (game.roundFigureAbilityUsed?.[`${fk}_get_down`]) continue;
-      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2)) return fk;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2, blockedEdges)) return fk;
     }
   }
   return null;
@@ -5124,6 +5127,7 @@ export async function handleCombatRoll(interaction, ctx) {
           String(_otlAtkPos).toLowerCase(),
           String(_otlDefPos).toLowerCase(),
           _otlMaxRange,
+          getClosedDoorEdges(game),
         );
         if (!_otlInRange) {
           _otlAdjFail = true;
@@ -5857,6 +5861,7 @@ function getSquadCohesionTokens(game, combat, role) {
   const mapSp = getMapData(game.selectedMap?.id);
   if (!mapSp) return null;
   const combatPosLc = String(combatPos).toLowerCase();
+  const _scBlockedEdges = getClosedDoorEdges(game);
 
   // Find Ko-Tun on the same team with squad_cohesion_kotun
   let koTunInRange = false;
@@ -5865,7 +5870,7 @@ function getSquadCohesionTokens(game, combat, role) {
     const fDcName = dcNameFromFigureKey(fk);
     const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (!(fEff?.specialAbilityIds || []).includes('squad_cohesion_kotun')) continue;
-    if (isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3)) {
+    if (isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges)) {
       koTunInRange = true;
       break;
     }
@@ -5884,7 +5889,7 @@ function getSquadCohesionTokens(game, combat, role) {
     const fDcName = dcNameFromFigureKey(fk);
     const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (String(fEff?.affiliation || '').toLowerCase() !== 'rebel') continue;
-    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3)) continue;
+    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges)) continue;
     const tokens = game.figurePowerTokens?.[fk] || [];
     tokens.forEach((type, index) => {
       if (allowed.includes(type)) {

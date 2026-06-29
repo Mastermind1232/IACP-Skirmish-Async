@@ -15,7 +15,7 @@ import { getMapData, getDcEffects, getFigureSize, isDcUnique } from '../data-loa
 import { isWithinSpaces, hasLineOfSightByCoord } from '../game/spatial.js';
 import { opponentPlayerNum } from '../game/player-helpers.js';
 import { getFootprintCells, shiftCoord } from '../game/coords.js';
-import { getEffectiveFigureSize } from '../game/board-helpers.js';
+import { getEffectiveFigureSize, getClosedDoorEdges } from '../game/board-helpers.js';
 
 /** All board cells a figure occupies (footprint), lowercased. */
 function figureCells(game, pn, figureKey) {
@@ -128,6 +128,7 @@ export function makeCondition(spec) {
         if (!mapSp) return false;
         const affCells = figureCells(game, aff.pn, aff.figureKey);
         if (!affCells.length) return false;
+        const blockedEdges = getClosedDoorEdges(game);
         // Owner figures of the card on the affected figure's team (beneficial
         // auras are friendly — owner and affected share a team).
         const team = game.figurePositions?.[aff.pn] || {};
@@ -135,7 +136,7 @@ export function makeCondition(spec) {
           if (norm(dcNameFromFigureKey(fk)) !== card) continue;
           if (excludeSelf && fk === aff.figureKey) continue; // "another" — owner ≠ itself
           for (const oc of figureCells(game, aff.pn, fk)) {
-            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n)) return true;
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n, blockedEdges)) return true;
           }
         }
         return false;
@@ -160,12 +161,13 @@ export function makeCondition(spec) {
         if (!mapSp) return false;
         const affCells = figureCells(game, aff.pn, aff.figureKey);
         if (!affCells.length) return false;
+        const blockedEdges = getClosedDoorEdges(game);
         const team = game.figurePositions?.[aff.pn] || {};
         for (const fk of Object.keys(team)) {
           if (fk === aff.figureKey) continue; // "another" — not the affected figure
           if (requireUnique && !isDcUnique(dcNameFromFigureKey(fk))) continue;
           for (const oc of figureCells(game, aff.pn, fk)) {
-            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n)) return true;
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, n, blockedEdges)) return true;
           }
         }
         return false;
@@ -238,7 +240,7 @@ export function makeCondition(spec) {
             if (affil && norm(e?.affiliation) !== affil) continue;
           }
           for (const oc of figureCells(game, aff.pn, fk)) {
-            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1)) return true;
+            for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1, getClosedDoorEdges(game))) return true;
           }
         }
         return false;
@@ -261,7 +263,8 @@ export function makeCondition(spec) {
         const aCells = figureCells(game, aPn, aFk);
         const dCells = figureCells(game, dPn, dFk);
         if (!aCells.length || !dCells.length) return false;
-        for (const ac of aCells) for (const dc of dCells) if (isWithinSpaces(mapSp, ac, dc, 1)) return true;
+        const blockedEdges = getClosedDoorEdges(game);
+        for (const ac of aCells) for (const dc of dCells) if (isWithinSpaces(mapSp, ac, dc, 1, blockedEdges)) return true;
         return false;
       };
     }
@@ -372,7 +375,7 @@ export function makeCondition(spec) {
           if (!pos) continue;
           if (excludeSelf && fk === combat?.attackerFigureKey) continue;
           if (kw && !figureKeywords(fk).includes(kw)) continue;
-          if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), atkPos, n)) continue;
+          if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), atkPos, n, getClosedDoorEdges(game))) continue;
           if (hasLineOfSightByCoord(game, String(pos).toLowerCase(), tgt, mapSp, getFigureSize)) return true;
         }
         return false;
@@ -450,11 +453,12 @@ export function makeCondition(spec) {
         if (!mapSp) return false;
         const affCells = figureCells(game, aff.pn, aff.figureKey);
         if (!affCells.length) return false;
+        const blockedEdges = getClosedDoorEdges(game);
         // Objects (crates/doors/etc.) from the unified objectPositions state.
         for (const pos of Object.values(game.objectPositions || {})) {
           if (!pos) continue;
           const oc = String(pos).toLowerCase();
-          for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1)) return true;
+          for (const ac of affCells) if (isWithinSpaces(mapSp, oc, ac, 1, blockedEdges)) return true;
         }
         // Non-friendly figures (the attacker is excluded by figureKey).
         const attackerFk = combat?.attackerFigureKey;
@@ -463,7 +467,7 @@ export function makeCondition(spec) {
           for (const fk of Object.keys(team)) {
             if (fk === attackerFk) continue; // "other than the attacker"
             for (const ec of figureCells(game, Number(pn), fk)) {
-              for (const ac of affCells) if (isWithinSpaces(mapSp, ec, ac, 1)) return true;
+              for (const ac of affCells) if (isWithinSpaces(mapSp, ec, ac, 1, blockedEdges)) return true;
             }
           }
         }

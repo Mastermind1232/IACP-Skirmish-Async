@@ -209,6 +209,9 @@ export function _buildLosEffectiveMs(game, ctx) {
     ...ms,
     impassableEdges: mergedImpassable,
     blocking: extraBlocking.length > 0 ? [...(ms?.blocking || []), ...extraBlocking] : ms?.blocking,
+    // cornerBlockingTiles feeds the energy-shield corner-blocking rule in hasLineOfSight:
+    // a corner shared by a shield/smoke cell AND a wall endpoint blocks LOS (CRR p.28).
+    cornerBlockingTiles: extraBlocking.length > 0 ? [...(ms?.cornerBlockingTiles || []), ...extraBlocking] : ms?.cornerBlockingTiles,
   };
 }
 
