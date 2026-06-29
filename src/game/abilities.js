@@ -3296,6 +3296,14 @@ export function resolveAbility(abilityId, context) {
         activeMsgId: msgId,
       };
     }
+    const _wrStunActD = game.dcActionsData?.[msgId];
+    const _wrStunSelF = _wrStunActD?.selectedFigure ?? 0;
+    const _wrStunDgM = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+    const _wrStunDgI = _wrStunDgM ? _wrStunDgM[1] : '1';
+    const _wrStunFk = `${meta.dcName}-${_wrStunDgI}-${_wrStunSelF}`;
+    if ((game.figureConditions?.[_wrStunFk] || []).includes('Stun')) {
+      return { applied: false, manualMessage: `**${entry.label || 'Wall Run'}** — **${dcNameFromFigureKey(_wrStunFk)}** is **Stunned** and cannot move.` };
+    }
     addMovementPoints(game, msgId, speed);
     // Charge (and similar): also grant a free attack after the move
     if (entry.freeAttackBonus) {
@@ -4344,7 +4352,9 @@ export function resolveAbility(abilityId, context) {
     } else if (entry.freeAttackBonus) {
       _nextAction = { type: 'freeAttackPrompt', payload: { msgId, playerNum: _pn, figureKey: _figureKey, sourceLabel: entry.label || 'Free Attack' } };
     }
-    if (_figureKey && (game.figureConditions?.[_figureKey] || []).includes('Stun')) {
+    // i_am_one_with_the_force fires at start of a HOSTILE's activation (reaction
+    // timing, out of Chirrut's own activation) so Stun does not apply.
+    if (_figureKey && abilityId !== 'i_am_one_with_the_force' && (game.figureConditions?.[_figureKey] || []).includes('Stun')) {
       return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(_figureKey)}** is **Stunned** and cannot move.` };
     }
     // Stamp pendingMoveX state synchronously; the caller posts the
@@ -15478,7 +15488,49 @@ export function resolveAbility(abilityId, context) {
     }
 
     if ((game.figureConditions?.[activatingFigureKey] || []).includes('Stun')) {
-      return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(activatingFigureKey)}** is **Stunned** and cannot move.` };
+      // Partially blocked: skip movement, attempt die roll on already-adjacent hostile
+      const _hbStunMapId = game.selectedMap?.id;
+      if (!_hbStunMapId) return { applied: false, manualMessage: `**${entry.label}** — Stunned (cannot move); resolve manually.` };
+      const _hbStunAdj = getFiguresAdjacentToTarget(game, activatingFigureKey, _hbStunMapId);
+      const _hbStunEnemy = opponentPlayerNum(playerNum);
+      const _hbStunTargets = _hbStunAdj.filter(f => isEntryHostileTo(game, f, playerNum));
+      if (_hbStunTargets.length === 0) {
+        return { applied: false, manualMessage: `**${entry.label}** — **${dcNameFromFigureKey(activatingFigureKey)}** is **Stunned** (cannot move) and has no adjacent hostile. Fizzles.` };
+      }
+      if (_hbStunTargets.length === 1) {
+        const _hbStFk = _hbStunTargets[0].figureKey;
+        const _hbStIsNpc = /^npc_(?:thug|krykna)_\d+$/.test(_hbStFk);
+        const _hbStLbl = _hbStIsNpc
+          ? (() => { const p = _hbStFk.match(/^npc_(thug|krykna)_(\d+)$/); return `${p[1] === 'thug' ? 'Thug' : 'Krykna'} ${parseInt(p[2], 10) + 1}`; })()
+          : dcNameFromFigureKey(_hbStFk);
+        const _hbStColor = entry.headbuttDie || 'red';
+        const _hbStRolled = rollAttackFaceWithIdx(_hbStColor);
+        if (!_hbStRolled) return { applied: false, manualMessage: `**${entry.label}** — Stunned (no move). Roll 1 ${_hbStColor} die against **${_hbStLbl}** manually.` };
+        const _hbStHits = _hbStRolled.dmg ?? 0;
+        const _hbStParts = []; if (_hbStHits) _hbStParts.push(`${_hbStHits} Hit${_hbStHits !== 1 ? 's' : ''}`); if (_hbStRolled.surge) _hbStParts.push(`${_hbStRolled.surge} Surge`);
+        const _hbStDice = _hbStParts.length ? _hbStParts.join(', ') : 'blank';
+        const _hbStRes = [];
+        if (_hbStHits > 0) {
+          if (_hbStIsNpc) {
+            const p = _hbStFk.match(/^npc_(thug|krykna)_(\d+)$/);
+            const r = applyDamageToNpcSync(game, { npcType: p[1], npcIndex: parseInt(p[2], 10), amount: _hbStHits, attackerPlayerNum: playerNum });
+            if (r.applied) _hbStRes.push(`${_hbStHits} Damage (HP: ${r.prevHp}→${r.newHp})`);
+          } else {
+            const _hbStTMsgId = findMsgIdForFigureKey(game, _hbStunEnemy, _hbStFk, dcMessageMeta);
+            if (dcHealthState && _hbStTMsgId) {
+              const _hbStFkM = _hbStFk.match(/-(\d+)-(\d+)$/);
+              const _hbStFi = _hbStFkM ? parseInt(_hbStFkM[2], 10) : 0;
+              const _hbStHp = (dcHealthState.get(_hbStTMsgId) || [])[_hbStFi];
+              if (_hbStHp) {
+                const r2 = applyDamageWithDefeatCheck(dcHealthState, game, _hbStTMsgId, _hbStFi, _hbStHits, _hbStunEnemy, { sourceLabel: 'Headbutt', attackerPlayerNum: playerNum, figureKey: _hbStFk });
+                _hbStRes.push(`${_hbStHits} Damage (HP: ${r2.prevHp}→${r2.newHp})`);
+              }
+            }
+          }
+        }
+        return { applied: true, logMessage: `**${entry.label}** (Stunned — no move). Rolled 1 ${_hbStColor} die: **${_hbStDice}**. **${_hbStLbl}** ${_hbStRes.join(', ') || 'unaffected'}.`, refreshDcEmbed: true, rollImageDice: [_hbStRolled] };
+      }
+      return { applied: false, requiresChoice: true, choiceOptions: figureChoiceLabels(_hbStunTargets.map(t => t.figureKey)), targetFigureKeys: _hbStunTargets.map(t => t.figureKey), choicePrompt: `**${entry.label}** — Stunned (no move). Choose an adjacent hostile figure:` };
     }
     // Phase 1: stamp pendingMoveX (2-space picker per CRR MOVE-017) +
     // headbuttRoll continuation. After the picker drains, the
