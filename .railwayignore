@@ -1,5 +1,11 @@
+node_modules/
+vassal_extracted/
+python/
+tests/headless/checkpoints/
 tests/headless/*.json
 tests/headless/*.test.js
+tests/headless/*.log
+tests/headless/*.stdout
 tests/certification/
 tests/domain/
 iacp_extracted/
@@ -7,6 +13,8 @@ tmp-s12-new/
 tmp-s12/
 *.vmod
 *.docx
+*.pdf
+*.log
 test-map-output.png
 mos-eisley-extracted/
 parse_errors.txt
