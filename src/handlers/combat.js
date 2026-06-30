@@ -651,6 +651,25 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
     ctx.saveGames?.(game.gameId);
     return;
   }
+  // Yoda / There Is No Try: if it survived (the 'yoda_tint_effect' continuation
+  // set combat._yodaTintSurvivedPick), re-run its prompt to post the die-picker.
+  // _yodaTintSurvivedPick is NOT deleted here — the prompt Phase 2 deletes it.
+  if (pend.yodaResolverPick && combat._yodaTintSurvivedPick === pend.yodaResolverPick) {
+    const pick = pend.yodaResolverPick;
+    const r = _resolverFor(pick);
+    const p = r?.prompt ? await r.prompt({ game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window }) : null;
+    if (p?.buttons) {
+      const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
+        new ButtonBuilder().setCustomId(`combat_modsub_${combat.gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
+      await thread?.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+      ctx.saveGames?.(game.gameId);
+      return;
+    }
+    if (r?.apply) await r.apply(null, { game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window });
+    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
+    ctx.saveGames?.(game.gameId);
+    return;
+  }
   // Attack gate CC: re-drive the paused gate (return to that phase's options).
   const cfg = _GATE_WINDOWS[pend.window];
   if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
@@ -1897,31 +1916,37 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
       if (!figs.length) return null;
       return { content: `**${card}** — choose which figure plays it:`, buttons: figs.map((fk, i) => [String(i), _label(fk)]) };
     },
-    apply: async (choice, { game, combat, thread, ctx, side }) => {
+    apply: async (choice, { game, combat, thread, ctx, side, gameId, window, id }) => {
       const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
       const fk = figs[parseInt(choice, 10)] ?? figs[0];
       if (!fk) return;
       const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-      // Validate + dispose via playCC, but apply the combat effect ourselves
-      // (it acts on the chosen figure, which resolveAbility doesn't know about).
-      await playCC(game, pn, fk, card, { ctx, skipExecute: true });
-      const { applyCondition } = await import('../game/conditions.js');
-      const res = applyThirdPartyCcEffect(specKey, game, combat, fk, { applyCondition });
-      if (thread) await thread.send(`**${card}** played by ${_label(fk)}${res.log?.length ? ` — ${res.log.join(', ')}` : ''}.`).catch(discordCatch);
-      // Target-switch (Bodyguard / GBM): the NEW target gets a fresh defender
-      // on_declare window. Rebuild the gate so eligibility (traits / square / auras)
-      // is rechecked for the new target, mark the attacker side done (it already
-      // completed on_declare), and re-drive — then signal followUp so the caller
-      // doesn't record/advance against the old gate.
-      if (res?.reopenDefenderOnDeclare) {
-        combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));
-        if (combat.onDeclareGate?.attacker) {
-          combat.onDeclareGate.attacker.passivesFired = true;
-          combat.onDeclareGate.attacker.passed = true;
-        }
-        await _driveGatePath('on_declare', thread, game, combat, ctx);
-        return { followUp: true };
-      }
+      // Validate
+      const tpCheck = canPlayCC(game, pn, fk, card);
+      if (!tpCheck.ok) { if (thread) await thread.send(`⚠️ Can't play ${card}: ${tpCheck.reason}`).catch(discordCatch); return; }
+      // Remove from hand + dispose (mirrors gate CC path)
+      const tpHand = game[ccHandKey(pn)] || [];
+      const tpHi = tpHand.indexOf(card);
+      if (tpHi >= 0) { tpHand.splice(tpHi, 1); game[ccHandKey(pn)] = tpHand; }
+      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
+      // Public reveal
+      { const _tpPid = getPlayerId(game, pn); await ctx.logGameAction?.(game, ctx.client, `<@${_tpPid}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _tpPid ? [_tpPid] : [] } }); }
+      // On-play triggers
+      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+      // Record gate choice + mark used before pausing (mirrors gate CC path)
+      const tpGate = combat[_GATE_WINDOWS[window]?.field];
+      if (tpGate && side) { try { recordModsChoice(tpGate, side, id); } catch { /* ok */ } }
+      _markGateAbilityUsed(game, combat, id);
+      // Pause gate + open counter window; effect fires in custom resolver if not cancelled
+      _ensureThirdPartyCcEffectResolver();
+      game.pendingCombatCcResolve = { window, side, gameId };
+      await openCcCounterWindow(game, gameId, {
+        card, cost: ctx.getCcEffect?.(card)?.cost ?? 0,
+        playedBy: pn, figureKey: fk, abilityId: card,
+        customResolve: 'third_party_cc_effect',
+        tpData: { specKey, fk, label: _label(fk) },
+      }, ctx, ctx.client);
+      return { followUp: true }; // gate paused; resumeCombatGateAfterCc re-drives
     },
   };
 }
@@ -2014,16 +2039,46 @@ function _makeYodaResolver({ specKey, side }) {
     ? _makeDefenseDieTurnResolver({ name: 'There Is No Try', stageKey: 'yoda_def', dodgeConversion: true })
     : _makeDieTurnResolver({ name: 'There Is No Try', eligible: (dice) => dice.map((_d, i) => i), stageKey: 'yoda_atk' });
   return {
-    prompt: async ({ game, combat, ctx }) => {
+    prompt: async ({ game, combat, ctx, gameId, window: gateWindow, side: _gateSide, id }) => {
+      // Phase 2: counter window survived — show die-pick buttons
+      if (combat._yodaTintSurvivedPick === id) {
+        delete combat._yodaTintSurvivedPick;
+        return turn.prompt({ game, combat, ctx });
+      }
+      // Phase 1: find Yoda, validate, dispose, open counter window
       const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
       const fk = figs[0];
-      if (fk) {
-        const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-        await playCC(game, pn, fk, 'There Is No Try', { ctx, skipExecute: true });
-      }
-      return turn.prompt({ game, combat, ctx });
+      if (!fk) return turn.prompt({ game, combat, ctx }); // no eligible Yoda — skip to die-pick
+      const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
+      const yCheck = canPlayCC(game, pn, fk, 'There Is No Try');
+      if (!yCheck.ok) return turn.prompt({ game, combat, ctx }); // can't play — skip
+      // Remove from hand + dispose
+      const yHand = game[ccHandKey(pn)] || [];
+      const yHi = yHand.indexOf('There Is No Try');
+      if (yHi >= 0) { yHand.splice(yHi, 1); game[ccHandKey(pn)] = yHand; }
+      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat('There Is No Try');
+      // Public reveal
+      { const _yPid = getPlayerId(game, pn); await ctx.logGameAction?.(game, ctx.client, `<@${_yPid}> played command card **There Is No Try**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _yPid ? [_yPid] : [] } }); }
+      // On-play triggers
+      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+      // Record gate choice + mark used before pausing
+      const yGate = combat[_GATE_WINDOWS[gateWindow]?.field];
+      if (yGate && _gateSide) { try { recordModsChoice(yGate, _gateSide, id); } catch { /* ok */ } }
+      _markGateAbilityUsed(game, combat, id);
+      // Pause gate + open counter window
+      _ensureYodaTintResolver();
+      game.pendingCombatCcResolve = { window: gateWindow, side: _gateSide, gameId, yodaResolverPick: id };
+      await openCcCounterWindow(game, gameId, {
+        card: 'There Is No Try', cost: ctx.getCcEffect?.('There Is No Try')?.cost ?? 0,
+        playedBy: pn, figureKey: fk, abilityId: 'There Is No Try',
+        customResolve: 'yoda_tint_effect', yodaData: { id },
+      }, ctx, ctx.client);
+      return null; // gate pauses; handleModsPick must check pendingCombatCcResolve
     },
-    apply: turn.apply,
+    apply: async (choice, args) => {
+      if (choice === null) return; // Phase 1 complete — gate paused (no-op)
+      return turn.apply(choice, args); // Phase 2: die choice after counter window survived
+    },
   };
 }
 
@@ -2305,6 +2360,9 @@ export async function handleModsPick(interaction, ctx) {
       } else {
         delete combat._lastRerolledDie;
         if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
+        // If apply opened a CC counter window (e.g. Yoda), the gate is paused —
+        // skip re-drive here; resumeCombatGateAfterCc re-drives after the window.
+        if (game.pendingCombatCcResolve) { saveGames?.(game.gameId); return; }
         recordModsChoice(gate, side, pick);
         _markGateAbilityUsed(game, combat, pick); // once/round-etc. → owner used-list
         await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
@@ -2442,6 +2500,45 @@ function _ensureRerollCcResolver() {
   registerCcCustomResolve('reroll_cc', async (game, entry) => {
     const combat = game.pendingCombat;
     if (combat) combat._rerollCcSurvivor = entry.rerollResolverPick;
+  });
+}
+// Third-party CC (Bodyguard / GBM / etc.): the card is validated + disposed in
+// _makeThirdPartyCcResolver.apply before the counter window opens; this
+// continuation fires ONLY if the card survives and applies the combat effect.
+// Target-switch cards (Bodyguard / GBM) override the resume window to on_declare
+// so resumeCombatGateAfterCc re-opens that gate for the new target.
+let _tpCcEffectResolverRegistered = false;
+function _ensureThirdPartyCcEffectResolver() {
+  if (_tpCcEffectResolverRegistered) return;
+  _tpCcEffectResolverRegistered = true;
+  registerCcCustomResolve('third_party_cc_effect', async (game, entry, ctx, client) => {
+    const combat = game.pendingCombat;
+    if (!combat) return;
+    const { specKey: tpSpecKey, fk, label } = entry.tpData || {};
+    const thread = await fetchCombatThread(client, combat.combatThreadId);
+    const { applyCondition } = await import('../game/conditions.js');
+    const res = applyThirdPartyCcEffect(tpSpecKey, game, combat, fk, { applyCondition });
+    if (thread) await thread.send(`**${entry.card}** played by ${label}${res.log?.length ? ` — ${res.log.join(', ')}` : ''}.`).catch(discordCatch);
+    if (res?.reopenDefenderOnDeclare) {
+      combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));
+      if (combat.onDeclareGate?.attacker) {
+        combat.onDeclareGate.attacker.passivesFired = true;
+        combat.onDeclareGate.attacker.passed = true;
+      }
+      if (game.pendingCombatCcResolve) game.pendingCombatCcResolve.window = 'on_declare';
+    }
+  });
+}
+// Yoda / There Is No Try: the card is disposed before the counter window; this
+// continuation fires ONLY if the card survives, flagging _yodaTintSurvivedPick
+// so resumeCombatGateAfterCc re-calls the prompt to post the die-pick buttons.
+let _yodaTintResolverRegistered = false;
+function _ensureYodaTintResolver() {
+  if (_yodaTintResolverRegistered) return;
+  _yodaTintResolverRegistered = true;
+  registerCcCustomResolve('yoda_tint_effect', async (game, entry) => {
+    const combat = game.pendingCombat;
+    if (combat) combat._yodaTintSurvivedPick = entry.yodaData?.id;
   });
 }
 // Params-less reroll-CC registrations (card detected in `applies`, not params).
