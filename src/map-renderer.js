@@ -28,14 +28,17 @@ try {
   console.warn('Map renderer: could not register DejaVu fonts, falling back to sans-serif:', err.message);
 }
 
-/** Try subfolder first (e.g. tokens/ maps/), then root. pathOrFilename can be "vassal_extracted/images/X" or "X.gif". */
+/** Try subfolder first (e.g. tokens/ maps/), then root. Prefers .png over .gif when both exist. */
 function resolveImagePath(pathOrFilename, subfolder) {
   const filename = pathOrFilename.split(/[/\\]/).pop() || pathOrFilename;
+  const baseName = filename.replace(/\.[^.]+$/, '');
   const base = join(rootDir, 'vassal_extracted', 'images');
-  const inSub = join(base, subfolder, filename);
-  if (existsSync(inSub)) return join('vassal_extracted', 'images', subfolder, filename).replace(/\\/g, '/');
-  const inRoot = join(base, filename);
-  if (existsSync(inRoot)) return join('vassal_extracted', 'images', filename).replace(/\\/g, '/');
+  for (const name of [baseName + '.png', baseName + '.jpg', filename]) {
+    const inSub = join(base, subfolder, name);
+    if (existsSync(inSub)) return join('vassal_extracted', 'images', subfolder, name).replace(/\\/g, '/');
+    const inRoot = join(base, name);
+    if (existsSync(inRoot)) return join('vassal_extracted', 'images', name).replace(/\\/g, '/');
+  }
   return pathOrFilename;
 }
 
@@ -103,7 +106,7 @@ function colToLetter(col) {
  */
 
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], tokens = {}, showGrid = true, maxWidth = 2500, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 4800, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
