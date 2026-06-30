@@ -361,7 +361,7 @@ export async function getActivationMinimapAttachment(game, msgId) {
       maxWidth: 800,
       cropToZone: cropCoords,
       gridStyle: 'black',
-      showGridOnlyOnCoords: labelCoords,
+      showGridOnlyOnCoords: null,
     });
     return new AttachmentBuilder(buffer, { name: 'activation-minimap.png' });
   } catch (err) {

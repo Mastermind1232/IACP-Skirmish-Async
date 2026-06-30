@@ -347,6 +347,7 @@ registerCombatAbility({
       if (!pos) continue;
       const eff = getEff()[dcNameFromFigureKey(fk)];
       if (!hasDistractingAbility(eff?.specialAbilityIds)) continue;
+      if (fk === target?.figureKey) continue;
       if (!within(mapData, String(pos).toLowerCase(), targetCoord, 1, blockedEdges)) continue;
       // Rogue Smuggler (Han upgrade) cancels Distracting.
       const findMid = deps?.findDcMessageIdForFigure;

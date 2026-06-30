@@ -908,6 +908,7 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     _cleanupMoveState(game, moveKey, msgId);
     const _mpRemainingNote = mpRemaining > 0 ? ` — **${mpRemaining}** MP remain in bank.` : '';
     await interaction.followUp({ content: `**${displayName}** ended movement${_mpRemainingNote}`, ephemeral: false }).catch(discordCatch);
+    await _renderPostMoveBoardUpdate(ctx, game, msgId).catch(() => {});
     // Re-post activation modal at thread bottom so player sees it without scrolling
     if (ctx.repostDcActionsMessage) {
       await ctx.repostDcActionsMessage(game, msgId, client).catch(() => {});
@@ -1320,6 +1321,14 @@ export async function handleMovePick(interaction, ctx, opts = {}) {
     if (wasPostDeploy && game.postDeployQueue) {
       const { onPostDeployMovementComplete } = await import('./post-deploy.js');
       await onPostDeployMovementComplete(game, meta.gameId, client, ctx, figureKey);
+    } else {
+      // Auto-end movement: treat 0 MP as if End Movement was clicked
+      await interaction.followUp({ content: `**${displayName}** ended movement — 0 MP remaining.`, ephemeral: false }).catch(discordCatch);
+      if (ctx.repostDcActionsMessage) {
+        await ctx.repostDcActionsMessage(game, msgId, client).catch(() => {});
+      } else if (ctx.updateDcActionsMessage) {
+        await ctx.updateDcActionsMessage(game, msgId, client).catch(() => {});
+      }
     }
   } else if (!fastPath) {
     await _renderNextMoveGrid(interaction, ctx, game, moveState, meta, msgId, figureKey, figureIndex, moveKey, newTopLeft, newMp);

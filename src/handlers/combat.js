@@ -6553,6 +6553,9 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const _attackerHiddenSurge = combat.attackerConds?.includes('Hide')
     && !combat.attackerCondEffectsSuppressed;
   const _hiddenSurgeBonus = _attackerHiddenSurge ? 1 : 0;
+  if (_attackerHiddenSurge) {
+    await thread.send('🫥 **Hidden** — attacker is Hidden: **+1 Surge**.').catch(discordCatch);
+  }
   const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty + _hiddenSurgeBonus);
   // Per-figure defender round-Evade for the surge-cancel step (Survival
   // Instincts, Armed Escort, Fuel Upgrade, etc.). Evaluated against THIS
@@ -6699,7 +6702,7 @@ export async function handleCombatSurge(interaction, ctx) {
   if (await replyIfGameEnded(game, interaction)) return;
   const combat = game.pendingCombat;
   // Allow rogue_one even with 0 surgeRemaining (it adds surge)
-  if (!combat || combat.gameId !== gameId || (choice !== 'rogue_one' && !combat.surgeRemaining)) {
+  if (!combat || combat.gameId !== gameId || (choice !== 'rogue_one' && choice !== 'done' && !combat.surgeRemaining)) {
     await interaction.followUp({ content: 'No surge step or already resolved.', ephemeral: true }).catch(discordCatch);
     return;
   }
