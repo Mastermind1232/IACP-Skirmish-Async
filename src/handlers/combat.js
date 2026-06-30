@@ -629,48 +629,7 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
     ctx.saveGames?.(game.gameId);
     return;
   }
-  // Reroll Command card: if it SURVIVED (the 'reroll_cc' continuation set
-  // combat._rerollCcSurvivor), NOW run its resolver — post the die-picker. The
-  // normal sub-choice flow (handleModsSubChoice → apply → reroll →
-  // _driveGateOrOfferToughLuck) does the reroll then offers Tough Luck. If it was
-  // cancelled, the flag is unset → fall through to a plain gate re-drive.
-  if (pend.rerollResolverPick && combat._rerollCcSurvivor === pend.rerollResolverPick) {
-    delete combat._rerollCcSurvivor;
-    const pick = pend.rerollResolverPick;
-    const r = _resolverFor(pick);
-    const p = r?.prompt ? await r.prompt({ game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window }) : null;
-    if (p?.buttons) {
-      const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
-        new ButtonBuilder().setCustomId(`combat_modsub_${combat.gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
-      await thread?.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
-      ctx.saveGames?.(game.gameId);
-      return; // handleModsSubChoice resolves the die pick → reroll → Tough Luck
-    }
-    if (r?.apply) await r.apply(null, { game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window });
-    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
-    ctx.saveGames?.(game.gameId);
-    return;
-  }
-  // Yoda / There Is No Try: if it survived (the 'yoda_tint_effect' continuation
-  // set combat._yodaTintSurvivedPick), re-run its prompt to post the die-picker.
-  // _yodaTintSurvivedPick is NOT deleted here — the prompt Phase 2 deletes it.
-  if (pend.yodaResolverPick && combat._yodaTintSurvivedPick === pend.yodaResolverPick) {
-    const pick = pend.yodaResolverPick;
-    const r = _resolverFor(pick);
-    const p = r?.prompt ? await r.prompt({ game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window }) : null;
-    if (p?.buttons) {
-      const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
-        new ButtonBuilder().setCustomId(`combat_modsub_${combat.gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
-      await thread?.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
-      ctx.saveGames?.(game.gameId);
-      return;
-    }
-    if (r?.apply) await r.apply(null, { game, combat, thread, ctx, side: pend.side, gameId: combat.gameId, id: pick, window: pend.window });
-    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
-    ctx.saveGames?.(game.gameId);
-    return;
-  }
-  // Attack gate CC: re-drive the paused gate (return to that phase's options).
+  // Attack gate CC (Tough Luck / after-attack): re-drive the paused gate.
   const cfg = _GATE_WINDOWS[pend.window];
   if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
   // Tough Luck removal-resume: if a rerolled-die marker is still live with Tough
@@ -1921,32 +1880,20 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
       const fk = figs[parseInt(choice, 10)] ?? figs[0];
       if (!fk) return;
       const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-      // Validate
-      const tpCheck = canPlayCC(game, pn, fk, card);
-      if (!tpCheck.ok) { if (thread) await thread.send(`⚠️ Can't play ${card}: ${tpCheck.reason}`).catch(discordCatch); return; }
-      // Remove from hand + dispose (mirrors gate CC path)
-      const tpHand = game[ccHandKey(pn)] || [];
-      const tpHi = tpHand.indexOf(card);
-      if (tpHi >= 0) { tpHand.splice(tpHi, 1); game[ccHandKey(pn)] = tpHand; }
-      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
-      // Public reveal
-      { const _tpPid = getPlayerId(game, pn); await ctx.logGameAction?.(game, ctx.client, `<@${_tpPid}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _tpPid ? [_tpPid] : [] } }); }
-      // On-play triggers
-      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-      // Record gate choice + mark used before pausing (mirrors gate CC path)
-      const tpGate = combat[_GATE_WINDOWS[window]?.field];
-      if (tpGate && side) { try { recordModsChoice(tpGate, side, id); } catch { /* ok */ } }
-      _markGateAbilityUsed(game, combat, id);
-      // Pause gate + open counter window; effect fires in custom resolver if not cancelled
-      _ensureThirdPartyCcEffectResolver();
-      game.pendingCombatCcResolve = { window, side, gameId };
-      await openCcCounterWindow(game, gameId, {
-        card, cost: ctx.getCcEffect?.(card)?.cost ?? 0,
-        playedBy: pn, figureKey: fk, abilityId: card,
-        customResolve: 'third_party_cc_effect',
-        tpData: { specKey, fk, label: _label(fk) },
-      }, ctx, ctx.client);
-      return { followUp: true }; // gate paused; resumeCombatGateAfterCc re-drives
+      // playCC validates, logs, runs triggers, opens counter window, and disposes.
+      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, ctx.client, { figureKey: fk, abilityId: card });
+      const res = await playCC(game, pn, fk, card, { ctx: { ...ctx, promptOpponentCancel: poc }, skipExecute: true });
+      if (!res.ok || res.cancelled) return;
+      // Survived — apply bespoke combat effect
+      const { applyCondition } = await import('../game/conditions.js');
+      const combatRes = applyThirdPartyCcEffect(specKey, game, combat, fk, { applyCondition });
+      if (thread) await thread.send(`**${card}** played by ${_label(fk)}${combatRes.log?.length ? ` — ${combatRes.log.join(', ')}` : ''}.`).catch(discordCatch);
+      if (combatRes?.reopenDefenderOnDeclare) {
+        combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));
+        if (combat.onDeclareGate?.attacker) { combat.onDeclareGate.attacker.passivesFired = true; combat.onDeclareGate.attacker.passed = true; }
+        await _driveGatePath('on_declare', thread, game, combat, ctx);
+        return { followUp: true };
+      }
     },
   };
 }
@@ -2040,44 +1987,20 @@ function _makeYodaResolver({ specKey, side }) {
     : _makeDieTurnResolver({ name: 'There Is No Try', eligible: (dice) => dice.map((_d, i) => i), stageKey: 'yoda_atk' });
   return {
     prompt: async ({ game, combat, ctx, gameId, window: gateWindow, side: _gateSide, id }) => {
-      // Phase 2: counter window survived — show die-pick buttons
-      if (combat._yodaTintSurvivedPick === id) {
-        delete combat._yodaTintSurvivedPick;
-        return turn.prompt({ game, combat, ctx });
-      }
-      // Phase 1: find Yoda, validate, dispose, open counter window
       const figs = eligibleThirdPartyCcFigures(game, specKey, combat, _gateDeps(ctx));
       const fk = figs[0];
       if (!fk) return turn.prompt({ game, combat, ctx }); // no eligible Yoda — skip to die-pick
       const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-      const yCheck = canPlayCC(game, pn, fk, 'There Is No Try');
-      if (!yCheck.ok) return turn.prompt({ game, combat, ctx }); // can't play — skip
-      // Remove from hand + dispose
-      const yHand = game[ccHandKey(pn)] || [];
-      const yHi = yHand.indexOf('There Is No Try');
-      if (yHi >= 0) { yHand.splice(yHi, 1); game[ccHandKey(pn)] = yHand; }
-      game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat('There Is No Try');
-      // Public reveal
-      { const _yPid = getPlayerId(game, pn); await ctx.logGameAction?.(game, ctx.client, `<@${_yPid}> played command card **There Is No Try**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _yPid ? [_yPid] : [] } }); }
-      // On-play triggers
-      await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-      // Record gate choice + mark used before pausing
-      const yGate = combat[_GATE_WINDOWS[gateWindow]?.field];
-      if (yGate && _gateSide) { try { recordModsChoice(yGate, _gateSide, id); } catch { /* ok */ } }
-      _markGateAbilityUsed(game, combat, id);
-      // Pause gate + open counter window
-      _ensureYodaTintResolver();
-      game.pendingCombatCcResolve = { window: gateWindow, side: _gateSide, gameId, yodaResolverPick: id };
-      await openCcCounterWindow(game, gameId, {
-        card: 'There Is No Try', cost: ctx.getCcEffect?.('There Is No Try')?.cost ?? 0,
-        playedBy: pn, figureKey: fk, abilityId: 'There Is No Try',
-        customResolve: 'yoda_tint_effect', yodaData: { id },
-      }, ctx, ctx.client);
-      return null; // gate pauses; handleModsPick must check pendingCombatCcResolve
+      // playCC validates, logs, runs triggers, opens counter window, and disposes.
+      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, ctx.client, { figureKey: fk, abilityId: 'There Is No Try' });
+      const res = await playCC(game, pn, fk, 'There Is No Try', { ctx: { ...ctx, promptOpponentCancel: poc }, skipExecute: true });
+      if (!res.ok) return turn.prompt({ game, combat, ctx }); // can't play — skip to die-pick
+      if (res.cancelled) return null; // cancelled — gate re-drives; handleModsPick apply(null) no-ops
+      return turn.prompt({ game, combat, ctx }); // survived — show die-turn picker
     },
     apply: async (choice, args) => {
-      if (choice === null) return; // Phase 1 complete — gate paused (no-op)
-      return turn.apply(choice, args); // Phase 2: die choice after counter window survived
+      if (choice === null) return; // cancelled: prompt returned null → no-op
+      return turn.apply(choice, args);
     },
   };
 }
@@ -2273,41 +2196,26 @@ export async function handleModsPick(interaction, ctx) {
       if (thread) await thread.send(`⚠️ Can't play ${_ccCard}: ${_ccCheck.reason}`).catch(discordCatch);
       await _driveGatePath(window, thread, game, combat, ctx);
     } else {
-      const _ccEff = ctx.getCcEffect?.(_ccCard);
-      const _ccCost = typeof _ccEff?.cost === 'number' ? _ccEff.cost : 0;
-      const _ccAbilityId = _ccEff?.abilityId ?? _ccCard;
-      // Dispose the played card to discard.
-      const _ccHand = game[ccHandKey(ccPn)] || [];
-      const _ccHi = _ccHand.indexOf(_ccCard);
-      if (_ccHi >= 0) _ccHand.splice(_ccHi, 1);
-      game[ccHandKey(ccPn)] = _ccHand;
-      game[ccDiscardKey(ccPn)] = (game[ccDiscardKey(ccPn)] || []).concat(_ccCard);
-      // Public reveal of the played gate CC (alexanbv 2026-06-26): a PLAYED CC
-      // is revealed to both players. The gate-play path otherwise only surfaces
-      // the card privately when a counter is offered. Match the hand-play style.
-      {
-        const _ccPid = getPlayerId(game, ccPn);
-        await ctx.logGameAction?.(game, interaction.client, `<@${_ccPid}> played command card **${_ccCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _ccPid ? [_ccPid] : [] } });
-      }
-      // The play happened — mark the gate ability used now.
+      // Unified counter-window via playCC + injected promptOpponentCancel.
+      // The Promise suspends handleModsPick until the Negate/Comms window closes.
+      // Effect runs inside playCC via ctx.resolveAbility when not cancelled.
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
-      // On-play triggers (Hunt Dissent, Adapt).
-      await runCcPlayTriggers(game, ccPn, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-      // Pause the gate: store the resume descriptor + open the counter-window.
-      game.pendingCombatCcResolve = { window, side, gameId };
-      await openCcCounterWindow(game, gameId, {
-        card: _ccCard, cost: _ccCost, playedBy: ccPn, figureKey: ccFig, abilityId: _ccAbilityId,
+      const _ccAbilityId = ctx.getCcEffect?.(_ccCard)?.abilityId ?? _ccCard;
+      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, interaction.client, {
+        figureKey: ccFig, abilityId: _ccAbilityId,
         msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
-      }, ctx, interaction.client);
+      });
+      await playCC(game, ccPn, ccFig, _ccCard, { ctx: { ...ctx, promptOpponentCancel: poc } });
+      await _driveGatePath(window, thread, game, combat, ctx);
     }
   } else if (_isRerollCcPick(pick, side === 'attacker'
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
     : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum)), game)) {
-    // Reroll Command card: Negate/Comms FIRST (before the die-picker). Dispose
-    // the card, mark it used, open the counter-window, and pause; the resolver's
-    // die-picker runs on resolve (resumeCombatGateAfterCc), then the normal flow
-    // does the reroll + Tough Luck. Cancelled → no die-pick, no reroll.
+    // Reroll Command card: Negate/Comms FIRST (before the die-picker). Counter
+    // window runs via playCC + injected promptOpponentCancel — suspends inline.
+    // If survived, show die-picker immediately (no resume indirection needed).
+    // Cancelled → no die-pick, no reroll.
     const _rReg = getCombatAbility(pick);
     const _rCard = _rerollCcCardName(_rReg, pick);
     const _rPn = side === 'attacker'
@@ -2319,25 +2227,27 @@ export async function handleModsPick(interaction, ctx) {
       if (thread) await thread.send(`⚠️ Can't play ${_rCard}: ${_rChk.reason}`).catch(discordCatch);
       await _driveGatePath(window, thread, game, combat, ctx);
     } else {
-      const _rHand = game[ccHandKey(_rPn)] || [];
-      const _rHi = _rHand.indexOf(_rCard);
-      if (_rHi >= 0) _rHand.splice(_rHi, 1);
-      game[ccHandKey(_rPn)] = _rHand;
-      game[ccDiscardKey(_rPn)] = (game[ccDiscardKey(_rPn)] || []).concat(_rCard);
-      // Public reveal of the played reroll gate CC (alexanbv 2026-06-26).
-      {
-        const _rPid = getPlayerId(game, _rPn);
-        await ctx.logGameAction?.(game, interaction.client, `<@${_rPid}> played command card **${_rCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _rPid ? [_rPid] : [] } });
-      }
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
-      _ensureRerollCcResolver();
-      await runCcPlayTriggers(game, _rPn, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-      game.pendingCombatCcResolve = { window, side, gameId, rerollResolverPick: pick };
-      await openCcCounterWindow(game, gameId, {
-        card: _rCard, cost: ctx.getCcEffect?.(_rCard)?.cost ?? 0, playedBy: _rPn,
-        abilityId: _rCard, customResolve: 'reroll_cc', rerollResolverPick: pick,
-      }, ctx, interaction.client);
+      const _rPoc = _makeCombatPromptOpponentCancel(game, gameId, ctx, interaction.client);
+      const _rRes = await playCC(game, _rPn, _rFig, _rCard, { ctx: { ...ctx, promptOpponentCancel: _rPoc }, skipExecute: true });
+      if (!_rRes.cancelled) {
+        // Survived — post the die-picker now (same path as handleModsSubChoice would)
+        const r = _resolverFor(pick);
+        const p = r?.prompt ? await r.prompt({ game, combat, thread, ctx, side, gameId, id: pick, window }) : null;
+        if (p?.buttons) {
+          const rows = chunkButtonsToRows(p.buttons.map(([c, l, s]) =>
+            new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${c}_${pick}`).setLabel(l).setStyle(_modsStyle(s))));
+          await thread?.send(sanitizeMentions({ content: p.content, components: rows, allowedMentions: p.mentionUserId ? { users: [p.mentionUserId] } : undefined })).catch(discordCatch);
+          // handleModsSubChoice → apply → reroll → _driveGateOrOfferToughLuck
+        } else {
+          if (r?.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
+          await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
+        }
+      } else {
+        // Cancelled — re-drive gate (no die-pick, no reroll)
+        await _driveGatePath(window, thread, game, combat, ctx);
+      }
     }
   } else {
     const r = _resolverFor(pick);
@@ -2360,9 +2270,6 @@ export async function handleModsPick(interaction, ctx) {
       } else {
         delete combat._lastRerolledDie;
         if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
-        // If apply opened a CC counter window (e.g. Yoda), the gate is paused —
-        // skip re-drive here; resumeCombatGateAfterCc re-drives after the window.
-        if (game.pendingCombatCcResolve) { saveGames?.(game.gameId); return; }
         recordModsChoice(gate, side, pick);
         _markGateAbilityUsed(game, combat, pick); // once/round-etc. → owner used-list
         await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
@@ -2484,62 +2391,30 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
-// Reroll Command cards (Capitalize, Double or Nothing, …): the FIRST thing that
-// happens is the Negate/Comms window, THEN the die is picked, THEN the reroll,
-// THEN Tough Luck (alexanbv 2026-06-19). So when such a gate ability is picked,
-// handleModsPick disposes the card + opens the counter-window and pauses BEFORE
-// running the resolver's die-picker. This continuation runs ONLY if the card
-// survives, flagging combat._rerollCcSurvivor; the resume (resumeCombatGateAfterCc,
-// full combat ctx) then posts the resolver's die-picker — and the normal
-// sub-choice flow does the reroll + Tough Luck. A countered card never sets the
-// flag, so the resume just re-drives the gate (no die-pick, no reroll).
-let _rerollCcResolverRegistered = false;
-function _ensureRerollCcResolver() {
-  if (_rerollCcResolverRegistered) return;
-  _rerollCcResolverRegistered = true;
-  registerCcCustomResolve('reroll_cc', async (game, entry) => {
-    const combat = game.pendingCombat;
-    if (combat) combat._rerollCcSurvivor = entry.rerollResolverPick;
-  });
-}
-// Third-party CC (Bodyguard / GBM / etc.): the card is validated + disposed in
-// _makeThirdPartyCcResolver.apply before the counter window opens; this
-// continuation fires ONLY if the card survives and applies the combat effect.
-// Target-switch cards (Bodyguard / GBM) override the resume window to on_declare
-// so resumeCombatGateAfterCc re-opens that gate for the new target.
-let _tpCcEffectResolverRegistered = false;
-function _ensureThirdPartyCcEffectResolver() {
-  if (_tpCcEffectResolverRegistered) return;
-  _tpCcEffectResolverRegistered = true;
-  registerCcCustomResolve('third_party_cc_effect', async (game, entry, ctx, client) => {
-    const combat = game.pendingCombat;
-    if (!combat) return;
-    const { specKey: tpSpecKey, fk, label } = entry.tpData || {};
-    const thread = await fetchCombatThread(client, combat.combatThreadId);
-    const { applyCondition } = await import('../game/conditions.js');
-    const res = applyThirdPartyCcEffect(tpSpecKey, game, combat, fk, { applyCondition });
-    if (thread) await thread.send(`**${entry.card}** played by ${label}${res.log?.length ? ` — ${res.log.join(', ')}` : ''}.`).catch(discordCatch);
-    if (res?.reopenDefenderOnDeclare) {
-      combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));
-      if (combat.onDeclareGate?.attacker) {
-        combat.onDeclareGate.attacker.passivesFired = true;
-        combat.onDeclareGate.attacker.passed = true;
-      }
-      if (game.pendingCombatCcResolve) game.pendingCombatCcResolve.window = 'on_declare';
-    }
-  });
-}
-// Yoda / There Is No Try: the card is disposed before the counter window; this
-// continuation fires ONLY if the card survives, flagging _yodaTintSurvivedPick
-// so resumeCombatGateAfterCc re-calls the prompt to post the die-pick buttons.
-let _yodaTintResolverRegistered = false;
-function _ensureYodaTintResolver() {
-  if (_yodaTintResolverRegistered) return;
-  _yodaTintResolverRegistered = true;
-  registerCcCustomResolve('yoda_tint_effect', async (game, entry) => {
-    const combat = game.pendingCombat;
-    if (combat) combat._yodaTintSurvivedPick = entry.yodaData?.id;
-  });
+/**
+ * Factory: build the promptOpponentCancel function for a combat gate CC play.
+ * Injects into playCC's ctx so the unified counter-window fires for ALL combat
+ * CCs — the same window hand-plays use. Returns a Promise that resolves with
+ * { cancelled } once the Negate/Comms buttons are clicked (or auto-resolves when
+ * there is no responder). alexanbv 2026-06-30.
+ */
+function _makeCombatPromptOpponentCancel(game, gameId, ctx, client, extraPlay = {}) {
+  return async ({ game: g, playerNum, figureKey, cardName }) => {
+    const pid = getPlayerId(g, playerNum);
+    await ctx.logGameAction?.(g, client, `<@${pid}> played command card **${cardName}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: pid ? [pid] : [] } });
+    await runCcPlayTriggers(g, playerNum, { client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+    const ccEff = ctx.getCcEffect?.(cardName);
+    return new Promise((resolve) => {
+      g._ccWindowResolve = resolve;
+      // _resolveCcCounterWindow calls resolve({ cancelled }) in query mode —
+      // synchronously if no responder, or when the opponent clicks a button.
+      // The .then() only saves; never resolve here (would race the button click).
+      openCcCounterWindow(g, gameId, {
+        card: cardName, cost: typeof ccEff?.cost === 'number' ? ccEff.cost : 0,
+        playedBy: playerNum, figureKey, abilityId: cardName, ...extraPlay,
+      }, ctx, client).then(() => ctx.saveGames?.(g.gameId));
+    });
+  };
 }
 // Params-less reroll-CC registrations (card detected in `applies`, not params).
 const _REROLL_CC_CARD_BY_ID = { rapid_recalibration: 'Rapid Recalibration' };

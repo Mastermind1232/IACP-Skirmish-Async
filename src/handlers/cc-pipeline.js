@@ -309,20 +309,28 @@ export async function handleCcCounterPass(interaction, ctx) {
 // a resolved counter does nothing further here.
 async function _resolveCcCounterWindow(game, gameId, ctx, client) {
   const outcome = resolveAndCloseWindow(game);
+  // Query-mode: when game._ccWindowResolve is set, a Promise-based combat caller
+  // is awaiting the result — resolve it with { cancelled } and skip effect
+  // execution (playCC handles disposal + effect routing). alexanbv 2026-06-30.
+  const queryResolve = game._ccWindowResolve ?? null;
+  if (queryResolve) delete game._ccWindowResolve;
+  let queryCancelled = false;
   for (const entry of outcome) {
     const isCounter = entry.card === NEGATION || entry.card === COMM_DISRUPTION;
     if (entry.status === 'cancelled') {
       // Cancelled → when-discarded pipeline (Windfall / Built on Hope), NOT resolved.
       fireCcDiscarded(game, entry.playedBy, entry.card, { fromDeck: false });
       await ctx.logGameAction?.(game, client, `**${entry.card}** was cancelled (effects suppressed).`, { phase: 'ACTION', icon: 'card' });
+      if (queryResolve && !isCounter) queryCancelled = true;
       continue;
     }
     if (isCounter) continue;
-    // Custom-resolve cards (Celebration, WHEN_DEFEATED CCs, mid-combat reroll
-    // reactions): their effect runs via a bespoke continuation registered by the
-    // originating handler, NOT the generic resolveAbility path. The continuation
-    // fires ONLY here (resolved, uncancelled) — the cancelled branch above skips
-    // it, so a countered card has no effect. alexanbv 2026-06-19.
+    // Query mode: the main card survived — skip effect; playCC caller handles it.
+    if (queryResolve) continue;
+    // Normal mode: custom-resolve or generic deferred-effect path.
+    // Custom-resolve cards (Celebration, WHEN_DEFEATED CCs, Tough Luck, …):
+    // their effect runs via a bespoke continuation registered by the originating
+    // handler, NOT the generic resolveAbility path. alexanbv 2026-06-19.
     if (entry.customResolve) {
       const fn = _ccCustomResolvers[entry.customResolve];
       if (fn) await fn(game, entry, ctx, client);
@@ -339,8 +347,12 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
     await _offerScThenResolveDeferredCc(game, ctx, client);
   }
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
-  // Combat CC: the attack gate paused for this window — re-drive it (return to
-  // that phase's options) now that the play has resolved or been cancelled.
+  if (queryResolve) {
+    queryResolve({ cancelled: queryCancelled });
+    return; // playCC caller re-drives the gate; skip pendingCombatCcResolve path
+  }
+  // Combat CC (Tough Luck / after-attack): the attack gate paused — re-drive it
+  // now that the play has resolved or been cancelled.
   if (game.pendingCombatCcResolve) {
     const resume = getCombatGateResume();
     if (resume) await resume(game, client);
