@@ -30,9 +30,8 @@ import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from
 import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
-import { canPlayCC } from '../game/cc-timing.js';
-import { runCcPlayTriggers } from './cc-hand.js';
-import { openCcCounterWindow } from './cc-pipeline.js';
+import { playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 import { _sendPrivateReactionPrompt } from '../engine/combat-bridge.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
@@ -40,7 +39,7 @@ import {
   setPendingFightingKnife, setPendingSpreadThePain,
   setPendingWantonDestruction, setPendingDeflect,
 } from '../game/interrupts.js';
-import { getCcHand, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
+import { getCcHand } from '../game/player-helpers.js';
 import { getDcList, getPlayerId, getDcMessageIds } from '../game/player-helpers.js';
 import { applyDamage } from '../game/damage-pipeline.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -1776,47 +1775,27 @@ async function fireGateAbility(thread, game, combat, effect, ctx) {
   const reg = getCombatAbility(effect?.payload?.abilityId);
   const side = effect?.side === 'defender' ? 'defender' : 'attacker';
   if (reg?.params?.kind === 'cc') {
-    // After-attack CC — routed through the UNIFIED counter-window like a hand
-    // play / a combat gate play (alexanbv 2026-06-17). The after-attack window
-    // PAUSES for the Negate/Comms window and re-posts (postPostResolveWindow)
-    // once the play resolves or is cancelled, via _resolveCcCounterWindow →
-    // resumeCombatGateAfterCc (kind 'after_attack'). No snapshot, no revert.
+    // After-attack CC — unified playCC + Promise poc path. Counter window is
+    // opened inline; playCC awaits the Promise (via game._ccWindowResolve), then
+    // runs the card's ability via ctx.resolveAbility. postPostResolveWindow
+    // re-posts the after-attack window inline once playCC returns.
     const card = reg.params.card;
     const pn = side === 'attacker'
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const fig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const check = canPlayCC(game, pn, fig, card, { allowNotInHand: false });
-    if (!check.ok) {
-      if (thread) await thread.send(`⚠️ Can't play ${card}: ${check.reason}`).catch(discordCatch);
-      return undefined;
-    }
-    const eff = ctx.getCcEffect?.(card);
-    const cost = typeof eff?.cost === 'number' ? eff.cost : 0;
-    const abilityId = eff?.abilityId ?? card;
-    // Dispose the played card to discard.
-    const hand = game[ccHandKey(pn)] || [];
-    const hi = hand.indexOf(card);
-    if (hi >= 0) hand.splice(hi, 1);
-    game[ccHandKey(pn)] = hand;
-    game[ccDiscardKey(pn)] = (game[ccDiscardKey(pn)] || []).concat(card);
-    // Public play-reveal: announce the after-attack CC to both players (matches
-    // the hand-play reveal style) before triggers / the counter-window open.
-    const _aaPid = getPlayerId(game, pn);
-    if (typeof ctx.logGameAction === 'function' && ctx.client) {
-      await ctx.logGameAction(game, ctx.client, `<@${_aaPid}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _aaPid ? [_aaPid] : [] } });
-    }
-    // On-play triggers (Hunt Dissent, Adapt).
-    await runCcPlayTriggers(game, pn, { client: ctx.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-    // Pause the after-attack window: store the resume descriptor (kind
-    // 'after_attack' → postPostResolveWindow) + open the counter-window.
-    game.pendingCombatCcResolve = { kind: 'after_attack', effectSide: effect.side, gameId: game.gameId };
-    await openCcCounterWindow(game, game.gameId, {
-      card, cost, playedBy: pn, figureKey: fig, abilityId,
+    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, ctx.client, {
+      figureKey: fig, abilityId: card,
       msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
-    }, ctx, ctx.client);
-    // Signal handleAarFire NOT to re-post the window — the counter-window resume
-    // (postPostResolveWindow) owns the continuation now.
+    });
+    const res = await playCC(game, pn, fig, card, { ctx: { ...ctx, promptOpponentCancel: poc } });
+    if (!res.ok) {
+      if (thread) await thread.send(`⚠️ Can't play ${card}: ${res.reason}`).catch(discordCatch);
+    }
+    // Re-post the after-attack window inline whether the card resolved or was cancelled.
+    const { postPostResolveWindow } = await import('./after-attack-resolve.js');
+    await postPostResolveWindow(thread, game, combat, effect.side, ctx);
+    // Signal handleAarFire NOT to re-post (we already did it above).
     return { deferredToCounterWindow: true };
   }
   // Figure ability with no executable resolver yet → diagnostic no-op.

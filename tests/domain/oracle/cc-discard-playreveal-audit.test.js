@@ -65,20 +65,27 @@ describe('PART A — async discards route through discardCc', () => {
 describe('PART B — the 4 retrofitted play paths emit a public play-reveal', () => {
   const REVEAL = /played command card \*\*/;
 
-  it('Defeat-triggered CC (defeat-cc-prompts.js) reveals the played card', () => {
+  it('Defeat-triggered CC (defeat-cc-prompts.js) reveals via the centralized poc factory', () => {
     const src = read('src/handlers/defeat-cc-prompts.js');
-    assert.match(src, REVEAL, 'reveal line present');
-    assert.match(src, /played command card \*\*\$\{cardName\}\*\*/, 'inlines the defeat card name');
+    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
+    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
   });
 
-  it('After-attack gate CC (after-attack-fire.js) reveals the played card', () => {
+  it('After-attack gate CC (after-attack-fire.js) reveals via the centralized poc factory', () => {
     const src = read('src/handlers/after-attack-fire.js');
-    assert.match(src, /played command card \*\*\$\{card\}\*\*/, 'inlines the after-attack card name');
+    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
+    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
   });
 
-  it('Tough Luck (combat.js) reveals the played card', () => {
+  it('Tough Luck (combat.js) reveals via the centralized poc factory', () => {
     const src = read('src/handlers/combat.js');
-    assert.match(src, /played command card \*\*Tough Luck\*\*/, 'Tough Luck reveal present');
+    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
+    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+  });
+
+  it('Centralized poc factory (cc-pipeline.js) emits the public play-reveal for all routed paths', () => {
+    const src = read('src/handlers/cc-pipeline.js');
+    assert.match(src, /played command card \*\*\$\{cardName\}\*\*/, 'reveal line present in centralized factory');
   });
 
   it('Celebration (cc-hand.js) reveals publicly (not just hand-channel)', () => {

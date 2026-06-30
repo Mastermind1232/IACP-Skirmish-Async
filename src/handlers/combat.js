@@ -229,7 +229,7 @@ import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
 import { runCcPlayTriggers, discardCc } from './cc-hand.js';
-import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume } from './cc-pipeline.js';
+import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume, makeCcPromptOpponentCancel } from './cc-pipeline.js';
 import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
@@ -2391,31 +2391,10 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
-/**
- * Factory: build the promptOpponentCancel function for a combat gate CC play.
- * Injects into playCC's ctx so the unified counter-window fires for ALL combat
- * CCs — the same window hand-plays use. Returns a Promise that resolves with
- * { cancelled } once the Negate/Comms buttons are clicked (or auto-resolves when
- * there is no responder). alexanbv 2026-06-30.
- */
-function _makeCombatPromptOpponentCancel(game, gameId, ctx, client, extraPlay = {}) {
-  return async ({ game: g, playerNum, figureKey, cardName }) => {
-    const pid = getPlayerId(g, playerNum);
-    await ctx.logGameAction?.(g, client, `<@${pid}> played command card **${cardName}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: pid ? [pid] : [] } });
-    await runCcPlayTriggers(g, playerNum, { client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
-    const ccEff = ctx.getCcEffect?.(cardName);
-    return new Promise((resolve) => {
-      g._ccWindowResolve = resolve;
-      // _resolveCcCounterWindow calls resolve({ cancelled }) in query mode —
-      // synchronously if no responder, or when the opponent clicks a button.
-      // The .then() only saves; never resolve here (would race the button click).
-      openCcCounterWindow(g, gameId, {
-        card: cardName, cost: typeof ccEff?.cost === 'number' ? ccEff.cost : 0,
-        playedBy: playerNum, figureKey, abilityId: cardName, ...extraPlay,
-      }, ctx, client).then(() => ctx.saveGames?.(g.gameId));
-    });
-  };
-}
+// makeCcPromptOpponentCancel is now the shared export from cc-pipeline.js — the
+// single factory used by ALL CC play paths (gate, reroll, third-party, Yoda,
+// Tough Luck, after-attack, when-defeated). Import alias for local readability.
+const _makeCombatPromptOpponentCancel = makeCcPromptOpponentCancel;
 // Params-less reroll-CC registrations (card detected in `applies`, not params).
 const _REROLL_CC_CARD_BY_ID = { rapid_recalibration: 'Rapid Recalibration' };
 /** The Command-card name a reroll gate ability plays, across param shapes. */
@@ -2440,30 +2419,6 @@ function _isRerollCcPick(pick, ccPn, game) {
   return (getCcHand(game, ccPn) || []).some((n) => String(n).toLowerCase() === lc);
 }
 
-// Tough Luck's die-removal is its EFFECT; it lands via this continuation only if
-// the card survives the Negate/Comms window (alexanbv 2026-06-19 "all CCs go
-// through the counter window"). The rerolls-window resume is handled separately
-// by resumeCombatGateAfterCc (pendingCombatCcResolve), which runs whether the
-// card resolves or is cancelled. Registered lazily (avoids load-time cycles).
-let _toughLuckResolverRegistered = false;
-function _ensureToughLuckResolver() {
-  if (_toughLuckResolverRegistered) return;
-  _toughLuckResolverRegistered = true;
-  registerCcCustomResolve('tough_luck_remove', async (game, entry, _ctx, client) => {
-    const combat = game.pendingCombat;
-    const tl = entry.toughLuck;
-    if (!combat || !tl) return;
-    const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
-    const die = dice?.[tl.idx];
-    if (!die) return;
-    if (tl.pool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
-    else { die.block = 0; die.evade = 0; die.dodge = false; }
-    const recalc = tl.pool === 'attack' ? _recalcAttackTotals : _recalcDefenseTotals;
-    combat[tl.pool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
-    const thread = await fetchCombatThread(client, combat.combatThreadId);
-    await thread?.send(`**Tough Luck** — removed the rerolled ${die.color} ${tl.pool} die's result.`).catch(discordCatch);
-  });
-}
 
 export async function handleToughLuckGate(interaction, ctx) {
   const { getGame, saveGames, replyIfGameEnded } = ctx;
@@ -2483,28 +2438,30 @@ export async function handleToughLuckGate(interaction, ctx) {
   const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
   const die = dice?.[tl.idx];
   if (isRemove && die) {
-    // Tough Luck is PLAYED — discard it, then route through the unified counter-
-    // window. The die-removal (the 'tough_luck_remove' continuation) lands only
-    // if it survives Negate/Comms; the rerolls window resumes either way via
-    // pendingCombatCcResolve → resumeCombatGateAfterCc.
-    const hand = getCcHand(game, tl.playerNum) || [];
-    const hi = hand.indexOf('Tough Luck');
-    if (hi >= 0) { hand.splice(hi, 1); (getCcDiscard(game, tl.playerNum) || []).push('Tough Luck'); }
+    // Tough Luck is PLAYED — route through the unified playCC + Promise poc path.
+    // skipTimingCheck: 'afteropponentreroll' returns false from isCcPlayableNow
+    // (dedicated gate, not the hand dropdown). skipExecute: die-removal runs inline.
     const tlPool = tl.pool, tlIdx = tl.idx, tlPlayerNum = tl.playerNum;
     delete combat._pendingToughLuck;
-    _ensureToughLuckResolver();
-    game.pendingCombatCcResolve = { window: 'rerolls', gameId: game.gameId };
-    // Public play-reveal: announce Tough Luck to both players (matches the
-    // sibling gate-CC reveals retrofitted 2026-06-26) before the counter-window.
-    const _tlPid = getPlayerId(game, tlPlayerNum);
-    if (typeof ctx.logGameAction === 'function' && interaction.client) {
-      await ctx.logGameAction(game, interaction.client, `<@${_tlPid}> played command card **Tough Luck**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _tlPid ? [_tlPid] : [] } });
+    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, interaction.client);
+    const res = await playCC(game, tlPlayerNum, null, 'Tough Luck', {
+      ctx: { ...ctx, promptOpponentCancel: poc },
+      skipExecute: true, skipTimingCheck: true,
+    });
+    if (res.ok && !res.cancelled) {
+      // Apply die-removal inline (survived Negate/Comms).
+      const dice = tlPool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+      const die2 = dice?.[tlIdx];
+      if (die2) {
+        if (tlPool === 'attack') { die2.acc = 0; die2.dmg = 0; die2.surge = 0; }
+        else { die2.block = 0; die2.evade = 0; die2.dodge = false; }
+        const recalc = tlPool === 'attack' ? _recalcAttackTotals : _recalcDefenseTotals;
+        combat[tlPool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
+        await thread?.send(`**Tough Luck** — removed the rerolled ${die2.color} ${tlPool} die's result.`).catch(discordCatch);
+      }
     }
-    await runCcPlayTriggers(game, tlPlayerNum, { client: interaction.client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-    await openCcCounterWindow(game, game.gameId, {
-      card: 'Tough Luck', cost: 0, playedBy: tlPlayerNum, abilityId: 'Tough Luck',
-      customResolve: 'tough_luck_remove', toughLuck: { pool: tlPool, idx: tlIdx },
-    }, ctx, interaction.client);
+    // Re-drive the rerolls gate whether the card was cancelled or not.
+    await _driveGateOrOfferToughLuck('rerolls', thread, game, combat, ctx);
     saveGames?.(game.gameId);
     return;
   }

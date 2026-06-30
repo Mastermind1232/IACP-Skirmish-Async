@@ -12,6 +12,7 @@
 // routes through ctx.handleCcConfirmPlay (the normal CC pipeline).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { handleAarPlayCc, handleAarCcPick } from '../../src/handlers/after-attack-resolve.js';
 
 // Attacker (player 1) holds Escalating Hostility (afterAttack, Any Figure). With
@@ -104,30 +105,24 @@ describe('AAR Play-CC — handleAarPlayCc opens an ephemeral private list', () =
   });
 });
 
-describe('AAR Play-CC — handleAarCcPick routes the play through the normal pipeline', () => {
-  it('stages pendingCcConfirmation + pendingCombatCcResolve and invokes ctx.handleCcConfirmPlay with a rewritten customId', async () => {
-    const game = gameWithAttackerCc();
-    // Pre-stash as handleAarPlayCc would.
-    game._aarCcChoices = { atk: ['Escalating Hostility'] };
-    const { interaction } = mockInteraction('aar_ccpick_t1_atk_0', 'P1');
+describe('AAR Play-CC — handleAarCcPick routes the play through the unified CC pipeline', () => {
+  // After the unification (alexanbv 2026-06-30), handleAarCcPick calls playCC +
+  // makeCcPromptOpponentCancel directly. It no longer stages pendingCcConfirmation
+  // or delegates to ctx.handleCcConfirmPlay. Verify the wiring via source audit
+  // (the same pattern used in cc-discard-playreveal-audit.test.js).
+  const aarSrc = readFileSync(
+    new URL('../../src/handlers/after-attack-resolve.js', import.meta.url),
+    'utf8',
+  );
+  const fnMatch = aarSrc.match(/export async function handleAarCcPick[\s\S]*?\n}\n/);
 
-    let confirmCalledWith = null;
-    const ctx = {
-      getGame: () => game,
-      saveGames: () => {},
-      handleCcConfirmPlay: async (proxy) => { confirmCalledWith = proxy.customId; },
-    };
-
-    await handleAarCcPick(interaction, ctx);
-
-    // Staged for the confirm path.
-    assert.ok(game.pendingCcConfirmation, 'pendingCcConfirmation should be set');
-    assert.equal(game.pendingCcConfirmation.playerNum, 1);
-    assert.equal(game.pendingCcConfirmation.card, 'Escalating Hostility');
-    // Resume descriptor so the window re-posts after the counter window closes.
-    assert.deepEqual(game.pendingCombatCcResolve, { kind: 'after_attack', effectSide: 'attacker', gameId: 't1' });
-    // Routed through the normal confirm handler with a rewritten cc_confirm_play_ id.
-    assert.equal(confirmCalledWith, 'cc_confirm_play_t1', 'handleCcConfirmPlay must be invoked with a rewritten customId');
+  it('uses makeCcPromptOpponentCancel + playCC (unified path, not the old pendingCcConfirmation path)', () => {
+    assert.ok(fnMatch, 'handleAarCcPick found in source');
+    const body = fnMatch[0];
+    assert.match(body, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+    assert.match(body, /await playCC/, 'routes through unified playCC');
+    assert.doesNotMatch(body, /pendingCcConfirmation/, 'no longer stages old confirm state');
+    assert.doesNotMatch(body, /handleCcConfirmPlay/, 'no longer proxies through old confirm handler');
   });
 
   it('rejects a pick whose card is no longer in hand (ephemeral, no play)', async () => {

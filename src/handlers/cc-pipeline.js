@@ -37,7 +37,7 @@ import { awardObjectiveVp } from '../game/index.js';
 import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame } from '../utils/guards.js';
-import { _offerScThenResolveDeferredCc } from './cc-hand.js';
+import { _offerScThenResolveDeferredCc, runCcPlayTriggers } from './cc-hand.js';
 
 // ── Cancel rules ─────────────────────────────────────────────────────────────
 
@@ -217,6 +217,37 @@ registerCcCustomResolve('celebration_vp', async (game, entry, ctx, client) => {
 });
 
 // ── Counter-window orchestration ─────────────────────────────────────────────
+
+/**
+ * Build a `promptOpponentCancel` function for ANY CC play — the single entry
+ * point every caller injects into `playCC.ctx`. Logs the play, runs on-play
+ * triggers, then opens the counter window as a Promise (stores resolve in
+ * game._ccWindowResolve). _resolveCcCounterWindow resolves it with
+ * { cancelled } when the Negate/Comms buttons resolve or auto-resolve with
+ * no eligible responder. alexanbv 2026-06-30 unified path.
+ *
+ * @param {object}  game      - live game state
+ * @param {string}  gameId
+ * @param {object}  ctx       - handler ctx (logGameAction, saveGames, dcMessageMeta…)
+ * @param {object}  client    - Discord client
+ * @param {object}  [extraPlay={}] - extra fields merged into the counter-window play
+ *   descriptor (figureKey, abilityId, combat, msgId, …).
+ */
+export function makeCcPromptOpponentCancel(game, gameId, ctx, client, extraPlay = {}) {
+  return async ({ game: g, playerNum, figureKey, cardName, cost }) => {
+    const pid = getPlayerId(g, playerNum);
+    await ctx.logGameAction?.(g, client, `<@${pid}> played command card **${cardName}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: pid ? [pid] : [] } });
+    await runCcPlayTriggers(g, playerNum, { client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames });
+    return new Promise((resolve) => {
+      g._ccWindowResolve = resolve;
+      // _resolveCcCounterWindow resolves via query mode when it finds _ccWindowResolve.
+      // .then() only saves; do NOT resolve here — would race the button click.
+      openCcCounterWindow(g, gameId, {
+        card: cardName, cost, playedBy: playerNum, figureKey, abilityId: cardName, ...extraPlay,
+      }, ctx, client).then(() => ctx.saveGames?.(g.gameId));
+    });
+  };
+}
 
 /**
  * Open the counter-window for a freshly played card and prompt the opponent.

@@ -38,8 +38,8 @@ import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame } from '../utils/guards.js';
 import { fireEffect } from './after-attack-fire.js';
 import { abilitiesForWindow } from '../engine/combat-timing-registry.js';
-import { getPlayableReactionCardsForTiming, isCcPlayableNow } from '../game/cc-timing.js';
-import { setPendingCcConfirmation } from '../game/interrupts.js';
+import { getPlayableReactionCardsForTiming, isCcPlayableNow, playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
@@ -920,14 +920,11 @@ export async function handleAarPlayCc(interaction, ctx) {
 
 /**
  * `aar_ccpick_<gameId>_<atk|def>_<index>` — pick a card from the ephemeral list.
- * Re-validates (still in hand + still timing-legal), then PLAYS it through the
- * normal CC pipeline by staging pendingCcConfirmation and invoking
- * ctx.handleCcConfirmPlay (which routes through openCcCounterWindow →
- * Negate/Comms counter-window → resolve). We also set pendingCombatCcResolve
- * (kind 'after_attack') BEFORE the play so that, once the counter-window closes,
- * the after-resolve window is re-posted (resumeCombatGateAfterCc, registered in
- * root index.js) — matching the existing after-attack CC path in
- * after-attack-fire.js fireGateAbility. The public window is never torn down.
+ * Re-validates (still in hand + still timing-legal), then plays it through the
+ * unified playCC + makeCcPromptOpponentCancel path: Negate/Comms counter-window
+ * opens as a Promise (game._ccWindowResolve), awaits opponent response, then
+ * ctx.resolveAbility applies the effect and postPostResolveWindow re-posts the
+ * after-attack window. The public window is never torn down.
  */
 export async function handleAarCcPick(interaction, ctx) {
   const { getGame, saveGames } = ctx;
@@ -960,32 +957,24 @@ export async function handleAarCcPick(interaction, ctx) {
     await interaction.followUp({ content: `**${card}** can't be played right now (wrong timing).`, ephemeral: true }).catch(discordCatch);
     return;
   }
-  // Stage the play, then route through the existing confirm path. handleCcConfirmPlay
-  // reads pendingCcConfirmation, re-checks timing/legality, and opens the counter
-  // window. pendingCombatCcResolve survives that call → resumeCombatGateAfterCc
-  // re-posts THIS window after the counter window resolves/cancels.
-  setPendingCcConfirmation(game, { playerNum: ownerPN, card, ts: Date.now() });
-  game.pendingCombatCcResolve = {
-    kind: 'after_attack',
-    effectSide: sideShort === 'atk' ? 'attacker' : 'defender',
-    gameId: game.gameId,
-  };
-  saveGames?.(game.gameId);
-  if (typeof ctx.handleCcConfirmPlay !== 'function') {
-    // Defensive: if the postCombat ctx didn't supply the confirm handler, the
-    // play can't be routed. Surface it rather than silently dropping the click.
-    await interaction.followUp({ content: '⚠️ Internal error: CC play path unavailable.', ephemeral: true }).catch(discordCatch);
+  await interaction.deferUpdate().catch(discordCatch);
+  // Unified playCC + Promise poc: counter window, Comms Jammer, effect via
+  // ctx.resolveAbility, and disposal all live in playCC. postPostResolveWindow
+  // re-posts the after-attack window inline once playCC returns.
+  const effectSide = sideShort === 'atk' ? 'attacker' : 'defender';
+  const fig = sideShort === 'atk' ? combat.attackerFigureKey : combat.target?.figureKey;
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, interaction.client, {
+    figureKey: fig, abilityId: card, combat: true,
+    msgId: sideShort === 'atk' ? combat.attackerMsgId : null,
+  });
+  const res = await playCC(game, ownerPN, fig, card, { ctx: { ...ctx, promptOpponentCancel: poc } });
+  if (!res.ok) {
+    await interaction.followUp({ content: `⚠️ Can't play ${card}: ${res.reason}`, ephemeral: true }).catch(discordCatch);
     return;
   }
-  // handleCcConfirmPlay parses its gameId from interaction.customId via the
-  // 'cc_confirm_play_' prefix. Our customId is 'aar_ccpick_…', so present a
-  // proxy interaction with a rewritten customId (this is the same customId-
-  // rewrite trick index.js uses for select→button adapters). The interaction is
-  // already deferUpdate'd and handleCcConfirmPlay only ever followUp()s, so the
-  // proxy needs no other surface beyond the real interaction's methods/fields.
-  const _proxy = Object.create(interaction);
-  _proxy.customId = `cc_confirm_play_${gameId}`;
-  await ctx.handleCcConfirmPlay(_proxy, ctx);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+  await postPostResolveWindow(thread, game, combat, effectSide, ctx);
+  saveGames?.(game.gameId);
 }
 
 /**

@@ -27,7 +27,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { clearPendingDefeatCcPrompt, setPendingDefeatCcPrompt } from '../game/interrupts.js';
-import { ccHandKey, ccDiscardKey, getDcMessageIds, getDcList, getPlayerId } from '../game/player-helpers.js';
+import { getDcMessageIds, getDcList, getPlayerId } from '../game/player-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { getDcEffects, getCcEffect } from '../data-loader.js';
@@ -36,8 +36,8 @@ import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { runCcPlayTriggers } from './cc-hand.js';
-import { openCcCounterWindow, registerCcCustomResolve } from './cc-pipeline.js';
+import { playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 
 // Drain the deferred side-effects a (sync) resolveAbility produced in the one
 // canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv
@@ -174,10 +174,9 @@ export async function handleSkipDefeatCcPrompt(interaction, ctx) {
 }
 
 export async function handlePlayDefeatCcPrompt(interaction, ctx) {
-  // Play-time: validate + commit + open the counter-window. The effect (picker /
-  // resolveAbility) is deferred to the 'defeat_cc' continuation below.
-  _ensureDefeatCcResolver();
-  const { getGame, canActAsPlayer, saveGames, client, logGameAction, dcMessageMeta } = ctx;
+  // Play-time: validate + route through unified playCC. Effect (picker /
+  // resolveAbility) runs inline via _resolveDefeatCcEffect after playCC returns.
+  const { getGame, canActAsPlayer, saveGames, client, logGameAction } = ctx;
   const parts = splitCustomId(interaction.customId, 'defeat_cc_play_');
   const gameId = parts[0];
   const game = await requireGame(interaction, getGame, gameId, { silent: true });
@@ -192,47 +191,37 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const { playerPN, cardName } = pending;
-  const handKey = ccHandKey(playerPN);
-  const discardKey = ccDiscardKey(playerPN);
-  const hand = game[handKey] || [];
-  const idx = hand.indexOf(cardName);
-  if (idx < 0) {
-    clearPendingDefeatCcPrompt(game);
+  // Capture defeat context BEFORE clearing (some CCs need the position).
+  const _defeatedPos = pending.defeatedPos ?? null;
+  const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
+  clearPendingDefeatCcPrompt(game);
+
+  // Unified playCC path: skipTimingCheck because when-defeated timing strings
+  // (whenoneofyourfiguresdefeated etc.) may no longer pass isCcPlayableNow by
+  // click time (recentDefeat flag cleared). The gate mechanism already validated.
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, {
+    abilityId: cardName,
+  });
+  const res = await playCC(game, playerPN, null, cardName, {
+    ctx: { ...ctx, getCcEffect, promptOpponentCancel: poc },
+    skipExecute: true, skipTimingCheck: true, getEffect: getCcEffect,
+  });
+  if (!res.ok) {
     if (typeof logGameAction === 'function' && client) {
       await logGameAction(game, client, `**${cardName}** — card no longer in hand.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
     if (typeof saveGames === 'function') await saveGames(gameId);
     return;
   }
-  hand.splice(idx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(cardName);
-
-  // Route through the unified counter-window: ALL CCs are counterable
-  // (alexanbv 2026-06-19). The bespoke target/mode picker (or direct resolve)
-  // runs via the 'defeat_cc' continuation ONLY if the card survives the
-  // Negate/Comms window. The captured channelId lets the continuation post the
-  // first picker without an interaction.
-  // Capture the defeat context BEFORE clearing — some defeat CCs (Paid in
-  // Beskar) need the defeated figure's position to resolve their effect.
-  const _defeatedPos = pending.defeatedPos ?? null;
-  const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
-  clearPendingDefeatCcPrompt(game);
-  // Public play-reveal: announce the played card to both players (matches the
-  // hand-play reveal style) before triggers / the counter-window open.
-  const _defeatPid = getPlayerId(game, playerPN);
-  if (typeof logGameAction === 'function' && client) {
-    await logGameAction(game, client, `<@${_defeatPid}> played command card **${cardName}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _defeatPid ? [_defeatPid] : [] } });
+  if (!res.cancelled) {
+    // Card survived Negate/Comms — apply the when-defeated effect inline.
+    _ensureDefeatCcResolver();
+    await _resolveDefeatCcEffect(game, {
+      card: cardName, playedBy: playerPN,
+      channelId: interaction.channel?.id ?? null,
+      defeatedPos: _defeatedPos, defeatedFigureKey: _defeatedFigureKey,
+    }, ctx, client);
   }
-  await runCcPlayTriggers(game, playerPN, { client, logGameAction, dcMessageMeta, saveGames });
-  const _dcCost = getCcEffect(cardName)?.cost;
-  await openCcCounterWindow(game, gameId, {
-    card: cardName, cost: typeof _dcCost === 'number' ? _dcCost : 0,
-    playedBy: playerPN, abilityId: cardName,
-    customResolve: 'defeat_cc', channelId: interaction.channel?.id ?? null,
-    defeatedPos: _defeatedPos, defeatedFigureKey: _defeatedFigureKey,
-  }, ctx, client);
   if (typeof saveGames === 'function') await saveGames(gameId);
 }
 

@@ -957,7 +957,7 @@ function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
  * Execution (running the card's effect + discard) is a separate step.
  */
 export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
-  const { allowNotInHand = false, getEffect = getCcEffect, ignoreCommsJammer = false } = opts;
+  const { allowNotInHand = false, getEffect = getCcEffect, ignoreCommsJammer = false, skipTimingCheck = false } = opts;
   const effect = getEffect(cardName);
   if (!effect) return { ok: false, reason: `Unknown command card "${cardName}".` };
   // 1. in hand (or an exception ability is supplying it)
@@ -970,9 +970,12 @@ export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
     return { ok: false, reason: `${dcName || 'that figure'} can't play ${cardName} (playable by: ${effect.playableBy}).` };
   }
   // 3 + 4. player not blocked from CCs AND timing matches the current instance.
+  // skipTimingCheck: used by dedicated gate flows (Tough Luck, after-attack, when-defeated)
+  // that have already validated legality via their own gate mechanism — isCcPlayableNow
+  // returns false for those timing strings to keep them out of the hand dropdown.
   // Comms Jammer is handled by playCC as a play-time cancel (not a pre-block), so
   // it can be ignored here when called from the playCC pipeline.
-  if (!isCcPlayableNow(game, playerNum, cardName, getEffect, { ignoreCommsJammer })) {
+  if (!skipTimingCheck && !isCcPlayableNow(game, playerNum, cardName, getEffect, { ignoreCommsJammer })) {
     return { ok: false, reason: `${cardName} can't be played right now (timing or a play-restriction).` };
   }
   return { ok: true };
@@ -1033,9 +1036,9 @@ export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
  * check, or { ok:true, result, disposedTo, cancelled? }.
  */
 export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
-  const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo, skipExecute = false } = opts;
+  const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo, skipExecute = false, skipTimingCheck = false } = opts;
   // 1. validate — comms jammer handled here as a play-time cancel, not a pre-block
-  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, ignoreCommsJammer: true });
+  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, ignoreCommsJammer: true, skipTimingCheck });
   if (!check.ok) return check;
 
   const effect = getEffect(cardName);
