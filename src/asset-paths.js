@@ -70,19 +70,15 @@ export function getCommandCardImagePath(cardName) {
   return null;
 }
 
-/** Try subfolder first, then root. relPath is e.g. "vassal_extracted/images/X.gif". Prefers .png over .gif when both exist. */
+/** Try subfolder first, then root. relPath is e.g. "vassal_extracted/images/X.gif". */
 export function resolveAssetPath(relPath, subfolder) {
   if (!relPath || typeof relPath !== 'string') return null;
   const filename = relPath.split(/[/\\]/).pop() || relPath;
-  const baseName = filename.replace(/\.[^.]+$/, '');
-  const candidates = [baseName + '.png', baseName + '.jpg', filename];
-  for (const name of candidates) {
-    const inSub = `vassal_extracted/images/${subfolder}/${name}`;
-    if (existsSync(join(rootDir, inSub))) return inSub;
-    if (subfolder === 'figures') {
-      const inTokens = `vassal_extracted/images/figure-tokens/${name}`;
-      if (existsSync(join(rootDir, inTokens))) return inTokens;
-    }
+  const inSub = `vassal_extracted/images/${subfolder}/${filename}`;
+  if (existsSync(join(rootDir, inSub))) return inSub;
+  if (subfolder === 'figures') {
+    const inTokens = `vassal_extracted/images/figure-tokens/${filename}`;
+    if (existsSync(join(rootDir, inTokens))) return inTokens;
   }
   if (existsSync(join(rootDir, relPath))) return relPath;
   return relPath;

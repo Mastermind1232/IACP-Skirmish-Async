@@ -28,17 +28,14 @@ try {
   console.warn('Map renderer: could not register DejaVu fonts, falling back to sans-serif:', err.message);
 }
 
-/** Try subfolder first (e.g. tokens/ maps/), then root. Prefers .png over .gif when both exist. */
+/** Try subfolder first (e.g. tokens/ maps/), then root. pathOrFilename can be "vassal_extracted/images/X" or "X.gif". */
 function resolveImagePath(pathOrFilename, subfolder) {
   const filename = pathOrFilename.split(/[/\\]/).pop() || pathOrFilename;
-  const baseName = filename.replace(/\.[^.]+$/, '');
   const base = join(rootDir, 'vassal_extracted', 'images');
-  for (const name of [baseName + '.png', baseName + '.jpg', filename]) {
-    const inSub = join(base, subfolder, name);
-    if (existsSync(inSub)) return join('vassal_extracted', 'images', subfolder, name).replace(/\\/g, '/');
-    const inRoot = join(base, name);
-    if (existsSync(inRoot)) return join('vassal_extracted', 'images', name).replace(/\\/g, '/');
-  }
+  const inSub = join(base, subfolder, filename);
+  if (existsSync(inSub)) return join('vassal_extracted', 'images', subfolder, filename).replace(/\\/g, '/');
+  const inRoot = join(base, filename);
+  if (existsSync(inRoot)) return join('vassal_extracted', 'images', filename).replace(/\\/g, '/');
   return pathOrFilename;
 }
 
@@ -106,15 +103,13 @@ function colToLetter(col) {
  */
 
 export async function renderMap(mapId, options = {}) {
-  const { figures = [], tokens = {}, showGrid = true, maxWidth = 3000, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
+  const { figures = [], tokens = {}, showGrid = true, maxWidth = 2500, cropToZone = null, gridStyle = 'default', showGridOnlyOnCoords = null } = options;
   const mapDef = getMap(mapId);
   if (!mapDef) throw new Error(`Map not found: ${mapId}`);
 
   const mapPath = resolveImagePath(mapDef.imagePath, 'maps');
   const imagePath = join(rootDir, mapPath);
   const { dx, dy, x0, y0 } = mapDef.grid;
-  const calibW = mapDef.calibrationWidth || null;
-  const calibH = mapDef.calibrationHeight || null;
 
   let img;
   if (existsSync(imagePath)) {
@@ -147,15 +142,11 @@ export async function renderMap(mapId, options = {}) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, w, h);
 
-  // When a higher-res image is loaded, grid params are calibrated against the original
-  // GIF dimensions — scale them to the actual canvas size independently of image scale.
-  const gridScaleX = calibW ? w / calibW : scale;
-  const gridScaleY = calibH ? h / calibH : scale;
-  const s = gridScaleX;
-  const sx0 = x0 * gridScaleX;
-  const sdx = dx * gridScaleX;
-  const sdy = dy * gridScaleY;
-  const sy0 = y0 * gridScaleY;
+  const s = scale;
+  const sx0 = x0 * s;
+  const sdx = dx * s;
+  const sdy = dy * s;
+  const sy0 = y0 * s;
 
   const numCols = Math.floor((w - sx0) / sdx);
   const numRows = Math.floor((h - sy0) / sdy);
