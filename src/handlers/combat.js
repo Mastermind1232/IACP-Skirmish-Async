@@ -291,79 +291,85 @@ function _markGateAbilityUsed(game, combat, pick) {
 }
 
 /**
- * Tough Luck (CC) — the single generic post-reroll reaction (alexanbv 2026-06-17:
- * "one or two functions, not multiple in each ability"). After ANY reroll, the
- * RELEVANT player by the die's POOL — attack die → the DEFENDER, defense die →
- * the ATTACKER, regardless of who did the rerolling — may play Tough Luck to
- * remove that die's result. If that player holds Tough Luck, post the window and
- * stash combat._pendingToughLuck so the gate pauses until they respond
- * (handleToughLuckGate resumes the rerolls window). Returns true iff a window
- * was posted. Called centrally by the gate after a reroll resolves.
+ * Tough Luck (CC) — end-of-rerolls picker (alexanbv 2026-06-30 redesign).
+ *
+ * NEW BEHAVIOR: no per-reroll pause. At the end of the rerolls gate, each player
+ * is offered a single chance to remove any one rerolled opponent die:
+ *   • Defender window: can cancel any rerolled attack die (including ones rerolled
+ *     by the defender's own abilities — e.g. Tress, HK rerolling attack dice).
+ *   • Attacker window: can cancel any rerolled defense die (until start of mods).
+ *
+ * Called by the rerolls onComplete (both seq-active and legacy paths). Posts a
+ * picker to the relevant player's hand channel with one button per unique rerolled
+ * opponent die. Returns true if a window was posted (gate must pause), false if
+ * neither player has a TL window (advance immediately).
  */
-export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
-  if (!combat || idx == null) return false;
-  const relevantPN = pool === 'attack'
-    ? (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum))
-    : combat.attackerPlayerNum;
-  if (!relevantPN) return false;
-  // INFO-LEAK TODO (alexanbv 2026-06-17): strictly, the window should be offered
-  // to the relevant player REGARDLESS of whether they actually hold Tough Luck,
-  // so that prompting (or not) doesn't reveal hand information. For now we only
-  // prompt when they hold it — left as-is per Destruct; revisit to always prompt.
-  if (!(getCcHand(game, relevantPN) || []).includes('Tough Luck')) return false;
-  // Discrete one-shot reaction: the entire pending state lives on
-  // combat._pendingToughLuck (read by handleToughLuckGate). We deliberately do
-  // NOT arm any round-long game.toughLuckPlayerNum / game.pendingToughLuck — Tough
-  // Luck reacts to a SINGLE reroll, then is consumed from hand. (alexanbv 2026-06-18)
-  combat._pendingToughLuck = { pool, idx, playerNum: relevantPN };
-  const ownerId = game[`player${relevantPN}Id`] ?? '';
-  const die = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults)?.[idx];
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`tlgate_remove_${combat.gameId}_${pool}_${idx}`).setLabel(`Remove the rerolled ${die?.color || ''} die`.trim()).setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`tlgate_skip_${combat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+export async function _offerToughLuckFinal(thread, game, combat, ctx) {
+  const atkPN = combat.attackerPlayerNum;
+  const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(atkPN);
+
+  // Defender window: cancel a rerolled attack die.
+  const atkRerolled = (combat._rerolledDice || []).filter((d) => d.pool === 'attack');
+  if (!combat._tlFinalDefenderOffered && atkRerolled.length > 0 && defPN
+    && (getCcHand(game, defPN) || []).includes('Tough Luck')) {
+    combat._tlFinalDefenderOffered = true;
+    combat._pendingToughLuckFinal = { phase: 'defender', playerNum: defPN };
+    await _postToughLuckFinalPicker(thread, game, combat, ctx, defPN, atkRerolled);
+    return true;
+  }
+
+  // Attacker window: cancel a rerolled defense die.
+  const defRerolled = (combat._rerolledDice || []).filter((d) => d.pool === 'defense');
+  if (!combat._tlFinalAttackerOffered && defRerolled.length > 0 && atkPN
+    && (getCcHand(game, atkPN) || []).includes('Tough Luck')) {
+    combat._tlFinalAttackerOffered = true;
+    combat._pendingToughLuckFinal = { phase: 'attacker', playerNum: atkPN };
+    await _postToughLuckFinalPicker(thread, game, combat, ctx, atkPN, defRerolled);
+    return true;
+  }
+
+  // No TL window needed — clean up tracking.
+  delete combat._rerolledDice;
+  return false;
+}
+
+async function _postToughLuckFinalPicker(thread, game, combat, ctx, playerNum, rerolledDice) {
+  const ownerId = game[`player${playerNum}Id`] ?? '';
+  const buttons = rerolledDice.map(({ pool, index }) => {
+    const die = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults)?.[index];
+    return new ButtonBuilder()
+      .setCustomId(`tl_final_remove_${combat.gameId}_${pool}_${index}`)
+      .setLabel(`Remove rerolled ${die?.color || ''} ${pool} die`.trim())
+      .setStyle(ButtonStyle.Danger);
+  });
+  buttons.push(
+    new ButtonBuilder().setCustomId(`tl_final_skip_${combat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
   );
-  // Send privately to the player's hand channel — opponent must not see the button
-  // (it would reveal whether they hold Tough Luck). Falls back to thread if the
-  // hand channel is unavailable (e.g. test games with no hand channels).
-  const _tlHandId = getHandChannelId(game, relevantPN);
+  const rows = chunkButtonsToRows(buttons).slice(0, 5);
+  const _tlHandId = getHandChannelId(game, playerNum);
   const _tlHandCh = _tlHandId && ctx.client
     ? await fetchGameChannel(ctx.client, _tlHandId).catch(() => null)
     : null;
   await (_tlHandCh ?? thread)?.send(sanitizeMentions({
-    content: `**Tough Luck** — <@${ownerId}> you may remove the rerolled ${die?.color || ''} ${pool} die's result.`,
-    components: [row], allowedMentions: { users: [ownerId] },
+    content: `**Tough Luck** — <@${ownerId}> you may remove any one rerolled die result.`,
+    components: rows,
+    allowedMentions: { users: [ownerId] },
   })).catch(discordCatch);
-  return true;
 }
 
 /**
- * After a reroll resolver completes, offer Tough Luck on the die just rerolled
- * (combat._lastRerolledDie, set by rerollDie); if a window is posted the gate
- * PAUSES (handleToughLuckGate re-drives). Otherwise drive the window normally.
- * The single place the reroll → Tough Luck reaction is triggered.
+ * After a reroll resolver completes, offer Double or Nothing on the die just
+ * rerolled (combat._lastRerolledDie, set by rerollDie); if a DON window is posted
+ * the gate PAUSES (handleDonGate re-drives). Otherwise drive the window normally.
+ * Tough Luck is no longer per-reroll — it is offered once at the END of the
+ * rerolls gate via _offerToughLuckFinal. alexanbv 2026-06-30.
  */
 export async function _driveGateOrOfferToughLuck(window, thread, game, combat, ctx) {
   if (window === 'rerolls' && combat?._lastRerolledDie) {
     const last = combat._lastRerolledDie;
     const { pool, index } = last;
-    // Post-reroll reaction ORDER (alexanbv 2026-06-20 ruling): "Tough Luck should
-    // prompt immediately after the reroll, BEFORE the double/cancel option."
-    //   1) Tough Luck FIRST — the opponent may remove the rerolled die's result.
-    //   2) Double or Nothing SECOND — only after Tough Luck resolves (used or
-    //      skipped) is the controller offered Double/Cancel on the (post-TL) die.
-    //   3) then continue the rerolls window.
-    // We keep combat._lastRerolledDie alive across the Tough Luck gate (marking
-    // _toughLuckOffered) so this driver, when re-entered after Tough Luck resolves
-    // (skip path or removal-resume), skips straight to the Double/Nothing offer
-    // with the CORRECT post-Tough-Luck die state.
-    if (!last._toughLuckOffered) {
-      last._toughLuckOffered = true;
-      if (await _offerToughLuck(game, combat, ctx, thread, pool, index)) return;
-    }
-    // Tough Luck resolved (or not applicable): now offer Double or Nothing. Its
-    // symbol-count comparison reads last.prevSymbols/newSymbols (captured at
-    // reroll time); if Tough Luck removed the die the controller may still
-    // double/cancel the (now-zeroed) result per the same gate.
+    // Double or Nothing still fires per-reroll (symbol-count comparison reads
+    // last.prevSymbols/newSymbols captured at reroll time).
     if (await _offerDoubleOrNothing(game, combat, ctx, thread, pool, index, last)) return;
     delete combat._lastRerolledDie;
   }
@@ -538,6 +544,10 @@ const _GATE_WINDOWS = {
       // after all rerolls (incl. Cheat to Win) have happened (IACP FAQ).
       await _resolveShrewdScoundrel(combat, ctx, thread);
       delete combat.rerollsGate;
+      // End-of-rerolls Tough Luck: offer each player a one-time picker for any
+      // rerolled opponent die. Pauses if a window is posted; continues when the
+      // player responds (handleToughLuckFinalPick calls ctx._rerollsGateDone).
+      if (await _offerToughLuckFinal(thread, game, combat, ctx)) return;
       if (ctx._rerollsGateDone) await ctx._rerollsGateDone(thread, game, combat);
     },
   },
@@ -603,6 +613,9 @@ async function _driveGatePath(window, thread, game, combat, ctx) {
       // here on each player choice, so this branch must be consistent.
       if (combat._seqActive) {
         delete combat[cfg.field];
+        // End-of-rerolls Tough Luck: offer each player a one-time picker for any
+        // rerolled opponent die before advancing to the next step (mods).
+        if (window === 'rerolls' && await _offerToughLuckFinal(thread, game, combat, ctx)) return;
         await _advanceSequence(combat, _seqHandlers(thread, game, combat, ctx));
       } else {
         await cfg.onComplete(thread, game, combat, ctx);
@@ -636,18 +649,9 @@ export async function resumeCombatGateAfterCc(game, ctx, client) {
     ctx.saveGames?.(game.gameId);
     return;
   }
-  // Attack gate CC (Tough Luck / after-attack): re-drive the paused gate.
+  // Attack gate CC (after-attack / mid-rerolls DON): re-drive the paused gate.
   const cfg = _GATE_WINDOWS[pend.window];
   if (!cfg || !combat[cfg.field]) { ctx.saveGames?.(game.gameId); return; } // gate already advanced/cleared
-  // Tough Luck removal-resume: if a rerolled-die marker is still live with Tough
-  // Luck already offered, route through the post-reroll driver so Double or Nothing
-  // is offered next (BEFORE the rerolls window resumes), per the 2026-06-20 ordering
-  // ruling. The DON symbol comparison reads the (now post-Tough-Luck) die state.
-  if (pend.window === 'rerolls' && combat._lastRerolledDie?._toughLuckOffered) {
-    await _driveGateOrOfferToughLuck(pend.window, thread, game, combat, ctx);
-    ctx.saveGames?.(game.gameId);
-    return;
-  }
   await _driveGatePath(pend.window, thread, game, combat, ctx);
 }
 
@@ -2478,6 +2482,70 @@ export async function handleToughLuckGate(interaction, ctx) {
   if (!isRemove) await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
   delete combat._pendingToughLuck;
   await _driveGateOrOfferToughLuck('rerolls', thread, game, combat, ctx);
+  saveGames?.(game.gameId);
+}
+
+/**
+ * End-of-rerolls Tough Luck picker (alexanbv 2026-06-30). The defender picks any
+ * one rerolled attack die to cancel; then the attacker picks any one rerolled
+ * defense die (if applicable). Posted by _offerToughLuckFinal at end of rerolls.
+ * customId: tl_final_remove_${gameId}_${pool}_${idx}  OR  tl_final_skip_${gameId}
+ */
+export async function handleToughLuckFinalPick(interaction, ctx) {
+  const { getGame, saveGames, replyIfGameEnded } = ctx;
+  const isRemove = interaction.customId.startsWith('tl_final_remove_');
+  const parts = splitCustomId(interaction.customId, isRemove ? 'tl_final_remove_' : 'tl_final_skip_');
+  const gameId = parts[0];
+  const game = await requireGame(interaction, getGame, gameId, { silent: true });
+  if (!game) return;
+  if (await replyIfGameEnded?.(game, interaction)) return;
+  const combat = game.pendingCombat;
+  const pend = combat?._pendingToughLuckFinal;
+  if (!pend) { await interaction.followUp({ content: 'No pending Tough Luck.', ephemeral: true }).catch(discordCatch); return; }
+  if (!await requirePlayer(interaction, game, interaction.user.id, pend.playerNum, canActAsPlayer, 'Only the Tough Luck player may respond.')) return;
+  await interaction.deferUpdate().catch(discordCatch);
+  if (interaction.message) await interaction.message.edit({ components: [] }).catch(discordCatch);
+  const thread = await fetchCombatThread(interaction.client, combat.combatThreadId);
+
+  if (isRemove) {
+    const tlPool = parts[1]; // 'attack' or 'defense'
+    const tlIdx = parseInt(parts[2], 10);
+    const tlPlayerNum = pend.playerNum;
+    delete combat._pendingToughLuckFinal;
+
+    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, interaction.client, { abilityId: 'Tough Luck' });
+    const res = await playCC(game, tlPlayerNum, null, 'Tough Luck', {
+      ctx: { ...ctx, promptOpponentCancel: poc },
+      skipExecute: true,
+      skipTimingCheck: true,
+    });
+    if (res.ok && !res.cancelled) {
+      const dice = tlPool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
+      const die = dice?.[tlIdx];
+      if (die) {
+        if (tlPool === 'attack') { die.acc = 0; die.dmg = 0; die.surge = 0; }
+        else { die.block = 0; die.evade = 0; die.dodge = false; }
+        const recalc = tlPool === 'attack' ? _recalcAttackTotals : _recalcDefenseTotals;
+        combat[tlPool === 'attack' ? 'attackRoll' : 'defenseRoll'] = recalc(dice);
+        await thread?.send(`**Tough Luck** — removed the rerolled ${die.color} ${tlPool} die's result.`).catch(discordCatch);
+      }
+    }
+  } else {
+    // Skip
+    delete combat._pendingToughLuckFinal;
+    await thread?.send('**Tough Luck** — Skipped.').catch(discordCatch);
+  }
+
+  // Check if the other player also gets a TL window; if so, picker is already posted.
+  if (await _offerToughLuckFinal(thread, game, combat, ctx)) {
+    saveGames?.(game.gameId);
+    return;
+  }
+  // Both TL windows resolved (or not needed) — clean up and advance the attack.
+  delete combat._rerolledDice;
+  if (combat._seqActive) {
+    await _advanceSequence(combat, _seqHandlers(thread, game, combat, ctx));
+  }
   saveGames?.(game.gameId);
 }
 

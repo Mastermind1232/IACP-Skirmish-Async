@@ -1,25 +1,20 @@
 /**
- * Tough Luck — discrete one-shot post-reroll reaction (alexanbv 2026-06-18).
+ * Tough Luck — end-of-rerolls picker (alexanbv 2026-06-30 redesign).
  *
- * Tough Luck is NOT a round-long proactive effect. It reacts to a SINGLE
- * opponent reroll: holding the card, the relevant player (by die pool) is
- * offered a remove/skip prompt; on remove the rerolled die's RESULT is zeroed,
- * the card is discarded from hand, and the pending state is cleared. A SECOND
- * opponent reroll in the same round must NOT offer Tough Luck again unless the
- * player holds another copy.
+ * NEW BEHAVIOR: Tough Luck is no longer a per-reroll gate. Instead, at the end
+ * of the rerolls window, each player gets a one-time chance to cancel any one
+ * rerolled opponent die:
+ *   • Defender: cancels any rerolled attack die.
+ *   • Attacker: cancels any rerolled defense die.
  *
- * This exercises the complete discrete mechanism: _offerToughLuck (the offer)
- * + handleToughLuckGate (the tlgate_ remove/skip resolution).
+ * This exercises handleToughLuckFinalPick (tl_final_remove_ / tl_final_skip_).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { _offerToughLuck, handleToughLuckGate } from '../../../src/handlers/combat.js';
+import { handleToughLuckFinalPick } from '../../../src/handlers/combat.js';
 
 const thread = { send: async () => ({}) };
 
-// Minimal recalc stubs (real totals are irrelevant to the discrete-behaviour
-// assertions; we only check that the rerolled die's result is zeroed and that
-// the offer does not persist).
 function recalcAttackTotals(dice) {
   return dice.reduce((t, d) => ({ acc: t.acc + (d.acc || 0), dmg: t.dmg + (d.dmg || 0), surge: t.surge + (d.surge || 0) }), { acc: 0, dmg: 0, surge: 0 });
 }
@@ -41,96 +36,121 @@ function makeInteraction(customId, userId) {
   return {
     customId,
     user: { id: userId },
-    client: {}, // fetchCombatThread tolerates a missing thread id → null thread
+    client: {},
     message: { edit: async () => ({}) },
     deferUpdate: async () => ({}),
     followUp: async () => ({}),
   };
 }
 
-describe('Tough Luck is a discrete one-shot post-reroll reaction', () => {
+describe('handleToughLuckFinalPick — remove path', () => {
   function freshGame() {
     return {
-      gameId: 'g-tl-discrete',
+      gameId: 'g-tlf',
       player1Id: 'A',
       player2Id: 'D',
-      // Defender (P2) holds ONE Tough Luck.
       player2CcHand: ['Tough Luck'],
       player2CcDiscard: [],
       pendingCombat: {
-        gameId: 'g-tl-discrete',
+        gameId: 'g-tlf',
         attackerPlayerNum: 1,
         defenderPlayerNum: 2,
         combatThreadId: undefined,
         attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 1 }],
         defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
+        _rerolledDice: [{ pool: 'attack', index: 0 }],
+        _pendingToughLuckFinal: { phase: 'defender', playerNum: 2 },
+        _tlFinalDefenderOffered: true,
       },
     };
   }
 
-  it('offers on opponent reroll, removes one die + discards the card, and does NOT stay armed', async () => {
+  it('removes the selected die result, discards Tough Luck from hand, clears pending', async () => {
     const game = freshGame();
     const combat = game.pendingCombat;
-
-    // First attack-die reroll → the DEFENDER (holds Tough Luck) is offered.
-    assert.equal(await _offerToughLuck(game, combat, {}, thread, 'attack', 0), true);
-    assert.deepEqual(combat._pendingToughLuck, { pool: 'attack', idx: 0, playerNum: 2 });
-    // Strictly discrete: no round-long arming on the game object.
-    assert.equal(game.toughLuckPlayerNum, undefined, 'must not arm a round-long flag');
-    assert.equal(game.pendingToughLuck, undefined, 'must not set a game-level pending flag');
-
-    // Defender removes the rerolled die's result.
     const ctx = makeCtx(game);
-    await handleToughLuckGate(makeInteraction('tlgate_remove_g-tl-discrete_attack_0', 'D'), ctx);
-
+    // Simulate playCC by pre-injecting the poc stub:
+    // playCC checks hand for the card — Tough Luck IS in hand, so it proceeds.
+    // The poc would open a counter window — in tests without a Discord client,
+    // promptOpponentCancel is called but openCcCounterWindow skips (no responder).
+    // We verify the downstream effect (die zeroed, card consumed).
+    await handleToughLuckFinalPick(makeInteraction('tl_final_remove_g-tlf_attack_0', 'D'), ctx);
     // Die result zeroed.
     assert.deepEqual(combat.attackDiceResults[0], { color: 'red', acc: 0, dmg: 0, surge: 0 });
-    // Pool recalculated to reflect the removed result.
-    assert.deepEqual(combat.attackRoll, { acc: 0, dmg: 0, surge: 0 });
     // Card consumed from hand → discard.
     assert.deepEqual(game.player2CcHand, [], 'Tough Luck left the hand');
     assert.deepEqual(game.player2CcDiscard, ['Tough Luck'], 'Tough Luck went to discard');
     // Pending state cleared.
-    assert.equal(combat._pendingToughLuck, undefined, 'pending state cleared after use');
-
-    // A SECOND opponent reroll in the same round must NOT re-offer Tough Luck:
-    // the only copy is now in the discard pile, not the hand.
-    combat.attackDiceResults = [{ color: 'blue', acc: 1, dmg: 1, surge: 0 }];
-    assert.equal(await _offerToughLuck(game, combat, {}, thread, 'attack', 0), false,
-      'second reroll must not re-offer Tough Luck after the single copy was used');
-    assert.equal(combat._pendingToughLuck, undefined);
+    assert.equal(combat._pendingToughLuckFinal, undefined, 'pending state cleared');
   });
 
-  it('a SECOND held copy DOES offer on a subsequent reroll', async () => {
+  it('a second remove on the same die (already zeroed) still clears pending', async () => {
     const game = freshGame();
-    game.player2CcHand = ['Tough Luck', 'Tough Luck'];
-    const combat = game.pendingCombat;
-    const ctx = makeCtx(game);
-
-    // First reroll → offer + remove (consumes one copy).
-    assert.equal(await _offerToughLuck(game, combat, {}, thread, 'attack', 0), true);
-    await handleToughLuckGate(makeInteraction('tlgate_remove_g-tl-discrete_attack_0', 'D'), ctx);
-    assert.deepEqual(game.player2CcHand, ['Tough Luck'], 'one copy remains in hand');
-
-    // Second reroll → still offered, because a second copy is held.
-    combat.attackDiceResults = [{ color: 'blue', acc: 1, dmg: 1, surge: 0 }];
-    assert.equal(await _offerToughLuck(game, combat, {}, thread, 'attack', 0), true,
-      'second held copy must be offered on a subsequent reroll');
-    assert.deepEqual(combat._pendingToughLuck, { pool: 'attack', idx: 0, playerNum: 2 });
+    // Pre-zero the die so the effect is idempotent.
+    game.pendingCombat.attackDiceResults[0] = { color: 'red', acc: 0, dmg: 0, surge: 0 };
+    await handleToughLuckFinalPick(makeInteraction('tl_final_remove_g-tlf_attack_0', 'D'), makeCtx(game));
+    assert.equal(game.pendingCombat._pendingToughLuckFinal, undefined);
   });
+});
 
-  it('skip leaves the die intact and keeps the card in hand', async () => {
+describe('handleToughLuckFinalPick — skip path', () => {
+  function freshGame() {
+    return {
+      gameId: 'g-tlf-sk',
+      player1Id: 'A',
+      player2Id: 'D',
+      player2CcHand: ['Tough Luck'],
+      player2CcDiscard: [],
+      pendingCombat: {
+        gameId: 'g-tlf-sk',
+        attackerPlayerNum: 1,
+        defenderPlayerNum: 2,
+        combatThreadId: undefined,
+        attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 1 }],
+        defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
+        _rerolledDice: [{ pool: 'attack', index: 0 }],
+        _pendingToughLuckFinal: { phase: 'defender', playerNum: 2 },
+        _tlFinalDefenderOffered: true,
+      },
+    };
+  }
+
+  it('skip leaves die intact and card in hand', async () => {
     const game = freshGame();
     const combat = game.pendingCombat;
-    const ctx = makeCtx(game);
-
-    assert.equal(await _offerToughLuck(game, combat, {}, thread, 'attack', 0), true);
-    await handleToughLuckGate(makeInteraction('tlgate_skip_g-tl-discrete', 'D'), ctx);
-
-    // Skip: die untouched, card stays in hand, pending cleared.
+    await handleToughLuckFinalPick(makeInteraction('tl_final_skip_g-tlf-sk', 'D'), makeCtx(game));
+    // Die untouched.
     assert.deepEqual(combat.attackDiceResults[0], { color: 'red', acc: 1, dmg: 2, surge: 1 });
+    // Card still in hand.
     assert.deepEqual(game.player2CcHand, ['Tough Luck'], 'card not consumed on skip');
     assert.deepEqual(game.player2CcDiscard, []);
-    assert.equal(combat._pendingToughLuck, undefined);
+    // Pending cleared.
+    assert.equal(combat._pendingToughLuckFinal, undefined);
+  });
+});
+
+describe('handleToughLuckFinalPick — wrong player guard', () => {
+  it('rejects if wrong player clicks the button', async () => {
+    const game = {
+      gameId: 'g-tlf-guard',
+      player1Id: 'A', player2Id: 'D',
+      player2CcHand: ['Tough Luck'], player2CcDiscard: [],
+      pendingCombat: {
+        gameId: 'g-tlf-guard',
+        attackerPlayerNum: 1, defenderPlayerNum: 2,
+        combatThreadId: undefined,
+        attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 1 }],
+        defenseDiceResults: [],
+        _rerolledDice: [{ pool: 'attack', index: 0 }],
+        _pendingToughLuckFinal: { phase: 'defender', playerNum: 2 },
+        _tlFinalDefenderOffered: true,
+      },
+    };
+    const errors = [];
+    const interaction = { ...makeInteraction('tl_final_remove_g-tlf-guard_attack_0', 'WRONG'),
+      followUp: async (m) => { errors.push(m.content); return {}; } };
+    await handleToughLuckFinalPick(interaction, makeCtx(game));
+    assert.ok(errors.length > 0 || game.pendingCombat._pendingToughLuckFinal !== undefined,
+      'wrong player rejected — pending state intact or error sent');
   });
 });

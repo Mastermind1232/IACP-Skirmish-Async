@@ -1,13 +1,19 @@
 /**
- * Tough Luck (CC) — the single generic post-reroll reaction (alexanbv 2026-06-17).
- * After ANY reroll, the relevant player BY THE DIE'S POOL is prompted: an attack
- * die reroll → the DEFENDER may react; a defense die reroll → the ATTACKER —
- * regardless of who did the rerolling. Only fires if that player holds Tough Luck.
+ * Tough Luck (CC) — end-of-rerolls picker (alexanbv 2026-06-30 redesign).
+ *
+ * NEW BEHAVIOR: no per-reroll pause. After all rerolls complete, each player
+ * gets a one-time window to cancel any one rerolled opponent die:
+ *   - Defender: cancels any rerolled ATTACK die.
+ *   - Attacker: cancels any rerolled DEFENSE die.
+ *
+ * rerollDie now tracks all rerolled dice in combat._rerolledDice.
+ * _offerToughLuckFinal posts the picker at end-of-rerolls and returns true
+ * (pause) when a window is posted.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { rerollDie } from '../../../src/engine/combat-reroll.js';
-import { _offerToughLuck } from '../../../src/handlers/combat.js';
+import { _offerToughLuckFinal } from '../../../src/handlers/combat.js';
 
 const thread = { send: async () => ({}) };
 const deps = {
@@ -17,42 +23,89 @@ const deps = {
   recalcDefenseTotals: () => ({ block: 0, evade: 0, dodge: false }),
 };
 
-describe('rerollDie records the last rerolled die for the Tough Luck offer', () => {
-  it('sets combat._lastRerolledDie on success (with symbol counts for Double or Nothing)', () => {
-    const combat = { attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }], _rerolledDieIds: new Set() };
+describe('rerollDie accumulates all rerolled dice for the end-of-rerolls TL picker', () => {
+  it('pushes unique (pool, index) entries into combat._rerolledDice', () => {
+    const combat = { attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }, { color: 'blue', acc: 0, dmg: 1, surge: 0 }], _rerolledDieIds: new Set() };
     rerollDie(combat, deps, { pool: 'attack', index: 0 });
-    // pool/index drive the Tough Luck offer; prevSymbols/newSymbols (whole-die
-    // counts) drive the Double or Nothing offer. Old die 1a/2d/0s = 3 symbols;
-    // injected new die 1a/1d/0s = 2 symbols.
-    assert.equal(combat._lastRerolledDie.pool, 'attack');
-    assert.equal(combat._lastRerolledDie.index, 0);
-    assert.equal(combat._lastRerolledDie.prevSymbols, 3);
-    assert.equal(combat._lastRerolledDie.newSymbols, 2);
+    rerollDie(combat, deps, { pool: 'attack', index: 1 });
+    // Rerolling index 0 again (special turn) should not add a duplicate.
+    rerollDie(combat, deps, { pool: 'attack', index: 0, specialTurn: true });
+    assert.equal(combat._rerolledDice.length, 2, 'only two unique dice tracked');
+    assert.deepEqual(combat._rerolledDice[0], { pool: 'attack', index: 0 });
+    assert.deepEqual(combat._rerolledDice[1], { pool: 'attack', index: 1 });
   });
 });
 
-describe('_offerToughLuck prompts the player chosen by the die pool', () => {
-  function combat() {
+describe('_offerToughLuckFinal: end-of-rerolls picker logic', () => {
+  const sent = [];
+  const capThread = { send: async (p) => { sent.push(typeof p === 'string' ? p : (p?.content ?? '')); return {}; } };
+
+  function freshCombat() {
     return {
-      gameId: 'g', attackerPlayerNum: 1, defenderPlayerNum: 2,
-      attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 0 }],
+      gameId: 'g-tl-final',
+      attackerPlayerNum: 1,
+      defenderPlayerNum: 2,
+      combatThreadId: undefined,
+      attackDiceResults: [{ color: 'red', acc: 1, dmg: 2, surge: 1 }],
       defenseDiceResults: [{ color: 'white', block: 1, evade: 0, dodge: false }],
+      _rerolledDice: [{ pool: 'attack', index: 0 }],
     };
   }
-  it('attack-die reroll → offers to the DEFENDER (only if they hold Tough Luck)', async () => {
-    const c = combat();
-    const game = { player2CcHand: ['Tough Luck'], player2Id: 'D' };
-    assert.equal(await _offerToughLuck(game, c, {}, thread, 'attack', 0), true);
-    assert.equal(c._pendingToughLuck.playerNum, 2, 'defender prompted for an attack die');
-    // defender without Tough Luck → no offer
-    const c2 = combat();
-    assert.equal(await _offerToughLuck({ player2CcHand: [] }, c2, {}, thread, 'attack', 0), false);
-    assert.equal(c2._pendingToughLuck, undefined);
+
+  it('offers to the DEFENDER (attack die rerolled) when they hold Tough Luck', async () => {
+    sent.length = 0;
+    const game = { gameId: 'g-tl-final', player1Id: 'A', player2Id: 'D', player2CcHand: ['Tough Luck'] };
+    const combat = freshCombat();
+    const result = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(result, true, 'returns true when a window is posted');
+    assert.equal(combat._pendingToughLuckFinal?.phase, 'defender');
+    assert.equal(combat._pendingToughLuckFinal?.playerNum, 2);
+    assert.ok(sent.some((m) => m.includes('Tough Luck')), 'picker message sent');
   });
-  it('defense-die reroll → offers to the ATTACKER', async () => {
-    const c = combat();
-    const game = { player1CcHand: ['Tough Luck'], player1Id: 'A' };
-    assert.equal(await _offerToughLuck(game, c, {}, thread, 'defense', 0), true);
-    assert.equal(c._pendingToughLuck.playerNum, 1, 'attacker prompted for a defense die');
+
+  it('does NOT offer when defender has no Tough Luck', async () => {
+    sent.length = 0;
+    const game = { gameId: 'g-tl-final', player1Id: 'A', player2Id: 'D', player2CcHand: [] };
+    const combat = freshCombat();
+    const result = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(result, false, 'returns false — no window posted');
+    assert.equal(combat._pendingToughLuckFinal, undefined);
+  });
+
+  it('offers to the ATTACKER (defense die rerolled) when they hold Tough Luck', async () => {
+    sent.length = 0;
+    const game = { gameId: 'g-tl-final', player1Id: 'A', player2Id: 'D', player1CcHand: ['Tough Luck'] };
+    const combat = { ...freshCombat(), _rerolledDice: [{ pool: 'defense', index: 0 }] };
+    const result = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(result, true);
+    assert.equal(combat._pendingToughLuckFinal?.phase, 'attacker');
+    assert.equal(combat._pendingToughLuckFinal?.playerNum, 1);
+  });
+
+  it('defender window fires first, attacker window fires second on subsequent call', async () => {
+    sent.length = 0;
+    const game = { gameId: 'g-tl-final', player1Id: 'A', player2Id: 'D', player1CcHand: ['Tough Luck'], player2CcHand: ['Tough Luck'] };
+    const combat = { ...freshCombat(), _rerolledDice: [{ pool: 'attack', index: 0 }, { pool: 'defense', index: 0 }] };
+    // First call: defender window
+    let res = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(res, true);
+    assert.equal(combat._pendingToughLuckFinal?.phase, 'defender');
+    delete combat._pendingToughLuckFinal;
+    // Second call: attacker window
+    res = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(res, true);
+    assert.equal(combat._pendingToughLuckFinal?.phase, 'attacker');
+    delete combat._pendingToughLuckFinal;
+    // Third call: nothing left
+    res = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(res, false);
+  });
+
+  it('does not re-offer once a window was already shown (_tlFinalDefenderOffered flag)', async () => {
+    sent.length = 0;
+    const game = { gameId: 'g-tl-final', player1Id: 'A', player2Id: 'D', player2CcHand: ['Tough Luck'] };
+    const combat = { ...freshCombat(), _tlFinalDefenderOffered: true };
+    const result = await _offerToughLuckFinal(capThread, game, combat, {});
+    assert.equal(result, false, 'already offered — should not repeat');
   });
 });

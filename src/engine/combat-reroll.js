@@ -66,8 +66,7 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
   if (!specialTurn) markDieRerolled(combat, id);
   const totals = recalc(dice);
   combat[totalsField] = totals;
-  // Record the most recent reroll so the gate can offer Tough Luck on it
-  // (attack die → defender may react; defense die → attacker). alexanbv 2026-06-17.
+  // Record the most recent reroll for the Double or Nothing per-reroll offer.
   // prevSymbols/newSymbols: the WHOLE-die symbol counts before/after, so the gate
   // can offer the Double or Nothing reaction ("if the rerolled result has the same
   // number of symbols, you may double or cancel"). alexanbv 2026-06-20.
@@ -75,6 +74,10 @@ export function rerollDie(combat, deps, { pool, index, newColor, specialTurn = f
     ? (d) => (d ? (d.dmg || 0) + (d.surge || 0) + (d.acc || 0) : 0)
     : (d) => (d ? (d.block || 0) + (d.evade || 0) + (d.dodge ? (typeof d.dodge === 'number' ? d.dodge : 1) : 0) : 0);
   combat._lastRerolledDie = { pool, index, prevSymbols: _symOf(oldDie), newSymbols: _symOf(newDie) };
+  // Track all rerolled dice (unique pool+index) for the end-of-rerolls Tough Luck
+  // picker. alexanbv 2026-06-30: TL window moved from per-reroll to end-of-rerolls.
+  const _td = combat._rerolledDice = combat._rerolledDice || [];
+  if (!_td.some((r) => r.pool === pool && r.index === index)) _td.push({ pool, index });
   // A color-swap reroll is Lando's Gambit (or Saska): record a DURABLE marker of
   // the swapped die so Cheat to Win ("change THAT die's result to another result
   // on that die") can identify and constrain to the Gambit die's color even after
