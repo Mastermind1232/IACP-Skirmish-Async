@@ -39,3 +39,8 @@ tests/headless/parity-check.js
 tests/headless/q-gap-diagnostic.js
 tests/headless/surge-diagnosis.js
 tests/headless/warmstart-ability-probe.js
+
+# Local WIP upscale folders
+vassal_extracted/figure-tokens-upscale-wip/
+vassal_extracted/maps-upscale-wip/
+vassal_extracted/.DS_Store
