@@ -1726,6 +1726,8 @@ export async function handleBlackMarketSmugglerPick(interaction, ctx) {
 // Black Market followup — run the CC draw/discard/return + VP swap
 // AFTER the strain choice resolves.
 import { registerStrainFollowup as _bmRegisterFollowup } from './strain-handler.js';
+import { playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 _bmRegisterFollowup('black_market_resolve', async (game, ctx, payload) => {
   const { client, logGameAction, saveGames, checkWinConditions } = ctx;
   const { playerNum, choice, topCard, cardCost, smugglerName } = payload;
@@ -1890,63 +1892,57 @@ export async function handleExtraProtection(interaction, ctx) {
   const _epCombat = _epPending.combatRef || _epGame.pendingCombat;
 
   if (isPlay) {
-    // Remove Extra Protection from hand, add to discard
-    const _epHandKey = _epPending.playerNum === 1 ? 'player1CcHand' : 'player2CcHand';
-    const _epDiscardKey = _epPending.playerNum === 1 ? 'player1CcDiscard' : 'player2CcDiscard';
-    const _epHand = _epGame[_epHandKey] || [];
-    const _epIdx = _epHand.indexOf('Extra Protection');
-    if (_epIdx >= 0) _epHand.splice(_epIdx, 1);
-    _epGame[_epDiscardKey] = _epGame[_epDiscardKey] || [];
-    _epGame[_epDiscardKey].push('Extra Protection');
-
-    // Card text: "move up to 2 spaces and perform an attack." That's
-    // a Move-X effect — pendingMoveX with bypassCosts: true, no
-    // bank, freeAttackPrompt continuation for the attack.
-
-    // Resolve the playing figure's key for the picker. Prefer the figureKey
-    // stashed at probe time (which anchors on the figure that plays Extra
-    // Protection — Onar Koma OR Mara via Fast Learner / a substitute —
-    // alexanbv 2026-06-21), falling back to dcMessageMeta lookup.
-    let _epOnarFigureKey = (_epPending.onarFigKey && _epGame.figurePositions?.[_epPending.playerNum]?.[_epPending.onarFigKey])
-      ? _epPending.onarFigKey
-      : null;
-    const _epDcMsgMeta = ctx.dcMessageMeta;
-    if (!_epOnarFigureKey && _epDcMsgMeta && _epDcMsgMeta.get?.(_epPending.onarMsgId)) {
-      const _epMeta = _epDcMsgMeta.get(_epPending.onarMsgId);
-      const _epFigKeys = Object.keys(_epGame.figurePositions?.[_epMeta.playerNum] || {})
-        .filter(k => k.startsWith((_epMeta.dcName || '') + '-'));
-      _epOnarFigureKey = _epFigKeys[0] || null;
-    }
-    _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
-    if (_epOnarFigureKey) _epGame.freeAttackBonusPending[_epOnarFigureKey] = true;
-
-    if (!_epOnarFigureKey) {
-      // No figure resolved — Extra Protection cannot fire. Card stays
-      // in hand (already removed above; the player can re-play once
-      // figure-lookup state is consistent).
-      await logGameAction(_epGame, client, `**Extra Protection** — could not locate **${_epPending.onarDcName}**'s figure; resolve manually.`, { phase: 'ROUND', icon: 'card' });
-    } else {
-      const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
-      stampPendingMoveX(_epGame, {
-        msgId: _epPending.onarMsgId,
-        figureKey: _epOnarFigureKey,
-        playerNum: _epPending.playerNum,
-        spaces: 2,
-        source: 'Extra Protection',
-        threadId: null,
-        nextAction: {
-          type: 'freeAttackPrompt',
-          payload: {
-            msgId: _epPending.onarMsgId,
-            playerNum: _epPending.playerNum,
-            figureKey: _epOnarFigureKey,
-            sourceLabel: 'Extra Protection',
+    // Unified playCC + poc: opens Negate/Comms counter window as a Promise,
+    // disposes card on pass. skipTimingCheck: the when_suffers_damage timing may
+    // not pass isCcPlayableNow by click time — gate already validated legality.
+    const _epPoc = makeCcPromptOpponentCancel(_epGame, _epGameId, ctx, client, { abilityId: 'Extra Protection' });
+    const _epPlayRes = await playCC(_epGame, _epPending.playerNum, null, 'Extra Protection', {
+      ctx: { ...ctx, promptOpponentCancel: _epPoc },
+      skipExecute: true,
+      skipTimingCheck: true,
+    });
+    if (_epPlayRes.ok && !_epPlayRes.cancelled) {
+      // Resolve the playing figure's key for the picker. Prefer the figureKey
+      // stashed at probe time (Onar Koma OR Mara via Fast Learner / a substitute —
+      // alexanbv 2026-06-21), falling back to dcMessageMeta lookup.
+      let _epOnarFigureKey = (_epPending.onarFigKey && _epGame.figurePositions?.[_epPending.playerNum]?.[_epPending.onarFigKey])
+        ? _epPending.onarFigKey
+        : null;
+      const _epDcMsgMeta = ctx.dcMessageMeta;
+      if (!_epOnarFigureKey && _epDcMsgMeta && _epDcMsgMeta.get?.(_epPending.onarMsgId)) {
+        const _epMeta = _epDcMsgMeta.get(_epPending.onarMsgId);
+        const _epFigKeys = Object.keys(_epGame.figurePositions?.[_epMeta.playerNum] || {})
+          .filter(k => k.startsWith((_epMeta.dcName || '') + '-'));
+        _epOnarFigureKey = _epFigKeys[0] || null;
+      }
+      _epGame.freeAttackBonusPending = _epGame.freeAttackBonusPending || {};
+      if (_epOnarFigureKey) _epGame.freeAttackBonusPending[_epOnarFigureKey] = true;
+      if (!_epOnarFigureKey) {
+        await logGameAction(_epGame, client, `**Extra Protection** — could not locate **${_epPending.onarDcName}**'s figure; resolve manually.`, { phase: 'ROUND', icon: 'card' });
+      } else {
+        const { stampPendingMoveX, postMoveXPicker } = await import('./move-x-handler.js');
+        stampPendingMoveX(_epGame, {
+          msgId: _epPending.onarMsgId,
+          figureKey: _epOnarFigureKey,
+          playerNum: _epPending.playerNum,
+          spaces: 2,
+          source: 'Extra Protection',
+          threadId: null,
+          nextAction: {
+            type: 'freeAttackPrompt',
+            payload: {
+              msgId: _epPending.onarMsgId,
+              playerNum: _epPending.playerNum,
+              figureKey: _epOnarFigureKey,
+              sourceLabel: 'Extra Protection',
+            },
           },
-        },
-      });
-      await postMoveXPicker(_epGame, { client, logGameAction, saveGames }, _epPending.onarMsgId);
-      await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Move up to 2 spaces, then take a free attack.`, { phase: 'ROUND', icon: 'card' });
+        });
+        await postMoveXPicker(_epGame, { client, logGameAction, saveGames }, _epPending.onarMsgId);
+        await logGameAction(_epGame, client, `**Extra Protection** — **${_epPending.onarDcName}** plays Extra Protection! Move up to 2 spaces, then take a free attack.`, { phase: 'ROUND', icon: 'card' });
+      }
     }
+    // If cancelled: effect skipped, fall through to applyDamageAndFinishCombat below.
   } else {
     await logGameAction(_epGame, client, `**Extra Protection** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }

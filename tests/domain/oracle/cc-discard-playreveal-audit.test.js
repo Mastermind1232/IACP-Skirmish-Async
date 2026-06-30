@@ -88,8 +88,9 @@ describe('PART B — the 4 retrofitted play paths emit a public play-reveal', ()
     assert.match(src, /played command card \*\*\$\{cardName\}\*\*/, 'reveal line present in centralized factory');
   });
 
-  it('Celebration (cc-hand.js) reveals publicly (not just hand-channel)', () => {
+  it('Celebration (cc-hand.js) reveals via the centralized poc factory', () => {
     const src = read('src/handlers/cc-hand.js');
-    assert.match(src, /played command card \*\*Celebration\*\*/, 'Celebration public reveal present');
+    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
+    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
   });
 });

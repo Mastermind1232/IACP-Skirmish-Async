@@ -28,11 +28,12 @@ import {
 } from '../game/interrupts.js';
 import { completeDeferredDefeat as _completeDeferredDefeat } from '../game/deferred-defeat.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { healHp } from '../game/damage-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
+import { playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 
 // ── Dying Lunge ──────────────────────────────────────────────────────────
 
@@ -95,44 +96,40 @@ export async function handleFireDyingLunge(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  const handKey = ccHandKey(ownerPN);
-  const discardKey = ccDiscardKey(ownerPN);
-  const hand = game[handKey] || [];
-  const dlIdx = hand.indexOf('Dying Lunge');
-  if (dlIdx < 0) {
-    await completeDyingLungeDefeat(game, ctx);
-    if (typeof saveGames === 'function') await saveGames(gameId);
-    return;
-  }
-  hand.splice(dlIdx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Dying Lunge');
+  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
+  // window as a Promise, disposes card on pass. skipTimingCheck: the before_defeated
+  // timing may not pass isCcPlayableNow by click time — gate already validated.
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Dying Lunge' });
+  const dlRes = await playCC(game, ownerPN, null, 'Dying Lunge', {
+    ctx: { ...ctx, promptOpponentCancel: poc },
+    skipExecute: true,
+    skipTimingCheck: true,
+  });
 
-  pending.active = true;
-  setPendingDyingLunge(game, pending);
-
-  // Run resolver targeted at the dying figure's msgId — it's the same
-  // figure that will perform Move + free Melee attack. abilities.js:2107
-  // honors the explicit context.msgId override.
-  if (typeof resolveAbility === 'function') {
-    const result = resolveAbility('Dying Lunge', {
-      game,
-      playerNum: ownerPN,
-      cardName: 'Dying Lunge',
-      msgId: pending.msgId,
-      dcMessageMeta,
-      dcHealthState,
-      dcExhaustedState,
-      combat: game.pendingCombat,
-    });
-    // Drain queued side-effects in canonical order: strain cost → damage →
-    // strain → conditions (alexanbv 2026-06-23). Idempotent.
-    const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
-    await applyDeferredAbilityEffects(game, ctx, result);
-    if (result?.logMessage && typeof logGameAction === 'function' && client) {
-      await logGameAction(game, client, `**Dying Lunge** — ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  if (dlRes.ok && !dlRes.cancelled) {
+    // Passed: run move+attack, then deferred defeat fires after the attack.
+    pending.active = true;
+    setPendingDyingLunge(game, pending);
+    if (typeof resolveAbility === 'function') {
+      const result = resolveAbility('Dying Lunge', {
+        game,
+        playerNum: ownerPN,
+        cardName: 'Dying Lunge',
+        msgId: pending.msgId,
+        dcMessageMeta,
+        dcHealthState,
+        dcExhaustedState,
+        combat: game.pendingCombat,
+      });
+      const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+      await applyDeferredAbilityEffects(game, ctx, result);
+      if (result?.logMessage && typeof logGameAction === 'function' && client) {
+        await logGameAction(game, client, `**Dying Lunge** — ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
     }
+  } else {
+    // Card not in hand, or cancelled by Negate/Comms: figure defeats normally.
+    await completeDyingLungeDefeat(game, ctx);
   }
 
   if (typeof saveGames === 'function') await saveGames(gameId);
@@ -185,31 +182,18 @@ export async function handlePlayMiracleWorker(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  const handKey = ccHandKey(ownerPN);
-  const discardKey = ccDiscardKey(ownerPN);
-  const hand = game[handKey] || [];
-  const mwIdx = hand.indexOf('Miracle Worker');
-  if (mwIdx < 0) {
-    clearPendingMiracleWorker(game);
-    await _completeDeferredDefeat(game, ctx, {
-      figureKey: pending.targetFigureKey,
-      msgId: pending.targetMsgId,
-      figIndex: pending.targetFigIndex,
-      controllerPlayerNum: pending.controllerPlayerNum,
-      attackerPlayerNum: pending.attackerPlayerNum,
-      source: `${pending.source || 'Damage'} (Miracle Worker — card vanished)`,
-    });
-    if (typeof saveGames === 'function') await saveGames(gameId);
-    return;
-  }
-  hand.splice(mwIdx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Miracle Worker');
+  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
+  // window as a Promise, disposes card on pass. skipTimingCheck: before_defeated
+  // timing may not pass isCcPlayableNow by click time — gate already validated.
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Miracle Worker' });
+  const mwRes = await playCC(game, ownerPN, null, 'Miracle Worker', {
+    ctx: { ...ctx, promptOpponentCancel: poc },
+    skipExecute: true,
+    skipTimingCheck: true,
+  });
 
-  // Heal the target by 3 Damage. completeDeferredDefeat sees HP > 0 and
-  // exits with wasDefeated:false.
-  if (dcHealthState) {
+  // Heal only if the card successfully passed the counter window.
+  if (mwRes.ok && !mwRes.cancelled && dcHealthState) {
     const { newHp } = healHp(dcHealthState, game, pending.targetMsgId, pending.targetFigIndex, pending.healAmount ?? 3, pending.controllerPlayerNum);
     if (typeof logGameAction === 'function' && client) {
       const targetDcName = dcNameFromFigureKey(pending.targetFigureKey);
@@ -217,14 +201,15 @@ export async function handlePlayMiracleWorker(interaction, ctx) {
     }
   }
   clearPendingMiracleWorker(game);
-  // Call completeDeferredDefeat — it sees HP > 0 and returns no-defeat.
+  // Always complete deferred defeat — if healing brought HP > 0, completeDeferredDefeat
+  // sees that and returns no-defeat; if cancelled/failed, figure defeats normally.
   await _completeDeferredDefeat(game, ctx, {
     figureKey: pending.targetFigureKey,
     msgId: pending.targetMsgId,
     figIndex: pending.targetFigIndex,
     controllerPlayerNum: pending.controllerPlayerNum,
     attackerPlayerNum: pending.attackerPlayerNum,
-    source: `${pending.source || 'Damage'} (Miracle Worker resumed)`,
+    source: `${pending.source || 'Damage'} (Miracle Worker${mwRes.ok && !mwRes.cancelled ? ' resumed' : ' cancelled'})`,
   });
   if (typeof saveGames === 'function') await saveGames(gameId);
 }
@@ -276,55 +261,41 @@ export async function handlePlayPreservationProtocol(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  const handKey = ccHandKey(ownerPN);
-  const discardKey = ccDiscardKey(ownerPN);
-  const hand = game[handKey] || [];
-  const ppIdx = hand.indexOf('Preservation Protocol');
-  if (ppIdx < 0) {
-    clearPendingPreservationProtocol(game);
-    await _completeDeferredDefeat(game, ctx, {
-      figureKey: pending.figureKey,
-      msgId: pending.msgId,
-      figIndex: pending.figIndex,
-      controllerPlayerNum: pending.controllerPlayerNum,
-      attackerPlayerNum: pending.attackerPlayerNum,
-      source: `${pending.source || 'Damage'} (Preservation Protocol — card vanished)`,
-    });
-    if (typeof saveGames === 'function') await saveGames(gameId);
-    return;
-  }
-  hand.splice(ppIdx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Preservation Protocol');
+  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
+  // window as a Promise, disposes card on pass. skipTimingCheck: before_defeated
+  // timing may not pass isCcPlayableNow by click time — gate already validated.
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Preservation Protocol' });
+  const ppRes = await playCC(game, ownerPN, null, 'Preservation Protocol', {
+    ctx: { ...ctx, promptOpponentCancel: poc },
+    skipExecute: true,
+    skipTimingCheck: true,
+  });
 
-  // Heal 4-LOM by 1 Damage and stamp the permanent ability-suppression
-  // marker. The Programming Override + Shared Intuition resolvers must
-  // consult game.preservationProtocolUsed[playerNum][figureKey] to
-  // suppress those abilities for the rest of the game.
-  if (dcHealthState) {
-    const { newHp } = healHp(dcHealthState, game, pending.msgId, pending.figIndex, pending.healAmount ?? 1, pending.controllerPlayerNum);
-    if (typeof logGameAction === 'function' && client) {
-      await logGameAction(game, client, `🛡️ **Preservation Protocol** — **4-LOM** recovers ${pending.healAmount ?? 1} Damage (HP → ${newHp}). Loses **Programming Override** and **Shared Intuition** for the rest of the game.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  if (ppRes.ok && !ppRes.cancelled) {
+    // Passed: heal 4-LOM and stamp permanent ability-suppression.
+    if (dcHealthState) {
+      const { newHp } = healHp(dcHealthState, game, pending.msgId, pending.figIndex, pending.healAmount ?? 1, pending.controllerPlayerNum);
+      if (typeof logGameAction === 'function' && client) {
+        await logGameAction(game, client, `🛡️ **Preservation Protocol** — **4-LOM** recovers ${pending.healAmount ?? 1} Damage (HP → ${newHp}). Loses **Programming Override** and **Shared Intuition** for the rest of the game.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
+    }
+    game.preservationProtocolUsed = game.preservationProtocolUsed || {};
+    game.preservationProtocolUsed[ownerPN] = game.preservationProtocolUsed[ownerPN] || {};
+    game.preservationProtocolUsed[ownerPN][pending.figureKey] = true;
+    if (game.roundProgrammingOverrideTrait?.[ownerPN] != null) {
+      game.roundProgrammingOverrideTrait[ownerPN] = null;
     }
   }
-  game.preservationProtocolUsed = game.preservationProtocolUsed || {};
-  game.preservationProtocolUsed[ownerPN] = game.preservationProtocolUsed[ownerPN] || {};
-  game.preservationProtocolUsed[ownerPN][pending.figureKey] = true;
-  // Programming Override is lost too — clear any active trait grant for
-  // this player's 4-LOM. (The flag is stored at game.roundProgrammingOverrideTrait[playerNum].)
-  if (game.roundProgrammingOverrideTrait?.[ownerPN] != null) {
-    game.roundProgrammingOverrideTrait[ownerPN] = null;
-  }
-
   clearPendingPreservationProtocol(game);
+  // Always complete deferred defeat — if healing brought HP > 0, completeDeferredDefeat
+  // returns no-defeat; if cancelled/failed, 4-LOM defeats normally.
   await _completeDeferredDefeat(game, ctx, {
     figureKey: pending.figureKey,
     msgId: pending.msgId,
     figIndex: pending.figIndex,
     controllerPlayerNum: pending.controllerPlayerNum,
     attackerPlayerNum: pending.attackerPlayerNum,
-    source: `${pending.source || 'Damage'} (Preservation Protocol resumed)`,
+    source: `${pending.source || 'Damage'} (Preservation Protocol${ppRes.ok && !ppRes.cancelled ? ' resumed' : ' cancelled'})`,
   });
   if (typeof saveGames === 'function') await saveGames(gameId);
 }

@@ -322,8 +322,15 @@ export async function _offerToughLuck(game, combat, ctx, thread, pool, idx) {
     new ButtonBuilder().setCustomId(`tlgate_remove_${combat.gameId}_${pool}_${idx}`).setLabel(`Remove the rerolled ${die?.color || ''} die`.trim()).setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(`tlgate_skip_${combat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
   );
-  await thread?.send(sanitizeMentions({
-    content: `**Tough Luck** — <@${ownerId}> may remove the rerolled ${pool} die's result.`,
+  // Send privately to the player's hand channel — opponent must not see the button
+  // (it would reveal whether they hold Tough Luck). Falls back to thread if the
+  // hand channel is unavailable (e.g. test games with no hand channels).
+  const _tlHandId = getHandChannelId(game, relevantPN);
+  const _tlHandCh = _tlHandId && ctx.client
+    ? await fetchGameChannel(ctx.client, _tlHandId).catch(() => null)
+    : null;
+  await (_tlHandCh ?? thread)?.send(sanitizeMentions({
+    content: `**Tough Luck** — <@${ownerId}> you may remove the rerolled ${die?.color || ''} ${pool} die's result.`,
     components: [row], allowedMentions: { users: [ownerId] },
   })).catch(discordCatch);
   return true;

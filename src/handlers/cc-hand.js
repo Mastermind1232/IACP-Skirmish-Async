@@ -46,7 +46,8 @@ import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAs
 // back from this file (it is shared with the standalone SC handlers below) — an
 // intentional ES-module cycle that is safe because all bindings are only used at
 // call time, never at module-eval time.
-import { openCcCounterWindow, registerCcCustomResolve, NEGATION, COMM_DISRUPTION } from './cc-pipeline.js';
+import { openCcCounterWindow, registerCcCustomResolve, NEGATION, COMM_DISRUPTION, makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCC } from '../game/cc-timing.js';
 
 /**
  * Resolve the on-board figureKey of the player's Mara Jade (the Adaptive Skills
@@ -72,6 +73,7 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
+import { awardObjectiveVp } from '../game/index.js';
 
 /**
  * Unified "a CC was played" trigger subroutine (alexanbv 2026-06-14): fires
@@ -1093,7 +1095,7 @@ export async function handleIllegalCcIgnore(interaction, ctx) {
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Play Celebration" to gain 4 VP. */
 export async function handleCelebrationPlay(interaction, ctx) {
-  const { getGame, buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, client, saveGames } = ctx;
+  const { getGame, logGameAction, client, saveGames } = ctx;
   const gameId = parseCustomId(interaction.customId, 'celebration_play_');
   const game = getGame(gameId);
   if (!game || !game.pendingCelebration) {
@@ -1102,31 +1104,29 @@ export async function handleCelebrationPlay(interaction, ctx) {
   }
   const { attackerPlayerNum } = game.pendingCelebration;
   if (!await requirePlayer(interaction, game, interaction.user.id, attackerPlayerNum, canActAsPlayer, 'Only the player who defeated the figure can play Celebration.')) return;
-  const handKey = ccHandKey(attackerPlayerNum);
-  const discardKey = ccDiscardKey(attackerPlayerNum);
-  const hand = game[handKey] || [];
-  const idx = hand.indexOf('Celebration');
-  if (idx < 0) {
-    await interaction.followUp({ content: "You don't have Celebration in your hand.", ephemeral: true }).catch(discordCatch);
-    return;
-  }
-  hand.splice(idx, 1);
-  game[handKey] = hand;
-  game[discardKey] = (game[discardKey] || []).concat('Celebration');
   clearPendingCelebration(game);
+  await interaction.update({ components: [] }).catch(discordCatch);
+
+  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
+  // window as a Promise, disposes card on pass. skipTimingCheck: afteropponentdefeated
+  // timing may not pass isCcPlayableNow by click time — gate already validated.
+  const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, client, { abilityId: 'Celebration' });
+  const res = await playCC(game, attackerPlayerNum, null, 'Celebration', {
+    ctx: { ...ctx, promptOpponentCancel: poc },
+    skipExecute: true,
+    skipTimingCheck: true,
+  });
+
   await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
-  await interaction.message.edit({ content: `**Celebration** — played.`, components: [] }).catch(discordCatch);
-  // Public play-reveal: the edit above is hand-channel-only, so announce the play
-  // to both players (matches the hand-play reveal style) — Celebration is then
-  // announced even if it never reaches a counter-window.
-  const _celPid = getPlayerId(game, attackerPlayerNum);
-  if (typeof logGameAction === 'function' && client) {
-    await logGameAction(game, client, `<@${_celPid}> played command card **Celebration**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _celPid ? [_celPid] : [] } });
+
+  if (res.ok && !res.cancelled) {
+    awardObjectiveVp(game, attackerPlayerNum, 4);
+    const _celPid = getPlayerId(game, attackerPlayerNum);
+    if (typeof logGameAction === 'function' && client) {
+      await logGameAction(game, client, `<@${_celPid}> **Celebration** — gained **4 VP**!`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: _celPid ? [_celPid] : [] } });
+    }
+    if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   }
-  // On-play triggers, then the unified counter-window: Celebration is counterable;
-  // the +4 VP lands via the 'celebration_vp' resolver only if not cancelled.
-  await runCcPlayTriggers(game, attackerPlayerNum, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-  await openCcCounterWindow(game, game.gameId, { card: 'Celebration', cost: 0, playedBy: attackerPlayerNum, abilityId: 'Celebration', customResolve: 'celebration_vp' }, ctx, client);
   saveGames(game.gameId);
 }
 

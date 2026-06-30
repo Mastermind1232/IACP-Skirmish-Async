@@ -33,10 +33,11 @@
 import { setPendingFinalStand, clearPendingFinalStand } from '../game/interrupts.js';
 import { completeDeferredDefeat as _completeDeferredDefeat } from '../game/deferred-defeat.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
-import { ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
+import { playCC } from '../game/cc-timing.js';
+import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
 
 /**
  * Resume a Final Stand deferred defeat. Reads `pendingFinalStand`,
@@ -81,7 +82,6 @@ export async function handleSkipFinalStand(interaction, ctx) {
 export async function handleFireFinalStand(interaction, ctx) {
   const {
     getGame, canActAsPlayer, saveGames, client, logGameAction,
-    ButtonBuilder, ButtonStyle, ActionRowBuilder,
     resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState,
   } = ctx;
   const parts = splitCustomId(interaction.customId, 'final_stand_play_');
@@ -97,52 +97,42 @@ export async function handleFireFinalStand(interaction, ctx) {
   if (!ok) return;
   await interaction.update({ components: [] }).catch(() => {});
 
-  // Remove Final Stand from controlling player's hand → discard.
   const ownerPN = pending.controllerPlayerNum;
-  const handKey = ccHandKey(ownerPN);
-  const discardKey = ccDiscardKey(ownerPN);
-  const hand = game[handKey] || [];
-  const fsIdx = hand.indexOf('Final Stand');
-  if (fsIdx < 0) {
-    // Card disappeared between prompt and click — fall back to skip semantics.
-    await completeDeferredDefeat(game, ctx);
-    if (typeof saveGames === 'function') await saveGames(gameId);
-    return;
-  }
-  hand.splice(fsIdx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push('Final Stand');
+  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
+  // window as a Promise, disposes card on pass. skipTimingCheck: the before_defeated
+  // timing may not pass isCcPlayableNow by click time — gate already validated.
+  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Final Stand' });
+  const fsRes = await playCC(game, ownerPN, null, 'Final Stand', {
+    ctx: { ...ctx, promptOpponentCancel: poc },
+    skipExecute: true,
+    skipTimingCheck: true,
+  });
 
-  // Mark pending as active so finishCombatResolution knows to call
-  // completeDeferredDefeat after Baze's free attack resolves.
-  pending.active = true;
-  setPendingFinalStand(game, pending);
-
-  // Run the Final Stand resolver targeted at Baze's msgId. The resolver
-  // already handles powerTokenGain → pendingPowerTokenGrant (deferred
-  // MoveX) → freeAttackPrompt continuation when token type is chosen.
-  // Passing context.msgId overrides the default findActiveActivationMsgId
-  // lookup (abilities.js:2107) so the Move+Attack chain runs on Baze
-  // regardless of whose activation is in progress.
-  if (typeof resolveAbility === 'function') {
-    const result = resolveAbility('Final Stand', {
-      game,
-      playerNum: ownerPN,
-      cardName: 'Final Stand',
-      msgId: pending.playingMsgId,
-      dcMessageMeta,
-      dcHealthState,
-      dcExhaustedState,
-      combat: game.pendingCombat,
-    });
-    // Drain queued side-effects in canonical order: strain cost → damage →
-    // strain → conditions (alexanbv 2026-06-23). Idempotent.
-    const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
-    await applyDeferredAbilityEffects(game, ctx, result);
-    if (result?.logMessage && typeof logGameAction === 'function' && client) {
-      await logGameAction(game, client, `**Final Stand** — **Baze Malbus** intervenes! ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+  if (fsRes.ok && !fsRes.cancelled) {
+    // Passed the counter window: mark pending active (signals finishCombatResolution
+    // to call completeDeferredDefeat once Baze's free attack resolves) and run effect.
+    pending.active = true;
+    setPendingFinalStand(game, pending);
+    if (typeof resolveAbility === 'function') {
+      const result = resolveAbility('Final Stand', {
+        game,
+        playerNum: ownerPN,
+        cardName: 'Final Stand',
+        msgId: pending.playingMsgId,
+        dcMessageMeta,
+        dcHealthState,
+        dcExhaustedState,
+        combat: game.pendingCombat,
+      });
+      const { applyDeferredAbilityEffects } = await import('../game/damage-pipeline.js');
+      await applyDeferredAbilityEffects(game, ctx, result);
+      if (result?.logMessage && typeof logGameAction === 'function' && client) {
+        await logGameAction(game, client, `**Final Stand** — **Baze Malbus** intervenes! ${result.logMessage}`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+      }
     }
+  } else {
+    // Card not in hand, or cancelled by Negate/Comms: target figure defeats normally.
+    await completeDeferredDefeat(game, ctx);
   }
 
   if (typeof saveGames === 'function') await saveGames(gameId);
