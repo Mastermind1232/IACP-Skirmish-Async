@@ -113,6 +113,8 @@ export async function renderMap(mapId, options = {}) {
   const mapPath = resolveImagePath(mapDef.imagePath, 'maps');
   const imagePath = join(rootDir, mapPath);
   const { dx, dy, x0, y0 } = mapDef.grid;
+  const calibW = mapDef.calibrationWidth || null;
+  const calibH = mapDef.calibrationHeight || null;
 
   let img;
   if (existsSync(imagePath)) {
@@ -145,11 +147,15 @@ export async function renderMap(mapId, options = {}) {
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, w, h);
 
-  const s = scale;
-  const sx0 = x0 * s;
-  const sdx = dx * s;
-  const sdy = dy * s;
-  const sy0 = y0 * s;
+  // When a higher-res image is loaded, grid params are calibrated against the original
+  // GIF dimensions — scale them to the actual canvas size independently of image scale.
+  const gridScaleX = calibW ? w / calibW : scale;
+  const gridScaleY = calibH ? h / calibH : scale;
+  const s = gridScaleX;
+  const sx0 = x0 * gridScaleX;
+  const sdx = dx * gridScaleX;
+  const sdy = dy * gridScaleY;
+  const sy0 = y0 * gridScaleY;
 
   const numCols = Math.floor((w - sx0) / sdx);
   const numRows = Math.floor((h - sy0) / sdy);

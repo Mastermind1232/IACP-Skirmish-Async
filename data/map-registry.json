@@ -12,7 +12,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_30th Floor Plaza.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_30th Floor Plaza.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "anchorhead-cantina-bar",
@@ -24,7 +26,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Anchorhead Cantina-Bar.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Anchorhead Cantina-Bar.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "bespin-tibanna-facility",
@@ -36,7 +40,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Bespin Tibanna Facility.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Bespin Tibanna Facility.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "chopper-base-atollon",
@@ -48,7 +54,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Chopper Base Atollon.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Chopper Base Atollon.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "climate-research-camp",
@@ -60,7 +68,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Climate Research Camp.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Climate Research Camp.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "corellian-underground",
@@ -72,7 +82,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Corellian Underground.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Corellian Underground.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "coruscant-back-alleys",
@@ -84,7 +96,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Back Alleys.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Back Alleys.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "coruscant-landfill",
@@ -96,7 +110,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Landfill.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Landfill.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "coruscant-senate-office",
@@ -108,7 +124,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Senate Office.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Coruscant Senate Office.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "devaron-garrison",
@@ -120,7 +138,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Devaron Garrison.gif"
+      "imagePath": "vassal_extracted/images/maps/Devaron Garrison.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "development-facility",
@@ -132,7 +152,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Development Facility.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Development Facility.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "the-dune-sea",
@@ -144,7 +166,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_The Dune Sea.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_The Dune Sea.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "echo-base",
@@ -156,7 +180,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Echo Base.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Echo Base.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "endor-defense-station",
@@ -168,7 +194,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Endor Defense Station.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Endor Defense Station.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "endor-wilderness",
@@ -180,7 +208,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Endor Wilderness.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Endor Wilderness.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "geonosis-foundry",
@@ -192,7 +222,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Geonosis Foundry.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Geonosis Foundry.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "hangar-bay",
@@ -204,7 +236,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Hangar Bay.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Hangar Bay.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "hoth-battle-station",
@@ -216,7 +250,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Hoth Battle Station.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Hoth Battle Station.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "hoth-weather-shelter",
@@ -228,7 +264,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Hoth Weather Shelter.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Hoth Weather Shelter.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "imperial-command-hub",
@@ -240,7 +278,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Imperial Command Hub.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Imperial Command Hub.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "imperial-labor-camp",
@@ -252,7 +292,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Imperial Labor Camp.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Imperial Labor Camp.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "imperial-research-lab",
@@ -264,7 +306,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Imperial Research Lab.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Imperial Research Lab.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "imperial-space-station",
@@ -276,7 +320,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Imperial Space Station.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Imperial Space Station.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "imperial-tower",
@@ -288,7 +334,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Imperial Tower.gif"
+      "imagePath": "vassal_extracted/images/maps/Imperial Tower.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "isb-headquarters",
@@ -300,7 +348,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_ISB Headquarters.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_ISB Headquarters.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "isb-training-grounds",
@@ -312,7 +362,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_ISB Training Grounds.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_ISB Training Grounds.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "jabba-s-palace",
@@ -324,7 +376,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Jabba's Palace.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Jabba's Palace.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "kashyyyk-station",
@@ -336,7 +390,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Kashyyyk Station.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Kashyyyk Station.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "kuat-space-station",
@@ -348,7 +404,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Kuat Space Station.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Kuat Space Station.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "lothal-battlefront",
@@ -360,7 +418,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Lothal Battlefront.gif"
+      "imagePath": "vassal_extracted/images/maps/Lothal Battlefront.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "lothal-safehouse",
@@ -372,7 +432,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Lothal Safehouse.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Lothal Safehouse.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "lothal-spaceport",
@@ -384,7 +446,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Lothal Spaceport.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Lothal Spaceport.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "lothal-wastes",
@@ -396,7 +460,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Lothal Wastes.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Lothal Wastes.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "massassi-ruins",
@@ -408,7 +474,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Massassi Ruins.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Massassi Ruins.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1351
     },
     {
       "id": "moisture-farm",
@@ -420,7 +488,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Moisture Farm.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Moisture Farm.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1351
     },
     {
       "id": "mos-eisley-back-alleys",
@@ -432,7 +502,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Back Alleys.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Back Alleys.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "mos-eisley-cantina",
@@ -444,7 +516,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Cantina.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Cantina.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "mos-eisley-outskirts",
@@ -456,7 +530,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Outskirts.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Mos Eisley Outskirts.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1351
     },
     {
       "id": "nal-hutta-swamps",
@@ -468,7 +544,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Nal Hutta Swamps.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Nal Hutta Swamps.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "nelvaanian-war-zone",
@@ -480,7 +558,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Nelvaanian War Zone.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Nelvaanian War Zone.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "ord-mantell-junkyard",
@@ -492,7 +572,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Ord Mantell Junkyard.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Ord Mantell Junkyard.gif",
+      "calibrationWidth": 1851,
+      "calibrationHeight": 1351
     },
     {
       "id": "the-pit-of-carkoon",
@@ -504,7 +586,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_The Pit of Carkoon.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_The Pit of Carkoon.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "sewers-of-nar-shaddaa",
@@ -516,7 +600,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Sewers of Nar Shaddaa.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Sewers of Nar Shaddaa.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "tarkin-initiative-labs",
@@ -528,7 +614,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Tarkin Initiative Labs.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Tarkin Initiative Labs.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "training-ground",
@@ -540,7 +628,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Training Ground.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Training Ground.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "tython-meditation-field",
@@ -552,7 +642,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Tython Meditation Field.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Tython Meditation Field.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "uscru-entertainment-district",
@@ -564,7 +656,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Uscru Entertainment District.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Uscru Entertainment District.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1451
     },
     {
       "id": "wasskah-hunting-ground",
@@ -576,7 +670,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Wasskah Hunting Ground.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Wasskah Hunting Ground.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "wasteland-outpost",
@@ -588,7 +684,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Wasteland Outpost.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Wasteland Outpost.gif",
+      "calibrationWidth": 1351,
+      "calibrationHeight": 1251
     },
     {
       "id": "b-omarr-subterranean-passageways-3-player",
@@ -600,7 +698,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Subterranean Passages (3-Player).gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Subterranean Passages (3-Player).gif",
+      "calibrationWidth": 2451,
+      "calibrationHeight": 1851
     },
     {
       "id": "scarif-imperial-hotel-3-player",
@@ -612,7 +712,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Imperial Hotel (3-Player).gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Imperial Hotel (3-Player).gif",
+      "calibrationWidth": 2451,
+      "calibrationHeight": 1851
     },
     {
       "id": "hoth-battlefield-4-player",
@@ -624,7 +726,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Hoth Battlefield (4-Player).gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Hoth Battlefield (4-Player).gif",
+      "calibrationWidth": 2451,
+      "calibrationHeight": 1851
     },
     {
       "id": "nal-hutta-borderlands-4-player",
@@ -636,7 +740,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Nal Hutta Borderlands (4-Player).gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Nal Hutta Borderlands (4-Player).gif",
+      "calibrationWidth": 2151,
+      "calibrationHeight": 1851
     },
     {
       "id": "temple-gardens-4-player",
@@ -648,7 +754,9 @@
         "x0": 25,
         "y0": 25
       },
-      "imagePath": "vassal_extracted/images/maps/Map_Temple Gardens.gif"
+      "imagePath": "vassal_extracted/images/maps/Map_Temple Gardens.gif",
+      "calibrationWidth": 2151,
+      "calibrationHeight": 1851
     }
   ]
 }
