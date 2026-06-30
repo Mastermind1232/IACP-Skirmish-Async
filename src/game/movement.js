@@ -615,7 +615,7 @@ export function getMovementProfile(dcName, figureKey, game) {
     isMobile,
     ignoreDifficult: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     ignoreBlocking: isMassive || isMobile,
-    ignoreImpassable: hasThrusters,
+    ignoreImpassable: hasThrusters || isMassive || isMobile,
     ignoreFigureCost: isMassive || isMobile || hasEfficientTravel || hasSurvivalist,
     canEndOnOccupied: isMassive,
     treatBlockingAsDifficult: hasMortarHaul,
