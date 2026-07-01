@@ -357,11 +357,9 @@ export async function getActivationMinimapAttachment(game, msgId) {
     const buffer = await renderMap(map.id, {
       figures,
       tokens,
-      showGrid: true,
+      showGrid: false,
       maxWidth: 800,
       cropToZone: cropCoords,
-      gridStyle: 'black',
-      showGridOnlyOnCoords: null,
     });
     return new AttachmentBuilder(buffer, { name: 'activation-minimap.png' });
   } catch (err) {
