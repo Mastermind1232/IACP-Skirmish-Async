@@ -166,7 +166,7 @@ function getStatsForDc(dcName) {
   })();
 }
 import { applyCondition, resetCondition, filterCondition, isConditionImmune, HARMFUL_CONDITIONS } from './conditions.js';
-import { parseSurgeEffect, recalcAttackTotals, recalcDefenseTotals } from './combat.js';
+import { parseSurgeEffect, recalcAttackTotals, recalcDefenseTotals, rollSingleAttackDie } from './combat.js';
 import { getFiguresAdjacentToTarget, getBoardStateForMovement, getMovementProfile, getReachableSpaces, getEffectiveMapSpaces, getValidPushDestinations } from './movement.js';
 import { applyDamageToNpcSync, isEntryHostileTo, entryDisplayLabel } from './hostile-enumeration.js';
 import { getDcList, getDcMessageIds, getPlayerId, getCcDiscard, getSquad, ccHandKey, ccDiscardKey, ccDeckKey, vpKey, activatedDcIndicesKey, opponentPlayerNum, syncHealthStateToList, pushFigure, dcAttachmentsKey } from './player-helpers.js';
@@ -11314,23 +11314,13 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'Perform 1 additional action; then you become Stunned.', refreshDcEmbed: true, refreshDcEmbedMsgIds: [msgId], conditionCardsToPost: ['Stun'] };
   }
 
-  // ccEffect: pickpocketVpByAccuracy (Pickpocket) — choiceIndex 0–3 = green die Accuracy result
+  // ccEffect: pickpocketVpByAccuracy (Pickpocket) — roll 1 green die, use Accuracy result for VP swing
   if (entry.type === 'ccEffect' && entry.pickpocketVpByAccuracy) {
-    const { game, playerNum, choiceIndex } = context;
+    const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    // A green attack die has NO accuracy-0 face — every face shows 1/2/3
-    // accuracy. Offer ['1','2','3'] mapping accuracy = choiceIndex + 1 (no
-    // impossible "0 (miss)" option).
-    const accuracy = choiceIndex != null && choiceIndex >= 0 && choiceIndex <= 2 ? choiceIndex + 1 : null;
-    if (accuracy === null) {
-      return {
-        applied: false,
-        requiresChoice: true,
-        choiceOptions: ['1', '2', '3'],
-        choiceCount: 3,
-        manualMessage: 'Roll 1 green die; enter the Accuracy result (1–3). Opponent loses that many VP and you gain that many VP.',
-      };
-    }
+    // Roll a green attack die; every face shows Accuracy 1/2/3 (no 0-face).
+    const dieResult = rollSingleAttackDie('green');
+    const accuracy = dieResult.acc ?? 1;
     const oppNum = opponentPlayerNum(playerNum);
     const yourVpKey = vpKey(playerNum);
     const oppVpKey = vpKey(oppNum);
@@ -11338,7 +11328,7 @@ export function resolveAbility(abilityId, context) {
     game[oppVpKey] = game[oppVpKey] || { total: 0, kills: 0, objectives: 0 };
     game[yourVpKey].total = (game[yourVpKey].total ?? 0) + accuracy;
     game[oppVpKey].total = Math.max(0, (game[oppVpKey].total ?? 0) - accuracy);
-    return { applied: true, logMessage: `Green die Accuracy ${accuracy}: you gain ${accuracy} VP, opponent loses ${accuracy} VP.` };
+    return { applied: true, logMessage: `Pickpocket — rolled green die: Accuracy **${accuracy}**. You gain ${accuracy} VP; opponent loses ${accuracy} VP.` };
   }
 
   // ccEffect: attackPoolAddYellowUntilTotal + superchargeStrainAfterAttack (Supercharge)

@@ -329,25 +329,32 @@ describe('HIGH: Boba Fett/Wrist Flamethrower — once-per-round gate [P4]', () =
 // PICKPOCKET — 3 accuracy choices (no "0 miss") [LOW]
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('LOW: Pickpocket — green die has no accuracy-0 face; choices are 1/2/3', () => {
-  let resolveAbility;
+describe('LOW: Pickpocket — auto-rolls green die in thread, no player input needed', () => {
+  let resolveAbility, setDiceStream, clearDiceHooks;
   before(async () => {
     ({ resolveAbility } = await import(new URL('src/game/abilities.js', ROOT).href));
+    ({ setDiceStream, clearDiceHooks } = await import(new URL('src/game/combat.js', ROOT).href));
   });
 
-  it('requiresChoice with exactly 3 options: ["1","2","3"]', () => {
-    const result = resolveAbility('Pickpocket', { game: {}, playerNum: 1 });
-    assert.equal(result.requiresChoice, true);
-    assert.deepEqual(result.choiceOptions, ['1', '2', '3']);
-    assert.equal(result.choiceCount, 3, 'no "0 (miss)" option — green die has no blank');
+  it('resolves immediately (applied:true) without requiresChoice', () => {
+    setDiceStream({ pools: { attack: { green: [0] } } }); // face 0 → acc 1
+    try {
+      const result = resolveAbility('Pickpocket', { game: { player1VP: { total: 0 }, player2VP: { total: 5 } }, playerNum: 1 });
+      assert.equal(result.applied, true, 'no requiresChoice — die is rolled automatically');
+      assert.equal(result.requiresChoice, undefined, 'no player choice needed');
+    } finally { clearDiceHooks(); }
   });
 
-  it('applying accuracy 2 → correct VP swing', () => {
-    const game = { player1VP: { total: 3 }, player2VP: { total: 5 } };
-    const result = resolveAbility('Pickpocket', { game, playerNum: 1, choiceIndex: 1 }); // choiceIndex 1 → accuracy 2
-    assert.equal(result.applied, true);
-    assert.equal(game.player1VP.total, 5, '+2 VP for player 1');
-    assert.equal(game.player2VP.total, 3, '-2 VP for player 2');
+  it('uses accuracy from green die roll for VP swing (face 3 → acc 3)', () => {
+    setDiceStream({ pools: { attack: { green: [3] } } }); // face 3 → acc 3, dmg 2
+    try {
+      const game = { player1VP: { total: 3 }, player2VP: { total: 5 } };
+      const result = resolveAbility('Pickpocket', { game, playerNum: 1 });
+      assert.equal(result.applied, true);
+      assert.equal(game.player1VP.total, 6, '+3 VP for player 1 (acc 3)');
+      assert.equal(game.player2VP.total, 2, '-3 VP for player 2 (acc 3)');
+      assert.ok(result.logMessage?.includes('3'), 'log message shows rolled accuracy');
+    } finally { clearDiceHooks(); }
   });
 });
 
