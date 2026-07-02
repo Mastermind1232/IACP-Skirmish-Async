@@ -553,7 +553,7 @@ Blend In,CC,Blend In,2,always,None,automatic,TRUE,None,None,None,FALSE,You canno
 Blitz,CC,Blitz,1,attack:modifiers,attacker,prompt,TRUE,None,None,None,FALSE,Apply +1 Surge to the attack results,None,None
 Blood Feud,CC,Blood Feud,1,special_action,None,prompt,TRUE,None,None,None,FALSE,Place this card on a hostile Deployment card,None,use timing
 Blood Feud,CC,Blood Feud,2,attack:on_declare,attacker,automatic,TRUE,figures in the marked group,attack targeting a figure in the marked group is declared,None,FALSE,"When an attack targeting a figure in that group is declared, apply +1 Hit to the attack results",damage,effect timing
-Bodyguard,CC,Bodyguard,1,attack:on_declare,defender,prompt,FALSE,an adjacent friendly figure,attack targeting an adjacent friendly figure and you could be the target,None,FALSE,The attack targets you instead,None,None
+Bodyguard,CC,Bodyguard,1,attack:on_declare,defender,prompt,TRUE,an adjacent friendly figure,attack targeting an adjacent friendly figure and you could be the target,None,FALSE,The attack targets you instead,None,None
 Brace for Impact,CC,Brace for Impact,1,attack:on_declare,defender,prompt,TRUE,None,None,None,FALSE,Add 1 black die to your defense pool,None,adds a die to the pool -> on_declare (alexanbv 2026-06-16)
 Brace Yourself,CC,Brace Yourself,1,attack:on_declare,defender,prompt,TRUE,None,it is not the attacker's activation,None,FALSE,Apply +2 Block to the defense results,None,None
 Built on Hope,CC,Built on Hope,1,during_activation,None,prompt,TRUE,None,None,None,FALSE,Look at the top 3 cards of your Command deck; place 1 into your hand and the others on top or bottom in any order,cc_draw,None
