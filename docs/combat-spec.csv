@@ -301,7 +301,7 @@ J4X-7,Companion DC,Supporting Fire,1,attack:modifiers,attacker,automatic,FALSE,a
 Jabba the Hutt,DC,Bully,1,special_action,None,prompt,TRUE,a figure of your choice within 3,None,None,FALSE,A figure of your choice within 3 spaces suffers 3 Damage,damage,None
 Jabba the Hutt,DC,Incentivize,1,special_action,None,prompt,TRUE,a SCUM figure of your choice,None,None,FALSE,An elite figure of your choice becomes Focused,condition,None
 Jabba the Hutt,DC,Scheme,1,special_action,None,prompt,TRUE,None,None,None,FALSE,Draw 1 Command card,cc_draw,None
-Jabba the Hutt,DC,Order Hit,1,special_action,None,prompt,TRUE,an elite figure of your choice,None,None,FALSE,"Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack, then it gains 2 movement points",vp;damage;gain_mp,Double Action Special
+Jabba the Hutt,DC,Order Hit,1,special_action,None,prompt,TRUE,a MERC figure of your choice,None,None,FALSE,"Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack, then it gains 2 movement points",vp;damage;gain_mp,Double Action Special
 Jabba the Hutt,DC,Nefarious Gains,1,always,None,automatic,TRUE,None,a hostile figure is defeated,None,FALSE,"When a hostile figure is defeated, gain 1 VP",vp,triggered when hostile figure defeated
 Jarrod Kelvin,DC,Leaping Slash,1,special_action,None,prompt,TRUE,None,None,None,FALSE,"Move up to 2 spaces, then perform an attack",move;damage,None
 Jarrod Kelvin,DC,Droid Master,1,during_setup,None,automatic,TRUE,J4X-7,None,None,FALSE,"At the start of a mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control",companion_place,None
