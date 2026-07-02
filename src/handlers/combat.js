@@ -4425,6 +4425,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('airborne_commander_gar_saxon')) continue;
+        if (fk === attackerFigureKey) continue; // "OTHER friendly Mobile figures" — Saxon cannot share with himself
         if (countSpaces(_csRawMs, atkPosAC, pos, _csClosedDoorEdges) > 4) continue;
         if (!attackerIsMobile) {
           await thread.send(`**Airborne Commander** — ${fkDcName} is within 4 spaces, but **${meta.dcName}** does not have the **Mobile** keyword. Surge sharing skipped.`).catch(discordCatch);
