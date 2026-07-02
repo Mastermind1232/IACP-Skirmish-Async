@@ -625,7 +625,9 @@ function othersPredicate(affectsOthers, ownerCard, side) {
     const filter = affectedFilter(s, side);
     return filter ? (game, combat) => range(game, combat) && filter(game, combat) : range;
   }
-  if (s.includes('group')) return makeCondition({ type: 'in_group_of_source', card: ownerCard, side });
+  // Only match in_group_of_source for the OWNER'S group, not opponent/hostile groups.
+  if (s.includes('group') && !s.includes('opponent') && !s.includes('hostile') && !s.includes('enemy'))
+    return makeCondition({ type: 'in_group_of_source', card: ownerCard, side });
   return null; // enemy-/unmodeled-targeting others → no usability grant
 }
 
