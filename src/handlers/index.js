@@ -29,7 +29,7 @@ import {
 import { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip, handleDioFollowPick, handleDioStay, handleMassivePushSpace, handleMassivePushFigure, handleCassianSaidIHadTo, handleCassianSaidIHadToSkip } from './movement.js';
 import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
-import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleKtpRegularGate, handleAtkDiePick, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleToughLuckFinalPick, handleDonGate, handleSquadCommandFocus } from './combat.js';
+import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleAtkDiePick, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleToughLuckFinalPick, handleDonGate, handleSquadCommandFocus } from './combat.js';
 import { handleAarFire, handleAarDone, handleAarPlayCc, handleAarCcPick } from './after-attack-resolve.js';
 import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
@@ -168,7 +168,7 @@ import {
 import { handleBotmenuRecover, handleResync } from './recover.js';
 import { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 import { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-import { handleThereIsNoTry, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handleForceExhaustion, handleForceExhaustionDiePick, handleLastStandPick, handleErgPick, handleForceIsWithMe } from './combat-reactions.js';
+import { handleThereIsNoTry, handleHunterProtocol, handleSlowOnTheDrawResume, handleForceExhaustionDiePick, handleLastStandPick, handleErgPick } from './combat-reactions.js';
 import { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick, handleScInterrogateOpen, handleScInterrogateSkip, handleScInterrogateConfirm } from './post-combat.js';
 import { handleStillFaster, handleSquadSwarm, handleOverdrive, handleExhaustBallistics, handleExhaustNavUpgrade, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleLastWielderDarksaber, handleYHSIW, handleDrivenByHatred, handleDbhPostMove, handleRogueSmuggler, handleWildBeastTrample, handleBlackMarket, handleBlackMarketSmugglerPick, handlePunishingStrike, handleExecutor, handleExtraProtection, handleFindsmanMeditation } from './interrupts.js';
 import { handleHuntDissentPick } from './hunt-dissent.js';
@@ -320,8 +320,8 @@ register('dbh_pick_die_', handleDbhPickDie, 'combat');
 register('combat_surge_', handleCombatSurge, 'combat');
 register('merciless_use_', handleMerciless, 'combat');
 register('merciless_skip_', handleMerciless, 'combat');
-register('ktpreg_use_', handleKtpRegularGate, 'combat');
-register('ktpreg_skip_', handleKtpRegularGate, 'combat');
+// ktpreg_use_ / ktpreg_skip_ routes removed — Keep the Peace Regular is now
+// a gate button (COMBAT_RESOLVERS['keep_the_peace_regular']).
 register('flawless_die_', handleFlawlessDie, 'combat');
 register('flawless_token_', handleFlawlessToken, 'combat');
 register('combat_mods_pick_', handleModsPick, 'combat');
@@ -560,17 +560,12 @@ register('there_is_no_try_face_', handleThereIsNoTry, 'combatReactions');
 register('there_is_no_try_skip_', handleThereIsNoTry, 'combatReactions');
 register('hunter_protocol_trigger_', handleHunterProtocol, 'combatReactions');
 register('hunter_protocol_skip_', handleHunterProtocol, 'combatReactions');
-register('strike_me_down_yes_', handleStrikeMeDown, 'combatReactions');
-register('strike_me_down_no_', handleStrikeMeDown, 'combatReactions');
+// strike_me_down_yes_/no_, force_with_me_pick_/skip_, force_exhaustion_yes_/no_,
+// slow_on_draw_yes_/no_ routes removed — these abilities are now gate buttons
+// (COMBAT_RESOLVERS entries in combat.js).
 register('last_stand_pick_', handleLastStandPick, 'combatReactions');
 register('erg_pick_', handleErgPick, 'combatReactions');
-register('slow_on_draw_yes_', handleSlowOnTheDraw, 'combatReactions');
-register('slow_on_draw_no_', handleSlowOnTheDraw, 'combatReactions');
 register('slow_on_draw_resume_', handleSlowOnTheDrawResume, 'combatReactions');
-register('force_with_me_pick_', handleForceIsWithMe, 'combatReactions');
-register('force_with_me_skip_', handleForceIsWithMe, 'combatReactions');
-register('force_exhaustion_yes_', handleForceExhaustion, 'combatReactions');
-register('force_exhaustion_no_', handleForceExhaustion, 'combatReactions');
 register('fe_die_pick_', handleForceExhaustionDiePick, 'combatReactions');
 // alexanbv 2026-05-13: doubt_reroll_use_/skip_ buttons retired.
 // [Doubt] now registers directly into the defender's reroll bucket
@@ -937,7 +932,7 @@ export { handleBotmenuRecover, handleResync, runRecovery } from './recover.js';
 export { handlePhaseGateReady, handlePhaseGateUnready, sendPhaseGateMessages } from './phase-gate.js';
 export { getWaitingPlayers } from '../game/phase-gate.js';
 export { handleFastForward, handleDefenderCcPlay } from './fast-forward.js';
-export { handleThereIsNoTry, handleHunterProtocol, handleStrikeMeDown, handleSlowOnTheDraw, handleSlowOnTheDrawResume, handleForceIsWithMe } from './combat-reactions.js';
+export { handleThereIsNoTry, handleHunterProtocol, handleSlowOnTheDrawResume } from './combat-reactions.js';
 export { handleReactionSkip, handleReactionUse, handleRightBack, handleMasteryPick, handleMilitaryEfficiencyPick, handleInterrogatePick } from './post-combat.js';
 export { handleStillFaster, handleSquadSwarm, handleOverdrive, handleSelfDestructProbe, handleSelfDestructProtocol, handleLastResort, handleScavengedWalker, handleMortarEor, handleOnDiplomatic, handleBelReorder, handleAssassinsBladePickTarget, handleSuppressiveFireMpPick, handleSuppressiveFireOptin, handleForceSlowPick, handleExcavationPick, handleYHSIW, handleDrivenByHatred, handleBlackMarket, handlePunishingStrike, handleExecutor, handleExtraProtection } from './interrupts.js';
 export { handleSpacesMoveInterruptPlay, handleSpacesMoveInterruptSkip, handleSpacesMoveInterruptContinue, startMoveInterruptLoop } from './move-interrupts-handler.js';

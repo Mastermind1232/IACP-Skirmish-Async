@@ -16,7 +16,7 @@
 // Imported after the catalog so these executable entries supersede the
 // catalog's timing-only placeholders for the same ids.
 
-import { getDcEffects as _getDcEffects } from '../data-loader.js';
+import { getDcEffects as _getDcEffects, getMapData } from '../data-loader.js';
 import { dcNameFromFigureKey } from '../game/index.js';
 import { registerCombatAbility } from './combat-timing-registry.js';
 import { sharpshooterInRange } from '../game/sharpshooter-helpers.js';
@@ -24,6 +24,10 @@ import { hasFullOfRageAbility, fullOfRageDamageTriggered } from '../game/full-of
 import { hasShockAndAweAbility } from '../game/shock-and-awe-helpers.js';
 import { dcAbilityFlags } from '../data-loader.js';
 import { limitGuard, abilityLimitKey } from './combat-conditions.js';
+import { opponentPlayerNum } from '../game/player-helpers.js';
+import { hasSlowOnTheDrawAbility } from '../game/slow-on-the-draw-helpers.js';
+import { hasKtpRegularAbility } from '../game/keep-the-peace-helpers.js';
+import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
 
 function atkEff(combat, deps) {
   const all = (deps?.getDcEffects || _getDcEffects)() || {};
@@ -138,17 +142,85 @@ atkAbility('front_line', 'Front Line', ['front_line'], 'frontLineResolved');
 atkAbility('much_to_learn', 'Much to Learn', ['much_to_learn'], 'muchToLearnResolved');
 
 // ── Defender interactive on-declare DC abilities ─────────────────────────────
-defAbility('the_force_is_with_me', 'The Force is With Me', ['the_force_is_with_me_chirrut'], 'forceIsWithMeResolved');
+
+// The Force is With Me (Chirrut Imwe) — defender gate button offered only on
+// Ranged attacks where at least one attacker figure is adjacent to Chirrut.
+// If there are no adjacent hostiles, prompt returns null → gate auto-skips it.
+registerCombatAbility({
+  id: 'the_force_is_with_me', name: 'The Force is With Me', windows: ['on_declare'], side: 'defender', kind: 'interactive',
+  applies: (game, combat, _side, deps) => {
+    if (!combat.target?.figureKey) return false;
+    if (!hasAny(defEff(combat, deps), 'the_force_is_with_me_chirrut')) return false;
+    if (!combat.isRanged) return false;
+    const mapSpaces = (deps?.getMapData || getMapData)(game.selectedMap?.id);
+    if (!mapSpaces) return false;
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const targetCoord = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+    if (!targetCoord) return false;
+    const adj = (mapSpaces.adjacency?.[String(targetCoord).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+    return Object.values(game.figurePositions?.[combat.attackerPlayerNum] || {}).some(
+      (pos) => adj.includes(String(pos).toLowerCase()),
+    );
+  },
+});
+
 defAbility('strike_me_down', 'Strike Me Down', ['strike_me_down_obiwan'], 'strikeMeDownResolved');
-// Force Exhaustion (The Child / Clan of Two) is NOT registered as an executable
-// on_declare gate ability. It is offered as direct Yes/No buttons at attack
-// declare (handlers/combat.js → setPendingForceExhaustion + force_exhaustion_yes_/
-// no_), and the gate's roll/Ready guards block on game.pendingForceExhaustion /
-// game.pendingForceExhaustionDiePick. The catalog (combat-ability-timing-catalog.js)
-// keeps a timing-only 'force_exhaustion' indicator for completeness. A dormant
-// executable registration here (keyed on a never-set forceExhaustionResolved flag)
-// was removed per alexanbv 2026-06-19 — it could have surfaced a redundant second
-// "Force Exhaustion" button in the on_declare window.
+
+// Force Exhaustion (The Child / Clan of Two) — gate button offered when The
+// Child is alive and the target qualifies (is The Child or has Clan of Two).
+// Previously hardcoded as standalone Yes/No buttons outside the gate; now a
+// standard on_declare defender interactive. The die-pick sub-step that follows
+// (pendingForceExhaustionDiePick + fe_die_pick_* buttons) is still handled by
+// handleForceExhaustionDiePick in combat-reactions.js.
+registerCombatAbility({
+  id: 'force_exhaustion', name: 'Force Exhaustion', windows: ['on_declare'], side: 'defender', kind: 'interactive',
+  applies: (game, combat, _side, deps) => {
+    if (!combat.target?.figureKey || combat.target?.isNpc) return false;
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const targetDcName = dcNameFromFigureKey(combat.target.figureKey);
+    const msgId = deps?.findDcMessageIdForFigure?.(game.gameId, defPN, combat.target.figureKey) || null;
+    const upgrades = msgId ? (game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || []) : [];
+    return canOfferForceExhaustion(game, defPN, targetDcName, upgrades).eligible;
+  },
+});
+
+// Slow on the Draw (Greedo) — defender gate button offered when the ATTACKER
+// has Greedo's ability. The DEFENDER decides to interrupt.
+registerCombatAbility({
+  id: 'slow_on_the_draw', name: 'Slow on the Draw', windows: ['on_declare'], side: 'defender', kind: 'interactive',
+  applies: (game, combat, _side, deps) => {
+    if (!combat.attackerFigureKey) return false;
+    return hasSlowOnTheDrawAbility(atkEff(combat, deps)?.specialAbilityIds || []);
+  },
+});
+
+// Keep the Peace (Wing Guard Regular) — defender gate button offered when a
+// friendly figure with KTP-Regular is adjacent to the target space (and the
+// target is not a GUARDIAN figure).
+registerCombatAbility({
+  id: 'keep_the_peace_regular', name: 'Keep the Peace', windows: ['on_declare'], side: 'defender', kind: 'interactive',
+  applies: (game, combat, _side, deps) => {
+    if (!combat.target?.figureKey || combat.target?.isNpc) return false;
+    if (combat._ktpRegularUsed) return false;
+    const mapSpaces = (deps?.getMapData || getMapData)(game.selectedMap?.id);
+    if (!mapSpaces) return false;
+    const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const targetCoord = game.figurePositions?.[defPN]?.[combat.target.figureKey];
+    if (!targetCoord) return false;
+    const all = (deps?.getDcEffects || _getDcEffects)() || {};
+    const adjToTarget = new Set((mapSpaces.adjacency?.[String(targetCoord).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
+    const targetEff = all[dcNameFromFigureKey(combat.target.figureKey)] || all[(dcNameFromFigureKey(combat.target.figureKey) || '').replace(/\s*\[.*\]\s*$/, '')];
+    if ((targetEff?.keywords || []).map((k) => String(k).toUpperCase()).includes('GUARDIAN')) return false;
+    const defFigPos = game.figurePositions?.[defPN] || {};
+    for (const [fk, pos] of Object.entries(defFigPos)) {
+      if (!adjToTarget.has(String(pos).toLowerCase())) continue;
+      const fkName = dcNameFromFigureKey(fk);
+      const fkEff = all[fkName] || all[(fkName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if (hasKtpRegularAbility(fkEff?.specialAbilityIds || [])) return true;
+    }
+    return false;
+  },
+});
 
 // ── Two-timing split-effect abilities (alexanbv 2026-06-18) ───────────────────
 // Negotiate (Hondo) + Query (HK-47): PLAY timing = on_declare — the OPPONENT

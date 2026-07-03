@@ -3,7 +3,7 @@
  */
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } from 'discord.js';
 import { COLORS } from '../discord/colors.js';
-import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, setPendingStrikeMeDown, setPendingSlowOnTheDraw, setPendingForceExhaustion, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector, setPendingForceIsWithMe, clearPendingForceIsWithMe } from '../game/interrupts.js';
+import { setPendingCelebration, setPendingCleave, clearPendingCleave, clearPendingCoverFire, clearPendingFalseOrders, setPendingIllicitArms, setPendingThereIsNoTry, setPendingPowerConverter, setPendingZilloDiscard, clearPendingZilloDiscard, clearPendingExecutiveOrder, clearPendingCoordinatedRaid, setPendingSurgeOverflow, clearPendingSurgeOverflow, setPendingRogueOneTokenPick, clearPendingRogueOneTokenPick, clearPendingEmperorInterrupt, clearPendingBombardmentSorin, clearPendingBattlefieldLeadership, setPendingHunterProtocol, setPendingUnhingedDirector, clearPendingUnhingedDirector } from '../game/interrupts.js';
 import { sendPowerTokenOverflowUI, TOKEN_EMOJI } from '../discord/power-token-prompts.js';
 import { applyStrain, registerStrainFollowup } from './strain-handler.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -20,7 +20,7 @@ import { figureMpRemaining, consumeMovementPoints } from '../game/game-helpers.j
 import { isWithinSpaces as _isWithinSpaces, countSpaces } from '../game/spatial.js';
 import { getClosedDoorEdges } from '../game/board-helpers.js';
 import { cardNameIncludes } from '../game/card-names.js';
-import { canOfferForceExhaustion } from '../game/force-exhaustion-helpers.js';
+import { canOfferForceExhaustion, removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { exhaustAttachment, depleteDc, combatSelfAttachmentMsgId, auraAttachmentBearerMsgId } from '../game/card-state-helpers.js';
 import { squadUpgradeFigureCard } from '../game/squad-upgrades.js';
 import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper-helpers.js';
@@ -209,7 +209,7 @@ import {
   hasConclusionAbility,
   applyEvadeDebuff,
 } from '../game/evade-debuff-helpers.js';
-import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey, getInnateRerollAbilities } from '../game/index.js';
+import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, isConditionImmune, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey, getInnateRerollAbilities } from '../game/index.js';
 import { getPlayerDisplayName } from '../discord/user-helpers.js';
 import { renderAttackDiceImage, renderDefenseDiceImage } from '../discord/dice-renderer.js';
 import { processFigureDefeat } from '../engine/defeat-handler.js';
@@ -1244,6 +1244,41 @@ function _makeDefenseDieTurnResolver({ name, eligible, stageKey, dodgeConversion
  * clicking discards the CC (playCC) and rerolls the chosen die via the shared
  * lock. No figure-picker (it's the attacker's own hand card).
  */
+
+// Die-order for Force Exhaustion picker (weakest first).
+const _FE_DIE_ORDER = Object.freeze({ yellow: 0, green: 1, blue: 2, red: 3 });
+
+// Shared tail of Force Exhaustion after the die is removed: apply Weaken to
+// the attacker, then either force a miss (target is The Child) or proceed.
+// Mirrors _resolveForceExhaustionAfterDiePick in combat-reactions.js but lives
+// here to avoid a circular import (combat-reactions.js → combat.js).
+async function _resolveFeAfterDiePick(game, combat, fe, thread, ctx, removedColor) {
+  const atkFk = combat?.attackerFigureKey ?? fe.attackerFigureKey;
+  if (atkFk && !isConditionImmune(game, atkFk)) {
+    applyCondition(game, atkFk, 'Weaken');
+    if (combat && Array.isArray(combat.attackerConds) && !combat.attackerConds.includes('Weaken')) {
+      combat.attackerConds.push('Weaken');
+    }
+  }
+  if (fe.targetIsChild) {
+    if (combat?.attackerFigureKey) {
+      filterCondition(game, combat.attackerFigureKey, 'Focus');
+      filterCondition(game, combat.attackerFigureKey, 'Hide');
+      if (Array.isArray(combat.attackerConds)) {
+        combat.attackerConds = combat.attackerConds.filter((c) => c !== 'Focus' && c !== 'Hide');
+      }
+    }
+    if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, `**Force Exhaustion** — The Child became Incapacitated.${removedColor ? ` 1 ${removedColor} attack die removed,` : ''} attacker Weakened, and the attack misses.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    if (combat) {
+      combat.forceMiss = true;
+      await _forceMissAndStep8(thread, game, combat, ctx, `**Force Exhaustion** — **The Child** is now **Incapacitated**. The attack **misses** — no dice are rolled.`);
+    }
+  } else {
+    if (thread) await thread.send(`**Force Exhaustion** — **The Child** is now **Incapacitated**. Attacker is **Weakened**. The attack proceeds with the reduced dice.`).catch(discordCatch);
+    if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, `**Force Exhaustion** — The Child became Incapacitated.${removedColor ? ` 1 ${removedColor} attack die removed,` : ''} attacker Weakened. Attack proceeds.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+  }
+}
+
 function _makeCapitalizeResolver() {
   const lbl = (p, d) => p === 'attack'
     ? `${d?.acc || 0}a/${d?.dmg || 0}d/${d?.surge || 0}s`
@@ -1849,6 +1884,204 @@ export const COMBAT_RESOLVERS = {
     eligible: (dice) => dice.map((_d, i) => i),
     phaseFlag: null, stageKey: 'rapidRecal',
   }),
+
+  // ── On-declare gate resolvers (alexanbv 2026-07-03 gate migration) ────────────
+
+  // Strike Me Down (Obi-Wan Kenobi) — defender gate button. Clicking it defeats
+  // Obi-Wan with a VP cost reduced by 3 and cancels the attack.
+  strike_me_down: {
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const fk = combat.target?.figureKey;
+      const atkPN = combat.attackerPlayerNum;
+      if (!fk) { if (thread) await thread.send('**Strike Me Down** — no valid target.').catch(discordCatch); return; }
+      const fkMatch = fk.match(/-(\d+)-(\d+)$/);
+      const figIdx = fkMatch ? parseInt(fkMatch[2], 10) : 0;
+      const targetMsgId = ctx.findDcMessageIdForFigure?.(game.gameId, defPN, fk);
+      if (targetMsgId && ctx.dcHealthState) {
+        const healthState = ctx.dcHealthState.get(targetMsgId) || [];
+        const entry = healthState[figIdx];
+        if (entry && entry[0] > 0) {
+          await _applyDamage(game, { dcHealthState: ctx.dcHealthState, logGameAction: ctx.logGameAction, client: ctx.client }, {
+            figureKey: fk, msgId: targetMsgId, figIndex: figIdx,
+            amount: entry[0], controllerPlayerNum: defPN, source: 'Strike Me Down',
+          });
+        }
+      }
+      const dcName = dcNameFromFigureKey(fk);
+      const stats = ctx.getDcStats?.(dcName);
+      const baseCost = stats?.cost ?? 5;
+      const reducedCost = Math.max(0, baseCost - 3);
+      if (reducedCost > 0) awardKillVp(game, atkPN, reducedCost);
+      resolvePendingCombat(game);
+      if (thread) await thread.send(`**Strike Me Down** — Obi-Wan is defeated (VP cost reduced by 3: ${reducedCost} VP awarded to attacker). Attack ended.`).catch(discordCatch);
+      if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, `**Strike Me Down** — Obi-Wan chose to be defeated. Attacker gains ${reducedCost} VP. Attack cancelled.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+      if (ctx.processFigureDefeat) {
+        await ctx.processFigureDefeat(game, {
+          defeatedPlayerNum: defPN, figureKey: fk, attackerPlayerNum: atkPN,
+          msgId: targetMsgId, dcName, displayName: dcName,
+          source: 'Strike Me Down', awardVp: false,
+        });
+      }
+    },
+  },
+
+  // The Force is With Me (Chirrut Imwe) — defender gate button on Ranged attacks.
+  // prompt lists adjacent attacker figures; apply deals 1 Damage to chosen one
+  // and reduces attack Damage by 1.
+  the_force_is_with_me: {
+    prompt: ({ game, combat }) => {
+      if (!combat.isRanged) return null;
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const targetCoord = game.figurePositions?.[defPN]?.[combat.target?.figureKey];
+      const mapSpaces = getMapData(game.selectedMap?.id);
+      if (!mapSpaces || !targetCoord) return null;
+      const adj = (mapSpaces.adjacency?.[String(targetCoord).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+      const adjacentHostiles = Object.entries(game.figurePositions?.[combat.attackerPlayerNum] || {})
+        .filter(([, pos]) => adj.includes(String(pos).toLowerCase()))
+        .map(([fk]) => fk);
+      if (!adjacentHostiles.length) return null;
+      const defOwnerId = getPlayerId(game, defPN);
+      return {
+        content: `**The Force is With Me** — Ranged attack targeting Chirrut. Choose an adjacent hostile figure to take 1 Damage (and apply **-1 Damage** to the attack results), or Skip:`,
+        mentionUserId: defOwnerId,
+        buttons: [
+          ...adjacentHostiles.slice(0, 24).map((fk, i) => [String(i), `Hit ${dcNameFromFigureKey(fk)}`]),
+          ['skip', 'Skip', 'secondary'],
+        ],
+      };
+    },
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      if (choice === 'skip' || choice === null) {
+        if (thread) await thread.send('**The Force is With Me** — Skipped.').catch(discordCatch);
+        return;
+      }
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const targetCoord = game.figurePositions?.[defPN]?.[combat.target?.figureKey];
+      const mapSpaces = getMapData(game.selectedMap?.id);
+      if (!mapSpaces || !targetCoord) return;
+      const adj = (mapSpaces.adjacency?.[String(targetCoord).toLowerCase()] || []).map((s) => String(s).toLowerCase());
+      const adjacentHostiles = Object.entries(game.figurePositions?.[combat.attackerPlayerNum] || {})
+        .filter(([, pos]) => adj.includes(String(pos).toLowerCase()))
+        .map(([fk]) => fk);
+      const pickedIdx = parseInt(choice, 10);
+      const chosenFk = adjacentHostiles[pickedIdx];
+      if (!chosenFk) { if (thread) await thread.send('**The Force is With Me** — Invalid pick.').catch(discordCatch); return; }
+      combat.defenderDamageReduction = (combat.defenderDamageReduction || 0) + 1;
+      const chosenDcName = dcNameFromFigureKey(chosenFk);
+      const _fkMatch = chosenFk.match(/^(.+)-(\d+)-(\d+)$/);
+      if (_fkMatch && ctx.dcHealthState) {
+        const [, _dcN, , _fiStr] = _fkMatch;
+        const _msgIds = getDcMessageIds(game, combat.attackerPlayerNum) || [];
+        const _dcList = getDcList(game, combat.attackerPlayerNum) || [];
+        let _chosenMsgId = null;
+        for (let i = 0; i < _msgIds.length; i++) {
+          if (_dcList[i]?.dcName === _dcN) { _chosenMsgId = _msgIds[i]; break; }
+        }
+        if (_chosenMsgId) {
+          await _applyDamage(game, { dcHealthState: ctx.dcHealthState, logGameAction: ctx.logGameAction, client: ctx.client }, {
+            figureKey: chosenFk, msgId: _chosenMsgId, figIndex: parseInt(_fiStr, 10),
+            amount: 1, controllerPlayerNum: combat.attackerPlayerNum, source: 'The Force is With Me',
+          });
+        }
+      }
+      if (thread) await thread.send(`**The Force is With Me** — **${chosenDcName}** suffers 1 Damage; -1 Damage applied to the attack results.`).catch(discordCatch);
+      if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, `**The Force is With Me** — Chirrut picks ${chosenDcName} (1 dmg) and reduces attack damage by 1.`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    },
+  },
+
+  // Force Exhaustion (The Child / Clan of Two) — defender gate button. Clicking
+  // incapacitates The Child; then the ATTACKER picks which die to remove via the
+  // existing fe_die_pick_* sub-step (handleForceExhaustionDiePick).
+  force_exhaustion: {
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const targetDcName = dcNameFromFigureKey(combat.target?.figureKey);
+      const targetMsgId = ctx.findDcMessageIdForFigure?.(game.gameId, defPN, combat.target?.figureKey) || null;
+      const upgrades = targetMsgId ? (game.p1DcAttachments?.[targetMsgId] || game.p2DcAttachments?.[targetMsgId] || []) : [];
+      const _feDecision = canOfferForceExhaustion(game, defPN, targetDcName, upgrades);
+      if (!_feDecision.eligible) { if (thread) await thread.send('**Force Exhaustion** — no longer eligible.').catch(discordCatch); return; }
+      game.childIncapacitated = true;
+      if (_feDecision.childFigureKey && game.figureConditions?.[_feDecision.childFigureKey]) {
+        delete game.figureConditions[_feDecision.childFigureKey];
+      }
+      const poolDice = combat?.attackInfo?.dice || [];
+      const targetIsChild = _feDecision.reasonCode === 'target-is-child';
+      const feInfo = {
+        defenderPlayerNum: defPN, attackerPlayerNum: combat.attackerPlayerNum,
+        targetIsChild, childFigureKey: _feDecision.childFigureKey,
+        attackerFigureKey: combat.attackerFigureKey, combatThreadId: combat.combatThreadId,
+      };
+      if (!combat || poolDice.length <= 1) {
+        let removedColor = null;
+        if (combat?.attackInfo) {
+          const r = removeForceExhaustionDie(combat.attackInfo.dice);
+          removedColor = r.removedColor;
+          combat.attackInfo = { ...combat.attackInfo, dice: r.dice };
+          if (removedColor && thread) await thread.send(`**Force Exhaustion** — Removed 1 **${removedColor}** attack die.`).catch(discordCatch);
+        }
+        await _resolveFeAfterDiePick(game, combat, feInfo, thread, ctx, removedColor);
+        return;
+      }
+      const atkPN = combat.attackerPlayerNum;
+      game.pendingForceExhaustionDiePick = {
+        gameId: game.gameId, attackerPlayerNum: atkPN, defenderPlayerNum: defPN,
+        targetIsChild, attackerFigureKey: combat.attackerFigureKey, combatThreadId: combat.combatThreadId,
+      };
+      const indexed = poolDice.map((color, idx) => ({ color, idx }))
+        .sort((a, b) => (_FE_DIE_ORDER[a.color] ?? 99) - (_FE_DIE_ORDER[b.color] ?? 99) || a.idx - b.idx);
+      const feBtns = indexed.map(({ color, idx }) =>
+        new ButtonBuilder().setCustomId(`fe_die_pick_${game.gameId}_${idx}`)
+          .setLabel(`${color.charAt(0).toUpperCase() + color.slice(1)} die`).setStyle(ButtonStyle.Primary));
+      const atkOwnerId = getPlayerId(game, atkPN);
+      if (thread) await thread.send(sanitizeMentions({
+        content: `<@${atkOwnerId}> **Force Exhaustion** — **The Child** is now **Incapacitated**. You must remove 1 die from your attack pool — choose which.`,
+        components: chunkButtonsToRows(feBtns), allowedMentions: { users: [atkOwnerId] },
+      })).catch(discordCatch);
+      if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, '**Force Exhaustion** — The Child became Incapacitated. Attacker must choose 1 attack die to remove.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    },
+  },
+
+  // Slow on the Draw (Greedo) — defender gate button. Clicking pushes the
+  // current combat onto the stack so the defender can attack Greedo first.
+  slow_on_the_draw: {
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      pushNestedCombat(game);
+      const defOwnerId = getPlayerId(game, defPN);
+      if (thread) await thread.send(sanitizeMentions({
+        content: `**Slow on the Draw** — <@${defOwnerId}>, you may now perform an attack targeting **Greedo**. Greedo's original attack will resume automatically once the interrupt attack resolves.`,
+        allowedMentions: { users: [defOwnerId] },
+      })).catch(discordCatch);
+      if (ctx.logGameAction) await ctx.logGameAction(game, ctx.client, '**Slow on the Draw** — Defender interrupts to attack Greedo first.', { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
+    },
+  },
+
+  // Keep the Peace (Wing Guard Regular) — defender gate button. Clicking makes
+  // the defender AND the attacker each suffer 1 Strain (limit once per attack).
+  keep_the_peace_regular: {
+    apply: async (choice, { game, combat, thread, ctx }) => {
+      if (combat._ktpRegularUsed) return;
+      const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+      const targetCoord = game.figurePositions?.[defPN]?.[combat.target?.figureKey];
+      const mapSpaces = getMapData(game.selectedMap?.id);
+      if (!mapSpaces || !targetCoord) return;
+      const all = getDcEffectsGlobal() || {};
+      const adjToTarget = new Set((mapSpaces.adjacency?.[String(targetCoord).toLowerCase()] || []).map((s) => String(s).toLowerCase()));
+      const defFigPos = game.figurePositions?.[defPN] || {};
+      for (const [fk, pos] of Object.entries(defFigPos)) {
+        if (!adjToTarget.has(String(pos).toLowerCase())) continue;
+        const fkName = dcNameFromFigureKey(fk);
+        const fkEff = all[fkName] || all[(fkName || '').replace(/\s*\[.*\]\s*$/, '')];
+        if (!hasKtpRegularAbility(fkEff?.specialAbilityIds || [])) continue;
+        combat._ktpRegularUsed = true;
+        await applyStrain(game, ctx, { figureKey: fk, controllerPlayerNum: defPN, amount: 1, source: `Keep the Peace (${fkName})` });
+        await applyStrain(game, ctx, { figureKey: combat.attackerFigureKey, controllerPlayerNum: combat.attackerPlayerNum, amount: 1, source: `Keep the Peace (${fkName})` });
+        if (thread) await thread.send(`**Keep the Peace** (${fkName}) — defender suffered 1 Strain; attacker suffers 1 Strain.`).catch(discordCatch);
+        break;
+      }
+    },
+  },
 };
 
 /**
@@ -2281,6 +2514,12 @@ export async function handleModsPick(interaction, ctx) {
       } else {
         delete combat._lastRerolledDie;
         if (r.apply) await r.apply(null, { game, combat, thread, ctx, side, gameId, id: pick, window });
+        // If the resolver cancelled the combat (Strike Me Down, Slow on the Draw),
+        // game.pendingCombat will be null/different — bail before re-driving the gate.
+        if (!game.pendingCombat || game.pendingCombat.gameId !== gameId) {
+          saveGames?.(game.gameId);
+          return;
+        }
         recordModsChoice(gate, side, pick);
         _markGateAbilityUsed(game, combat, pick); // once/round-etc. → owner used-list
         await _driveGateOrOfferToughLuck(window, thread, game, combat, ctx);
@@ -4357,36 +4596,10 @@ export async function handleAttackTarget(interaction, ctx) {
           ktpApplied = true;
         }
       }
-      // Regular: INTERACTIVE — defender MAY suffer 1 Strain; if they do, the
-      // attacker also suffers 1 Strain (limit 1 per attack). Mirrors the Elite
-      // automation but routed through an Apply/Skip prompt addressed to the
-      // defender (handleKtpRegularGate). Once-per-attack flag combat._ktpRegularUsed.
-      // alexanbv 2026-06-26 (audit fix — was a prose reminder only).
-      if (!ktpApplied && hasKtpRegularAbility(fkAbilityIds) && !game.pendingCombat?._ktpRegularUsed) {
-        // Check: target space must not contain a friendly GUARDIAN
-        const targetFigKws = (defEff?.keywords || []).map(k => String(k).toUpperCase());
-        if (!targetFigKws.includes('GUARDIAN')) {
-          // Stash the once-per-attack pending state on the combat so the gate
-          // handler can resolve it (route strain to BOTH figures) exactly once.
-          game.pendingCombat._ktpRegular = {
-            defenderFigureKey: fk,
-            defenderPlayerNum,
-            attackerFigureKey,
-            attackerPlayerNum,
-            dcName: fkDcName,
-          };
-          const defOwnerId = game[`player${defenderPlayerNum}Id`] ?? '';
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ktpreg_use_${game.pendingCombat.gameId}`).setLabel('Suffer 1 Strain → Strain attacker').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId(`ktpreg_skip_${game.pendingCombat.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-          );
-          await thread.send(sanitizeMentions({
-            content: `**Keep the Peace** — <@${defOwnerId}> **${fkDcName}** is adjacent to the target space. You MAY suffer 1 Strain; if you do, the attacker suffers 1 Strain.`,
-            components: [row], allowedMentions: { users: defOwnerId ? [defOwnerId] : [] },
-          })).catch(discordCatch);
-          ktpApplied = true;
-        }
-      }
+      // Regular: INTERACTIVE — now handled as an on_declare gate button
+      // (COMBAT_RESOLVERS['keep_the_peace_regular']). The gate offers it to the
+      // defender when any adjacent friendly has KTP-Regular; the resolver applies
+      // the strain exchange. No hardcoded standalone buttons here.
     }
   }
 
@@ -4598,54 +4811,10 @@ export async function handleAttackTarget(interaction, ctx) {
     delete game.optimalBombardmentBlastBonus[_obFk];
   }
 
-  // The Force is With Me (Chirrut Imwe): when a Ranged attack targeting
-  // Chirrut is declared, Chirrut's owner may CHOOSE an adjacent hostile.
-  // If they do, apply -1 Damage to the attack results (defender modifier
-  // via combat.defenderDamageReduction) and the chosen hostile suffers
-  // 1 Damage.
-  //
-  // Per alexanbv 2026-05-13: previously this auto-picked the first
-  // adjacent hostile and incorrectly applied "-1 Hit". Both fixed —
-  // it's now a player-choice picker AND a defender Damage modifier.
-  if (isRanged && defSpecialIds.includes('the_force_is_with_me_chirrut') && mapSpaces && targetCoord) {
-    const adjToChirrut = (mapSpaces.adjacency?.[targetCoord] || []).map(s => String(s).toLowerCase());
-    const atkFigPos = game.figurePositions?.[attackerPlayerNum] || {};
-    const adjacentHostiles = [];
-    for (const [fk, pos] of Object.entries(atkFigPos)) {
-      if (pos && adjToChirrut.includes(String(pos).toLowerCase())) {
-        adjacentHostiles.push(fk);
-      }
-    }
-    if (adjacentHostiles.length > 0) {
-      setPendingForceIsWithMe(game, {
-        gameId: game.gameId,
-        defenderPlayerNum,
-        attackerPlayerNum,
-        chirrutFigureKey: target.figureKey,
-        adjacentHostiles,
-      });
-      const defOwnerId = getPlayerId(game, defenderPlayerNum);
-      // Up to 24 picker buttons so the Skip still fits within Discord's 25-component cap.
-      const _fiwmSlice = adjacentHostiles.slice(0, 24);
-      const btns = _fiwmSlice.map((fk, i) =>
-        new ButtonBuilder()
-          .setCustomId(`force_with_me_pick_${game.gameId}_${i}`)
-          .setLabel(`Hit ${dcNameFromFigureKey(fk)}`)
-          .setStyle(ButtonStyle.Primary)
-      );
-      btns.push(
-        new ButtonBuilder()
-          .setCustomId(`force_with_me_skip_${game.gameId}`)
-          .setLabel('Skip')
-          .setStyle(ButtonStyle.Secondary)
-      );
-      await thread.send(sanitizeMentions({
-        content: `<@${defOwnerId}> **The Force is With Me** — Ranged attack targeting Chirrut. Choose an adjacent hostile figure to take 1 Damage (and apply **-1 Damage** to the attack results), or Skip:`,
-        components: chunkButtonsToRows(btns),
-        allowedMentions: { users: [defOwnerId] },
-      }));
-    }
-  }
+  // The Force is With Me, Strike Me Down, Slow on the Draw, Force Exhaustion:
+  // all migrated to the on_declare gate (COMBAT_RESOLVERS in this file +
+  // registrations in combat-abilities-ondeclare.js). No hardcoded standalone
+  // buttons here — they appear as gate choices alongside other on_declare abilities.
 
   // Loku Recon Token — player-sensitive (game.reconTokens[playerNum], so a mirror
   // match keeps each player's token separate) and only active while a Loku with
@@ -4666,79 +4835,10 @@ export async function handleAttackTarget(interaction, ctx) {
     await thread.send('**Mon Cala Special Forces** — Loku gains Focus for attacking Recon-tokened figure.');
   }
 
-  // Strike Me Down (Obi-Wan): when attack targeting Obi-Wan is declared, may reduce VP cost by 3 and be defeated (ending the attack)
-  if (defSpecialIds.includes('strike_me_down_obiwan')) {
-    const defOwnerId = getPlayerId(game, defenderPlayerNum);
-    setPendingStrikeMeDown(game, {
-      gameId: game.gameId,
-      defenderPlayerNum,
-      attackerPlayerNum,
-      defenderFigureKey: target.figureKey,
-      defenderLabel: target.label,
-      combatThreadId: thread.id,
-    });
-    const smdRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`strike_me_down_yes_${game.gameId}`).setLabel('Use Strike Me Down').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`strike_me_down_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Strike Me Down** — Obi-Wan may choose to reduce his figure cost by 3 and be defeated, ending this attack. Use this ability?`, components: [smdRow], allowedMentions: { users: [defOwnerId] } }));
-  }
-
-  // Slow on the Draw (Greedo): when Greedo declares an attack, defender may interrupt to attack Greedo first
-  if (hasSlowOnTheDrawAbility(atkSpecialIds)) {
-    const defOwnerId = getPlayerId(game, defenderPlayerNum);
-    setPendingSlowOnTheDraw(game, {
-      gameId: game.gameId,
-      defenderPlayerNum,
-      attackerPlayerNum,
-      attackerFigureKey: attackerFigureKey,
-      attackerMsgId: msgId,
-      attackerLabel: attackerDisplayName,
-      combatThreadId: thread.id,
-    });
-    const sotdRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`slow_on_draw_yes_${game.gameId}`).setLabel('Interrupt: Attack Greedo first').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`slow_on_draw_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send(sanitizeMentions({ content: `<@${defOwnerId}> **Slow on the Draw** — You may interrupt to perform an attack targeting **Greedo** before this attack resolves. Use this ability?`, components: [sotdRow], allowedMentions: { users: [defOwnerId] } }));
-  }
-
   // Illicit Arms (Bib Fortuna): MOVED to proceedAfterRerolls (step-4
   // attacker modifier) per alexanbv 2026-05-09 — was incorrectly firing at
   // attack-declare. The +1 Hit applies as a step-4 modifier alongside
   // Pulse Cannon / Negotiate / Call the Shots / Heavy Repeater.
-
-  // Force Exhaustion (The Child / Clan of Two): when an attack targets The Child or a figure with
-  // Clan of Two, The Child's owner may incapacitate The Child. On incap (both cases) 1 attack die is
-  // removed and the attacker becomes Weakened. ADDITIONALLY, if The Child ITSELF is the target, the
-  // attack also MISSES (no dice rolled, skip to "after resolving an attack" — alexanbv ruling, like
-  // On the Lam). If a Clan-of-Two-attached figure is the target, the attack proceeds with reduced dice.
-  {
-    const _feDefMsgId = target.isNpc ? null : (findDcMessageIdForFigure?.(game.gameId, defenderPlayerNum, target.figureKey) || null);
-    const _feDefUpgrades = _feDefMsgId ? (game.p1DcAttachments?.[_feDefMsgId] || game.p2DcAttachments?.[_feDefMsgId] || []) : [];
-    const _feDecision = canOfferForceExhaustion(game, defenderPlayerNum, targetDcName, _feDefUpgrades);
-    if (_feDecision.eligible) {
-      const defOwnerId = getPlayerId(game, defenderPlayerNum);
-      const _feTargetIsChild = _feDecision.reasonCode === 'target-is-child';
-      setPendingForceExhaustion(game, {
-        gameId: game.gameId,
-        defenderPlayerNum,
-        attackerPlayerNum,
-        attackerFigureKey,
-        childFigureKey: _feDecision.childFigureKey,
-        targetIsChild: _feTargetIsChild,
-        combatThreadId: thread.id,
-      });
-      const feRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`force_exhaustion_yes_${game.gameId}`).setLabel('Use Force Exhaustion (Incapacitate The Child)').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`force_exhaustion_no_${game.gameId}`).setLabel('Decline').setStyle(ButtonStyle.Secondary),
-      );
-      const _feMsg = _feTargetIsChild
-        ? `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated**: remove 1 attack die and **Weaken** the attacker, AND (since The Child itself is the target) this attack **misses** — no dice are rolled. Use this ability?`
-        : `<@${defOwnerId}> **Force Exhaustion** — The Child may become **Incapacitated** to remove 1 attack die and apply **Weakened** to the attacker. The attack still proceeds with the reduced dice. Use this ability?`;
-      await thread.send(sanitizeMentions({ content: _feMsg, components: [feRow], allowedMentions: { users: [defOwnerId] } }));
-    }
-  }
 
   // Per-figure 2026-05-09: clear next-attack bonuses keyed by attackerFigureKey.
   if (nextSurge.length) delete game.nextAttackBonusSurgeAbilities?.[attackerFigureKey];
