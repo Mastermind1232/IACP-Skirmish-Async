@@ -32,8 +32,7 @@ import { healHp } from '../game/damage-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
-import { playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 
 // ── Dying Lunge ──────────────────────────────────────────────────────────
 
@@ -96,15 +95,9 @@ export async function handleFireDyingLunge(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
-  // window as a Promise, disposes card on pass. skipTimingCheck: the before_defeated
-  // timing may not pass isCcPlayableNow by click time — gate already validated.
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Dying Lunge' });
-  const dlRes = await playCC(game, ownerPN, null, 'Dying Lunge', {
-    ctx: { ...ctx, promptOpponentCancel: poc },
-    skipExecute: true,
-    skipTimingCheck: true,
-  });
+  const dlRes = await playCcFull(game, gameId, ownerPN, null, 'Dying Lunge', {
+    skipExecute: true, skipTimingCheck: true,
+  }, ctx, client);
 
   if (dlRes.ok && !dlRes.cancelled) {
     // Passed: run move+attack, then deferred defeat fires after the attack.
@@ -182,15 +175,9 @@ export async function handlePlayMiracleWorker(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
-  // window as a Promise, disposes card on pass. skipTimingCheck: before_defeated
-  // timing may not pass isCcPlayableNow by click time — gate already validated.
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Miracle Worker' });
-  const mwRes = await playCC(game, ownerPN, null, 'Miracle Worker', {
-    ctx: { ...ctx, promptOpponentCancel: poc },
-    skipExecute: true,
-    skipTimingCheck: true,
-  });
+  const mwRes = await playCcFull(game, gameId, ownerPN, null, 'Miracle Worker', {
+    skipExecute: true, skipTimingCheck: true,
+  }, ctx, client);
 
   // Heal only if the card successfully passed the counter window.
   if (mwRes.ok && !mwRes.cancelled && dcHealthState) {
@@ -261,15 +248,9 @@ export async function handlePlayPreservationProtocol(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
-  // window as a Promise, disposes card on pass. skipTimingCheck: before_defeated
-  // timing may not pass isCcPlayableNow by click time — gate already validated.
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Preservation Protocol' });
-  const ppRes = await playCC(game, ownerPN, null, 'Preservation Protocol', {
-    ctx: { ...ctx, promptOpponentCancel: poc },
-    skipExecute: true,
-    skipTimingCheck: true,
-  });
+  const ppRes = await playCcFull(game, gameId, ownerPN, null, 'Preservation Protocol', {
+    skipExecute: true, skipTimingCheck: true,
+  }, ctx, client);
 
   if (ppRes.ok && !ppRes.cancelled) {
     // Passed: heal 4-LOM and stamp permanent ability-suppression.

@@ -106,21 +106,16 @@ describe('AAR Play-CC — handleAarPlayCc opens an ephemeral private list', () =
 });
 
 describe('AAR Play-CC — handleAarCcPick routes the play through the unified CC pipeline', () => {
-  // After the unification (alexanbv 2026-06-30), handleAarCcPick calls playCC +
-  // makeCcPromptOpponentCancel directly. It no longer stages pendingCcConfirmation
-  // or delegates to ctx.handleCcConfirmPlay. Verify the wiring via source audit
-  // (the same pattern used in cc-discard-playreveal-audit.test.js).
   const aarSrc = readFileSync(
     new URL('../../src/handlers/after-attack-resolve.js', import.meta.url),
     'utf8',
   );
   const fnMatch = aarSrc.match(/export async function handleAarCcPick[\s\S]*?\n}\n/);
 
-  it('uses makeCcPromptOpponentCancel + playCC (unified path, not the old pendingCcConfirmation path)', () => {
+  it('uses playCcFull (unified path, not the old pendingCcConfirmation/makeCcPromptOpponentCancel path)', () => {
     assert.ok(fnMatch, 'handleAarCcPick found in source');
     const body = fnMatch[0];
-    assert.match(body, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
-    assert.match(body, /await playCC/, 'routes through unified playCC');
+    assert.match(body, /playCcFull/, 'routes through unified playCcFull pipeline');
     assert.doesNotMatch(body, /pendingCcConfirmation/, 'no longer stages old confirm state');
     assert.doesNotMatch(body, /handleCcConfirmPlay/, 'no longer proxies through old confirm handler');
   });

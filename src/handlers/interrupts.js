@@ -1726,8 +1726,7 @@ export async function handleBlackMarketSmugglerPick(interaction, ctx) {
 // Black Market followup — run the CC draw/discard/return + VP swap
 // AFTER the strain choice resolves.
 import { registerStrainFollowup as _bmRegisterFollowup } from './strain-handler.js';
-import { playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 _bmRegisterFollowup('black_market_resolve', async (game, ctx, payload) => {
   const { client, logGameAction, saveGames, checkWinConditions } = ctx;
   const { playerNum, choice, topCard, cardCost, smugglerName } = payload;
@@ -1892,15 +1891,9 @@ export async function handleExtraProtection(interaction, ctx) {
   const _epCombat = _epPending.combatRef || _epGame.pendingCombat;
 
   if (isPlay) {
-    // Unified playCC + poc: opens Negate/Comms counter window as a Promise,
-    // disposes card on pass. skipTimingCheck: the when_suffers_damage timing may
-    // not pass isCcPlayableNow by click time — gate already validated legality.
-    const _epPoc = makeCcPromptOpponentCancel(_epGame, _epGameId, ctx, client, { abilityId: 'Extra Protection' });
-    const _epPlayRes = await playCC(_epGame, _epPending.playerNum, null, 'Extra Protection', {
-      ctx: { ...ctx, promptOpponentCancel: _epPoc },
-      skipExecute: true,
-      skipTimingCheck: true,
-    });
+    const _epPlayRes = await playCcFull(_epGame, _epGameId, _epPending.playerNum, null, 'Extra Protection', {
+      skipExecute: true, skipTimingCheck: true,
+    }, ctx, client);
     if (_epPlayRes.ok && !_epPlayRes.cancelled) {
       // Resolve the playing figure's key for the picker. Prefer the figureKey
       // stashed at probe time (Onar Koma OR Mara via Fast Learner / a substitute —

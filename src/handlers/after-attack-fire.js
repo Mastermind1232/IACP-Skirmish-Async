@@ -30,8 +30,7 @@ import { getFigureFootprint, getAllFigureFootprints, hasFigureLineOfSight } from
 import { sanitizeMentions } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getCombatAbility } from '../engine/combat-timing-registry.js';
-import { playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 import { _sendPrivateReactionPrompt } from '../engine/combat-bridge.js';
 import {
   setPendingBoltslinger, setPendingHeavyFire, setPendingHavocShot,
@@ -1775,20 +1774,17 @@ async function fireGateAbility(thread, game, combat, effect, ctx) {
   const reg = getCombatAbility(effect?.payload?.abilityId);
   const side = effect?.side === 'defender' ? 'defender' : 'attacker';
   if (reg?.params?.kind === 'cc') {
-    // After-attack CC — unified playCC + Promise poc path. Counter window is
-    // opened inline; playCC awaits the Promise (via game._ccWindowResolve), then
-    // runs the card's ability via ctx.resolveAbility. postPostResolveWindow
-    // re-posts the after-attack window inline once playCC returns.
     const card = reg.params.card;
     const pn = side === 'attacker'
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const fig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, ctx.client, {
-      figureKey: fig, abilityId: card,
-      msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
-    });
-    const res = await playCC(game, pn, fig, card, { ctx: { ...ctx, promptOpponentCancel: poc } });
+    const res = await playCcFull(game, game.gameId, pn, fig, card, {
+      extraStackEntry: {
+        figureKey: fig, combat: true,
+        msgId: side === 'attacker' ? combat.attackerMsgId : null,
+      },
+    }, ctx, ctx.client);
     if (!res.ok) {
       if (thread) await thread.send(`⚠️ Can't play ${card}: ${res.reason}`).catch(discordCatch);
     }

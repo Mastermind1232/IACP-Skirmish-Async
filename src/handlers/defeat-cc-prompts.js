@@ -36,8 +36,7 @@ import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
-import { playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCcFull, registerCcCustomResolve } from './cc-pipeline.js';
 
 // Drain the deferred side-effects a (sync) resolveAbility produced in the one
 // canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv
@@ -196,16 +195,9 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
   clearPendingDefeatCcPrompt(game);
 
-  // Unified playCC path: skipTimingCheck because when-defeated timing strings
-  // (whenoneofyourfiguresdefeated etc.) may no longer pass isCcPlayableNow by
-  // click time (recentDefeat flag cleared). The gate mechanism already validated.
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, {
-    abilityId: cardName,
-  });
-  const res = await playCC(game, playerPN, null, cardName, {
-    ctx: { ...ctx, getCcEffect, promptOpponentCancel: poc },
+  const res = await playCcFull(game, gameId, playerPN, null, cardName, {
     skipExecute: true, skipTimingCheck: true, getEffect: getCcEffect,
-  });
+  }, ctx, client);
   if (!res.ok) {
     if (typeof logGameAction === 'function' && client) {
       await logGameAction(game, client, `**${cardName}** — card no longer in hand.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});

@@ -3,8 +3,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
-import { runCcPlayTriggers } from './cc-hand.js';
-import { openCcCounterWindow } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 import { postMoveXPicker } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -909,6 +908,19 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
   const attachKey = ccAttachmentsKey(meta.playerNum);
   const previousAttachments = isCcAttachment(card) && game[attachKey]?.[msgId] ? game[attachKey][msgId].slice() : undefined;
 
+  // Signal Jammer intercept: fires before commit. Played card goes to discard
+  // (not attachment — Jammer cancels the effect regardless of CC type).
+  if (game.signalJammerActive && card !== 'Signal Jammer') {
+    const _sjPN = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    game[handKey] = hand.filter((c) => c !== card);
+    game[discardKey] = [...(game[discardKey] || []), card];
+    game[ccDiscardKey(_sjPN)] = [...(game[ccDiscardKey(_sjPN)] || []), 'Signal Jammer'];
+    await logGameAction(game, interaction.client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
+    await refreshHandAndDiscard(game, meta.playerNum, interaction.client, ctx);
+    saveGames(game.gameId);
+    return;
+  }
   const effectData = getCcEffect(card);
   const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
   const abilityId = effectData?.abilityId ?? card;
@@ -979,14 +991,15 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       }
     }
   }
-  // Route through the UNIFIED counter-window (Negate/Comms) — the same path as a
-  // hand play and the combat gate (alexanbv 2026-06-17). The card's disposition
-  // (attachment vs discard) already happened above; on resolve the effect runs
-  // via _resumeScCcEffect (msgId + fromDc are threaded, so PowerToken / choice /
-  // space prompts route correctly), on cancel the when-discarded pipeline fires.
-  // No more old Negation / Comm-Disruption window.
-  await runCcPlayTriggers(game, meta.playerNum, { client, logGameAction, dcMessageMeta, saveGames });
-  await openCcCounterWindow(game, game.gameId, { card, cost, playedBy: meta.playerNum, abilityId, msgId, fromDc: true }, ctx, interaction.client);
+  // Unified CC play pipeline: card already committed (allowNotInHand), Jammer
+  // already handled above (skipSignalJammer), log already posted (skipLog).
+  // Triggers + counter window + execute all handled by playCcFull.
+  await playCcFull(game, game.gameId, meta.playerNum, null, card, {
+    allowNotInHand: true,
+    skipSignalJammer: true,
+    skipLog: true,
+    extraStackEntry: { msgId, fromDc: true },
+  }, ctx, interaction.client);
   if (ctx.pushUndo) {
     ctx.pushUndo(game, {
       type: 'cc_play_dc',

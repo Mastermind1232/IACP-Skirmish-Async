@@ -222,14 +222,14 @@ import {
   removeFigurePosition, getHandChannelId,
 } from '../game/player-helpers.js';
 import { checkFriendlyDefeatedPassiveRedraws, checkDeckDiscardPassiveRedraws } from '../game/cc-passive-redraw.js';
-import { getPlayableReactionCardsForTiming, playCC, canPlayCC } from '../game/cc-timing.js';
+import { getPlayableReactionCardsForTiming, canPlayCC } from '../game/cc-timing.js';
 import { eligibleThirdPartyCcFigures, applyThirdPartyCcEffect, thirdPartyCardName } from '../engine/third-party-ccs.js';
 import { applyDefenseDieTurn, applyDefenseDieRemoval } from '../engine/defense-die-turn.js';
 import { isLargeTarget, getDeclarableSquares } from '../engine/large-target.js';
 import { applyAbilityResult } from '../discord/apply-ability-result.js';
 import { tokenSpenderFigureKey } from '../engine/combat-abilities-tokens.js';
-import { runCcPlayTriggers, discardCc } from './cc-hand.js';
-import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume, makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { discardCc } from './cc-hand.js';
+import { openCcCounterWindow, registerCcCustomResolve, registerCombatGateResume, playCcFull } from './cc-pipeline.js';
 import { recalcAttackTotals as _recalcAttackTotals, recalcDefenseTotals as _recalcDefenseTotals } from '../game/combat.js';
 import { discordCatch, withDiscordRetry } from '../error-handling.js';
 import { fetchCombatThread, fetchGameChannel, snowflakeUsers, sanitizeMentions, isAiUserId } from '../discord/channel-helpers.js';
@@ -2124,9 +2124,7 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
       const fk = figs[parseInt(choice, 10)] ?? figs[0];
       if (!fk) return;
       const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-      // playCC validates, logs, runs triggers, opens counter window, and disposes.
-      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, ctx.client, { figureKey: fk, abilityId: card });
-      const res = await playCC(game, pn, fk, card, { ctx: { ...ctx, promptOpponentCancel: poc }, skipExecute: true });
+      const res = await playCcFull(game, gameId, pn, fk, card, { skipExecute: true }, ctx, ctx.client);
       if (!res.ok || res.cancelled) return;
       // Survived — apply bespoke combat effect
       const { applyCondition } = await import('../game/conditions.js');
@@ -2235,9 +2233,7 @@ function _makeYodaResolver({ specKey, side }) {
       const fk = figs[0];
       if (!fk) return turn.prompt({ game, combat, ctx }); // no eligible Yoda — skip to die-pick
       const pn = side === 'attacker' ? combat.attackerPlayerNum : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
-      // playCC validates, logs, runs triggers, opens counter window, and disposes.
-      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, ctx.client, { figureKey: fk, abilityId: 'There Is No Try' });
-      const res = await playCC(game, pn, fk, 'There Is No Try', { ctx: { ...ctx, promptOpponentCancel: poc }, skipExecute: true });
+      const res = await playCcFull(game, gameId, pn, fk, 'There Is No Try', { skipExecute: true }, ctx, ctx.client);
       if (!res.ok) return turn.prompt({ game, combat, ctx }); // can't play — skip to die-pick
       if (res.cancelled) return null; // cancelled — gate re-drives; handleModsPick apply(null) no-ops
       return turn.prompt({ game, combat, ctx }); // survived — show die-turn picker
@@ -2440,17 +2436,15 @@ export async function handleModsPick(interaction, ctx) {
       if (thread) await thread.send(`⚠️ Can't play ${_ccCard}: ${_ccCheck.reason}`).catch(discordCatch);
       await _driveGatePath(window, thread, game, combat, ctx);
     } else {
-      // Unified counter-window via playCC + injected promptOpponentCancel.
-      // The Promise suspends handleModsPick until the Negate/Comms window closes.
-      // Effect runs inside playCC via ctx.resolveAbility when not cancelled.
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
-      const _ccAbilityId = ctx.getCcEffect?.(_ccCard)?.abilityId ?? _ccCard;
-      const poc = _makeCombatPromptOpponentCancel(game, gameId, ctx, interaction.client, {
-        figureKey: ccFig, abilityId: _ccAbilityId,
-        msgId: side === 'attacker' ? combat.attackerMsgId : null, combat: true,
-      });
-      await playCC(game, ccPn, ccFig, _ccCard, { ctx: { ...ctx, promptOpponentCancel: poc } });
+      await playCcFull(game, gameId, ccPn, ccFig, _ccCard, {
+        extraStackEntry: {
+          figureKey: ccFig,
+          msgId: side === 'attacker' ? combat.attackerMsgId : null,
+          combat: true,
+        },
+      }, ctx, interaction.client);
       await _driveGatePath(window, thread, game, combat, ctx);
     }
   } else if (_isRerollCcPick(pick, side === 'attacker'
@@ -2473,8 +2467,7 @@ export async function handleModsPick(interaction, ctx) {
     } else {
       recordModsChoice(gate, side, pick);
       _markGateAbilityUsed(game, combat, pick);
-      const _rPoc = _makeCombatPromptOpponentCancel(game, gameId, ctx, interaction.client);
-      const _rRes = await playCC(game, _rPn, _rFig, _rCard, { ctx: { ...ctx, promptOpponentCancel: _rPoc }, skipExecute: true });
+      const _rRes = await playCcFull(game, gameId, _rPn, _rFig, _rCard, { skipExecute: true }, ctx, interaction.client);
       if (!_rRes.cancelled) {
         // Survived — post the die-picker now (same path as handleModsSubChoice would)
         const r = _resolverFor(pick);
@@ -2641,10 +2634,7 @@ export async function handleModsSubChoice(interaction, ctx) {
  * recalc, and discards the Tough Luck CC) or skips; then the rerolls window
  * resumes. customId: tlgate_remove_<gameId>_<pool>_<idx> | tlgate_skip_<gameId>.
  */
-// makeCcPromptOpponentCancel is now the shared export from cc-pipeline.js — the
-// single factory used by ALL CC play paths (gate, reroll, third-party, Yoda,
-// Tough Luck, after-attack, when-defeated). Import alias for local readability.
-const _makeCombatPromptOpponentCancel = makeCcPromptOpponentCancel;
+// CC plays in combat all route through playCcFull (unified pipeline).
 // Params-less reroll-CC registrations (card detected in `applies`, not params).
 const _REROLL_CC_CARD_BY_ID = { rapid_recalibration: 'Rapid Recalibration' };
 /** The Command-card name a reroll gate ability plays, across param shapes. */
@@ -2688,16 +2678,13 @@ export async function handleToughLuckGate(interaction, ctx) {
   const dice = tl.pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
   const die = dice?.[tl.idx];
   if (isRemove && die) {
-    // Tough Luck is PLAYED — route through the unified playCC + Promise poc path.
     // skipTimingCheck: 'afteropponentreroll' returns false from isCcPlayableNow
     // (dedicated gate, not the hand dropdown). skipExecute: die-removal runs inline.
     const tlPool = tl.pool, tlIdx = tl.idx, tlPlayerNum = tl.playerNum;
     delete combat._pendingToughLuck;
-    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, interaction.client);
-    const res = await playCC(game, tlPlayerNum, null, 'Tough Luck', {
-      ctx: { ...ctx, promptOpponentCancel: poc },
+    const res = await playCcFull(game, game.gameId, tlPlayerNum, null, 'Tough Luck', {
       skipExecute: true, skipTimingCheck: true,
-    });
+    }, ctx, interaction.client);
     if (res.ok && !res.cancelled) {
       // Apply die-removal inline (survived Negate/Comms).
       const dice = tlPool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
@@ -2752,12 +2739,9 @@ export async function handleToughLuckFinalPick(interaction, ctx) {
     const tlPlayerNum = pend.playerNum;
     delete combat._pendingToughLuckFinal;
 
-    const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, interaction.client, { abilityId: 'Tough Luck' });
-    const res = await playCC(game, tlPlayerNum, null, 'Tough Luck', {
-      ctx: { ...ctx, promptOpponentCancel: poc },
-      skipExecute: true,
-      skipTimingCheck: true,
-    });
+    const res = await playCcFull(game, game.gameId, tlPlayerNum, null, 'Tough Luck', {
+      skipExecute: true, skipTimingCheck: true,
+    }, ctx, interaction.client);
     if (res.ok && !res.cancelled) {
       const dice = tlPool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults;
       const die = dice?.[tlIdx];
@@ -3296,25 +3280,28 @@ export async function handleAttackTarget(interaction, ctx) {
     }
     if (_tsqs.length === 1) target._declaredSquare = _tsqs[0];
   }
-  // Marksman auto-play: target was rendered as [Marksman] (no normal LOS,
-  // but figures-don't-block LOS exists). Move the card from hand to discard
-  // and arm nextAttackIgnoreFigureLOS so the attack resolves with no
-  // figure-blocking. Single-use, consumed by handleAttackTarget below.
+  // Marksman auto-play: target requires it (no normal LOS but figures-don't-block
+  // LOS exists). Routes through playCcFull so Jammer + counter window apply.
+  // skipExecute: the LOS flag is set here only if NOT cancelled.
   if (target.requiresMarksman) {
-    const _mmHand = game[ccHandKey(attackerPlayerNum)] || [];
-    const _mmIdx = _mmHand.indexOf('Marksman');
-    if (_mmIdx < 0) {
+    if (!(game[ccHandKey(attackerPlayerNum)] || []).includes('Marksman')) {
       await interaction.followUp({ content: '🚫 Marksman is no longer in your hand.', ephemeral: true }).catch(discordCatch);
       return;
     }
-    _mmHand.splice(_mmIdx, 1);
-    game[ccHandKey(attackerPlayerNum)] = _mmHand;
-    const _mmDiscardKey = ccDiscardKey(attackerPlayerNum);
-    game[_mmDiscardKey] = [...(game[_mmDiscardKey] || []), 'Marksman'];
-    // Per alexanbv 2026-05-13: per-figureKey.
+    const _mmRes = await playCcFull(game, game.gameId, attackerPlayerNum, _attackerFkEarly, 'Marksman', {
+      skipTimingCheck: true,
+      skipExecute: true,
+      skipLog: true,
+      onPostCommit: async () => {
+        await logGameAction(game, client, `🎯 **Marksman** played — figures do not block LOS for this Ranged attack.`, { phase: 'ROUND', icon: 'card' });
+      },
+    }, ctx, interaction.client);
+    if (!_mmRes.ok || _mmRes.cancelled) {
+      await interaction.followUp({ content: '🚫 **Marksman** was cancelled — cannot proceed without line of sight.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
     game.nextAttackIgnoreFigureLOS = game.nextAttackIgnoreFigureLOS || {};
     game.nextAttackIgnoreFigureLOS[_attackerFkEarly] = true;
-    await logGameAction(game, client, `🎯 **Marksman** played — figures do not block LOS for this Ranged attack.`, { phase: 'ROUND', icon: 'card' });
   }
   // Etiquette and Protocol: block attacks between paired figures this round
   const etiqPairs = game.etiquetteBlockPairs || [];

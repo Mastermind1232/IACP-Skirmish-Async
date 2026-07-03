@@ -46,8 +46,7 @@ import { scReactionAvailable, offerScSetAside, scSetAsideSelectRow, applyScSetAs
 // back from this file (it is shared with the standalone SC handlers below) — an
 // intentional ES-module cycle that is safe because all bindings are only used at
 // call time, never at module-eval time.
-import { openCcCounterWindow, registerCcCustomResolve, NEGATION, COMM_DISRUPTION, makeCcPromptOpponentCancel } from './cc-pipeline.js';
-import { playCC } from '../game/cc-timing.js';
+import { playCcFull } from './cc-pipeline.js';
 
 /**
  * Resolve the on-board figureKey of the player's Mara Jade (the Adaptive Skills
@@ -719,66 +718,31 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     await interaction.followUp(followUpPayload).catch(discordCatch);
     return;
   }
-  const effectData = getCcEffect(card);
-  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
-  const abilityId = effectData?.abilityId ?? card;
-
-  // ── UNIFIED CC PLAY (alexanbv 2026-06-17) ──────────────────────────────────
-  // Every play routes through the recursive Negate/Comms counter-window; the
-  // effect resolves only if not cancelled — no snapshot, no revert. This
-  // REPLACES the legacy cost-branch below (left as dead code pending a live
-  // playtest, then deleted). Order: block check → commit card → on-play triggers
-  // → counter-window (which folds in the Smuggling Compartment step + resolve).
-  {
-    // 1. Block check — a figure prevented from playing CCs (Shadow Ops, Mak).
-    if (game.shadowOpsBlockedPlayer === playerNum) {
-      await interaction.followUp({ content: '**Shadow Ops** — you cannot play Command cards this round.', ephemeral: true }).catch(discordCatch);
-      return;
-    }
-    // 2. Commit the played card to discard + refresh the player's hand UI.
-    const _uHand = (game[handKey] || []).slice();
-    const _uIdx = _uHand.indexOf(card);
-    if (_uIdx >= 0) _uHand.splice(_uIdx, 1);
-    game[handKey] = _uHand;
-    game[discardKey] = (game[discardKey] || []).concat(card);
-    // alexanbv 2026-06-23: keep message (no delete) for traceability
-    await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
-    const _uLog = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-    if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
-    // 3. On-play triggers (Hunt Dissent, Adapt) fire for the played card.
-    await runCcPlayTriggers(game, playerNum, { client: interaction.client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-    // [A New Hope]: deplete it now (once per game — it enabled the play) when
-    // the play actually used A New Hope. When the unified picker produced a
-    // choice, the picked consumption is AUTHORITATIVE — deplete ONLY if the
-    // chosen figure qualified via A New Hope (`_pickedConsume === 'a_new_hope'`).
-    // This enforces TIA-over-A-New-Hope precedence: a Force User chosen via There
-    // is Another carries consume 'none', so A New Hope is NOT depleted even when
-    // it is also available. When the picker did NOT run (single-named or legacy
-    // auto-substitution), fall back to the legality flag `restriction.aNewHope`.
-    const _useANewHope = _pickedConsume != null
-      ? _pickedConsume === 'a_new_hope'
-      : !!restriction?.aNewHope;
-    if (_useANewHope) {
-      const { depleteANewHope } = await import('../game/cc-timing.js');
-      if (depleteANewHope(game, playerNum)) {
-        await logGameAction(game, interaction.client, `**[A New Hope]** depleted — enabled **${card}**.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
+  // Route through unified CC play pipeline. Signal Jammer was already handled
+  // above (skipSignalJammer:true). Validation (hand, timing, restriction) was
+  // already done above (skipValidation:true). Log uses interaction user mention
+  // so skipLog:true and onPostCommit posts it. A New Hope deplete also in callback.
+  const _anchorFk = _pickedFigureKey
+    ?? ((restriction.fastLearner) ? resolveFastLearnerFigureKey(game, playerNum) : null);
+  await playCcFull(game, gameId, playerNum, _anchorFk, card, {
+    skipValidation: true,
+    skipSignalJammer: true,
+    skipLog: true,
+    extraStackEntry: { playedByFigureKey: _anchorFk, fastLearnerFigureKey: _anchorFk },
+    onPostCommit: async () => {
+      await refreshHandAndDiscard(game, playerNum, interaction.client, ctx);
+      const _uLog = await logGameAction(game, interaction.client, `<@${interaction.user.id}> played command card **${card}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      if (ctx.pushUndo) ctx.pushUndo(game, { type: 'cc_play', gameId, playerNum, card, gameLogMessageId: _uLog?.id });
+      const _useANewHope = _pickedConsume != null ? _pickedConsume === 'a_new_hope' : !!restriction?.aNewHope;
+      if (_useANewHope) {
+        const { depleteANewHope } = await import('../game/cc-timing.js');
+        if (depleteANewHope(game, playerNum)) {
+          await logGameAction(game, interaction.client, `**[A New Hope]** depleted — enabled **${card}**.`, { phase: 'ACTION', icon: 'card' }).catch(() => {});
+        }
       }
-    }
-    // 4. Open the recursive counter-window; it resolves the effect or cancels it.
-    //    Thread the played-by anchor (the CHOSEN playing figure's figureKey) so a
-    //    CC with a range component references THAT figure, not the named figure
-    //    (alexanbv 2026-06-21). Covers all paths: named, Mara via Fast Learner, a
-    //    Force User via There is Another, any army figure via A New Hope. Survives
-    //    the counter-window via the stack entry → deferred-effect resolution
-    //    (see _resumeScCcEffect). When the picker did not run, fall back to the
-    //    Fast-Learner figureKey for the legacy Mara-auto-substitution path.
-    const _anchorFk = _pickedFigureKey
-      ?? ((restriction.fastLearner) ? resolveFastLearnerFigureKey(game, playerNum) : null);
-    await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, playedByFigureKey: _anchorFk, fastLearnerFigureKey: _anchorFk }, ctx, interaction.client);
-    saveGames(game.gameId);
-    return;
-  }
-
+    },
+  }, ctx, interaction.client);
+  saveGames(game.gameId);
 }
 
 /** DO SOMETHING ELSE — cancel the pending play. */
@@ -797,50 +761,34 @@ export async function handleCcCancelPlay(interaction, ctx) {
 }
 
 /**
- * Resolve a CC play: remove from hand, add to discard, update messages, log. Used by normal play and illegal_cc_ignore.
- * @param {object} game - Game state
- * @param {number} playerNum - 1 or 2
- * @param {string} card - CC name
- * @param {object} ctx - buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client
+ * Resolve a CC play: commit card, update hand UI, log, triggers, counter window.
+ * Used by normal play (illegal_cc_ignore). Routes through playCcFull so Signal
+ * Jammer, triggers, and counter window are all handled consistently.
  */
 async function resolveCcPlay(game, playerNum, card, ctx) {
-  const { buildHandDisplayPayload, updateHandVisualMessage, updateDiscardPileMessage, logGameAction, getCcEffect, client, resolveAbility, dcMessageMeta, dcHealthState } = ctx;
-  const handKey = ccHandKey(playerNum);
-  const discardKey = ccDiscardKey(playerNum);
-  const hand = (game[handKey] || []).slice();
-  const idx = hand.indexOf(card);
-  if (idx >= 0) hand.splice(idx, 1);
-  game[handKey] = hand;
-  game[discardKey] = game[discardKey] || [];
-  game[discardKey].push(card);
-  const handId = getHandChannelId(game, playerNum);
-  const handChannel = await fetchGameChannel(client, handId);
-  const handMessages = await handChannel.messages.fetch({ limit: 20 });
-  const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
-  const deck = getCcDeck(game, playerNum) || [];
-  const effectData = getCcEffect(card);
-  if (handMsg) {
-    const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
-    const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
-    handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
-    await handMsg.edit({
-      content: handPayload.content,
-      embeds: handPayload.embeds,
-      files: handPayload.files || [],
-      components: handPayload.components,
-    }).catch(discordCatch);
-  }
-  await refreshHandAndDiscard(game, playerNum, client, ctx);
+  const { buildHandDisplayPayload, getCcEffect, logGameAction, client } = ctx;
+  const effectData = getCcEffect ? getCcEffect(card) : null;
   const effectDesc = effectData?.effect ? `\n> *${effectData.effect}*` : '';
-  await logGameAction(game, client, `Played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card' });
-  // On-play triggers (Hunt Dissent, Adapt), then route through the unified
-  // counter-window: ALL CCs are counterable (alexanbv 2026-06-19). The effect
-  // resolves (via the deferred path) only if not cancelled. This also covers the
-  // illegal-play-anyway override, which still plays a Command card.
-  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta, saveGames: ctx.saveGames });
-  const abilityId = effectData?.abilityId ?? card;
-  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
-  await openCcCounterWindow(game, game.gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, client);
+  await playCcFull(game, game.gameId, playerNum, null, card, {
+    skipValidation: true,
+    skipLog: true,
+    onPostCommit: async () => {
+      const hand = (game[ccHandKey(playerNum)] || []);
+      const deck = getCcDeck(game, playerNum) || [];
+      const handId = getHandChannelId(game, playerNum);
+      const handChannel = await fetchGameChannel(client, handId);
+      const handMessages = await handChannel.messages.fetch({ limit: 20 });
+      const handMsg = handMessages.find((m) => m.author.bot && (m.content?.includes('Hand:') || m.content?.includes('Hand (')) && (m.components?.length > 0 || m.embeds?.some((e) => e.title?.includes('Command Cards'))));
+      if (handMsg && buildHandDisplayPayload) {
+        const handPayload = buildHandDisplayPayload(hand, deck, game.gameId, game, playerNum);
+        const effectReminder = effectData?.effect ? `\n**Apply effect:** ${effectData.effect}` : '';
+        handPayload.content = `**Command Cards** — Played **${card}**.${effectReminder}\n\n` + handPayload.content;
+        await handMsg.edit({ content: handPayload.content, embeds: handPayload.embeds, files: handPayload.files || [], components: handPayload.components }).catch(discordCatch);
+      }
+      await refreshHandAndDiscard(game, playerNum, client, ctx);
+      await logGameAction(game, client, `Played command card **${card}**.${effectDesc}`, { phase: 'ACTION', icon: 'card' });
+    },
+  }, ctx, client);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — space button for pick-a-space CC (e.g. Smoke Grenade, placement). */
@@ -1107,18 +1055,13 @@ export async function handleCelebrationPlay(interaction, ctx) {
   clearPendingCelebration(game);
   await interaction.update({ components: [] }).catch(discordCatch);
 
-  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
-  // window as a Promise, disposes card on pass. skipTimingCheck: afteropponentdefeated
-  // timing may not pass isCcPlayableNow by click time — gate already validated.
-  const poc = makeCcPromptOpponentCancel(game, game.gameId, ctx, client, { abilityId: 'Celebration' });
-  const res = await playCC(game, attackerPlayerNum, null, 'Celebration', {
-    ctx: { ...ctx, promptOpponentCancel: poc },
-    skipExecute: true,
+  // afteropponentdefeated timing may not pass isCcPlayableNow by click time —
+  // gate already validated. skipExecute: VP award only fires if not cancelled.
+  const res = await playCcFull(game, gameId, attackerPlayerNum, null, 'Celebration', {
     skipTimingCheck: true,
-  });
-
+    skipExecute: true,
+  }, ctx, client);
   await refreshHandAndDiscard(game, attackerPlayerNum, client, ctx);
-
   if (res.ok && !res.cancelled) {
     awardObjectiveVp(game, attackerPlayerNum, 4);
     const _celPid = getPlayerId(game, attackerPlayerNum);
@@ -1204,7 +1147,7 @@ export async function handleExcavationPlay(interaction, ctx) {
  * and handleIllegalCcIgnore (when pendingIllegalCcPlay.excavationPlay).
  */
 async function _commitExcavationPlay(game, ctx, interaction, params) {
-  const { getCcEffect, resolveAbility, dcMessageMeta, dcHealthState, dcExhaustedState, logGameAction, updateDiscardPileMessage, getBoardStateForMovement, getMapAttachmentForSpaces, client, saveGames } = ctx;
+  const { logGameAction, updateDiscardPileMessage, client, saveGames } = ctx;
   const { gameId, card, playerNum, sourcePN, sourceDiscardKey } = params;
   // Re-validate card still in source discard (state may have shifted
   // between prompt and click — Mastery, redraws, etc).
@@ -1236,34 +1179,19 @@ async function _commitExcavationPlay(game, ctx, interaction, params) {
       await interaction.message.edit({ content: `⛏️ **Excavation** — **${card}** played from P${sourcePN}'s discard, returned to game box.`, components: [] }).catch(discordCatch);
     }
   } catch {}
-  await logGameAction(game, client, `<@${interaction.user.id}> played **${card}** via ⛏️ **Excavation** (from P${sourcePN}'s discard → game box).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
-  if (updateDiscardPileMessage) {
-    await updateDiscardPileMessage(game, sourcePN, client).catch(discordCatch);
-  }
-  const effectData = getCcEffect ? getCcEffect(card) : null;
-  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
-  const abilityId = effectData?.abilityId ?? card;
-  // Signal Jammer intercept (mirrors handleCcConfirmPlay). Per CRR the
-  // jammed card and Signal Jammer both go to discard; for excavation the
-  // played card is already in game box per Aphra's "return to game box"
-  // rule, so only Signal Jammer routes to its owner's discard here.
-  if (game.signalJammerActive && card !== 'Signal Jammer') {
-    const jammerOwnerNum = game.signalJammerActive.playerNum;
-    game.signalJammerActive = null;
-    const jammerDiscardKey = ccDiscardKey(jammerOwnerNum);
-    game[jammerDiscardKey] = [...(game[jammerDiscardKey] || []), 'Signal Jammer'];
-    await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — Signal Jammer discarded; **${card}** still routes to game box per Excavation.`, { phase: 'ACTION', icon: 'card' });
-    saveGames(game.gameId);
-    return;
-  }
-  // Route through the UNIFIED counter-window (Negate/Comms) — the same path as a
-  // hand play / combat gate / DC play (alexanbv 2026-06-17). The card is already
-  // in the game box (Excavation's "return to game box" disposition above); on
-  // resolve the effect runs via _resumeScCcEffect (choice / space prompts +
-  // choiceForControllerPlayerNum handled there), on cancel the when-discarded
-  // pipeline fires. No more old Negation / Comm-Disruption window.
-  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta, saveGames });
-  await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId }, ctx, client);
+  // Route through the unified CC play pipeline. Card is already in game box
+  // (allowNotInHand:true skips _ccCommit). Signal Jammer, triggers, and
+  // counter window are all handled by playCcFull. Log and discard UI update go
+  // in onPostCommit (after Jammer check) so they're suppressed if Jammer fires.
+  await playCcFull(game, gameId, playerNum, null, card, {
+    allowNotInHand: true,
+    skipValidation: true,
+    skipLog: true,
+    onPostCommit: async () => {
+      await logGameAction(game, client, `<@${interaction.user.id}> played **${card}** via ⛏️ **Excavation** (from P${sourcePN}'s discard → game box).`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+      if (updateDiscardPileMessage) await updateDiscardPileMessage(game, sourcePN, client).catch(discordCatch);
+    },
+  }, ctx, client);
   saveGames(game.gameId);
 }
 

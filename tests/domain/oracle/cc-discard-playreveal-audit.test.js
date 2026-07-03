@@ -62,35 +62,29 @@ describe('PART A — async discards route through discardCc', () => {
   });
 });
 
-describe('PART B — the 4 retrofitted play paths emit a public play-reveal', () => {
-  const REVEAL = /played command card \*\*/;
-
-  it('Defeat-triggered CC (defeat-cc-prompts.js) reveals via the centralized poc factory', () => {
+describe('PART B — the 4 retrofitted play paths emit a public play-reveal via playCcFull', () => {
+  it('Defeat-triggered CC (defeat-cc-prompts.js) routes through playCcFull', () => {
     const src = read('src/handlers/defeat-cc-prompts.js');
-    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
-    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+    assert.match(src, /playCcFull/, 'imports and uses playCcFull unified pipeline');
   });
 
-  it('After-attack gate CC (after-attack-fire.js) reveals via the centralized poc factory', () => {
+  it('After-attack gate CC (after-attack-fire.js) routes through playCcFull', () => {
     const src = read('src/handlers/after-attack-fire.js');
-    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
-    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+    assert.match(src, /playCcFull/, 'imports and uses playCcFull unified pipeline');
   });
 
-  it('Tough Luck (combat.js) reveals via the centralized poc factory', () => {
+  it('Tough Luck (combat.js) routes through playCcFull', () => {
     const src = read('src/handlers/combat.js');
-    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
-    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+    assert.match(src, /playCcFull/, 'imports and uses playCcFull unified pipeline');
   });
 
-  it('Centralized poc factory (cc-pipeline.js) emits the public play-reveal for all routed paths', () => {
+  it('playCcFull (cc-pipeline.js) emits the public play-reveal for all routed paths', () => {
     const src = read('src/handlers/cc-pipeline.js');
-    assert.match(src, /played command card \*\*\$\{cardName\}\*\*/, 'reveal line present in centralized factory');
+    assert.match(src, /played command card \*\*\$\{cardName\}\*\*/, 'reveal line present in playCcFull');
   });
 
-  it('Celebration (cc-hand.js) reveals via the centralized poc factory', () => {
+  it('Celebration (cc-hand.js) routes through playCcFull', () => {
     const src = read('src/handlers/cc-hand.js');
-    // Reveal now emitted by makeCcPromptOpponentCancel in cc-pipeline.js, not inline.
-    assert.match(src, /makeCcPromptOpponentCancel/, 'imports and uses centralized poc factory');
+    assert.match(src, /playCcFull/, 'imports and uses playCcFull unified pipeline');
   });
 });

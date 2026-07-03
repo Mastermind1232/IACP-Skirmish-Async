@@ -30,7 +30,7 @@ import {
   ButtonStyle,
 } from 'discord.js';
 import { parseCustomId } from '../discord/custom-id.js';
-import { getDcEffects } from '../data-loader.js';
+import { getCcEffect, getDcEffects } from '../data-loader.js';
 import { getPlayerId, getHandChannelId, ccHandKey, ccDiscardKey } from '../game/player-helpers.js';
 import { fireCcDiscarded } from '../game/cc-passive-redraw.js';
 import { awardObjectiveVp } from '../game/index.js';
@@ -38,6 +38,7 @@ import { discordCatch } from '../error-handling.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
 import { requireGame } from '../utils/guards.js';
 import { _offerScThenResolveDeferredCc, runCcPlayTriggers } from './cc-hand.js';
+import { canPlayCC, ccRemovesToGameBox } from '../game/cc-timing.js';
 
 // ── Cancel rules ─────────────────────────────────────────────────────────────
 
@@ -216,6 +217,128 @@ registerCcCustomResolve('celebration_vp', async (game, entry, ctx, client) => {
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
 });
 
+// ── Unified CC play entry point ───────────────────────────────────────────────
+
+function _ccCommit(game, playerNum, cardName, removeTo, getEffect) {
+  const h = game[ccHandKey(playerNum)] || [];
+  const i = h.indexOf(cardName);
+  if (i >= 0) h.splice(i, 1);
+  const dest = removeTo || (ccRemovesToGameBox(cardName, getEffect) ? 'gamebox' : 'discard');
+  if (dest === 'gamebox') { game.gameBox = game.gameBox || []; game.gameBox.push(cardName); }
+  else if (dest === 'discard') { const dk = ccDiscardKey(playerNum); game[dk] = game[dk] || []; game[dk].push(cardName); }
+  return dest;
+}
+
+/**
+ * Unified CC play — ALL CCs regardless of origin route through here.
+ *
+ * Pipeline (alexanbv 2026-07-03):
+ *  0. Validate (canPlayCC) — unless skipValidation.
+ *  1. Signal Jammer — auto-cancel if active against this player.
+ *  2. Commit — remove from hand + dispose (unless allowNotInHand).
+ *  3. onPostCommit callback — UI refresh / logging (caller-supplied).
+ *  4. Log "<@pid> played **card**." unless skipLog.
+ *  5. runCcPlayTriggers — Hunt Dissent, Adapt (ALL CCs including counter cards).
+ *  6. Counter window — suspends via Promise (_ccWindowResolve) until resolved.
+ *  7. Execute — pendingCcEffect + _offerScThenResolveDeferredCc unless skipExecute.
+ *
+ * opts:
+ *   allowNotInHand  — card already relocated (Aphra excavation)
+ *   removeTo        — 'discard'|'gamebox'|'none' (default: auto)
+ *   skipExecute     — skip step 7; caller applies effect inline
+ *   skipTimingCheck — skip timing/block check in canPlayCC (gate-driven CCs)
+ *   skipValidation  — skip step 0 (caller already validated)
+ *   skipLog         — skip step 4 (caller logs its own message)
+ *   getEffect       — getCcEffect override
+ *   extraStackEntry — extra fields merged into the counter-window stack entry
+ *   onPostCommit    — async fn called after commit (step 2), before log (step 4)
+ */
+export async function playCcFull(game, gameId, playerNum, figureKey, cardName, opts = {}, ctx, client) {
+  const {
+    allowNotInHand = false,
+    removeTo,
+    skipExecute = false,
+    skipTimingCheck = false,
+    skipValidation = false,
+    skipSignalJammer = false,
+    skipLog = false,
+    getEffect = getCcEffect,
+    extraStackEntry = {},
+    onPostCommit = null,
+  } = opts;
+
+  const effect = getEffect(cardName);
+  if (!effect) return { ok: false, reason: `Unknown command card "${cardName}".` };
+  const cost = typeof effect.cost === 'number' ? effect.cost : 0;
+  const abilityId = effect.abilityId ?? cardName;
+
+  // 0. Validate.
+  if (!skipValidation) {
+    const check = canPlayCC(game, playerNum, figureKey, cardName, {
+      allowNotInHand, getEffect, ignoreCommsJammer: true, skipTimingCheck,
+    });
+    if (!check.ok) return check;
+  }
+
+  // 1. Signal Jammer (skipSignalJammer for callers that handle it themselves).
+  if (!skipSignalJammer && game.signalJammerActive && game.signalJammerActive.playerNum !== playerNum && cardName !== 'Signal Jammer') {
+    const jammerPN = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
+    game[ccDiscardKey(jammerPN)] = [...(game[ccDiscardKey(jammerPN)] || []), 'Signal Jammer'];
+    const jmsg = allowNotInHand
+      ? `**Signal Jammer** cancelled **${cardName}** — Signal Jammer discarded; **${cardName}** remains in game box.`
+      : `**Signal Jammer** cancelled **${cardName}** — both cards discarded.`;
+    await ctx.logGameAction?.(game, client, jmsg, { phase: 'ACTION', icon: 'card' });
+    ctx.saveGames?.(game.gameId);
+    return { ok: true, cancelled: 'signal_jammer' };
+  }
+
+  // 2. Commit card.
+  if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
+
+  // 3. Post-commit callback (UI refresh etc.).
+  if (onPostCommit) await onPostCommit();
+
+  // 4. Log.
+  if (!skipLog) {
+    const pid = getPlayerId(game, playerNum);
+    await ctx.logGameAction?.(game, client, `<@${pid}> played command card **${cardName}**.`,
+      { phase: 'ACTION', icon: 'card', allowedMentions: { users: pid ? [pid] : [] } });
+  }
+
+  // 5. On-play triggers (Hunt Dissent, Adapt) — ALL CCs including counter cards.
+  await runCcPlayTriggers(game, playerNum, {
+    client, logGameAction: ctx.logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames: ctx.saveGames,
+  });
+
+  // 6. Counter window — suspend via Promise until _resolveCcCounterWindow resolves it.
+  const windowResult = await new Promise((resolve) => {
+    game._ccWindowResolve = resolve;
+    openCcCounterWindow(game, gameId, {
+      card: cardName, cost, playedBy: playerNum, figureKey, abilityId, ...extraStackEntry,
+    }, ctx, client).then(() => ctx.saveGames?.(game.gameId));
+  });
+
+  // _resolveCcCounterWindow already fired fireCcDiscarded + logged the cancel.
+  if (windowResult.cancelled) return { ok: true, cancelled: 'opponent' };
+
+  // 7. Execute.
+  if (!skipExecute) {
+    game.pendingCcEffect = {
+      abilityId, card: cardName, playedBy: playerNum,
+      msgId: extraStackEntry.msgId ?? null,
+      fromDc: !!extraStackEntry.fromDc,
+      scProtect: SC_HAND_CCS.has(cardName),
+      fastLearnerFigureKey: extraStackEntry.fastLearnerFigureKey ?? null,
+      playedByFigureKey: figureKey ?? extraStackEntry.playedByFigureKey ?? null,
+    };
+    await _offerScThenResolveDeferredCc(game, ctx, client);
+  }
+
+  return { ok: true };
+}
+
 // ── Counter-window orchestration ─────────────────────────────────────────────
 
 /**
@@ -306,12 +429,37 @@ async function _playCounter(interaction, ctx, counterCard) {
     await interaction.followUp({ content: res.reason || 'That counter is not legal here.', ephemeral: true }).catch(discordCatch);
     return;
   }
+  // Signal Jammer: counter cards are also cancellable (alexanbv 2026-07-03).
+  // If Jammer fires: pop the counter back off the stack (it was just pushed), discard
+  // both cards, and re-prompt with the counter no longer in hand.
+  if (game.signalJammerActive && game.signalJammerActive.playerNum !== responder && counterCard !== 'Signal Jammer') {
+    const jammerPN = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    // Pop the counter we just pushed.
+    const w = game.ccCounterWindow;
+    if (w && w.stack[w.stack.length - 1]?.card === counterCard && w.stack[w.stack.length - 1]?.playedBy === responder) {
+      w.stack.pop();
+    }
+    const hi = hand.indexOf(counterCard);
+    if (hi >= 0) hand.splice(hi, 1);
+    game[ccHandKey(responder)] = hand;
+    game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
+    game[ccDiscardKey(jammerPN)] = [...(game[ccDiscardKey(jammerPN)] || []), 'Signal Jammer'];
+    await interaction.message.edit({ content: `**Signal Jammer** cancelled **${counterCard}** — both cards discarded.`, components: [] }).catch(discordCatch);
+    await logGameAction?.(game, client, `**Signal Jammer** cancelled **${counterCard}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
+    await _promptCounterResponder(game, gameId, ctx, client);
+    saveGames(game.gameId);
+    return;
+  }
+  // Commit: remove from hand + push to discard.
   const hi = hand.indexOf(counterCard);
   hand.splice(hi, 1);
   game[ccHandKey(responder)] = hand;
   game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
   await interaction.message.edit({ content: `**${counterCard}** played.`, components: [] }).catch(discordCatch);
   await logGameAction?.(game, client, `<@${interaction.user.id}> played **${counterCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
+  // On-play triggers fire for counter cards too (Hunt Dissent, Adapt).
+  await runCcPlayTriggers(game, responder, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
   await _promptCounterResponder(game, gameId, ctx, client);
   saveGames(game.gameId);
 }

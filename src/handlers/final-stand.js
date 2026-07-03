@@ -36,8 +36,7 @@ import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { discordCatch } from '../error-handling.js';
 import { splitCustomId } from '../discord/custom-id.js';
-import { playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 
 /**
  * Resume a Final Stand deferred defeat. Reads `pendingFinalStand`,
@@ -98,15 +97,9 @@ export async function handleFireFinalStand(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
-  // Unified playCC + poc: validates card in hand, opens Negate/Comms counter
-  // window as a Promise, disposes card on pass. skipTimingCheck: the before_defeated
-  // timing may not pass isCcPlayableNow by click time — gate already validated.
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, client, { abilityId: 'Final Stand' });
-  const fsRes = await playCC(game, ownerPN, null, 'Final Stand', {
-    ctx: { ...ctx, promptOpponentCancel: poc },
-    skipExecute: true,
-    skipTimingCheck: true,
-  });
+  const fsRes = await playCcFull(game, gameId, ownerPN, null, 'Final Stand', {
+    skipExecute: true, skipTimingCheck: true,
+  }, ctx, client);
 
   if (fsRes.ok && !fsRes.cancelled) {
     // Passed the counter window: mark pending active (signals finishCombatResolution

@@ -19,8 +19,7 @@ import { setRoundPhase, ROUND_PHASES } from '../game/phase.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame } from '../utils/guards.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
-import { runCcPlayTriggers } from './cc-hand.js';
-import { openCcCounterWindow } from './cc-pipeline.js';
+import { playCcFull } from './cc-pipeline.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 
@@ -470,23 +469,29 @@ export async function handleDefenderCcPlay(interaction, ctx) {
     return;
   }
 
-  // Commit the card to discard + refresh the hand UI.
+  // Signal Jammer intercept: fires before commit.
+  if (game.signalJammerActive && card !== 'Signal Jammer') {
+    const _sjPN = game.signalJammerActive.playerNum;
+    game.signalJammerActive = null;
+    game[handKey] = hand.filter((c) => c !== card);
+    game[discardKey] = [...(game[discardKey] || []), card];
+    game[ccDiscardKey(_sjPN)] = [...(game[ccDiscardKey(_sjPN)] || []), 'Signal Jammer'];
+    await logGameAction(game, client, `**Signal Jammer** cancelled **${card}** — both cards discarded.`, { icon: 'card' });
+    await refreshHandAndDiscard(game, playerNum, client, ctx);
+    saveGames(game.gameId);
+    return;
+  }
+  // Commit, log, refresh — then unified triggers + counter window via playCcFull.
   hand.splice(hand.indexOf(card), 1);
   game[handKey] = hand;
   game[discardKey] = (game[discardKey] || []).concat(card);
   await logGameAction(game, client, `🛡️ <@${getPlayerId(game, playerNum)}> played defender CC **${card}**.`, { icon: 'card' });
   await refreshHandAndDiscard(game, playerNum, client, ctx);
-
-  // On-play triggers (Hunt Dissent, Adapt) fire for the played card.
-  await runCcPlayTriggers(game, playerNum, { client, logGameAction, dcMessageMeta: ctx.dcMessageMeta, saveGames });
-
-  // Route through the UNIFIED counter-window: ALL CCs are potentially counterable
-  // (Negate/Comms), the fast-forward defender play included (alexanbv 2026-06-19).
-  // The effect resolves only if not cancelled — same path as a normal hand play.
-  const effectData = getCcEffect(card);
-  const abilityId = effectData?.abilityId ?? card;
-  const cost = typeof effectData?.cost === 'number' ? effectData.cost : 0;
-  await openCcCounterWindow(game, gameId, { card, cost, playedBy: playerNum, abilityId, msgId }, ctx, client);
-
+  await playCcFull(game, gameId, playerNum, null, card, {
+    allowNotInHand: true,
+    skipSignalJammer: true,
+    skipLog: true,
+    extraStackEntry: { msgId },
+  }, ctx, client);
   saveGames(game.gameId);
 }

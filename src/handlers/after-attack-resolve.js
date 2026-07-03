@@ -38,8 +38,8 @@ import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame } from '../utils/guards.js';
 import { fireEffect } from './after-attack-fire.js';
 import { abilitiesForWindow } from '../engine/combat-timing-registry.js';
-import { getPlayableReactionCardsForTiming, isCcPlayableNow, playCC } from '../game/cc-timing.js';
-import { makeCcPromptOpponentCancel } from './cc-pipeline.js';
+import { getPlayableReactionCardsForTiming, isCcPlayableNow } from '../game/cc-timing.js';
+import { playCcFull } from './cc-pipeline.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 
 /**
@@ -958,16 +958,14 @@ export async function handleAarCcPick(interaction, ctx) {
     return;
   }
   await interaction.deferUpdate().catch(discordCatch);
-  // Unified playCC + Promise poc: counter window, Comms Jammer, effect via
-  // ctx.resolveAbility, and disposal all live in playCC. postPostResolveWindow
-  // re-posts the after-attack window inline once playCC returns.
   const effectSide = sideShort === 'atk' ? 'attacker' : 'defender';
   const fig = sideShort === 'atk' ? combat.attackerFigureKey : combat.target?.figureKey;
-  const poc = makeCcPromptOpponentCancel(game, gameId, ctx, interaction.client, {
-    figureKey: fig, abilityId: card, combat: true,
-    msgId: sideShort === 'atk' ? combat.attackerMsgId : null,
-  });
-  const res = await playCC(game, ownerPN, fig, card, { ctx: { ...ctx, promptOpponentCancel: poc } });
+  const res = await playCcFull(game, gameId, ownerPN, fig, card, {
+    extraStackEntry: {
+      figureKey: fig, combat: true,
+      msgId: sideShort === 'atk' ? combat.attackerMsgId : null,
+    },
+  }, ctx, interaction.client);
   if (!res.ok) {
     await interaction.followUp({ content: `⚠️ Can't play ${card}: ${res.reason}`, ephemeral: true }).catch(discordCatch);
     return;
