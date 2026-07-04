@@ -575,7 +575,7 @@
     "Element of Surprise": {
       "cost": 0,
       "playableBy": "Any Figure",
-      "timing": "whenYouDeclareAttack",
+      "timing": "whenYouDeclareAttackDuringActivation",
       "effect": "Use when you declare an attack. If the target figure did not have line of sight to you at the start of your activation, remove 1 die from its defense pool.",
       "abilityId": "Element of Surprise"
     },

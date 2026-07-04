@@ -173,9 +173,12 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
       // Played during your activation, before picking an attack target
       return ctx.duringActivation;
     case 'whenyoudeclareattack':
-      // Played after attack is declared — requires an active activation (duringRound).
-      // Blocks SOR/EOR-granted attacks; allows return fire / granted attacks during
-      // any activation (attacker need not be the activating figure). alexanbv 2026-07-04.
+      // Played after attack is declared (combat/pendingCombat exists).
+      return ctx.duringAttack && ctx.isAttacker;
+    case 'whenyoudeclareattackduringactivation':
+      // Like whenYouDeclareAttack but also requires an active activation (not SOR/EOR).
+      // Used by Element of Surprise — its "at the start of your activation" LOS check
+      // is meaningless outside of an activation. alexanbv 2026-07-04.
       return ctx.duringAttack && ctx.isAttacker && ctx.duringRound;
     case 'afterattack':
     case 'afterattackdice':
