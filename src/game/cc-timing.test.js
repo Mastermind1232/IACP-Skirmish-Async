@@ -353,6 +353,9 @@ import { canPlayCC, playCC, ccRemovesToGameBox } from './cc-timing.js';
 const _ccGame = () => ({
   pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
   currentRound: 1,
+  currentActivationTurnPlayerId: 'p1', // simulate active activation (duringRound=true)
+  player1Id: 'p1',
+  player2Id: 'p2',
   player1CcHand: ['Wild Attack', 'Tools for the Job'],
   player2CcHand: ['Stealth Tactics'],
   figurePositions: {
