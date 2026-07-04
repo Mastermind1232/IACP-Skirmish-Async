@@ -8267,10 +8267,17 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !cbt || cbt.attackerPlayerNum !== playerNum) {
       return { applied: false, manualMessage: "Resolve manually: play when declaring an attack (as the attacker)." };
     }
-    // Element of Surprise: check target had no LOS to attacker at activation start
+    // Element of Surprise: check target had no LOS to attacker at activation start.
+    // Use activationStartAllPositions (board-wide snapshot) so that non-activating
+    // attackers (return fire, granted attack) are covered — activationStartPositions
+    // only stores the activating group and would silently skip the check otherwise.
     if (entry.requireNoLosAtActivationStart) {
-      const atkStartPos = game.activationStartPositions?.[cbt.attackerFigureKey];
-      const defCoord = cbt.target?.coord;
+      const atkStartPos = game.activationStartAllPositions?.[cbt.attackerFigureKey]
+        ?? game.activationStartPositions?.[cbt.attackerFigureKey];
+      const defFk = cbt.target?.figureKey;
+      const defCoord = (defFk && game.activationStartAllPositions?.[defFk])
+        ? game.activationStartAllPositions[defFk]
+        : cbt.target?.coord;
       const mapSp = game.selectedMap?.id ? getEffectiveMapSpaces(game, getMapData(game.selectedMap.id)) : null;
       if (atkStartPos && defCoord && mapSp) {
         const targetHadLos = hasLineOfSightByCoord(game, String(defCoord).toLowerCase(), String(atkStartPos).toLowerCase(), mapSp, getFigureSize);
