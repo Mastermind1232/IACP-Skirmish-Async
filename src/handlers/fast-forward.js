@@ -470,7 +470,7 @@ export async function handleDefenderCcPlay(interaction, ctx) {
   }
 
   // Signal Jammer intercept: fires before commit.
-  if (game.signalJammerActive && card !== 'Signal Jammer') {
+  if (game.signalJammerActive) {
     const _sjPN = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
     game[handKey] = hand.filter((c) => c !== card);

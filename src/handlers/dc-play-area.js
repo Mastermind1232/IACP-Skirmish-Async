@@ -910,7 +910,7 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
 
   // Signal Jammer intercept: fires before commit. Played card goes to discard
   // (not attachment — Jammer cancels the effect regardless of CC type).
-  if (game.signalJammerActive && card !== 'Signal Jammer') {
+  if (game.signalJammerActive) {
     const _sjPN = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
     game[handKey] = hand.filter((c) => c !== card);

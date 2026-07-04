@@ -281,7 +281,7 @@ export async function playCcFull(game, gameId, playerNum, figureKey, cardName, o
   }
 
   // 1. Signal Jammer (skipSignalJammer for callers that handle it themselves).
-  if (!skipSignalJammer && game.signalJammerActive && game.signalJammerActive.playerNum !== playerNum && cardName !== 'Signal Jammer') {
+  if (!skipSignalJammer && game.signalJammerActive) {
     const jammerPN = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
     if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
@@ -432,7 +432,7 @@ async function _playCounter(interaction, ctx, counterCard) {
   // Signal Jammer: counter cards are also cancellable (alexanbv 2026-07-03).
   // If Jammer fires: pop the counter back off the stack (it was just pushed), discard
   // both cards, and re-prompt with the counter no longer in hand.
-  if (game.signalJammerActive && game.signalJammerActive.playerNum !== responder && counterCard !== 'Signal Jammer') {
+  if (game.signalJammerActive) {
     const jammerPN = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
     // Pop the counter we just pushed.

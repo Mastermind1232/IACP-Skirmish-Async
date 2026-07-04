@@ -509,23 +509,23 @@ describe('Signal Jammer — cancels CCs from any timing category', () => {
     assert.equal(result.cancelled, 'signal_jammer');
   });
 
-  it('does NOT cancel when Jammer belongs to the playing player (own jammer)', () => {
-    // signalJammerActive.playerNum === playerNum → no cancel
+  it('cancels even when Jammer belongs to the playing player (own jammer — any CC rule)', async () => {
+    // Per alexanbv 2026-07-03: no own-player exemption — ANY next CC is cancelled.
     const g = baseGame({
       player1CcHand: ['Advance Warning'],
       currentActivationTurnPlayerId: 'P1',
       signalJammerActive: { playerNum: 1 },
     });
-    return runPipeline(g, 1, 'Advance Warning', { skipValidation: true }).then(({ result }) => {
-      assert.ok(!result.cancelled, 'own jammer never cancels own CC');
-      assert.equal(result.ok, true);
-    });
+    const { result } = await runPipeline(g, 1, 'Advance Warning', { skipValidation: true });
+    assert.equal(result.cancelled, 'signal_jammer', 'own jammer cancels own CC');
+    assert.equal(result.ok, true);
   });
 
-  it('does NOT cancel Signal Jammer itself (exempt by name)', async () => {
+  it('cancels Signal Jammer itself (no name exemption — any CC rule)', async () => {
+    // Per alexanbv 2026-07-03: Signal Jammer is not exempt from another active Jammer.
     const g = baseGame({ player1CcHand: ['Signal Jammer'], ...withJammer });
     const { result } = await runPipeline(g, 1, 'Signal Jammer', { skipValidation: true });
-    assert.ok(!result.cancelled, 'Signal Jammer is exempt from its own cancel rule');
+    assert.equal(result.cancelled, 'signal_jammer', 'Signal Jammer cancels Signal Jammer');
     assert.equal(result.ok, true);
   });
 });

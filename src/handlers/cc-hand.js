@@ -512,7 +512,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   clearPendingCcConfirmation(game);
 
   // Signal Jammer intercept: cancel this CC and discard both it and Signal Jammer
-  if (game.signalJammerActive && card !== 'Signal Jammer') {
+  if (game.signalJammerActive) {
     const jammerOwnerNum = game.signalJammerActive.playerNum;
     game.signalJammerActive = null;
     const playedHandKey = ccHandKey(playerNum);
