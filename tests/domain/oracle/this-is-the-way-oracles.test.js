@@ -116,14 +116,15 @@ describe('ORACLE-TITW-002: Structural wiring', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat', () => {
-  // devaron-garrison: a1 and b1 are adjacent (distance 1), well within the
-  // 4-space This is the Way range gate (IACP 2026-06-21).
-  function buildTestGame(armorerAlive = true, armorerCoord = 'b1') {
+  // devaron-garrison: g6 and h6 are adjacent (distance 1), well within the
+  // 4-space This is the Way range gate (IACP 2026-06-21). Coords live in the
+  // north-west room corridor g6..l6 (all on-map, no blocking terrain).
+  function buildTestGame(armorerAlive = true, armorerCoord = 'h6') {
     const game = {
       selectedMap: { id: 'devaron-garrison' },
       figurePositions: {
         1: {
-          'Greedo-0-0': 'a1',
+          'Greedo-0-0': 'g6',
           ...(armorerAlive ? { 'The Armorer-0-0': armorerCoord } : {}),
         },
         2: {},
@@ -190,8 +191,8 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
     const game = {
       selectedMap: { id: 'devaron-garrison' },
       figurePositions: {
-        1: { 'Greedo-0-0': 'a1' },
-        2: { 'The Armorer-0-0': 'b1' },
+        1: { 'Greedo-0-0': 'g6' },
+        2: { 'The Armorer-0-0': 'h6' },
       },
       figurePowerTokens: {},
     };
@@ -204,8 +205,8 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
   });
 
   // IACP 2026-06-21: within-4-spaces-of-the-Armorer range gate.
-  it('003g: Armorer exactly 4 spaces away (a1↔e1) → grants 1 Block Token', async () => {
-    const game = buildTestGame(true, 'e1'); // distance 4 from a1
+  it('003g: Armorer exactly 4 spaces away (g6↔k6) → grants 1 Block Token', async () => {
+    const game = buildTestGame(true, 'k6'); // distance 4 from g6
     const deps = buildDeps();
     await checkThisIsTheWay(game, 1, 'Greedo-0-0', null, deps);
     const tokens = game.figurePowerTokens['Greedo-0-0'] || [];
@@ -213,8 +214,8 @@ describe('ORACLE-TITW-003: Behavioral — grants Block Token on friendly defeat'
       'Attacker within 4 spaces of the Armorer should gain a Block Token');
   });
 
-  it('003h: Armorer 5 spaces away (a1↔f1, out of range) → NO Block Token', async () => {
-    const game = buildTestGame(true, 'f1'); // distance 5 from a1 (> 4)
+  it('003h: Armorer 5 spaces away (g6↔l6, out of range) → NO Block Token', async () => {
+    const game = buildTestGame(true, 'l6'); // distance 5 from g6 (> 4)
     const deps = buildDeps();
     await checkThisIsTheWay(game, 1, 'Greedo-0-0', null, deps);
     const tokens = game.figurePowerTokens['Greedo-0-0'] || [];

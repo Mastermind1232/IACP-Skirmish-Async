@@ -15,7 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
 
-const MAP_ID = 'anchorhead-cantina-bar';
+const MAP_ID = 'unit-test-grid';
 
 function buildGame({
   r2Pos = 'a1',

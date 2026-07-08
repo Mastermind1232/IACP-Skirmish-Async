@@ -147,7 +147,7 @@ describe('B-SORBLK-006: Force Slow blocks activation when multiple hostile targe
   it('increments pendingStartOfRoundResolve when picker is shown', async () => {
     // Use mos-eisley-outskirts: a1 and a2 are adjacent (distance 1)
     const game = makeGame({
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
       p1DcList: [{ dcName: 'Cal Kestis', displayName: 'Cal Kestis' }],
       p1DcMessageIds: ['msg_cal'],
       figurePositions: {
@@ -166,7 +166,7 @@ describe('B-SORBLK-006: Force Slow blocks activation when multiple hostile targe
 
   it('does NOT block when only 1 hostile target (auto-resolve)', async () => {
     const game = makeGame({
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
       p1DcList: [{ dcName: 'Cal Kestis', displayName: 'Cal Kestis' }],
       p1DcMessageIds: ['msg_cal'],
       figurePositions: {

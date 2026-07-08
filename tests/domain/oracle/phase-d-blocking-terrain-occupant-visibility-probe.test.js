@@ -80,7 +80,7 @@ describe('PROBE-PD-MSV-009/MOB-003: blocking-terrain occupants (Massive/Mobile) 
     // Whether the target space is blocking terrain or not, isWithinN
     // counts spaces over the map adjacency graph. Per-occupant terrain
     // does not gate the count.
-    const reachable = isWithinN('b2', 'b3', 1, 'mos-eisley-outskirts', getMapData);
+    const reachable = isWithinN('b2', 'b3', 1, 'unit-test-grid', getMapData);
     assert.equal(reachable, true,
       'spaces counted to neighbor regardless of occupant terrain — CRR-MSV-009 / CRR-MOB-003');
   });
@@ -91,9 +91,9 @@ describe('PROBE-PD-MSV-009/MOB-003: blocking-terrain occupants (Massive/Mobile) 
     const game = {
       figurePositions: { 1: { 'Massive-1-0': 'b2' } },
       figureOrientations: { 'Massive-1-0': '2x2' },
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
     };
-    const adj = getFiguresAdjacentToCoord(game, 'd3', 'mos-eisley-outskirts', null);
+    const adj = getFiguresAdjacentToCoord(game, 'd3', 'unit-test-grid', null);
     assert.ok(
       adj.some(f => f.figureKey === 'Massive-1-0'),
       'Massive figure (2x2) at b2 must be detected as adjacent to d3 (footprint cell c3 is adjacent) — CRR-MSV-009',

@@ -46,7 +46,7 @@ import { _registerDcMessageMeta } from '../../../src/game/activation-state.js';
 const PLAYER1_ID = 'user_p1';
 const MSG_ID = 'msg001';
 const GAME_ID = 'test1';
-const REAL_MAP_ID = 'mos-eisley-outskirts';
+const REAL_MAP_ID = 'unit-test-grid';
 
 function makeGame(overrides = {}) {
   return {

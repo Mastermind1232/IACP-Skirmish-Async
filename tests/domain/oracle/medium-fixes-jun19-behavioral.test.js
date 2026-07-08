@@ -27,7 +27,7 @@ function baseGame(overrides = {}) {
     figureConditions: {},
     figurePowerTokens: {},
     currentRound: 1,
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: {},
     ...overrides,
   };

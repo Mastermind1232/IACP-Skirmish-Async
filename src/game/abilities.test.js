@@ -1142,7 +1142,7 @@ test('resolveAbility Regroup discards HARMFUL from adjacent figures', () => {
   const msgId = 'msg-r';
   const game = {
     gameId: 'g-r',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Leader-1-0': 'o8', 'Trooper-1-0': 'p8' }, 2: {} },
     figureConditions: { 'Trooper-1-0': ['Stun'] },
     dcActionsData: { [msgId]: {} },
@@ -1226,7 +1226,7 @@ test('resolveAbility Emergency Aid recovers to adjacent figure', () => {
   ]);
   const game = {
     gameId: 'g-ea',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Leader-1-0': 'o8', 'Trooper-1-0': 'p8' }, 2: {} },
     dcActionsData: { [msgId]: {} },
     p1DcMessageIds: [msgId, targetMsgId],
@@ -1249,7 +1249,7 @@ test('resolveAbility Dirty Trick with adjacent hostile presents orStunInstead ch
   const hostileMsgId = 'msg-hostile-dt';
   const game = {
     gameId: 'g-dt',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Akbar-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p2DcMessageIds: [hostileMsgId],
@@ -1342,7 +1342,7 @@ test('resolveAbility Wild Fury applies Focus and uses entry logMessage', () => {
     p1DcList: [{ dcName: 'Darth Vader', healthState: [[8, 10]] }],
     figureConditions: {},
     figurePositions: { 1: { 'Darth Vader-1-0': 'n8' }, 2: {} },
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-wf2', playerNum: 1, dcName: 'Darth Vader', displayName: 'Darth Vader [Group 1]' }]]);
   const result = resolveAbility('Wild Fury', { game, playerNum: 1, dcMessageMeta });
@@ -1390,7 +1390,7 @@ test('resolveAbility Out of Time applies strain = round number via scaleStrainTo
   const game = {
     gameId: 'g-oot',
     currentRound: 4,
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Obi-Wan-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p2DcMessageIds: [hostileMsgId],
@@ -1423,7 +1423,7 @@ test('resolveAbility Force Drain applies damage+Stun+Weaken and heals self if th
   ]);
   const game = {
     gameId: 'g-fd',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Darth Vader-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p1DcMessageIds: [msgId],
@@ -1457,7 +1457,7 @@ test('resolveAbility Force Drain does NOT heal when the target is NOT a FORCE US
   ]);
   const game = {
     gameId: 'g-fd2',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Luke Skywalker-1-0': 'o8' }, 2: { 'Nexu-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p1DcMessageIds: [msgId],
@@ -1483,7 +1483,7 @@ test('resolveAbility Force Lightning applies 2 Damage and Stun to adjacent hosti
   const dcHealthState = new Map([[hostileMsgId, hostileHealth]]);
   const game = {
     gameId: 'g-fl',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Emperor Palpatine-1-0': 'o8' }, 2: { 'Stormtroopers-2-0': 'p8' } },
     dcActionsData: { [msgId]: {} },
     p2DcMessageIds: [hostileMsgId],
@@ -1747,7 +1747,7 @@ test('Counter Attack: damages the attacker (not a free adjacent hostile) when ad
   const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
   const game = {
     gameId: 'g-ca',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: {
       1: { 'Royal Guard-1-0': 'a1' }, // defender (you)
       2: { 'Stormtrooper-1-0': 'a2' }, // attacker (adjacent)
@@ -1772,7 +1772,7 @@ test('Counter Attack: no effect when defender is not adjacent to the attacker', 
   const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
   const game = {
     gameId: 'g-ca2',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: {
       1: { 'Royal Guard-1-0': 'a1' },
       2: { 'Stormtrooper-1-0': 'c3' }, // 2 spaces away
@@ -1795,7 +1795,7 @@ test('Counter Attack: no effect when defender was defeated (no longer on board)'
   const dcHealthState = new Map([[atkMsgId, [[6, 6]]]]);
   const game = {
     gameId: 'g-ca3',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: {
       1: {}, // defender removed from board (defeated)
       2: { 'Stormtrooper-1-0': 'a2' },
@@ -1823,7 +1823,7 @@ test('Crush: only SMALL adjacent hostiles are eligible (LARGE/MASSIVE excluded)'
   ]);
   const game = {
     gameId: 'g-crush',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: {
       1: { 'Royal Guard-1-0': 'a1' },
       2: { 'AT-ST-1-0': 'a2' }, // adjacent but MASSIVE → not eligible
@@ -1852,7 +1852,7 @@ test('Combat Resupply: does NOT grant the activator a Power Token (only Hit-toke
   const game = {
     gameId: 'g-cr',
     currentRound: 1,
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { 'Royal Guard-1-0': 'a1' } },
     dcActionsData: { [msgId]: { selectedFigure: 0 } },
     p1DcMessageIds: [msgId],
@@ -2293,7 +2293,7 @@ test('Collateral Damage: single adjacent damageable OBJECT is auto-damaged for 2
   // the target space; it suffers 2 Damage." Only an object is in range → auto-apply.
   const game = {
     gameId: 'g-cd-obj',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8' } },
     lastAttackTargetFigureKey: 'Target-1-0',
     objectHealth: { 'crate-1': [3, 3] },
@@ -2311,7 +2311,7 @@ test('Collateral Damage: single adjacent damageable OBJECT is auto-damaged for 2
 test('Collateral Damage: an object at 0 HP is removed from positions (destroyed)', () => {
   const game = {
     gameId: 'g-cd-destroy',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8' } },
     lastAttackTargetFigureKey: 'Target-1-0',
     objectHealth: { 'barrel-1': [2, 2] },
@@ -2329,7 +2329,7 @@ test('Collateral Damage: an object at 0 HP is removed from positions (destroyed)
 test('Collateral Damage: figure + object both in range → choice offers both; object pick damages object', () => {
   const game = {
     gameId: 'g-cd-multi',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8', 'Bystander-1-0': 'o8' } },
     lastAttackTargetFigureKey: 'Target-1-0',
     objectHealth: { 'crate-1': [3, 3] },
@@ -2353,7 +2353,7 @@ test('Collateral Damage: figure + object both in range → choice offers both; o
 test('Collateral Damage: figure pick (cc-hand chosenFigureKey route) damages the chosen figure', () => {
   const game = {
     gameId: 'g-cd-fig',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: { 'Target-1-0': 'o8', 'Bystander-1-0': 'o8' } },
     lastAttackTargetFigureKey: 'Target-1-0',
     objectHealth: { 'crate-1': [3, 3] },
@@ -2416,7 +2416,7 @@ test('Dark Energy enumerates friendly SMALL figures too, excluding only the acti
   const msgId = 'msg-de';
   const game = {
     gameId: 'g-de',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: { [msgId]: { selectedFigure: 0 } },
     figurePositions: {
       1: { 'Smuggler-1-0': 'a1', 'AllySmall-1-0': 'a2' },
@@ -2439,7 +2439,7 @@ test('Pounce uses the selected figure index, not figure 0 (gap 11/13/14)', () =>
   const msgId = 'msg-pounce';
   const game = {
     gameId: 'g-pounce',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: { [msgId]: { selectedFigure: 1 } },
     figurePositions: { 1: { 'Loth-cat-1-0': 'a1', 'Loth-cat-1-1': 'b2' } },
   };
@@ -2455,7 +2455,7 @@ test('Emperor may target a HOSTILE figure within 4 (gap 9)', () => {
   const msgId = 'msg-emp';
   const game = {
     gameId: 'g-emp',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: { [msgId]: { selectedFigure: 0 } },
     figurePositions: {
       1: { 'Emperor Palpatine-1-0': 'a1' },
@@ -2501,7 +2501,7 @@ test('Wrist Cord enforces oncePer:round per figure (push branch)', () => {
   const figureKey = 'Boba Fett-1-0';
   const game = {
     gameId: 'g-wc',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: { [msgId]: { selectedFigure: 0 } },
     figurePositions: { 1: { [figureKey]: 'a1' }, 2: { 'Rebel Trooper-1-0': 'a2' } },
     // Pre-mark used this round → the branch must short-circuit.
@@ -2522,7 +2522,7 @@ test('Wrist Cord round flag is keyed per figure (not group-wide)', () => {
   const figB = 'Boba Fett-1-1';
   const game = {
     gameId: 'g-wc2',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     dcActionsData: { [msgId]: { selectedFigure: 1 } }, // figure B is acting
     figurePositions: { 1: { [figA]: 'a1', [figB]: 'b1' }, 2: { 'Rebel Trooper-1-0': 'a2' } },
     roundFigureAbilityUsed: { [`${figA}_wrist_cord`]: true }, // only A used it
@@ -2549,7 +2549,7 @@ test('Ambush forces 2 Damage onto THE ATTACKER (no free target pick) and grants 
   const dcHealthState = new Map([[attMsgId, attHealth]]);
   const game = {
     gameId: 'g-ambush',
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: { [defFk]: 'a1' }, 2: { [attFk]: 'a2' } },
     p2DcMessageIds: [attMsgId],
     p2DcList: [{ dcName: 'Stormtroopers', healthState: [[10, 10]] }],

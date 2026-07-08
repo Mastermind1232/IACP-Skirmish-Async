@@ -11,8 +11,10 @@
  * Scope is narrow on purpose:
  *   - Graph-level invariants that must hold for every playable map.
  *   - A small set of handcrafted BFS anchor-pair distances on
- *     mos-eisley-outskirts, chosen because the heat map already cites
- *     them as manually-verified anchors (d1↔a1 = 3, e21↔h21 = 3).
+ *     mos-eisley-outskirts, verified against the map image (main-street
+ *     row 17 corridor l17↔o17 = 3, e21↔h21 = 3). Rebuilt 2026-07-08 when
+ *     the placeholder full-grid spaces were replaced with the real traced
+ *     cells (a1/b1/d1 are off-map background now).
  *
  * What this catches:
  *   - Orphan adjacency entries (coord in adj but not in spaces).
@@ -235,12 +237,12 @@ describe('D10 Map Topology Certification', () => {
 
   describe('CERT-MAP-008: handcrafted BFS anchor distances (mos-eisley-outskirts)', () => {
     const ANCHORS = [
-      // d1↔a1 = 3 — Obi-Wan Alter Mind probe (heat-map D8 PROBE-ABILITY-001).
-      { src: 'd1', dst: 'a1', expected: 3 },
+      // l17↔o17 = 3 — open main-street corridor, verified on the map image.
+      { src: 'l17', dst: 'o17', expected: 3 },
       // e21↔h21 = 3 — interact legality terminal reachability (heat-map D1 PROBE-INT-*).
       { src: 'e21', dst: 'h21', expected: 3 },
-      // b1↔a1 = 1 — Powerful Influence probe (heat-map D8 PROBE-ABILITY-002).
-      { src: 'b1', dst: 'a1', expected: 1 },
+      // m17↔n17 = 1 — adjacent street cells.
+      { src: 'm17', dst: 'n17', expected: 1 },
     ];
 
     for (const { src, dst, expected } of ANCHORS) {

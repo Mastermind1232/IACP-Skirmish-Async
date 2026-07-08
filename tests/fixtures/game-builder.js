@@ -26,7 +26,7 @@ export function createTestGame() {
 
 class GameBuilder {
   constructor() {
-    this._mapId = 'mos-eisley-outskirts';
+    this._mapId = 'unit-test-grid'; // synthetic open 26x26 grid; use .withMap() for a real map
     this._p1Army = [];
     this._p2Army = [];
     this._deployed = false;

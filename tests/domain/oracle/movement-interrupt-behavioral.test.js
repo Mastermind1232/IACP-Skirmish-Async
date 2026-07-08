@@ -38,7 +38,7 @@ import { detectPostMoveInterrupts } from '../../../src/game/movement-interrupts.
  */
 function makeGame(overrides = {}) {
   return {
-    selectedMap: { id: 'anchorhead-cantina-bar' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: {} },
     figureOrientations: {},
     openedDoors: [],

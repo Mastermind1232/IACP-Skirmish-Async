@@ -70,11 +70,11 @@ describe('PROBE-PD-ADJ-007: blocking-terrain occupants are adjacent at distance 
     const game = {
       figurePositions: { 1: { 'Stormtrooper-1-0': 'b2' } },
       figureOrientations: {},
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
     };
     // Probe from b1 (a neighbor of b2). The occupant at b2 should appear
     // regardless of whether b2 itself is blocking terrain.
-    const adj = getFiguresAdjacentToCoord(game, 'b1', 'mos-eisley-outskirts', null);
+    const adj = getFiguresAdjacentToCoord(game, 'b1', 'unit-test-grid', null);
     assert.ok(adj.some(f => f.figureKey === 'Stormtrooper-1-0'),
       'occupant at distance 1 must be detected as adjacent regardless of its space terrain — CRR-ADJ-007');
   });
@@ -92,9 +92,9 @@ describe('PROBE-PD-ADJ-007: blocking-terrain occupants are adjacent at distance 
         },
       },
       figureOrientations: {},
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
     };
-    const adj = getFiguresAdjacentToCoord(game, 'b2', 'mos-eisley-outskirts', 'Baze-1-0');
+    const adj = getFiguresAdjacentToCoord(game, 'b2', 'unit-test-grid', 'Baze-1-0');
     assert.ok(adj.some(f => f.figureKey === 'TheChild-0-0'),
       'same-square companion must be adjacent — CRR-ADJ-007 + figure-adjacency rule');
   });

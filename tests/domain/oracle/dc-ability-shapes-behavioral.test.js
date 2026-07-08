@@ -34,7 +34,7 @@ import { applyDeferredAbilityEffects } from '../../../src/game/damage-pipeline.j
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
 const GAME_ID = 'test1';
-const REAL_MAP_ID = 'mos-eisley-outskirts';
+const REAL_MAP_ID = 'unit-test-grid';
 
 function makeGame(overrides = {}) {
   return {

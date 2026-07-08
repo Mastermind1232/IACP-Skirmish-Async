@@ -39,6 +39,7 @@ function getDcInfo(game, dcMessageMeta, playerNum, dcName) {
  */
 function buildInteractScenario(p1DcName) {
   const { game, deps, dcMessageMeta } = createTestGame()
+    .withMap('mos-eisley-outskirts') // terminals (h21) come from real map-tokens
     .withPlayer1Army([{ dcName: p1DcName }])
     .withPlayer2Army([{ dcName: 'Greedo' }])
     .inRound(1)

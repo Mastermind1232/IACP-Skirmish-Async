@@ -60,7 +60,7 @@ describe('CRR-COMBAT-BLAST-MULTICELL: full-footprint adjacency for blast / cleav
     return {
       figurePositions,
       figureOrientations: {},
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
     };
   }
 
@@ -70,7 +70,7 @@ describe('CRR-COMBAT-BLAST-MULTICELL: full-footprint adjacency for blast / cleav
       1: {},
       2: { 'enemy-0-0': 'b1' },
     });
-    const result = getFiguresAdjacentToCoord(game, 'b2', 'mos-eisley-outskirts', 'target-fk');
+    const result = getFiguresAdjacentToCoord(game, 'b2', 'unit-test-grid', 'target-fk');
     assert.ok(Array.isArray(result), 'returns an array');
     // Either b1 is adjacent to b2 in this map (it is — orthogonally), or it isn't.
     // Either way, the call shouldn't crash and should return a clean array.
@@ -85,8 +85,8 @@ describe('CRR-COMBAT-BLAST-MULTICELL: full-footprint adjacency for blast / cleav
       1: {},
       2: { 'enemy-0-0': 'c1' },
     });
-    const withoutSize = getFiguresAdjacentToCoord(game, 'b2', 'mos-eisley-outskirts', 'target-fk');
-    const withSize    = getFiguresAdjacentToCoord(game, 'b2', 'mos-eisley-outskirts', 'target-fk', '2x2');
+    const withoutSize = getFiguresAdjacentToCoord(game, 'b2', 'unit-test-grid', 'target-fk');
+    const withSize    = getFiguresAdjacentToCoord(game, 'b2', 'unit-test-grid', 'target-fk', '2x2');
     // The behavioral assertion: with full footprint, the result set is a SUPERSET
     // of the single-cell result (multi-cell origin can only match more, never fewer).
     const withoutKeys = new Set(withoutSize.map(r => r.figureKey));

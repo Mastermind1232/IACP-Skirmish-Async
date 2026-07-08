@@ -29,7 +29,7 @@ function makeGame(positions) {
   return {
     figurePositions: positions,
     figureOrientations: {},
-    selectedMap: { id: 'mos-eisley-outskirts' },
+    selectedMap: { id: 'unit-test-grid' },
   };
 }
 
@@ -43,7 +43,7 @@ describe('getFiguresAdjacentToTarget — same-square adjacency (CRR figure rule)
         'The Child-0-0': 'b2',
       },
     });
-    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'mos-eisley-outskirts');
+    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'unit-test-grid');
     const found = adj.find((f) => f.figureKey === 'The Child-0-0');
     assert.ok(found, 'same-square companion must appear in adjacency result');
     assert.equal(found.playerNum, 2);
@@ -57,7 +57,7 @@ describe('getFiguresAdjacentToTarget — same-square adjacency (CRR figure rule)
         'Baze Malbus-1-0': 'b3', // adjacent (south)
       },
     });
-    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'mos-eisley-outskirts');
+    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'unit-test-grid');
     const found = adj.find((f) => f.figureKey === 'Baze Malbus-1-0');
     assert.ok(found, 'orthogonal neighbor must still appear in adjacency result');
   });
@@ -73,7 +73,7 @@ describe('getFiguresAdjacentToTarget — same-square adjacency (CRR figure rule)
         'Baze Malbus-1-0': 'b3', // adjacent neighbor
       },
     });
-    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'mos-eisley-outskirts');
+    const adj = getFiguresAdjacentToTarget(game, 'C-3PO-1-0', 'unit-test-grid');
     const keys = new Set(adj.map((f) => f.figureKey));
     assert.ok(keys.has('The Child-0-0'),
       'same-square companion must be present (tripwire: own-cell excluded if missing)');

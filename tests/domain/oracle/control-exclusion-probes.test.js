@@ -16,7 +16,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getSpaceController } from '../../../src/game/board-helpers.js';
 
-const MAP_ID = 'mos-eisley-outskirts';
+const MAP_ID = 'unit-test-grid';
 
 // a1 adjacency: [a2, b1, b2]
 // d1 is 3 game-spaces from a1 — NOT adjacent to a1

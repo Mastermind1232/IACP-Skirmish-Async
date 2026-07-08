@@ -15,7 +15,7 @@ import { resolveAbility } from '../../../src/game/abilities.js';
 import { drainPendingDamage } from '../../../src/game/damage-pipeline.js';
 
 // Real map with real adjacency so countGameSpaces / push-space mechanics work.
-const MAP = 'mos-eisley-outskirts';
+const MAP = 'unit-test-grid';
 // a1 is adjacent to a2 and b1 (all within 3 spaces of each other).
 const ACT = 'a1', FRIEND = 'a2', ENEMY = 'b1';
 

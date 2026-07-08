@@ -84,7 +84,7 @@ describe('PROBE-PD-CS-004: ability-user is the reference frame for within/adjace
     // CRR figure-adjacency baseline: a figure at the same coord as the
     // ability-user is at distance 0 → "within 0" is true (and trivially
     // "adjacent" since same-square IS adjacent per CRR).
-    assert.equal(isWithinN('b2', 'b2', 0, 'mos-eisley-outskirts', getMapData), true,
+    assert.equal(isWithinN('b2', 'b2', 0, 'unit-test-grid', getMapData), true,
       'same coord must be within 0 from the reference — CRR-CS-004');
   });
 
@@ -94,8 +94,8 @@ describe('PROBE-PD-CS-004: ability-user is the reference frame for within/adjace
     // verifies that swapping which figure is "the ability user" does
     // not change the count semantic — both directions agree.
     const A = 'b2', B = 'd2';
-    const ab = isWithinN(A, B, 2, 'mos-eisley-outskirts', getMapData);
-    const ba = isWithinN(B, A, 2, 'mos-eisley-outskirts', getMapData);
+    const ab = isWithinN(A, B, 2, 'unit-test-grid', getMapData);
+    const ba = isWithinN(B, A, 2, 'unit-test-grid', getMapData);
     assert.equal(ab, ba,
       'within-N is symmetric: A-as-reference and B-as-reference must agree — CRR-CS-004');
   });
@@ -111,9 +111,9 @@ describe('PROBE-PD-CS-004: ability-user is the reference frame for within/adjace
         2: { 'NearTarget-1-0': 'b3', 'FarTarget-1-0': 'e5' },
       },
       figureOrientations: {},
-      selectedMap: { id: 'mos-eisley-outskirts' },
+      selectedMap: { id: 'unit-test-grid' },
     };
-    const adj = getFiguresAdjacentToCoord(game, 'b2', 'mos-eisley-outskirts', 'AbilityUser-1-0');
+    const adj = getFiguresAdjacentToCoord(game, 'b2', 'unit-test-grid', 'AbilityUser-1-0');
     const keys = adj.map(f => f.figureKey);
     assert.ok(keys.includes('NearTarget-1-0'),
       'adjacent figure must appear when reference coord is the ability-user — CRR-CS-004');

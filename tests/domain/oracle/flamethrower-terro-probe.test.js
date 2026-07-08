@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
 import { applyDeferredAbilityEffects } from '../../../src/game/damage-pipeline.js';
 
-const MAP_ID = 'anchorhead-cantina-bar';
+const MAP_ID = 'unit-test-grid';
 
 function buildGame({ terroPos = 'a1', hostilePos = 'b1', extraFriendly = null } = {}) {
   const dcMessageMeta = new Map();

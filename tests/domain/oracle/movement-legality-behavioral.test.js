@@ -133,7 +133,7 @@ function mockInteraction(customId, userId = 'player1') {
 function makeGame(overrides = {}) {
   return {
     gameId: '42', player1Id: 'player1', player2Id: 'player2',
-    selectedMap: { id: 'anchorhead-cantina-bar' },
+    selectedMap: { id: 'unit-test-grid' },
     figurePositions: { 1: {}, 2: {} },
     figureOrientations: {}, figureConditions: {}, figurePowerTokens: {},
     openedDoors: [], moveInProgress: {}, movementBank: {},

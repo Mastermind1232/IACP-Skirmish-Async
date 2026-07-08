@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { detectAttachedTrigger, applyDioFollow } from '../../../src/game/attached-dio-helpers.js';
 import { isForcedStepByStep } from '../../../src/game/forced-step-movement.js';
 
-const MAP_ID = 'anchorhead-cantina-bar';
+const MAP_ID = 'unit-test-grid';
 
 function buildGame({ idenPos = 'a1', dioPos = null } = {}) {
   const p1 = { 'Iden Versio-1-0': idenPos };

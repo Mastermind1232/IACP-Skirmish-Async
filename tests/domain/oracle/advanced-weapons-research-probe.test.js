@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { awrRange, enumerateAwrTargets } from '../../../src/game/awr-helpers.js';
 import { grantPowerTokens } from '../../../src/game/game-helpers.js';
 
-const MAP_ID = 'anchorhead-cantina-bar';
+const MAP_ID = 'unit-test-grid';
 
 function buildGame({
   krennicPos = 'a1',

@@ -332,7 +332,7 @@ describe('B-DC-005: resolveAbility — Invasive Procedure', () => {
   // Invasive Procedure has range: 1, so countGameSpaces (which uses the real
   // data-loader getMapData, not the context mock) must resolve to ≤1.
   // Use real map coords from mos-eisley-outskirts where a1 and a2 are adjacent.
-  const REAL_MAP_ID = 'mos-eisley-outskirts';
+  const REAL_MAP_ID = 'unit-test-grid';
   const ATTACKER_POS = 'a1';
   const ADJACENT_POS = 'a2';
 

@@ -4325,14 +4325,14 @@
     "development-facility": {
       "transform": {
         "x": {
-          "from": "row",
-          "scale": 1,
-          "offset": -9
-        },
-        "y": {
           "from": "col",
           "scale": 1,
-          "offset": -12
+          "offset": -5
+        },
+        "y": {
+          "from": "row",
+          "scale": 1,
+          "offset": -4
         }
       },
       "walls": [

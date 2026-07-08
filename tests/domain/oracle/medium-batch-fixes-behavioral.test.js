@@ -29,7 +29,7 @@ function makeGame(overrides = {}) {
 
 // countGameSpaces / getReachableSpaces use the REAL data-loader map, not the
 // context mock — use a real map id with known-close coords.
-const REAL_MAP_ID = 'mos-eisley-outskirts';
+const REAL_MAP_ID = 'unit-test-grid';
 
 function baseContext(game, { msgId, meta, targetFigureKey, choiceIndex } = {}) {
   return {
