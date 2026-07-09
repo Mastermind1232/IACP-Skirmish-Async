@@ -27,7 +27,11 @@ const COMBAT_DEPS = [
   'applyDamageAndFinishCombat', 'isDcUnique', 'getCelebrationButtons', 'getFiguresAdjacentToCoord',
   'calculateKillVp', 'checkHuntDissent', 'checkThisIsTheWay', 'decrementActivationIfGroupDefeated',
   'checkFriendlyDefeatedPassiveRedraws', 'ccAttachmentsKey',
-  'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage',
+  // updateHandChannelMessages: combat-window CC plays (EoS, Marksman, Tough
+  // Luck, reroll/gate CCs) commit hand removals inside cc-pipeline; the hand
+  // CHANNEL refresh needs this key or the player's card list stays stale
+  // (corndog19 2026-07-09: EoS still shown in hand after playing it).
+  'checkNefariousGains', 'updateHandVisualMessage', 'updateDiscardPileMessage', 'updateHandChannelMessages',
   'processFigureDefeat',
   'getMapData', 'getEffectiveMapSpaces', 'isWithinN', 'getFigureLabel',
   // findFigureheadFigure: applyStrain (called from combat-path strain like

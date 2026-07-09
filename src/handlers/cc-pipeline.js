@@ -40,6 +40,22 @@ import { requireGame } from '../utils/guards.js';
 import { _offerScThenResolveDeferredCc, runCcPlayTriggers } from './cc-hand.js';
 import { canPlayCC, ccRemovesToGameBox } from '../game/cc-timing.js';
 
+// ── Hand-display refresh ─────────────────────────────────────────────────────
+// Every hand mutation inside this pipeline (play commit, counter commit,
+// Signal Jammer double-discard) must redraw the player's hand + discard
+// displays, or the old cards stay visible until an unrelated action redraws
+// them (corndog19 2026-07-09: EoS still shown in hand after a combat play).
+// Guarded per-fn because some ctx groups only carry a subset of the updaters.
+async function _refreshHandUi(game, playerNum, client, ctx) {
+  try {
+    if (ctx.updateHandVisualMessage) await ctx.updateHandVisualMessage(game, playerNum, client);
+    if (ctx.updateDiscardPileMessage) await ctx.updateDiscardPileMessage(game, playerNum, client);
+    if (ctx.updateHandChannelMessages) await ctx.updateHandChannelMessages(game, client);
+  } catch (err) {
+    console.error('[cc-pipeline] hand display refresh failed:', err);
+  }
+}
+
 // ── Cancel rules ─────────────────────────────────────────────────────────────
 
 export const NEGATION = 'Negation';
@@ -286,6 +302,8 @@ export async function playCcFull(game, gameId, playerNum, figureKey, cardName, o
     game.signalJammerActive = null;
     if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
     game[ccDiscardKey(jammerPN)] = [...(game[ccDiscardKey(jammerPN)] || []), 'Signal Jammer'];
+    await _refreshHandUi(game, playerNum, client, ctx);
+    if (jammerPN !== playerNum) await _refreshHandUi(game, jammerPN, client, ctx);
     const jmsg = allowNotInHand
       ? `**Signal Jammer** cancelled **${cardName}** — Signal Jammer discarded; **${cardName}** remains in game box.`
       : `**Signal Jammer** cancelled **${cardName}** — both cards discarded.`;
@@ -294,8 +312,12 @@ export async function playCcFull(game, gameId, playerNum, figureKey, cardName, o
     return { ok: true, cancelled: 'signal_jammer' };
   }
 
-  // 2. Commit card.
-  if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
+  // 2. Commit card + redraw the player's hand/discard displays immediately —
+  // combat-window plays have no other refresh path (corndog19 2026-07-09).
+  if (!allowNotInHand) {
+    _ccCommit(game, playerNum, cardName, removeTo, getEffect);
+    await _refreshHandUi(game, playerNum, client, ctx);
+  }
 
   // 3. Post-commit callback (UI refresh etc.).
   if (onPostCommit) await onPostCommit();
@@ -389,12 +411,20 @@ async function _promptCounterResponder(game, gameId, ctx, client) {
   if (!responder) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
   const top = topCard(game);
   const spy = _ccSpyGroupCount(game, responder);
-  const hand = game[ccHandKey(responder)] || [];
-  const offer = topAvailableCounters(game, spy).filter((c) => hand.includes(c));
+  // alexanbv 2026-07-09: the window shows whenever a counter is RULE-legal by
+  // PUBLIC information only (card cost, responder's SPY-group count) — never
+  // gated on the responder's hand, which would leak hand contents through the
+  // prompt's absence. Clicking a counter you don't hold errors ephemerally in
+  // _playCounter, so the buttons are safe to show unconditionally.
+  const offer = topAvailableCounters(game, spy);
   if (offer.length === 0) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
   const chId = getHandChannelId(game, responder);
   const ch = chId ? await fetchGameChannel(client, chId) : null;
-  if (!ch) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
+  if (!ch) {
+    console.error(`[cc-pipeline] counter-window: hand channel unavailable for P${responder} in game ${gameId} — auto-resolving WITHOUT a prompt (counter opportunity lost).`);
+    await _resolveCcCounterWindow(game, gameId, ctx, client);
+    return;
+  }
   const btns = offer.map((c) => new ButtonBuilder()
     .setCustomId(c === NEGATION ? `cc_counter_negate_${gameId}` : `cc_counter_comms_${gameId}`)
     .setLabel(`Play ${c}`).setStyle(ButtonStyle.Danger));
@@ -445,6 +475,8 @@ async function _playCounter(interaction, ctx, counterCard) {
     game[ccHandKey(responder)] = hand;
     game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
     game[ccDiscardKey(jammerPN)] = [...(game[ccDiscardKey(jammerPN)] || []), 'Signal Jammer'];
+    await _refreshHandUi(game, responder, client, ctx);
+    if (jammerPN !== responder) await _refreshHandUi(game, jammerPN, client, ctx);
     await interaction.message.edit({ content: `**Signal Jammer** cancelled **${counterCard}** — both cards discarded.`, components: [] }).catch(discordCatch);
     await logGameAction?.(game, client, `**Signal Jammer** cancelled **${counterCard}** — both cards discarded.`, { phase: 'ACTION', icon: 'card' });
     await _promptCounterResponder(game, gameId, ctx, client);
@@ -456,6 +488,7 @@ async function _playCounter(interaction, ctx, counterCard) {
   hand.splice(hi, 1);
   game[ccHandKey(responder)] = hand;
   game[ccDiscardKey(responder)] = (game[ccDiscardKey(responder)] || []).concat(counterCard);
+  await _refreshHandUi(game, responder, client, ctx);
   await interaction.message.edit({ content: `**${counterCard}** played.`, components: [] }).catch(discordCatch);
   await logGameAction?.(game, client, `<@${interaction.user.id}> played **${counterCard}**.`, { phase: 'ACTION', icon: 'card', allowedMentions: { users: [interaction.user.id] } });
   // On-play triggers fire for counter cards too (Hunt Dissent, Adapt).
