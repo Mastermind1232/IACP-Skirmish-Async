@@ -1038,7 +1038,7 @@ async function fireBoltslinger(thread, game, combat, effect, ctx) {
   const targets = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
     if (fk === combat.target?.figureKey) continue;
-    if (!isWithinN(atkPos, pos, 3, game.selectedMap.id)) continue;
+    if (!isWithinN(atkPos, pos, 3, game.selectedMap.id, undefined, game)) continue;
     const { label } = getFigureLabel(game, defPN, fk, undefined, 80, {
       dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
     });
@@ -1119,7 +1119,7 @@ async function fireIndiscriminateFire(thread, game, combat, effect, ctx) {
     for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
       if (fk === combat.target.figureKey) continue;
       if (fk === combat.attackerFigureKey) continue;
-      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id, undefined, game)) continue;
       const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
         dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
       });
@@ -1185,7 +1185,7 @@ async function fireHeavyFire(thread, game, combat, effect, ctx) {
   if (!targetPos) return;
   const hostiles = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[defPN] || {})) {
-    if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+    if (!isWithinN(pos, targetPos, 2, game.selectedMap.id, undefined, game)) continue;
     const { label } = getFigureLabel(game, defPN, fk, undefined, 80, {
       dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
     });
@@ -1235,7 +1235,7 @@ async function fireHavocShot(thread, game, combat, effect, ctx) {
   for (const pn of [1, 2]) {
     for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
       if (!pos || fk === combat.attackerFigureKey) continue;
-      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id, undefined, game)) continue;
       const candFp = getFigureFootprint(game, pn, fk, getFigureSize);
       if (!hasFigureLineOfSight(atkFp, candFp, ms, allFp)) continue;
       const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
@@ -1438,7 +1438,7 @@ async function fireWantonDestruction(thread, game, combat, effect, ctx) {
   for (const pn of [1, 2]) {
     for (const [fk, pos] of Object.entries(game.figurePositions?.[pn] || {})) {
       if (!pos || fk === combat.target.figureKey) continue;
-      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id)) continue;
+      if (!isWithinN(pos, targetPos, 2, game.selectedMap.id, undefined, game)) continue;
       const { label } = getFigureLabel(game, pn, fk, undefined, 80, {
         dcMessageMeta: ctx.dcMessageMeta, getDcMessageIds, getDcList, dcNameFromFigureKey,
       });
@@ -1523,7 +1523,7 @@ async function fireForceDeflection(thread, game, combat, effect, ctx) {
         const dcN = dcNameFromFigureKey(fk);
         const e = getDcEffect(dcN);
         if (!(e?.specialAbilityIds || []).includes('force_deflection_yoda')) continue;
-        if (isWithinN(pos, targetCoord, 1, game.selectedMap?.id)) { yodaFigKey = fk; break; }
+        if (isWithinN(pos, targetCoord, 1, game.selectedMap?.id, undefined, game)) { yodaFigKey = fk; break; }
       }
     }
   }
@@ -1639,7 +1639,7 @@ async function fireDeflect(thread, game, combat, effect, ctx) {
     const e = getDcEffect(dName);
     if (!(e?.specialAbilityIds || []).includes('deflect')) continue;
     const isSelf = fk === combat.target.figureKey;
-    const isAdj = !isSelf && isWithinN(pos, targetPos, 1, game.selectedMap.id);
+    const isAdj = !isSelf && isWithinN(pos, targetPos, 1, game.selectedMap.id, undefined, game);
     if (!isSelf && !isAdj) continue;
     candidates.push({ figureKey: fk, dcName: dName });
   }

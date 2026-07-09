@@ -111,7 +111,7 @@ export function eligibleThirdPartyCcFigures(game, specKey, combat, deps = {}) {
     // Rebel FORCE USER whose attack type is MELEE).
     if (typeof spec.figureEligible === 'function' && !spec.figureEligible(game, fk, deps)) continue;
     if (spec.n != null) {
-      if (!refPos || !isWithinN(pos, refPos, spec.n, game?.selectedMap?.id, deps.getMapData || _getMapData)) continue;
+      if (!refPos || !isWithinN(pos, refPos, spec.n, game?.selectedMap?.id, deps.getMapData || _getMapData, game)) continue;
     }
     if (spec.los && typeof deps.hasLineOfSight === 'function') {
       if (!deps.hasLineOfSight(game, fk, refKey)) continue;

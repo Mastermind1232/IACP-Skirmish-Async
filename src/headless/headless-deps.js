@@ -313,7 +313,7 @@ export function buildHeadlessDeps(options = {}) {
   const _getFigureLabel = (game, playerNum, figureKey, fallback, maxLen) => _getFigureLabelRaw(game, playerNum, figureKey, fallback, maxLen, { dcMessageMeta, dcNameFromFigureKey, getDcList, getDcMessageIds });
   const _findFigureheadFigure = (game, defenderPlayerNum, targetFigureKey) => _findFigureheadFigureRaw(game, defenderPlayerNum, targetFigureKey, {
     getDcList, getDcEffect, dcNameFromFigureKey,
-    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
+    isWithinN: (a, b, n, mapId, game = null) => isWithinN(a, b, n, mapId, getMapData, game),
     findDcMessageIdForFigure: _findDcMessageIdForFigure, parseFigureKey,
   });
   // Wrap DC UI helpers that need deps.getDcStats bound
@@ -328,7 +328,7 @@ export function buildHeadlessDeps(options = {}) {
     calculateKillVp, awardKillVp, awardObjectiveVp, vpKey,
     getDcList, getDcMessageIds, getDcStats, getDcEffects, getDcEffect, getDcKeywords,
     getPlayerId, getMapData, getEffectiveMapSpaces,
-    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
+    isWithinN: (a, b, n, mapId, game = null) => isWithinN(a, b, n, mapId, getMapData, game),
     hasLineOfSight, hasLineOfSightByCoord, hasFigureLineOfSight, getFigureFootprint, getAllFigureFootprints,
     getRange,
     getFiguresAdjacentToTarget, getFiguresAdjacentToCoord, getFiguresOnOrAdjacentToSpace,
@@ -637,7 +637,7 @@ export function buildHeadlessDeps(options = {}) {
     runAfterResolveWindow,
     finishCombatResolution, checkPostCombatSurges,
     computeCleaveEligibleTargets,
-    isWithinN: (a, b, n, mapId) => isWithinN(a, b, n, mapId, getMapData),
+    isWithinN: (a, b, n, mapId, game = null) => isWithinN(a, b, n, mapId, getMapData, game),
     getCleaveTargetButtons,
     applyDirectDamageToFigure, applyNpcDamageToFigure,
     decrementActivationIfGroupDefeated,

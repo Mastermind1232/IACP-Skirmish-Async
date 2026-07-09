@@ -425,6 +425,7 @@ export function hasFigureLineOfSight(fromFootprint, toFootprint, mapSpaces, figu
  */
 export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges = null, extraAdj = null) {
   if (!mapSpaces?.adjacency || !coordA || !coordB) return false;
+  if (extraAdj && !(extraAdj instanceof Map)) extraAdj = buildCountingOverlay(extraAdj, mapSpaces, [coordA, coordB]);
   const a = coordA.toLowerCase(), b = coordB.toLowerCase();
   if (a === b) return true;
   const visited = new Set([a]);
@@ -576,6 +577,10 @@ export function buildCountingOverlay(game, mapSpaces, endpointCoords = []) {
 
 export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50, extraAdj = null) {
   if (!mapSpaces?.adjacency || !coordA || !coordB) return Infinity;
+  // Callers may pass the GAME object as extraAdj — the CRR occupied-blocking /
+  // Spire overlays are then built here for the two endpoints (2026-07-09
+  // "ALL within-N call sites must be correct").
+  if (extraAdj && !(extraAdj instanceof Map)) extraAdj = buildCountingOverlay(extraAdj, mapSpaces, [coordA, coordB]);
   const a = coordA.toLowerCase(), b = coordB.toLowerCase();
   if (a === b) return 0;
   const visited = new Set([a]);

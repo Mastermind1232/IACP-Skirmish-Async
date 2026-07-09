@@ -1368,7 +1368,7 @@ export const COMBAT_RESOLVERS = {
           const fn = dcNameFromFigureKey(fk);
           const fe = eff[fn] || eff[(fn || '').replace(/\s*\[.*\]\s*$/, '')];
           if (!(fe?.specialAbilityIds || []).includes('soresu_form')) continue;
-          if (mapSp && defPos && _isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3, _soresuBlockedEdges)) {
+          if (mapSp && defPos && _isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defPos).toLowerCase(), 3, _soresuBlockedEdges, game)) {
             combat.soresuFormFigKey = fk; // resolve-step handler does the Dodge conversion + Kanan strain
             break;
           }
@@ -2549,7 +2549,7 @@ function _findModsFigKey(id, game, combat) {
       if (fk === combat.attackerFigureKey) continue;
       if (!(effOf(fk)?.specialAbilityIds || []).includes('call_the_shots_hera')) continue;
       if (game.roundFigureAbilityUsed?.[`${fk}_call_the_shots`]) continue;
-      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3, blockedEdges)) return fk;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkCoord).toLowerCase(), 3, blockedEdges, game)) return fk;
     }
   } else if (id === 'get_down') {
     const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
@@ -2559,7 +2559,7 @@ function _findModsFigKey(id, game, combat) {
     for (const [fk, pos] of Object.entries(friendly)) {
       if (!(effOf(fk)?.specialAbilityIds || []).includes('get_down_onar')) continue;
       if (game.roundFigureAbilityUsed?.[`${fk}_get_down`]) continue;
-      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2, blockedEdges)) return fk;
+      if (_isWithinSpaces(mapSp, String(pos).toLowerCase(), String(defCoord).toLowerCase(), 2, blockedEdges, game)) return fk;
     }
   }
   return null;
@@ -4147,7 +4147,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const figKws = (kwMap[figDcName] || []).map(k => String(k).toUpperCase());
         if (!figKws.includes('TROOPER') && !figKws.includes('GUARDIAN')) continue;
         for (const k of krennicSources) {
-          if (countSpaces(_csRawMs, k.pos, figPos, _csClosedDoorEdges) <= k.maxRange) {
+          if (countSpaces(_csRawMs, k.pos, figPos, _csClosedDoorEdges, 50, game) <= k.maxRange) {
             out.add(figKey);
             break;
           }
@@ -4419,7 +4419,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffect(fkDcName);
         if (!isHunterFriendly(fkEff)) continue;
-        if (!sharedIntuitionInRange(countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges))) continue;
+        if (!sharedIntuitionInRange(countSpaces(_csRawMs, attackerPos, pos, _csClosedDoorEdges, 50, game))) continue;
         if (!hasLineOfSightByCoord(game, pos, targetCoord, mapSpaces, getFigureSize, { blocking: null })) continue;
         const r = applySharedIntuitionHit(game.pendingCombat);
         game.pendingCombat.bonusHits = r.bonusHits;
@@ -4516,7 +4516,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!isUniqueFriendly(fkEff)) continue;
-        if (!muchToLearnInRange(countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges))) continue;
+        if (!muchToLearnInRange(countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges, 50, game))) continue;
         if (isForceUserFriendly(fkEff)) {
           _mtlMode = 'turn';
           _mtlSourceName = fkDcName;
@@ -4626,7 +4626,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
         if (!(fkEff?.specialAbilityIds || []).includes('airborne_commander_gar_saxon')) continue;
         if (fk === attackerFigureKey) continue; // "OTHER friendly Mobile figures" — Saxon cannot share with himself
-        if (countSpaces(_csRawMs, atkPosAC, pos, _csClosedDoorEdges) > 4) continue;
+        if (countSpaces(_csRawMs, atkPosAC, pos, _csClosedDoorEdges, 50, game) > 4) continue;
         if (!attackerIsMobile) {
           await thread.send(`**Airborne Commander** — ${fkDcName} is within 4 spaces, but **${meta.dcName}** does not have the **Mobile** keyword. Surge sharing skipped.`).catch(discordCatch);
           break;
@@ -4663,7 +4663,7 @@ export async function handleAttackTarget(interaction, ctx) {
         const _afAtts = _afSorinMsgId ? (game.p1DcAttachments?.[_afSorinMsgId] || game.p2DcAttachments?.[_afSorinMsgId] || []) : [];
         const _afHasACS = cardNameIncludes(_afAtts, 'Advanced Com Systems');
         const _afMaxRange = _afHasACS ? 3 : 1;
-        const _afDist = _csRawMs ? countSpaces(_csRawMs, atkPosAF, pos, _csClosedDoorEdges) : Infinity;
+        const _afDist = _csRawMs ? countSpaces(_csRawMs, atkPosAF, pos, _csClosedDoorEdges, 50, game) : Infinity;
         if (_afDist > _afMaxRange) continue;
         if (!attackerIsDroidOrVehicle) {
           await thread.send(`**Advanced Firepower** — ${fkDcName} is within range, but **${meta.dcName}** is not a DROID or VEHICLE. Surge sharing skipped.`).catch(discordCatch);
@@ -5962,7 +5962,7 @@ function getSquadCohesionTokens(game, combat, role) {
     const fDcName = dcNameFromFigureKey(fk);
     const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (!(fEff?.specialAbilityIds || []).includes('squad_cohesion_kotun')) continue;
-    if (isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges)) {
+    if (isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges, game)) {
       koTunInRange = true;
       break;
     }
@@ -5981,7 +5981,7 @@ function getSquadCohesionTokens(game, combat, role) {
     const fDcName = dcNameFromFigureKey(fk);
     const fEff = dcEff[fDcName] || dcEff[fDcName?.replace(/\s*\[.*\]\s*$/, '')];
     if (String(fEff?.affiliation || '').toLowerCase() !== 'rebel') continue;
-    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges)) continue;
+    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), combatPosLc, 3, _scBlockedEdges, game)) continue;
     const tokens = game.figurePowerTokens?.[fk] || [];
     tokens.forEach((type, index) => {
       if (allowed.includes(type)) {

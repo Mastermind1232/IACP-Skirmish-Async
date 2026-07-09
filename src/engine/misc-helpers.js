@@ -562,7 +562,7 @@ export function findFigureheadFigure(game, defenderPlayerNum, targetFigureKey, d
     for (const [fk, pos] of Object.entries(figures)) {
       if (fk === targetFigureKey) continue;
       if (deps.dcNameFromFigureKey(fk) !== dcName) continue;
-      if (!deps.isWithinN(pos, targetPos, 4, game.selectedMap.id)) continue;
+      if (!deps.isWithinN(pos, targetPos, 4, game.selectedMap.id, game)) continue;
       const msgId = deps.findDcMessageIdForFigure(game.gameId, defenderPlayerNum, fk);
       const { figureIndex: figIndex } = deps.parseFigureKey(fk);
       return { figureKey: fk, msgId, figIndex, label: dc.displayName || dcName };

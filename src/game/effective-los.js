@@ -114,7 +114,7 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
   if (fromPN && toPN && fromPN !== toPN && figureHasInTheShadows(game, toFigureKey)) {
     const _itsBlockedEdges = getClosedDoorEdges(game);
     const itsDist = Math.min(...fromFp.map((ac) => Math.min(...toFp.map((tc) =>
-      countSpaces(effMs, String(ac).toLowerCase(), String(tc).toLowerCase(), _itsBlockedEdges)))));
+      countSpaces(effMs, String(ac).toLowerCase(), String(tc).toLowerCase(), _itsBlockedEdges, 50, game)))));
     if (itsDist >= 4) return false;
   }
   // Build figure-blocking-coords using the picker's canonical helper
@@ -151,7 +151,7 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
         if (pn !== fromPN
             && ((fkEff?.specialAbilityIds || []).some((id) => _CAMO_RECIPROCAL_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
           const _camoBlockedEdges = getClosedDoorEdges(game);
-          const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase(), _camoBlockedEdges)));
+          const dist = Math.min(...fromFp.map((ac) => countSpaces(effMs, String(ac).toLowerCase(), String(pos).toLowerCase(), _camoBlockedEdges, 50, game)));
           if (dist >= 4) continue;
         }
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);

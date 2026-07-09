@@ -874,13 +874,10 @@ function evaluateMovementStep(current, neighbor, board, profile) {
     // Force Jump: cannot END on blocking terrain (see normal-step path below).
     const rotateEndsOnBlocking = profile.cannotEndOnBlocking
       && nextFootprint.some((cell) => board.blockingSet.has(cell));
-    const rotateEndsOnImpassable = board.impassableSet
-      && !profile.ignoreBlocking
-      && nextFootprint.some((cell) => board.impassableSet.has(cell));
     return {
       cost: 1 + extraCost,
       occupied: overlapping,
-      canEnd: (!overlapping || profile.canEndOnOccupied) && !rotateEndsOnBlocking && !rotateEndsOnImpassable,
+      canEnd: (!overlapping || profile.canEndOnOccupied) && !rotateEndsOnBlocking,
       footprint: nextFootprint,
     };
   }
@@ -966,17 +963,10 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   // impassable terrain"). The destination footprint must not overlap a blocking cell.
   const endsOnBlocking = profile.cannotEndOnBlocking
     && nextFootprint.some((cell) => board.blockingSet.has(cell));
-  // Impassable cells: passing through is possible for several profiles, but
-  // ENDING there is Mobile/Massive-only (CRR Mobile: "can end movement in a
-  // space containing impassable or blocking terrain"; Thrusters is only
-  // "while moving").
-  const endsOnImpassable = board.impassableSet
-    && !profile.ignoreBlocking
-    && nextFootprint.some((cell) => board.impassableSet.has(cell));
   return {
     cost: baseCost + extraCost,
     occupied: enteringOccupied,
-    canEnd: (!enteringOccupied || profile.canEndOnOccupied) && !endsOnBlocking && !endsOnImpassable,
+    canEnd: (!enteringOccupied || profile.canEndOnOccupied) && !endsOnBlocking,
     footprint: nextFootprint,
   };
 }
@@ -1055,12 +1045,12 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
     // allowing the path to traverse it. alexanbv 2026-06-20.
     const endsOnBlocking = profile.cannotEndOnBlocking
       && current.footprint.some((cell) => board.blockingSet.has(cell));
-    // Impassable CELLS: several profiles may pass through (Thrusters, Haul),
-    // but only Mobile/Massive (profile.ignoreBlocking) may END there (CRR
-    // Mobile/Massive; alexanbv 2026-07-09).
-    const endsOnImpassable = board.impassableSet && !profile.ignoreBlocking
-      && current.footprint.some((cell) => board.impassableSet.has(cell));
-    const canEnd = (!isOccupied || profile.canEndOnOccupied) && !endsOnBlocking && !endsOnImpassable;
+    // Impassable CELLS: any profile that can legally ENTER one while moving
+    // (Mobile/Massive/Thrusters/Haul) may also END there (alexanbv 2026-07-09:
+    // "Thrusters and haul can technically end on impassable, since they can
+    // enter while moving"). Figures with no entry permission never reach an
+    // impassable cell, so no extra end-gate is needed here.
+    const canEnd = (!isOccupied || profile.canEndOnOccupied) && !endsOnBlocking;
     nodes.set(current.key, { ...current, isOccupied, canEnd });
     // Only record the topLeft cell, never non-topLeft footprint cells.
     // Recording all footprint cells causes permanent poisoning: a cell that is a

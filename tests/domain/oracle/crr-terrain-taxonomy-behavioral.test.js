@@ -132,14 +132,10 @@ describe('CRR-2: impassable cells — entry, pass-through, and end legality', ()
     assert.ok(t, 'Mobile enters impassable and may END there');
   });
 
-  it('Thrusters passes through impassable but cannot end there', () => {
+  it('Thrusters passes through impassable and MAY end there (alexanbv: entering while moving implies may-end)', () => {
     const cache = reach(ms(), 'b3', 3, THRUSTERS);
-    // destination cache records only END-legal placements: the impassable cell
-    // must NOT be offered to Thrusters, but cells beyond it must be (proving
-    // pass-through worked)
-    assert.ok(!getMovementTarget(cache, 'c3'), 'Thrusters may not END in impassable ("while moving")');
-    const beyond = getMovementTarget(cache, 'd3');
-    assert.ok(beyond, 'Thrusters passes through and ends beyond');
+    assert.ok(getMovementTarget(cache, 'c3'), 'Thrusters may end in impassable');
+    assert.ok(getMovementTarget(cache, 'd3'), 'and passes through to cells beyond');
   });
 });
 

@@ -1560,8 +1560,8 @@ async function runAfterResolveWindow(thread, game, combat, { resultText, embedRe
 }
 
 /** BFS distance check on mapSpaces adjacency (used for Boltslinger, etc.). */
-function isWithinN(posA, posB, maxDist, mapId) {
-  return _isWithinNPure(posA, posB, maxDist, mapId, getMapData);
+function isWithinN(posA, posB, maxDist, mapId, game = null) {
+  return _isWithinNPure(posA, posB, maxDist, mapId, getMapData, game);
 }
 
 /**

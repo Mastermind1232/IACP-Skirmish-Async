@@ -548,7 +548,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
     for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
       if (fk === combat.target?.figureKey) continue;
-      if (!isWithinN(attackerPos, fCoord, _reachRange, mapId)) continue;
+      if (!isWithinN(attackerPos, fCoord, _reachRange, mapId, game)) continue;
       const candFp = getFigureFootprint(game, defenderPlayerNum, fk, getFigureSize);
       if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
       targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
@@ -561,7 +561,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
         if (hp <= 0) continue;
         const objPos = game.objectPositions?.[objId];
         if (!objPos) continue;
-        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), _reachRange, mapId)) continue;
+        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), _reachRange, mapId, game)) continue;
         const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
         const origCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
         targets.push({ figureKey: `crate_${origCoord || objId}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: objPos, objectId: objId, label: `${meta.name || objId} (${hp}/${maxHp} HP)` });
@@ -573,7 +573,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
     for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
       if (fk === combat.target?.figureKey) continue;
-      if (!isWithinN(attackerPos, fCoord, totalAcc, mapId)) continue;
+      if (!isWithinN(attackerPos, fCoord, totalAcc, mapId, game)) continue;
       const candFp = getFigureFootprint(game, defenderPlayerNum, fk, getFigureSize);
       if (!hasFigureLineOfSight(attackerFp, candFp, mapSpaces, null)) continue;
       targets.push({ figureKey: fk, playerNum: defenderPlayerNum });
@@ -586,7 +586,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
         if (hp <= 0) continue;
         const objPos = game.objectPositions?.[objId];
         if (!objPos) continue;
-        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), totalAcc, mapId)) continue;
+        if (!isWithinN(attackerPos, String(objPos).toLowerCase(), totalAcc, mapId, game)) continue;
         const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
         const origCoord = objId.startsWith('crate-') ? objId.slice('crate-'.length) : null;
         targets.push({ figureKey: `crate_${origCoord || objId}`, playerNum: null, isCrate: true, crateOrigCoord: origCoord, crateCoord: objPos, objectId: objId, label: `${meta.name || objId} (${hp}/${maxHp} HP)` });

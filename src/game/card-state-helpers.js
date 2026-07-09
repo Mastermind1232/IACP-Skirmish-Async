@@ -108,7 +108,7 @@ export function auraAttachmentBearerMsgId(game, combat, attachmentName, n, deps,
   const wantLc = String(attachmentName).toLowerCase();
   for (const [fk, pos] of Object.entries(figs)) {
     if (fk === atkFk || !pos) continue;
-    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), n, getClosedDoorEdges(game))) continue;
+    if (!isWithinSpaces(mapSp, String(pos).toLowerCase(), String(atkPos).toLowerCase(), n, getClosedDoorEdges(game), game)) continue;
     const fn = fk.replace(/-\d+-\d+$/, '');
     for (let i = 0; i < dcList.length; i++) {
       const dn = dcList[i]?.dcName || dcList[i];

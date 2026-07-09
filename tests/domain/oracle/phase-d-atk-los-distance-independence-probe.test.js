@@ -31,7 +31,7 @@ const AA_SRC = readFileSync(resolve(ROOT, 'src/engine/available-actions.js'), 'u
 describe('PROBE-PD-ATK-025: LOS and distance are determined independently', () => {
   it('025a: source — distance iteration is a standalone min-reduction over attacker-fp × target-fp', () => {
     assert.match(AA_SRC,
-      /let dist = Infinity;\s*\n\s*for \(const ac of _aaAttackerFpCells\) \{\s*\n\s*for \(const tc of _aaTargetFpCells\) \{\s*\n\s*const d = countSpaces\(ms, ac, tc, _aaClosedDoorEdges\);\s*\n\s*if \(d < dist\) dist = d;/,
+      /let dist = Infinity;\s*\n\s*for \(const ac of _aaAttackerFpCells\) \{\s*\n\s*for \(const tc of _aaTargetFpCells\) \{\s*\n\s*const d = countSpaces\(ms, ac, tc, _aaClosedDoorEdges(, 50, game)?\);\s*\n\s*if \(d < dist\) dist = d;/,
       'distance must be a min over attacker-fp × target-fp, not coupled to LOS — CRR-ATK-025');
   });
 

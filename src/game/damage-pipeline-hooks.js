@@ -203,7 +203,7 @@ WHEN_DAMAGED_HOOKS.push({
     if (!playFk || playFk === opts.figureKey) return false; // "another" friendly figure
     const playPos = game.figurePositions?.[defPN]?.[playFk];
     if (!playPos) return false;
-    if (!isWithinN(playPos, targetPos, 2, game.selectedMap.id, getMapData)) return false;
+    if (!isWithinN(playPos, targetPos, 2, game.selectedMap.id, getMapData, game)) return false;
     return true;
   },
   apply: async (game, opts, ctx) => {
@@ -224,7 +224,7 @@ WHEN_DAMAGED_HOOKS.push({
     if (!onarFk || onarFk === opts.figureKey) return null;
     const onarPos = game.figurePositions?.[defPN]?.[onarFk];
     if (!onarPos) return null;
-    if (!isWithinN(onarPos, targetPos, 2, game.selectedMap.id, getMapData)) return null;
+    if (!isWithinN(onarPos, targetPos, 2, game.selectedMap.id, getMapData, game)) return null;
     const onarMsgId = findDcMessageIdForFigure(game.gameId, defPN, onarFk);
     if (!onarMsgId) return null;
     const onarDcName = dcNameFromFigureKey(onarFk);
@@ -716,7 +716,7 @@ BEFORE_DEFEATED_HOOKS.push({
     if (!playFk || playFk === opts.figureKey) return false; // triggers on a DIFFERENT friendly within 3
     const playPos = game.figurePositions?.[ownerPN]?.[playFk];
     if (!playPos) return false;
-    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData);
+    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData, game);
   },
   apply: async (game, opts, ctx) => {
     const thread = ctx?.thread;
@@ -735,7 +735,7 @@ BEFORE_DEFEATED_HOOKS.push({
     if (!bazeFigKey || bazeFigKey === opts.figureKey) return null;
     const bazePos = game.figurePositions?.[ownerPN]?.[bazeFigKey];
     if (!bazePos) return null;
-    if (!isWithinN(bazePos, targetPos, 3, game.selectedMap.id, getMapData)) return null;
+    if (!isWithinN(bazePos, targetPos, 3, game.selectedMap.id, getMapData, game)) return null;
     const bazeDcName = dcNameFromFigureKey(bazeFigKey);
     const bazeMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, bazeFigKey);
     if (!bazeMsgId) return null;
@@ -861,7 +861,7 @@ BEFORE_DEFEATED_HOOKS.push({
     if (!playFk || playFk === opts.figureKey) return false;
     const playPos = game.figurePositions?.[ownerPN]?.[playFk];
     if (!playPos) return false;
-    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData);
+    return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData, game);
   },
   apply: async (game, opts, ctx) => {
     const thread = ctx?.thread;
@@ -880,7 +880,7 @@ BEFORE_DEFEATED_HOOKS.push({
     if (!mhdFigKey || mhdFigKey === opts.figureKey) return null;
     const mhdPos = game.figurePositions?.[ownerPN]?.[mhdFigKey];
     if (!mhdPos) return null;
-    if (!isWithinN(mhdPos, targetPos, 3, game.selectedMap.id, getMapData)) return null;
+    if (!isWithinN(mhdPos, targetPos, 3, game.selectedMap.id, getMapData, game)) return null;
     const mhdDcName = dcNameFromFigureKey(mhdFigKey);
     const mhdMsgId = findDcMessageIdForFigure(game.gameId, ownerPN, mhdFigKey);
     if (!mhdMsgId) return null;
@@ -1554,7 +1554,7 @@ function _makeDefeatCcHook({ id, cardName, scope, label, requireProximity = 0, r
       if (requireProximity > 0 && opts.defeatedPos && game.selectedMap?.id) {
         const friendly = game.figurePositions?.[playerPN] || {};
         const anyWithin = Object.values(friendly).some(pos =>
-          pos && isWithinN(pos, opts.defeatedPos, requireProximity, game.selectedMap.id));
+          pos && isWithinN(pos, opts.defeatedPos, requireProximity, game.selectedMap.id, undefined, game));
         if (!anyWithin) return false;
       }
       // Lord of the Sith: "NOT your activation" — the card player

@@ -266,8 +266,8 @@ export function detectPostMoveInterrupts(game, movingPlayerNum, movingFigureKey,
       {
         // Only check for Mak specifically
         if (hf.dcName === "Mak Eshka'rey") {
-          const distAfter = countSpaces(rawMapSpaces, enteringSpace, hf.pos, _miClosedDoorEdges);
-          const distBefore = countSpaces(rawMapSpaces, exitingSpace, hf.pos, _miClosedDoorEdges);
+          const distAfter = countSpaces(rawMapSpaces, enteringSpace, hf.pos, _miClosedDoorEdges, 50, game);
+          const distBefore = countSpaces(rawMapSpaces, exitingSpace, hf.pos, _miClosedDoorEdges, 50, game);
           // Trigger when entering within 3 spaces (was further, now within)
           if (distAfter <= 3 && distBefore > 3) {
             if (hasCardInHand(game, oppNum, 'Disengage')) {

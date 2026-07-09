@@ -5,6 +5,10 @@
 // buildCountingOverlay: CRR occupied-blocking + Spire counting exceptions for
 // isWithinN when a caller supplies `game` (spatial.js is itself pure).
 import { buildCountingOverlay } from '../game/spatial.js';
+// Default map-data source so 4-arg call sites are safe: several handlers
+// called isWithinN(a, b, n, mapId) with the direct utils import, leaving
+// getMapData undefined — a latent crash (found in the 2026-07-09 sweep).
+import { getMapData as _defaultGetMapData } from '../data-loader.js';
 
 export function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -40,7 +44,7 @@ export function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, getFo
 }
 
 export function isWithinN(posA, posB, maxDist, mapId, getMapData, game = null) {
-  const ms = getMapData(mapId);
+  const ms = (getMapData || _defaultGetMapData)(mapId);
   if (!ms?.adjacency || !posA || !posB) return false;
   const a = String(posA).toLowerCase(), b = String(posB).toLowerCase();
   if (a === b) return true;

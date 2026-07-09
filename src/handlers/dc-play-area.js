@@ -1128,7 +1128,7 @@ export function buildFigureBlockingCoords(game, playerNum, attackerPos, attacker
           && ((fkEff?.specialAbilityIds || []).some(id => CAMO_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
         const fkPosLc = String(pos).toLowerCase();
         const _camoBe = getClosedDoorEdges(game);
-        const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc, _camoBe)));
+        const dist = Math.min(...attackerFpCells.map(ac => countSpaces(_camoMs, ac, fkPosLc, _camoBe, 50, game)));
         if (dist >= 4) continue;
       }
       const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
@@ -1254,7 +1254,7 @@ async function buildAndSendAttackTargets(
     const dcName = dcNameFromFigureKey(k);
     const size = game.figureOrientations?.[k] || getFigureSize(dcName);
     const cells = getFootprintCells(coord, size);
-    const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => countSpaces(ms, ac, tc, closedDoorEdges))));
+    const dist = Math.min(...attackerFpCells.flatMap(ac => cells.map(tc => countSpaces(ms, ac, tc, closedDoorEdges, 50, game))));
     if (dist < minRange || dist > effectiveMaxRange) continue;
     // I Must Go Alone (alexanbv 2026-06-20): shields ONLY the one figure that
     // played it (figureKey), not every friendly figure. Filter beyond `spaces`
@@ -1386,7 +1386,7 @@ async function buildAndSendAttackTargets(
       const npc = npcArray[i];
       if (npc.defeated) continue;
       const coord = String(npc.coord).toLowerCase();
-      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));
+      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges, 50, game)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       const label = `${npcType === 'thug' ? 'Thug' : 'Krykna'} ${i + 1} (${npc.hp}/${npc.maxHp} ${hpLabel})`;
@@ -1408,7 +1408,7 @@ async function buildAndSendAttackTargets(
       const objPos = game.objectPositions?.[objId];
       if (!objPos) continue;
       const coord = String(objPos).toLowerCase();
-      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges)));
+      const dist = Math.min(...attackerFpCells.map(ac => countSpaces(ms, ac, coord, closedDoorEdges, 50, game)));
       if (dist < minRange || dist > effectiveMaxRange) continue;
       const los = attackerFpCells.some(ac => hasLineOfSight(ac, coord, effectiveMs, allFigureBlockingCoords));
       const maxHp = (game.objectHealth?.[objId] || [0, 0])[1] ?? 0;
@@ -1438,7 +1438,7 @@ async function buildAndSendAttackTargets(
   // Per alexanbv 2026-05-13: per-figureKey.
   if (game.autofireChainTargetSpace?.[figureKey]) {
     const _chainSpace = game.autofireChainTargetSpace[figureKey];
-    const _chainFiltered = targets.filter(t => countSpaces(ms, _chainSpace, t.coord, closedDoorEdges) <= 3);
+    const _chainFiltered = targets.filter(t => countSpaces(ms, _chainSpace, t.coord, closedDoorEdges, 50, game) <= 3);
     if (_chainFiltered.length > 0) targets.splice(0, targets.length, ..._chainFiltered);
     delete game.autofireChainTargetSpace[figureKey];
   }
@@ -1446,7 +1446,7 @@ async function buildAndSendAttackTargets(
   // Per-figureKey 2026-05-13 (alexanbv).
   if (game.barrageTargetSpace?.[figureKey]) {
     const _barrageSpace = game.barrageTargetSpace[figureKey];
-    const _barrageFiltered = targets.filter(t => countSpaces(ms, _barrageSpace, t.coord, closedDoorEdges) <= 3);
+    const _barrageFiltered = targets.filter(t => countSpaces(ms, _barrageSpace, t.coord, closedDoorEdges, 50, game) <= 3);
     if (_barrageFiltered.length > 0) targets.splice(0, targets.length, ..._barrageFiltered);
     delete game.barrageTargetSpace[figureKey];
   }
@@ -4344,7 +4344,7 @@ export async function handleFalseOrdersAction(interaction, ctx) {
   const foBlockingCoords = buildFigureBlockingCoords(game, controlledPlayerNum, controlledPos, controlledSize, ctx);
   const foTargets = [];
   for (const [figKey, targetPos] of Object.entries(allOtherPositions)) {
-    const dist = countSpaces(ms, controlledPos, targetPos, foClosedDoorEdges);
+    const dist = countSpaces(ms, controlledPos, targetPos, foClosedDoorEdges, 50, game);
     if (dist < foMinRange || dist > foEffectiveMaxRange) continue;
     // Refine blocking set per target: remove target's own footprint, skip blocking for MASSIVE targets
     let losBlockingCoords = foBlockingCoords;

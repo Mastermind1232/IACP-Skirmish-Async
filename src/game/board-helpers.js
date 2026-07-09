@@ -59,7 +59,7 @@ export function countGameSpaces(game, coordA, coordB) {
   const mapId = game?.selectedMap?.id;
   const ms = mapId ? getMapData(mapId) : null;
   if (!ms) return Infinity;
-  return countSpaces(ms, coordA, coordB, getClosedDoorEdges(game));
+  return countSpaces(ms, coordA, coordB, getClosedDoorEdges(game), 50, game);
 }
 
 /** Get a figure's effective size, preferring stored orientation over base size. */

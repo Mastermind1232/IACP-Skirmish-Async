@@ -965,7 +965,7 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       const eligible = [];
       for (const [fk, fpos] of Object.entries(game.figurePositions?.[ability.playerNum] || {})) {
         if (!fpos) continue;
-        const dist = countSpaces(_adMs, kotunPos, fpos, _adClosedDoorEdges);
+        const dist = countSpaces(_adMs, kotunPos, fpos, _adClosedDoorEdges, 50, game);
         if (dist <= 3) {
           eligible.push(fk);
         }

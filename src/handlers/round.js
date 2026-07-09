@@ -1862,7 +1862,7 @@ async function _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, 
   const hostiles = [];
   for (const [fk, pos] of Object.entries(game.figurePositions?.[oppNum] || {})) {
     if (!pos) continue;
-    if (countSpaces(_fsMs, calPos, pos, _fsClosedDoorEdges) <= 3) hostiles.push({ fk, dcName: dcNameFromFigureKey(fk) });
+    if (countSpaces(_fsMs, calPos, pos, _fsClosedDoorEdges, 50, game) <= 3) hostiles.push({ fk, dcName: dcNameFromFigureKey(fk) });
   }
   if (hostiles.length === 0) {
     await logGameAction(game, client, `🐌 **Force Slow** — No hostile figures within 3 spaces of **${dc.displayName || dc.dcName}**. Skipped.`, { phase: 'ROUND', icon: 'round' });

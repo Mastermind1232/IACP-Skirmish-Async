@@ -50,7 +50,7 @@ describe('PROBE-PD-TGT-002: attacker picks any space a large-figure target occup
 
   it('002c: source — dc-play-area.js distance is Math.min over attacker-footprint × target-footprint cell pairs (attacker picks the closest space)', () => {
     assert.match(DP_SRC,
-      /const dist = Math\.min\(\.\.\.attackerFpCells\.flatMap\(ac => cells\.map\(tc => countSpaces\(ms, ac, tc, closedDoorEdges\)\)\)\);/,
+      /const dist = Math\.min\(\.\.\.attackerFpCells\.flatMap\(ac => cells\.map\(tc => countSpaces\(ms, ac, tc, closedDoorEdges(, 50, game)?\)\)\)\);/,
       'dc-play-area.js must compute min distance across attacker/target footprint pairs — CRR-TGT-002');
   });
 
@@ -67,7 +67,7 @@ describe('PROBE-PD-TGT-002: attacker picks any space a large-figure target occup
       'available-actions.js must expand multi-cell target footprint — CRR-TGT-002');
     // Distance: min over attacker-fp × target-fp
     assert.match(AA_SRC,
-      /let dist = Infinity;\s*\n\s*for \(const ac of _aaAttackerFpCells\) \{\s*\n\s*for \(const tc of _aaTargetFpCells\) \{\s*\n\s*const d = countSpaces\(ms, ac, tc, _aaClosedDoorEdges\);\s*\n\s*if \(d < dist\) dist = d;/,
+      /let dist = Infinity;\s*\n\s*for \(const ac of _aaAttackerFpCells\) \{\s*\n\s*for \(const tc of _aaTargetFpCells\) \{\s*\n\s*const d = countSpaces\(ms, ac, tc, _aaClosedDoorEdges(, 50, game)?\);\s*\n\s*if \(d < dist\) dist = d;/,
       'available-actions.js must compute min distance across attacker × target footprint pairs — CRR-TGT-002');
     // LOS: any-pair succeeds
     assert.match(AA_SRC,

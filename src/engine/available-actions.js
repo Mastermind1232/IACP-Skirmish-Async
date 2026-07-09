@@ -2316,7 +2316,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
         if (thisPn === enemyPn
             && ((fkEff?.specialAbilityIds || []).some(id => _AA_CAMO_IDS.has(id)) || figureHasInTheShadows(game, fk))) {
           const fkPosLc = String(pos).toLowerCase();
-          const dist = Math.min(..._aaAttackerFpCells.map(ac => countSpaces(ms, ac, fkPosLc, _aaClosedDoorEdges)));
+          const dist = Math.min(..._aaAttackerFpCells.map(ac => countSpaces(ms, ac, fkPosLc, _aaClosedDoorEdges, 50, game)));
           if (dist >= 4) continue;
         }
         const fkSize = game.figureOrientations?.[fk] || getFigureSize(fkDcName);
@@ -2345,7 +2345,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
     let dist = Infinity;
     for (const ac of _aaAttackerFpCells) {
       for (const tc of _aaTargetFpCells) {
-        const d = countSpaces(ms, ac, tc, _aaClosedDoorEdges);
+        const d = countSpaces(ms, ac, tc, _aaClosedDoorEdges, 50, game);
         if (d < dist) dist = d;
       }
     }
@@ -2470,7 +2470,7 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
       // and _aaEffectiveMs for door/shield LOS correctness.
       let npcDist = Infinity;
       for (const ac of _aaAttackerFpCells) {
-        const d = countSpaces(ms, ac, npcCoord, _aaClosedDoorEdges);
+        const d = countSpaces(ms, ac, npcCoord, _aaClosedDoorEdges, 50, game);
         if (d < npcDist) npcDist = d;
       }
       if (npcDist < minRange || npcDist > maxRange) continue;
