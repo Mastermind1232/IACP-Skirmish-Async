@@ -60,7 +60,6 @@ for (const id of Object.keys(NICK)) {
 
   final[id] = {
     ...cur,
-    ...(id === 'corellian-underground' ? { playReady: true } : {}),
     spaces,
     adjacency,
     terrain,
