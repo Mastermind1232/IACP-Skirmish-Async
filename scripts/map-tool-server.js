@@ -74,7 +74,13 @@ createServer((req, res) => {
   let requestPath = (req.url || '/').split('?')[0];
   if (MAP_TOOL_KEY) {
     const prefix = '/' + MAP_TOOL_KEY;
-    if (requestPath === prefix) requestPath = '/';
+    if (requestPath === prefix) {
+      // Without the trailing slash, the browser resolves the page's relative
+      // asset URLs against the domain root (outside the prefix) — redirect.
+      res.writeHead(301, { Location: prefix + '/' });
+      res.end();
+      return;
+    }
     else if (requestPath.startsWith(prefix + '/')) requestPath = requestPath.slice(prefix.length) || '/';
     else { res.writeHead(404); res.end('Not found'); return; }
     req.url = requestPath; // downstream pathMatches() reads req.url
@@ -201,7 +207,9 @@ createServer((req, res) => {
         for (const m of registry.maps || []) {
           if (!m.id) continue;
           const filename = (m.imagePath || '').split(/[/\\]/).pop() || m.vassalImage || '';
-          if (filename) imagePaths[m.id] = MAPS_SUBFOLDER + filename;
+          // The tool sets img.src = '/' + path (absolute), which would bypass
+          // the secret prefix — bake the key into the injected path instead.
+          if (filename) imagePaths[m.id] = (MAP_TOOL_KEY ? MAP_TOOL_KEY + '/' : '') + MAPS_SUBFOLDER + filename;
         }
         const pathsJson = JSON.stringify(imagePaths).replace(/<\/script>/gi, '<\\/script>');
         html = html.replace(PLACEHOLDER_IMAGE_PATHS, `<script type="application/json" id="map-image-paths">${pathsJson}</script>`);
