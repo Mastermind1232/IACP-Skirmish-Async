@@ -6,6 +6,7 @@
 import { parseCoord, colRowToCoord, getFootprintCells } from './coords.js';
 import { nickLineOfSight } from './los-engine-vendored.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { getFigureSize } from '../data-loader.js';
 
 /**
  * Manhattan distance between two coords.
@@ -422,7 +423,7 @@ export function hasFigureLineOfSight(fromFootprint, toFootprint, mapSpaces, figu
  * @param {number} maxDist
  * @returns {boolean}
  */
-export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges = null) {
+export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges = null, extraAdj = null) {
   if (!mapSpaces?.adjacency || !coordA || !coordB) return false;
   const a = coordA.toLowerCase(), b = coordB.toLowerCase();
   if (a === b) return true;
@@ -431,7 +432,8 @@ export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges 
   for (let d = 1; d <= maxDist; d++) {
     const next = [];
     for (const c of frontier) {
-      for (const adj of (mapSpaces.adjacency[c] || [])) {
+      const nbrs = extraAdj ? [...(mapSpaces.adjacency[c] || []), ...(extraAdj.get(c) || [])] : (mapSpaces.adjacency[c] || []);
+      for (const adj of nbrs) {
         const s = String(adj).toLowerCase();
         if (blockedEdges) {
           const ek = [c, s].sort().join('|');
@@ -459,7 +461,120 @@ export function isWithinSpaces(mapSpaces, coordA, coordB, maxDist, blockedEdges 
  * @param {number} [maxDist=50] - BFS depth cap
  * @returns {number} distance (0 if same, Infinity if unreachable)
  */
-export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50) {
+
+// ── CRR counting overlays: occupied-blocking + the Spire exception ──────────
+// (alexanbv 2026-07-09) Two dynamic exceptions to "blocking cuts counting":
+//  1. A figure/object OCCUPYING a blocking space can be counted to/from —
+//     the occupied space's own terrain is ignored for that measurement
+//     (CRR Counting Spaces; Blocking Terrain "apply the rules for Mobile").
+//  2. The Spire: a figure enclosed on all four edges by walls/blocking has
+//     those surrounding blocking spaces ignored for counting (they still
+//     block movement).
+// buildCountingOverlay returns a Map<coord, string[]> of EXTRA symmetric
+// adjacency links to union into a counting BFS, or null when no exception
+// applies. Pass the two measurement endpoints (and/or occupied blocking
+// cells) as `endpointCoords`.
+const _ekLc = (a, b) => { const x = String(a).toLowerCase(), y = String(b).toLowerCase(); return x < y ? `${x}|${y}` : `${y}|${x}`; };
+
+function _occupiedCellSet(game) {
+  const out = new Set();
+  if (!game) return out;
+  const poses = game.figurePositions || {};
+  for (const p of [1, 2]) {
+    for (const [fk, coord] of Object.entries(poses[p] || {})) {
+      const size = game.figureOrientations?.[fk] || getFigureSize(dcNameFromFigureKey(fk));
+      for (const c of getFootprintCells(coord, size)) out.add(String(c).toLowerCase());
+    }
+  }
+  for (const arrName of ['npcThugs', 'npcKrykna']) {
+    for (const npc of game[arrName] || []) {
+      if (npc?.coord) out.add(String(npc.coord).toLowerCase());
+    }
+  }
+  return out;
+}
+
+export function buildCountingOverlay(game, mapSpaces, endpointCoords = []) {
+  if (!game || !mapSpaces?.adjacency) return null;
+  const blocking = new Set((mapSpaces.blocking || []).map((c) => String(c).toLowerCase()));
+  if (!blocking.size) return null;
+  const spaces = new Set((mapSpaces.spaces || []).map((c) => String(c).toLowerCase()));
+  const walls = new Set((mapSpaces.wallEdges || []).map((e) => _ekLc(e[0], e[1])));
+  const mbe = new Set((mapSpaces.movementBlockingEdges || []).map((e) => _ekLc(e[0], e[1])));
+  const countBlockedEdge = (a, b) => walls.has(_ekLc(a, b)) || mbe.has(_ekLc(a, b));
+  const occupied = _occupiedCellSet(game);
+
+  const cellAt = (col, row) => {
+    if (col < 0 || row < 0) return null;
+    const c = colRowToCoord(col, row);
+    return c && spaces.has(c) ? c : null;
+  };
+  // Counting-legal neighbors of E, treating E ITSELF as normal terrain.
+  // Other blocking cells still block; walls + blocking edges still cut.
+  const neighborsIgnoringSelf = (E, allowBlockingNeighbor = null) => {
+    const { col, row } = parseCoord(E);
+    const out = [];
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = cellAt(col + dc, row + dr);
+      if (!n || countBlockedEdge(E, n)) continue;
+      if (blocking.has(n) && n !== allowBlockingNeighbor) continue;
+      out.push(n);
+    }
+    for (const [dc, dr] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const d = cellAt(col + dc, row + dr);
+      if (!d) continue;
+      if (blocking.has(d) && d !== allowBlockingNeighbor) continue;
+      const c1 = cellAt(col + dc, row), c2 = cellAt(col, row + dr);
+      const via = (corner) => corner && !blocking.has(corner)
+        && !countBlockedEdge(E, corner) && !countBlockedEdge(corner, d);
+      if (via(c1) || via(c2)) out.push(d);
+    }
+    return out;
+  };
+  const extra = new Map();
+  const addLink = (a, b) => {
+    if (!extra.has(a)) extra.set(a, []);
+    if (!extra.get(a).includes(b)) extra.get(a).push(b);
+    if (!extra.has(b)) extra.set(b, []);
+    if (!extra.get(b).includes(a)) extra.get(b).push(a);
+  };
+  const isEnclosed = (E) => {
+    const { col, row } = parseCoord(E);
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = cellAt(col + dc, row + dr);
+      if (!n) continue; // off-map / wall of the map: counts as sealed
+      if (countBlockedEdge(E, n)) continue;
+      if (blocking.has(n)) continue;
+      return false;
+    }
+    return true;
+  };
+  for (const e0 of endpointCoords) {
+    if (!e0) continue;
+    const E = String(e0).toLowerCase();
+    if (!spaces.has(E) || !occupied.has(E)) continue;
+    // 1. occupied blocking space: countable to/from
+    if (blocking.has(E)) {
+      for (const n of neighborsIgnoringSelf(E)) addLink(E, n);
+    }
+    // 2. Spire: enclosed figure — surrounding blocking cells become
+    // count-through-able for paths to/from this space
+    if (isEnclosed(E)) {
+      const { col, row } = parseCoord(E);
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const B = cellAt(col + dc, row + dr);
+        if (!B || !blocking.has(B)) continue;
+        const orth = Math.abs(dc) + Math.abs(dr) === 1;
+        if (orth && countBlockedEdge(E, B)) continue;
+        addLink(E, B);
+        for (const n of neighborsIgnoringSelf(B)) addLink(B, n);
+      }
+    }
+  }
+  return extra.size ? extra : null;
+}
+
+export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50, extraAdj = null) {
   if (!mapSpaces?.adjacency || !coordA || !coordB) return Infinity;
   const a = coordA.toLowerCase(), b = coordB.toLowerCase();
   if (a === b) return 0;
@@ -468,7 +583,8 @@ export function countSpaces(mapSpaces, coordA, coordB, blockedEdges = null, maxD
   for (let d = 1; d <= maxDist; d++) {
     const next = [];
     for (const c of frontier) {
-      for (const adj of (mapSpaces.adjacency[c] || [])) {
+      const nbrs = extraAdj ? [...(mapSpaces.adjacency[c] || []), ...(extraAdj.get(c) || [])] : (mapSpaces.adjacency[c] || []);
+      for (const adj of nbrs) {
         const s = String(adj).toLowerCase();
         if (blockedEdges) {
           const ek = [c, s].sort().join('|');

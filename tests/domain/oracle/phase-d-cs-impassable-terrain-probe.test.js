@@ -44,8 +44,13 @@ function* walkFiles(dir) {
 
 describe('PROBE-PD-CS-002: no impassable-terrain category exists in the engine; rule vacuously satisfied', () => {
   it('002a: source — countSpaces BFS operates on mapSpaces.adjacency and an optional blockedEdges set; does not filter by terrain type', () => {
+    // 2026-07-09: impassable terrain IS implemented now (cells + edges). The
+    // CRR-CS-002 rule stands — counting passes through impassable — because
+    // impassable never filters the BFS: impassable EDGES stay in adjacency,
+    // and the optional extraAdj overlay only ADDS links (occupied-blocking /
+    // Spire); countSpaces still never consults terrain type.
     assert.match(SP_SRC,
-      /export function countSpaces\(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50\)/,
+      /export function countSpaces\(mapSpaces, coordA, coordB, blockedEdges = null, maxDist = 50, extraAdj = null\)/,
       'countSpaces signature must include blockedEdges (doors) — CRR-CS-002');
     // The BFS body must not filter by terrain type — no terrain[...] check inside countSpaces
     const csBody = SP_SRC.match(/export function countSpaces[\s\S]*?\n\}/)[0];

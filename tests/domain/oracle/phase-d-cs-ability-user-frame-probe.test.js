@@ -45,8 +45,10 @@ const MOVEMENT_SRC = readFileSync(resolve(ROOT, 'src/game/movement.js'), 'utf8')
 
 describe('PROBE-PD-CS-004: ability-user is the reference frame for within/adjacent counts', () => {
   it('004a: source — isWithinN takes ability-user position as posA (first arg)', () => {
+    // 2026-07-09: trailing optional `game` param added for the CRR
+    // occupied-blocking / Spire counting overlays; posA stays first.
     assert.match(UTILS_SRC,
-      /export function isWithinN\(posA, posB, maxDist, mapId, getMapData\) \{/,
+      /export function isWithinN\(posA, posB, maxDist, mapId, getMapData, game = null\) \{/,
       'isWithinN must take posA (ability-user) as the first arg — CRR-CS-004');
   });
 

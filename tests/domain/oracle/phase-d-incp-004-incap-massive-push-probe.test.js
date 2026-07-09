@@ -51,8 +51,11 @@ describe('PROBE-PD-INCP-004: massive figure can still push an incapacitated figu
     // exception. A later `&& !endsOnBlocking` clause was added for Force Jump's
     // cannotEndOnBlocking (MOBILE may pass through but not end on blocking terrain);
     // it does not affect Massive movers (they never set cannotEndOnBlocking).
+    // 2026-07-09: a further `&& !endsOnImpassable` clause was added (only
+    // Mobile/Massive may END on impassable cells); like endsOnBlocking it
+    // never fires for Massive movers (they set ignoreBlocking).
     assert.match(MV_SRC,
-      /const isOccupied = current\.footprint\.some\(\(cell\) => board\.occupiedSet\.has\(cell\)\);[\s\S]*?const canEnd = \(!isOccupied \|\| profile\.canEndOnOccupied\)( && !endsOnBlocking)?;/,
+      /const isOccupied = current\.footprint\.some\(\(cell\) => board\.occupiedSet\.has\(cell\)\);[\s\S]*?const canEnd = \(!isOccupied \|\| profile\.canEndOnOccupied\)( && !endsOnBlocking)?( && !endsOnImpassable)?;/,
       'BFS canEnd gate must allow Massive figures to end on occupied — CRR-INCP-004');
   });
 

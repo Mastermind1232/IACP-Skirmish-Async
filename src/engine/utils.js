@@ -1,7 +1,10 @@
 /**
  * Pure utility functions extracted from index.js.
- * No Discord, no game state dependencies.
+ * No Discord, no game state dependencies (single exception below).
  */
+// buildCountingOverlay: CRR occupied-blocking + Spire counting exceptions for
+// isWithinN when a caller supplies `game` (spatial.js is itself pure).
+import { buildCountingOverlay } from '../game/spatial.js';
 
 export function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -36,17 +39,22 @@ export function filterValidTopLeftSpaces(zoneSpaces, occupiedSpaces, size, getFo
   });
 }
 
-export function isWithinN(posA, posB, maxDist, mapId, getMapData) {
+export function isWithinN(posA, posB, maxDist, mapId, getMapData, game = null) {
   const ms = getMapData(mapId);
   if (!ms?.adjacency || !posA || !posB) return false;
   const a = String(posA).toLowerCase(), b = String(posB).toLowerCase();
   if (a === b) return true;
+  // CRR occupied-blocking / Spire counting exceptions activate only when a
+  // measurement endpoint is a blocking cell with a figure on it (possible now
+  // that Mobile/Massive may end there). Callers that pass `game` get them.
+  const extraAdj = game ? buildCountingOverlay(game, ms, [a, b]) : null;
   const visited = new Set([a]);
   let frontier = [a];
   for (let d = 1; d <= maxDist; d++) {
     const next = [];
     for (const c of frontier) {
-      for (const adj of (ms.adjacency[c] || [])) {
+      const nbrs = extraAdj ? [...(ms.adjacency[c] || []), ...(extraAdj.get(c) || [])] : (ms.adjacency[c] || []);
+      for (const adj of nbrs) {
         const s = String(adj).toLowerCase();
         if (s === b) return true;
         if (!visited.has(s)) { visited.add(s); next.push(s); }

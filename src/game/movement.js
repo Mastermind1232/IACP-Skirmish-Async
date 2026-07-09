@@ -113,6 +113,7 @@ import {
 } from '../data-loader.js';
 import { getDcList, getDcMessageIds, getDcAttachments, opponentPlayerNum, pushFigure } from './player-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
+import { buildCountingOverlay } from './spatial.js';
 import { squadUpgradeFigureCard } from './squad-upgrades.js';
 
 // ---------------------------------------------------------------------------
@@ -336,6 +337,32 @@ export function getHostileOccupiedSpacesForMovement(game, excludeFigureKey = nul
  * Per CRR step 8: blast/cleave-eligible adjacency uses the target's full
  * pre-defeat footprint, not just one cell.
  */
+
+/** CRR occupied-blocking + Spire: adjacency IS determinable to/from figures
+ *  standing on blocking terrain. Returns overlay endpoints = origin cells plus
+ *  every currently-occupied blocking cell, so the counting-overlay links make
+ *  both directions visible to figure-adjacency queries. */
+function _augmentAdjacentSetForBlocking(game, mapSpaces, originCells, adjacentSet) {
+  const blocking = new Set((mapSpaces.blocking || []).map((c) => String(c).toLowerCase()));
+  if (!blocking.size) return;
+  const endpoints = [...originCells];
+  const poses = game?.figurePositions || {};
+  for (const p of [1, 2]) {
+    for (const [fk, coord] of Object.entries(poses[p] || {})) {
+      const size = game.figureOrientations?.[fk] || getFigureSize(dcNameFromFigureKey(fk));
+      for (const c of getFootprintCells(coord, size)) {
+        const lc = normalizeCoord(c);
+        if (blocking.has(lc)) endpoints.push(lc);
+      }
+    }
+  }
+  const extraAdj = buildCountingOverlay(game, mapSpaces, endpoints);
+  if (!extraAdj) return;
+  for (const oc of originCells) {
+    for (const n of extraAdj.get(oc) || []) adjacentSet.add(normalizeCoord(n));
+  }
+}
+
 export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey, coordSize = null) {
   if (!coord || !mapId) return [];
   const rawMapSpaces = getMapData(mapId);
@@ -352,6 +379,7 @@ export function getFiguresAdjacentToCoord(game, coord, mapId, excludeFigureKey, 
     adjacentSet.add(oc);
     for (const n of adjacency[oc] || []) adjacentSet.add(normalizeCoord(n));
   }
+  _augmentAdjacentSetForBlocking(game, mapSpaces, originCells, adjacentSet);
   const poses = game?.figurePositions || { 1: {}, 2: {} };
   const out = [];
   for (const p of [1, 2]) {
@@ -414,6 +442,7 @@ export function getFiguresAdjacentToTarget(game, targetFigureKey, mapId) {
     adjacentSet.add(c);
     for (const n of adjacency[c] || []) adjacentSet.add(normalizeCoord(n));
   }
+  _augmentAdjacentSetForBlocking(game, mapSpaces, targetCells, adjacentSet);
   const out = [];
   for (const p of [1, 2]) {
     for (const [figureKey, coord] of Object.entries(poses[p] || {})) {
@@ -529,7 +558,10 @@ export function getBoardStateForMovement(game, excludeFigureKey = null) {
     ...impassableEdgeSet,
     ...(mapSpaces.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])),
   ]);
-  return { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet, wallRunPassableEdgeSet };
+  return buildTerrainIgnoringExtensions(
+    { mapSpaces, adjacency, terrain, blockingSet, occupiedSet, hostileOccupiedSet, movementBlockingSet, impassableEdgeSet, spacesSet, massiveOccupiedSet, wallAdjacentSet, wallRunPassableEdgeSet },
+    mapSpaces
+  );
 }
 
 export function getMovementProfile(dcName, figureKey, game) {
@@ -672,6 +704,41 @@ export function buildTempBoardState(mapSpaces, occupiedSet, hostileOccupiedSet =
   if (hostileOccupiedSet != null) {
     board.hostileOccupiedSet = new Set((hostileOccupiedSet || []).map((s) => normalizeCoord(s)));
   }
+  return buildTerrainIgnoringExtensions(board, mapSpaces);
+}
+
+
+/**
+ * CRR terrain extensions for a movement board (alexanbv 2026-07-09):
+ *  - impassableSet: cells with terrain 'impassable' (dashed red). Normal
+ *    figures cannot enter; Mobile/Massive ignore and may END there; Thrusters
+ *    pass through but cannot end ("while moving").
+ *  - blockingEdgeSet / wallEdgeSet: the solid-red and black-line edge classes.
+ *    Mobile/Massive cross blocking edges; NOTHING crosses walls.
+ *  - adjacencyIgnoreTerrain: the movement graph for figures that ignore
+ *    terrain (Mobile/Massive) — orthogonal links between on-map cells cut by
+ *    WALLS only (blocking cells/edges and impassable everything are ignored).
+ *    Diagonals are handled by canMoveDiagonally's wall-only corner test.
+ */
+function buildTerrainIgnoringExtensions(board, mapSpaces) {
+  board.wallEdgeSet = new Set((mapSpaces.wallEdges || []).map((e) => edgeKey(e[0], e[1])));
+  board.blockingEdgeSet = new Set((mapSpaces.movementBlockingEdges || []).map((e) => edgeKey(e[0], e[1])));
+  board.impassableSet = new Set(
+    Object.entries(board.terrain).filter(([, t]) => t === 'impassable').map(([c]) => c)
+  );
+  const adjIgnore = {};
+  for (const c of board.spacesSet) {
+    const { col, row } = parseCoord(c);
+    const out = [];
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const n = normalizeCoord(colRowToCoord(col + dc, row + dr));
+      if (!n || !board.spacesSet.has(n)) continue;
+      if (board.wallEdgeSet.has(edgeKey(c, n))) continue;
+      out.push(n);
+    }
+    adjIgnore[c] = out;
+  }
+  board.adjacencyIgnoreTerrain = adjIgnore;
   return board;
 }
 
@@ -683,7 +750,7 @@ export function getNormalizedFootprint(topLeft, size) {
   return getFootprintCells(topLeft, size).map((c) => normalizeCoord(c));
 }
 
-function canMoveDiagonally(start, dx, dy, board) {
+function canMoveDiagonally(start, dx, dy, board, profile = null) {
   if (!dx || !dy) return true;
   const startLower = normalizeCoord(start);
   const { col, row } = parseCoord(startLower);
@@ -694,6 +761,15 @@ function canMoveDiagonally(start, dx, dy, board) {
   const bExists = board.spacesSet.has(bNorm);
   // Fully sealed corner — both sides absent, cannot cut through
   if (!aExists && !bExists) return false;
+  // Mobile/Massive ignore terrain entirely: their diagonal test is walls-only —
+  // at least one right-angle path whose two edges are not walls, through an
+  // on-map corner cell (blocking/impassable corner cells are fine for them).
+  if (profile?.ignoreBlocking && board.wallEdgeSet) {
+    const wallFree = (x, y) => !board.wallEdgeSet.has(edgeKey(x, y));
+    const viaA = aExists && wallFree(startLower, aNorm) && wallFree(aNorm, destNorm);
+    const viaB = bExists && wallFree(startLower, bNorm) && wallFree(bNorm, destNorm);
+    return viaA || viaB;
+  }
   // IA corner-cut rule: diagonal is allowed if at least one full path (corner → dest) is open.
   // First half: start → corner (adjacency encodes impassable walls; movementBlockingSet catches doors)
   const adjList = board.adjacency?.[startLower] || [];
@@ -731,13 +807,18 @@ function getNeighborStates(state, board, profile) {
   // When adjacency data is present for this cell, use it to restrict moves to genuinely
   // connected cells. This handles maps where walls are encoded as adjacency restrictions
   // rather than (or in addition to) movementBlockingEdges.
-  const adjForCell = board.adjacency?.[state.topLeft];
+  // Mobile/Massive (profile.ignoreBlocking) ignore ALL terrain: their graph is
+  // adjacencyIgnoreTerrain (walls are the only static cut), so they can path
+  // through blocking cells / across blocking + impassable edges (CRR Mobile,
+  // Massive; alexanbv 2026-07-09). Runtime gates (doors) still apply.
+  const adjSource = (profile.ignoreBlocking && board.adjacencyIgnoreTerrain) ? board.adjacencyIgnoreTerrain : board.adjacency;
+  const adjForCell = adjSource?.[state.topLeft];
   const adjSet = adjForCell ? new Set(adjForCell) : null;
 
   for (const vec of moveVectors) {
     const isDiagonal = !!(vec.dx && vec.dy);
     if (isDiagonal && profile.isLarge) continue;
-    if (isDiagonal && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board)) continue;
+    if (isDiagonal && !canMoveDiagonally(state.topLeft, vec.dx, vec.dy, board, profile)) continue;
     const nextTopLeft = shiftCoord(state.topLeft, vec.dx, vec.dy);
     if (!nextTopLeft || !board.spacesSet.has(nextTopLeft)) continue;
     // For orthogonal moves, adjacency is the source of truth for wall encoding.
@@ -793,10 +874,13 @@ function evaluateMovementStep(current, neighbor, board, profile) {
     // Force Jump: cannot END on blocking terrain (see normal-step path below).
     const rotateEndsOnBlocking = profile.cannotEndOnBlocking
       && nextFootprint.some((cell) => board.blockingSet.has(cell));
+    const rotateEndsOnImpassable = board.impassableSet
+      && !profile.ignoreBlocking
+      && nextFootprint.some((cell) => board.impassableSet.has(cell));
     return {
       cost: 1 + extraCost,
       occupied: overlapping,
-      canEnd: (!overlapping || profile.canEndOnOccupied) && !rotateEndsOnBlocking,
+      canEnd: (!overlapping || profile.canEndOnOccupied) && !rotateEndsOnBlocking && !rotateEndsOnImpassable,
       footprint: nextFootprint,
     };
   }
@@ -816,6 +900,10 @@ function evaluateMovementStep(current, neighbor, board, profile) {
       if (!prevSet.has(normalizeCoord(prevCoord))) continue;
       const ek = edgeKey(cell, prevCoord);
       if (board.movementBlockingSet.has(ek)) {
+        // Mobile/Massive ignore blocking + impassable EDGES (CRR: "can move
+        // through and end movement on blocked or impassable terrain edges").
+        // Doors and walls still stop them.
+        if (profile.ignoreBlocking && (board.blockingEdgeSet?.has(ek) || board.impassableEdgeSet?.has(ek))) continue;
         // Thrusters (profile.ignoreImpassable): waive impassable-terrain edges
         // only — doors/walls (movementBlockingSet but not impassableEdgeSet) still block.
         if (profile.ignoreImpassable && board.impassableEdgeSet?.has(ek)) continue;
@@ -846,12 +934,25 @@ function evaluateMovementStep(current, neighbor, board, profile) {
     : [];
   // Mortar Trooper Haul: blocking/impassable become difficult instead of impassable
   if (enteringBlockingCells.length > 0 && !profile.treatBlockingAsDifficult) return null;
+  // Impassable CELLS (terrain 'impassable', dashed red): normal figures cannot
+  // enter; Mobile/Massive ignore (and may END there); Thrusters pass through
+  // while moving; Haul treats as difficult (CRR Impassable Terrain; alexanbv
+  // 2026-07-09).
+  let crossedImpassableCellAsDifficult = false;
+  const enteringImpassableCells = (board.impassableSet && !wallRunWaivesTerrain)
+    ? entering.filter((cell) => board.impassableSet.has(cell))
+    : [];
+  if (enteringImpassableCells.length > 0 && !profile.ignoreBlocking && !profile.ignoreImpassable) {
+    if (profile.treatImpassableAsDifficult) crossedImpassableCellAsDifficult = true;
+    else return null;
+  }
   const enteringDifficult =
     !profile.ignoreDifficult &&
     !wallRunWaivesTerrain &&
     (entering.some((cell) => (board.terrain[cell] || 'normal') === 'difficult')
       || (profile.treatBlockingAsDifficult && enteringBlockingCells.length > 0)
-      || crossedImpassableAsDifficult);
+      || crossedImpassableAsDifficult
+      || crossedImpassableCellAsDifficult);
   const enteringOccupied = entering.some((cell) => board.occupiedSet.has(cell));
   const enteringHostile = board.hostileOccupiedSet
     ? entering.some((cell) => board.hostileOccupiedSet.has(cell))
@@ -865,10 +966,17 @@ function evaluateMovementStep(current, neighbor, board, profile) {
   // impassable terrain"). The destination footprint must not overlap a blocking cell.
   const endsOnBlocking = profile.cannotEndOnBlocking
     && nextFootprint.some((cell) => board.blockingSet.has(cell));
+  // Impassable cells: passing through is possible for several profiles, but
+  // ENDING there is Mobile/Massive-only (CRR Mobile: "can end movement in a
+  // space containing impassable or blocking terrain"; Thrusters is only
+  // "while moving").
+  const endsOnImpassable = board.impassableSet
+    && !profile.ignoreBlocking
+    && nextFootprint.some((cell) => board.impassableSet.has(cell));
   return {
     cost: baseCost + extraCost,
     occupied: enteringOccupied,
-    canEnd: (!enteringOccupied || profile.canEndOnOccupied) && !endsOnBlocking,
+    canEnd: (!enteringOccupied || profile.canEndOnOccupied) && !endsOnBlocking && !endsOnImpassable,
     footprint: nextFootprint,
   };
 }
@@ -947,7 +1055,12 @@ export function computeMovementCache(startCoord, mpLimit, board, profile) {
     // allowing the path to traverse it. alexanbv 2026-06-20.
     const endsOnBlocking = profile.cannotEndOnBlocking
       && current.footprint.some((cell) => board.blockingSet.has(cell));
-    const canEnd = (!isOccupied || profile.canEndOnOccupied) && !endsOnBlocking;
+    // Impassable CELLS: several profiles may pass through (Thrusters, Haul),
+    // but only Mobile/Massive (profile.ignoreBlocking) may END there (CRR
+    // Mobile/Massive; alexanbv 2026-07-09).
+    const endsOnImpassable = board.impassableSet && !profile.ignoreBlocking
+      && current.footprint.some((cell) => board.impassableSet.has(cell));
+    const canEnd = (!isOccupied || profile.canEndOnOccupied) && !endsOnBlocking && !endsOnImpassable;
     nodes.set(current.key, { ...current, isOccupied, canEnd });
     // Only record the topLeft cell, never non-topLeft footprint cells.
     // Recording all footprint cells causes permanent poisoning: a cell that is a
