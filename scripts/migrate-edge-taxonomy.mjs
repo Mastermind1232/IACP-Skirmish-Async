@@ -1,3 +1,9 @@
+// ⚠️ BOOTSTRAP-ERA SCRIPT — FROZEN 2026-07-09 (alexanbv directive).
+// The map tool's saved data (data/map-spaces.json via the hosted editor) is
+// now the ONLY ground truth for spaces/terrain/edges. Do NOT rerun this
+// script against tool-authored data — it would overwrite manual corrections.
+// Kept for historical reference and for bootstrapping brand-new maps ONLY
+// (and then only before any manual tool edits exist for that map).
 // One-time migration (alexanbv 2026-07-09): split the conflated impassableEdges
 // field into the three rule-distinct edge classes:
 //   wallEdges             — black lines + map boundary; adjacency CUT

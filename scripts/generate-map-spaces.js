@@ -1,3 +1,9 @@
+// ⚠️ BOOTSTRAP-ERA SCRIPT — FROZEN 2026-07-09 (alexanbv directive).
+// The map tool's saved data (data/map-spaces.json via the hosted editor) is
+// now the ONLY ground truth for spaces/terrain/edges. Do NOT rerun this
+// script against tool-authored data — it would overwrite manual corrections.
+// Kept for historical reference and for bootstrapping brand-new maps ONLY
+// (and then only before any manual tool edits exist for that map).
 /**
  * Generates initial map-spaces.json from deployment zones + map registry.
  * Builds full grid with orthogonal AND diagonal adjacency per IA rules:

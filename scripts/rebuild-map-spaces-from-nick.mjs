@@ -1,3 +1,9 @@
+// ⚠️ BOOTSTRAP-ERA SCRIPT — FROZEN 2026-07-09 (alexanbv directive).
+// The map tool's saved data (data/map-spaces.json via the hosted editor) is
+// now the ONLY ground truth for spaces/terrain/edges. Do NOT rerun this
+// script against tool-authored data — it would overwrite manual corrections.
+// Kept for historical reference and for bootstrapping brand-new maps ONLY
+// (and then only before any manual tool edits exist for that map).
 // Rebuild map-spaces geometry (spaces / adjacency / impassableEdges) for every
 // map from nick-los.json, and validate the rebuild rule against the two
 // nick-native human-curated maps (hoth-battle-station, lothal-wastes).
