@@ -56,12 +56,14 @@
       <div id="colorKey" title="Grid overlay legend">
         <span><span class="swatch" style="background:#505050;"></span> Off-map</span>
         <span><span class="swatch" style="background:rgba(100,149,237,0.65);"></span> Difficult terrain</span>
-        <span><span class="swatch" style="background:rgba(220,53,69,0.7);"></span> Blocking</span>
+        <span><span class="swatch" style="background:rgba(220,53,69,0.7);"></span> Blocking terrain</span>
+        <span><span class="swatch" style="background:rgba(255,120,60,0.65);border:2px dashed #ff2828;"></span> Impassable terrain</span>
         <span><span class="swatch" style="background:rgba(50,205,50,0.6);"></span> Exterior</span>
         <span><span class="swatch" style="background:rgba(220,53,69,0.6);"></span> Red deployment zone</span>
         <span><span class="swatch" style="background:rgba(13,110,253,0.6);"></span> Blue deployment zone</span>
-        <span><span class="swatch" style="background:rgba(255,255,0,0.9);"></span> Solid wall</span>
-        <span><span class="swatch" style="background:rgba(255,100,100,0.8);"></span> Movement-blocking edge</span>
+        <span><span class="swatch" style="background:rgba(20,20,20,0.95);"></span> Wall (edge)</span>
+        <span><span class="swatch" style="background:rgba(255,60,60,0.9);"></span> Blocking edge (solid red)</span>
+        <span><span class="swatch" style="background:repeating-linear-gradient(90deg,#ff2828 0 6px,transparent 6px 10px);"></span> Impassable edge (dashed red)</span>
       </div>
       <div class="toolbar">
         <label>Map: <select id="mapSelect" title="Select which map to configure"></select></label>
@@ -72,8 +74,8 @@
       </div>
       <div id="mapSpacesToolbar" class="toolbar">
         <span class="mode"><label><input type="radio" name="mode" value="offmap" checked> Off-map (click to exclude)</label></span>
-        <span class="mode"><label><input type="radio" name="mode" value="terrain"> Terrain (normal → difficult → blocking)</label></span>
-        <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (solid wall → dotted → clear)</label></span>
+        <span class="mode"><label><input type="radio" name="mode" value="terrain"> Terrain (normal → difficult → blocking → impassable)</label></span>
+        <span class="mode"><label><input type="radio" name="mode" value="edge"> Edge (wall → blocking → impassable → clear)</label></span>
         <span class="mode"><label><input type="radio" name="mode" value="exterior"> Exterior (green = exterior; click or drag to paint/clear)</label></span>
         <span class="mode" id="deploymentZoneWrap"><label><input type="radio" name="mode" value="deploymentzone"> Deployment zone (click to cycle red → blue → clear; drag to paint)</label></span>
       </div>
@@ -167,7 +169,7 @@
     const ctx = overlay.getContext('2d');
     const dx = 50, dy = 50, x0 = 25, y0 = 25;
     let scale = 1, numCols = 0, numRows = 0;
-    let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {}, playReady: true };
+    let state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], wallEdges: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {}, playReady: true };
     /** Full file data from last Load (or injected by map-tool server); used to preserve other maps on Export. */
     let fullMapData = (function () {
       const el = document.getElementById('map-spaces-data');
@@ -878,7 +880,7 @@
         if (numCols === 0 && numRows === 0) initGridFromSpaces();
         document.getElementById('status').textContent = 'Editing: ' + name + ' (' + (mapData.spaces || []).length + ' spaces).';
       } else {
-        state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {}, playReady: true };
+        state = { spaces: [], adjacency: {}, terrain: {}, blocking: [], wallEdges: [], impassableEdges: [], movementBlockingEdges: [], offMap: [], exterior: {}, playReady: true };
         numCols = 0;
         numRows = 0;
         overlay.width = 0;
@@ -897,6 +899,7 @@
         adjacency: mapData.adjacency || {},
         terrain: mapData.terrain || {},
         blocking: mapData.blocking || [],
+        wallEdges: (mapData.wallEdges || []).map(normEdge),
         impassableEdges: (mapData.impassableEdges || []).map(normEdge),
         movementBlockingEdges: (mapData.movementBlockingEdges || []).map(normEdge),
         offMap: [],
@@ -975,6 +978,7 @@
       const sdx = dx * scale, sdy = dy * scale, sx0 = x0 * scale, sy0 = y0 * scale;
       const impSet = new Set((state.impassableEdges || []).map(e => edgeKey(e[0], e[1])));
       const dotSet = new Set((state.movementBlockingEdges || []).map(e => edgeKey(e[0], e[1])));
+      const wallSet = new Set((state.wallEdges || []).map(e => edgeKey(e[0], e[1])));
       const offSet = new Set((state.offMap || []).map(s => String(s).toLowerCase()));
       for (let r = 0; r < numRows; r++) for (let c = 0; c < numCols; c++) {
         const k = coordKey(c, r), x = sx0 + c * sdx, y = sy0 + r * sdy;
@@ -989,6 +993,11 @@
           const ter = state.terrain[k] || 'normal';
           if (ter === 'difficult') { ctx.fillStyle = 'rgba(100,149,237,0.55)'; ctx.fillRect(x, y, sdx, sdy); }
           else if (ter === 'blocking') { ctx.fillStyle = 'rgba(220,53,69,0.65)'; ctx.fillRect(x, y, sdx, sdy); }
+          else if (ter === 'impassable') {
+            ctx.fillStyle = 'rgba(255,120,60,0.45)'; ctx.fillRect(x, y, sdx, sdy);
+            ctx.save(); ctx.strokeStyle = 'rgba(255,40,40,0.95)'; ctx.setLineDash([6,4]); ctx.lineWidth = 2;
+            ctx.strokeRect(x + 2, y + 2, sdx - 4, sdy - 4); ctx.restore();
+          }
           if (state.exterior && state.exterior[k]) { ctx.fillStyle = 'rgba(50,205,50,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
           if (deploymentZoneState.red.includes(k)) { ctx.fillStyle = 'rgba(220,53,69,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
           else if (deploymentZoneState.blue.includes(k)) { ctx.fillStyle = 'rgba(13,110,253,0.5)'; ctx.fillRect(x, y, sdx, sdy); }
@@ -997,19 +1006,18 @@
         for (const [dc, dr, dir] of [[0,-1,'n'],[1,0,'e'],[0,1,'s'],[-1,0,'w']]) {
           const nk = coordKey(c+dc, r+dr);
           const ek = edgeKey(k, nk);
-          if (impSet.has(ek)) {
-            ctx.fillStyle = 'rgba(255,255,0,0.8)';
-            if (dir === 'n') ctx.fillRect(x, y, sdx, 5);
-            else if (dir === 's') ctx.fillRect(x, y+sdy-5, sdx, 5);
-            else if (dir === 'e') ctx.fillRect(x+sdx-5, y, 5, sdy);
-            else ctx.fillRect(x, y, 5, sdy);
-          } else if (dotSet.has(ek)) {
-            ctx.fillStyle = 'rgba(255,100,100,0.7)';
-            if (dir === 'n') ctx.fillRect(x, y, sdx, 4);
-            else if (dir === 's') ctx.fillRect(x, y+sdy-4, sdx, 4);
-            else if (dir === 'e') ctx.fillRect(x+sdx-4, y, 4, sdy);
-            else ctx.fillRect(x, y, 4, sdy);
-          }
+          const edgeLine = (dash, color, w) => {
+            ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = w; ctx.setLineDash(dash);
+            ctx.beginPath();
+            if (dir === 'n') { ctx.moveTo(x, y); ctx.lineTo(x + sdx, y); }
+            else if (dir === 's') { ctx.moveTo(x, y + sdy); ctx.lineTo(x + sdx, y + sdy); }
+            else if (dir === 'e') { ctx.moveTo(x + sdx, y); ctx.lineTo(x + sdx, y + sdy); }
+            else { ctx.moveTo(x, y); ctx.lineTo(x, y + sdy); }
+            ctx.stroke(); ctx.restore();
+          };
+          if (wallSet.has(ek)) edgeLine([], 'rgba(15,15,15,0.95)', 6);
+          else if (dotSet.has(ek)) edgeLine([], 'rgba(255,60,60,0.95)', 5);
+          else if (impSet.has(ek)) edgeLine([7,5], 'rgba(255,40,40,0.95)', 4);
         }
       }
       // Mission overlay: show only the selected mission's tokens (Mission A or B); terminals, doors, named areas shown for both
@@ -1151,6 +1159,7 @@
         if (state.blocking) state.blocking = state.blocking.filter(s => String(s).toLowerCase() !== c);
         if (state.exterior && state.exterior[c] !== undefined) delete state.exterior[c];
         if (state.impassableEdges) state.impassableEdges = state.impassableEdges.filter(([a, b]) => String(a).toLowerCase() !== c && String(b).toLowerCase() !== c);
+        if (state.wallEdges) state.wallEdges = state.wallEdges.filter(([a, b]) => String(a).toLowerCase() !== c && String(b).toLowerCase() !== c);
         if (state.movementBlockingEdges) state.movementBlockingEdges = state.movementBlockingEdges.filter(([a, b]) => String(a).toLowerCase() !== c && String(b).toLowerCase() !== c);
       } else {
         off.delete(c);
@@ -1186,7 +1195,7 @@
         applyExterior(info, paintOffMap);
       } else if (mode === 'terrain') {
         if (new Set((state.offMap || []).map(s => String(s).toLowerCase())).has(info.coord)) return;
-        const next = { normal: 'difficult', difficult: 'blocking', blocking: 'normal' };
+        const next = { normal: 'difficult', difficult: 'blocking', blocking: 'impassable', impassable: 'normal' };
         state.terrain[info.coord] = next[state.terrain[info.coord] || 'normal'];
         state.blocking = state.spaces.filter(s => state.terrain[s] === 'blocking' && !(state.offMap || []).includes(s));
       } else if (mode === 'exterior') {
@@ -1201,26 +1210,37 @@
         if (nc >= 0 && nc < numCols && nr >= 0 && nr < numRows) {
           const nk = coordKey(nc, nr);
           const ek = edgeKey(info.coord, nk);
+          // Edge taxonomy (alexanbv 2026-07-09, CRR): wall | blocking (solid
+          // red) | impassable (dashed red) | nothing. Walls and BLOCKING edges
+          // both CUT adjacency (counting cannot pass; Mobile/Massive crossing
+          // blocking is an engine special-case). IMPASSABLE edges keep the two
+          // cells ADJACENT (counting passes through; movement gated).
+          state.wallEdges = state.wallEdges || [];
+          state.movementBlockingEdges = state.movementBlockingEdges || [];
+          const wallIdx = state.wallEdges.findIndex(([a,b]) => edgeKey(a,b) === ek);
+          const dotIdx = state.movementBlockingEdges.findIndex(([a,b]) => edgeKey(a,b) === ek);
           const impIdx = state.impassableEdges.findIndex(([a,b]) => edgeKey(a,b) === ek);
-          const dotIdx = (state.movementBlockingEdges || []).findIndex(([a,b]) => edgeKey(a,b) === ek);
           const removeFromAdj = () => {
             state.adjacency[info.coord] = (state.adjacency[info.coord] || []).filter(x => x !== nk);
             state.adjacency[nk] = (state.adjacency[nk] || []).filter(x => x !== info.coord);
           };
           const addToAdj = () => {
-            if (!(state.adjacency[info.coord] || []).includes(nk)) state.adjacency[info.coord].push(nk);
-            if (!(state.adjacency[nk] || []).includes(info.coord)) state.adjacency[nk].push(info.coord);
+            if (!(state.adjacency[info.coord] || []).includes(nk)) (state.adjacency[info.coord] = state.adjacency[info.coord] || []).push(nk);
+            if (!(state.adjacency[nk] || []).includes(info.coord)) (state.adjacency[nk] = state.adjacency[nk] || []).push(info.coord);
           };
-          if (impIdx >= 0) {
-            state.impassableEdges.splice(impIdx, 1);
-            state.movementBlockingEdges = state.movementBlockingEdges || [];
+          if (wallIdx >= 0) {              // wall -> blocking edge (both cut adjacency)
+            state.wallEdges.splice(wallIdx, 1);
             state.movementBlockingEdges.push([info.coord, nk]);
             removeFromAdj();
-          } else if (dotIdx >= 0) {
+          } else if (dotIdx >= 0) {        // blocking -> impassable edge
             state.movementBlockingEdges.splice(dotIdx, 1);
-            addToAdj();
-          } else {
             state.impassableEdges.push([info.coord, nk]);
+            addToAdj();
+          } else if (impIdx >= 0) {        // impassable -> clear
+            state.impassableEdges.splice(impIdx, 1);
+            addToAdj();
+          } else {                         // nothing -> wall
+            state.wallEdges.push([info.coord, nk]);
             removeFromAdj();
           }
         }
@@ -1657,12 +1677,13 @@
       const blocking = onMapSpaces.filter(s => state.terrain[String(s).toLowerCase()] === 'blocking');
       const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
+      const wEdges = (state.wallEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const exterior = {};
       for (const k of onMapSpaces) {
         const key = String(k).toLowerCase();
         if (state.exterior && state.exterior[key]) exterior[key] = true;
       }
-      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, impassableEdges: impEdges, movementBlockingEdges: movEdges, exterior: Object.keys(exterior).length ? exterior : undefined, playReady: state.playReady !== false };
+      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, wallEdges: wEdges, impassableEdges: impEdges, movementBlockingEdges: movEdges, exterior: Object.keys(exterior).length ? exterior : undefined, playReady: state.playReady !== false };
       const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
       const data = fullMapData && fullMapData.maps
         ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } }
@@ -1781,12 +1802,13 @@
       const blocking = onMapSpaces.filter(s => state.terrain[String(s).toLowerCase()] === 'blocking');
       const impEdges = (state.impassableEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const movEdges = (state.movementBlockingEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
+      const wEdges = (state.wallEdges || []).filter(([a,b]) => onMapSet.has(String(a).toLowerCase()) || onMapSet.has(String(b).toLowerCase()));
       const exterior = {};
       for (const k of onMapSpaces) {
         const key = String(k).toLowerCase();
         if (state.exterior && state.exterior[key]) exterior[key] = true;
       }
-      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, impassableEdges: impEdges, movementBlockingEdges: movEdges, exterior: Object.keys(exterior).length ? exterior : undefined, playReady: state.playReady !== false };
+      const exportState = { spaces: onMapSpaces, adjacency: adj, terrain, blocking, wallEdges: wEdges, impassableEdges: impEdges, movementBlockingEdges: movEdges, exterior: Object.keys(exterior).length ? exterior : undefined, playReady: state.playReady !== false };
       const selectedId = document.getElementById('mapSelect').value || 'mos-eisley-outskirts';
       const data = fullMapData && fullMapData.maps ? { ...fullMapData, maps: { ...fullMapData.maps, [selectedId]: exportState } } : { source: 'extract-map-spaces.html', maps: { [selectedId]: exportState } };
       const zonesData = { source: fullDeploymentZonesData?.source || 'extract-map-spaces.html', maps: { ...(fullDeploymentZonesData?.maps || {}), [selectedId]: { red: [...deploymentZoneState.red], blue: [...deploymentZoneState.blue] } } };

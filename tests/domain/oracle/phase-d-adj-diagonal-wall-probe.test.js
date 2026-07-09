@@ -62,7 +62,9 @@ describe('PROBE-PD-ADJ-005: diagonal adjacency blocked only when BOTH right-angl
   it('005e: data — lothal-wastes i7↔j8 diagonal is excluded (walls on i7|i8 AND j7|j8)', () => {
     const lw = MAP_SPACES.maps['lothal-wastes'];
     assert.ok(lw, 'lothal-wastes must be in map-spaces.json');
-    const hasEdge = (a, b) => (lw.impassableEdges || []).some(e => e.includes(a) && e.includes(b));
+    // 2026-07-09 edge-taxonomy split: WALLS live in wallEdges now
+    // (impassableEdges = dashed-red terrain edges only).
+    const hasEdge = (a, b) => (lw.wallEdges || []).some(e => e.includes(a) && e.includes(b));
     assert.equal(hasEdge('i7', 'i8'), true, 'fixture requires i7|i8 wall — CRR-ADJ-005');
     assert.equal(hasEdge('j7', 'j8'), true, 'fixture requires j7|j8 wall — CRR-ADJ-005');
     assert.ok(!lw.adjacency['i7'].includes('j8'),
@@ -73,7 +75,7 @@ describe('PROBE-PD-ADJ-005: diagonal adjacency blocked only when BOTH right-angl
 
   it('005f: data — lothal-wastes n4↔m5 diagonal is preserved (only C-path walled; D-path open)', () => {
     const lw = MAP_SPACES.maps['lothal-wastes'];
-    const hasEdge = (a, b) => (lw.impassableEdges || []).some(e => e.includes(a) && e.includes(b));
+    const hasEdge = (a, b) => (lw.wallEdges || []).some(e => e.includes(a) && e.includes(b));
     assert.equal(hasEdge('n4', 'm4'), true, 'fixture: n4|m4 walled (C-path)');
     assert.equal(hasEdge('m4', 'm5'), true, 'fixture: m4|m5 walled (C-path)');
     assert.equal(hasEdge('n4', 'n5'), false, 'fixture: n4|n5 open (D-path)');
