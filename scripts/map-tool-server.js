@@ -11,7 +11,13 @@ import { exec } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const PORT = 3457;
+const PORT = Number(process.env.PORT) || 3457;
+// Optional shared-secret path prefix (Railway/public deploys): when
+// MAP_TOOL_KEY is set, every request must start with /<key>/ — the whole tool
+// (page, assets, save endpoint) lives under the secret path, and anything
+// else gets a 404. Relative asset/save URLs inside the HTML inherit the
+// prefix automatically.
+const MAP_TOOL_KEY = (process.env.MAP_TOOL_KEY || '').trim();
 
 const MIME = {
   '.html': 'text/html',
@@ -40,7 +46,7 @@ const PLACEHOLDER_IMAGE_PATHS = '<!-- INJECT_MAP_IMAGE_PATHS -->';
 const PLACEHOLDER_TOURNAMENT_ROTATION = '<!-- INJECT_TOURNAMENT_ROTATION -->';
 const PLACEHOLDER_DEPLOYMENT_ZONES = '<!-- INJECT_DEPLOYMENT_ZONES -->';
 const PLACEHOLDER_MAP_TOKENS = '<!-- INJECT_MAP_TOKENS -->';
-const TOKEN_IMAGE_BASE_PATH = '/vassal_extracted/images/';
+const TOKEN_IMAGE_BASE_PATH = (process.env.MAP_TOOL_KEY ? '/' + process.env.MAP_TOOL_KEY.trim() : '') + '/vassal_extracted/images/';
 const PLACEHOLDER_TOKEN_IMAGE_BASE = '<!-- INJECT_TOKEN_IMAGE_BASE -->';
 const PLACEHOLDER_TOKEN_IMAGES = '<!-- INJECT_TOKEN_IMAGES --><script type="application/json" id="token-images-data">{"terminals":"Counter--Terminal GRAY.gif","missionA":"Mission Token--Neutral GRAY.gif","missionB":"Counter--Crate Blue.gif","doors":"Token--Door.png"}</script>';
 const PLACEHOLDER_MISSION_CARDS = '<!-- INJECT_MISSION_CARDS --><script type="application/json" id="mission-cards-data">{"source":"extract-map-spaces.html","maps":{}}</script>';
@@ -65,12 +71,38 @@ function setCors(res) {
 }
 
 createServer((req, res) => {
-  const requestPath = (req.url || '/').split('?')[0];
+  let requestPath = (req.url || '/').split('?')[0];
+  if (MAP_TOOL_KEY) {
+    const prefix = '/' + MAP_TOOL_KEY;
+    if (requestPath === prefix) requestPath = '/';
+    else if (requestPath.startsWith(prefix + '/')) requestPath = requestPath.slice(prefix.length) || '/';
+    else { res.writeHead(404); res.end('Not found'); return; }
+    req.url = requestPath; // downstream pathMatches() reads req.url
+  }
   const pathname = requestPath === '/' ? '/' + MAP_SPACES_HTML : requestPath;
   let decodedPath = (pathname.startsWith('/') ? pathname.slice(1) : pathname).replace(/\.\./g, '');
   try { decodedPath = decodeURIComponent(decodedPath); } catch (_) {}
   decodedPath = decodedPath.replace(/\.\./g, '');
   const filePath = join(root, decodedPath);
+
+  if (req.method === 'GET' && pathMatches(req, 'map-tool-export')) {
+    setCors(res);
+    try {
+      const payload = {};
+      const readIf = (path) => existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+      payload.mapSpaces = readIf(MAP_SPACES_JSON);
+      payload.tournamentRotation = readIf(TOURNAMENT_ROTATION_JSON);
+      payload.deploymentZones = readIf(DEPLOYMENT_ZONES_JSON);
+      payload.mapTokens = readIf(MAP_TOKENS_JSON);
+      payload.missionCards = readIf(MISSION_CARDS_JSON);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(payload));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('Error: ' + (err.message || 'export failed'));
+    }
+    return;
+  }
 
   if (req.method === 'GET' && pathMatches(req, 'map-tool-ping')) {
     setCors(res);
@@ -286,6 +318,8 @@ createServer((req, res) => {
 }).listen(PORT, '0.0.0.0', () => {
   const url = `http://127.0.0.1:${PORT}/`;
   console.log('Map tool: ' + url);
-  const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
-  exec(cmd, () => {});
+  if (!process.env.RAILWAY_ENVIRONMENT && !process.env.NO_OPEN) {
+    const cmd = process.platform === 'win32' ? `start "" "${url}"` : process.platform === 'darwin' ? `open "${url}"` : `xdg-open "${url}"`;
+    exec(cmd, () => {});
+  }
 });
