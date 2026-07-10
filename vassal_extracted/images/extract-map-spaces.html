@@ -1739,7 +1739,12 @@
       const payload = { mapSpaces: data, tournamentRotation: fullTournamentRotationData, deploymentZones: zonesData, mapTokens: tokensData, missionCards: missionCardsData };
       const trySave = (url) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       const urls = [];
-      if (typeof location !== 'undefined' && location.origin && location.origin !== 'null') urls.push(location.origin + '/map-tool-save');
+      // Resolve against the PAGE URL, not the origin — hosted deploys live
+      // behind a secret path prefix (/KEY/...) and an origin-absolute URL
+      // escapes it (the 2026-07-10 "save doesn't save" bug: POST /map-tool-save
+      // 404'd while the page lived at /KEY/). The server matches the
+      // 'map-tool-save' suffix, so any page path resolves correctly.
+      if (typeof location !== 'undefined' && location.origin && location.origin !== 'null') urls.push(new URL('map-tool-save', location.href).toString());
       urls.push('http://127.0.0.1:3457/map-tool-save', 'http://localhost:3457/map-tool-save');
       (function attempt(i) {
         if (i >= urls.length) {
