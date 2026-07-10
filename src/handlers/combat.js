@@ -889,7 +889,7 @@ function _makeResourcefulResolver(side) {
         // Store the Shrewd guess for the DEFERRED double (end of rerolls step).
         if (typeof st.guess === 'number') combat.shrewdScoundrel = { pool: st.pool, index: st.index, guess: st.guess };
         const res = _rerollDie(combat, ctx, { pool: st.pool, index: st.index, newColor: st.newColor });
-        if (res.ok) await thread?.send(`**Resourceful** — rerolled ${st.pool} die #${st.index + 1}.`).catch(discordCatch);
+        if (res.ok) await _sendRerollResult(thread, st.pool, `**Resourceful** — rerolled ${st.pool} die #${st.index + 1}.`, res.newDie);
         else await thread?.send(`**Resourceful** — die #${st.index + 1} not rerolled (${res.reason}).`).catch(discordCatch);
         delete combat[sk];
       };
@@ -966,7 +966,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
         const p = choice[0] === 'd' ? 'defense' : 'attack';
         const idx = parseInt(choice.slice(1), 10);
         const res = _rerollDie(combat, ctx, { pool: p, index: idx });
-        if (res.ok) thread?.send(`**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+        if (res.ok) await _sendRerollResult(thread, p, `**${name}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`, res.newDie);
         else thread?.send(`**${name}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
         return undefined;
       },
@@ -1001,7 +1001,7 @@ function _makeRerollResolver({ name, pool, side, eligible, colorSwap = false, di
       const newColor = _cs && ['blue', 'green', 'red', 'yellow', 'white', 'black'].includes(choice) ? choice : undefined;
       const res = _rerollDie(combat, ctx, { pool, index: idx, newColor });
       if (res.ok) {
-        thread?.send(`**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
+        await _sendRerollResult(thread, pool, `**${name}** — rerolled ${pool} die #${idx + 1} → ${dieLabel(res.newDie)}.`, res.newDie);
         // Strain cost on use (Rancor's Trained: "suffer 1 Strain to reroll"). The
         // attacker pays it AFTER a successful reroll. alexanbv 2026-06-18.
         if (strainCost && game) {
@@ -1066,7 +1066,7 @@ function _makeForcedRerollResolver({ slot, side }) {
       if (pool === 'any') { p = choice[0] === 'd' ? 'defense' : 'attack'; idx = parseInt(choice.slice(1), 10); }
       else { p = pool; idx = parseInt(choice, 10); }
       const res = _rerollDie(combat, ctx, { pool: p, index: idx });
-      if (res.ok) await thread?.send(`**${entry.source || 'Granted Reroll'}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+      if (res.ok) await _sendRerollResult(thread, p, `**${entry.source || 'Granted Reroll'}** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`, res.newDie);
       else await thread?.send(`**${entry.source || 'Granted Reroll'}** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
       // Demoralizing Monologue (Moff Gideon): record which DEFENSE die the
       // attacker chose to reroll so computeCombatResult can REMOVE that die's
@@ -1305,7 +1305,7 @@ function _makeCapitalizeResolver() {
       const p = choice[0] === 'd' ? 'defense' : 'attack';
       const idx = parseInt(choice.slice(1), 10);
       const res = _rerollDie(combat, ctx, { pool: p, index: idx });
-      if (res.ok) await thread?.send(`**Capitalize** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`).catch(discordCatch);
+      if (res.ok) await _sendRerollResult(thread, p, `**Capitalize** — rerolled ${p} die #${idx + 1} → ${lbl(p, res.newDie)}.`, res.newDie);
       else await thread?.send(`**Capitalize** — die #${idx + 1} not rerolled (${res.reason}).`).catch(discordCatch);
       return undefined;
     },
@@ -1344,7 +1344,9 @@ export const COMBAT_RESOLVERS = {
       for (const i of _selectableDieIndices(combat, { pool })) {
         if (_rerollDie(combat, ctx, { pool, index: i }).ok) n++;
       }
-      thread?.send(`**Twin Sabers** — rerolled all ${pool} dice (${n}).`).catch(discordCatch);
+      await _sendRerollResult(thread, pool,
+        `**Twin Sabers** — rerolled all ${pool} dice (${n}).`,
+        pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults);
     },
   },
   // Soresu Form (Kanan Jarrus) — bespoke reroll resolver (alexanbv 2026-06-16):
@@ -2173,7 +2175,7 @@ function _makeBattlefieldAwarenessResolver() {
       const st = combat[sk] || {};
       const reroll = async (newColor) => {
         const res = _rerollDie(combat, ctx, { pool: 'attack', index: st.index, newColor });
-        if (res.ok) await thread?.send(`**Battlefield Awareness** — rerolled attack die #${st.index + 1} → ${dieLabel(res.newDie)}.`).catch(discordCatch);
+        if (res.ok) await _sendRerollResult(thread, 'attack', `**Battlefield Awareness** — rerolled attack die #${st.index + 1} → ${dieLabel(res.newDie)}.`, res.newDie);
         else await thread?.send(`**Battlefield Awareness** — die #${st.index + 1} not rerolled (${res.reason}).`).catch(discordCatch);
         delete combat[sk];
       };
@@ -3037,6 +3039,23 @@ export async function _postGateChooseWindow(window, side, pending, thread, game,
   // after_resolve is migrated onto this gate framework. See the big ARCHITECTURE
   // NOTE on postPostResolveWindow.
   const cfg = _GATE_WINDOWS[window];
+  // Hidden/Weakened notes belong to the MODS stage, not the surge-spend step
+  // (alexanbv 2026-07-10) — post once per side when its mods window first opens.
+  if (window === 'mods') {
+    combat._condNotesPosted = combat._condNotesPosted || {};
+    if (!combat._condNotesPosted[side]) {
+      combat._condNotesPosted[side] = true;
+      const notes = [];
+      if (side === 'attacker' && !combat.attackerCondEffectsSuppressed) {
+        if (combat.attackerConds?.includes('Hide')) notes.push('🫥 **Hidden** — attacker: **+1 Surge** result.');
+        if (combat.attackerConds?.includes('Weaken')) notes.push('🌀 **Weakened** — attacker: **−1 Surge** result.');
+      } else if (side === 'defender' && !combat.defenderCondEffectsSuppressed) {
+        if (combat.defenderConds?.includes('Hide')) notes.push('🫥 **Hidden** — defender: attacker suffers **−2 Accuracy**.');
+        if (combat.defenderConds?.includes('Weaken')) notes.push('🌀 **Weakened** — defender: **−1 Evade** result.');
+      }
+      for (const n of notes) await thread.send(n).catch(discordCatch);
+    }
+  }
   // False Orders / Lure: the controller acts on the attacker side.
   const sidePlayerNum = side === 'attacker'
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
@@ -6563,6 +6582,17 @@ async function _updateRollPromptStatus(thread, game, combat, client) {
   }
 }
 
+/** Post a reroll result WITH the die image (alexanbv 2026-07-10: "when dice
+ * are rerolled the die image should be shown"). Falls back to text-only when
+ * rendering fails. `dice` = array of the rerolled die/dice results. */
+async function _sendRerollResult(thread, pool, text, dice) {
+  if (!thread) return;
+  const render = pool === 'attack' ? renderAttackDiceImage : renderDefenseDiceImage;
+  const img = await render(Array.isArray(dice) ? dice : [dice]).catch(() => null);
+  if (img) await thread.send({ content: text, files: [new AttachmentBuilder(img, { name: 'reroll.png' })] }).catch(discordCatch);
+  else await thread.send(text).catch(discordCatch);
+}
+
 /** Render and post the attack roll image. Used by held-roll second-press
  * reveal to surface a roll that was computed but not posted on first press. */
 async function _postAttackRollImage(thread, combat, game, client) {
@@ -6645,9 +6675,8 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
   const _attackerHiddenSurge = combat.attackerConds?.includes('Hide')
     && !combat.attackerCondEffectsSuppressed;
   const _hiddenSurgeBonus = _attackerHiddenSurge ? 1 : 0;
-  if (_attackerHiddenSurge) {
-    await thread.send('🫥 **Hidden** — attacker is Hidden: **+1 Surge**.').catch(discordCatch);
-  }
+  // (Hidden/Weakened notes are posted at the MODS stage — alexanbv 2026-07-10;
+  // only the arithmetic lives here.)
   const rawSurge = Math.max(0, roll.surge + surgeBonus + (combat.tokenSurgeBonus || 0) - _weakenSurgePenalty + _hiddenSurgeBonus);
   // Per-figure defender round-Evade for the surge-cancel step (Survival
   // Instincts, Armed Escort, Fuel Upgrade, etc.). Evaluated against THIS
