@@ -4922,10 +4922,18 @@ export async function _forceMissAndStep8(thread, game, combat, ctx, message) {
   // safely skips Blast / Cleave / damage-conditions on a miss.
   try {
     const { enqueueAttackerStep8Effects, enqueueDefenderStep8Effects, enqueueAttackerPerDcEffects, enqueueAfterResolveGateAbilities, postPostResolveWindow } = await import('./after-attack-resolve.js');
+    // LIVE-PATH BUG (alexanbv 2026-07-10, C-3P0 at 1 HP got no Disruptor
+    // offer): this deps bag lacked dcHealthState, so the after-resolve
+    // enumerators' HP reads (Disruptor Rifle's exactly-1-HP gate) came back
+    // undefined on the Discord-driven path and silently dropped the offer —
+    // while the headless path (tests) passed full deps and stayed green.
+    // Pass everything the enumerators consume.
     const _step8Deps = {
       getDcEffects: ctx.getDcEffects,
       findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
       dcNameFromFigureKey,
+      dcHealthState: ctx.dcHealthState,
+      getDcList,
     };
     // alexanbv ruling 2026-06-26: the FULL after-attack window fires on a forced
     // miss (discard conditions like Focus/Hidden, after-resolve DC abilities, gate

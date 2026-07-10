@@ -290,6 +290,16 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
         type: 'disruptor_rifle',
         label: 'Disruptor Rifle: Execute (1 HP)',
       });
+    } else if (_drCur == null) {
+      // Unreadable HP (missing deps / stale target msgId) must never silently
+      // eat the offer — fireDisruptorRifle rechecks eligibility at click time,
+      // so offering is safe; log loudly so the data problem surfaces.
+      console.error(`[after-attack-resolve] Disruptor Rifle: target HP unreadable (msgId=${combat.target.msgId}, fig=${combat.target.figureKey}) — offering with fire-time recheck.`);
+      enqueueAfterAttackEffect(combat, {
+        side: 'attacker',
+        type: 'disruptor_rifle',
+        label: 'Disruptor Rifle: Execute (if at 1 HP)',
+      });
     }
   }
   // Electro-pulse (Electrohammer post-attack): each other figure adjacent
