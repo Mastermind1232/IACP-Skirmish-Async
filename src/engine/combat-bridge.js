@@ -1874,6 +1874,37 @@ export async function applySuppressiveFireEffect(game, { send, client, logGameAc
  * pipeline for blast no matter the target").
  */
 async function _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
+  // If defeat-timing CC prompts were posted in hand channels, pause the sequence
+  // before AAR until each player has played or skipped their card.
+  const _pendingIds = game._defeatCcPromptsPosted;
+  if (_pendingIds?.length) {
+    // Only track IDs that are actually respondable via their respective
+    // pending-state slots (avoids an unhealable hang when two _makeDefeatCcHook
+    // cards overwrite the single pendingDefeatCcPrompt slot).
+    const _respondable = new Set();
+    if (game.pendingCelebration && _pendingIds.includes('celebration_auto_prompt')) {
+      _respondable.add('celebration_auto_prompt');
+    }
+    if (game.pendingDefeatCcPrompt?.id && _pendingIds.includes(game.pendingDefeatCcPrompt.id)) {
+      _respondable.add(game.pendingDefeatCcPrompt.id);
+    }
+    const _filteredIds = _pendingIds.filter(id => _respondable.has(id));
+    delete game._defeatCcPromptsPosted;
+    if (_filteredIds.length > 0) {
+      game.pendingDefeatCcWindow = {
+        gameId: game.gameId,
+        pendingIds: _filteredIds,
+        afterResolveArgs: { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum },
+        combatThreadId: combat.combatThreadId,
+      };
+      // Gate sequence: stash args so resumeSequenceAfterInterrupt can advance
+      if (combat._seqActive) {
+        combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
+      }
+      return;
+    }
+    // All posted ids were orphaned (slots overwritten) — fall through to normal flow.
+  }
   if (combat._seqActive) {
     combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
     return;

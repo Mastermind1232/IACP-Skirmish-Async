@@ -247,6 +247,9 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'pendingBELReorder',
   'pendingUnhingedDirector',
   'pendingUnhingedStrain',
+  // Defeat CC window: array accumulated in hooks then deleted after consumption;
+  // scanner sees mixed array/delete access as a mismatch.
+  '_defeatCcPromptsPosted',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────

@@ -37,7 +37,8 @@ import {
   WHEN_DEFEATED_HOOKS,
   _registerDcEffectsResolver,
 } from './damage-pipeline.js';
-import { getDcList, getDcMessageIds, opponentPlayerNum, vpKey, getActivatedDcIndices, dcAttachmentsKey } from './player-helpers.js';
+import { getDcList, getDcMessageIds, opponentPlayerNum, vpKey, getActivatedDcIndices, dcAttachmentsKey, getHandChannelId } from './player-helpers.js';
+import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { getDcEffects, getDcKeywords, getMapData, isDcUnique } from '../data-loader.js';
 import { applyCondition, isConditionImmune, areConditionEffectsSuppressed } from './conditions.js';
@@ -1217,33 +1218,43 @@ WHEN_DEFEATED_HOOKS.push({
   probe: (game, opts) => {
     if (!opts.figureKey) return false;
     if (!opts.attackerPlayerNum) return false;
+    const hand = getCcHand(game, opts.attackerPlayerNum) || [];
+    if (!hand.includes('Celebration')) return false;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     return !!isDcUnique(dcName);
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return;
-    // Headless / oracle / fixture client — no human to click buttons.
-    if (ctx?.client?._isFakeClient) return;
-    const ownerId = game[`player${opts.attackerPlayerNum}Id`];
-    setPendingCelebration(game, {
-      attackerPlayerNum: opts.attackerPlayerNum,
-      combatThreadId: opts.combat?.combatThreadId ?? thread?.id,
-    });
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`celebration_play_${game.gameId}`).setLabel('Play Celebration (+4 VP)').setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`celebration_pass_${game.gameId}`).setLabel('Pass').setStyle(ButtonStyle.Secondary),
-    );
-    await thread.send({
-      content: ownerId
-        ? `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`
-        : `Unique figure defeated. Play **Celebration** to gain 4 VP?`,
-      components: [row],
-      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-    }).catch(() => {});
+    if (!ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !client) return;
+    if (client._isFakeClient) return;
+    const attackerPN = opts.attackerPlayerNum;
+    const ownerId = game[`player${attackerPN}Id`];
+    const combatThreadId = opts.combat?.combatThreadId ?? ctx?.thread?.id;
+    setPendingCelebration(game, { attackerPlayerNum: attackerPN, combatThreadId });
+    const handChId = getHandChannelId(game, attackerPN);
+    if (!handChId) return;
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`celebration_play_${game.gameId}`).setLabel('Play Celebration (+4 VP)').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`celebration_pass_${game.gameId}`).setLabel('Pass').setStyle(ButtonStyle.Secondary),
+      );
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> — You defeated a unique figure. Play **Celebration** to gain 4 VP?`
+          : `Unique figure defeated. Play **Celebration** to gain 4 VP?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+      // Track for defeat CC window sequence pause
+      game._defeatCcPromptsPosted = game._defeatCcPromptsPosted || [];
+      game._defeatCcPromptsPosted.push('celebration_auto_prompt');
+    } catch (err) {
+      console.error('[defeat-hook] celebration_auto_prompt hand channel error:', err?.message ?? err);
+    }
   },
 });
 
@@ -1573,12 +1584,12 @@ function _makeDefeatCcHook({ id, cardName, scope, label, requireProximity = 0, r
       return true;
     },
     apply: async (game, opts, ctx) => {
-      const thread = ctx?.thread;
+      const client = ctx?.client;
       const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
       const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
       const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
-      if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
-      if (ctx?.client?._isFakeClient) return null;
+      if (!ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !client) return null;
+      if (client._isFakeClient) return null;
       const playerPN = scope === 'friendly'
         ? opts.controllerPlayerNum
         : (opts.controllerPlayerNum === 1 ? 2 : 1);
@@ -1600,13 +1611,24 @@ function _makeDefeatCcHook({ id, cardName, scope, label, requireProximity = 0, r
         new ButtonBuilder().setCustomId(`defeat_cc_skip_${game.gameId}_${id}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
       );
       const dcName = dcNameFromFigureKey(opts.figureKey);
-      await thread.send({
-        content: ownerId
-          ? `<@${ownerId}> 📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`
-          : `📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`,
-        components: [row],
-        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-      }).catch(() => {});
+      const handChId = getHandChannelId(game, playerPN);
+      if (!handChId) return null;
+      try {
+        const handCh = await fetchGameChannel(client, handChId);
+        await handCh.send({
+          content: ownerId
+            ? `<@${ownerId}> 📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`
+            : `📜 **${cardName}** — ${label}. **${dcName}** was defeated. Play?`,
+          components: [row],
+          allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+        });
+        // Track for defeat CC window sequence pause
+        game._defeatCcPromptsPosted = game._defeatCcPromptsPosted || [];
+        game._defeatCcPromptsPosted.push(id);
+      } catch (err) {
+        console.error(`[defeat-hook] ${id} hand channel error:`, err?.message ?? err);
+      }
+      return null;
     },
   };
 }

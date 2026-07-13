@@ -38,6 +38,28 @@ import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { playCcFull, registerCcCustomResolve } from './cc-pipeline.js';
 
+/**
+ * Remove `hookId` from the defeat-CC window. When all pending IDs are gone,
+ * resume the gate sequence (or AAR for legacy non-gate attacks).
+ * Called after each defeat-CC prompt is played or skipped.
+ */
+export async function _drainDefeatCcWindow(game, hookId, ctx) {
+  const win = game.pendingDefeatCcWindow;
+  if (!win) return;
+  win.pendingIds = win.pendingIds.filter(id => id !== hookId);
+  if (win.pendingIds.length > 0) return;
+  delete game.pendingDefeatCcWindow;
+  const combat = game.pendingCombat;
+  if (!combat) return;
+  if (combat._seqActive && combat._afterResolveArgs) {
+    const { resumeSequenceAfterInterrupt } = await import('./combat.js');
+    await resumeSequenceAfterInterrupt(game, combat, ctx, null);
+  }
+  // Legacy non-gate path: _afterResolveArgs isn't set so resumeSequence is a
+  // no-op; AAR will run via the caller's normal flow once pendingDefeatCcWindow
+  // is cleared. Nothing more to do here.
+}
+
 // Drain the deferred side-effects a (sync) resolveAbility produced in the one
 // canonical order: strain COST → DAMAGE → dealt STRAIN → CONDITIONS (alexanbv
 // 2026-06-23). Defeat CCs like Lord of the Sith (Force Choke) deal Damage +
@@ -165,11 +187,13 @@ export async function handleSkipDefeatCcPrompt(interaction, ctx) {
   const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.playerPN);
   if (!ok) return;
   await interaction.update({ components: [] }).catch(() => {});
+  const _hookId = pending.id;
   clearPendingDefeatCcPrompt(game);
   if (typeof logGameAction === 'function' && client) {
     await logGameAction(game, client, `**${pending.cardName}** — skipped.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
   }
   if (typeof saveGames === 'function') await saveGames(gameId);
+  await _drainDefeatCcWindow(game, _hookId, ctx);
 }
 
 export async function handlePlayDefeatCcPrompt(interaction, ctx) {
@@ -193,6 +217,7 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
   // Capture defeat context BEFORE clearing (some CCs need the position).
   const _defeatedPos = pending.defeatedPos ?? null;
   const _defeatedFigureKey = pending.defeatedFigureKey ?? null;
+  const _hookId = pending.id;
   clearPendingDefeatCcPrompt(game);
 
   const res = await playCcFull(game, gameId, playerPN, null, cardName, {
@@ -203,6 +228,7 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
       await logGameAction(game, client, `**${cardName}** — card no longer in hand.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
     if (typeof saveGames === 'function') await saveGames(gameId);
+    await _drainDefeatCcWindow(game, _hookId, ctx);
     return;
   }
   if (!res.cancelled) {
@@ -215,6 +241,12 @@ export async function handlePlayDefeatCcPrompt(interaction, ctx) {
     }, ctx, client);
   }
   if (typeof saveGames === 'function') await saveGames(gameId);
+  // Drain the window only if _resolveDefeatCcEffect did NOT post a target/mode
+  // picker (which would have set a new pendingDefeatCcPrompt). Picker handlers
+  // call _drainDefeatCcWindow themselves when they finish.
+  if (!game.pendingDefeatCcPrompt) {
+    await _drainDefeatCcWindow(game, _hookId, ctx);
+  }
 }
 
 // WHEN_DEFEATED CCs (Debts Repaid, Retaliation, ...) — post-counter-window
@@ -417,6 +449,7 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
   const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.playerPN);
   if (!ok) return;
   await interaction.update({ components: [] }).catch(() => {});
+  const _hookId = pending.id;
   const opt = (pending.targetOptions || [])[optionIdx];
   if (!opt) {
     clearPendingDefeatCcPrompt(game);
@@ -424,12 +457,13 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
       await logGameAction(game, client, `**${pending.cardName}** — invalid target index ${optionIdx}.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
     }
     if (typeof saveGames === 'function') await saveGames(gameId);
+    await _drainDefeatCcWindow(game, _hookId, ctx);
     return;
   }
 
   // Retaliation: after the GUARDIAN is chosen, post a chooseOne mode
   // picker (Focused / 2 Power Tokens / Move 2). The next click runs
-  // resolveAbility with msgId + choiceIndex.
+  // resolveAbility with msgId + choiceIndex. Drain happens in mode-pick.
   if (pending.cardName === 'Retaliation' && ButtonBuilder && ButtonStyle && ActionRowBuilder && interaction.channel?.send) {
     setPendingDefeatCcPrompt(game, {
       ...pending,
@@ -451,7 +485,7 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
     return;
   }
 
-  // Single-effect cards (Debts Repaid): run resolveAbility with the
+  // Single-effect cards (Debts Repaid, Paid in Beskar): run resolveAbility with the
   // chosen DC's msgId. If the chosen option is via Fast Learner (Mara
   // picked instead of the named figure), mark FL used for the round.
   clearPendingDefeatCcPrompt(game);
@@ -485,6 +519,7 @@ export async function handleDefeatCcTargetPick(interaction, ctx) {
     }
   }
   if (typeof saveGames === 'function') await saveGames(gameId);
+  await _drainDefeatCcWindow(game, _hookId, ctx);
 }
 
 /**
@@ -516,6 +551,7 @@ export async function handleDefeatCcModePick(interaction, ctx) {
   const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.playerPN);
   if (!ok) return;
   await interaction.update({ components: [] }).catch(() => {});
+  const _hookId = pending.id;
   clearPendingDefeatCcPrompt(game);
   if (typeof resolveAbility === 'function') {
     const result = resolveAbility(pending.cardName, {
@@ -539,4 +575,5 @@ export async function handleDefeatCcModePick(interaction, ctx) {
     }
   }
   if (typeof saveGames === 'function') await saveGames(gameId);
+  await _drainDefeatCcWindow(game, _hookId, ctx);
 }

@@ -1071,6 +1071,8 @@ export async function handleCelebrationPlay(interaction, ctx) {
     if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   }
   saveGames(game.gameId);
+  const { _drainDefeatCcWindow } = await import('./defeat-cc-prompts.js').catch(() => ({}));
+  if (typeof _drainDefeatCcWindow === 'function') await _drainDefeatCcWindow(game, 'celebration_auto_prompt', ctx);
 }
 
 /**
@@ -1209,6 +1211,8 @@ export async function handleCelebrationPass(interaction, ctx) {
   clearPendingCelebration(game);
   await interaction.message.edit({ content: 'Passed on Celebration.', components: [] }).catch(discordCatch);
   saveGames(game.gameId);
+  const { _drainDefeatCcWindow } = await import('./defeat-cc-prompts.js').catch(() => ({}));
+  if (typeof _drainDefeatCcWindow === 'function') await _drainDefeatCcWindow(game, 'celebration_auto_prompt', ctx);
 }
 
 /** @param {import('discord.js').ButtonInteraction} interaction — "Unplay card" for pending illegal CC. */
