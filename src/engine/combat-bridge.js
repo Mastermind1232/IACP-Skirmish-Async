@@ -1874,37 +1874,61 @@ export async function applySuppressiveFireEffect(game, { send, client, logGameAc
  * pipeline for blast no matter the target").
  */
 async function _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds, ownerId, defenderPlayerNum }, client, deps) {
-  // If defeat-timing CC prompts were posted in hand channels, pause the sequence
-  // before AAR until each player has played or skipped their card.
-  const _pendingIds = game._defeatCcPromptsPosted;
-  if (_pendingIds?.length) {
-    // Only track IDs that are actually respondable via their respective
-    // pending-state slots (avoids an unhealable hang when two _makeDefeatCcHook
-    // cards overwrite the single pendingDefeatCcPrompt slot).
+  const _arArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
+
+  // ── Suffered-damage CC window (Opportunistic, Extra Protection) ─────────────
+  // Fires BEFORE the defeat window. Defeat CC ids are stashed inside the window
+  // so the drain function can set them up once this window clears.
+  const _wdIds = game._whenDamagedCcPromptsPosted;
+  const _defeatIds = game._defeatCcPromptsPosted;
+  delete game._whenDamagedCcPromptsPosted;
+  delete game._defeatCcPromptsPosted;
+  if (_wdIds?.length) {
+    const _wdRespondable = new Set();
+    if (game.pendingExtraProtection && _wdIds.includes('extra_protection_onar_koma')) {
+      _wdRespondable.add('extra_protection_onar_koma');
+    }
+    if (game.pendingOpportunisticPrompt && _wdIds.includes('opportunistic_prompt')) {
+      _wdRespondable.add('opportunistic_prompt');
+    }
+    const _wdFiltered = _wdIds.filter(id => _wdRespondable.has(id));
+    if (_wdFiltered.length > 0) {
+      // Build filtered defeat ids for deferred second stage
+      const _defRespondable = new Set();
+      if (_defeatIds?.length) {
+        if (game.pendingCelebration && _defeatIds.includes('celebration_auto_prompt')) _defRespondable.add('celebration_auto_prompt');
+        if (game.pendingDefeatCcPrompt?.id && _defeatIds.includes(game.pendingDefeatCcPrompt.id)) _defRespondable.add(game.pendingDefeatCcPrompt.id);
+      }
+      game.pendingWhenDamagedCcWindow = {
+        gameId: game.gameId,
+        pendingIds: _wdFiltered,
+        afterResolveArgs: _arArgs,
+        combatThreadId: combat.combatThreadId,
+        deferredDefeatIds: [..._defRespondable],
+      };
+      if (combat._seqActive) combat._afterResolveArgs = _arArgs;
+      return;
+    }
+  }
+
+  // ── Defeat CC window (Celebration, Debts Repaid, Lord of the Sith, etc.) ───
+  if (_defeatIds?.length) {
     const _respondable = new Set();
-    if (game.pendingCelebration && _pendingIds.includes('celebration_auto_prompt')) {
-      _respondable.add('celebration_auto_prompt');
-    }
-    if (game.pendingDefeatCcPrompt?.id && _pendingIds.includes(game.pendingDefeatCcPrompt.id)) {
-      _respondable.add(game.pendingDefeatCcPrompt.id);
-    }
-    const _filteredIds = _pendingIds.filter(id => _respondable.has(id));
-    delete game._defeatCcPromptsPosted;
+    if (game.pendingCelebration && _defeatIds.includes('celebration_auto_prompt')) _respondable.add('celebration_auto_prompt');
+    if (game.pendingDefeatCcPrompt?.id && _defeatIds.includes(game.pendingDefeatCcPrompt.id)) _respondable.add(game.pendingDefeatCcPrompt.id);
+    const _filteredIds = _defeatIds.filter(id => _respondable.has(id));
     if (_filteredIds.length > 0) {
       game.pendingDefeatCcWindow = {
         gameId: game.gameId,
         pendingIds: _filteredIds,
-        afterResolveArgs: { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum },
+        afterResolveArgs: _arArgs,
         combatThreadId: combat.combatThreadId,
       };
-      // Gate sequence: stash args so resumeSequenceAfterInterrupt can advance
-      if (combat._seqActive) {
-        combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
-      }
+      if (combat._seqActive) combat._afterResolveArgs = _arArgs;
       return;
     }
-    // All posted ids were orphaned (slots overwritten) — fall through to normal flow.
   }
+
   if (combat._seqActive) {
     combat._afterResolveArgs = { resultText, embedRefreshMsgIds: [...(embedRefreshMsgIds || [])], ownerId, defenderPlayerNum };
     return;

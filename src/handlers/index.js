@@ -213,6 +213,7 @@ import {
   handleWantonUse, handleWantonCcPick, handleWantonPick, handleWantonDone, handleWantonSkip,
 } from './combat-special-effects.js';
 import { handleSpaceRow, handleSpaceRowBack, handleSpaceCellPage } from './space-picker.js';
+import { handleOpportunisticPick, handleOpportunisticSkip } from './when-damaged-cc-prompts.js';
 import { getValidGroupNames } from '../context-factory.js';
 
 const HANDLERS = new Map();
@@ -659,6 +660,8 @@ register('executor_use_', handleExecutor, 'interrupts');
 register('executor_skip_', handleExecutor, 'interrupts');
 register('extra_protection_play_', handleExtraProtection, 'interrupts');
 register('extra_protection_skip_', handleExtraProtection, 'interrupts');
+register('opportunistic_pick_', handleOpportunisticPick, 'interrupts');
+register('opportunistic_skip_', handleOpportunisticSkip, 'interrupts');
 register('defeat_pick_skip_', handleDefeatPick, 'interrupts');
 register('defeat_pick_', handleDefeatPick, 'interrupts');
 register('parting_shot_fire_', handleFirePartingShot, 'interrupts');

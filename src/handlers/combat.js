@@ -738,7 +738,7 @@ function _seqHandlers(thread, game, combat, ctx) {
         // resume / early-finish path owns continuation. [Interrupt + NPC resume
         // wiring is a follow-up slice; the normal path is validated end-to-end.]
         await ctx.resolveCombatAfterRolls(game, c, ctx.client);
-        if (c._afterResolveArgs && !game.pendingDefeatCcWindow) await _advanceSequence(c, handlers);
+        if (c._afterResolveArgs && !game.pendingWhenDamagedCcWindow && !game.pendingDefeatCcWindow) await _advanceSequence(c, handlers);
         return;
       }
       // Fallback: unknown mechanic step — advance so the walk never stalls.

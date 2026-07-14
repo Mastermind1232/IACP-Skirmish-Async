@@ -1940,20 +1940,14 @@ export async function handleExtraProtection(interaction, ctx) {
     await logGameAction(_epGame, client, `**Extra Protection** — Skipped.`, { phase: 'ROUND', icon: 'card' });
   }
 
-  // Continue post-combat flow by re-calling applyDamageAndFinishCombat.
-  // Re-entry is detected by combat._damageApplied (set in first pass at
-  // combat-bridge.js step-7), so re-applying damage is skipped.
-  await applyDamageAndFinishCombat(_epGame, _epCombat, {
-    damage: _epPending.damage, hit: _epPending.hit, resultText: _epPending.resultText,
-    totalBlast: _epPending.totalBlast, defenderPlayerNum: _epPending.defenderPlayerNum,
-    attackerPlayerNum: _epPending.attackerPlayerNum, ownerId: _epPending.ownerId,
-    targetMsgId: _epPending.targetMsgId, targetFigIndex: _epPending.targetFigIndex,
-  }, client);
-  // Interrupts route through the sequence (alexanbv 2026-06-15): the resume above
-  // stashed combat._afterResolveArgs instead of finishing when the attack is
-  // walking the gate sequence — advance into the after_resolve gate. No-op for
-  // legacy attacks.
-  await resumeSequenceAfterInterrupt(_epGame, _epCombat, ctx);
-  saveGames(_epGame.gameId);
+  // Drain the WD window. All damage already ran before _runOrDeferAfterResolve
+  // created pendingWhenDamagedCcWindow, so no re-entry into applyDamageAndFinishCombat
+  // is needed — just drain, which either cascades into the defeat window or resumes
+  // the gate sequence.
+  await saveGames(_epGame.gameId);
+  const { _drainWhenDamagedCcWindow } = await import('./when-damaged-cc-prompts.js').catch(() => ({}));
+  if (typeof _drainWhenDamagedCcWindow === 'function') {
+    await _drainWhenDamagedCcWindow(_epGame, 'extra_protection_onar_koma', ctx);
+  }
   return;
 }

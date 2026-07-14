@@ -208,19 +208,16 @@ WHEN_DAMAGED_HOOKS.push({
     return true;
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
     const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
-    const logGameAction = ctx?.deps?.logGameAction ?? ctx?.logGameAction;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
-    if (ctx?.client?._isFakeClient) return null;
+    if (!ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure || !client) return null;
+    if (client._isFakeClient) return null;
     const defPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[defPN]?.[opts.figureKey];
     if (!targetPos) return null;
-    // Anchor on the playing figure (Onar Koma OR Mara via Fast Learner / a
-    // substitute) — alexanbv 2026-06-21 anchor fix.
     const onarFk = resolvePlayingFigureKeyForUniqueCc(game, defPN, 'Extra Protection');
     if (!onarFk || onarFk === opts.figureKey) return null;
     const onarPos = game.figurePositions?.[defPN]?.[onarFk];
@@ -238,18 +235,12 @@ WHEN_DAMAGED_HOOKS.push({
       onarFigKey: onarFk,
       onarMsgId,
       onarDcName,
-      // combat-flow re-entry params (read by handleExtraProtection):
       hit: opts.combat?._step7Hit ?? true,
       resultText: opts.combat?._step7ResultText || '',
       totalBlast: (opts.combat?.surgeBlast || 0) + (opts.combat?.bonusBlast || 0),
       defenderPlayerNum: defPN,
       attackerPlayerNum: opts.attackerPlayerNum,
       ownerId: opts.combat ? game[`player${opts.combat.attackerPlayerNum}Id`] : null,
-      // Frame-correctness fix (alexanbv 2026-05-09, B-NA-EP-002 / -003):
-      // capture the combat object reference at probe time so the click
-      // handler doesn't depend on `game.pendingCombat` at click time —
-      // which may have popped to an outer frame (Slow on the Draw,
-      // Parting Shot) by the time the user clicks.
       combatRef: opts.combat || null,
     });
     const ownerId = game[`player${defPN}Id`];
@@ -258,8 +249,115 @@ WHEN_DAMAGED_HOOKS.push({
       new ButtonBuilder().setCustomId(`extra_protection_play_${game.gameId}`).setLabel('Play Extra Protection (move 2 + attack)').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(`extra_protection_skip_${game.gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    if (logGameAction) {
-      await logGameAction(game, ctx?.client, `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **${onarDcName}** is within 2 spaces and may play Extra Protection (move up to 2 spaces, then perform an attack).`, { components: [row], allowedMentions: { users: [ownerId] }, interrupt: true });
+    const handChId = getHandChannelId(game, defPN);
+    if (!handChId) return null;
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> **Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **${onarDcName}** is within 2 spaces. Move up to 2 spaces, then perform an attack?`
+          : `**Extra Protection** — **${damagedLabel}** suffers ${opts.amount} Damage. **${onarDcName}** may play Extra Protection.`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+      game._whenDamagedCcPromptsPosted = game._whenDamagedCcPromptsPosted || [];
+      game._whenDamagedCcPromptsPosted.push('extra_protection_onar_koma');
+    } catch (err) {
+      console.error('[when-damaged-hook] extra_protection_onar_koma hand channel error:', err?.message ?? err);
+    }
+    return null;
+  },
+});
+
+/**
+ * Opportunistic (SCUM CC) — afterHostileFigureSuffersDamage: when a hostile
+ * figure suffers damage, the attacker may choose a friendly SCUM figure within
+ * 3 spaces of the damaged figure to gain MP equal to the damage suffered
+ * (spend immediately). Prompt goes to attacker's hand channel (private).
+ */
+WHEN_DAMAGED_HOOKS.push({
+  id: 'opportunistic_prompt',
+  probe: (game, opts) => {
+    if (!opts.figureKey || !opts.controllerPlayerNum) return false;
+    if ((opts.amount || 0) <= 0) return false;
+    const attackerPN = opts.attackerPlayerNum;
+    if (!attackerPN) return false;
+    const hand = getCcHand(game, attackerPN) || [];
+    if (!hand.includes('Opportunistic')) return false;
+    if (!game.selectedMap?.id) return false;
+    const damagedPos = game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!damagedPos) return false;
+    const dcEffects = getDcEffects() || {};
+    const figs = game.figurePositions?.[attackerPN] || {};
+    return Object.entries(figs).some(([fk, pos]) => {
+      if (!pos) return false;
+      const dn = dcNameFromFigureKey(fk);
+      const eff = dcEffects[dn] || dcEffects[dn.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+      return (eff?.keywords || []).map(k => String(k).toUpperCase()).includes('SCUM') &&
+        isWithinN(pos, damagedPos, 3, game.selectedMap.id, getMapData, game);
+    });
+  },
+  apply: async (game, opts, ctx) => {
+    const client = ctx?.client;
+    const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
+    const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
+    const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
+    if (!ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !client) return null;
+    if (client._isFakeClient) return null;
+    const attackerPN = opts.attackerPlayerNum;
+    if (!attackerPN) return null;
+    const damagedPos = game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
+    if (!damagedPos) return null;
+    const dcEffects = getDcEffects() || {};
+    const figs = game.figurePositions?.[attackerPN] || {};
+    const eligible = [];
+    for (const [fk, pos] of Object.entries(figs)) {
+      if (!pos) continue;
+      const dn = dcNameFromFigureKey(fk);
+      const eff = dcEffects[dn] || dcEffects[dn.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
+      if (!(eff?.keywords || []).map(k => String(k).toUpperCase()).includes('SCUM')) continue;
+      if (!isWithinN(pos, damagedPos, 3, game.selectedMap.id, getMapData, game)) continue;
+      eligible.push({ figureKey: fk, displayName: dn });
+    }
+    if (eligible.length === 0) return null;
+    const { setPendingOpportunisticPrompt } = await import('./interrupts.js').catch(() => ({}));
+    if (typeof setPendingOpportunisticPrompt !== 'function') return null;
+    setPendingOpportunisticPrompt(game, {
+      gameId: game.gameId,
+      playerPN: attackerPN,
+      damageAmount: opts.amount,
+      damagedFigureKey: opts.figureKey,
+      eligibleFigures: eligible,
+    });
+    const ownerId = game[`player${attackerPN}Id`];
+    const handChId = getHandChannelId(game, attackerPN);
+    if (!handChId) return null;
+    const buttons = eligible.slice(0, 4).map((opt, i) =>
+      new ButtonBuilder()
+        .setCustomId(`opportunistic_pick_${game.gameId}_${i}`)
+        .setLabel(String(opt.displayName).slice(0, 80))
+        .setStyle(ButtonStyle.Primary),
+    );
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId(`opportunistic_skip_${game.gameId}`)
+        .setLabel('Skip')
+        .setStyle(ButtonStyle.Secondary),
+    );
+    const row = new ActionRowBuilder().addComponents(buttons);
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> 📜 **Opportunistic** — Choose a friendly SCUM figure within 3 spaces to gain **${opts.amount} MP** (spend immediately):`
+          : `📜 **Opportunistic** — Choose a friendly SCUM figure within 3 spaces to gain **${opts.amount} MP**:`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+      game._whenDamagedCcPromptsPosted = game._whenDamagedCcPromptsPosted || [];
+      game._whenDamagedCcPromptsPosted.push('opportunistic_prompt');
+    } catch (err) {
+      console.error('[when-damaged-hook] opportunistic_prompt hand channel error:', err?.message ?? err);
     }
     return null;
   },

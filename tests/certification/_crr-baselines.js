@@ -250,6 +250,10 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   // Defeat CC window: array accumulated in hooks then deleted after consumption;
   // scanner sees mixed array/delete access as a mismatch.
   '_defeatCcPromptsPosted',
+  // WD CC window: same pattern as above.
+  '_whenDamagedCcPromptsPosted',
+  // Opportunistic: object set at hook time, deleted after pick/skip.
+  'pendingOpportunisticPrompt',
 ];
 
 // ── Dep-bag parity allowlist ────────────────────────────────────────────────

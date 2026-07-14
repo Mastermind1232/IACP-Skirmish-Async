@@ -428,7 +428,8 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     assert.strictEqual(game.pendingExtraProtection, undefined, 'pendingExtraProtection deleted');
     assert.strictEqual(game.movementBank, undefined, 'no MP granted on skip');
     assert.strictEqual(game.freeAttackBonusPending, undefined, 'no free attack on skip');
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
+    // Re-entry removed: handler now drains pendingWhenDamagedCcWindow instead.
+    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 0, 'no re-entry — WD window drain handles resume');
   });
 
   it('B-I-EP-004: play path stamps pendingMoveX (no bank) + free attack, clears pending, calls re-entry', async () => {
@@ -467,9 +468,8 @@ describe('B-I-EP: Extra Protection double-damage regression and cleanup', () => 
     // already covered by Move-X picker tests.
     assert.strictEqual(game.movementBank, undefined, 'no bank — Move-X never banks');
     assert.strictEqual(game.freeAttackBonusPending?.['Onar Koma-1-0'], true, 'free attack pending for Onar');
-    // Re-entry called
-    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 1, 're-entry called');
-    assert.strictEqual(calls.applyDamageAndFinishCombat[0].params.damage, 3, 'original damage passed');
+    // Re-entry removed: handler now drains pendingWhenDamagedCcWindow instead.
+    assert.strictEqual(calls.applyDamageAndFinishCombat.length, 0, 'no re-entry — WD window drain handles resume');
   });
 });
 
