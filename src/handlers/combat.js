@@ -2927,7 +2927,31 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   } else if (id === 'distracting') {
     const r = applyDistractingEvade(combat);
     combat.bonusEvade = r.bonusEvade;
-    await thread.send('🎭 **Distracting** (Han Solo / C-3PO) — a friendly figure is adjacent to the target: **+1 Evade** for the defender.').catch(discordCatch);
+    // Find the specific figure that triggered Distracting (adjacent to target).
+    const _distDefPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
+    const _distTargetCoord = combat.target?.coord
+      ? String(combat.target.coord).toLowerCase()
+      : (game.figurePositions?.[_distDefPN]?.[combat.target?.figureKey]
+        ? String(game.figurePositions[_distDefPN][combat.target.figureKey]).toLowerCase()
+        : null);
+    let _distractingFigName = null;
+    if (_distTargetCoord && game.selectedMap?.id) {
+      const _distMapSp = getMapData(game.selectedMap.id);
+      const _distBlocked = getClosedDoorEdges(game);
+      for (const [_fk, _pos] of Object.entries(game.figurePositions?.[_distDefPN] || {})) {
+        if (!_pos) continue;
+        const _dn = dcNameFromFigureKey(_fk);
+        const _eff = getDcEffectsGlobal()[_dn];
+        if (!hasDistractingAbility(_eff?.specialAbilityIds)) continue;
+        if (_fk === combat.target?.figureKey) continue;
+        if (_isWithinSpaces(_distMapSp, String(_pos).toLowerCase(), _distTargetCoord, 1, _distBlocked)) {
+          _distractingFigName = _dn;
+          break;
+        }
+      }
+    }
+    const _distLabel = _distractingFigName || 'Han Solo / C-3PO';
+    await thread.send(`🎭 **Distracting** — **${_distLabel}** is adjacent to target space: **+1 Evade** for the defender.`).catch(discordCatch);
   } else if (id === 'hunker_down') {
     combat.bonusEvade = (combat.bonusEvade || 0) + 1;
     await thread.send('**Hunker Down** (Cara Dune) — adjacent to blocking/impassable/difficult terrain: +1 Evade.').catch(discordCatch);
