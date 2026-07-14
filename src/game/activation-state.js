@@ -994,6 +994,7 @@ const ROUND_NULL_FLAGS = [
   'pendingWhenDamagedCcWindow',
   '_whenDamagedCcPromptsPosted',
   'pendingOpportunisticPrompt',
+  '_pendingDefeatResolved',
   'pendingFastLearnerPick',
   'pendingCcConfirmation',
   'pendingNegation',

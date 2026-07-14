@@ -78,6 +78,17 @@ export async function handleFirePartingShot(interaction, ctx) {
   }
   const ok = await requirePlayer(interaction, canActAsPlayer, gameId, pending.controllerPlayerNum);
   if (!ok) return;
+  // Guard: another BEFORE_DEFEATED interrupt on the same figure may have already
+  // defeated it (e.g. Final Stand fired first). Position cleared = figure gone.
+  if (!game.figurePositions?.[pending.controllerPlayerNum]?.[pending.figureKey]) {
+    clearPendingPartingShot(game);
+    await interaction.update({ components: [] }).catch(() => {});
+    if (typeof logGameAction === 'function' && client) {
+      await logGameAction(game, client, `**Parting Shot** — figure already defeated; skipping.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+    if (typeof saveGames === 'function') await saveGames(gameId);
+    return;
+  }
   pending.active = true;
   setPendingPartingShot(game, pending);
   await interaction.update({ components: [] }).catch(() => {});

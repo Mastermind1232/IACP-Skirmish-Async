@@ -95,6 +95,16 @@ export async function handleFireDyingLunge(interaction, ctx) {
   await interaction.update({ components: [] }).catch(() => {});
 
   const ownerPN = pending.controllerPlayerNum;
+  // Guard: if another BEFORE_DEFEATED handler already cleared the figure,
+  // skip rather than firing an attack with a non-existent figure.
+  if (!game.figurePositions?.[ownerPN]?.[pending.figureKey]) {
+    clearPendingDyingLunge(game);
+    if (typeof logGameAction === 'function' && client) {
+      await logGameAction(game, client, `**Dying Lunge** — figure already defeated; skipping.`, { phase: 'ROUND', icon: 'card' }).catch(() => {});
+    }
+    if (typeof saveGames === 'function') await saveGames(gameId);
+    return;
+  }
   const dlRes = await playCcFull(game, gameId, ownerPN, null, 'Dying Lunge', {
     skipExecute: true, skipTimingCheck: true,
   }, ctx, client);

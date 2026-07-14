@@ -38,6 +38,14 @@ export async function completeDeferredDefeat(game, ctx, payload) {
   await _ensureHooksLoaded();
 
   const defeatedPos = game.figurePositions?.[payload.controllerPlayerNum]?.[payload.figureKey] || null;
+  // Guard: prevent double WHEN_DEFEATED hooks + processFigureDefeat when two
+  // BEFORE_DEFEATED handlers race on the same figure (e.g. Parting Shot +
+  // Final Stand both fired, player resolves one first which defeats the figure,
+  // then resolves the other). Stamp is set just before processFigureDefeat.
+  const _defeatStampKey = `${payload.controllerPlayerNum}:${payload.figureKey}`;
+  if (game._pendingDefeatResolved?.[_defeatStampKey]) {
+    return { wasDefeated: false };
+  }
   const dcHealth = ctx?.dcHealthState?.get?.(payload.msgId) || [];
   const figEntry = dcHealth[payload.figIndex] || [0, 0];
   const curHp = figEntry[0] ?? 0;
@@ -84,6 +92,10 @@ export async function completeDeferredDefeat(game, ctx, payload) {
   const dcMessageIds = getDcMessageIds(game, payload.controllerPlayerNum) || [];
   const dcIdx = dcMessageIds.indexOf(payload.msgId);
   const dcName = dcNameFromFigureKey(payload.figureKey);
+  // Stamp before calling so that any re-entrant call (stale before-defeated handler)
+  // hits the guard at the top and exits without double-defeating.
+  game._pendingDefeatResolved = game._pendingDefeatResolved || {};
+  game._pendingDefeatResolved[_defeatStampKey] = true;
   const processFigureDefeat = ctx?.processFigureDefeat ?? _defaultProcessFigureDefeat;
   await processFigureDefeat(game, {
     defeatedPlayerNum: payload.controllerPlayerNum,
