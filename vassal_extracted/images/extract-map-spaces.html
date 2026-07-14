@@ -1523,8 +1523,8 @@
       if (!mapId) return;
       const ids = fullTournamentRotationData.missionIds;
       if (checked) {
-        const hasVariant = ids.some(m => String(m).startsWith(mapId + ':'));
-        if (!hasVariant) ids.push(mapId + ':a');
+        if (!ids.includes(mapId + ':a')) ids.push(mapId + ':a');
+        if (!ids.includes(mapId + ':b')) ids.push(mapId + ':b');
       } else {
         for (let i = ids.length - 1; i >= 0; i--) {
           if (String(ids[i]).startsWith(mapId + ':')) ids.splice(i, 1);
