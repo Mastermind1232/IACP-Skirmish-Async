@@ -96,7 +96,7 @@ export async function handleOpportunisticPick(interaction, ctx) {
     const result = resolveAbility('Opportunistic', {
       game, playerNum: pending.playerPN, cardName: 'Opportunistic',
       chosenFigureKey: opt.figureKey,
-      n: pending.damageAmount,
+      n: 3,
       dcMessageMeta, dcHealthState, dcExhaustedState,
       combat: game.pendingCombat,
     });

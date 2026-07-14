@@ -284,17 +284,13 @@ WHEN_DAMAGED_HOOKS.push({
     if (!attackerPN) return false;
     const hand = getCcHand(game, attackerPN) || [];
     if (!hand.includes('Opportunistic')) return false;
-    if (!game.selectedMap?.id) return false;
-    const damagedPos = game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
-    if (!damagedPos) return false;
     const dcEffects = getDcEffects() || {};
     const figs = game.figurePositions?.[attackerPN] || {};
     return Object.entries(figs).some(([fk, pos]) => {
       if (!pos) return false;
       const dn = dcNameFromFigureKey(fk);
       const eff = dcEffects[dn] || dcEffects[dn.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
-      return (eff?.keywords || []).map(k => String(k).toUpperCase()).includes('SCUM') &&
-        isWithinN(pos, damagedPos, 3, game.selectedMap.id, getMapData, game);
+      return (eff?.keywords || []).map(k => String(k).toUpperCase()).includes('SCUM');
     });
   },
   apply: async (game, opts, ctx) => {
@@ -306,8 +302,6 @@ WHEN_DAMAGED_HOOKS.push({
     if (client._isFakeClient) return null;
     const attackerPN = opts.attackerPlayerNum;
     if (!attackerPN) return null;
-    const damagedPos = game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
-    if (!damagedPos) return null;
     const dcEffects = getDcEffects() || {};
     const figs = game.figurePositions?.[attackerPN] || {};
     const eligible = [];
@@ -316,7 +310,6 @@ WHEN_DAMAGED_HOOKS.push({
       const dn = dcNameFromFigureKey(fk);
       const eff = dcEffects[dn] || dcEffects[dn.replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')];
       if (!(eff?.keywords || []).map(k => String(k).toUpperCase()).includes('SCUM')) continue;
-      if (!isWithinN(pos, damagedPos, 3, game.selectedMap.id, getMapData, game)) continue;
       eligible.push({ figureKey: fk, displayName: dn });
     }
     if (eligible.length === 0) return null;
@@ -325,7 +318,6 @@ WHEN_DAMAGED_HOOKS.push({
     setPendingOpportunisticPrompt(game, {
       gameId: game.gameId,
       playerPN: attackerPN,
-      damageAmount: opts.amount,
       damagedFigureKey: opts.figureKey,
       eligibleFigures: eligible,
     });
@@ -349,8 +341,8 @@ WHEN_DAMAGED_HOOKS.push({
       const handCh = await fetchGameChannel(client, handChId);
       await handCh.send({
         content: ownerId
-          ? `<@${ownerId}> 📜 **Opportunistic** — Choose a friendly SCUM figure within 3 spaces to gain **${opts.amount} MP** (spend immediately):`
-          : `📜 **Opportunistic** — Choose a friendly SCUM figure within 3 spaces to gain **${opts.amount} MP**:`,
+          ? `<@${ownerId}> 📜 **Opportunistic** — Choose a friendly SCUM figure to gain **3 MP** (spend immediately):`
+          : `📜 **Opportunistic** — Choose a friendly SCUM figure to gain **3 MP**:`,
         components: [row],
         allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
       });
