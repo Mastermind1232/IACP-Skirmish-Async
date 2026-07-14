@@ -730,21 +730,12 @@ BEFORE_DEFEATED_HOOKS.push({
     return true;
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) {
-      // No prompt UI available (non-Discord ctx, e.g. headless replay).
-      // Skip the interrupt, let defeat proceed normally.
-      return null;
-    }
-    // Headless / oracle / fixture client — no human to click buttons.
-    // Skip the interrupt and let defeat proceed normally so combat
-    // tests don't deadlock waiting for a Discord click.
-    if (ctx?.client?._isFakeClient) {
-      return null;
-    }
+    if (!client || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (client._isFakeClient) return null;
     game.partingShotTriggered = game.partingShotTriggered || {};
     game.partingShotTriggered[opts.msgId] = true;
     setPendingPartingShot(game, {
@@ -757,19 +748,27 @@ BEFORE_DEFEATED_HOOKS.push({
       source: opts.source || 'Damage',
       active: false,
     });
-    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const ownerPN = opts.controllerPlayerNum;
+    const ownerId = game[`player${ownerPN}Id`];
+    const handChId = getHandChannelId(game, ownerPN);
+    if (!handChId) return null;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`parting_shot_fire_${game.gameId}_${opts.msgId}`).setLabel('Fire Parting Shot').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`parting_shot_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({
-      content: ownerId
-        ? `<@${ownerId}> ⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`
-        : `⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`,
-      components: [row],
-      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-    }).catch(() => {});
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> ⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`
+          : `⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+    } catch (err) {
+      console.error('[before-defeated-hook] parting_shot hand channel error:', err?.message ?? err);
+    }
     return { preventDefeat: true };
   },
 });
@@ -818,13 +817,13 @@ BEFORE_DEFEATED_HOOKS.push({
     return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData, game);
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
     const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
-    if (ctx?.client?._isFakeClient) return null;
+    if (!client || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (client._isFakeClient) return null;
     const ownerPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return null;
@@ -856,18 +855,25 @@ BEFORE_DEFEATED_HOOKS.push({
       active: false,
     });
     const ownerId = game[`player${ownerPN}Id`];
+    const handChId = getHandChannelId(game, ownerPN);
+    if (!handChId) return null;
     const targetDcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`final_stand_play_${game.gameId}_${opts.msgId}`).setLabel(`Play Final Stand (${bazeDcName})`).setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`final_stand_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({
-      content: ownerId
-        ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after ${bazeDcName}'s attack.`
-        : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** intervene?`,
-      components: [row],
-      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-    }).catch(() => {});
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> ⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** move up to 2, gain 1 Power Token, and perform a free attack? **${targetDcName}** is defeated after ${bazeDcName}'s attack.`
+          : `⚔️ **Final Stand** — **${targetDcName}** is about to be defeated. Play to have **${bazeDcName}** intervene?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+    } catch (err) {
+      console.error('[before-defeated-hook] final_stand hand channel error:', err?.message ?? err);
+    }
     return { preventDefeat: true };
   },
 });
@@ -895,37 +901,45 @@ BEFORE_DEFEATED_HOOKS.push({
     return true;
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
-    if (ctx?.client?._isFakeClient) return null;
+    if (!client || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder) return null;
+    if (client._isFakeClient) return null;
     game.dyingLungeTriggered = game.dyingLungeTriggered || {};
     game.dyingLungeTriggered[opts.msgId] = true;
+    const ownerPN = opts.controllerPlayerNum;
     setPendingDyingLunge(game, {
       gameId: game.gameId,
       figureKey: opts.figureKey,
       msgId: opts.msgId,
       figIndex: opts.figIndex,
-      controllerPlayerNum: opts.controllerPlayerNum,
+      controllerPlayerNum: ownerPN,
       attackerPlayerNum: opts.attackerPlayerNum,
       source: opts.source || 'Damage',
       active: false,
     });
-    const ownerId = game[`player${opts.controllerPlayerNum}Id`];
+    const ownerId = game[`player${ownerPN}Id`];
+    const handChId = getHandChannelId(game, ownerPN);
+    if (!handChId) return null;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`dying_lunge_play_${game.gameId}_${opts.msgId}`).setLabel('Play Dying Lunge').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`dying_lunge_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({
-      content: ownerId
-        ? `<@${ownerId}> ⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play to move up to 2 and perform a free Melee attack first?`
-        : `⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play?`,
-      components: [row],
-      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-    }).catch(() => {});
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> ⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play to move up to 2 and perform a free Melee attack first?`
+          : `⚔️ **Dying Lunge** — **${dcName}** is about to be defeated. Play?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+    } catch (err) {
+      console.error('[before-defeated-hook] dying_lunge hand channel error:', err?.message ?? err);
+    }
     return { preventDefeat: true };
   },
 });
@@ -963,13 +977,13 @@ BEFORE_DEFEATED_HOOKS.push({
     return isWithinN(playPos, targetPos, 3, game.selectedMap.id, getMapData, game);
   },
   apply: async (game, opts, ctx) => {
-    const thread = ctx?.thread;
+    const client = ctx?.client;
     const ButtonBuilder = ctx?.deps?.ButtonBuilder ?? ctx?.ButtonBuilder;
     const ButtonStyle = ctx?.deps?.ButtonStyle ?? ctx?.ButtonStyle;
     const ActionRowBuilder = ctx?.deps?.ActionRowBuilder ?? ctx?.ActionRowBuilder;
     const findDcMessageIdForFigure = ctx?.deps?.findDcMessageIdForFigure ?? ctx?.findDcMessageIdForFigure;
-    if (!thread?.send || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
-    if (ctx?.client?._isFakeClient) return null;
+    if (!client || !ButtonBuilder || !ButtonStyle || !ActionRowBuilder || !findDcMessageIdForFigure) return null;
+    if (client._isFakeClient) return null;
     const ownerPN = opts.controllerPlayerNum;
     const targetPos = game.figurePositions?.[ownerPN]?.[opts.figureKey];
     if (!targetPos) return null;
@@ -998,18 +1012,25 @@ BEFORE_DEFEATED_HOOKS.push({
       healAmount: 3,
     });
     const ownerId = game[`player${ownerPN}Id`];
+    const handChId = getHandChannelId(game, ownerPN);
+    if (!handChId) return null;
     const targetDcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`miracle_worker_play_${game.gameId}_${opts.msgId}`).setLabel('Play Miracle Worker (heal 3)').setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId(`miracle_worker_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
-    await thread.send({
-      content: ownerId
-        ? `<@${ownerId}> ✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. **${mhdDcName}** within 3 spaces — play to recover 3 Damage instead?`
-        : `✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. Play?`,
-      components: [row],
-      allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
-    }).catch(() => {});
+    try {
+      const handCh = await fetchGameChannel(client, handChId);
+      await handCh.send({
+        content: ownerId
+          ? `<@${ownerId}> ✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. **${mhdDcName}** within 3 spaces — play to recover 3 Damage instead?`
+          : `✨ **Miracle Worker** — **${targetDcName}** is about to be defeated. Play?`,
+        components: [row],
+        allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
+      });
+    } catch (err) {
+      console.error('[before-defeated-hook] miracle_worker hand channel error:', err?.message ?? err);
+    }
     return { preventDefeat: true };
   },
 });
