@@ -742,16 +742,15 @@ BEFORE_DEFEATED_HOOKS.push({
     });
     const ownerPN = opts.controllerPlayerNum;
     const ownerId = game[`player${ownerPN}Id`];
-    const handChId = getHandChannelId(game, ownerPN);
-    if (!handChId) return null;
+    const thread = ctx?.thread;
+    if (!thread) return null;
     const dcName = dcNameFromFigureKey(opts.figureKey);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`parting_shot_fire_${game.gameId}_${opts.msgId}`).setLabel('Fire Parting Shot').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`parting_shot_skip_${game.gameId}_${opts.msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
     );
     try {
-      const handCh = await fetchGameChannel(client, handChId);
-      await handCh.send({
+      await thread.send({
         content: ownerId
           ? `<@${ownerId}> ⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`
           : `⚠️ **Parting Shot** — **${dcName}** is about to be defeated. Fire a free attack first?`,
@@ -759,7 +758,7 @@ BEFORE_DEFEATED_HOOKS.push({
         allowedMentions: ownerId ? { users: [ownerId] } : { parse: [] },
       });
     } catch (err) {
-      console.error('[before-defeated-hook] parting_shot hand channel error:', err?.message ?? err);
+      console.error('[before-defeated-hook] parting_shot thread error:', err?.message ?? err);
     }
     return { preventDefeat: true };
   },
