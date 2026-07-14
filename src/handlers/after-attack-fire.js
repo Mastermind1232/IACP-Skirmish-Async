@@ -599,7 +599,7 @@ async function fireCripplingBlow(thread, game, combat, effect, ctx) {
  * other step-8 effects (e.g. Bleed apply) that lowered HP don't double-fire.
  */
 async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
-  const { dcHealthState, logGameAction, client, deps } = ctx;
+  const { dcHealthState, logGameAction, client } = ctx;
   if (combat.attackerFigureKey && game.disruptorRiflePending?.[combat.attackerFigureKey]) {
     delete game.disruptorRiflePending[combat.attackerFigureKey];
   }
@@ -617,7 +617,7 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     }
     return;
   }
-  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+  await applyDamage(game, { ...ctx, thread }, {
     figureKey: fk, msgId: targetMsgId, figIndex: figureIndex,
     amount: 1, controllerPlayerNum: combat.defenderPlayerNum,
     attackerPlayerNum: combat.attackerPlayerNum,
@@ -631,7 +631,12 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     dcMessageMeta: ctx.dcMessageMeta,
     getDcMessageIds, getDcList,
   });
-  await processFigureDefeat(game, {
+  // Use the pre-wired ctx.processFigureDefeat (registered in COMBAT_DEPS) which
+  // already has removeFigurePosition, calculateKillVp, awardKillVp, etc. baked in.
+  // The raw imported processFigureDefeat needs a full deps object that ctx.deps
+  // does NOT carry on the Discord path — causing silent no-op defeats.
+  const _pfd = ctx.processFigureDefeat ?? processFigureDefeat;
+  await _pfd(game, {
     defeatedPlayerNum: combat.defenderPlayerNum,
     figureKey: fk,
     attackerPlayerNum: combat.attackerPlayerNum,
@@ -641,7 +646,7 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     dcName: dcNameFromFigureKey(fk),
     displayName: combat.target.label,
     source: 'Disruptor Rifle',
-  }, { ...(deps || {}), client });
+  }, ctx);
 }
 
 /**
