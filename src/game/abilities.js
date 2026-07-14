@@ -5809,11 +5809,17 @@ export function resolveAbility(abilityId, context) {
       const timing = (ccEffect?.timing || '').toLowerCase().replace(/\s+/g, '');
       if (timing === 'afterhostilefiguresuffersdamage') {
         const n = entry.mpBonus;
-        // Phase 2: choice resolved — grant MP to chosen DC
+        // Phase 2: choice resolved — grant MP to chosen DC.
+        // Per alexanbv 2026-07-13: if the chosen figure IS currently activating,
+        // the MP banks normally; if NOT activating, it must be spent immediately.
         if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
           const chosenMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
           if (chosenMsgId) {
             addMovementPoints(game, chosenMsgId, n);
+            const activeMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+            if (activeMsgId && activeMsgId === chosenMsgId) {
+              return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (banked — figure is currently activating).` };
+            }
             game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
             game.opportunisticMustSpendNow[playerNum] = { mp: n, card: cardName, msgId: chosenMsgId };
             return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (must be spent immediately).` };
