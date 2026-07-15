@@ -353,6 +353,15 @@ function clearPendingAndPerMsgIdState(game) {
   // Combat thread / pre-combat / roll messages live on dead channels.
   game.activeCombatThreadId = null;
   game.combatThreadId = null;
+  // Clear stale startOfRoundWhoseTurn. If the checkpoint was saved mid-activation,
+  // the SoR window is already over — the flag was never cleared due to the old
+  // SoR-skip bug (fixed in round.js). Leaving it set on load means inSorWindow=true
+  // for the whole round, blocking EoS and other timing-sensitive CCs.
+  // Guard: only clear in 'activation' phase — if roundPhase is 'start_of_round'
+  // the SoR window may still be legitimately open.
+  if (game.roundPhase === 'activation' && game.startOfRoundWhoseTurn) {
+    game.startOfRoundWhoseTurn = null;
+  }
 }
 
 /**
