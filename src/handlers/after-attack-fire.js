@@ -624,26 +624,16 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     attackerFigureKey: combat.attackerFigureKey,
     source: 'Disruptor Rifle', combat,
   });
-  if (!wasDefeated || preventDefeat) return;
-  if (logGameAction) {
-    await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target.label}** had 1 HP — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  if (wasDefeated && !preventDefeat) {
+    const _pfd = ctx.processFigureDefeat ?? processFigureDefeat;
+    await _pfd(game, {
+      defeatedPlayerNum: combat.defenderPlayerNum,
+      figureKey: fk,
+      attackerPlayerNum: combat.attackerPlayerNum,
+      attackerFigureKey: combat.attackerFigureKey,
+      source: 'Disruptor Rifle',
+    }, ctx);
   }
-  const { idx } = lookupFigureDcIndex(game, combat.defenderPlayerNum, fk, {
-    dcMessageMeta: ctx.dcMessageMeta,
-    getDcMessageIds, getDcList,
-  });
-  const _pfd = ctx.processFigureDefeat ?? processFigureDefeat;
-  await _pfd(game, {
-    defeatedPlayerNum: combat.defenderPlayerNum,
-    figureKey: fk,
-    attackerPlayerNum: combat.attackerPlayerNum,
-    attackerFigureKey: combat.attackerFigureKey,
-    msgId: targetMsgId,
-    dcIdx: idx,
-    dcName: dcNameFromFigureKey(fk),
-    displayName: combat.target.label,
-    source: 'Disruptor Rifle',
-  }, ctx);
 }
 
 /**
