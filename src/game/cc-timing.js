@@ -1026,39 +1026,32 @@ export function ccRemovesToGameBox(cardName, getEffect = getCcEffect) {
 /**
  * Full playCC pipeline (alexanbv 2026-06-16), in order:
  *  1. validate (canPlayCC: in-hand / figure / not-blocked / timing);
- *  2. Comms Jammer — an automatic cancel of the next CC the opponent plays: if
- *     active against this player, the card IS played (removed from hand) but its
- *     effect is cancelled and the jammer consumed;
- *  3. opponent cancel window — negate (if cost 0) or Comm Disruption (if cost ≤
+ *  2. opponent cancel window — negate (if cost 0) or Comm Disruption (if cost ≤
  *     the opponent's friendly SPY count); awaited via the injected
  *     ctx.promptOpponentCancel({ game, playerNum, cardName, cost }) → truthy
  *     { cancelled } skips execution;
- *  4. execute the card's ability via ctx.resolveAbility (injected to avoid an
+ *  3. execute the card's ability via ctx.resolveAbility (injected to avoid an
  *     import cycle with abilities.js);
- *  5. dispose — player DISCARD by default, GAME BOX for self-gamebox cards
+ *  4. dispose — player DISCARD by default, GAME BOX for self-gamebox cards
  *     (YWNDM) or opts.removeTo:'gamebox' (Aphra-excavated); 'none' leaves it.
  * Async because of the opponent prompt. Returns { ok:false, reason } on a failed
  * check, or { ok:true, result, disposedTo, cancelled? }.
+ *
+ * Note: Comms Jammer (ISB Infiltrator Elite) is a HARD BLOCK — the opponent
+ * cannot play CCs at all during the ISB's activation. It is handled as a pre-block
+ * in canPlayCC (isCcPlayableNow), not as a play-time cancel.
  */
 export async function playCC(game, playerNum, figureKey, cardName, opts = {}) {
   const { ctx = {}, allowNotInHand = false, getEffect = getCcEffect, removeTo, skipExecute = false, skipTimingCheck = false } = opts;
-  // 1. validate — comms jammer handled here as a play-time cancel, not a pre-block
-  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, ignoreCommsJammer: true, skipTimingCheck });
+  // 1. validate (Comms Jammer pre-blocks here as a hard block, not a play-time cancel)
+  const check = canPlayCC(game, playerNum, figureKey, cardName, { allowNotInHand, getEffect, skipTimingCheck });
   if (!check.ok) return check;
 
   const effect = getEffect(cardName);
   const abilityId = effect?.abilityId ?? cardName;
   const cost = typeof effect?.cost === 'number' ? effect.cost : 0;
 
-  // 2. Comms Jammer: the card is played but its effect auto-cancelled; consume it.
-  if (game.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) {
-    game.commsJammerActivePlayerNum = null;
-    if (!allowNotInHand) _removeFromHand(game, playerNum, cardName);
-    const dest = _disposeCC(game, playerNum, cardName, removeTo, getEffect);
-    return { ok: true, cancelled: 'comms_jammer', disposedTo: dest };
-  }
-
-  // 3. opponent cancel window (negate if cost 0, else Comm Disruption if cost ≤
+  // 2. opponent cancel window (negate if cost 0, else Comm Disruption if cost ≤
   // opponent SPY count). Injected so this module stays free of the Discord layer.
   if (typeof ctx.promptOpponentCancel === 'function') {
     const cancel = await ctx.promptOpponentCancel({ game, playerNum, figureKey, cardName, cost });

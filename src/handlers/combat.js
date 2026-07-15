@@ -2428,12 +2428,21 @@ export async function handleModsPick(interaction, ctx) {
     // _resolveCcCounterWindow → resumeCombatGateAfterCc. No snapshot, no revert.
     const _ccReg = getCombatAbility(pick);
     const _ccCard = _ccReg.params.card;
+    // Stale-click guard: the player may have opened the ephemeral CC list during
+    // the attacker gate, then clicked Done in the thread (advancing the gate to
+    // defender), then clicked a CC from the now-stale ephemeral list. The ability's
+    // registered side (e.g., 'attacker') no longer matches the current active side
+    // ('defender'), so `ccPn` would resolve to the wrong player, causing a spurious
+    // "timing or play-restriction" error (EoS: isAttacker=false). Re-drive silently.
+    if (_ccReg.side && _ccReg.side !== side) {
+      await _driveGatePath(window, thread, game, combat, ctx);
+    } else {
     // False Orders / Lure: the controller plays the attacker-side CC.
     const ccPn = side === 'attacker'
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const _ccCheck = canPlayCC(game, ccPn, ccFig, _ccCard, { allowNotInHand: false, ignoreCommsJammer: true });
+    const _ccCheck = canPlayCC(game, ccPn, ccFig, _ccCard, { allowNotInHand: false });
     if (!_ccCheck.ok) {
       if (thread) await thread.send(`⚠️ Can't play ${_ccCard}: ${_ccCheck.reason}`).catch(discordCatch);
       await _driveGatePath(window, thread, game, combat, ctx);
@@ -2448,6 +2457,7 @@ export async function handleModsPick(interaction, ctx) {
         },
       }, ctx, interaction.client);
       await _driveGatePath(window, thread, game, combat, ctx);
+    }
     }
   } else if (_isRerollCcPick(pick, side === 'attacker'
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)

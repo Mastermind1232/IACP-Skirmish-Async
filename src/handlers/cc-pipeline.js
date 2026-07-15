@@ -312,18 +312,6 @@ export async function playCcFull(game, gameId, playerNum, figureKey, cardName, o
     return { ok: true, cancelled: 'signal_jammer' };
   }
 
-  // 1.5. Comms Jammer (ISB Infiltrator Elite): opponent cannot play CCs during the
-  // ISB Infiltrator's activation. The card IS played (committed to discard) but its
-  // effect is auto-cancelled and the jammer consumed. Mirrors playCC in cc-timing.js.
-  if (game.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) {
-    game.commsJammerActivePlayerNum = null;
-    if (!allowNotInHand) _ccCommit(game, playerNum, cardName, removeTo, getEffect);
-    await _refreshHandUi(game, playerNum, client, ctx);
-    await ctx.logGameAction?.(game, client, `📵 **Comms Jammer** cancelled **${cardName}** — ${cardName} discarded.`, { phase: 'ACTION', icon: 'card' });
-    ctx.saveGames?.(game.gameId);
-    return { ok: true, cancelled: 'comms_jammer' };
-  }
-
   // 2. Commit card + redraw the player's hand/discard displays immediately —
   // combat-window plays have no other refresh path (corndog19 2026-07-09).
   if (!allowNotInHand) {
