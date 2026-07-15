@@ -264,6 +264,42 @@ describe('isCcPlayableNow', () => {
   it('returns false for unknown timing', () => {
     assert.ok(!isCcPlayableNow(activationGame, 1, 'Test', mockEffect('unknownTiming123')));
   });
+
+  // Element of Surprise — whenYouDeclareAttackDuringActivation
+  it('EoS: playable during normal activation attack (attacker, duringRound)', () => {
+    const game = {
+      player1Id: 'u1', player2Id: 'u2',
+      currentRound: 1,
+      currentActivationTurnPlayerId: 'u1', // activation is live → duringRound
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
+    };
+    assert.ok(isCcPlayableNow(game, 1, 'Element of Surprise'), 'EoS playable during normal activation attack');
+  });
+
+  it('EoS: blocked when attack is during SOR (no active activation turn)', () => {
+    const game = {
+      player1Id: 'u1', player2Id: 'u2',
+      currentRound: 1,
+      startOfRoundWhoseTurn: 'u1', // SOR window → duringRound=false
+      pendingCombat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
+    };
+    assert.ok(!isCcPlayableNow(game, 1, 'Element of Surprise'), 'EoS blocked during SOR-granted attack');
+  });
+
+  it('EoS: blocked when player is the defender, not the attacker', () => {
+    const game = {
+      player1Id: 'u1', player2Id: 'u2',
+      currentRound: 1,
+      currentActivationTurnPlayerId: 'u2', // player 2 is activating
+      pendingCombat: { attackerPlayerNum: 2, defenderPlayerNum: 1 }, // player 1 is defender
+    };
+    assert.ok(!isCcPlayableNow(game, 1, 'Element of Surprise'), 'EoS blocked when player is defender');
+  });
+
+  it('EoS: blocked when no attack is in progress', () => {
+    // No pendingCombat → duringAttack=false
+    assert.ok(!isCcPlayableNow(activationGame, 1, 'Element of Surprise'), 'EoS blocked without active attack');
+  });
 });
 
 // --- getPlayableCcFromHand ---

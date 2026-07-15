@@ -1104,6 +1104,53 @@ test('resolveAbility Element of Surprise adds defensePoolRemoveMax', () => {
   assert.strictEqual(combat.defensePoolRemoveMax, 1);
 });
 
+test('resolveAbility Element of Surprise — blocked when target had LOS to attacker at activation start (per-figure check)', () => {
+  // unit-test-grid is an open grid; all cells have mutual LOS.
+  // activationStartAllPositions is keyed by per-figure figureKey (NOT group-level).
+  const combat = {
+    attackerPlayerNum: 1,
+    attackerFigureKey: 'Stormtrooper Group-1-2', // 3rd figure in group
+    target: { figureKey: 'Nexu-2-0', coord: 'p8' },
+  };
+  const game = {
+    gameId: 'g-eos-los-blocked',
+    selectedMap: { id: 'unit-test-grid' },
+    pendingCombat: combat,
+    figurePositions: {},
+    activationStartAllPositions: {
+      'Stormtrooper Group-1-2': 'a1',  // specific attacking figure at a1
+      'Nexu-2-0': 'a2',               // target at adjacent a2 (has LOS to a1)
+    },
+  };
+  const result = resolveAbility('Element of Surprise', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, false, 'target had LOS → EoS blocked');
+  assert.ok(result.manualMessage && result.manualMessage.includes('had LOS'), 'manualMessage explains block');
+  assert.strictEqual(combat.defensePoolRemoveMax, undefined, 'defensePoolRemoveMax not set');
+});
+
+test('resolveAbility Element of Surprise — applies when activationStartAllPositions missing for attacker', () => {
+  // If the attacking figure is not in the snapshot (e.g. was not on board at activation start),
+  // the LOS check is skipped and EoS applies unconditionally.
+  const combat = {
+    attackerPlayerNum: 1,
+    attackerFigureKey: 'Stormtrooper Group-1-2',
+    target: { figureKey: 'Nexu-2-0', coord: 'p8' },
+  };
+  const game = {
+    gameId: 'g-eos-no-snap',
+    selectedMap: { id: 'unit-test-grid' },
+    pendingCombat: combat,
+    figurePositions: {},
+    activationStartAllPositions: {
+      // attacker key absent — LOS check is skipped
+      'Nexu-2-0': 'a2',
+    },
+  };
+  const result = resolveAbility('Element of Surprise', { game, playerNum: 1, combat });
+  assert.strictEqual(result.applied, true, 'no attacker snapshot → check skipped, EoS applies');
+  assert.strictEqual(combat.defensePoolRemoveMax, 1);
+});
+
 test('resolveAbility Trandoshan Terror adds 1 yellow attack die', () => {
   const combat = { attackerPlayerNum: 1, attackerDcName: 'Bossk', attackInfo: { dice: ['green'], range: [1, 3] } };
   const game = { gameId: 'g-tt', pendingCombat: combat };
