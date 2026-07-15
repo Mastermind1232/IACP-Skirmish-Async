@@ -976,14 +976,39 @@ export function canPlayCC(game, playerNum, figureKey, cardName, opts = {}) {
   }
   // 3 + 4. player not blocked from CCs AND timing matches the current instance.
   // skipTimingCheck: used by dedicated gate flows (Tough Luck, after-attack, when-defeated)
-  // that have already validated legality via their own gate mechanism — isCcPlayableNow
-  // returns false for those timing strings to keep them out of the hand dropdown.
-  // Comms Jammer is handled by playCC as a play-time cancel (not a pre-block), so
-  // it can be ignored here when called from the playCC pipeline.
+  // that have already validated legality via their own gate mechanism.
   if (!skipTimingCheck && !isCcPlayableNow(game, playerNum, cardName, getEffect, { ignoreCommsJammer })) {
-    return { ok: false, reason: `${cardName} can't be played right now (timing or a play-restriction).` };
+    return { ok: false, reason: _ccBlockReason(game, playerNum, cardName, getEffect, { ignoreCommsJammer }) };
   }
   return { ok: true };
+}
+
+/** Diagnose WHY isCcPlayableNow returned false — for human-readable error messages. */
+function _ccBlockReason(game, playerNum, cardName, getEffect, opts = {}) {
+  const { ignoreCommsJammer = false } = opts;
+  if (game?.shadowOpsBlockedPlayer === playerNum) return `${cardName} can't be played — Shadow Ops is blocking your Command Cards this round.`;
+  {
+    const _cbt = game?.pendingCombat;
+    const _defFk = _cbt?.target?.figureKey;
+    if (_defFk) {
+      const _defName = _cbt.defenderDcName || dcNameFromFigureKey(_defFk);
+      const _all = getDcEffects() || {};
+      const _e = _all[_defName] || _all[String(_defName || '').replace(/\s*\[.*\]\s*$/, '')];
+      if ((_e?.specialAbilityIds || []).includes('vague_and_unconvincing_k2s0')) return `${cardName} can't be played — K-2SO's Vague and Unconvincing prevents all Command Cards while he defends.`;
+    }
+  }
+  if (game?.criticalHitBlockedPlayer === playerNum) return `${cardName} can't be played — Mak's Critical Hit is blocking your Command Cards this round.`;
+  if (!ignoreCommsJammer && game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return `${cardName} can't be played — ISB Infiltrator Comms Jammer is active this activation.`;
+  const ctx = getCcPlayContext(game, playerNum);
+  const effect = getEffect(cardName);
+  const timing = String(effect?.timing || '').toLowerCase().trim();
+  if (!effect || !timing) return `${cardName} can't be played — card data not found.`;
+  // Per-timing diagnostic
+  if (!ctx.duringAttack) return `${cardName} can't be played right now — no attack is in progress (pendingCombat=${JSON.stringify(game?.pendingCombat?.attackerPlayerNum)}; combat=${JSON.stringify(game?.combat?.attackerPlayerNum)}).`;
+  if (!ctx.duringRound) return `${cardName} can't be played right now — not in an active round (sorWindow=${!!game?.startOfRoundWhoseTurn}; round=${game?.currentRound}; activationId=${game?.currentActivationTurnPlayerId}; eorTurn=${game?.endOfRoundWhoseTurn}).`;
+  if (!ctx.isAttacker) return `${cardName} can't be played — you are not the attacker (attackerPN=${JSON.stringify(ctx.combat?.attackerPlayerNum)}; yourPN=${playerNum}).`;
+  if (!ctx.isDefender) return `${cardName} can't be played — you are not the defender (defenderPN=${JSON.stringify(ctx.combat?.defenderPlayerNum)}; yourPN=${playerNum}).`;
+  return `${cardName} can't be played right now (timing: ${timing}; duringAttack=${ctx.duringAttack}; isAttacker=${ctx.isAttacker}; isDefender=${ctx.isDefender}; duringRound=${ctx.duringRound}; duringActivation=${ctx.duringActivation}).`;
 }
 
 /** Dispose a played CC: player discard by default, game box for self-gamebox
