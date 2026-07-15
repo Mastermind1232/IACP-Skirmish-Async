@@ -445,12 +445,15 @@ describe('B-RNDLC-009: handleEndEndOfRound toggles from initiative to opponent',
       'initiative swapped to opponent (suffix ran)');
     assert.strictEqual(game.currentRound, 2,
       'currentRound incremented (suffix ran)');
-    // The new round opens its activation window via the pre_activation gate
-    // (no post_end_of_round gate any more).
+    // The new round opens its SoR window (not pre_activation directly) —
+    // SoR is never skipped; pre_activation fires only after both SoR Done clicks.
     assert.ok(!calls.sendPhaseGateMessages.includes('post_end_of_round'),
       'post_end_of_round gate no longer fired');
-    assert.ok(calls.sendPhaseGateMessages.includes('pre_activation'),
-      'pre_activation gate fired for the new round');
+    assert.ok(!calls.sendPhaseGateMessages.includes('pre_activation'),
+      'pre_activation gate does NOT fire immediately — SoR Done must come first');
+    assert.ok(calls.logGameAction.length > 0, 'logGameAction called for SoR Done button');
+    assert.strictEqual(game.startOfRoundWhoseTurn, game.initiativePlayerId,
+      'startOfRoundWhoseTurn set to new initiative player — awaiting SoR Done');
     assert.ok(calls.saveGames.length > 0, 'saveGames called');
   });
 });

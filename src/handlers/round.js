@@ -1189,7 +1189,7 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     logGameAction, client, updateHandChannelMessages, updateHandVisualMessage,
     buildHandDisplayPayload, sendPhaseGateMessages, countTerminalsControlledByPlayer,
     getMapTokensData, postDevaronDoorButtons, postDevaronCratePushPrompts,
-    postKryknaPushButtons, saveGames, checkWinConditions,
+    postKryknaPushButtons, saveGames, checkWinConditions, getPlayerZoneLabel,
   } = ctx;
   const mapId = game.selectedMap?.id;
   const variant = game.selectedMission?.variant;
@@ -1225,15 +1225,22 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
       console.error('Failed to update hand message:', err);
     }
   }
-  if (!hasPendingSor) {
-    // No SoR effects pending — skip the SoR window and go straight to
-    // activation. Clear startOfRoundWhoseTurn now; it was set above for the
-    // hand-channel SoR button, but the normal clearance path
-    // (handleEndStartOfRound) is bypassed here.
-    game.startOfRoundWhoseTurn = null;
-    if (sendPhaseGateMessages) {
-      await sendPhaseGateMessages(game, 'pre_activation', ctx);
-    }
+  // SoR window always runs for both players in initiative order — never skipped,
+  // even when no DC effects are pending (alexanbv ruling). Post the initiative
+  // player's Done button in the main thread so they can close their SoR window.
+  // handleEndStartOfRound handles the state transition (flag → null → activation).
+  {
+    const _initNum = getInitiativePlayerNum(game);
+    const _initZone = getPlayerZoneLabel ? getPlayerZoneLabel(game, game.initiativePlayerId) : '';
+    const _sorRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`end_start_of_round_${game.gameId}`)
+        .setLabel('Done — Start of Round')
+        .setStyle(ButtonStyle.Success)
+    );
+    await logGameAction(game, client,
+      `**Start of Round ${game.currentRound}** — 1. <@${game.initiativePlayerId}> (${_initZone}Player ${_initNum}) — resolve any Start of Round effects, then click **Done**.`,
+      { phase: 'ROUND', icon: 'round', components: [_sorRow], allowedMentions: { users: [game.initiativePlayerId] } });
   }
 
   // Arms Salvage (Devaron Garrison A): if EoR queued an interactive
@@ -1646,7 +1653,13 @@ export async function handleEndStartOfRound(interaction, ctx) {
     const initNum = initiativeId === game.player1Id ? 1 : 2;
     const otherNum = 3 - initNum;
     const otherZone = getPlayerZoneLabel(game, otherId);
-    await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for start-of-round effects. Click **End 'Start of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
+    const _sorRow2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`end_start_of_round_${gameId}`)
+        .setLabel('Done — Start of Round')
+        .setStyle(ButtonStyle.Success)
+    );
+    await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — resolve any Start of Round effects, then click **Done**.`, { phase: 'ROUND', icon: 'round', components: [_sorRow2], allowedMentions: { users: [otherId] } });
     await updateHandChannelMessages(game, client);
     saveGames(game.gameId);
     return;
