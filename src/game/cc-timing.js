@@ -45,7 +45,10 @@ export function getCcPlayContext(game, playerNum) {
   // Start of Round: use the authoritative startOfRoundWhoseTurn flag (set when SoR
   // window opens, cleared when both players finish). The old heuristic using
   // roundActivationButtonShown was unreliable — it stayed false during early activation.
-  const inSorWindow = !!game.startOfRoundWhoseTurn;
+  // Defensive: if a combat is already in progress, we are definitively past the SoR
+  // window even if startOfRoundWhoseTurn was not cleared (stale-flag bug in startRound
+  // when hasPendingSor=false — fixed in round.js but guard here too).
+  const inSorWindow = !!(game.startOfRoundWhoseTurn && !game.pendingCombat);
   const startOfRound = !!(
     game.currentRound &&
     inSorWindow

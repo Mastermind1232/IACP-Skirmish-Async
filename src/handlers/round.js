@@ -1226,6 +1226,11 @@ async function _continueAfterMissionSor(game, gameId, interaction, ctx) {
     }
   }
   if (!hasPendingSor) {
+    // No SoR effects pending — skip the SoR window and go straight to
+    // activation. Clear startOfRoundWhoseTurn now; it was set above for the
+    // hand-channel SoR button, but the normal clearance path
+    // (handleEndStartOfRound) is bypassed here.
+    game.startOfRoundWhoseTurn = null;
     if (sendPhaseGateMessages) {
       await sendPhaseGateMessages(game, 'pre_activation', ctx);
     }
