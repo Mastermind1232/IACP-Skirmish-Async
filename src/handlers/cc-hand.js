@@ -543,7 +543,7 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     saveGames(game.gameId);
     return;
   }
-  if (!isCcPlayableNow(game, playerNum, card)) {
+  if (!isCcPlayableNow(game, playerNum, card, undefined, { ignoreCommsJammer: true })) {
     await interaction.followUp({ content: "That card can't be played right now (wrong timing).", ephemeral: true }).catch(discordCatch);
     // alexanbv 2026-06-23: keep message (no delete) for traceability
     saveGames(game.gameId);

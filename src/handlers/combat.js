@@ -2433,7 +2433,7 @@ export async function handleModsPick(interaction, ctx) {
       ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum)
       : (combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum));
     const ccFig = side === 'attacker' ? combat.attackerFigureKey : combat.target?.figureKey;
-    const _ccCheck = canPlayCC(game, ccPn, ccFig, _ccCard, { allowNotInHand: false });
+    const _ccCheck = canPlayCC(game, ccPn, ccFig, _ccCard, { allowNotInHand: false, ignoreCommsJammer: true });
     if (!_ccCheck.ok) {
       if (thread) await thread.send(`⚠️ Can't play ${_ccCard}: ${_ccCheck.reason}`).catch(discordCatch);
       await _driveGatePath(window, thread, game, combat, ctx);
