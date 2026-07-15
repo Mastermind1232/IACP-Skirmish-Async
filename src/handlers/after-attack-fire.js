@@ -617,13 +617,14 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     }
     return;
   }
-  await applyDamage(game, { ...ctx, thread }, {
+  const { wasDefeated, preventDefeat } = await applyDamage(game, { ...ctx, thread }, {
     figureKey: fk, msgId: targetMsgId, figIndex: figureIndex,
     amount: 1, controllerPlayerNum: combat.defenderPlayerNum,
     attackerPlayerNum: combat.attackerPlayerNum,
     attackerFigureKey: combat.attackerFigureKey,
     source: 'Disruptor Rifle', combat,
   });
+  if (!wasDefeated || preventDefeat) return;
   if (logGameAction) {
     await logGameAction(game, client, `\u{1F480} **Disruptor Rifle** — **${combat.target.label}** had 1 HP — suffers 1 additional Damage and is **defeated**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
@@ -631,10 +632,6 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     dcMessageMeta: ctx.dcMessageMeta,
     getDcMessageIds, getDcList,
   });
-  // Use the pre-wired ctx.processFigureDefeat (registered in COMBAT_DEPS) which
-  // already has removeFigurePosition, calculateKillVp, awardKillVp, etc. baked in.
-  // The raw imported processFigureDefeat needs a full deps object that ctx.deps
-  // does NOT carry on the Discord path — causing silent no-op defeats.
   const _pfd = ctx.processFigureDefeat ?? processFigureDefeat;
   await _pfd(game, {
     defeatedPlayerNum: combat.defenderPlayerNum,

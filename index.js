@@ -181,6 +181,7 @@ import {
   finishCombatResolution as _finishCombatResolutionPure,
   runAfterResolveWindow as _runAfterResolveWindowPure,
   computeCleaveEligibleTargets,
+  _sendPrivateReactionPrompt,
 } from './src/engine/combat-bridge.js';
 import {
   getHandWindowButtonRow as _getHandWindowButtonRowPure,
@@ -3473,6 +3474,9 @@ async function processFigureDefeat(game, opts) {
     checkWinConditions,
     findDcMessageIdForFigure,
     dcMessageMeta,
+    getCcHand,
+    getCcEffectsData,
+    sendPrivateReactionPrompt: _sendPrivateReactionPrompt,
   });
 }
 
