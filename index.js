@@ -4928,6 +4928,34 @@ client.on('interactionCreate', async (interaction) => {
     } catch (_e) { /* gate is best-effort — fall through if lookup fails */ }
   }
 
+  // CC counter responses in query mode: a playCcFull caller holds the game lock
+  // and is suspended at the counter-window Promise (game._ccWindowResolve set).
+  // Trying to acquire the same lock here deadlocks — the Pass/Negate/Comms
+  // handler would queue behind the held lock forever. In Node.js's single-threaded
+  // model, calling queryResolve() outside the lock is safe: the first handler
+  // resumes as a microtask (still inside its lock) and runs step 7 with the effect.
+  if (_CC_RESPONSE_PREFIXES.has(buttonKey)) {
+    try {
+      const _qmGameId = resolveGameIdForLock(interaction);
+      const _qmGame = _qmGameId ? getGame(_qmGameId) : null;
+      if (_qmGame?._ccWindowResolve) {
+        const _qmHandler = getHandler(buttonKey);
+        if (_qmHandler) {
+          const _qmDeps = buildAllDeps();
+          const _qmGroup = getHandlerGroup(buttonKey);
+          const _qmCtx = _qmGroup ? buildContext(_qmGroup, _qmDeps) : null;
+          if (_qmCtx) await _qmHandler(interaction, _qmCtx);
+          else await _qmHandler(interaction);
+        }
+        return; // always return — do NOT fall through to withAtomicGameLock
+      }
+    } catch (_qmErr) {
+      console.error('[cc-query-bypass]', _qmErr?.message ?? _qmErr);
+      await interaction.followUp({ content: '⚠️ Error resolving counter response — game may need a checkpoint reload.', ephemeral: true }).catch(discordCatch);
+      return;
+    }
+  }
+
   const _buttonLockId = resolveGameIdForLock(interaction);
   await withAtomicGameLock(_buttonLockId, atomicOpts, async () => {
 
