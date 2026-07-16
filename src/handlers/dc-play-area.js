@@ -3,7 +3,8 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
-import { playCcFull } from './cc-pipeline.js';
+import { openCcCounterWindow } from './cc-pipeline.js';
+import { runCcPlayTriggers } from './cc-hand.js';
 import { postMoveXPicker } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
@@ -991,14 +992,16 @@ async function _playCcFromDcThread(interaction, ctx, idPrefix, getCardList, timi
       }
     }
   }
-  // Unified CC play pipeline: card already committed (allowNotInHand), Jammer
-  // already handled above (skipSignalJammer), log already posted (skipLog).
-  // Triggers + counter window + execute all handled by playCcFull.
-  await playCcFull(game, game.gameId, meta.playerNum, null, card, {
-    allowNotInHand: true,
-    skipSignalJammer: true,
-    skipLog: true,
-    extraStackEntry: { msgId, fromDc: true },
+  await runCcPlayTriggers(game, meta.playerNum, {
+    client: interaction.client, logGameAction, dcMessageMeta, saveGames,
+  });
+  // Do NOT await — holding the game lock across the counter-window user-input
+  // prompt deadlocks the Pass/Negate/Comms handler (it needs the same lock).
+  // Auto-resolve (offer empty) runs synchronously inside _promptCounterResponder;
+  // counter-window-shown resolves when the opponent clicks, after this handler
+  // returns and releases the lock.
+  openCcCounterWindow(game, game.gameId, {
+    card, cost, playedBy: meta.playerNum, abilityId, msgId, fromDc: true,
   }, ctx, interaction.client);
   if (ctx.pushUndo) {
     ctx.pushUndo(game, {

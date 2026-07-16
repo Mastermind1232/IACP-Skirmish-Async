@@ -757,8 +757,11 @@ describe('Source audit — every CC play site routes through playCcFull', () => 
     assert.match(readSrc('src/handlers/interrupts.js'), /playCcFull/);
   });
 
-  it('dc-play-area.js: DC play path (special_action, Aphra excavation) routes through playCcFull', () => {
-    assert.match(readSrc('src/handlers/dc-play-area.js'), /playCcFull/);
+  it('dc-play-area.js: DC play path uses fire-and-forget openCcCounterWindow + runCcPlayTriggers (NOT playCcFull — avoids mutex deadlock)', () => {
+    const s = readSrc('src/handlers/dc-play-area.js');
+    assert.match(s, /openCcCounterWindow/, 'uses openCcCounterWindow directly');
+    assert.match(s, /runCcPlayTriggers/, 'fires on-play triggers');
+    assert.doesNotMatch(s, /playCcFull/, 'must NOT use playCcFull (deadlock risk with game lock held across counter-window Promise)');
   });
 
   it('fast-forward.js: fast-forward CC play routes through playCcFull', () => {
