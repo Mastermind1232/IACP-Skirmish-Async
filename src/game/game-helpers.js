@@ -145,7 +145,17 @@ export function expireImmediateMp(game, msgId, figureIndex) {
     const fig = entry.perFig[idx];
     if (!fig || !fig._mustSpendImmediately) return;
     lost += fig.remaining || 0;
-    delete entry.perFig[idx];
+    const savedBank = fig._savedBankedMp ?? 0;
+    if (savedBank > 0) {
+      // Restore banked MP (e.g. Heart of Freedom) that was set aside when the
+      // urgency window opened; only the urgency remainder is lost.
+      fig.remaining = savedBank;
+      delete fig._savedBankedMp;
+      delete fig._mustSpendImmediately;
+      delete fig._outOfActivation;
+    } else {
+      delete entry.perFig[idx];
+    }
   };
 
   if (figureIndex === 'all') {

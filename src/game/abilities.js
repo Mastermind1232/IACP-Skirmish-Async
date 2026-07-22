@@ -511,6 +511,17 @@ function addMovementPoints(game, msgId, n, opts) {
     fig._outOfActivation = true;
     fig._mustSpendImmediately = true;
   } else if (opts?.forceImmediate) {
+    // Save any pre-existing banked MP (e.g. Heart of Freedom) so the urgency
+    // window only shows/discards urgency MP; expireImmediateMp restores the
+    // saved portion. Without this, banked MP would be lost when the player
+    // clicks "Done spending" after the urgency move.
+    if (!fig._mustSpendImmediately) {
+      const bankedBefore = (fig.remaining ?? 0) - n; // n was already added above
+      if (bankedBefore > 0) {
+        fig._savedBankedMp = (fig._savedBankedMp ?? 0) + bankedBefore;
+        fig.remaining = n;
+      }
+    }
     fig._mustSpendImmediately = true;
   }
 
