@@ -4495,42 +4495,32 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `**Smoke Grenade** — recipient ${chosenFigureKey} no longer on the board.` };
       }
       const n = entry.mpBonus || 0;
-      // Rule 3 (in-activation grant on the activating figure) → bank.
+      // Smoke Grenade on the activating figure: special-action grant →
+      // forceImmediate (must spend now, not banked for later).
       if (chosenFigureKey === activatingFigKey) {
-        addMovementPoints(game, msgId, n);
+        addMovementPoints(game, msgId, n, { forceImmediate: true });
         return {
           applied: true,
-          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** (activating) banks **${n} MP**.`,
+          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once on movement or MP-cost abilities; remainder lost.`,
           refreshMovementBank: true,
+          refreshDcEmbed: true,
           activeMsgId: msgId,
         };
       }
-      // Rule 1 (grant on a non-activating friendly) → pendingMoveX
-      // picker, spend immediately, remainder lost. Recipient might be
-      // controlled by the same player but isn't the active DC — they
-      // need a fresh msgId-keyed picker. We piggyback on the recipient
-      // DC's msgId so the picker scopes to the right figure.
+      // Smoke Grenade on a non-activating friendly: grant into their
+      // movementBank (not pendingMoveX) so they can spend on movement AND
+      // MP-cost abilities (Wrist Cord, Flamethrower). outOfActivation is
+      // automatically true for a non-activating figure → _mustSpendImmediately.
       const recipMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       if (!recipMsgId) {
         return { applied: false, manualMessage: `**Smoke Grenade** — could not locate **${dcNameFromFigureKey(chosenFigureKey)}**'s play area; resolve manually.` };
       }
-      game.pendingMoveX = game.pendingMoveX || {};
-      game.pendingMoveX[recipMsgId] = {
-        remaining: n,
-        source: 'Smoke Grenade',
-        playerNum,
-        figureKey: chosenFigureKey,
-        dcName: dcNameFromFigureKey(chosenFigureKey),
-        threadId: null,
-        bypassCosts: false,
-        msgId: recipMsgId,
-        nextAction: null,
-      };
+      addMovementPoints(game, recipMsgId, n);
       return {
         applied: true,
-        pendingMoveXMsgId: recipMsgId,
+        refreshDcEmbedMsgIds: [recipMsgId],
         activeMsgId: recipMsgId,
-        logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once, remainder lost.`,
+        logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once on movement or MP-cost abilities; remainder lost.`,
       };
     }
     // Phase 2: place smoke token, then present friendly-figure picker.

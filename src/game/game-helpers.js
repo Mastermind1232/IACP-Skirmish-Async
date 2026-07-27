@@ -94,6 +94,33 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
 }
 
 /**
+ * Grant immediate-spend MP that must be used at once (cannot bank).
+ * Used by special-action MP grants outside of abilities.js (e.g. Hit and Run
+ * in combat-bridge). Mirrors the forceImmediate path in addMovementPoints:
+ * saves any pre-existing banked MP into _savedBankedMp so it survives the
+ * "Done spending" click, then tags the entry _mustSpendImmediately.
+ *
+ * @param {object} game
+ * @param {string} msgId - DC message ID
+ * @param {number} n - MP to grant
+ * @param {number} [figureIndex] - figure index (defaults to 0)
+ */
+export function grantImmediateMp(game, msgId, n, figureIndex) {
+  if (!msgId || !n) return;
+  const fig = _ensureFigureBank(game, msgId, figureIndex ?? 0);
+  fig.total = (fig.total ?? 0) + n;
+  fig.remaining = (fig.remaining ?? 0) + n;
+  if (!fig._mustSpendImmediately) {
+    const bankedBefore = fig.remaining - n;
+    if (bankedBefore > 0) {
+      fig._savedBankedMp = (fig._savedBankedMp ?? 0) + bankedBefore;
+      fig.remaining = n;
+    }
+  }
+  fig._mustSpendImmediately = true;
+}
+
+/**
  * Spend MP from a SPECIFIC figure's bank (figureIndex defaults to 0).
  * Clamps at 0. No-op if the figure has no bank entry. Per alexanbv
  * 2026-06-13.

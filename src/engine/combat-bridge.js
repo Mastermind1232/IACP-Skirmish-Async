@@ -16,7 +16,7 @@ import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js'
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect, effectiveDcNameForFigure } from '../game/dc-helpers.js';
-import { grantPowerTokens as _grantPowerTokensHelper } from '../game/game-helpers.js';
+import { grantPowerTokens as _grantPowerTokensHelper, grantImmediateMp } from '../game/game-helpers.js';
 import { isDcUnique } from '../data-loader.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
@@ -2310,34 +2310,20 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       source: 'Lure of the Dark Side',
     });
   }
-  // Hit and Run: stamp Move-X picker after the attack resolves. Per
-  // rule 2 (in-activation special-action MP grant) — spend at once,
-  // remainder discarded (no banking). The card text reads "gain N
-  // movement points" (not "move X spaces"), so bypassCosts is FALSE
-  // — each step honors +1 difficult terrain / +1 hostile-figure
-  // adders, with the figure's movement profile (Mobile / Massive /
-  // Efficient Travel) overriding via getMovementProfile.
+  // Hit and Run: grant MP into movementBank (not pendingMoveX) so the
+  // player can spend on movement AND on MP-cost abilities (Wrist Cord,
+  // Wrist Flamethrower). forceImmediate — spend at once during the
+  // special action; remainder lost. The DC embed refresh below (line ~2771)
+  // surfaces the "Spend Remaining MP" + "Done spending" buttons.
   const pending = game.hitAndRunPendingMp;
   if (pending && pending.msgId === combat.attackerMsgId && pending.amount > 0) {
     const n = pending.amount;
     delete game.hitAndRunPendingMp;
     if (combat.attackerFigureKey) {
-      try {
-        const { setupPendingMoveX } = await import('../handlers/move-x-handler.js');
-        await setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
-          msgId: pending.msgId,
-          figureKey: combat.attackerFigureKey,
-          playerNum: combat.attackerPlayerNum,
-          spaces: n,
-          source: 'Hit and Run',
-          threadId: combat.combatThreadId,
-          bypassCosts: false,
-        });
-        const ownerId = getPlayerId(game, combat.attackerPlayerNum);
-        await logGameAction(game, client, `Hit and Run: <@${ownerId}> gains **${n}** MP after the attack — spend at once, remainder lost.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
-      } catch (err) {
-        console.error('[combat-bridge] Hit and Run picker stamp failed:', err?.message ?? err);
-      }
+      const { figureIndex: _harFigIdx } = parseFigureKey(combat.attackerFigureKey);
+      grantImmediateMp(game, pending.msgId, n, _harFigIdx ?? 0);
+      const ownerId = getPlayerId(game, combat.attackerPlayerNum);
+      await logGameAction(game, client, `Hit and Run: <@${ownerId}> gains **${n}** MP after the attack — spend at once on movement or MP-cost abilities; remainder lost.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
     }
   }
   // --- Post-combat ability prompts (before clearing pendingCombat) ---
