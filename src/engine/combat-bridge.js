@@ -16,7 +16,7 @@ import { findSmugglingCompartmentMsgId } from '../game/smuggling-compartment.js'
 import { discordCatch as _discordCatchH } from '../error-handling.js';
 
 import { getDcEffect, effectiveDcNameForFigure } from '../game/dc-helpers.js';
-import { grantPowerTokens as _grantPowerTokensHelper, grantImmediateMp } from '../game/game-helpers.js';
+import { grantPowerTokens as _grantPowerTokensHelper } from '../game/game-helpers.js';
 import { isDcUnique } from '../data-loader.js';
 import { evaluateRoundModifiers } from '../game/round-modifiers.js';
 import { exhaustAttachment } from '../game/card-state-helpers.js';
@@ -2310,20 +2310,26 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       source: 'Lure of the Dark Side',
     });
   }
-  // Hit and Run: grant MP into movementBank (not pendingMoveX) so the
+  // Hit and Run: grant MP via pendingMoveX with allowAbilitySpend so the
   // player can spend on movement AND on MP-cost abilities (Wrist Cord,
-  // Wrist Flamethrower). forceImmediate — spend at once during the
-  // special action; remainder lost. The DC embed refresh below (line ~2771)
-  // surfaces the "Spend Remaining MP" + "Done spending" buttons.
+  // Wrist Flamethrower). Per alexanbv 2026-07-27.
   const pending = game.hitAndRunPendingMp;
   if (pending && pending.msgId === combat.attackerMsgId && pending.amount > 0) {
     const n = pending.amount;
     delete game.hitAndRunPendingMp;
     if (combat.attackerFigureKey) {
-      const { figureIndex: _harFigIdx } = parseFigureKey(combat.attackerFigureKey);
-      grantImmediateMp(game, pending.msgId, n, _harFigIdx ?? 0);
       const ownerId = getPlayerId(game, combat.attackerPlayerNum);
       await logGameAction(game, client, `Hit and Run: <@${ownerId}> gains **${n}** MP after the attack — spend at once on movement or MP-cost abilities; remainder lost.`, { allowedMentions: { users: [ownerId] }, phase: 'ACTION', icon: 'card' });
+      await _setupPendingMoveX(game, { client, logGameAction, saveGames: deps?.saveGames }, {
+        msgId: pending.msgId,
+        figureKey: combat.attackerFigureKey,
+        playerNum: combat.attackerPlayerNum,
+        spaces: n,
+        source: 'Hit and Run',
+        threadId: null,
+        bypassCosts: false,
+        allowAbilitySpend: true,
+      });
     }
   }
   // --- Post-combat ability prompts (before clearing pendingCombat) ---

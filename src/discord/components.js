@@ -1167,6 +1167,14 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   const _figImmediate = _spendFigBank?._mustSpendImmediately ? _spendFigBank : null;
   const _effBankMp = _figImmediate ? (_figImmediate.remaining ?? 0) : (_spendFigBank?.remaining ?? 0);
   const _mustSpendNow = !!_figImmediate;
+  // pendingMoveX with allowAbilitySpend: include its remaining MP in the
+  // effective MP for ability button gating (Wrist Cord, Wrist Flamethrower).
+  // Only applies when the pendingMoveX targets the currently-selected figure.
+  const _pxEntry = game?.pendingMoveX?.[msgId];
+  const _pxFkIdxStr = _pxEntry?.figureKey?.match(/-(\d+)$/)?.[1];
+  const _pxFigIdx = _pxFkIdxStr != null ? parseInt(_pxFkIdxStr, 10) : 0;
+  const _pxAbilityMp = (_pxEntry?.allowAbilitySpend && _pxFigIdx === _spendFigIdx)
+    ? (_pxEntry.remaining ?? 0) : 0;
 
   // Spend remaining MP: available when movement bank has unspent points from a previous Move action
   // This is free — does not cost an action (IA rules: MP persist for the entire activation)
@@ -1223,10 +1231,10 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       } else {
         label = `Special Action: ${name}`.slice(0, 80);
       }
-      // Use the selected figure's effective MP (per-figure immediate sub-
-      // bank when present, else top-level) so MP-cost abilities like Wrist
-      // Cord enable correctly off the figure's own granted MP.
-      const bankMp = _effBankMp;
+      // Use the selected figure's effective MP: movementBank + any pendingMoveX
+      // allowAbilitySpend pool so MP-cost abilities (Wrist Cord, Wrist Flamethrower)
+      // enable correctly whether the MP is banked or in an immediate-spend window.
+      const bankMp = _effBankMp + _pxAbilityMp;
       const mpDisabled = mpCost > 0 && bankMp < mpCost;
       // destruct 2026-05-07: Stun does NOT block Special Actions in
       // general — only Move + Attack. Stunned figures can still use

@@ -94,36 +94,9 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
 }
 
 /**
- * Grant immediate-spend MP that must be used at once (cannot bank).
- * Used by special-action MP grants outside of abilities.js (e.g. Hit and Run
- * in combat-bridge). Mirrors the forceImmediate path in addMovementPoints:
- * saves any pre-existing banked MP into _savedBankedMp so it survives the
- * "Done spending" click, then tags the entry _mustSpendImmediately.
- *
- * @param {object} game
- * @param {string} msgId - DC message ID
- * @param {number} n - MP to grant
- * @param {number} [figureIndex] - figure index (defaults to 0)
- */
-export function grantImmediateMp(game, msgId, n, figureIndex) {
-  if (!msgId || !n) return;
-  const fig = _ensureFigureBank(game, msgId, figureIndex ?? 0);
-  fig.total = (fig.total ?? 0) + n;
-  fig.remaining = (fig.remaining ?? 0) + n;
-  if (!fig._mustSpendImmediately) {
-    const bankedBefore = fig.remaining - n;
-    if (bankedBefore > 0) {
-      fig._savedBankedMp = (fig._savedBankedMp ?? 0) + bankedBefore;
-      fig.remaining = n;
-    }
-  }
-  fig._mustSpendImmediately = true;
-}
-
-/**
  * Spend MP from a SPECIFIC figure's bank (figureIndex defaults to 0).
- * Clamps at 0. No-op if the figure has no bank entry. Per alexanbv
- * 2026-06-13.
+ * Clamps at 0. Drains pendingMoveX first when allowAbilitySpend is set,
+ * then falls through to movementBank. Per alexanbv 2026-06-13 / 2026-07-27.
  *
  * @param {object} game
  * @param {string} msgId - DC message ID
@@ -133,26 +106,44 @@ export function grantImmediateMp(game, msgId, n, figureIndex) {
  */
 export function consumeMovementPoints(game, msgId, amount, figureIndex) {
   if (!msgId || !amount || amount <= 0) return 0;
-  const fig = game.movementBank?.[msgId]?.perFig?.[figureIndex ?? 0];
-  if (!fig) return 0;
-  const have = fig.remaining || 0;
-  const spent = Math.min(have, amount);
-  fig.remaining = have - spent;
+  const figIdx = figureIndex ?? 0;
+  let need = amount;
+  let spent = 0;
+
+  // Drain pendingMoveX first when allowAbilitySpend is active for this figure
+  const px = game.pendingMoveX?.[msgId];
+  if (px?.allowAbilitySpend && need > 0) {
+    const pxFkIdx = px.figureKey?.match(/-(\d+)$/)?.[1];
+    const pxFigIdx = pxFkIdx != null ? parseInt(pxFkIdx, 10) : 0;
+    if (pxFigIdx === figIdx) {
+      const pxHave = px.remaining ?? 0;
+      const fromPx = Math.min(pxHave, need);
+      px.remaining = pxHave - fromPx;
+      spent += fromPx;
+      need -= fromPx;
+    }
+  }
+
+  // Then drain movementBank
+  if (need > 0) {
+    const fig = game.movementBank?.[msgId]?.perFig?.[figIdx];
+    if (fig) {
+      const have = fig.remaining || 0;
+      const fromBank = Math.min(have, need);
+      fig.remaining = have - fromBank;
+      spent += fromBank;
+    }
+  }
+
   return spent;
 }
 
 /**
  * Discard a figure's per-figure MP flagged "must spend immediately".
- *
- * Per alexanbv 2026-06-12/13: MP gained outside a figure's own activation
- * (Order Hit and similar grants) OR as part of a special action (Urgency)
- * must be spent at once. While the window is open the MP lives in the
- * figure's per-figure sub-bank (movementBank[msgId].perFig[figureIndex])
- * so it can feed both the "Spend Remaining MP" movement button and the
- * MP-cost ability buttons (Wrist Cord, Super Commando rockets). This
- * helper closes the window: it drops the figure's sub-bank when it carries
- * the _mustSpendImmediately flag, so leftover MP never carries forward and
- * never spreads to a sibling figure.
+ * Legacy path for movementBank._mustSpendImmediately entries. New immediate
+ * MP grants use pendingMoveX (handled via move-x-handler clearPendingMoveX /
+ * handleMoveXDone). This helper remains for backward compat with old game
+ * states and any residual non-pendingMoveX paths.
  *
  * Pass figureIndex (defaults to 0) to clear that figure's immediate MP;
  * pass figureIndex === 'all' to sweep every flagged figure of the DC
@@ -172,17 +163,7 @@ export function expireImmediateMp(game, msgId, figureIndex) {
     const fig = entry.perFig[idx];
     if (!fig || !fig._mustSpendImmediately) return;
     lost += fig.remaining || 0;
-    const savedBank = fig._savedBankedMp ?? 0;
-    if (savedBank > 0) {
-      // Restore banked MP (e.g. Heart of Freedom) that was set aside when the
-      // urgency window opened; only the urgency remainder is lost.
-      fig.remaining = savedBank;
-      delete fig._savedBankedMp;
-      delete fig._mustSpendImmediately;
-      delete fig._outOfActivation;
-    } else {
-      delete entry.perFig[idx];
-    }
+    delete entry.perFig[idx];
   };
 
   if (figureIndex === 'all') {

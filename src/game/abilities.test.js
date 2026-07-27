@@ -274,18 +274,16 @@ test('resolveAbility Force Rush with active activation applies +2 MP', () => {
   assert.strictEqual(game.movementBank[msgId].perFig[0].total, 6);
 });
 
-test('resolveAbility Urgency (Speed+2) banks immediate-spend MP usable on movement AND MP-cost abilities', () => {
-  // Per alexanbv 2026-06-12: Urgency MP must be spendable on movement AND
-  // MP-cost abilities (Wrist Cord, Super Commando rockets). Those ability
-  // buttons read movementBank[msgId].remaining, so the MP lives in
-  // movementBank with the immediate-spend flag (Urgency is mid-activation
-  // but its MP still can't bank into later actions). NOT pendingMoveX,
-  // which is movement-only.
+test('resolveAbility Urgency (Speed+2) routes to pendingMoveX with allowAbilitySpend', () => {
+  // Per alexanbv 2026-07-27: all immediate-spend MP goes to pendingMoveX with
+  // allowAbilitySpend:true so it can be spent on MOVEMENT *and* MP-cost abilities
+  // (Wrist Cord, Super Commando rockets). consumeMovementPoints drains pendingMoveX
+  // first; components.js includes pendingMoveX.remaining in ability button gating.
   const msgId = 'msg789';
   const figureKey = 'Luke Skywalker-1-0';
   const game = {
     gameId: 'g3',
-    dcActionsData: { [msgId]: { remaining: 1, selectedFigure: 0 } },
+    dcActionsData: { [msgId]: { remaining: 1, selectedFigure: 0, threadId: null } },
     figurePositions: { 1: { [figureKey]: 'a1' } },
   };
   // Luke Skywalker has speed 5 in dc-stats → 5+2=7 MP
@@ -293,40 +291,38 @@ test('resolveAbility Urgency (Speed+2) banks immediate-spend MP usable on moveme
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
   assert.match(result.logMessage, /gains 7 MP/);
-  // MP lives in the activating figure's per-figure sub-bank (feeds movement
-  // + MP-cost ability buttons), flagged must-spend-immediately so it cannot
-  // carry into later actions. Per alexanbv 2026-06-13.
-  assert.ok(game.movementBank?.[msgId]?.perFig?.[0], 'figure-0 sub-bank should be stamped');
-  assert.strictEqual(game.movementBank[msgId].perFig[0].remaining, 7);
-  assert.strictEqual(game.movementBank[msgId].perFig[0]._mustSpendImmediately, true);
-  // Not routed through the movement-only picker.
-  assert.strictEqual(game.pendingMoveX, undefined);
-  assert.strictEqual(result.refreshDcEmbed, true);
+  // Routed through pendingMoveX (not movementBank._mustSpendImmediately).
+  assert.ok(game.pendingMoveX?.[msgId], 'pendingMoveX should be stamped');
+  assert.strictEqual(game.pendingMoveX[msgId].remaining, 7);
+  assert.strictEqual(game.pendingMoveX[msgId].allowAbilitySpend, true);
+  assert.strictEqual(game.pendingMoveX[msgId].bypassCosts, false);
+  assert.strictEqual(game.pendingMoveX[msgId].figureKey, figureKey);
+  assert.strictEqual(result.pendingMoveXMsgId, msgId);
+  // movementBank is NOT touched.
+  assert.strictEqual(game.movementBank, undefined);
 });
 
-test('resolveAbility Urgency on a multi-figure group scopes MP to the selected figure (no carryover)', () => {
-  // Per alexanbv 2026-06-13: in a multi-figure deployment group, immediate
-  // MP must belong to the specific figure and must NOT carry over to a
-  // sibling. It is written to that figure's per-figure sub-bank, not the
-  // shared top-level entry.
+test('resolveAbility Urgency on a multi-figure group targets the selected figure in pendingMoveX', () => {
+  // Per alexanbv 2026-07-27: pendingMoveX.figureKey encodes the specific figure
+  // so sibling figures cannot spend from this pool.
   const msgId = 'msgGrp';
   const f0 = 'Stormtrooper-1-0';
   const f1 = 'Stormtrooper-1-1';
   const game = {
     gameId: 'g4',
-    dcActionsData: { [msgId]: { remaining: 2, selectedFigure: 1 } },
+    dcActionsData: { [msgId]: { remaining: 2, selectedFigure: 1, threadId: null } },
     figurePositions: { 1: { [f0]: 'a1', [f1]: 'a2' } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g4', playerNum: 1, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 1]' }]]);
   const result = resolveAbility('Urgency', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(result.applied, true);
-  // Scoped to figure 1's per-figure sub-bank, flagged immediate.
-  assert.ok(game.movementBank?.[msgId]?.perFig?.[1], 'figure 1 sub-bank should exist');
-  assert.strictEqual(game.movementBank[msgId].perFig[1]._mustSpendImmediately, true);
-  assert.ok(game.movementBank[msgId].perFig[1].remaining > 0);
-  // No carryover: shared top-level remaining stays 0, figure 0 has nothing.
-  assert.strictEqual(game.movementBank[msgId].remaining ?? 0, 0);
-  assert.strictEqual(game.movementBank[msgId].perFig[0], undefined);
+  // pendingMoveX targets figure 1 specifically.
+  assert.ok(game.pendingMoveX?.[msgId], 'pendingMoveX should be stamped');
+  assert.strictEqual(game.pendingMoveX[msgId].figureKey, f1);
+  assert.strictEqual(game.pendingMoveX[msgId].allowAbilitySpend, true);
+  assert.ok(game.pendingMoveX[msgId].remaining > 0);
+  // movementBank is NOT touched.
+  assert.strictEqual(game.movementBank, undefined);
 });
 
 test("resolveAbility Officer's Training with LEADER (during attack) draws 1", () => {

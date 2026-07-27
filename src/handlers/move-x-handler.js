@@ -44,7 +44,7 @@ import { splitCustomId } from '../discord/custom-id.js';
  * The caller must follow up with postMoveXPicker to surface the UI.
  */
 export function stampPendingMoveX(game, opts) {
-  const { msgId, figureKey, playerNum, spaces, source, threadId, bypassCosts, nextAction } = opts;
+  const { msgId, figureKey, playerNum, spaces, source, threadId, bypassCosts, nextAction, allowAbilitySpend } = opts;
   if (!msgId || !figureKey || !playerNum || !spaces || spaces <= 0) return false;
   game.pendingMoveX = game.pendingMoveX || {};
   game.pendingMoveX[msgId] = {
@@ -61,6 +61,12 @@ export function stampPendingMoveX(game, opts) {
     //   adder, honoring the figure's profile (Mobile / Massive / Efficient
     //   Travel keywords still bypass via getMovementProfile flags).
     bypassCosts: bypassCosts !== false,
+    // allowAbilitySpend: true for "gain X MP" grants (Urgency, Order Hit,
+    //   Smoke Grenade, Hit and Run) so the DC embed enables MP-cost ability
+    //   buttons (Wrist Cord, Wrist Flamethrower) that can spend from this pool.
+    //   NOT set for "Move X spaces" grants (Force Jump, Fell Swoop, Ambush, etc.)
+    //   where the MP is strictly for movement. Per alexanbv 2026-07-27.
+    allowAbilitySpend: !!allowAbilitySpend,
     msgId,
     // Optional typed continuation that fires after the picker drains
     // (handleMoveXStep when remaining=0, handleMoveXDone, or

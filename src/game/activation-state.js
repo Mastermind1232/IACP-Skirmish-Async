@@ -863,7 +863,6 @@ const ROUND_OBJECT_FLAGS = [
   'massiveMovementLocked',
   'disarmPermanentWeakened',
   'adrenalineBonuses',
-  'opportunisticMustSpendNow',
   'imperialRetrofittingMultiAttack',
   'urgencyMustSpendAll',
   'arcingShotActive',

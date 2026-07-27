@@ -511,17 +511,6 @@ function addMovementPoints(game, msgId, n, opts) {
     fig._outOfActivation = true;
     fig._mustSpendImmediately = true;
   } else if (opts?.forceImmediate) {
-    // Save any pre-existing banked MP (e.g. Heart of Freedom) so the urgency
-    // window only shows/discards urgency MP; expireImmediateMp restores the
-    // saved portion. Without this, banked MP would be lost when the player
-    // clicks "Done spending" after the urgency move.
-    if (!fig._mustSpendImmediately) {
-      const bankedBefore = (fig.remaining ?? 0) - n; // n was already added above
-      if (bankedBefore > 0) {
-        fig._savedBankedMp = (fig._savedBankedMp ?? 0) + bankedBefore;
-        fig.remaining = n;
-      }
-    }
     fig._mustSpendImmediately = true;
   }
 
@@ -1566,15 +1555,15 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       if (chosenMsgId) {
-        // Rule 2 — special-action MP gain. Stamp pendingMoveX with
-        // bypassCosts: false so terrain/figure adders apply, no bank.
-        // Per alexanbv 2026-05-17: picker posts in activator's thread.
+        // Out-of-activation MP gain → pendingMoveX with allowAbilitySpend.
+        // Per alexanbv 2026-07-27: picker posts in activator's thread.
         const _tmThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};
         game.pendingMoveX[chosenMsgId] = {
           remaining: 2, source: 'Tactical Maneuver',
           playerNum, figureKey: targetFigureKey, dcName: chosenName,
-          threadId: _tmThreadId, bypassCosts: false, msgId: chosenMsgId,
+          threadId: _tmThreadId, bypassCosts: false, allowAbilitySpend: true, msgId: chosenMsgId,
+          nextAction: null,
         };
         return {
           applied: true,
@@ -1701,18 +1690,16 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       if (chosenMsgId) {
-        // Rule 2 — special-action MP gain. Stamp pendingMoveX with
-        // bypassCosts: false so terrain/figure adders apply, no bank.
-        // Per alexanbv 2026-05-17: interrupt-grant picker posts in the
-        // ACTIVATOR's thread (the Officer's activation thread), not
-        // the grantee's (no such thread exists for non-activating
-        // figures) and not the general game log.
+        // Out-of-activation MP gain → pendingMoveX with allowAbilitySpend.
+        // Per alexanbv 2026-07-27: interrupt-grant picker posts in the
+        // ACTIVATOR's thread (the Officer's activation thread).
         const _orderThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};
         game.pendingMoveX[chosenMsgId] = {
           remaining: 2, source: 'Order',
           playerNum, figureKey: targetFigureKey, dcName: chosenName,
-          threadId: _orderThreadId, bypassCosts: false, msgId: chosenMsgId,
+          threadId: _orderThreadId, bypassCosts: false, allowAbilitySpend: true, msgId: chosenMsgId,
+          nextAction: null,
         };
         return {
           applied: true,
@@ -2391,21 +2378,27 @@ export function resolveAbility(abilityId, context) {
           game.freeAttackBonusPending = game.freeAttackBonusPending || {};
           game.freeAttackBonusPending[targetFigureKey] = true;
           if (entry.grantMpToTarget > 0) {
-            // Per alexanbv 2026-06-12: out-of-activation MP must be
-            // spendable on MOVEMENT *and* MP-cost abilities (Wrist Cord,
-            // Super Commando rockets), so it lives in movementBank where
-            // both the "Spend Remaining MP" button and the MP-cost
-            // ability buttons read it. addMovementPoints tags it
-            // _mustSpendImmediately; the immediate-spend window is closed
-            // (and any leftover discarded) by expireImmediateMp.
-            // MP belongs to the specific target figure's per-figure bank
-            // (alexanbv 2026-06-13).
-            addMovementPoints(game, tgtMsgId, entry.grantMpToTarget, { figureIndex: figureIndexFromKey(targetFigureKey) ?? 0 });
+            // Per alexanbv 2026-07-27: out-of-activation MP goes to pendingMoveX
+            // with allowAbilitySpend so it can be spent on MOVEMENT *and* on
+            // MP-cost abilities (Wrist Cord, Flamethrower). Picker posts via
+            // pendingMoveXMsgId in the return below.
+            game.pendingMoveX = game.pendingMoveX || {};
+            game.pendingMoveX[tgtMsgId] = {
+              remaining: entry.grantMpToTarget,
+              source: entry.label || 'Order Hit',
+              playerNum,
+              figureKey: targetFigureKey,
+              dcName: dcNameFromFigureKey(targetFigureKey),
+              threadId: null,
+              bypassCosts: false,
+              allowAbilitySpend: true,
+              msgId: tgtMsgId,
+              nextAction: null,
+            };
           }
           // Include the TARGET's msgId in the refresh list so their DC
-          // embed updates with the new MP + any newly-enabled MP-cost
-          // buttons (e.g. Boba Fett's Wrist Cord / Wrist Flamethrower
-          // when granted MP out-of-activation via Order Hit).
+          // embed updates with any newly-enabled MP-cost buttons
+          // (e.g. Boba Fett's Wrist Cord / Wrist Flamethrower).
           return {
             applied: true,
             // alexanbv audit 2026-06-26 (P1): Order Hit is a Double Action
@@ -2416,6 +2409,7 @@ export function resolveAbility(abilityId, context) {
             logMessage: `**${entry.label}** — **${dcName}** may interrupt to perform a free attack and gains ${entry.grantMpToTarget || 0} MP${entry.grantMpToTarget > 0 ? ' (spend now — remainder lost when the interrupt resolves)' : ''}.${entry.autoDeductVp ? ` (−${entry.autoDeductVp} VP)` : ''}`,
             refreshDcEmbed: true,
             refreshDcEmbedMsgIds: [tgtMsgId],
+            pendingMoveXMsgId: entry.grantMpToTarget > 0 ? tgtMsgId : undefined,
             grantedAttackButton: { granteeMsgId: tgtMsgId, granteeFigureKey: targetFigureKey, granteeName: dcName, sourceLabel: entry.label || 'Order Hit' },
           };
         }
@@ -4495,29 +4489,47 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `**Smoke Grenade** — recipient ${chosenFigureKey} no longer on the board.` };
       }
       const n = entry.mpBonus || 0;
-      // Smoke Grenade on the activating figure: special-action grant →
-      // forceImmediate (must spend now, not banked for later).
+      // Smoke Grenade on the activating figure: gains MP during their own
+      // activation — banks normally per alexanbv 2026-07-27.
       if (chosenFigureKey === activatingFigKey) {
-        addMovementPoints(game, msgId, n, { forceImmediate: true });
+        addMovementPoints(game, msgId, n);
         return {
           applied: true,
-          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once on movement or MP-cost abilities; remainder lost.`,
+          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** (banked for this activation).`,
           refreshMovementBank: true,
           refreshDcEmbed: true,
           activeMsgId: msgId,
         };
       }
-      // Smoke Grenade on a non-activating friendly: grant into their
-      // movementBank (not pendingMoveX) so they can spend on movement AND
-      // MP-cost abilities (Wrist Cord, Flamethrower). outOfActivation is
-      // automatically true for a non-activating figure → _mustSpendImmediately.
+      // Smoke Grenade on a non-activating friendly: out-of-activation grant
+      // → pendingMoveX picker with allowAbilitySpend so they can spend on
+      // movement OR MP-cost abilities (Wrist Cord, Flamethrower).
+      // Per alexanbv 2026-07-27.
       const recipMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
       if (!recipMsgId) {
         return { applied: false, manualMessage: `**Smoke Grenade** — could not locate **${dcNameFromFigureKey(chosenFigureKey)}**'s play area; resolve manually.` };
       }
-      addMovementPoints(game, recipMsgId, n);
+      const _sgRecipPos = game.figurePositions?.[playerNum]?.[chosenFigureKey];
+      const _sgFigIdx = figureIndexFromKey(chosenFigureKey) ?? 0;
+      if (!_sgRecipPos) {
+        return { applied: false, manualMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** has no position on the board.` };
+      }
+      game.pendingMoveX = game.pendingMoveX || {};
+      game.pendingMoveX[recipMsgId] = {
+        remaining: n,
+        source: 'Smoke Grenade',
+        playerNum,
+        figureKey: chosenFigureKey,
+        dcName: dcNameFromFigureKey(chosenFigureKey),
+        threadId: null,
+        bypassCosts: false,
+        allowAbilitySpend: true,
+        msgId: recipMsgId,
+        nextAction: null,
+      };
       return {
         applied: true,
+        pendingMoveXMsgId: recipMsgId,
         refreshDcEmbedMsgIds: [recipMsgId],
         activeMsgId: recipMsgId,
         logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once on movement or MP-cost abilities; remainder lost.`,
@@ -5098,10 +5110,22 @@ export function resolveAbility(abilityId, context) {
         const speed = getStatsForDc(reactDcName)?.speed ?? 4;
         const n = speed + entry.mpBonusFromSpeed;
         if (reactMsgId && n >= 1) {
-          const _stM = reactFk.match(/-(\d+)-(\d+)$/);
-          const reactFigIdx = _stM ? parseInt(_stM[2], 10) : 0;
-          addMovementPoints(game, reactMsgId, n, { forceImmediate: true, figureIndex: reactFigIdx });
-          return { applied: true, logMessage: `**Slippery Target** — **${reactDcName}** gains ${n} MP (Speed; spend at once on movement or MP-cost abilities, remainder lost).`, refreshMovementBank: true, refreshDcEmbed: true, activeMsgId: reactMsgId };
+          // Slippery Target out-of-activation: pendingMoveX with allowAbilitySpend.
+          // Per alexanbv 2026-07-27: immediate MP goes to pendingMoveX, not movementBank.
+          game.pendingMoveX = game.pendingMoveX || {};
+          game.pendingMoveX[reactMsgId] = {
+            remaining: n,
+            source: 'Slippery Target',
+            playerNum,
+            figureKey: reactFk,
+            dcName: reactDcName,
+            threadId: null,
+            bypassCosts: false,
+            allowAbilitySpend: true,
+            msgId: reactMsgId,
+            nextAction: null,
+          };
+          return { applied: true, logMessage: `**Slippery Target** — **${reactDcName}** gains ${n} MP (Speed; spend at once on movement or MP-cost abilities, remainder lost).`, pendingMoveXMsgId: reactMsgId, refreshDcEmbedMsgIds: [reactMsgId], activeMsgId: reactMsgId };
         }
       }
       // No live interrupt context → fall through to the activation path below.
@@ -5113,15 +5137,9 @@ export function resolveAbility(abilityId, context) {
     const speed = getStatsForDc(meta.dcName)?.speed ?? 4;
     const n = speed + entry.mpBonusFromSpeed;
     if (n < 1) return { applied: false, manualMessage: 'Resolve manually: no MP to gain.' };
-    // Per alexanbv 2026-06-12: every card hitting this dispatch (Urgency,
-    // On the Lam, Slippery Target) grants MP that must be spent at once —
-    // never banked — but it must be spendable on MOVEMENT *and* on MP-cost
-    // abilities (Wrist Cord, Super Commando rockets). So the MP goes into
-    // movementBank (where both the "Spend Remaining MP" movement button and
-    // the MP-cost ability buttons read it) with the immediate-spend tag
-    // forced on (Urgency is mid-activation but its MP still can't bank).
-    // The DC embed refresh surfaces the spend options + a "Done spending"
-    // button (handleDoneImmediateMp) that discards the remainder.
+    // Per alexanbv 2026-07-27: all immediate-spend MP goes to pendingMoveX with
+    // allowAbilitySpend so it can be spent on MOVEMENT *and* on MP-cost abilities
+    // (Wrist Cord, Super Commando rockets). The picker posts immediately.
     const figureKeys = Object.keys(game.figurePositions?.[meta.playerNum] || {})
       .filter(k => k.startsWith(meta.dcName + '-'));
     const selectedIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
@@ -5133,11 +5151,21 @@ export function resolveAbility(abilityId, context) {
     if (context.cardName === 'On the Lam' && game.pendingCombat) {
       game.onTheLamActive = true;
     }
-    // MP belongs to the activating figure's per-figure bank, immediate
-    // (special-action timing). Per alexanbv 2026-06-13.
-    addMovementPoints(game, msgId, n, { forceImmediate: true, figureIndex: selectedIdx });
+    game.pendingMoveX = game.pendingMoveX || {};
+    game.pendingMoveX[msgId] = {
+      remaining: n,
+      source: context.cardName || entry.label || 'Move',
+      playerNum: meta.playerNum,
+      figureKey,
+      dcName: meta.dcName,
+      threadId: game.dcActionsData?.[msgId]?.threadId || null,
+      bypassCosts: false,
+      allowAbilitySpend: true,
+      msgId,
+      nextAction: null,
+    };
     const msg = `**${context.cardName || entry.label || 'Move'}** — gains ${n} MP (spend at once on movement or MP-cost abilities; remainder lost).`;
-    return { applied: true, logMessage: msg, refreshMovementBank: true, refreshDcEmbed: true, activeMsgId: msgId };
+    return { applied: true, logMessage: msg, pendingMoveXMsgId: msgId };
   }
 
   // ccEffect: discardUpToNHarmful + mpBonus combo (optionally + recoverDamage) — Heart of Freedom, Price of Glory, Worth Every Credit
@@ -5816,14 +5844,29 @@ export function resolveAbility(abilityId, context) {
         if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
           const chosenMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
           if (chosenMsgId) {
-            addMovementPoints(game, chosenMsgId, n);
             const activeMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
             if (activeMsgId && activeMsgId === chosenMsgId) {
+              // Figure is currently activating — MP banks normally.
+              addMovementPoints(game, chosenMsgId, n);
               return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (banked — figure is currently activating).` };
             }
-            game.opportunisticMustSpendNow = game.opportunisticMustSpendNow || {};
-            game.opportunisticMustSpendNow[playerNum] = { mp: n, card: cardName, msgId: chosenMsgId };
-            return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (must be spent immediately).` };
+            // Out-of-activation grant → pendingMoveX with allowAbilitySpend.
+            // Per alexanbv 2026-07-27.
+            const _oppFk = chosenFigureKey;
+            game.pendingMoveX = game.pendingMoveX || {};
+            game.pendingMoveX[chosenMsgId] = {
+              remaining: n,
+              source: cardName || 'Opportunistic',
+              playerNum,
+              figureKey: _oppFk,
+              dcName: dcNameFromFigureKey(_oppFk),
+              threadId: null,
+              bypassCosts: false,
+              allowAbilitySpend: true,
+              msgId: chosenMsgId,
+              nextAction: null,
+            };
+            return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (must be spent immediately).`, pendingMoveXMsgId: chosenMsgId, refreshDcEmbedMsgIds: [chosenMsgId], activeMsgId: chosenMsgId };
           }
           return { applied: true, logMessage: `Gained **${n} MP** (outside activation — spend on the chosen figure immediately).` };
         }
@@ -12393,6 +12436,7 @@ export function resolveAbility(abilityId, context) {
         dcName: targetName,
         threadId: null,
         bypassCosts: false,
+        allowAbilitySpend: true,
         msgId: targetMsgId,
         nextAction: wantsSpecial ? {
           type: 'freeSpecialPrompt',

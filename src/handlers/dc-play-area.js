@@ -5,7 +5,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, 
 import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
 import { openCcCounterWindow } from './cc-pipeline.js';
 import { runCcPlayTriggers } from './cc-hand.js';
-import { postMoveXPicker } from './move-x-handler.js';
+import { postMoveXPicker, clearPendingMoveX } from './move-x-handler.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -3423,6 +3423,22 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   // the picker now (async, needs ctx.client + logGameAction).
   if (resolveResult.pendingMoveXMsgId) {
     await postMoveXPicker(game, { client, logGameAction, saveGames }, resolveResult.pendingMoveXMsgId);
+  }
+  // allowAbilitySpend sync: if an MP-cost ability just drained from a
+  // pendingMoveX pool (consumeMovementPoints deducts pendingMoveX first),
+  // refresh the picker so the remaining count stays accurate.
+  if (resolveResult.applied && resolveResult.refreshMovementBank && !resolveResult.pendingMoveXMsgId) {
+    const _pxActive = game.pendingMoveX?.[msgId];
+    if (_pxActive?.allowAbilitySpend) {
+      if ((_pxActive.remaining ?? 0) <= 0) {
+        clearPendingMoveX(game, msgId);
+        await logGameAction?.(game, client,
+          `🦿 **${_pxActive.source}** — **${_pxActive.dcName}** has spent all granted MP.`,
+          { phase: 'ROUND', icon: 'attack' });
+      } else {
+        await postMoveXPicker(game, { client, logGameAction, saveGames }, msgId);
+      }
+    }
   }
   // ERG per-figure choices prompt (alexanbv 2026-05-11). Each affected
   // TROOPER with BOTH options viable gets a Recover/Discard pair.

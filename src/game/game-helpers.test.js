@@ -79,21 +79,7 @@ describe('expireImmediateMp', () => {
     assert.strictEqual(lost, 0);
     assert.deepStrictEqual(game.movementBank.msg1.perFig[0], { total: 4, remaining: 4 });
   });
-  it('restores _savedBankedMp after urgency window expires (Heart of Freedom + Urgency scenario)', () => {
-    // Simulates: HoF granted 2 banked MP, then Urgency granted 6 immediate MP.
-    // addMovementPoints saves the 2 banked MP in _savedBankedMp and puts only 6 in remaining.
-    const game = { movementBank: { msg1: { perFig: {
-      0: { total: 8, remaining: 4, _mustSpendImmediately: true, _savedBankedMp: 2 },
-    } } } };
-    const lost = expireImmediateMp(game, 'msg1', 0);
-    // 4 urgency MP discarded; 2 HoF MP restored into remaining
-    assert.strictEqual(lost, 4);
-    assert.deepStrictEqual(game.movementBank.msg1.perFig[0], { total: 8, remaining: 2 });
-    // _mustSpendImmediately cleared so banked MP is now freely spendable
-    assert.strictEqual(game.movementBank.msg1.perFig[0]._mustSpendImmediately, undefined);
-  });
-  it('discards entire entry when _savedBankedMp is 0 after urgency window', () => {
-    // No pre-existing banked MP; urgency is only MP source — entry should be dropped.
+  it('discards entire entry for any immediate-spend figure (no savedBankedMp restore)', () => {
     const game = { movementBank: { msg1: { perFig: {
       0: { total: 6, remaining: 3, _mustSpendImmediately: true },
     } } } };
