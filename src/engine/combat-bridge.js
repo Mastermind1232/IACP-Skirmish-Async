@@ -96,6 +96,7 @@ export async function applyNpcDamageToFigure(game, playerNum, figureKey, damage,
       amount: damage,
       controllerPlayerNum: playerNum,
       source: sourceLabel,
+      suppressDamageMessage: true,
     });
     const maxHp = dcHealthState.get(msgId)?.[figureIndex]?.[1] ?? 0;
     if (dcHealthState.get(msgId)?.[figureIndex]) {

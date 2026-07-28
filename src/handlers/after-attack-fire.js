@@ -665,11 +665,7 @@ async function fireElectroPulse(thread, game, combat, effect, ctx) {
         attackerFigureKey: combat.attackerFigureKey,
         source: 'Electro-pulse', combat,
       });
-      lines.push(`**${dcNameFromFigureKey(fk)}** suffers 1 Damage`);
     }
-  }
-  if (lines.length && logGameAction) {
-    await logGameAction(game, client, `⚡ **Electro-pulse** — Adjacent figures:\n${lines.join('\n')}`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
   }
 }
 
@@ -692,9 +688,6 @@ async function fireQuickStrike(thread, game, combat, effect, ctx) {
     attackerFigureKey: combat.attackerFigureKey,
     source: 'Quick Strike', combat,
   });
-  if (logGameAction) {
-    await logGameAction(game, client, `⚡ **Quick Strike** — Defender modified dice/results: **${combat.target.label}** suffers 1 Damage.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
-  }
 }
 
 /**

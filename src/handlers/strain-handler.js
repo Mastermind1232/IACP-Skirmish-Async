@@ -460,6 +460,7 @@ async function _applyDamageFromStrain(game, ctx, ev) {
     controllerPlayerNum: ev.originalControllerPN,
     source: `Strain (${ev.source})`,
     viaStrain: true,
+    suppressDamageMessage: true,
   });
   await logGameAction(game, client, `🩸 **Strain → Damage** — **${dcName}**: HP ${prevHp} → ${newHp}.`, { phase: 'ROUND', icon: 'card' });
   if (wasDefeated && processFigureDefeat) {

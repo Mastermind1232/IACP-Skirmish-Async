@@ -72,23 +72,22 @@ async function _emitDamageMessage(game, ctx, opts, applied) {
     : '';
   const defeatedTag = (typeof opts._newHp === 'number' && opts._newHp <= 0) ? ' **(defeated)**' : '';
   const msg = `💢 **${dcName}** suffers **${applied} Damage**${source}${hpNote}${defeatedTag}`;
-  // 1. ctx.thread first.
+  // 1. ctx.thread first (combat/interrupt thread).
   if (ctx.thread && typeof ctx.thread.send === 'function') {
     await ctx.thread.send(msg).catch(() => {});
-    return;
+  } else {
+    // 2. Active combat thread (fetch via client).
+    const combatThreadId = game?.pendingCombat?.combatThreadId;
+    if (combatThreadId && ctx.client && typeof ctx.client.channels?.fetch === 'function') {
+      try {
+        const t = await ctx.client.channels.fetch(combatThreadId);
+        if (t && typeof t.send === 'function') {
+          await t.send(msg).catch(() => {});
+        }
+      } catch { /* fall through to log */ }
+    }
   }
-  // 2. Active combat thread (fetch via client).
-  const combatThreadId = game?.pendingCombat?.combatThreadId;
-  if (combatThreadId && ctx.client && typeof ctx.client.channels?.fetch === 'function') {
-    try {
-      const t = await ctx.client.channels.fetch(combatThreadId);
-      if (t && typeof t.send === 'function') {
-        await t.send(msg).catch(() => {});
-        return;
-      }
-    } catch { /* fall through to log */ }
-  }
-  // 3. Game log fallback.
+  // 3. Always log to game log — players need a record of all damage taken.
   if (typeof ctx.logGameAction === 'function') {
     await ctx.logGameAction(game, ctx.client, msg, { phase: 'ROUND', icon: 'attack' }).catch(() => {});
   }
