@@ -826,6 +826,7 @@ export async function handleDcEndActivation(interaction, ctx) {
     logGameAction,
     maybeShowEndActivationPhaseButton,
     getDcActionButtons,
+    updateDcActionsMessage,
     client,
     saveGames,
   } = ctx;
@@ -1089,6 +1090,13 @@ export async function handleDcEndActivation(interaction, ctx) {
   // returns null.
   if (_slice3PairedActive) {
     saveGames(game.gameId);
+    // Refresh the still-active paired side's action message so its buttons
+    // reflect the now-cleared activation lock (cleanupActivation just released it).
+    if (typeof updateDcActionsMessage === 'function') {
+      await updateDcActionsMessage(game, _slice3PairedActive, client).catch((e) =>
+        console.error('[slice3] failed to refresh paired DC action message:', e?.message ?? e),
+      );
+    }
     return;
   }
 
