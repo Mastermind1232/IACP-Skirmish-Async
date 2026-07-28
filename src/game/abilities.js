@@ -16475,9 +16475,14 @@ function getFigureKeysForDcMsg(game, playerNum, meta) {
   const dcName = meta?.dcName;
   if (!dcName) return [];
   const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-  const dgIndex = dgMatch ? dgMatch[1] : '1';
-  const prefix = `${dcName}-${dgIndex}-`;
   const positions = game.figurePositions?.[playerNum] || {};
+  if (dgMatch) {
+    const prefix = `${dcName}-${dgMatch[1]}-`;
+    return Object.keys(positions).filter((k) => k.startsWith(prefix));
+  }
+  // No [Group N] tag: could be a companion (DG index 0) or a single-DG DC (DG index 1).
+  // Search all positions with the dcName prefix and let actual placement determine the result.
+  const prefix = `${dcName}-`;
   return Object.keys(positions).filter((k) => k.startsWith(prefix));
 }
 
