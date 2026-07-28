@@ -70,7 +70,7 @@ function _soaFigTokenComponents(gameId, descId, candidates, types, skipLabel, pi
 }
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
-import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt } from '../game/soa-orchestrator.js';
+import { findDescriptorInCurrentBucket, consumeDescriptor, skipCurrentBucket, describeChooserPrompt, startSoaResolution } from '../game/soa-orchestrator.js';
 import { grantMovementBank, grantPowerTokens } from '../game/game-helpers.js';
 import { healHp } from '../game/damage-helpers.js';
 import { registerStrainFollowup } from './strain-handler.js';
@@ -1015,6 +1015,30 @@ export async function handleSoaFire(interaction, ctx) {
       await updateDcActionsMessage(game, _hostMsgId, client).catch(discordCatch);
       if (_companionMsgId) await updateDcActionsMessage(game, _companionMsgId, client).catch(discordCatch);
     }
+    // Consume companion_order here (not at the shared bottom path) so we can
+    // control whether deferred SoA descriptors follow immediately.
+    consumeDescriptor(game, desc.id);
+    // Deferred host SoA descriptors (e.g. Into the Fray) were stored in
+    // pendingCompanionHostSoaDescriptors when companion_order was emitted.
+    // Host-first: fire them now. Child-first: leave stored for activation.js to
+    // pick up after the companion's partial-end (before Baze's buttons unlock).
+    const _pendingHostSoa = game.pendingCompanionHostSoaDescriptors?.[_hostMsgId];
+    if (_pendingHostSoa?.length && choiceKey === 'second') {
+      delete game.pendingCompanionHostSoaDescriptors[_hostMsgId];
+      const _soaInitPn = game.initiativePlayerNum ?? ownerPlayerNum;
+      const _soaStarted = startSoaResolution(game, _pendingHostSoa, _soaInitPn, {
+        activatorPlayerNum: ownerPlayerNum,
+        activatorMsgId: _hostMsgId,
+      });
+      if (_soaStarted) {
+        await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+        saveGames(game.gameId);
+        return;
+      }
+    }
+    await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+    saveGames(game.gameId);
+    return;
 
   // --- Advanced Weapons Research (Director Krennic) ---
   // choiceKey is `${figureKey}|damage` or `${figureKey}|surge`, or 'skip'.

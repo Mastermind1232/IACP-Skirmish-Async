@@ -854,6 +854,25 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
     }
   }
 
+  // companion_order must be the FIRST decision — before any other SoA triggers.
+  // Per alexanbv 2026-07-28: choosing who activates first cannot be deferred
+  // while other effects (Into the Fray, Vigor, etc.) fire simultaneously.
+  // When companion_order is present, store all other same-player descriptors in
+  // game.pendingCompanionHostSoaDescriptors[msgId] and return only companion_order.
+  // The stored descriptors fire for the host after companion_order resolves:
+  //   - host-first: triggered immediately in soa-handler.js after the order pick
+  //   - child-first: triggered in activation.js after the companion's partial-end
+  const _compOrderDesc = descriptors.find((d) => d.subPromptKey === 'companion_order');
+  if (_compOrderDesc && game) {
+    const _otherDescs = descriptors.filter((d) => d.subPromptKey !== 'companion_order' && d.ownerPlayerNum === _compOrderDesc.ownerPlayerNum);
+    if (_otherDescs.length > 0) {
+      game.pendingCompanionHostSoaDescriptors = game.pendingCompanionHostSoaDescriptors || {};
+      game.pendingCompanionHostSoaDescriptors[msgId] = _otherDescs;
+    }
+    // Keep any opponent-owned descriptors (non-companion_order) alongside companion_order.
+    return [_compOrderDesc, ...descriptors.filter((d) => d.ownerPlayerNum !== _compOrderDesc.ownerPlayerNum)];
+  }
+
   return descriptors;
 }
 

@@ -1089,6 +1089,42 @@ export async function handleDcEndActivation(interaction, ctx) {
   // repost). They fire when the SECOND side ends and the paired check
   // returns null.
   if (_slice3PairedActive) {
+    // Child-first companion order: after Child's partial-end, check whether the
+    // host (Baze) has deferred SoA descriptors (e.g. Into the Fray) that should
+    // fire now — before Baze's action buttons unlock. These were stored in
+    // pendingCompanionHostSoaDescriptors when companion_order was emitted.
+    const _pendingHostSoa = game.pendingCompanionHostSoaDescriptors?.[_slice3PairedActive];
+    if (_pendingHostSoa?.length) {
+      delete game.pendingCompanionHostSoaDescriptors[_slice3PairedActive];
+      try {
+        const { startSoaResolution: _startSoaRes, describeChooserPrompt: _soaDescPrompt } = await import('../game/soa-orchestrator.js');
+        const { ButtonBuilder: _SoaBB, ButtonStyle: _SoaBS, ActionRowBuilder: _SoaAR } = await import('discord.js');
+        const _hostMeta = dcMessageMeta?.get(_slice3PairedActive);
+        const _hostPn = _hostMeta?.playerNum ?? meta.playerNum;
+        const _soaInitPn = game.initiativePlayerNum ?? _hostPn;
+        const _soaStarted = _startSoaRes(game, _pendingHostSoa, _soaInitPn, {
+          activatorPlayerNum: _hostPn,
+          activatorMsgId: _slice3PairedActive,
+        });
+        if (_soaStarted) {
+          const _soaPrompt = _soaDescPrompt(game.pendingSoaResolution, game.gameId);
+          if (_soaPrompt) {
+            const _soaChannel = await fetchGameChannel(client, game.generalId).catch(() => null);
+            if (_soaChannel) {
+              const _soaButtons = _soaPrompt.choices.map((c) =>
+                new _SoaBB().setCustomId(c.customId).setLabel(c.label).setStyle(c.descId === '__skip_all__' ? _SoaBS.Secondary : _SoaBS.Primary),
+              );
+              await _soaChannel.send({
+                content: `✨ **Start-of-Activation** — Player ${_soaPrompt.ownerPlayerNum}: resolve effects for **${_hostMeta?.dcName || 'the host'}**.`,
+                components: [new _SoaAR().addComponents(_soaButtons)],
+              }).catch(discordCatch);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[slice3] failed to start deferred host SoA:', err?.message ?? err);
+      }
+    }
     saveGames(game.gameId);
     // Refresh the still-active paired side's action message so its buttons
     // reflect the now-cleared activation lock (cleanupActivation just released it).

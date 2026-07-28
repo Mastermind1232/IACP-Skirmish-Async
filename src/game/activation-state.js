@@ -153,6 +153,11 @@ const ACTIVATION_MSGID_FLAGS = [
   // activation end, matching their actual lifecycle.
   // activationDoubleSpecialAction MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS.
   'companionActivatedBefore',
+  // Deferred host SoA descriptors (e.g. Into the Fray) stored when companion_order
+  // is pending — companion_order must resolve first before other SoA triggers fire.
+  // Cleared when the host fires them (host-first) or after companion's partial-end
+  // triggers them (child-first). Safety-net cleanup at activation end.
+  'pendingCompanionHostSoaDescriptors',
   // falseOrdersAttackTargets MIGRATED 2026-05-13 → ACTIVATION_FIGKEY_FLAGS
   // (alexanbv: per-figure; the False Orders target list is for the
   // specific controlled figure's attack, not the whole group).
