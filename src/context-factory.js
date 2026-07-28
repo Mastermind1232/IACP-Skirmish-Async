@@ -164,7 +164,7 @@ const CONTEXT_GROUPS = {
     'ButtonBuilder', 'ActionRowBuilder', 'ButtonStyle',
     // After-attack-resolve fire handlers (slice 2b)
     'dcHealthState', 'logGameAction', 'replyIfGameEnded',
-    'dcMessageMeta', 'checkWinConditions',
+    'dcMessageMeta', 'checkWinConditions', 'processFigureDefeat',
     // gate_ability → playCC needs the ability resolver so after-attack CCs
     // (Escalating Hostility, …) actually apply (re-audit fix); applyAbilityResult
     // is imported directly by the fire handler.
