@@ -281,8 +281,11 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
   // one gate governs both. (Per-figureKey 2026-05-13.)
   if (game?.disruptorRiflePending?.[combat.attackerFigureKey] && combat._step7Hit && combat.target?.figureKey) {
     const _drIdx = parseFigureKey(combat.target.figureKey)?.figureIndex;
-    const _drCur = (combat.target.msgId != null && _drIdx != null)
-      ? deps?.dcHealthState?.get?.(combat.target.msgId)?.[_drIdx]?.[0]
+    // combat.target.msgId is not populated by computeAttackTargets; look it up.
+    const _drTargetMsgId = combat.target.msgId
+      ?? deps?.findDcMessageIdForFigure?.(game.gameId, combat.defenderPlayerNum, combat.target.figureKey);
+    const _drCur = (_drTargetMsgId != null && _drIdx != null)
+      ? deps?.dcHealthState?.get?.(_drTargetMsgId)?.[_drIdx]?.[0]
       : null;
     if (_drCur === 1) {
       enqueueAfterAttackEffect(combat, {
@@ -291,10 +294,7 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
         label: 'Disruptor Rifle: Execute (1 HP)',
       });
     } else if (_drCur == null) {
-      // Unreadable HP (missing deps / stale target msgId) must never silently
-      // eat the offer — fireDisruptorRifle rechecks eligibility at click time,
-      // so offering is safe; log loudly so the data problem surfaces.
-      console.error(`[after-attack-resolve] Disruptor Rifle: target HP unreadable (msgId=${combat.target.msgId}, fig=${combat.target.figureKey}) — offering with fire-time recheck.`);
+      console.error(`[after-attack-resolve] Disruptor Rifle: target HP unreadable (msgId=${_drTargetMsgId}, fig=${combat.target.figureKey}) — offering with fire-time recheck.`);
       enqueueAfterAttackEffect(combat, {
         side: 'attacker',
         type: 'disruptor_rifle',

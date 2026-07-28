@@ -604,7 +604,9 @@ async function fireDisruptorRifle(thread, game, combat, effect, ctx) {
     delete game.disruptorRiflePending[combat.attackerFigureKey];
   }
   const fk = combat.target?.figureKey;
-  const targetMsgId = combat.target?.msgId;
+  // combat.target.msgId is not populated by computeAttackTargets; look it up.
+  const targetMsgId = combat.target?.msgId
+    ?? ctx.findDcMessageIdForFigure?.(game.gameId, combat.defenderPlayerNum, fk);
   if (!fk || !targetMsgId) return;
   const { figureIndex } = parseFigureKey(fk);
   const hs = dcHealthState?.get?.(targetMsgId) || [];
