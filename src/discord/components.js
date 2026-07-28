@@ -1371,16 +1371,6 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // End Activation button in thread (mirrors dc_end_activation_ on DC card in play area)
   if (rows.length < 5) {
     const endActBtns = [];
-    // Multi-figure DG: "Done with 1A" button to finish this figure and pick the next
-    if (figures > 1 && selectedFigure != null) {
-      const _figLabel = `${dgIndex}${FIGURE_LETTERS[selectedFigure]}`;
-      endActBtns.push(
-        new ButtonBuilder()
-          .setCustomId(`dc_switch_fig_${msgId}`)
-          .setLabel(`Done with ${_figLabel}`)
-          .setStyle(ButtonStyle.Primary)
-      );
-    }
     const endLabel = figures > 1 ? 'End Group Activation' : 'End Activation';
     endActBtns.push(
       new ButtonBuilder()

@@ -31,7 +31,7 @@ import { handleThugPick, handleThugDest } from './thug-movement.js';
 import { handleMoveXStep, handleMoveXRotate, handleMoveXDone, handleMoveXSeqPick, handleGrantedMoveX, handleOnAMissionPush, handleCrushPick } from './move-x-handler.js';
 import { handleAttackTarget, handleTargetSquarePick, handleCombatRoll, handleCombatSurge, handleCleaveTarget, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, handleCoverFireBlock, handleCoverFireDiscard, handleZilloPierceCancel, handleRogueOneTokenPick, handleUnhingedDirectorChoice, handleDbhPickDie, handleOnDeclareDieSwap, handleBlFriendlyPick, handleCqDefPick, handleMerciless, handleAtkDiePick, handleFlawlessDie, handleFlawlessToken, handleModsPick, handleModsSubChoice, handleToughLuckGate, handleToughLuckFinalPick, handleDonGate, handleSquadCommandFocus } from './combat.js';
 import { handleAarFire, handleAarDone, handleAarPlayCc, handleAarCcPick } from './after-attack-resolve.js';
-import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
+import { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortDraw, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip, handleItWillBeAlrightUse, handleItWillBeAlrightSkip, handleItWillBeAlrightPick, handleItWillBeAlrightAction } from './activation.js';
 import {
   handleMapSelection,
   handleMapTypeChoice,
@@ -381,7 +381,6 @@ register('act_passive_', handleActPassive, 'activation');
 register('status_phase_', handleStatusPhase, 'activation');
 register('pass_activation_turn_', handlePassActivationTurn, 'activation');
 register('end_turn_', handleEndTurn, 'activation');
-register('dc_switch_fig_', handleDcSwitchFig, 'activation');
 register('dc_end_activation_', handleDcEndActivation, 'activation');
 register('clan_of_two_teleport_', handleClanOfTwoTeleport, 'activation');
 register('confirm_activate_', handleConfirmActivate, 'activation');
@@ -819,7 +818,7 @@ export {
 } from './post-deploy.js';
 export { handleMoveMp, handleMoveAdjustMp, handleMovePick, handleMoveStepModeToggle, handleMoveInterruptPlay, handleMoveInterruptSkip, handleOverwatchInterruptUse, handleOverwatchInterruptSkip } from './movement.js';
 export { handleAttackTarget, handleCleaveTarget, handleCoverFireBlock, handleCoverFireDiscard, handleCombatRoll, handleCombatSurge, handleCombatToken, handlePowerTokenChoice, handlePowerTokenOverflowDiscard, sendPowerTokenOverflowUI, handleSpreadThePainCondPick, handleFalseOrdersAtkPick, sendReadyToResolveRolls, handleRogueOneTokenPick, sendOnDeclareTokenWindow } from './combat.js';
-export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleDcSwitchFig, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip} from './activation.js';
+export { handleStatusPhase, handlePassActivationTurn, handleEndTurn, handleDcEndActivation, handleClanOfTwoTeleport, handleConfirmActivate, handleCancelActivate, handleActPassive, handleFieldTacticsPick, handleForceVisionPick, handleLiaDeployZone, handleHeroicEffortReturn, handleScavWeaponTransfer, handleScFigPick, handleHairTriggerUse, handleHairTriggerSkip} from './activation.js';
 export {
   handleMapSelection,
   handleMapTypeChoice,
