@@ -1696,8 +1696,15 @@ export async function handleSoaFire(interaction, ctx) {
     return;
   }
 
-  consumeDescriptor(game, desc.id);
+  // Capture activatorMsgId before consumeDescriptor potentially clears
+  // pendingSoaResolution — needed to re-enable action buttons after the last
+  // descriptor is consumed (isActivationActionInProgress checks pendingSoaResolution).
+  const _activatorMsgId = game.pendingSoaResolution?.activationContext?.activatorMsgId;
+  const { exhausted: _soaExhausted } = consumeDescriptor(game, desc.id);
   await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+  if (_soaExhausted && _activatorMsgId && typeof updateDcActionsMessage === 'function') {
+    await updateDcActionsMessage(game, _activatorMsgId, client).catch(discordCatch);
+  }
   saveGames(game.gameId);
 }
 
@@ -1706,7 +1713,7 @@ export async function handleSoaFire(interaction, ctx) {
  * bucket, advance to the next bucket (or finish).
  */
 export async function handleSoaSkipAll(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client, updateDcActionsMessage } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const gameId = parseCustomId(interaction.customId, 'soa_skip_all_');
   const game = await requireGame(interaction, getGame, gameId);
@@ -1716,7 +1723,11 @@ export async function handleSoaSkipAll(interaction, ctx) {
   const bucket = r.buckets[r.currentBucketIdx];
   if (!await requirePlayer(interaction, game, interaction.user.id, bucket.ownerPlayerNum, canActAsPlayer, 'Only the bucket owner may skip.')) return;
   await interaction.message.edit({ content: '\u{2728} Skipped all remaining SoA triggers in this bucket.', components: [] }).catch(discordCatch);
-  skipCurrentBucket(game);
+  const _skipActivatorMsgId = game.pendingSoaResolution?.activationContext?.activatorMsgId;
+  const _skipExhausted = skipCurrentBucket(game);
   await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+  if (_skipExhausted && _skipActivatorMsgId && typeof updateDcActionsMessage === 'function') {
+    await updateDcActionsMessage(game, _skipActivatorMsgId, client).catch(discordCatch);
+  }
   saveGames(game.gameId);
 }

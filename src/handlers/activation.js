@@ -1109,7 +1109,10 @@ export async function handleDcEndActivation(interaction, ctx) {
         if (_soaStarted) {
           const _soaPrompt = _soaDescPrompt(game.pendingSoaResolution, game.gameId);
           if (_soaPrompt) {
-            const _soaChannel = await fetchGameChannel(client, game.generalId).catch(() => null);
+            // Post to the host's activation thread so SoA stays in context with
+            // the figure, not the game log. Fall back to generalId if no thread.
+            const _hostThreadId = game.dcActionsData?.[_slice3PairedActive]?.threadId;
+            const _soaChannel = await fetchGameChannel(client, _hostThreadId || game.generalId).catch(() => null);
             if (_soaChannel) {
               const _soaButtons = _soaPrompt.choices.map((c) =>
                 new _SoaBB().setCustomId(c.customId).setLabel(c.label).setStyle(c.descId === '__skip_all__' ? _SoaBS.Secondary : _SoaBS.Primary),
