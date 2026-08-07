@@ -306,8 +306,26 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
       playerNum: defenderPlayerNum,
       combat,
     });
-    if (_defMods.block) combat.bonusBlock = (combat.bonusBlock || 0) + _defMods.block;
-    if (_defMods.evade) combat.bonusEvade = (combat.bonusEvade || 0) + _defMods.evade;
+    if (_defMods.block) {
+      combat.bonusBlock = (combat.bonusBlock || 0) + _defMods.block;
+      for (const _rms of (_defMods.sources || [])) {
+        const _rmd = (game.activeRoundModifiers || []).find((m) => m.id === _rms.id);
+        if (_rmd?.effect?.block) {
+          combat.bonusBlockSources = combat.bonusBlockSources || [];
+          combat.bonusBlockSources.push({ label: _rms.card, amount: _rmd.effect.block, type: 'round' });
+        }
+      }
+    }
+    if (_defMods.evade) {
+      combat.bonusEvade = (combat.bonusEvade || 0) + _defMods.evade;
+      for (const _rms of (_defMods.sources || [])) {
+        const _rmd = (game.activeRoundModifiers || []).find((m) => m.id === _rms.id);
+        if (_rmd?.effect?.evade) {
+          combat.bonusEvadeSources = combat.bonusEvadeSources || [];
+          combat.bonusEvadeSources.push({ label: _rms.card, amount: _rmd.effect.evade, type: 'round' });
+        }
+      }
+    }
     if (_defMods.accuracyPenalty) combat.defenderAccuracyPenalty = (combat.defenderAccuracyPenalty || 0) + _defMods.accuracyPenalty;
     // Personal Energy Shield: +N Block per Evade result (self figure only).
     if (_defMods.blockPerEvade && combat.defenseRoll) {
@@ -412,7 +430,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
       await logGameAction(game, client, `🔫 **Experimental Weapons** — **${combat.target.label}** carries a weapon prototype: ${_wpRule > 0 ? '+' : ''}${_wpRule} Block to defense.`, { phase: 'ROUND', icon: 'attack' });
     }
   }
-  let { hit, damage, resultText } = computeCombatResult(combat);
+  let { hit, damage, resultText, calcNote } = computeCombatResult(combat);
   const totalBlast = (combat.surgeBlast || 0) + (combat.bonusBlast || 0);
   const attackerPlayerNum = combat.attackerPlayerNum;
   // Store target + adjacent spaces for Reduce to Rubble (only when attack hit)
@@ -452,7 +470,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
   // does both internally; marking at-entry gives the telemetry a useful
   // high-water-mark even if finer transitions land later.
   if (combat.currentStep === 'step6') combat.currentStep = 'step7';
-  await _applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
+  await _applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, calcNote, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client);
   if (combat.currentStep === 'step7') combat.currentStep = 'step8';
 }
 
@@ -605,7 +623,7 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
  * Apply damage, conditions, defeat logic, and finish combat resolution.
  * Called from resolveCombatAfterRolls and handleFigureheadDecision.
  */
-export async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client, deps) {
+export async function applyDamageAndFinishCombat(game, combat, { damage, hit, resultText, calcNote, totalBlast, defenderPlayerNum, attackerPlayerNum, ownerId, targetMsgId, targetFigIndex }, client, deps) {
   const {
     logGameAction, saveGames, dcHealthState, dcMessageMeta,
     dcNameFromFigureKey, parseFigureKey, opponentPlayerNum, discordCatch,
@@ -713,6 +731,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
       combat._step7Hit = hit;
       combat._step7Damage = damage;
       combat._step8Conditions = []; // objects don't receive conditions (CRR p.13)
+      if (calcNote && hit) resultText += `\n${calcNote}`;
       await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds: new Set(), ownerId, defenderPlayerNum }, client, deps);
       return;
     }
@@ -766,6 +785,7 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
     combat._step7Hit = hit;
     combat._step7Damage = damage;
     combat._step8Conditions = _npcStep8Conditions;
+    if (calcNote && hit) resultText += `\n${calcNote}`;
     await _runOrDeferAfterResolve(thread, game, combat, { resultText, embedRefreshMsgIds: new Set(), ownerId, defenderPlayerNum }, client, deps);
     return;
   }
@@ -835,6 +855,9 @@ export async function applyDamageAndFinishCombat(game, combat, { damage, hit, re
         combat,
       });
       newCur = _mdResult.newHp;
+      // Send damage calc to the combat thread at the suffer-damage step so it
+      // appears right after "suffered X damage", not after all post-attack effects.
+      if (calcNote && thread) await thread.send(calcNote).catch(() => {});
       // Mark damage applied on the combat frame so a subsequent re-entry
       // (handleExtraProtection → applyDamageAndFinishCombat) can detect
       // first-pass-already-ran and skip re-applying damage. Per-combat

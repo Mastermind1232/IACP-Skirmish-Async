@@ -47,7 +47,7 @@ describe('PROBE-PD-ATK-038: False Orders consequences — resolver rolls control
 
   it('038b: source — controlled figure\'s passives are applied to pendingCombat (resolver can use any of the figure\'s abilities)', () => {
     assert.match(COMBAT_SRC,
-      /applyDcPassivesToCombat\(game\.pendingCombat, controlledStats\?\.passives \|\| \[\], targetStats\?\.passives \|\| \[\]\);/,
+      /applyDcPassivesToCombat\(game\.pendingCombat, controlledStats\?\.passives \|\| \[\], targetStats\?\.passives \|\| \[\]/,
       'CONTROLLED figure\'s passives must seed pendingCombat (resolver uses figure\'s keywords/surges) — CRR-ATK-038');
   });
 

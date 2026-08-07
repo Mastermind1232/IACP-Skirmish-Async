@@ -2290,8 +2290,18 @@ function _makeTokenResolver({ side }) {
       let msg = '';
       if (tok.type === 'Damage') { combat.bonusHits = (combat.bonusHits || 0) + 1; msg = '+1 Damage'; }
       else if (tok.type === 'Surge') { combat.surgeBonus = (combat.surgeBonus || 0) + 1; msg = '+1 Surge'; }
-      else if (tok.type === 'Block') { combat.bonusBlock = (combat.bonusBlock || 0) + 1; msg = '+1 Block'; }
-      else if (tok.type === 'Evade') { combat.bonusEvade = (combat.bonusEvade || 0) + 1; msg = '+1 Evade'; }
+      else if (tok.type === 'Block') {
+        combat.bonusBlock = (combat.bonusBlock || 0) + 1;
+        combat.bonusBlockSources = combat.bonusBlockSources || [];
+        combat.bonusBlockSources.push({ label: 'Block token', amount: 1, type: 'token' });
+        msg = '+1 Block';
+      }
+      else if (tok.type === 'Evade') {
+        combat.bonusEvade = (combat.bonusEvade || 0) + 1;
+        combat.bonusEvadeSources = combat.bonusEvadeSources || [];
+        combat.bonusEvadeSources.push({ label: 'Evade token', amount: 1, type: 'token' });
+        msg = '+1 Evade';
+      }
       // Personal Combat Shield (Gar Saxon): a Block token spent while defending → +1 Evade.
       // (Bo-Katan lost Personal Combat Shield in the IACP 2026-06-21 update — she now has
       // Beskar Armor instead, so personal_combat_shield_bokatan is no longer present.)
@@ -3938,7 +3948,10 @@ export async function handleAttackTarget(interaction, ctx) {
     if (_fCard?.combatPassives) attackerPassives.push(..._fCard.combatPassives);
   }
   const defenderPassives = target.isNpc ? [] : (targetStats.passives || []);
-  applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives);
+  applyDcPassivesToCombat(game.pendingCombat, attackerPassives, defenderPassives, {
+    attackerDcName: meta.dcName,
+    defenderDcName: target.isNpc ? '' : targetDcName,
+  });
 
   // Blood Feud: persistent +1 Hit when attacking a DC marked with Blood Feud
   if (game.bloodFeudTargets?.[target.msgId] === attackerPlayerNum) {
@@ -5942,7 +5955,8 @@ const isWithinSpaces = _isWithinSpaces;
  * Combined entries (e.g. "+1 Hit, +1 Accuracy, +1 Block") split by comma —
  * each part is applied to whichever role is relevant.
  */
-function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
+function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives, dcNames = {}) {
+  const { defenderDcName = '' } = dcNames;
   const parts = (str) => str.split(',').map((s) => s.trim().toLowerCase());
 
   for (const passive of (attackerPassives || [])) {
@@ -5964,8 +5978,26 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives) {
 
   for (const passive of (defenderPassives || [])) {
     for (const p of parts(passive)) {
-      const blk  = p.match(/^(?:block\s+(\d+)|\+(\d+)\s+block)$/i); if (blk) { combat.bonusBlock = (combat.bonusBlock || 0) + parseInt(blk[1] ?? blk[2], 10); continue; }
-      const evd  = p.match(/^\+(\d+)\s+evade$/);      if (evd)    { combat.bonusEvade     = (combat.bonusEvade     || 0) + parseInt(evd[1],    10); continue; }
+      const blk  = p.match(/^(?:block\s+(\d+)|\+(\d+)\s+block)$/i);
+      if (blk) {
+        const _blkAmt = parseInt(blk[1] ?? blk[2], 10);
+        combat.bonusBlock = (combat.bonusBlock || 0) + _blkAmt;
+        if (defenderDcName) {
+          combat.bonusBlockSources = combat.bonusBlockSources || [];
+          combat.bonusBlockSources.push({ label: defenderDcName, amount: _blkAmt, type: 'innate' });
+        }
+        continue;
+      }
+      const evd  = p.match(/^\+(\d+)\s+evade$/);
+      if (evd) {
+        const _evdAmt = parseInt(evd[1], 10);
+        combat.bonusEvade = (combat.bonusEvade || 0) + _evdAmt;
+        if (defenderDcName) {
+          combat.bonusEvadeSources = combat.bonusEvadeSources || [];
+          combat.bonusEvadeSources.push({ label: defenderDcName, amount: _evdAmt, type: 'innate' });
+        }
+        continue;
+      }
       // Professional is "While attacking, reroll 1 attack die" — attack-only.
       // Removed defender-side branch 2026-05-06 per destruct's clarification:
       // it incorrectly granted defense rerolls to figures (Royal Guard etc.)
@@ -8615,7 +8647,10 @@ export async function handleFalseOrdersAtkPick(interaction, ctx) {
   };
   const controlledEff = getDcEffect(controlledName);
   const defEff = getDcEffect(targetDcName);
-  applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || []);
+  applyDcPassivesToCombat(game.pendingCombat, controlledStats?.passives || [], targetStats?.passives || [], {
+    attackerDcName: controlledName,
+    defenderDcName: targetDcName,
+  });
   const abilityLabel = fo.isLure ? 'Lure of the Dark Side' : 'False Orders';
   await interaction.message.edit({ content: `**${abilityLabel} — Attack declared**. See thread in Game Log.`, components: [] }).catch(discordCatch);
   if (logGameAction) await logGameAction(game, client, `⚔️ **${abilityLabel}** — **${controllerUserName}** controlling **${controlledName}** attacks **${targetDcName}**.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);

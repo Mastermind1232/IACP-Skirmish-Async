@@ -576,11 +576,27 @@ export function computeCombatResult(combat) {
   let details = `Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
   if (bonusAcc) details += ` | bonus: +${bonusAcc} acc`;
   if (bonusHits || perDefDieDamage) details += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
-  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) details += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
+  if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) {
+    if ((combat.bonusBlockSources || []).length) {
+      for (const _bbs of combat.bonusBlockSources) {
+        details += ` | ${_bbs.label}: ${_bbs.amount > 0 ? '+' : ''}${_bbs.amount} Block${_bbs.type ? ` (${_bbs.type})` : ''}`;
+      }
+    } else {
+      details += ` | bonus: ${bonusBlock > 0 ? '+' : ''}${bonusBlock} Block`;
+    }
+  }
   if (cunningBonus) details += ` | **Cunning**: +${cunningBonus} Block (from ${cunningEvadeTotal} evade)`;
   if (combat.ignoreDefenseResultsNotOnDice) details += ' | CC: ignore defense not on dice';
   if (evadeCancelled > 0) details += ` | Evade cancelled ${evadeCancelled} surge`;
-  if (bonusEvade) details += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;
+  if (bonusEvade) {
+    if ((combat.bonusEvadeSources || []).length) {
+      for (const _bes of combat.bonusEvadeSources) {
+        details += ` | ${_bes.label}: ${_bes.amount > 0 ? '+' : ''}${_bes.amount} Evade${_bes.type ? ` (${_bes.type})` : ''}`;
+      }
+    } else {
+      details += ` | bonus: ${bonusEvade > 0 ? '+' : ''}${bonusEvade} Evade`;
+    }
+  }
   if (bonusPierce) details += ` | bonus: +${bonusPierce} pierce`;
   if (bonusBlast) details += ` | bonus: Blast ${bonusBlast}`;
   if ((combat.bonusConditions || []).length) details += ` | CC bonus: ${combat.bonusConditions.join(', ')}`;
@@ -598,20 +614,22 @@ export function computeCombatResult(combat) {
   if (defenderAccPenalty) details += ` | **CC** (defender -${defenderAccPenalty} accuracy)`;
   if (defRoll.dodge && combat.surgeCancelDodge) details += ` | **Deadly**: Dodge cancelled`;
   if (defRoll.dodge && combat.surgeDeadlySpinDodge) details += ` | **Deadly Spin**: -1 Dodge`;
-  // Show the damage math (alexanbv 2026-06-26: "list total damage results minus
-  // total block results — show the work for your damage calculation").
+  // Build the damage math note (alexanbv 2026-06-26 / 2026-07-20).
+  // Returned separately as `calcNote` so the engine can send it at the
+  // suffer-damage step (right after _applyDamage) rather than bundled into
+  // the finishCombatResolution message that arrives after all post-attack effects.
+  let calcNote = '';
   if (hit) {
     const _totalDmgResults = (roll.dmg || 0) + (surgeD || 0) + (bonusHits || 0) + (perDefDieDamage || 0);
     const _blkAdj = [];
     if (pierceToUse > 0) _blkAdj.push(`−${pierceToUse} Pierce`);
     if (surgeCancel > 0) _blkAdj.push(`−${surgeCancel} Cancel`);
     const _blkNote = _blkAdj.length ? ` (${blockForCalc} block ${_blkAdj.join(' ')})` : '';
-    let _calc = `🧮 **Damage:** ${_totalDmgResults} damage − ${effectiveBlock} block${_blkNote}`;
-    if (defenderDamageReduction > 0) _calc += ` − ${defenderDamageReduction} reduction`;
-    _calc += ` = **${damage}**`;
-    details += `\n${_calc}`;
+    calcNote = `🧮 **Damage:** ${_totalDmgResults} damage − ${effectiveBlock} block${_blkNote}`;
+    if (defenderDamageReduction > 0) calcNote += ` − ${defenderDamageReduction} reduction`;
+    calcNote += ` = **${damage}**`;
   }
   let resultText = `${headline}\n${details}`;
 
-  return { hit, damage, effectiveBlock, resultText };
+  return { hit, damage, effectiveBlock, resultText, calcNote };
 }
