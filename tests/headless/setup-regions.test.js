@@ -468,11 +468,11 @@ describe('Companion Deployment: companionHostMap structure', () => {
   it('companionHostMap maps companionKey to { hostFigureKey, playerNum }', () => {
     const game = {
       companionHostMap: {
-        'The Child-0-0': { hostFigureKey: 'Din Djarin-0-0', playerNum: 1 },
+        'The Child-1-0': { hostFigureKey: 'Din Djarin-1-0', playerNum: 1 },
       },
     };
-    const entry = game.companionHostMap['The Child-0-0'];
-    assert.equal(entry.hostFigureKey, 'Din Djarin-0-0');
+    const entry = game.companionHostMap['The Child-1-0'];
+    assert.equal(entry.hostFigureKey, 'Din Djarin-1-0');
     assert.equal(entry.playerNum, 1);
   });
 
@@ -484,25 +484,25 @@ describe('Companion Deployment: companionHostMap structure', () => {
 
 describe('Companion Deployment: figureKey format', () => {
   it('companion figureKey follows CompanionName-dgIdx-figIdx pattern', () => {
-    const key = 'The Child-0-0';
+    const key = 'The Child-1-0';
     const parts = key.split('-');
     // Last two segments are dgIdx and figIdx
     const figIdx = parts.pop();
     const dgIdx = parts.pop();
     const name = parts.join('-');
     assert.equal(name, 'The Child');
-    assert.equal(dgIdx, '0');
+    assert.equal(dgIdx, '1');
     assert.equal(figIdx, '0');
   });
 
   it('companion names with hyphens parse correctly (e.g. J4X-7)', () => {
-    const key = 'J4X-7-0-0';
+    const key = 'J4X-7-1-0';
     const parts = key.split('-');
     const figIdx = parts.pop();
     const dgIdx = parts.pop();
     const name = parts.join('-');
     assert.equal(name, 'J4X-7');
-    assert.equal(dgIdx, '0');
+    assert.equal(dgIdx, '1');
     assert.equal(figIdx, '0');
   });
 });

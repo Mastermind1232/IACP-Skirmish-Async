@@ -94,11 +94,11 @@ describe('deployCompanionFigure — programmatic companion deploy (mirrors The C
       deps,
     );
     assert.equal(r.ok, true);
-    assert.equal(r.companionKey, 'J4X-7-0-0');
+    assert.equal(r.companionKey, 'J4X-7-1-0');
     // Placed at the host's space ("your space").
-    assert.equal(game.figurePositions[1]['J4X-7-0-0'], 'd5', 'J4X-7 placed in Jarrod Kelvin\'s space');
+    assert.equal(game.figurePositions[1]['J4X-7-1-0'], 'd5', 'J4X-7 placed in Jarrod Kelvin\'s space');
     // Host map recorded (same shape as handleCompanionDeployPick).
-    assert.deepEqual(game.companionHostMap['J4X-7-0-0'], { hostFigureKey: 'Jarrod Kelvin-1-0', playerNum: 1 });
+    assert.deepEqual(game.companionHostMap['J4X-7-1-0'], { hostFigureKey: 'Jarrod Kelvin-1-0', playerNum: 1 });
     // Companion registered at the host's index (parallel-array fallback).
     assert.equal(game.p1DcCompanionMessageIds[0], 'msg-comp', 'companion msgId stored at host index');
     assert.equal(embedBuilt, true, 'the SAME _createCompanionDcEmbed routine ran (DC embed built)');

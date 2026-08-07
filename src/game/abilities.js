@@ -2669,7 +2669,7 @@ export function resolveAbility(abilityId, context) {
         if (game.movementBank?.[_swJdMsgId]) delete game.movementBank[_swJdMsgId];
       }
       // Place new JD at chosen space.
-      const _swNewFk = 'Junk Droid-0-0';
+      const _swNewFk = 'Junk Droid-1-0';
       if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
       game.figurePositions[playerNum][_swNewFk] = String(chosenSpace).toLowerCase();
       game.companionHostMap = game.companionHostMap || {};
@@ -12119,7 +12119,7 @@ export function resolveAbility(abilityId, context) {
         }
         const _dioMsgId = _hostIdx >= 0 ? (_compIds?.[_hostIdx] || null) : null;
         // Deploy Dio at playing figure's position.
-        const _dioFigureKey = 'Dio-0-0';
+        const _dioFigureKey = 'Dio-1-0';
         if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
         game.figurePositions[playerNum][_dioFigureKey] = playingPos;
         game.companionHostMap = game.companionHostMap || {};

@@ -1482,11 +1482,11 @@ describe('Region 5: Companion Deployment -- companion data validation', () => {
     assert.ok(crumb, 'Salacious B. Crumb should exist in dc-effects');
   });
 
-  it('companion figure key format is name-0-0', () => {
-    // As coded in post-deploy.js: `${companionName}-0-0`
-    const childKey = 'The Child-0-0';
+  it('companion figure key format is name-1-0', () => {
+    // As coded in post-deploy.js: `${companionName}-1-0` (dgIndex=1, figureIndex=0)
+    const childKey = 'The Child-1-0';
     assert.ok(childKey.startsWith('The Child-'), 'should start with companion name');
-    assert.ok(childKey.endsWith('-0-0'), 'should end with -0-0');
+    assert.ok(childKey.endsWith('-1-0'), 'should end with -1-0');
   });
 
   it('all attachment-based companions have unique: true on their attachment', () => {

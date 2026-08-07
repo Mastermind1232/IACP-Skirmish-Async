@@ -326,7 +326,7 @@ async function resolveAutoAbility(game, ability, client, logGameAction) {
       const companionName = ability.companionName;
       const hostPos = game.figurePositions?.[playerNum]?.[figureKey];
       if (hostPos && companionName) {
-        const companionKey = `${companionName}-0-0`;
+        const companionKey = `${companionName}-1-0`;
         if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
         game.figurePositions[playerNum][companionKey] = hostPos;
         game[`companionDeployed_${ability.msgId}`] = true;
@@ -431,7 +431,7 @@ export async function deployCompanionFigure(game, d, client, deps) {
   const hostPos = game.figurePositions?.[playerNum]?.[hostFigureKey];
   if (!hostPos) return { ok: false }; // host not on board → cannot place
   const normSpace = normalizeCoord(d.space || hostPos); // CSV: "into your space" (host space)
-  const companionKey = `${companionName}-0-0`;
+  const companionKey = `${companionName}-1-0`;
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figurePositions[playerNum][companionKey] = normSpace;
 
@@ -1986,7 +1986,7 @@ export async function handleCompanionDeployPick(interaction, ctx) {
   }
 
   const normSpace = normalizeCoord(space);
-  const companionKey = `${active.companionName}-0-0`;
+  const companionKey = `${active.companionName}-1-0`;
   if (!game.figurePositions[playerNum]) game.figurePositions[playerNum] = {};
   game.figurePositions[playerNum][companionKey] = normSpace;
   game[`companionDeployed_${active.msgId}`] = true;

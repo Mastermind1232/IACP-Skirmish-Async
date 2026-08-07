@@ -338,7 +338,7 @@ describe('DG: Companion rules', () => {
   });
 
   it('companion figureKey format is correct', () => {
-    const companionKey = 'The Child-0-0';
+    const companionKey = 'The Child-1-0';
     const dcName = dcNameFromFigureKey(companionKey);
     assert.strictEqual(dcName, 'The Child');
   });
