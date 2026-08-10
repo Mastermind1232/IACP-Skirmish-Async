@@ -406,6 +406,53 @@ export async function openCcCounterWindow(game, gameId, play, ctx, client) {
   await _promptCounterResponder(game, gameId, ctx, client);
 }
 
+// ── Public wait-status line ──────────────────────────────────────────────────
+// The responder's Negate/Comms prompt is sent to their PRIVATE hand channel, so
+// the player who played the card got no signal at all and could not tell why the
+// game had paused (corndog19 2026-08-10). Post one status line in the game log
+// when the window opens and EDIT it in place as the stack grows and resolves —
+// edit rather than delete, per the 2026-06-23 keep-messages policy.
+//
+// Safe to show publicly: the responder prompt is itself gated on PUBLIC info
+// only (card cost + SPY-group count, see _promptCounterResponder), so neither
+// this line's presence nor its absence leaks hand contents.
+async function _setCcWaitStatus(game, client, content) {
+  if (!client || client._isFakeClient || !game?.generalId) return;
+  try {
+    const ch = await fetchGameChannel(client, game.generalId);
+    if (!ch) return;
+    const body = `\u{1F0CF} ${content}`;
+    if (game._ccCounterStatusMsgId) {
+      const existing = await ch.messages?.fetch(game._ccCounterStatusMsgId).catch(() => null);
+      if (existing) {
+        await existing.edit({ content: body }).catch(discordCatch);
+        return;
+      }
+    }
+    const sent = await ch.send({ content: body }).catch(() => null);
+    if (sent) game._ccCounterStatusMsgId = sent.id;
+  } catch { /* status line is best-effort — never block the counter window */ }
+}
+
+/** Write the final outcome into the wait-status line, then stop tracking it. */
+async function _closeCcWaitStatus(game, client, outcome) {
+  if (!game._ccCounterStatusMsgId) return;
+  const base = outcome?.[0];
+  let summary;
+  if (!base) {
+    summary = 'Counter-window closed.';
+  } else if (base.status === 'cancelled') {
+    const canceller = outcome[1];
+    summary = `\u{1F6AB} **${base.card}** was cancelled${canceller ? ` by **${canceller.card}**` : ''} — effects suppressed.`;
+  } else if (outcome.length > 1) {
+    summary = `\u{2705} **${base.card}** resolves — the counter against it was itself cancelled.`;
+  } else {
+    summary = `\u{2705} **${base.card}** resolves — no counter was played.`;
+  }
+  await _setCcWaitStatus(game, client, summary);
+  delete game._ccCounterStatusMsgId;
+}
+
 async function _promptCounterResponder(game, gameId, ctx, client) {
   const responder = counterResponder(game);
   if (!responder) { await _resolveCcCounterWindow(game, gameId, ctx, client); return; }
@@ -435,6 +482,9 @@ async function _promptCounterResponder(game, gameId, ctx, client) {
     allowedMentions: { users: [ownerId] },
     components: [new ActionRowBuilder().addComponents(btns)],
   })).catch(discordCatch);
+  // Tell the rest of the table why play has paused (the prompt above is private).
+  await _setCcWaitStatus(game, client,
+    `\u{23F3} **${top.card}** (P${top.playedBy}) — waiting on **P${responder}** to cancel it or pass.`);
 }
 
 async function _playCounter(interaction, ctx, counterCard) {
@@ -558,6 +608,7 @@ async function _resolveCcCounterWindow(game, gameId, ctx, client) {
     };
     await _offerScThenResolveDeferredCc(game, ctx, client);
   }
+  await _closeCcWaitStatus(game, client, outcome);
   if (ctx.checkWinConditions) await ctx.checkWinConditions(game, client);
   if (queryResolve) {
     queryResolve({ cancelled: queryCancelled });
