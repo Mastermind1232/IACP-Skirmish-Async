@@ -772,6 +772,17 @@ export async function handleAarFire(interaction, ctx) {
   if (!game) return;
   const combat = game.pendingCombat;
   if (!combat) return;
+  // Permission check BEFORE disabling buttons or consuming the effect —
+  // wrong player clicking would otherwise disable the button and lock out
+  // the rightful owner (effect was re-enqueued but window was gone).
+  const effectPeek = (combat.afterAttackEffects || []).find((e) => e.id === effectId);
+  if (effectPeek) {
+    const peekOwnerPN = effectPeek.side === 'attacker'
+      ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+      : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+    const peekOwnerId = getPlayerId(game, peekOwnerPN);
+    if (peekOwnerId && interaction.user.id !== peekOwnerId && !game.isTestGame) return;
+  }
   // Disable buttons on the source message — prevents double-clicks.
   try {
     const newRows = (interaction.message?.components || []).map((row) => {
@@ -785,14 +796,12 @@ export async function handleAarFire(interaction, ctx) {
   if (!effect) return;
   const thread = await fetchCombatThread(client, combat.combatThreadId);
   if (!thread) return;
-  // Permission: only the side's owner may click their button.
+  // Secondary permission guard (defence in depth, e.g. isTestGame override path).
   const ownerPN = effect.side === 'attacker'
     ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
     : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
   const ownerId = getPlayerId(game, ownerPN);
   if (ownerId && interaction.user.id !== ownerId && !game.isTestGame) {
-    // Not the right player — re-enqueue the effect so the rightful
-    // owner can still click it.
     enqueueAfterAttackEffect(combat, effect);
     saveGames?.(game.gameId);
     return;
@@ -825,7 +834,14 @@ export async function handleAarDone(interaction, ctx) {
   if (!game) return;
   const combat = game.pendingCombat;
   if (!combat) return;
-  // Disable buttons on the source message.
+  // Permission check BEFORE disabling buttons — wrong player clicking would
+  // otherwise disable the button and lock out the rightful owner.
+  const ownerPN = side === 'attacker'
+    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
+    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
+  const ownerId = getPlayerId(game, ownerPN);
+  if (ownerId && interaction.user.id !== ownerId && !game.isTestGame) return;
+  // Disable buttons on the source message (only after confirming right player).
   try {
     const newRows = (interaction.message?.components || []).map((row) => {
       const newRow = new ActionRowBuilder();
@@ -834,11 +850,6 @@ export async function handleAarDone(interaction, ctx) {
     });
     if (newRows.length > 0) await interaction.message.edit({ components: newRows }).catch(discordCatch);
   } catch { /* non-fatal */ }
-  const ownerPN = side === 'attacker'
-    ? (combat.falseOrdersControllerPlayerNum ?? combat.attackerPlayerNum ?? 1)
-    : opponentPlayerNum(combat.attackerPlayerNum ?? 1);
-  const ownerId = getPlayerId(game, ownerPN);
-  if (ownerId && interaction.user.id !== ownerId && !game.isTestGame) return;
   // Drain remaining effects on this side. Skipped effects do NOT fire.
   const remaining = getAfterAttackEffects(combat, side);
   for (const e of remaining) consumeAfterAttackEffect(combat, e.id);
