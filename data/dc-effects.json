@@ -201,7 +201,8 @@
         "dice": [
           "red",
           "green"
-        ]
+        ],
+        "type": "range"
       },
       "defense": [
         "black"
@@ -328,7 +329,8 @@
           "blue",
           "blue",
           "green"
-        ]
+        ],
+        "type": "range"
       },
       "defense": [
         "black"
@@ -3550,7 +3552,6 @@
         "LEADER"
       ],
       "cost": 4,
-      "subCost": 2,
       "health": 6,
       "speed": 4,
       "figures": 1,
@@ -7222,7 +7223,6 @@
         "BRAWLER"
       ],
       "cost": 7,
-      "subCost": 0,
       "health": 13,
       "speed": 4,
       "figures": 1,
