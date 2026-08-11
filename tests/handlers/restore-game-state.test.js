@@ -40,6 +40,26 @@ describe('restoreGameStateInPlace', () => {
     assert.equal(game.otherField, 'kept'); // savedState applied where no overlay
   });
 
+  it('repairs stale companion figure keys carried in the restored blob', () => {
+    // alexanbv 2026-08-11: game 00001 was a fresh lobby loaded from a
+    // checkpoint predating ac266382, so the restored blob still held
+    // "The Child-0-0". Restores bypass the load-time migrations in
+    // game-state.js, so this path must repair the key itself — otherwise
+    // checkpoint load, Undo and Resync each reintroduce the broken companion.
+    const game = {};
+    restoreGameStateInPlace(game, {
+      gameId: null,
+      figurePositions: { 1: {}, 2: { 'The Child-0-0': 't13', 'Baze Malbus-1-0': 'u13' } },
+      companionHostMap: { 'The Child-0-0': { hostFigureKey: 'Baze Malbus-1-0', playerNum: 2 } },
+    });
+    assert.equal(game.figurePositions[2]['The Child-1-0'], 't13');
+    assert.equal(game.figurePositions[2]['The Child-0-0'], undefined);
+    assert.equal(game.companionHostMap['The Child-1-0'].hostFigureKey, 'Baze Malbus-1-0');
+    assert.equal(game.companionHostMap['The Child-0-0'], undefined);
+    // Untouched neighbour.
+    assert.equal(game.figurePositions[2]['Baze Malbus-1-0'], 'u13');
+  });
+
   it('mutates the game object in place (returns undefined)', () => {
     const game = { a: 1 };
     const ret = restoreGameStateInPlace(game, { b: 2 });

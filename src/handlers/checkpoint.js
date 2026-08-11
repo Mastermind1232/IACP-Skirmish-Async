@@ -34,7 +34,7 @@ import {
   insertCheckpoint, listAllCheckpoints, getCheckpointById,
   countCheckpointsByUser,
 } from '../db.js';
-import { CURRENT_GAME_VERSION, repopulateDcMapsForGame } from '../game-state.js';
+import { CURRENT_GAME_VERSION, repopulateDcMapsForGame, migrateCompanionFigureKeys } from '../game-state.js';
 import { renderHandThread, renderHandVisual, renderHandPayload, renderRoundActivationMessage, renderDcCompanion } from '../engine/renderer.js';
 import { getBlockingInterrupts, INTERRUPT_TYPES, clearAllInterrupts, getMidActionReason } from '../game/interrupts.js';
 import { recoverPhaseGate } from './recover.js';
@@ -293,6 +293,14 @@ export function restoreGameStateInPlace(game, savedState, identityOverlay = {}) 
   }
   Object.assign(game, savedState);
   Object.assign(game, identityOverlay);
+  // Restored blobs bypass the load-time migrations in game-state.js, so any
+  // fix-ups that must hold for ALL in-memory state have to run here too. This
+  // is the single choke point for the three restore paths — checkpoint load,
+  // Undo (game-tools.js) and Recover/Resync (recover.js) — each of which can
+  // otherwise reintroduce a pre-ac266382 `${name}-0-0` companion key from an
+  // old snapshot and break the companion again (alexanbv 2026-08-11: game
+  // 00001 was a fresh lobby loaded from exactly such a checkpoint).
+  migrateCompanionFigureKeys(game);
   if (game.gameId) repopulateDcMapsForGame(game.gameId);
 }
 
