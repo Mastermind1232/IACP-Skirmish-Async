@@ -217,6 +217,28 @@ for (const file of new Set(fnToFile.values())) {
   }
 }
 
+/**
+ * Global fnName → ctx keys, across ALL handler files.
+ *
+ * A handler may forward its own ctx into a handler that belongs to a DIFFERENT
+ * context group — e.g. combat-special-effects.js hands its ctx to
+ * handleDcAction from dc-play-area.js. The receiver then reads keys its caller's
+ * group never declared, which is invisible to a same-file-only lookup and is
+ * exactly how Missile Salvo died after die selection.
+ *
+ * Merging by name is deliberately conservative: on a name collision across
+ * files we take the union, so the check over-reports rather than under-reports.
+ * A false positive is one line in KNOWN_BENIGN; a false negative is a live
+ * crash. alexanbv 2026-08-11.
+ */
+const globalFunctions = new Map();
+for (const fnMap of fileCache.values()) {
+  for (const [fn, keys] of fnMap) {
+    if (!globalFunctions.has(fn)) globalFunctions.set(fn, new Set());
+    for (const k of keys) globalFunctions.get(fn).add(k);
+  }
+}
+
 // ── Step 3: Resolve helper-function delegation ──────────────────────────────
 
 /**
@@ -253,7 +275,9 @@ function getEffectiveCtxKeys(functionName, file) {
     if (calledFn === functionName) continue; // skip self-recursion
     if (['if', 'for', 'while', 'switch', 'catch', 'return'].includes(calledFn)) continue;
 
-    const helperKeys = fileFunctions.get(calledFn);
+    // Same file first, then any handler file — a cross-file handoff forwards
+    // this ctx into a function whose own group may declare different keys.
+    const helperKeys = fileFunctions.get(calledFn) || globalFunctions.get(calledFn);
     if (helperKeys) {
       for (const k of helperKeys) effectiveKeys.add(k);
     }

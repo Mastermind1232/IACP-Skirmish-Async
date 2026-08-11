@@ -9222,8 +9222,12 @@ export function resolveAbility(abilityId, context) {
     }
     if (candidates.length === 0) return { applied: false, manualMessage: 'No hostile figures in line of sight.' };
     if (candidates.length === 1) {
-      // Auto-select the only candidate
-      return resolveAbility(entry, { ...context, chosenFigureKey: candidates[0].figureKey });
+      // Auto-select the only candidate. Must pass the ability ID, not the
+      // resolved entry object — resolveAbility does getAbility(abilityId), and
+      // an object keys as "[object Object]" -> undefined -> the generic
+      // "Resolve manually" bail. The card was spent and nothing happened.
+      // alexanbv 2026-08-11.
+      return resolveAbility(abilityId, { ...context, chosenFigureKey: candidates[0].figureKey });
     }
     return {
       applied: false,
@@ -9319,7 +9323,8 @@ export function resolveAbility(abilityId, context) {
       hostiles.push(fk);
     }
     if (hostiles.length === 0) return { applied: true, logMessage: 'No hostile within 3 spaces with LOS.' };
-    if (hostiles.length === 1) return resolveAbility(entry, { ...context, chosenFigureKey: hostiles[0] });
+    // Pass the ID, not the entry object — see the note in Lure of the Dark Side.
+    if (hostiles.length === 1) return resolveAbility(abilityId, { ...context, chosenFigureKey: hostiles[0] });
     return { applied: false, requiresChoice: true, choiceOptions: figureChoiceLabels(hostiles), choiceValues: hostiles };
   }
 

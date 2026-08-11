@@ -48,6 +48,12 @@ const COMBAT_DEPS = [
 
 const CONTEXT_GROUPS = {
   ccHand: [
+    // handleCcShuffleDraw -> autoDrawAllStartingHands -> advanceFromCcDraw ->
+    // runStartOfRoundContinuation. Without these the start-of-round continuation
+    // silently no-ops and the game never posts the first activation phase
+    // message — the documented ia00001/ia00002 stall, reached through a third
+    // entry point that was never patched. alexanbv 2026-08-11.
+    'runStartOfRoundContinuation', 'runStartOfRoundRules', 'getMissionRules', 'getMapTokensData',
     'getGame', 'dcMessageMeta', 'dcHealthState', 'dcExhaustedState', 'saveGames',
     'pushUndo', 'client', 'pendingIllegalSquad', 'pendingSquadConfirm', 'PENDING_ILLEGAL_TTL_MS',
     'validateDeckLegal', 'sendDeckIllegalAlert', 'sendSquadConfirmation', 'applySquadSubmission',
@@ -218,6 +224,10 @@ const CONTEXT_GROUPS = {
   ],
 
   activation: [
+    // applyStrain (reached from handleActPassive) consults this to offer Murne
+    // Rin's Figurehead strain-prevention. Every other group that reaches
+    // applyStrain already lists it.
+    'findFigureheadFigure',
     'getGame', 'replyIfGameEnded', 'hasActionsRemainingInGame',
     'GAME_PHASES', 'PHASE_COLOR', 'getInitiativePlayerZoneLabel',
     'getPlayerZoneLabel', 'logGameAction', 'pushUndo',
@@ -281,6 +291,10 @@ const CONTEXT_GROUPS = {
   ],
 
   setup: [
+    // handleDeploymentDone -> runPostDeployPhase, which bails without these and
+    // silently never posts the COMPANION's deployment card. This is the live
+    // deploy route (setup.js:2052); the phaseGate copy already had them.
+    'buildDcEmbedAndFiles', 'dcExhaustedState', 'getDcPlayAreaComponents', 'getNicknamesForDcMessage',
     'getGame', 'getPlayReadyMaps', 'getTournamentRotation', 'getMissionCardsData',
     'getMapRegistry', 'getMapTypeButtons', 'getMapSelectionTooltipEmbed',
     'getMapConfirmButton', 'getMissionSelectDrawMenu', 'getMissionSelectionPickMenu',
@@ -325,6 +339,9 @@ const CONTEXT_GROUPS = {
     // Retrieving The Child awards +1 VP; without this the win check is skipped
     // and a game that should end there carries on.
     'checkWinConditions',
+    // Interact-path strain routes through applyStrain, which needs a client to
+    // post and findFigureheadFigure for Murne Rin's prevention reaction.
+    'client', 'findFigureheadFigure',
   ],
 
   refreshMap: [
@@ -557,6 +574,20 @@ const CONTEXT_GROUPS = {
   ],
 
   combatSpecialEffects: [
+    // handleMissileSalvoDie rewrites the customId and forwards THIS ctx into
+    // handleDcAction, a `dcPlayArea` handler. Cross-group forwarding means this
+    // group must satisfy the receiver too. Missing replyIfGameEnded made
+    // Missile Salvo die right after die selection — the die was consumed, then
+    // "replyIfGameEnded is not a function" and no target picker ever appeared.
+    // The rest are the attack-path deps handleDcAction needs to actually run.
+    // alexanbv 2026-08-11.
+    'replyIfGameEnded', 'getFigureSize', 'getFootprintCells', 'getRange',
+    'hasLineOfSight', 'hasLineOfSightByCoord', 'getEffectiveSpeed',
+    'getBoardStateForMovement', 'getMovementProfile', 'computeMovementCache',
+    'getMovementMinimapAttachment', 'clearMoveGridMessages', 'getLegalInteractOptions',
+    'FIGURE_LETTERS', 'DC_ACTIONS_PER_ACTIVATION', 'logGameErrorToBotLogs',
+    'extractGameIdFromInteraction', 'resolveAbility', 'getMapAttachmentForSpaces',
+    'pushUndo', 'getDeploymentZones', 'updateAttachmentMessageForDc',
     'getGame', 'saveGames', 'client', 'canActAsPlayer',
     'dcMessageMeta', 'dcHealthState', 'dcExhaustedState',
     'findDcMessageIdForFigure', 'buildDcEmbedAndFiles', 'renderDcEmbed', 'getConditionsForDcMessage', 'getNicknamesForDcMessage',
