@@ -24,6 +24,7 @@
  * responsibility.
  */
 import { getClosedDoorEdges } from './board-helpers.js';
+import { ACTIVATION_FIGKEY_FLAGS } from './activation-state.js';
 
 /**
  * Mark a skirmish-upgrade attachment as exhausted on a DC.
@@ -227,5 +228,52 @@ export function readyDeploymentCard(game, playerNum, msgId, deps = {}) {
     deps.recomputeActivationCounts(game, playerNum);
   }
 
+  // 5. Once-per-ACTIVATION counters (alexanbv 2026-08-11: "reset any
+  //    once/activation (not once/round) counters"). A readied card gets a NEW
+  //    activation, so Heroic, Bo-Rifle Strike, the Wookiee Avenger slam,
+  //    special-action-used, attack-performed etc. must be available again.
+  //    Once-per-ROUND state is deliberately untouched — a ready is not a new
+  //    round.
+  //
+  //    Skipped while the card is MID-activation (Blaze of Glory readies your
+  //    own card during your activation): the current activation must keep its
+  //    spent flags, and cleanupActivation will clear them when it ends.
+  //    Otherwise this is a no-op after a correct cleanup, and a repair after a
+  //    missed one.
+  if (dcIndex >= 0 && !game.dcActionsData?.[msgId]) {
+    _resetOncePerActivationFlags(game, playerNum, dcIndex);
+  }
+
   return { changed, dcIndex };
+}
+
+/**
+ * Clear every ACTIVATION_FIGKEY_FLAGS entry belonging to one DC's figures.
+ *
+ * Figure keys are `${dcName}-${dgIndex}-${figureIndex}`, and dgIndex is this
+ * card's 1-based position among same-named cards in the player's list — the
+ * same derivation recomputeActivationCounts uses. Matching by prefix avoids
+ * needing the figure count.
+ */
+function _resetOncePerActivationFlags(game, playerNum, dcIndex) {
+  const dcList = (playerNum === 1 ? game.p1DcList : game.p2DcList) || [];
+  const entry = dcList[dcIndex];
+  const dcName = entry?.dcName || entry;
+  if (!dcName || typeof dcName !== 'string') return;
+
+  // dgIndex = how many cards of this name appear at or before dcIndex.
+  let dgIndex = 0;
+  for (let i = 0; i <= dcIndex && i < dcList.length; i++) {
+    const n = dcList[i]?.dcName || dcList[i];
+    if (n === dcName) dgIndex++;
+  }
+  const prefix = `${dcName}-${dgIndex}-`;
+
+  for (const flag of ACTIVATION_FIGKEY_FLAGS) {
+    const bucket = game[flag];
+    if (!bucket || typeof bucket !== 'object') continue;
+    for (const fk of Object.keys(bucket)) {
+      if (fk.startsWith(prefix)) delete bucket[fk];
+    }
+  }
 }

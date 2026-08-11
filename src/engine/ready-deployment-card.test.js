@@ -143,3 +143,66 @@ describe('readyDeploymentCard — Lie in Ambush tally linkage', () => {
     assert.deepEqual(game.p1ActivatedDcIndices, [0], 'tally untouched');
   });
 });
+
+/**
+ * Once-per-ACTIVATION counters reset on ready; once-per-ROUND ones do not.
+ *
+ * alexanbv 2026-08-11: the unified ready "should ready the card, remove it from
+ * the exhausted list, and reset any once/activation (not once/round) counters."
+ * A readied card gets a NEW activation, so Heroic / Bo-Rifle / the Wookiee
+ * Avenger slam / special-action-used / attack-performed must be available
+ * again. Round-scoped limits are not refreshed — a ready is not a new round.
+ */
+describe('readyDeploymentCard — once-per-activation counters', () => {
+  const activatedGame = (extra = {}) => ({
+    p1DcMessageIds: ['m0'],
+    p1DcList: [{ dcName: 'Luke Skywalker' }],
+    p1ActivatedDcIndices: [0],
+    dcActionsData: {},
+    heroicUsedThisActivation: { 'Luke Skywalker-1-0': true, 'Han Solo-1-0': true },
+    attackPerformedThisActivation: { 'Luke Skywalker-1-0': true },
+    specialActionUsedThisActivation: { 'Luke Skywalker-1-0': 1 },
+    // Once-per-ROUND — must survive a ready.
+    roundFigureAbilityUsed: { 'trustBothWays_m0': true },
+    ...extra,
+  });
+
+  test('clears once-per-activation flags for the readied card only', () => {
+    const game = activatedGame();
+    readyDeploymentCard(game, 1, 'm0', {});
+    assert.equal(game.heroicUsedThisActivation['Luke Skywalker-1-0'], undefined, 'Heroic available again');
+    assert.equal(game.attackPerformedThisActivation['Luke Skywalker-1-0'], undefined, 'may attack again');
+    assert.equal(game.specialActionUsedThisActivation['Luke Skywalker-1-0'], undefined, 'special action available');
+    assert.equal(game.heroicUsedThisActivation['Han Solo-1-0'], true, 'other figure untouched');
+  });
+
+  test('does NOT reset once-per-round state', () => {
+    const game = activatedGame();
+    readyDeploymentCard(game, 1, 'm0', {});
+    assert.equal(game.roundFigureAbilityUsed['trustBothWays_m0'], true, 'round limit still spent');
+  });
+
+  test('preserves spent abilities while the card is MID-activation', () => {
+    // Blaze of Glory readies IG-88's own card during its activation. The
+    // current activation must keep its spent flags — otherwise Heroic could be
+    // used twice in one activation. cleanupActivation clears them at the end.
+    const game = activatedGame({ dcActionsData: { m0: { perFigureRemaining: { 0: 1 } } } });
+    readyDeploymentCard(game, 1, 'm0', {});
+    assert.equal(game.heroicUsedThisActivation['Luke Skywalker-1-0'], true, 'still spent this activation');
+    assert.equal(game.attackPerformedThisActivation['Luke Skywalker-1-0'], true, 'still spent this activation');
+    assert.deepEqual(game.p1ActivatedDcIndices, [], 'but the card is still readied');
+  });
+
+  test('distinguishes same-named groups by dgIndex', () => {
+    const game = {
+      p1DcMessageIds: ['m0', 'm1'],
+      p1DcList: [{ dcName: 'Stormtrooper' }, { dcName: 'Stormtrooper' }],
+      p1ActivatedDcIndices: [0, 1],
+      dcActionsData: {},
+      attackPerformedThisActivation: { 'Stormtrooper-1-0': true, 'Stormtrooper-2-0': true },
+    };
+    readyDeploymentCard(game, 1, 'm1', {}); // second group
+    assert.equal(game.attackPerformedThisActivation['Stormtrooper-2-0'], undefined, 'group 2 reset');
+    assert.equal(game.attackPerformedThisActivation['Stormtrooper-1-0'], true, 'group 1 untouched');
+  });
+});
