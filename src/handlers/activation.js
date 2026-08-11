@@ -988,6 +988,22 @@ export async function handleDcEndActivation(interaction, ctx) {
   for (let fi = 0; fi < figCount; fi++) {
     figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);
   }
+  // Two ACTIVATION_FIGKEY_FLAGS are still needed further down THIS function,
+  // after cleanupActivation has wiped them: On a Diplomatic Mission reads
+  // attackPerformedThisActivation (~line 1250) and Wild Fury reads
+  // postActivationConditions (~line 1340). Snapshot them before the wipe.
+  //
+  // Both were already dead before the dgIndex fix above — the lookups used
+  // `-0-N` keys while the writers (figureKeyForActivation, which correctly
+  // defaults to 1) used `-1-0`, so they never matched. Aligning the keys alone
+  // would have kept them dead for the opposite reason: cleanupActivation now
+  // matches, and deletes the data before either consumer runs.
+  const _preCleanupAttacked = new Set(figureKeys.filter((fk) => game.attackPerformedThisActivation?.[fk]));
+  const _preCleanupPostConds = {};
+  for (const fk of figureKeys) {
+    const _pc = game.postActivationConditions?.[fk];
+    if (_pc) _preCleanupPostConds[fk] = _pc;
+  }
   cleanupActivation(game, msgId, meta.playerNum, figureKeys);
   // Weakened discard + Stun persistence now handled by applyEndOfActivationEffects().
   // End-of-activation deterministic effects (shared with headless).
@@ -1242,7 +1258,8 @@ export async function handleDcEndActivation(interaction, ctx) {
     // attackPerformedThisActivation is now figureKey-keyed (alexanbv
     // 2026-05-13). Group-scope "no attack" means none of the group's
     // figures attacked this activation.
-    const _odmAnyFigAttacked = figureKeys.some((fk) => !!game.attackPerformedThisActivation?.[fk]);
+    // Snapshot taken before cleanupActivation — the live map is already wiped.
+    const _odmAnyFigAttacked = figureKeys.some((fk) => _preCleanupAttacked.has(fk));
     if (cardNameIncludes(_odmUpgrades, 'On a Diplomatic Mission') && !cardNameIncludes(_odmExh, 'On a Diplomatic Mission') && !_odmAnyFigAttacked) {
       const _odmRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
@@ -1332,9 +1349,12 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Per alexanbv 2026-05-13: postActivationConditions is figureKey-keyed.
   // Iterate every figure in the group; apply queued conditions per-figure.
   for (const _pacFk of figureKeys) {
-    if (!game.postActivationConditions?.[_pacFk]) continue;
-    let waConds = game.postActivationConditions[_pacFk];
-    delete game.postActivationConditions[_pacFk];
+    // Read the pre-cleanup snapshot; cleanupActivation already cleared the
+    // live map (and did so under the correct keys after the dgIndex fix).
+    if (!_preCleanupPostConds[_pacFk]) continue;
+    let waConds = _preCleanupPostConds[_pacFk];
+    delete _preCleanupPostConds[_pacFk];
+    delete game.postActivationConditions?.[_pacFk];
     if (Array.isArray(waConds) && waConds.length > 0) {
       const waFigureKey = _pacFk;
       const _waImmune = (game.figurePositions?.[meta.playerNum]?.[waFigureKey]) ? isConditionImmune(game, waFigureKey) : false;
