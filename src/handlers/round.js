@@ -642,16 +642,14 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       const displayName = meta?.displayName || meta?.dcName || 'Figure';
       await logGameAction(game, client, `**End of round:** ${displayName} suffered ${entry.damage} Damage (e.g. Blaze of Glory).`, { phase: 'ROUND', icon: 'round' });
       if (_eorDied) {
-        const _eorDcName = meta?.dcName || 'Figure';
-        const _eorDgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-        // 1-based, matching the damage key built a few lines above (_eorFkX).
-        // A '0' default here meant the damage killed `Name-1-0` while the
-        // defeat was processed against `Name-0-0`, so removeFigurePosition
-        // deleted nothing: the defeated figure stayed on the board occupying
-        // space and blocking LOS, and lastPos was null so carried contraband
-        // never dropped. alexanbv 2026-08-11.
-        const _eorDgIdx = _eorDgMatch ? _eorDgMatch[1] : '1';
-        const _eorFigKey = `${_eorDcName.replace(/\s*\[.*\]\s*$/, '').trim()}-${_eorDgIdx}-0`;
+        // REUSE the key the damage was applied under. This was previously
+        // rebuilt from the same inputs, and the copies drifted: the defeat
+        // path defaulted the group index to '0' while the damage path used
+        // '1'. removeFigurePosition then deleted a key that did not exist, so
+        // the defeated figure stayed on the board occupying space and blocking
+        // LOS, and lastPos was null so carried contraband never dropped.
+        // Deriving it once removes the possibility. alexanbv 2026-08-11.
+        const _eorFigKey = _eorFkX;
         const _eorDcIds = getDcMessageIds(game, playerNum) || [];
         const _eorIdx = _eorDcIds.indexOf(msgId);
         await processFigureDefeat(game, {
@@ -660,7 +658,7 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
           attackerPlayerNum: playerNum,
           msgId,
           dcIdx: _eorIdx,
-          dcName: _eorDcName,
+          dcName: _eorDcN,
           displayName,
           source: 'Blaze of Glory',
           awardVp: false,
