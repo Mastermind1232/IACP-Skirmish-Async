@@ -22,6 +22,33 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const HANDLERS_DIR = join(ROOT, 'src', 'handlers');
 
+/**
+ * Known-benign gaps: `${functionName}:${key}` → why it is not a bug.
+ *
+ * Keep this SMALL and justified. Every entry is a real "handler reads a key its
+ * group lacks" hit — it is on the list only because the read is optional and
+ * the absence is handled. Anything that silently disables a feature belongs in
+ * the group, not here.
+ *
+ * This allowlist is what lets the check run in `npm test`. It was written to
+ * catch precisely the class of bug that killed Cleave, Fighting Knife, Heavy
+ * Fire and five defeat-CCs, but it exited non-zero on these four benign cases
+ * and so was never wired in — and therefore never ran. alexanbv 2026-08-11.
+ */
+const KNOWN_BENIGN = {
+  // Documented: the closure is discarded once the window posts buttons, and
+  // the close path is rebuilt from combat._aarCloseArgs instead. See the
+  // ARCHITECTURE NOTE in src/handlers/after-attack-resolve.js.
+  'handleAarDone:afterAttackClose': 'reconstructed from combat._aarCloseArgs; absence is the normal live path',
+  // Optional continuation, never assigned anywhere in src/. Guarded at
+  // src/handlers/eoa-handler.js:41. Should be wired or deleted; harmless today.
+  'handleEoaFire:eoaResolvedCallback': 'optional continuation, never set in src/; guarded before use',
+  'handleEoaSkipAll:eoaResolvedCallback': 'optional continuation, never set in src/; guarded before use',
+  // Static-analysis artifact: handleFavRemove never reaches the modal handler
+  // whose ctx access the tracer attributed to it.
+  'handleFavRemove:buildSquadConfirmText': 'tracer artifact — handleFavRemove never calls the modal handler',
+};
+
 // ── Step 1: Parse handler index.js for imports and register() calls ─────────
 
 const indexSrc = readFileSync(join(HANDLERS_DIR, 'index.js'), 'utf8');
@@ -274,7 +301,9 @@ for (const { prefix, functionName, group } of registrations) {
   }
 
   const groupKeySet = new Set(groupKeys);
-  const missingKeys = [...effectiveKeys].filter((k) => !groupKeySet.has(k));
+  const missingKeys = [...effectiveKeys]
+    .filter((k) => !groupKeySet.has(k))
+    .filter((k) => !KNOWN_BENIGN[`${functionName}:${k}`]);
 
   if (missingKeys.length > 0) {
     failures.push({

@@ -121,6 +121,9 @@ const CONTEXT_GROUPS = {
   ],
 
   movePick: [
+    // Line of Fire: on maps whose extraction point comes only from map-tokens
+    // (not mission rules), delivering a crate awarded 0 VP without these.
+    'getMapTokensData', 'awardObjectiveVp',
     'getGame', 'dcMessageMeta', 'clearMoveGridMessages', 'getBoardStateForMovement',
     'getMovementProfile', 'ensureMovementCache', 'computeMovementCache',
     'normalizeCoord', 'getMovementTarget', 'getFigureSize', 'getNormalizedFootprint',
@@ -234,6 +237,9 @@ const CONTEXT_GROUPS = {
   ],
 
   round: [
+    // handleRbfDiscard puts a card in the pile; without this the pinned
+    // Discard Pile message stays stale.
+    'updateDiscardPileMessage',
     'getGame', 'replyIfGameEnded', 'getPlayerZoneLabel', 'logGameAction',
     'updateHandChannelMessages', 'saveGames', 'dcMessageMeta', 'dcExhaustedState',
     'dcHealthState', 'isDepletedRemovedFromGame', 'buildDcEmbedAndFiles', 'renderDcEmbed',
@@ -316,6 +322,9 @@ const CONTEXT_GROUPS = {
     'getGame', 'dcMessageMeta', 'dcHealthState', 'getLegalInteractOptions',
     'getDcStats', 'getDcEffects', 'updateDcActionsMessage', 'logGameAction',
     'saveGames', 'pushUndo', 'getMissionTokenLabel',
+    // Retrieving The Child awards +1 VP; without this the win check is skipped
+    // and a game that should end there carries on.
+    'checkWinConditions',
   ],
 
   refreshMap: [
@@ -399,6 +408,19 @@ const CONTEXT_GROUPS = {
   interrupts: [
     'getGame', 'canActAsPlayer', 'saveGames', 'client', 'dcMessageMeta',
     'dcHealthState', 'logGameAction', 'getDiceData', 'getMapData',
+    // resolveAbility + dcExhaustedState: EVERY before-defeated / when-defeated
+    // CC handler guards on `typeof resolveAbility === 'function'`, but the card
+    // is already pulled from hand, discarded and its counter-window resolved by
+    // playCcFull BEFORE that guard. Without these the card burns and the effect
+    // silently never applies — Final Stand, Dying Lunge, Opportunistic, Debts
+    // Repaid, Paid in Beskar, Lord of the Sith. Surfaced by scripts/
+    // smoke-context.js, which was written for exactly this and was not wired
+    // into `npm test`. alexanbv 2026-08-11.
+    'resolveAbility', 'dcExhaustedState',
+    // Wild Beast / Trample forwards these into resolveAbility('trample_bantha')
+    // (interrupts.js ~1390); without them it resolves with no card data or
+    // geometry and finds no valid targets.
+    'getDcEffects', 'getFigureSize', 'hasLineOfSightByCoord',
     // findDcMessageIdForFigure + findFigureheadFigure: needed by the
     // applyStrain pipeline when a strain prompt (Figurehead / per-strain
     // choice) resolves in this ctx — Fireproof lookup, strain→damage, and the
