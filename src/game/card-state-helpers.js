@@ -157,3 +157,75 @@ export function isDcDepleted(game, msgId) {
   return (game.p1DepletedDcMessageIds || []).includes(msgId)
       || (game.p2DepletedDcMessageIds || []).includes(msgId);
 }
+
+/**
+ * Ready a Deployment card — THE single way to do it.
+ *
+ * alexanbv 2026-08-11: "SoS Blaze Furious charge etc should ready cards in the
+ * same way. It sounds like they are different." They were: five call sites,
+ * five different subsets of the necessary work, and three of them incomplete.
+ *
+ *   Son of Skywalker  removed the activation index but NEVER un-exhausted the
+ *                     card, so Luke stayed rendered exhausted
+ *   Blaze of Glory    un-exhausted but never removed the activation index, so
+ *                     the activation was not actually given back
+ *   Furious Charge    did both but wrote pXActivatedDcIndices raw and never
+ *                     recomputed the activation counts
+ *   un-activate/toggle  the only complete implementations
+ *
+ * Readying is FOUR pieces of state, and all of them have to move together:
+ *   1. dcExhaustedState (the derived render/interaction store)
+ *   2. dcList[idx].exhausted (the persisted blob — survives a reload)
+ *   3. pXActivatedDcIndices (what actually grants the extra activation)
+ *   4. activation counts (what the player is shown)
+ *
+ * SYNC and Discord-free, so resolveAbility (which is sync) can call it. The
+ * caller still owns the async UI refresh — updateActivationsMessage and the DC
+ * embed — and should use the returned dcIndex/changed to decide whether to.
+ *
+ * @param {object} game
+ * @param {number} playerNum      owner of the card
+ * @param {string} msgId          the DC's play-area message id
+ * @param {object} [deps]
+ * @param {Map}    [deps.dcExhaustedState]        derived exhaust store
+ * @param {Function} [deps.recomputeActivationCounts] (game, playerNum) => void
+ * @returns {{ changed: boolean, dcIndex: number }}
+ */
+export function readyDeploymentCard(game, playerNum, msgId, deps = {}) {
+  if (!game || !msgId || (playerNum !== 1 && playerNum !== 2)) {
+    return { changed: false, dcIndex: -1 };
+  }
+  const dcIdsKey = playerNum === 1 ? 'p1DcMessageIds' : 'p2DcMessageIds';
+  const dcListKey = playerNum === 1 ? 'p1DcList' : 'p2DcList';
+  const activatedKey = playerNum === 1 ? 'p1ActivatedDcIndices' : 'p2ActivatedDcIndices';
+
+  const dcIndex = (game[dcIdsKey] || []).indexOf(msgId);
+
+  // 1. Derived exhaust store (drives rendering + the activate button).
+  deps.dcExhaustedState?.set?.(msgId, false);
+
+  // 2. Persisted blob, so the ready survives a reload / checkpoint restore.
+  const dcList = game[dcListKey];
+  if (dcIndex >= 0 && Array.isArray(dcList) && dcList[dcIndex]) {
+    const dc = dcList[dcIndex];
+    dcList[dcIndex] = typeof dc === 'object'
+      ? { ...dc, exhausted: false }
+      : { dcName: dc, displayName: dc, exhausted: false };
+  }
+
+  // 3. The activation itself. Without this the card looks ready but the player
+  //    gets no extra activation — Blaze of Glory's exact failure.
+  let changed = false;
+  const activated = game[activatedKey];
+  if (dcIndex >= 0 && Array.isArray(activated) && activated.includes(dcIndex)) {
+    game[activatedKey] = activated.filter((i) => i !== dcIndex);
+    changed = true;
+  }
+
+  // 4. Counts the player is shown. Derived from the above, so it must follow.
+  if (changed && typeof deps.recomputeActivationCounts === 'function') {
+    deps.recomputeActivationCounts(game, playerNum);
+  }
+
+  return { changed, dcIndex };
+}

@@ -14,7 +14,7 @@ import { awardObjectiveVp, deductVp } from './vp-helpers.js';
 import { countGameSpaces, getActiveTerminals, eyesOnThePrizeEligibleFigures, isFigureInOpponentDeploymentZone, isFigureAdjacentOrOnAny, getBlockingDifficultTerrainCoords, getFigureAdjacentCoordsFromSet } from './board-helpers.js';
 import { applyDefenseDieRemoval, applyAttackDieRemoval } from '../engine/defense-die-turn.js';
 import { cardNameIncludes } from './card-names.js';
-import { exhaustAttachment, isAttachmentExhausted } from './card-state-helpers.js';
+import { exhaustAttachment, isAttachmentExhausted, readyDeploymentCard } from './card-state-helpers.js';
 import { groupEffectiveFigures, squadUpgradeOnGroup, attachmentsForMsgId } from './squad-upgrades.js';
 
 
@@ -10660,13 +10660,14 @@ export function resolveAbility(abilityId, context) {
     // offering a free menu of every DC.
     const targetMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: no IG-88 activation in progress to ready your Deployment card.' };
-    const dcList = getDcList(game, playerNum) || [];
-    const dcMessageIds = getDcMessageIds(game, playerNum) || [];
-    const idx = dcMessageIds.indexOf(targetMsgId);
-    if (idx >= 0 && dcList[idx]) {
-      const dc = dcList[idx];
-      dcList[idx] = typeof dc === 'object' ? { ...dc, exhausted: false } : { dcName: dc, displayName: dc, exhausted: false };
-    }
+    // Unified ready primitive (alexanbv 2026-08-11). This previously set only
+    // dcList[idx].exhausted and left pXActivatedDcIndices alone — so the card
+    // rendered as ready but the activation was never actually given back,
+    // which is the whole point of Blaze of Glory. readyDcMsgIds below still
+    // drives the derived store + embed refresh on the Discord side.
+    readyDeploymentCard(game, playerNum, targetMsgId, {
+      recomputeActivationCounts: context.recomputeActivationCounts,
+    });
     game.endOfRoundSelfDamage = game.endOfRoundSelfDamage || {};
     game.endOfRoundSelfDamage[playerNum] = {
       damage: entry.endOfRoundSelfDamage,
@@ -15727,18 +15728,24 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
-    const activatedKey = activatedDcIndicesKey(playerNum);
-    const dcMessageIds = getDcMessageIds(game, playerNum) || [];
-    const idx = dcMessageIds.indexOf(msgId);
-    if (idx >= 0 && Array.isArray(game[activatedKey])) {
-      game[activatedKey] = game[activatedKey].filter((i) => i !== idx);
-    }
+    // Unified ready primitive — see readyDeploymentCard. This site only
+    // filtered the activation index; the card's exhausted state (both the
+    // derived store and the persisted blob) was left set.
+    readyDeploymentCard(game, playerNum, msgId, {
+      recomputeActivationCounts: context.recomputeActivationCounts,
+    });
     // Set persistent flag so Luke's DC auto-readies after every subsequent activation this round
     game.sonOfSkywalkerActive = { playerNum, dcMsgId: msgId };
     return {
       applied: true,
       logMessage: 'Your Deployment card is now **Readied** and will auto-ready after each activation this round.',
+      // readyDcMsgIds is what makes the Discord layer clear the DERIVED
+      // dcExhaustedState store and re-render the card (apply-ability-result
+      // ~119). Without it the card stayed rendered exhausted even though it was
+      // readied — resolveAbility is sync and cannot touch that store itself.
+      readyDcMsgIds: [msgId],
       refreshDcEmbed: true,
+      refreshDcEmbedMsgIds: [msgId],
     };
   }
 

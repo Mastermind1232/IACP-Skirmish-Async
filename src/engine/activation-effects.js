@@ -5,6 +5,7 @@
 import { getDcEffects } from '../data-loader.js';
 import { filterCondition } from '../game/conditions.js';
 import { getActivatedDcIndices, setActivatedDcIndices, getDcList, getDcMessageIds } from '../game/player-helpers.js';
+import { readyDeploymentCard } from '../game/card-state-helpers.js';
 import { dcNameFromFigureKey } from '../game/dc-helpers.js';
 
 /**
@@ -97,7 +98,12 @@ export function applyStartOfActivationEffects(game, { dcName, playerNum, display
  * @param {string} opts.msgId - DC message ID
  * @returns {{ applied: Array<{ effect: string, message: string }> }}
  */
-export function applyEndOfActivationEffects(game, { dcName, playerNum, displayName, msgId, figureIndex }) {
+// dcExhaustedState / recomputeActivationCounts are OPTIONAL: they let the
+// Son of Skywalker auto-ready below move all four pieces of ready-state, not
+// just the activation index. Callers that have them should pass them; without
+// them the ready still updates the persisted blob and the activation index,
+// which is strictly more than this did before. alexanbv 2026-08-11.
+export function applyEndOfActivationEffects(game, { dcName, playerNum, displayName, msgId, figureIndex, dcExhaustedState, recomputeActivationCounts }) {
   const applied = [];
   const dcEff = getDcEffects()?.[dcName];
   const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
@@ -137,11 +143,15 @@ export function applyEndOfActivationEffects(game, { dcName, playerNum, displayNa
     const sosDcMsgId = sos.dcMsgId;
     const sosPlayerNum = sos.playerNum;
     if (sosDcMsgId !== msgId) {
-      const sosActivated = getActivatedDcIndices(game, sosPlayerNum);
-      const sosDcIds = sosPlayerNum === 1 ? game.p1DcMessageIds : game.p2DcMessageIds;
-      const sosIdx = (sosDcIds || []).indexOf(sosDcMsgId);
-      if (sosIdx >= 0 && Array.isArray(sosActivated) && sosActivated.includes(sosIdx)) {
-        setActivatedDcIndices(game, sosPlayerNum, sosActivated.filter((i) => i !== sosIdx));
+      // Unified ready primitive (alexanbv 2026-08-11). This previously removed
+      // the activation index ONLY — it never un-exhausted the card, so Luke
+      // showed as exhausted despite being readied, and the activation counts
+      // were never recomputed.
+      const { changed: _sosReadied } = readyDeploymentCard(game, sosPlayerNum, sosDcMsgId, {
+        dcExhaustedState,
+        recomputeActivationCounts,
+      });
+      if (_sosReadied) {
         applied.push({ effect: 'Son of Skywalker', message: `**Son of Skywalker** — **Luke Skywalker** is automatically **Readied**.` });
       }
     }

@@ -1484,14 +1484,14 @@ async function fireFuriousCharge(thread, game, combat, effect, ctx) {
   let defMsgId = combat.target?.msgId || null;
   if (!defMsgId && ctx.findDcMessageIdForFigure) defMsgId = ctx.findDcMessageIdForFigure(game.gameId, defPn, fk);
   if (!defMsgId) return;
-  dcExhaustedState?.set?.(defMsgId, false);
-  const msgIds = (defPn === 1 ? game.p1DcMessageIds : game.p2DcMessageIds) || [];
-  const idx = msgIds.indexOf(defMsgId);
-  if (idx >= 0) {
-    const activated = (defPn === 1 ? game.p1ActivatedDcIndices : game.p2ActivatedDcIndices) || [];
-    const filtered = activated.filter((i) => i !== idx);
-    if (defPn === 1) game.p1ActivatedDcIndices = filtered; else game.p2ActivatedDcIndices = filtered;
-  }
+  // Unified ready primitive (alexanbv 2026-08-11). This hand-rolled the same
+  // steps but wrote pXActivatedDcIndices raw, never touched the persisted
+  // dcList[].exhausted, and never recomputed the activation counts.
+  const { readyDeploymentCard: _readyDc } = await import('../game/card-state-helpers.js');
+  _readyDc(game, defPn, defMsgId, {
+    dcExhaustedState,
+    recomputeActivationCounts: ctx.recomputeActivationCounts,
+  });
   if (logGameAction) {
     await logGameAction(game, client, `**Furious Charge** — **${combat.target.label || dcNameFromFigureKey(fk)}**'s Deployment card is readied (suffered ${combat._step7Damage || 0} Damage).`, { phase: 'ROUND', icon: 'card' }).catch(discordCatch);
   }
