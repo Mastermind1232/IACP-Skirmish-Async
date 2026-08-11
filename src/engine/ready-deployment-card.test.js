@@ -94,3 +94,52 @@ describe('readyDeploymentCard', () => {
     assert.equal(readyDeploymentCard(makeGame(), 1, 'nope').dcIndex, -1, 'unknown msgId');
   });
 });
+
+/**
+ * Cross-system invariant: readying must withdraw the card from the
+ * "exhausted or defeated groups" tally that Lie in Ambush counts.
+ *
+ * alexanbv 2026-08-11: "you also need to track the time at which the LiA figure
+ * deploys, which also depends on number of exhausted and defeated cards. A
+ * re-readied card would no longer count to that total."
+ *
+ * checkLieInAmbushTrigger (handlers/activation.js ~310) derives its tally from
+ * getActivatedDcIndices at check time — it is NOT a stored counter. So the
+ * invariant holds automatically PROVIDED every ready effect actually removes
+ * the index. Before the primitive, Blaze of Glory / Change of Plans / Rancor /
+ * Scrap Battalion did not: a readied card still counted as exhausted, so LiA
+ * could reach its 3-group threshold EARLY.
+ *
+ * This pins the linkage rather than the trigger itself.
+ */
+describe('readyDeploymentCard — Lie in Ambush tally linkage', () => {
+  test('a readied card leaves the activated set LiA counts', () => {
+    const game = {
+      p1DcMessageIds: ['m0', 'm1', 'm2'],
+      p1DcList: [
+        { dcName: 'Luke Skywalker', exhausted: true },
+        { dcName: 'Han Solo', exhausted: true },
+        { dcName: 'Chewbacca', exhausted: true },
+      ],
+      // Three exhausted groups: exactly LiA's threshold.
+      p1ActivatedDcIndices: [0, 1, 2],
+    };
+    const tally = () => game.p1ActivatedDcIndices.length;
+    assert.equal(tally(), 3, 'threshold met before the ready');
+
+    readyDeploymentCard(game, 1, 'm1', {});
+
+    assert.equal(tally(), 2, 'readied card no longer counts as exhausted');
+    assert.deepEqual(game.p1ActivatedDcIndices, [0, 2], 'only that card withdrawn');
+  });
+
+  test('readying a never-activated card does not change the tally', () => {
+    const game = {
+      p1DcMessageIds: ['m0', 'm1'],
+      p1DcList: [{ dcName: 'Luke Skywalker' }, { dcName: 'Han Solo' }],
+      p1ActivatedDcIndices: [0],
+    };
+    readyDeploymentCard(game, 1, 'm1', {});
+    assert.deepEqual(game.p1ActivatedDcIndices, [0], 'tally untouched');
+  });
+});
