@@ -1702,10 +1702,28 @@ export async function handleSoaFire(interaction, ctx) {
   const _activatorMsgId = game.pendingSoaResolution?.activationContext?.activatorMsgId;
   const { exhausted: _soaExhausted } = consumeDescriptor(game, desc.id);
   await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
-  if (_soaExhausted && _activatorMsgId && typeof updateDcActionsMessage === 'function') {
-    await updateDcActionsMessage(game, _activatorMsgId, client).catch(discordCatch);
+  if (_soaExhausted && _activatorMsgId) {
+    // REPOST rather than edit-in-place (alexanbv 2026-08-11): the SoA prompts
+    // pushed the action message far up the thread, so editing it left the player
+    // scrolling to find their map and buttons. Mirrors the post-MP-spend path.
+    await _repostAfterSoa(ctx, game, _activatorMsgId, client);
   }
   saveGames(game.gameId);
+}
+
+/**
+ * Put a fresh action message (with map + buttons) at the bottom of the
+ * activation thread once the SoA chooser is finished. Falls back to an in-place
+ * edit if the repost helper isn't in ctx.
+ */
+async function _repostAfterSoa(ctx, game, msgId, client) {
+  const repost = ctx.repostDcActionsMessage;
+  const update = ctx.updateDcActionsMessage;
+  if (typeof repost === 'function') {
+    await repost(game, msgId, client).catch(discordCatch);
+  } else if (typeof update === 'function') {
+    await update(game, msgId, client).catch(discordCatch);
+  }
 }
 
 /**
@@ -1713,7 +1731,7 @@ export async function handleSoaFire(interaction, ctx) {
  * bucket, advance to the next bucket (or finish).
  */
 export async function handleSoaSkipAll(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, updateDcActionsMessage } = ctx;
+  const { getGame, canActAsPlayer, saveGames, client } = ctx;
   await interaction.deferUpdate().catch(discordCatch);
   const gameId = parseCustomId(interaction.customId, 'soa_skip_all_');
   const game = await requireGame(interaction, getGame, gameId);
@@ -1726,8 +1744,8 @@ export async function handleSoaSkipAll(interaction, ctx) {
   const _skipActivatorMsgId = game.pendingSoaResolution?.activationContext?.activatorMsgId;
   const _skipExhausted = skipCurrentBucket(game);
   await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
-  if (_skipExhausted && _skipActivatorMsgId && typeof updateDcActionsMessage === 'function') {
-    await updateDcActionsMessage(game, _skipActivatorMsgId, client).catch(discordCatch);
+  if (_skipExhausted && _skipActivatorMsgId) {
+    await _repostAfterSoa(ctx, game, _skipActivatorMsgId, client);
   }
   saveGames(game.gameId);
 }

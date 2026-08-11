@@ -23,7 +23,7 @@ import { canActAsPlayer } from '../utils/can-act-as-player.js';
 import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { clearPendingShoulderRush, clearPendingRushPush, setPendingFalseOrders, clearPendingFalseOrders, clearPendingExecutiveOrder, setPendingOrbitalBombardment, clearPendingOrbitalBombardment, clearPendingLure } from '../game/interrupts.js';
 import { getConfig } from '../game/figure-config.js';
-import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower, getFigureSize } from '../data-loader.js';
+import { getLoadoutCards, hasMissionFlag, hasChooseASideFlamethrower, getFigureSize, isDcCompanion } from '../data-loader.js';
 import { depleteDc } from '../game/card-state-helpers.js';
 import { reduceHp, awardObjectiveVp, applyCondition, filterCondition, dcNameFromFigureKey, isCompanionHostDefeated, figureChoiceLabels, figureHasInTheShadows } from '../game/index.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
@@ -2146,6 +2146,16 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   if (!game) return;
   if (await replyIfGameEnded(game, interaction)) return;
   if (!await requirePlayer(interaction, game, interaction.user.id, meta.playerNum, canActAsPlayer, 'Only the owner of this Play Area can use these actions.')) return;
+  // Companions cannot Interact (alexanbv 2026-08-11). The button is no longer
+  // rendered for them, but guard the action itself so any already-posted
+  // message still carrying the old button can't drive an illegal Interact.
+  if (action === 'Interact' && isDcCompanion(meta.dcName)) {
+    await interaction.followUp({
+      content: `**${meta.dcName}** is a companion and cannot Interact.`,
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   // Companion-first gate (per destruct 2026-05-07): when companion was
   // chosen to activate before the host, the host's actions are refused
   // until the companion's full activation completes. The flag is set to

@@ -1,7 +1,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, StringSelectMenuOptionBuilder } from 'discord.js';
 import { normalizeCoord } from '../game/coords.js';
 import { getDcList, getActivatedDcIndices, getPlayerId, getActivationsRemaining, opponentPlayerNum } from '../game/player-helpers.js';
-import { hasChooseASideFlamethrower, getDcKeywords } from '../data-loader.js';
+import { hasChooseASideFlamethrower, getDcKeywords, isDcCompanion } from '../data-loader.js';
 import { cardNameIncludes } from '../game/card-names.js';
 import { figureActionsRemaining, isCompanionOrderPending } from '../game/activation-state.js';
 
@@ -1006,6 +1006,10 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
   // Non-Combatant: DCs with no attack dice cannot attack
   const hasAttack = (stats.attack?.dice?.length ?? 0) > 0;
 
+  // Companions cannot Interact (alexanbv 2026-08-11) — they were being offered
+  // an Interact button they can never legally use.
+  const canInteract = !isDcCompanion(dcName);
+
   // Heroic (Jedi Luke): "Once during your activation, you may perform an
   // attack without spending an action." Surfaces as a sibling Primary/blue
   // Attack button alongside the regular Attack — NOT as a Special Action.
@@ -1072,7 +1076,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f${selectedFigure}`).setLabel(`Heroic Attack (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
       if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f${selectedFigure}`).setLabel(`Bo-Rifle Strike (free)`).setStyle(ButtonStyle.Primary).setDisabled(isStunned));
       if (_showWaSlam) comps.push(new ButtonBuilder().setCustomId(`dc_wa_slam_${msgId}_f${selectedFigure}`).setLabel(`Free Slam (Wookiee Avenger)`).setStyle(ButtonStyle.Primary).setDisabled(_activationLocked));
-      comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
+      if (canInteract) comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f${selectedFigure}`).setLabel(`Interact${suffix}`).setStyle(ButtonStyle.Secondary).setDisabled(noAct));
       rows.push(new ActionRowBuilder().addComponents(...comps));
       // Condition-discard row: Remove Stun + Remove Bleed (1 action each)
       // when applicable. Surface as a separate row so the action row stays
@@ -1145,7 +1149,7 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
     if (_showHeroic) comps.push(new ButtonBuilder().setCustomId(`dc_heroic_attack_${msgId}_f0`).setLabel('Heroic Attack (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
     if (_showBoRifleStaff) comps.push(new ButtonBuilder().setCustomId(`dc_bo_rifle_attack_${msgId}_f0`).setLabel('Bo-Rifle Strike (free)').setStyle(ButtonStyle.Primary).setDisabled(isStunned));
     if (_showWaSlam) comps.push(new ButtonBuilder().setCustomId(`dc_wa_slam_${msgId}_f0`).setLabel('Free Slam (Wookiee Avenger)').setStyle(ButtonStyle.Primary).setDisabled(_activationLocked));
-    comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
+    if (canInteract) comps.push(new ButtonBuilder().setCustomId(`dc_interact_${msgId}_f0`).setLabel('Interact').setStyle(ButtonStyle.Secondary).setDisabled(noAct));
     rows.push(new ActionRowBuilder().addComponents(...comps));
     if (isStunned || isBleeding) {
       const condBtns = [];

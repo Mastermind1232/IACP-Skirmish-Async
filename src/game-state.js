@@ -143,7 +143,52 @@ function migrateGame(g) {
     }
   }
 
+  migrateCompanionFigureKeys(g);
+
   ensureGameShape(g);
+}
+
+/**
+ * Repair stale `${dcName}-0-0` companion figure keys to `${dcName}-1-0`.
+ *
+ * Every companion deploy path used to store the companion's position under
+ * dgIndex 0, but the Move/Attack/Interact handlers all build the key with
+ * dgIndex 1 (parseFigureKey defaults to 1 when the displayName carries no
+ * `[Group N]` suffix). The lookup therefore always missed and the companion
+ * reported "This figure has no position yet (deploy first)". The deploy sites
+ * were fixed in ac266382, but saves written before that still carry the bad
+ * key — including any game with a companion already on the board.
+ *
+ * dgIndex is 1-based everywhere it is produced (setup-bridge's auto-deploy
+ * loop and processDcList both pre-increment; parseFigureKey defaults to 1), so
+ * a `-0-` group index is unambiguously stale and safe to rewrite. Deliberately
+ * structural rather than consulting isDcCompanion(): migrations run during game
+ * load and must never depend on card data being loaded first, nor throw.
+ *
+ * Idempotent — after one pass no `-0-0` keys remain, so it no-ops thereafter.
+ */
+function migrateCompanionFigureKeys(g) {
+  const STALE = /^(.+)-0-0$/;
+  const rekey = (bucket) => {
+    if (!bucket || typeof bucket !== 'object') return;
+    for (const fk of Object.keys(bucket)) {
+      const m = STALE.exec(fk);
+      if (!m) continue;
+      const target = `${m[1]}-1-0`;
+      // Never clobber a real entry that already lives at the correct key.
+      if (bucket[target] === undefined) bucket[target] = bucket[fk];
+      delete bucket[fk];
+    }
+  };
+
+  // Positions are nested one level deeper (playerNum → figureKey).
+  for (const pn of [1, 2]) rekey(g.figurePositions?.[pn]);
+
+  // Flat figureKey-keyed containers that a companion can appear in.
+  for (const key of [
+    'figureConditions', 'figureStrain', 'figureConfig', 'figureOrientations',
+    'figureNicknames', 'figurePowerTokens', 'figureContraband', 'companionHostMap',
+  ]) rekey(g[key]);
 }
 
 /**
@@ -855,6 +900,8 @@ export {
   dcHealthState,
   pendingIllegalSquad,
   pendingSquadConfirm,
+  // Exported for unit tests — pure state transform, no I/O.
+  migrateCompanionFigureKeys,
 };
 
 /** Graceful shutdown: flush pending DB writes before the process exits. */
