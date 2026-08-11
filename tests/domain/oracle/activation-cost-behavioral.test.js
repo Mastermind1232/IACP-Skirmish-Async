@@ -689,3 +689,58 @@ describe('B-UNACT-004: Un-activate clears activation-scoped flags via cleanupAct
     assert.ok(game.moveInProgress?.['3002_0'], 'moveInProgress for other DC preserved');
   });
 });
+
+// ── B-UNACT-005: a RESOLVED activation cannot be un-activated ───────────────
+//
+// handleDcUnactivate's "actions performed?" and "MP spent?" guards read
+// dcActionsData and movementBank — the same two maps cleanupActivation deletes
+// when an activation ends. So after a completed activation both compared
+// against undefined and passed, letting the player ready the group and get the
+// activation back for free having already acted.
+//
+// The distinction that matters: activation data PRESENT with a full budget
+// means "activated, did nothing" (legitimately un-activatable — B-UNACT-003).
+// Activation data ABSENT on an exhausted card means "activated and cleaned up".
+// alexanbv 2026-08-11.
+
+describe('B-UNACT-005: resolved activation cannot be un-activated', () => {
+  it('005: refuses when cleanupActivation has already cleared the activation data', async () => {
+    const game = makeGame({
+      // Post-cleanup shape: both maps gone, card still exhausted, activation spent.
+      dcActionsData: {},
+      movementBank: {},
+      p1ActivatedDcIndices: [0],
+      p1ActivationsRemaining: 0,
+      p1ActivationsTotal: 1,
+      figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' }, 2: {} },
+    });
+    const { ctx, exhaustedState } = buildUnactivateCtx(game);
+    const interaction = mockInteraction('dc_unactivate_3001', 'player1');
+
+    await handleDcUnactivate(interaction, ctx);
+
+    assert.strictEqual(exhaustedState.get('3001'), true, 'DC stays exhausted');
+    assert.ok(game.p1ActivatedDcIndices.includes(0), 'activation NOT refunded');
+    assert.strictEqual(game.p1ActivationsRemaining, 0, 'activations remaining unchanged');
+    const msg = (interaction._followUpCalls || []).map((c) => c.content || '').join(' ');
+    assert.match(msg, /already completed its activation/i, 'explains the refusal');
+  });
+
+  it('005b: still allows un-activate when the group has acted but spent nothing', async () => {
+    // Guards against over-correcting: a full budget with data present is the
+    // legitimate "changed my mind" case and must keep working.
+    const game = makeGame({
+      dcActionsData: { '3001': { perFigureRemaining: { 0: 2 }, figureLocked: {} } },
+      movementBank: { '3001': { perFig: { 0: { remaining: 4, total: 4 } } } },
+      p1ActivatedDcIndices: [0],
+      p1ActivationsRemaining: 0,
+      p1ActivationsTotal: 1,
+      figurePositions: { 1: { 'Rebel Trooper-1-0': 'a1' }, 2: {} },
+    });
+    const { ctx, exhaustedState } = buildUnactivateCtx(game);
+    await handleDcUnactivate(mockInteraction('dc_unactivate_3001', 'player1'), ctx);
+
+    assert.strictEqual(exhaustedState.get('3001'), false, 'un-activate still works');
+    assert.ok(!game.p1ActivatedDcIndices.includes(0), 'activation refunded');
+  });
+});

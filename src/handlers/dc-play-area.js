@@ -348,6 +348,26 @@ export async function handleDcUnactivate(interaction, ctx) {
     return;
   }
   const actionsData = game.dcActionsData?.[msgId];
+  // A group whose activation has RESOLVED cannot be un-activated.
+  //
+  // The two guards below ask "were actions performed?" and "was MP spent?" by
+  // reading dcActionsData / movementBank — but cleanupActivation deletes both
+  // when the activation ends. So once an activation completed, they compared
+  // against undefined and passed vacuously: the group could be readied and its
+  // activation refunded, for free, after acting.
+  //
+  // Absent activation data on an EXHAUSTED card means "activated and cleaned
+  // up", not "nothing happened". Checked here rather than via dcFinishedPinged
+  // so the legitimate case still works — a group activated but which has taken
+  // no action still HAS its dcActionsData, and B-UNACT-003 pins that.
+  // alexanbv 2026-08-11.
+  if (!actionsData) {
+    await interaction.followUp({
+      content: 'Cannot un-activate — this group has already completed its activation.',
+      ephemeral: true,
+    }).catch(discordCatch);
+    return;
+  }
   // Per alexanbv 2026-06-13: actions are strictly per-figure. "Actions
   // performed" = the active figure has spent any of its budget (remaining
   // below the full DC_ACTIONS_PER_ACTIVATION).
