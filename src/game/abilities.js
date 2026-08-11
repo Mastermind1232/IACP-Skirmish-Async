@@ -9176,7 +9176,9 @@ export function resolveAbility(abilityId, context) {
     // Find activating figure (the FORCE USER playing this card)
     const activatingMsgId = game.dcActionsData ? Object.keys(game.dcActionsData).find(mid => game.dcActionsData[mid]?.threadId) : null;
     const activatingMeta = activatingMsgId ? dcMessageMeta.get(activatingMsgId) : null;
-    const activatingFk = activatingMeta ? `${activatingMeta.dcName}-${(activatingMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0'}-0` : null;
+    // 1-based: a '0' default built a key that never exists, so the position
+    // lookup below always missed for single-group casters. alexanbv 2026-08-11.
+    const activatingFk = activatingMeta ? `${activatingMeta.dcName}-${(activatingMeta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1'}-0` : null;
     const activatingPos = activatingFk ? game.figurePositions?.[playerNum]?.[activatingFk] : null;
 
     if (chosenFigureKey) {

@@ -168,7 +168,10 @@ function headlessEndActivation(game, customId, dcMessageMeta) {
   // Build figure keys for only the activated deployment group.
   const endEff = getDcEffects()?.[meta.dcName];
   const figCount = endEff?.figures || 1;
-  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
+  // 1-based, matching the live handler (activation.js). This harness carried
+  // the same '0' default, so the suites reproduced the broken cleanup and
+  // could never catch it — fixed alongside the production sites.
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const figureKeys = [];
   for (let fi = 0; fi < figCount; fi++) {
     figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);

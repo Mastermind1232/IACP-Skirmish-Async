@@ -423,7 +423,9 @@ export async function handleDcUnactivate(interaction, ctx) {
     const getDcEffects = ctx.getDcEffects;
     const _uaEff = getDcEffects?.()?.[meta.dcName];
     const _uaFigCount = _uaEff?.figures || 1;
-    const _uaDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
+    // 1-based — see the note in activation.js handleDcEndActivation. A '0'
+    // default made this cleanup a no-op for every single-group DC.
+    const _uaDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
     const _uaFigureKeys = [];
     for (let fi = 0; fi < _uaFigCount; fi++) {
       _uaFigureKeys.push(`${meta.dcName}-${_uaDgIdx}-${fi}`);

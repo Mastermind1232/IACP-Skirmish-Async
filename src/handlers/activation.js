@@ -975,7 +975,15 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Build figure keys for only the activated deployment group (not all DGs)
   const endEff = getDcEffects()?.[meta.dcName];
   const figCount = endEff?.figures || 1;
-  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '0';
+  // dgIndex is 1-BASED. A single-group DC's displayName carries no "[Group N]"
+  // suffix, so a '0' default built `${dcName}-0-N` keys that match nothing the
+  // handlers ever wrote (they use ?? 1) — cleanupActivation then silently
+  // cleared nothing. attackPerformedThisActivation is the sharp edge: it is in
+  // ACTIVATION_FIGKEY_FLAGS and NOT in ROUND_OBJECT_FLAGS, so it survived both
+  // this cleanup and the round reset, permanently blocking that figure's next
+  // attack ("already attacked this activation and does not have Assault").
+  // alexanbv 2026-08-11.
+  const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
   const figureKeys = [];
   for (let fi = 0; fi < figCount; fi++) {
     figureKeys.push(`${meta.dcName}-${dgIndex}-${fi}`);
