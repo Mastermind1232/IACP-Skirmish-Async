@@ -41,8 +41,9 @@ const SCAN_FILES = ['index.js'];
 // false until this was widened. alexanbv 2026-08-11.
 const GROUP_REGEX = /\[\(\?:DG\|Group\)/;
 
-//  a) nullish-coalescing, always one line:  ....match(/.../)?.[1] ?? '0'
-const BAD_COALESCE = /\?\.\[1\]\s*\?\?\s*['"`]?0['"`]?/;
+//  a) defaulting inline, always one line:  ....match(/.../)?.[1] ?? '0'
+//     `||` counts too — same bug, and '0'/0 are both falsy-adjacent here.
+const BAD_COALESCE = /\?\.\[1\]\s*(?:\?\?|\|\|)\s*['"`]?0['"`]?/;
 
 //  b) ternary form, where the match is stored first and defaulted later:
 //        const m = (name || '').match(/\[(?:DG|Group) (\d+)\]/);
@@ -52,9 +53,13 @@ const BAD_COALESCE = /\?\.\[1\]\s*\?\?\s*['"`]?0['"`]?/;
 //     defeated an earlier windowed version of this check), so resolve it by
 //     NAME: collect every variable assigned from a [Group N] match, then flag
 //     any `NAME ? NAME[1] : '0'` for one of those names.
+//     Matched loosely on purpose: require a `?` somewhere before NAME[1] and a
+//     `: 0` after it, on the same line. That covers `m ? m[1] : '0'` and the
+//     guarded `m && m[1] ? m[1] : '0'` variant alike, while the mandatory `?`
+//     keeps object literals like `{ a: m[1], b: 0 }` from false-positiving.
 const GROUP_MATCH_ASSIGN = /(?:const|let|var)\s+(\w+)\s*=[^\n]*\[\(\?:DG\|Group\)/g;
 const badTernaryFor = (name) =>
-  new RegExp(`\\b${name}\\b\\s*\\?[^\\n:]*\\b${name}\\b\\[1\\]\\s*:\\s*['"\`]?0['"\`]?`);
+  new RegExp(`\\?[^\\n]*\\b${name}\\b\\[1\\][^\\n]*:\\s*['"\`]?0['"\`]?`);
 
 /** Offenders in a whole file: both idioms, resolved per-file rather than per-line. */
 function findOffenders(src) {
