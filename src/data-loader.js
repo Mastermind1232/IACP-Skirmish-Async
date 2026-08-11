@@ -528,13 +528,30 @@ export function isDcAttachment(dcName) {
   return card?.attachment === true;
 }
 
-/** True if this Deployment Card is a companion figure (e.g. BD-1, Junk Droid, Dio, The Child). */
+/**
+ * True if this Deployment Card IS a companion figure (BD-1, Junk Droid, Dio,
+ * The Child, J4X-7, 88-Z, Cam Droid, Pit Droid, Salacious B. Crumb).
+ *
+ * The `companion` field is OVERLOADED and the distinction matters:
+ *   - on a companion's own card:            companion: true
+ *   - on a HOST card or granting attachment: companion: "<companion name>"
+ *     (e.g. "Iden Versio" → "Dio", "Jarrod Kelvin" → "J4X-7",
+ *      "[Clan of Two]" → "The Child")
+ *
+ * So this MUST test `=== true`. A truthy test also matched every host, which
+ * made Iden Versio (7pt) and Jarrod Kelvin (5pt) count as companions — they
+ * awarded 0 VP when defeated, were allowed to share spaces, and were refused
+ * on the interact/retrieve path. Fixed alexanbv 2026-08-11.
+ *
+ * To ask the other question ("does this card BRING a companion?") read the
+ * field directly — see _companionDcNameForHost in game-state.js.
+ */
 export function isDcCompanion(dcName) {
   if (!dcName || typeof dcName !== 'string') return false;
   const n = dcName.trim();
   const effects = getDcEffects();
   const card = effects[n] || effects[`[${n}]`] || (n.startsWith('[') ? effects[n] : null);
-  return !!card?.companion;
+  return card?.companion === true;
 }
 
 /** True if this Deployment Card is unique (from dc-effects.json unique field). */
