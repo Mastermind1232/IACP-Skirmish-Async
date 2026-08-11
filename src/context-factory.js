@@ -114,6 +114,9 @@ const CONTEXT_GROUPS = {
     // SoA-handler strain (e.g. Channel the Force) flows through applyStrain,
     // which consults findFigureheadFigure for the Figurehead STRAIN reaction.
     'findFigureheadFigure',
+    // Rancor's SoA ready goes through readyDeploymentCard, which recomputes
+    // the activation counts after returning the activation.
+    'recomputeActivationCounts',
   ],
 
   move: [

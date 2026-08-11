@@ -691,8 +691,13 @@ export async function finalizeActivation({
   // applyStartOfActivationEffects records the intent on
   // game._scrapBattalionReadyJd; flip dcExhaustedState here.
   if (game._scrapBattalionReadyJd?.length && dcExhaustedState) {
+    // Unified ready primitive (alexanbv 2026-08-11) — un-exhausting alone left
+    // the Junk Droid in pXActivatedDcIndices, so Scrap Battalion readied it
+    // visually without returning the activation.
+    const { readyDeploymentCard: _readyDc } = await import('../game/card-state-helpers.js');
     for (const _jdMsgId of game._scrapBattalionReadyJd) {
-      dcExhaustedState.set(_jdMsgId, false);
+      const _jdPn = (game.p1DcMessageIds || []).includes(_jdMsgId) ? 1 : 2;
+      _readyDc(game, _jdPn, _jdMsgId, { dcExhaustedState, recomputeActivationCounts: deps?.recomputeActivationCounts });
     }
     delete game._scrapBattalionReadyJd;
   }

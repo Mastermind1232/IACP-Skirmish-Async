@@ -1203,9 +1203,15 @@ export async function handleSoaFire(interaction, ctx) {
         const rFigIdx = rFkParsed ? parseInt(rFkParsed[2], 10) : 0;
         healHp(dcHealthState, game, rancorMsgId, rFigIdx, 2, rancorPn);
       }
-      // Ready Rancor's DC (un-exhaust)
-      if (ctx.dcExhaustedState) {
-        ctx.dcExhaustedState.set(rancorMsgId, false);
+      // Ready Rancor's DC via the unified primitive (alexanbv 2026-08-11) —
+      // un-exhausting alone left it in pXActivatedDcIndices, so the activation
+      // was never actually returned.
+      {
+        const { readyDeploymentCard: _readyDc } = await import('../game/card-state-helpers.js');
+        _readyDc(game, rancorPn, rancorMsgId, {
+          dcExhaustedState: ctx.dcExhaustedState,
+          recomputeActivationCounts: ctx.recomputeActivationCounts,
+        });
       }
       // Direct-defeat: per IACP these abilities skip WHEN_DAMAGED and
       // BEFORE_DEFEATED. applyDirectDefeat records HP=0, fires

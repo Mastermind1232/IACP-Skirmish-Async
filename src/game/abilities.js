@@ -15239,7 +15239,16 @@ export function resolveAbility(abilityId, context) {
       const exhaustMeta = dcMessageMeta?.get(exhaustMsgId);
       const readyMeta = dcMessageMeta?.get(readyMsgId);
       if (dcExhaustedState && exhaustMsgId) dcExhaustedState.set(exhaustMsgId, true);
-      if (dcExhaustedState && readyMsgId) dcExhaustedState.set(readyMsgId, false);
+      // Ready side goes through the unified primitive (alexanbv 2026-08-11).
+      // Setting dcExhaustedState alone left the card looking ready while
+      // pXActivatedDcIndices still held it — so the activation was never
+      // actually returned, the same failure Blaze of Glory had.
+      if (readyMsgId) {
+        readyDeploymentCard(game, playerNum, readyMsgId, {
+          dcExhaustedState,
+          recomputeActivationCounts: context.recomputeActivationCounts,
+        });
+      }
       // Persist ability-driven exhaustion/readying for restart survival
       if (game) {
         game.abilityExhaustedMsgIds = game.abilityExhaustedMsgIds || [];
