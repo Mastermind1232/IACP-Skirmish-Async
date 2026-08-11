@@ -96,7 +96,11 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     combat.target?.figureKey,
     combat._blastTargetSize,
   );
-  const dCtx = { dcHealthState, logGameAction, client, deps, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt };
+  // Forward the WHOLE handler ctx into the damage pipeline. Hand-picking a few
+  // keys here silently disabled every pipeline hook that needs anything else —
+  // see the note above applyDamage's call sites in this file. alexanbv
+  // 2026-08-11: "all damage should be routed through the damage pipeline".
+  const dCtx = { ...ctx, thread, sendPrivateReactionPrompt: _sendPrivateReactionPrompt };
   // FUTURE — PLAYER-CHOSEN RESOLUTION ORDER (alexanbv 2026-06-23, NOT YET BUILT):
   // Blast hits every adjacent figure individually through applyDamage (correct),
   // but in FIXED adjacency order. The IACP rule is the CONTROLLER OF THE AFFECTED
@@ -125,7 +129,7 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     if (wasDefeated) {
       const blastLabel = bDcList[bIdx]?.displayName || figureKey;
       const blastDcName = bDcList[bIdx]?.dcName;
-      await processFigureDefeat(game, {
+      await (ctx.processFigureDefeat ?? processFigureDefeat)(game, {
         defeatedPlayerNum: playerNum,
         figureKey,
         attackerPlayerNum,
@@ -135,7 +139,7 @@ async function fireBlast(thread, game, combat, effect, ctx) {
         dcName: blastDcName,
         displayName: blastLabel,
         source: 'Blast',
-      }, { ...(deps || {}), client });
+      }, ctx);
       if (combat.attackerMsgId) {
         // Per alexanbv 2026-05-13: per-figureKey.
         game.activationKills = game.activationKills || {};
@@ -188,9 +192,7 @@ async function fireBlast(thread, game, combat, effect, ctx) {
     if (objectIds.length > 0) {
       const _blastObjCtx = {
         logGameAction, client,
-        applyFigureDamageAt: makeFigureDamageAtAdapter(game, {
-          logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread,
-        }),
+        applyFigureDamageAt: makeFigureDamageAtAdapter(game, { ...ctx, thread }),
         awardObjectiveVp: (await import('../game/vp-helpers.js')).awardObjectiveVp,
       };
       // CRR: Blast hits objects OTHER THAN THE TARGET. Skip the target object
@@ -658,7 +660,7 @@ async function fireElectroPulse(thread, game, combat, effect, ctx) {
       const msgId = findDcMessageIdForFigure?.(game.gameId, pNum, fk);
       if (!msgId) continue;
       const { figureIndex } = parseFigureKey(fk);
-      await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+      await applyDamage(game, { ...ctx, thread }, {
         figureKey: fk, msgId, figIndex: figureIndex,
         amount: 1, controllerPlayerNum: pNum,
         attackerPlayerNum: combat.attackerPlayerNum,
@@ -681,7 +683,7 @@ async function fireQuickStrike(thread, game, combat, effect, ctx) {
   const targetMsgId = combat.target?.msgId;
   if (!fk || !targetMsgId) return;
   const { figureIndex } = parseFigureKey(fk);
-  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+  await applyDamage(game, { ...ctx, thread }, {
     figureKey: fk, msgId: targetMsgId, figIndex: figureIndex,
     amount: 1, controllerPlayerNum: combat.defenderPlayerNum,
     attackerPlayerNum: combat.attackerPlayerNum,
@@ -873,7 +875,7 @@ async function fireBladestorm(thread, game, combat, effect, ctx) {
     const fMsgId = findDcMessageIdForFigure?.(game.gameId, defPn, fk);
     if (!fMsgId) continue;
     const { figureIndex } = parseFigureKey(fk);
-    const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    const { prevHp, newHp } = await applyDamage(game, { ...ctx, thread }, {
       figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
       amount: aoeDmg, controllerPlayerNum: defPn,
       attackerPlayerNum: combat.attackerPlayerNum,
@@ -936,7 +938,7 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
     const fMsgId = findDcMessageIdForFigure?.(game.gameId, pn, fk);
     if (!fMsgId) continue;
     const { figureIndex } = parseFigureKey(fk);
-    const { prevHp, newHp } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+    const { prevHp, newHp } = await applyDamage(game, { ...ctx, thread }, {
       figureKey: fk, msgId: fMsgId, figIndex: figureIndex,
       amount: 1, controllerPlayerNum: pn,
       attackerPlayerNum: atkPn,
@@ -962,9 +964,7 @@ async function fireShrapnelSplash(thread, game, combat, effect, ctx) {
     if (objectIds.length > 0) {
       const _splashCtx = {
         logGameAction, client,
-        applyFigureDamageAt: makeFigureDamageAtAdapter(game, {
-          logGameAction, client, dcHealthState, findDcMessageIdForFigure, deps, thread,
-        }),
+        applyFigureDamageAt: makeFigureDamageAtAdapter(game, { ...ctx, thread }),
         awardObjectiveVp: (await import('../game/vp-helpers.js')).awardObjectiveVp,
       };
       for (const objId of objectIds) {
@@ -1536,7 +1536,7 @@ async function fireForceDeflection(thread, game, combat, effect, ctx) {
   const diceCount = combat.attackDiceResults?.length || 0;
   if (diceCount === 0) return;
   const atkFigIdx = combat.attackerFigureIndex ?? 0;
-  const { newHp, prevHp, wasDefeated } = await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+  const { newHp, prevHp, wasDefeated } = await applyDamage(game, { ...ctx, thread }, {
     figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: atkFigIdx,
     amount: diceCount, controllerPlayerNum: combat.attackerPlayerNum,
     source: 'Force Deflection', combat,
@@ -1549,7 +1549,7 @@ async function fireForceDeflection(thread, game, combat, effect, ctx) {
   if (wasDefeated) {
     const dcIds = getDcMessageIds(game, combat.attackerPlayerNum) || [];
     const dcIdx = dcIds.indexOf(combat.attackerMsgId);
-    await processFigureDefeat(game, {
+    await (ctx.processFigureDefeat ?? processFigureDefeat)(game, {
       defeatedPlayerNum: combat.attackerPlayerNum,
       figureKey: combat.attackerFigureKey,
       attackerPlayerNum: defPN,
@@ -1558,7 +1558,7 @@ async function fireForceDeflection(thread, game, combat, effect, ctx) {
       dcIdx,
       dcName: combat.attackerDcName,
       source: 'Force Deflection',
-    }, { ...(deps || {}), client });
+    }, ctx);
   }
 }
 
@@ -1608,7 +1608,7 @@ async function fireDeflection(thread, game, combat, effect, ctx) {
   delete game.deflectionPending[defPN];
   if (game.deflectionUnconditional?.[defPN]) delete game.deflectionUnconditional[defPN];
   const atkFigIdx = combat.attackerFigureIndex ?? 0;
-  await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+  await applyDamage(game, { ...ctx, thread }, {
     figureKey: combat.attackerFigureKey, msgId: combat.attackerMsgId, figIndex: atkFigIdx,
     amount: deflectDmg, controllerPlayerNum: combat.attackerPlayerNum,
     source: 'Deflection', combat,
@@ -1662,7 +1662,7 @@ async function fireDeflect(thread, game, combat, effect, ctx) {
       const tgtMsgId = findDcMessageIdForFigure?.(game.gameId, tgt.playerNum, tgt.figureKey);
       if (tgtMsgId) {
         const { figureIndex } = parseFigureKey(tgt.figureKey);
-        await applyDamage(game, { dcHealthState, logGameAction, client, deps, thread }, {
+        await applyDamage(game, { ...ctx, thread }, {
           figureKey: tgt.figureKey, msgId: tgtMsgId, figIndex: figureIndex,
           amount: 1, controllerPlayerNum: tgt.playerNum,
           source: 'Deflect (Luke)', combat,
