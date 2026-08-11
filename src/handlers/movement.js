@@ -42,6 +42,15 @@ function _stepModeToggleBtn(msgId, figureIndex, stepByStep) {
 
 /** Clean up all movement-related state flags for a completed/cancelled move. */
 function _cleanupMoveState(game, moveKey, msgId) {
+  // Capture before the delete below — the Mobile cleanup at the end of this
+  // function needs it. `figureKey` was never a parameter here, so that line
+  // referenced a free variable: harmless only while game.mobileMovementActive
+  // was undefined (optional chaining short-circuits the whole chain, so the
+  // subscript is never evaluated). cleanupRoundStart lists mobileMovementActive
+  // in ROUND_OBJECT_FLAGS and sets it to {} at every round start, at which
+  // point the subscript IS evaluated and throws ReferenceError, killing every
+  // End-Movement from round 2 on. Latent since 78204a92 (2026-05-13).
+  const _mmFigureKey = game.moveInProgress?.[moveKey]?.figureKey;
   delete game.moveInProgress[moveKey];
   // Per alexanbv 2026-05-12: the paired pendingSpacePick entry must
   // clear here too. Move grids register a pick at
@@ -54,7 +63,7 @@ function _cleanupMoveState(game, moveKey, msgId) {
     const ctxKey = `${game.gameId}_${moveKey}`;
     if (game.pendingSpacePick[ctxKey]) delete game.pendingSpacePick[ctxKey];
   }
-  if (game.mobileMovementActive?.[figureKey]) delete game.mobileMovementActive[figureKey];
+  if (_mmFigureKey && game.mobileMovementActive?.[_mmFigureKey]) delete game.mobileMovementActive[_mmFigureKey];
   if (game.urgencyMustSpendAll?.[msgId]) delete game.urgencyMustSpendAll[msgId];
 }
 
