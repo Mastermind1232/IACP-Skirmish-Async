@@ -179,6 +179,19 @@ const CONTEXT_GROUPS = {
     'isCcAttachment', 'isCcPlayableNow', 'isCcPlayLegalByRestriction',
     'buildHandDisplayPayload', 'updateHandVisualMessage', 'updateDiscardPileMessage',
     'getIllegalCcPlayButtons', 'getCommandCardImagePath', 'pushUndo',
+    // Step-8 effect firing (src/handlers/after-attack-fire.js). fireCleave does
+    // `deps = ctx.deps || ctx` and forwards this ctx straight into
+    // computeCleaveEligibleTargets, which destructures all of the geometry
+    // helpers below (combat-bridge.js ~487). They were absent from this group,
+    // so the FIRST one called threw — "getEffectiveMapSpaces is not a function"
+    // killed ranged Cleave in live play (alexanbv 2026-08-11). The `combat`
+    // group already carries these; postCombat is the same code path after the
+    // attack resolves, so it needs them too. Same reason for the splash and
+    // adjacency helpers used by the other fire* effects.
+    'getFiguresAdjacentToCoord', 'getEffectiveMapSpaces', 'isWithinN',
+    'hasFigureLineOfSight', 'getFigureFootprint', 'getFigureSize', 'getFigureLabel',
+    'getDcEffect', 'getLoadoutCards',
+    'getCleaveTargetButtons', 'getFiguresAdjacentToTarget', 'applyIndiscriminateFireSplash',
   ],
 
   activation: [

@@ -140,7 +140,7 @@ import { shuffleArray, filterValidTopLeftSpaces as _filterValidTopLeftSpacesPure
 import {
   getMissionTokenLabel, calculateKillVp as _calculateKillVpRaw,
 } from '../engine/mission-helpers.js';
-import { isDcCompanion } from '../data-loader.js';
+import { isDcCompanion, getLoadoutCards } from '../data-loader.js';
 import {
   hasActionsRemainingInGame as _hasActionsRemainingInGameRaw,
   shouldShowEndActivationPhaseButton as _shouldShowEndActivationPhaseButtonRaw,
@@ -639,6 +639,10 @@ export function buildHeadlessDeps(options = {}) {
     computeCleaveEligibleTargets,
     isWithinN: (a, b, n, mapId, game = null) => isWithinN(a, b, n, mapId, getMapData, game),
     getCleaveTargetButtons,
+    // Step-8 cleave/splash deps — the postCombat context group now requires
+    // these (alexanbv 2026-08-11 ranged-Cleave crash), so headless must supply
+    // them too or the parity certification fails.
+    getLoadoutCards, applyIndiscriminateFireSplash: noopAsync,
     applyDirectDamageToFigure, applyNpcDamageToFigure,
     decrementActivationIfGroupDefeated,
     checkNefariousGains, checkHuntDissent, checkThisIsTheWay,

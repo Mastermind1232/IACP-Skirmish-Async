@@ -3563,6 +3563,10 @@ function buildAllDeps() {
     countTerminalsControlledByPlayer, isFigureInDeploymentZone,
     getFiguresOnOrAdjacentToSpace, getFiguresAdjacentToCoord, applyNpcDamageToFigure,
     getEffectiveMapSpaces, isWithinN, computeCleaveEligibleTargets, getCleaveTargetButtons,
+    // Required by the postCombat group's step-8 fire path (after-attack-fire.js
+    // → computeCleaveEligibleTargets). Imported but never exposed on the bag,
+    // so the ctx built for aar_fire_ had them undefined (alexanbv 2026-08-11).
+    getDcEffect, getLoadoutCards, getFiguresAdjacentToTarget, applyIndiscriminateFireSplash,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons, postArmsDistributionPrompt, postPrototypeMovePrompt,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,

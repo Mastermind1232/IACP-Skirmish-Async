@@ -563,7 +563,10 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
   } else if (!combat.isRanged && _attackerHasReach) {
     // Reach + melee: eligibility extends to 2 spaces + LOS (per CRR).
     const _reachRange = 2;
-    const mapSpaces = getEffectiveMapSpaces(game, mapId);
+    // getEffectiveMapSpaces takes map DATA, not a map id (see movement.js) —
+    // a bare id string is truthy and falls straight through the identity
+    // return, so LOS below would run against the string. alexanbv 2026-08-11.
+    const mapSpaces = getEffectiveMapSpaces(game, getMapData(mapId));
     const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
     for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
       if (fk === combat.target?.figureKey) continue;
@@ -588,7 +591,8 @@ export function computeCleaveEligibleTargets(game, combat, defenderPlayerNum, de
     }
   } else {
     const totalAcc = (combat.attackRoll?.acc || 0) + (combat.surgeAccuracy || 0) + (combat.bonusAccuracy || 0);
-    const mapSpaces = getEffectiveMapSpaces(game, mapId);
+    // Map DATA, not an id — see the note on the reach branch above.
+    const mapSpaces = getEffectiveMapSpaces(game, getMapData(mapId));
     const attackerFp = getFigureFootprint(game, combat.attackerPlayerNum, combat.attackerFigureKey, getFigureSize);
     for (const [fk, fCoord] of Object.entries(game.figurePositions?.[defenderPlayerNum] || {})) {
       if (fk === combat.target?.figureKey) continue;
