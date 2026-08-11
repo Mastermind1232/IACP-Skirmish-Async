@@ -644,7 +644,13 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       if (_eorDied) {
         const _eorDcName = meta?.dcName || 'Figure';
         const _eorDgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-        const _eorDgIdx = _eorDgMatch ? _eorDgMatch[1] : '0';
+        // 1-based, matching the damage key built a few lines above (_eorFkX).
+        // A '0' default here meant the damage killed `Name-1-0` while the
+        // defeat was processed against `Name-0-0`, so removeFigurePosition
+        // deleted nothing: the defeated figure stayed on the board occupying
+        // space and blocking LOS, and lastPos was null so carried contraband
+        // never dropped. alexanbv 2026-08-11.
+        const _eorDgIdx = _eorDgMatch ? _eorDgMatch[1] : '1';
         const _eorFigKey = `${_eorDcName.replace(/\s*\[.*\]\s*$/, '').trim()}-${_eorDgIdx}-0`;
         const _eorDcIds = getDcMessageIds(game, playerNum) || [];
         const _eorIdx = _eorDcIds.indexOf(msgId);

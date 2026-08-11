@@ -40,7 +40,7 @@ import {
 import { getDcList, getDcMessageIds, opponentPlayerNum, vpKey, getActivatedDcIndices, dcAttachmentsKey, getHandChannelId } from './player-helpers.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { getDcEffects, getDcKeywords, getMapData, isDcUnique } from '../data-loader.js';
+import { getDcEffects, getDcKeywords, getMapData, isDcUnique, isDcCompanion } from '../data-loader.js';
 import { applyCondition, isConditionImmune, areConditionEffectsSuppressed } from './conditions.js';
 import { awardObjectiveVp } from './vp-helpers.js';
 import { countGameSpaces } from './board-helpers.js';
@@ -1532,7 +1532,11 @@ WHEN_DEFEATED_HOOKS.push({
     // A defeated companion figure (its own entry carries `companion`) does not
     // trigger Vengeance/Forward Vengeance — mirrors the GUARDIAN exclusion and
     // the dedicated forward_vengeance_royal_guard_elite move hook below.
-    if (eff?.companion) return false;
+    // Must be `=== true` (via isDcCompanion): the raw field is a STRING on
+    // host cards, so a truthy read also matched Iden Versio (companion: "Dio")
+    // and Jarrod Kelvin, wrongly suppressing Vengeance when they were the
+    // defeated friendly. Same bug fixed in isDcCompanion at 091b0e45.
+    if (isDcCompanion(dcName)) return false;
     // Same-side RG must exist adjacent to defeated position.
     const ms = getMapData(game.selectedMap?.id);
     const adj = (ms?.adjacency?.[String(opts.defeatedPos).toLowerCase()] || [])
@@ -1838,7 +1842,8 @@ WHEN_DEFEATED_HOOKS.push({
     const defeatedEff = getDcEffect(defeatedDc);
     const defeatedKws = (defeatedEff?.keywords || []).map((k) => String(k).toUpperCase());
     if (defeatedKws.includes('GUARDIAN')) return false;
-    if (defeatedEff?.companion) return false;
+    // `=== true` via isDcCompanion — see the note on the Vengeance probe above.
+    if (isDcCompanion(defeatedDc)) return false;
     const defeatedPos = opts.defeatedPos ?? game.figurePositions?.[opts.controllerPlayerNum]?.[opts.figureKey];
     if (!defeatedPos) return false;
     const friendly = game.figurePositions?.[opts.controllerPlayerNum] || {};

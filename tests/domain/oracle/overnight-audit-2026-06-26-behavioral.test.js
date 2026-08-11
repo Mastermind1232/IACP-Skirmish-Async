@@ -384,24 +384,40 @@ describe('HIGH: P1 action cost — ability-library.json carries explicit actionC
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('LOW: Royal Guard (Elite)/Forward Vengeance — companion exclusion in predicate', () => {
-  let isForwardVengeanceEligibleDefeated;
+  // Both Vengeance probes must exclude a defeated COMPANION figure.
+  //
+  // These originally asserted the literal `eff?.companion` / `defeatedEff?.companion`
+  // expressions. That raw field is OVERLOADED — `true` on a companion's own
+  // card, but a STRING naming the companion on host cards — so a truthy read
+  // also matched Iden Versio (companion: "Dio") and Jarrod Kelvin, suppressing
+  // Vengeance when either was the defeated friendly. Both sites now go through
+  // isDcCompanion(), which tests `=== true`. Assert the guarantee rather than
+  // the old expression text. alexanbv 2026-08-11.
   before(async () => {
-    // Read the damage-pipeline-hooks to verify the exclusion exists
     const src = await readFile(new URL('src/game/damage-pipeline-hooks.js', ROOT), 'utf8');
-    // Companion exclusion should reference eff?.companion
-    const hasCompanionExclusion = src.includes('eff?.companion') || src.includes('defeatedEff?.companion');
-    assert.ok(hasCompanionExclusion, 'damage-pipeline-hooks must exclude companion DCs from Forward Vengeance');
+    assert.ok(
+      src.includes('isDcCompanion('),
+      'damage-pipeline-hooks must exclude companion DCs from Vengeance/Forward Vengeance',
+    );
+    assert.ok(
+      !/\w*[Ee]ff\?\.companion/.test(src),
+      'no raw truthy `companion` read may remain — the field is a string on host cards',
+    );
   });
 
-  it('forward_vengeance_royal_guard_elite fires when eff.companion is falsy (ordinary DC)', async () => {
-    const { allCombatAbilities } = await import(new URL('src/engine/combat-timing-registry.js', ROOT).href);
-    // The companion exclusion is structural in the hook predicate; just verify Forward Vengeance is registered.
+  it('both Vengeance probes exclude companions via the strict isDcCompanion check', async () => {
     const src = await readFile(new URL('src/game/damage-pipeline-hooks.js', ROOT), 'utf8');
     assert.ok(src.includes('forward_vengeance_royal_guard_elite'), 'FV Elite hook registered');
-    // Both companion exclusion forms must be present (two different contexts in the file)
-    const hasEff = (src.match(/eff\?\.companion/g) || []).length >= 1;
-    const hasDef = (src.match(/defeatedEff\?\.companion/g) || []).length >= 1;
-    assert.ok(hasEff && hasDef, `companion exclusion at both FV hook sites (eff: ${hasEff}, defeatedEff: ${hasDef})`);
+    // One exclusion in the Vengeance probe, one in the Forward Vengeance probe.
+    const calls = (src.match(/isDcCompanion\(/g) || []).length;
+    assert.ok(calls >= 2, `expected an exclusion at both FV hook sites, found ${calls}`);
+  });
+
+  it('isDcCompanion excludes real companions but not their hosts', async () => {
+    const { isDcCompanion } = await import(new URL('src/data-loader.js', ROOT).href);
+    assert.equal(isDcCompanion('The Child'), true, 'companion figure');
+    assert.equal(isDcCompanion('Iden Versio'), false, 'HOST — must still trigger Vengeance');
+    assert.equal(isDcCompanion('Jarrod Kelvin'), false, 'HOST — must still trigger Vengeance');
   });
 });
 

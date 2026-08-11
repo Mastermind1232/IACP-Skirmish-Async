@@ -1159,8 +1159,13 @@ async function fireHeavyFire(thread, game, combat, effect, ctx) {
   const hfMsgId = dcMsgIds[hfIdx];
   if (!hfMsgId) return;
   if (dcExhaustedState?.get?.(hfMsgId)) return;
-  const atkKws = (ctx.getDcKeywords?.(game) || {})[combat.attackerDcName] || [];
-  // Note: getDcKeywords is imported, but ctx may also pass it; use either.
+  // Prefer the module import and fall back to ctx. The comment below always
+  // claimed "use either", but the code read ONLY ctx.getDcKeywords — which the
+  // postCombat group never provided, so atkKws was always [] and the
+  // VEHICLE / HEAVY WEAPON gate below always failed: Heavy Fire never fired.
+  // alexanbv 2026-08-11.
+  const _hfKeywords = getDcKeywords || ctx.getDcKeywords;
+  const atkKws = (_hfKeywords?.(game) || {})[combat.attackerDcName] || [];
   const upper = atkKws.map((k) => String(k).toUpperCase());
   if (!upper.includes('VEHICLE') && !upper.includes('HEAVY WEAPON')) return;
   const attEff = getDcEffect(combat.attackerDcName);
@@ -1312,7 +1317,11 @@ async function fireFightingKnife(thread, game, combat, effect, ctx) {
   const { ButtonBuilder, ButtonStyle, ActionRowBuilder, deps } = ctx;
   if (!thread || !combat.attackerFigureKey || !game.selectedMap?.id) return;
   const defPN = combat.defenderPlayerNum ?? opponentPlayerNum(combat.attackerPlayerNum);
-  const getFiguresAdjacentToTarget = deps?.getFiguresAdjacentToTarget;
+  // `ctx.deps` is not a thing on the handler context — the postCombat bag is
+  // flat. Reading only `deps?.x` made this an unconditional early return, so
+  // Fighting Knife never fired at all. Match the `ctx.deps || ctx` fallback
+  // fireCleave uses. alexanbv 2026-08-11.
+  const getFiguresAdjacentToTarget = deps?.getFiguresAdjacentToTarget || ctx?.getFiguresAdjacentToTarget;
   if (!getFiguresAdjacentToTarget) return;
   const adjHostiles = getFiguresAdjacentToTarget(game, combat.attackerFigureKey, game.selectedMap.id)
     .filter((c) => c.playerNum === defPN);

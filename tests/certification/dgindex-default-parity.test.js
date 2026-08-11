@@ -30,12 +30,55 @@ const SCAN_DIRS = ['src'];
 const SCAN_FILES = ['index.js'];
 
 // A line is an offender only if it BOTH extracts a group index and defaults
-// that extraction to 0. Keyed on the `?.[1] ?? 0` idiom specifically — a
-// looser scan runs past it onto the trailing `selectedFigure ?? 0`, which is
-// correctly 0-based (figure indices start at 0; only GROUP indices start at 1).
+// that extraction to 0. Scoped to the two idioms actually used, because a
+// looser scan runs onto a trailing `selectedFigure ?? 0`, which is correctly
+// 0-based (figure indices start at 0; only GROUP indices start at 1).
+//
+// BOTH forms must be covered. The original version of this test only matched
+// the `??` form and therefore missed round.js's ternary
+// (`_eorDgMatch ? _eorDgMatch[1] : '0'`), which left defeated figures on the
+// board after Blaze of Glory — so the test's claim to block the class was
+// false until this was widened. alexanbv 2026-08-11.
 const GROUP_REGEX = /\[\(\?:DG\|Group\)/;
-const BAD_FALLBACK = /\?\.\[1\]\s*\?\?\s*['"`]?0['"`]?/;
-const isOffender = (line) => GROUP_REGEX.test(line) && BAD_FALLBACK.test(line);
+
+//  a) nullish-coalescing, always one line:  ....match(/.../)?.[1] ?? '0'
+const BAD_COALESCE = /\?\.\[1\]\s*\?\?\s*['"`]?0['"`]?/;
+
+//  b) ternary form, where the match is stored first and defaulted later:
+//        const m = (name || '').match(/\[(?:DG|Group) (\d+)\]/);
+//        ...
+//        const idx = m ? m[1] : '0';
+//     The two statements can be arbitrarily far apart (a comment between them
+//     defeated an earlier windowed version of this check), so resolve it by
+//     NAME: collect every variable assigned from a [Group N] match, then flag
+//     any `NAME ? NAME[1] : '0'` for one of those names.
+const GROUP_MATCH_ASSIGN = /(?:const|let|var)\s+(\w+)\s*=[^\n]*\[\(\?:DG\|Group\)/g;
+const badTernaryFor = (name) =>
+  new RegExp(`\\b${name}\\b\\s*\\?[^\\n:]*\\b${name}\\b\\[1\\]\\s*:\\s*['"\`]?0['"\`]?`);
+
+/** Offenders in a whole file: both idioms, resolved per-file rather than per-line. */
+function findOffenders(src) {
+  const lines = src.split('\n');
+  const hits = [];
+
+  // (a) single-line coalesce form
+  lines.forEach((line, i) => {
+    if (GROUP_REGEX.test(line) && BAD_COALESCE.test(line)) hits.push({ line: i + 1, text: line });
+  });
+
+  // (b) ternary form, matched by variable name anywhere in the file
+  const names = new Set();
+  let m;
+  GROUP_MATCH_ASSIGN.lastIndex = 0;
+  while ((m = GROUP_MATCH_ASSIGN.exec(src)) !== null) names.add(m[1]);
+  for (const name of names) {
+    const re = badTernaryFor(name);
+    lines.forEach((line, i) => {
+      if (re.test(line)) hits.push({ line: i + 1, text: line });
+    });
+  }
+  return hits;
+}
 
 function walk(dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -57,12 +100,9 @@ describe('dgIndex default parity', () => {
   test('no [Group N] regex fallback defaults to 0', () => {
     const offenders = [];
     for (const file of collectFiles()) {
-      const lines = readFileSync(file, 'utf8').split('\n');
-      lines.forEach((line, i) => {
-        if (isOffender(line)) {
-          offenders.push(`${relative(ROOT, file)}:${i + 1}\n      ${line.trim()}`);
-        }
-      });
+      for (const hit of findOffenders(readFileSync(file, 'utf8'))) {
+        offenders.push(`${relative(ROOT, file)}:${hit.line}\n      ${hit.text.trim()}`);
+      }
     }
     if (offenders.length) {
       assert.fail(
