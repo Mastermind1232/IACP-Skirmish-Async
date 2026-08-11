@@ -673,7 +673,12 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         });
       }
     }
-    game.endOfRoundSelfDamage = {};
+    // Delete only THIS pass's entries. _runDcEorForPlayer runs once per player
+    // (init at ~:469, non-init at ~:123); a blanket reset here meant pass 1
+    // destroyed the other player's pending entry before pass 2 could read it,
+    // so the NON-INITIATIVE player never suffered Blaze of Glory self-damage
+    // and readied a Deployment card for free. alexanbv 2026-08-11.
+    for (const playerNum of _eorPlayers) delete game.endOfRoundSelfDamage[playerNum];
   }
   // Second Chance: end-of-round — recover 2 Damage for any DC that still has Second Chance, then discard
   if (game.secondChanceDcMsgId && typeof game.secondChanceDcMsgId === 'object') {
@@ -697,7 +702,13 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
         break; // only heal first damaged figure
       }
     }
-    game.secondChanceDcMsgId = {};
+    // Per-player, not global — see the note on endOfRoundSelfDamage above.
+    // A blanket reset meant the non-initiative player's Second Chance never
+    // recovered its 2 Damage, and their live prevent-defeat carrier was
+    // dropped a full window-turn early.
+    for (const [msgId, pn] of Object.entries(game.secondChanceDcMsgId)) {
+      if (Number(pn) === _eorPlayerNum) delete game.secondChanceDcMsgId[msgId];
+    }
   }
   // Adrenaline: at end of round, remove the temporary +5 Health bonus for each
   // boosted WOOKIEE. Spec (combat-spec.csv:528 / cc-effects.json): the card ONLY
@@ -729,7 +740,13 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       if (idx >= 0 && dcListArr[idx]) dcListArr[idx].healthState = [...healthState];
       await logGameAction(game, client, `**End of round — Adrenaline** — **${info.dcName}** lost the **+5 Health** bonus.`, { phase: 'ROUND', icon: 'round' });
     }
-    game.adrenalineBonuses = {};
+    // Per-player, not global — see the note on endOfRoundSelfDamage above.
+    // A blanket reset meant the non-initiative player's +5 max Health was
+    // never reverted; the record then died at the round-start reset, leaving
+    // that figure permanently inflated for the rest of the game.
+    for (const [msgId, info] of Object.entries(game.adrenalineBonuses)) {
+      if (Number(info?.playerNum) === _eorPlayerNum) delete game.adrenalineBonuses[msgId];
+    }
   }
   // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
   for (const pn of _eorPlayers) {
