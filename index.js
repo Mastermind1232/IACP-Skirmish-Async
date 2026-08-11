@@ -3567,6 +3567,10 @@ function buildAllDeps() {
     // → computeCleaveEligibleTargets). Imported but never exposed on the bag,
     // so the ctx built for aar_fire_ had them undefined (alexanbv 2026-08-11).
     getDcEffect, getLoadoutCards, getFiguresAdjacentToTarget, applyIndiscriminateFireSplash,
+    // Also required by the postCombat step-8 path: enqueueDefenderStep8Effects
+    // bails without dcNameFromFigureKey, and Boltslinger's >24-target path
+    // needs the select-menu builder.
+    dcNameFromFigureKey, StringSelectMenuBuilder,
     postDevaronDoorButtons, postDevaronCratePushPrompts, postKryknaPushButtons, postKryknaPlaceButtons, postFluctuationSwapButtons, postArmsDistributionPrompt, postPrototypeMovePrompt,
     getSpaceController, shouldShowEndActivationPhaseButton, getPlayReadyMaps,
     getDetermineInitiativeButtons, populatePlayAreas,

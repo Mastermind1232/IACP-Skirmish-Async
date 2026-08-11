@@ -265,6 +265,7 @@ export const DEP_BAG_ALLOWED_OMISSIONS = {
   buildSquadConfirmText:            'Discord text builder for squad-confirmation messages; no Discord messages in headless',
   channelDeleteGuard:               'Discord channel-delete safeguard; headless never deletes real channels',
   getDetermineInitiativeButtons:    'Discord button builder for initiative prompts; headless has no Discord UI',
+  StringSelectMenuBuilder:          'Raw discord.js select-menu class (Boltslinger >24-target picker); headless renders no components',
   populatePlayAreas:                'Creates Discord play-area channel messages; headless uses no Discord channels',
   postFluctuationSwapButtons:       'Discord button post for mission fluctuation-swap UI; no Discord UI in headless',
   postGameOver:                     'Discord game-over message poster; headless uses an inline wrapper inside checkWinConditions (see headless-deps.js line ~363)',

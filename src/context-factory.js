@@ -200,6 +200,18 @@ const CONTEXT_GROUPS = {
     // it fire (9f42408f) turned the missing guard into a live rules break.
     // alexanbv 2026-08-11.
     'dcExhaustedState',
+    // enqueueDefenderStep8Effects (after-attack-resolve.js ~545) bails at
+    // `if (!getDcEffects || !findDcMessageIdForFigure) return;` — it had the
+    // second but not the first, so it early-returned every time and the
+    // DEFENDER's step-8 abilities were never queued at all: Slippery, Furious
+    // Charge, Force Deflection, Deflect, Deflection and Return Fire.
+    'getDcEffects', 'dcNameFromFigureKey',
+    // Stalk Prey grants MP and then refreshes the bank message (~394/406);
+    // without this the grant lands but the player never sees it.
+    'ensureMovementBankMessage',
+    // Boltslinger's >24-candidate path falls back to truncated buttons without
+    // the select menu it exists to use (~1062).
+    'StringSelectMenuBuilder',
   ],
 
   activation: [

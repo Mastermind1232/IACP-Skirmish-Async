@@ -56,9 +56,10 @@
     "baselineTypeMismatchCount": 111
   },
   "depBagParity": {
-    "totalRequiredDepKeys": 244,
-    "allowedOmissionsCount": 13,
+    "totalRequiredDepKeys": 246,
+    "allowedOmissionsCount": 14,
     "allowedOmissions": [
+      "StringSelectMenuBuilder",
       "buildSquadConfirmText",
       "channelDeleteGuard",
       "getCheckpointById",

@@ -159,11 +159,21 @@ function migrateGame(g) {
  * were fixed in ac266382, but saves written before that still carry the bad
  * key — including any game with a companion already on the board.
  *
- * dgIndex is 1-based everywhere it is produced (setup-bridge's auto-deploy
- * loop and processDcList both pre-increment; parseFigureKey defaults to 1), so
- * a `-0-` group index is unambiguously stale and safe to rewrite. Deliberately
- * structural rather than consulting isDcCompanion(): migrations run during game
- * load and must never depend on card data being loaded first, nor throw.
+ * dgIndex is 1-based everywhere it is PRODUCED (setup-bridge's auto-deploy loop
+ * and processDcList both pre-increment; parseFigureKey defaults to 1), so a
+ * `-0-` group index is unambiguously stale and safe to rewrite.
+ *
+ * Caveat on that invariant: when this migration was written, four sites still
+ * DEFAULTED a read to `?? '0'` (activation.js, dc-play-area.js, abilities.js,
+ * game-harness.js). All four were lookup/delete sites — none ever wrote a
+ * `-0-0` entry — so the migration was safe in practice, but the invariant only
+ * became literally true in 1fc9dd61, which fixed them and added
+ * tests/certification/dgindex-default-parity.test.js to enforce it. Keep these
+ * commits together.
+ *
+ * Deliberately structural rather than consulting isDcCompanion(): migrations
+ * run during game load and must never depend on card data being loaded first,
+ * nor throw.
  *
  * Idempotent — after one pass no `-0-0` keys remain, so it no-ops thereafter.
  */
@@ -185,9 +195,24 @@ function migrateCompanionFigureKeys(g) {
   for (const pn of [1, 2]) rekey(g.figurePositions?.[pn]);
 
   // Flat figureKey-keyed containers that a companion can appear in.
+  //
+  // Scope note: only GAME-PERSISTENT containers need migrating. Round- and
+  // activation-scoped maps (attackPerformedThisActivation, figureMoved,
+  // activationStartPositions, …) are reset at their own boundary, so a stale
+  // `-0-0` entry there ages out on its own.
   for (const key of [
     'figureConditions', 'figureStrain', 'figureConfig', 'figureOrientations',
     'figureNicknames', 'figurePowerTokens', 'figureContraband', 'companionHostMap',
+    // Added after audit: these three are explicitly game-persistent and are
+    // never cleared by a round boundary, so a stale key here is orphaned for
+    // the rest of the game.
+    //   deviceTokens             activation.js:2332 — Unstable Devices; the
+    //                            comment at combat-conditions.js:195 notes
+    //                            these persist even after the granter dies
+    //   disarmPermanentWeakened  abilities.js:9972 — makes Weaken unremovable
+    //   figureCostModifier       abilities.js:10952 — marked "game-persistent,
+    //                            NOT round-scoped"; feeds kill VP
+    'deviceTokens', 'disarmPermanentWeakened', 'figureCostModifier',
   ]) rekey(g[key]);
 }
 
@@ -800,6 +825,13 @@ async function _loadFromEventReplay() {
       try {
         const state = await replayToState(gameId);
         if (state && Object.keys(state).length > 0) {
+          // Replayed state must go through the same migrations as a blob load.
+          // This path skipped migrateGame entirely, so it also skipped
+          // ensureGameShape, the v1->v2 phase computation, CC faction-suffix
+          // sanitisation and the 'Hit'->'Damage' power-token fix. Dormant while
+          // EVENT_SOURCE_READ defaults to 'off', but flipping that env var to
+          // 'primary'/'exclusive' would have silently regressed all of them.
+          migrateGame(state);
           games.set(gameId, state);
           loaded++;
         }

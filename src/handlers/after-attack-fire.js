@@ -1115,7 +1115,12 @@ async function fireIndiscriminateFire(thread, game, combat, effect, ctx) {
   }
   const applyIndiscriminateFireSplash = deps?.applyIndiscriminateFireSplash || ctx.applyIndiscriminateFireSplash;
   if (nonRedDice.length === 1 && applyIndiscriminateFireSplash) {
-    await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps);
+    // `deps` is undefined — the handler ctx is flat, it has no `deps` sub-bag.
+    // Passing it made applyIndiscriminateFireSplash destructure `undefined` and
+    // throw. Latent until 7632e718 put applyIndiscriminateFireSplash on the
+    // postCombat bag: before that the guard above was false and this branch
+    // never ran. alexanbv 2026-08-11.
+    await applyIndiscriminateFireSplash(game, combat.attackerPlayerNum, combat.combatThreadId, nonRedDice[0], splashTargets, thread, deps || ctx);
     return;
   }
   setPendingIndiscriminateFire(game, {
