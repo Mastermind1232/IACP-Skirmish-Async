@@ -192,6 +192,14 @@ const CONTEXT_GROUPS = {
     'hasFigureLineOfSight', 'getFigureFootprint', 'getFigureSize', 'getFigureLabel',
     'getDcEffect', 'getLoadoutCards',
     'getCleaveTargetButtons', 'getFiguresAdjacentToTarget', 'applyIndiscriminateFireSplash',
+    // dcExhaustedState: Heavy Fire's "already exhausted?" guard and Furious
+    // Charge's un-exhaust both read it. It was absent, so the Heavy Fire guard
+    // silently passed and Furious Charge's `.set(msgId, false)` no-opped —
+    // leaving the card rendered exhausted while its activated index was
+    // cleared. Harmless only while Heavy Fire could never fire at all; making
+    // it fire (9f42408f) turned the missing guard into a live rules break.
+    // alexanbv 2026-08-11.
+    'dcExhaustedState',
   ],
 
   activation: [
