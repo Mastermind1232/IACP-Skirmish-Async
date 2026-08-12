@@ -1,17 +1,22 @@
 /**
- * `afterActivationResolves` CCs must resolve in the window they are offered in.
+ * `afterActivationResolves` CCs: the window they resolve in, and the card they
+ * resolve against. Two separate things, both of which were wrong.
  *
- * Blaze of Glory (IG-88) and Son of Skywalker (Luke) both read "after an
- * activation resolves, ready your Deployment card". The prompt that offers
- * them fires at the END of handleDcEndActivation — by which point
- * cleanupActivation has already deleted dcActionsData[msgId]. Both resolvers
- * looked the target up with findActiveActivationMsgId, which needs that entry,
- * so both bailed with "no activation in progress" for the entire window they
- * were legal in: the player paid the card and got nothing.
+ * THE WINDOW. Blaze of Glory (IG-88) and Son of Skywalker (Luke) are offered at
+ * the end of handleDcEndActivation, by which point cleanupActivation has
+ * deleted dcActionsData[msgId]. Both resolvers looked their target up with
+ * findActiveActivationMsgId, which needs that entry, so both bailed with "no
+ * activation in progress" for the entire window they were legal in and the
+ * player paid the card for nothing.
  *
- * handleDcEndActivation now records lastActivationMsgIdByPlayer before
- * cleanup, and the two resolvers fall back to it. These tests pin the window,
- * the precedence, and the staleness guard. alexanbv 2026-08-11.
+ * THE TARGET. Both then readied whichever card had just activated. alexanbv
+ * 2026-08-12: "they should not just ready whatever DC went, they should ready
+ * the named DC." Play Son of Skywalker after your Stormtroopers resolve and it
+ * readied the Stormtroopers.
+ *
+ * ONE TIME. Son of Skywalker also set a standing flag that re-readied the card
+ * after every later activation that round ("they should not repeatedly ready,
+ * it is a one time ability"). That is pinned in end-activation-parity.test.js.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
@@ -19,76 +24,110 @@ import { resolveAbility } from './abilities.js';
 
 const GAME_ID = 'g1';
 
-/** A game whose activation of 'm0' has already been cleaned up. */
-const makeResolvedGame = () => ({
+const CARDS = [
+  { card: 'Blaze of Glory', figure: 'IG-88', msgId: 'm-ig', index: 1, figureKey: 'IG-88-1-0' },
+  { card: 'Son of Skywalker', figure: 'Luke Skywalker', msgId: 'm-luke', index: 2, figureKey: 'Luke Skywalker-1-0' },
+];
+
+/**
+ * Stormtroopers have just finished activating. IG-88 and Luke are both in play
+ * and both exhausted, so "readied the wrong card" is observable.
+ */
+const makeGame = () => ({
   gameId: GAME_ID,
-  p1DcMessageIds: ['m0', 'm1'],
-  p1DcList: [{ dcName: 'IG-88', exhausted: true }, { dcName: 'Han Solo', exhausted: false }],
-  p1ActivatedDcIndices: [0],
-  // cleanupActivation already ran — this is the state the window opens in.
-  dcActionsData: {},
-  lastActivationMsgIdByPlayer: { 1: 'm0' },
+  p1DcMessageIds: ['m-st', 'm-ig', 'm-luke'],
+  p1DcList: [
+    { dcName: 'Stormtrooper', exhausted: true },
+    { dcName: 'IG-88', exhausted: true },
+    { dcName: 'Luke Skywalker', exhausted: true },
+  ],
+  p1ActivatedDcIndices: [0, 1, 2],
+  figurePositions: {
+    1: { 'Stormtrooper-1-0': 'a1', 'IG-88-1-0': 'b1', 'Luke Skywalker-1-0': 'c1' },
+  },
+  dcActionsData: {},                              // cleanupActivation already ran
+  lastActivationMsgIdByPlayer: { 1: 'm-st' },     // Stormtroopers were last
 });
 
 const makeMeta = (overrides = {}) => new Map([
-  ['m0', { gameId: GAME_ID, playerNum: 1, dcName: 'IG-88', displayName: 'IG-88', ...overrides }],
-  ['m1', { gameId: GAME_ID, playerNum: 1, dcName: 'Han Solo', displayName: 'Han Solo' }],
+  ['m-st', { gameId: GAME_ID, playerNum: 1, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 1]' }],
+  ['m-ig', { gameId: GAME_ID, playerNum: 1, dcName: 'IG-88', displayName: 'IG-88', ...overrides }],
+  ['m-luke', { gameId: GAME_ID, playerNum: 1, dcName: 'Luke Skywalker', displayName: 'Luke Skywalker', ...overrides }],
 ]);
 
 describe('afterActivationResolves window', () => {
-  for (const cardName of ['Blaze of Glory', 'Son of Skywalker']) {
-    test(`${cardName} resolves after cleanup, not only during the activation`, () => {
-      const game = makeResolvedGame();
-      const result = resolveAbility(cardName, { game, playerNum: 1, dcMessageMeta: makeMeta() });
+  for (const { card, figure, msgId, index, figureKey } of CARDS) {
+    test(`${card} resolves after cleanup, not only during the activation`, () => {
+      const game = makeGame();
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: makeMeta() });
 
       assert.equal(result.applied, true, 'must not bail with "no activation in progress"');
-      assert.deepEqual(result.readyDcMsgIds, ['m0'], 'readies the DC that just activated');
-      assert.equal(game.p1DcList[0].exhausted, false, 'persisted blob readied');
-      assert.deepEqual(game.p1ActivatedDcIndices, [], 'activation actually given back');
+      assert.equal(game.p1DcList[index].exhausted, false, `${figure} readied in the persisted blob`);
+      assert.ok(!game.p1ActivatedDcIndices.includes(index), 'activation actually given back');
     });
 
-    test(`${cardName} still bails when the player never activated`, () => {
-      const game = makeResolvedGame();
-      delete game.lastActivationMsgIdByPlayer;
-      const result = resolveAbility(cardName, { game, playerNum: 1, dcMessageMeta: makeMeta() });
+    test(`${card} readies ${figure}'s card, not the one that just activated`, () => {
+      const game = makeGame();
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: makeMeta() });
+
+      assert.deepEqual(result.readyDcMsgIds, [msgId], `targets ${figure}`);
+      assert.equal(game.p1DcList[0].exhausted, true, 'the Stormtroopers stay exhausted');
+      assert.ok(game.p1ActivatedDcIndices.includes(0), 'the Stormtroopers keep their activation spent');
+    });
+
+    test(`${card} bails when ${figure} is not on the board`, () => {
+      const game = makeGame();
+      delete game.figurePositions[1][figureKey];
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: makeMeta() });
 
       assert.equal(result.applied, false);
-      assert.match(result.manualMessage, /no .*activation in progress/i);
-      assert.deepEqual(game.p1ActivatedDcIndices, [0], 'nothing readied');
+      assert.deepEqual(game.p1ActivatedDcIndices, [0, 1, 2], 'nothing readied');
     });
 
-    test(`${cardName} ignores a pointer belonging to another game`, () => {
-      const game = makeResolvedGame();
-      const result = resolveAbility(cardName, {
-        game,
-        playerNum: 1,
-        dcMessageMeta: makeMeta({ gameId: 'some-other-game' }),
-      });
+    test(`${card} bails when no activation has resolved yet`, () => {
+      const game = makeGame();
+      delete game.lastActivationMsgIdByPlayer;
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: makeMeta() });
 
-      assert.equal(result.applied, false, 'a stale cross-game pointer must not resolve');
-      assert.deepEqual(game.p1ActivatedDcIndices, [0], 'nothing readied');
+      assert.equal(result.applied, false, 'the timing gate still has to hold');
+      assert.match(result.manualMessage, /no activation has resolved/i);
+      assert.deepEqual(game.p1ActivatedDcIndices, [0, 1, 2], 'nothing readied');
     });
 
-    test(`${cardName} prefers a live activation over the recorded pointer`, () => {
-      // Played mid-activation (the path that always worked): the DC currently
-      // activating wins, even when the pointer still names an earlier one.
-      const game = makeResolvedGame();
-      game.dcActionsData = { m1: {} };
-      game.p1ActivatedDcIndices = [0, 1];
-      game.p1DcList[1].exhausted = true;
+    test(`${card} ignores a pointer belonging to another game`, () => {
+      const game = makeGame();
+      const meta = makeMeta();
+      meta.set('m-st', { gameId: 'some-other-game', playerNum: 1, dcName: 'Stormtrooper' });
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: meta });
 
-      const result = resolveAbility(cardName, { game, playerNum: 1, dcMessageMeta: makeMeta() });
+      assert.equal(result.applied, false, 'a stale cross-game pointer must not open the window');
+      assert.deepEqual(game.p1ActivatedDcIndices, [0, 1, 2], 'nothing readied');
+    });
+
+    test(`${card} also resolves while an activation is still live`, () => {
+      // The path that always worked: the gate accepts a live activation too.
+      const game = makeGame();
+      delete game.lastActivationMsgIdByPlayer;
+      game.dcActionsData = { 'm-st': {} };
+
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: makeMeta() });
 
       assert.equal(result.applied, true);
-      assert.deepEqual(result.readyDcMsgIds, ['m1'], 'live activation wins over the pointer');
-      assert.equal(game.p1DcList[0].exhausted, true, 'the older DC is left alone');
+      assert.deepEqual(result.readyDcMsgIds, [msgId], `still targets ${figure}`);
     });
   }
 
-  test('Blaze of Glory books its end-of-round damage against the DC it readied', () => {
-    const game = makeResolvedGame();
+  test('Blaze of Glory books its end-of-round damage against IG-88, not the last activation', () => {
+    const game = makeGame();
     resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta: makeMeta() });
 
-    assert.deepEqual(game.endOfRoundSelfDamage[1], { damage: 3, msgId: 'm0' });
+    assert.deepEqual(game.endOfRoundSelfDamage[1], { damage: 3, msgId: 'm-ig' });
+  });
+
+  test('Son of Skywalker leaves no standing re-ready flag', () => {
+    const game = makeGame();
+    resolveAbility('Son of Skywalker', { game, playerNum: 1, dcMessageMeta: makeMeta() });
+
+    assert.equal(game.sonOfSkywalkerActive, undefined, 'one-time ability, not a round-long effect');
   });
 });

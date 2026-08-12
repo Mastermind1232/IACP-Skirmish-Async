@@ -137,25 +137,11 @@ export function applyEndOfActivationEffects(game, { dcName, playerNum, displayNa
   // The auto-fire blocks were removed to stop double-firing (once here,
   // once via the orchestrator descriptor).
 
-  // Son of Skywalker: auto-ready Luke's DC after any activation ends (not Luke's own)
-  if (game.sonOfSkywalkerActive) {
-    const sos = game.sonOfSkywalkerActive;
-    const sosDcMsgId = sos.dcMsgId;
-    const sosPlayerNum = sos.playerNum;
-    if (sosDcMsgId !== msgId) {
-      // Unified ready primitive (alexanbv 2026-08-11). This previously removed
-      // the activation index ONLY — it never un-exhausted the card, so Luke
-      // showed as exhausted despite being readied, and the activation counts
-      // were never recomputed.
-      const { changed: _sosReadied } = readyDeploymentCard(game, sosPlayerNum, sosDcMsgId, {
-        dcExhaustedState,
-        recomputeActivationCounts,
-      });
-      if (_sosReadied) {
-        applied.push({ effect: 'Son of Skywalker', message: `**Son of Skywalker** — **Luke Skywalker** is automatically **Readied**.` });
-      }
-    }
-  }
+  // Son of Skywalker used to auto-ready Luke's DC here after EVERY subsequent
+  // activation, driven by a game.sonOfSkywalkerActive flag that lived until the
+  // round boundary. Removed per alexanbv 2026-08-12: "They of course should not
+  // repeatedly ready, it is a one time ability." The card now readies once,
+  // where it resolves, in abilities.js.
 
   return { applied };
 }

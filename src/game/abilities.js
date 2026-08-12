@@ -10658,11 +10658,17 @@ export function resolveAbility(abilityId, context) {
     // chooses. Resolve the activating DC via findActiveActivationMsgId (the
     // readyOwnDeploymentCard pattern Son of Skywalker uses at :15417) instead of
     // offering a free menu of every DC.
-    // afterActivationResolves timing — the window opens after cleanupActivation
-    // has cleared dcActionsData, so this must accept the just-resolved
-    // activation, not only a live one. See findJustResolvedActivationMsgId.
-    const targetMsgId = findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: no IG-88 activation in progress to ready your Deployment card.' };
+    // TIMING GATE. afterActivationResolves: the window opens after
+    // cleanupActivation has cleared dcActionsData, so this accepts the
+    // just-resolved activation, not only a live one. See
+    // findJustResolvedActivationMsgId.
+    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
+      return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
+    }
+    // TARGET. IG-88's own card, NOT whichever card just activated
+    // (alexanbv 2026-08-12). See findOwnDcMsgIdForCc.
+    const targetMsgId = findOwnDcMsgIdForCc(game, playerNum, abilityId, dcMessageMeta);
+    if (!targetMsgId) return { applied: false, manualMessage: "Resolve manually: IG-88's Deployment card is not in play." };
     // Unified ready primitive (alexanbv 2026-08-11). This previously set only
     // dcList[idx].exhausted and left pXActivatedDcIndices alone — so the card
     // rendered as ready but the activation was never actually given back,
@@ -10674,7 +10680,11 @@ export function resolveAbility(abilityId, context) {
     game.endOfRoundSelfDamage = game.endOfRoundSelfDamage || {};
     game.endOfRoundSelfDamage[playerNum] = {
       damage: entry.endOfRoundSelfDamage,
-      msgId: game.lastActivationMsgIdByPlayer?.[playerNum] ?? targetMsgId,
+      // "you suffer 3 Damage" is IG-88 suffering it, so this follows the same
+      // named-figure rule as the ready above. It previously pointed at
+      // lastActivationMsgIdByPlayer, which put the 3 Damage on whichever card
+      // happened to activate last.
+      msgId: targetMsgId,
     };
     return {
       applied: true,
@@ -15738,20 +15748,29 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.readyOwnDeploymentCard) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    // afterActivationResolves timing — see findJustResolvedActivationMsgId.
-    const msgId = findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
+    // TIMING GATE. afterActivationResolves — see findJustResolvedActivationMsgId.
+    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
+      return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
+    }
+    // TARGET. Luke's own card, NOT whichever card just activated
+    // (alexanbv 2026-08-12). See findOwnDcMsgIdForCc.
+    const msgId = findOwnDcMsgIdForCc(game, playerNum, abilityId, dcMessageMeta);
+    if (!msgId) return { applied: false, manualMessage: "Resolve manually: Luke Skywalker's Deployment card is not in play." };
     // Unified ready primitive — see readyDeploymentCard. This site only
     // filtered the activation index; the card's exhausted state (both the
     // derived store and the persisted blob) was left set.
     readyDeploymentCard(game, playerNum, msgId, {
       recomputeActivationCounts: context.recomputeActivationCounts,
     });
-    // Set persistent flag so Luke's DC auto-readies after every subsequent activation this round
-    game.sonOfSkywalkerActive = { playerNum, dcMsgId: msgId };
+    // ONE TIME ONLY (alexanbv 2026-08-12: "They of course should not repeatedly
+    // ready, it is a one time ability."). This used to set
+    // game.sonOfSkywalkerActive, which re-readied the card after EVERY
+    // subsequent activation until the round ended, so Luke could activate,
+    // ready, and activate again all round for 3 points. The flag and its
+    // consumer in engine/activation-effects.js are gone.
     return {
       applied: true,
-      logMessage: 'Your Deployment card is now **Readied** and will auto-ready after each activation this round.',
+      logMessage: 'Your Deployment card is now **Readied**.',
       // readyDcMsgIds is what makes the Discord layer clear the DERIVED
       // dcExhaustedState store and re-render the card (apply-ability-result
       // ~119). Without it the card stayed rendered exhausted even though it was
@@ -16516,6 +16535,29 @@ function findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta) {
   const meta = dcMessageMeta.get(last);
   if (meta?.gameId !== game.gameId || meta?.playerNum !== playerNum) return null;
   return last;
+}
+
+/**
+ * The Deployment card a unique-figure CC means by "your Deployment card".
+ *
+ * alexanbv 2026-08-12: "they should not just ready whatever DC went, they
+ * should ready the named DC." Blaze of Glory is playable by IG-88 and Son of
+ * Skywalker by Luke, and both read "ready YOUR Deployment card", so the target
+ * is the playing figure's own card. Resolving it from the activation instead
+ * meant playing Son of Skywalker after your Stormtroopers resolved readied the
+ * Stormtroopers.
+ *
+ * Deliberately built on resolveUniqueFigureCcFigureKey rather than a name match
+ * against the registry: that helper already honours game.ccPlayedByFigureKey,
+ * so when Mara Jade plays Luke's card through Fast Learner (or anyone plays it
+ * through A New Hope) "your Deployment card" correctly means the card of the
+ * figure who actually played it.
+ */
+function findOwnDcMsgIdForCc(game, playerNum, cardName, dcMessageMeta) {
+  if (!dcMessageMeta) return null;
+  const figureKey = resolveUniqueFigureCcFigureKey(game, playerNum, cardName);
+  if (!figureKey) return null;
+  return findMsgIdForFigureKey(game, playerNum, figureKey, dcMessageMeta);
 }
 
 /** Get figure keys for the DC represented by meta (msgId). */

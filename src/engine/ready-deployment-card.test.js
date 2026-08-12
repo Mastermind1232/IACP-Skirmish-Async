@@ -182,15 +182,22 @@ describe('readyDeploymentCard — once-per-activation counters', () => {
     assert.equal(game.roundFigureAbilityUsed['trustBothWays_m0'], true, 'round limit still spent');
   });
 
-  test('preserves spent abilities while the card is MID-activation', () => {
-    // Blaze of Glory readies IG-88's own card during its activation. The
-    // current activation must keep its spent flags — otherwise Heroic could be
-    // used twice in one activation. cleanupActivation clears them at the end.
-    const game = activatedGame({ dcActionsData: { m0: { perFigureRemaining: { 0: 1 } } } });
+  test('resets even when some OTHER card is mid-activation', () => {
+    // This test previously asserted the opposite, on the belief that Blaze of
+    // Glory readies IG-88's card during its own activation. alexanbv corrected
+    // both halves (2026-08-11 "blaze is after an activation resolves. Not
+    // during."; 2026-08-12 "I'm not sure there is any skip that is needed"), so
+    // the mid-activation guard is gone.
+    //
+    // The case that DOES occur is Rancor's Voracious: it fires at the start of
+    // another figure's activation and readies Rancor's own card, so a live
+    // dcActionsData entry exists but belongs to a different msgId. The reset
+    // must still happen for the card being readied.
+    const game = activatedGame({ dcActionsData: { 'someone-else': { perFigureRemaining: { 0: 1 } } } });
     readyDeploymentCard(game, 1, 'm0', {});
-    assert.equal(game.heroicUsedThisActivation['Luke Skywalker-1-0'], true, 'still spent this activation');
-    assert.equal(game.attackPerformedThisActivation['Luke Skywalker-1-0'], true, 'still spent this activation');
-    assert.deepEqual(game.p1ActivatedDcIndices, [], 'but the card is still readied');
+    assert.equal(game.heroicUsedThisActivation['Luke Skywalker-1-0'], undefined, 'reset for the readied card');
+    assert.equal(game.attackPerformedThisActivation['Luke Skywalker-1-0'], undefined, 'reset for the readied card');
+    assert.deepEqual(game.p1ActivatedDcIndices, [], 'and the card is readied');
   });
 
   test('distinguishes same-named groups by dgIndex', () => {

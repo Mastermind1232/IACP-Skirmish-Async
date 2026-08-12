@@ -235,19 +235,26 @@ export function readyDeploymentCard(game, playerNum, msgId, deps = {}) {
   //    Once-per-ROUND state is deliberately untouched — a ready is not a new
   //    round.
   //
-  //    Skipped while the card is MID-activation: that activation must keep its
-  //    spent flags, and cleanupActivation will clear them when it ends.
-  //    Otherwise this is a no-op after a correct cleanup, and a repair after a
-  //    missed one.
+  //    There is deliberately NO mid-activation guard here. An earlier version
+  //    skipped the reset while dcActionsData[msgId] existed, justified by
+  //    "Blaze of Glory readies your own card during your activation." Both
+  //    halves of that were wrong (alexanbv 2026-08-11 "blaze is after an
+  //    activation resolves. Not during.", and 2026-08-12 "I'm not sure there is
+  //    any skip that is needed"). No caller can reach this with msgId being the
+  //    card that is currently activating:
   //
-  //    An earlier version of this comment cited Blaze of Glory as the
-  //    mid-activation case. That was wrong (alexanbv 2026-08-11: "blaze is
-  //    after an activation resolves. Not during."). Blaze and Son of Skywalker
-  //    are both afterActivationResolves, so they land here with the activation
-  //    already cleaned up and DO get the reset, which is correct: they are
-  //    handing back a fresh activation. The real mid-activation caller is
-  //    Rancor's start-of-activation self-ready (soa-handler.js ~1210).
-  if (dcIndex >= 0 && !game.dcActionsData?.[msgId]) {
+  //      Blaze of Glory / Son of Skywalker / Change of Plans
+  //                          afterActivationResolves, so cleanup already ran
+  //      Rancor (Voracious)  fires at the start of ANOTHER figure's
+  //                          activation and readies Rancor's own card, so the
+  //                          live dcActionsData entry belongs to a different
+  //                          msgId (soa-orchestrator.js ~478)
+  //      Scrap Battalion     readies the Junk Droid at deployment
+  //      un-activate/toggle  manual, outside any activation
+  //
+  //    The guard was therefore never taken, and keeping it invited a future
+  //    self-readying caller to silently lose its counter reset.
+  if (dcIndex >= 0) {
     _resetOncePerActivationFlags(game, playerNum, dcIndex);
   }
 

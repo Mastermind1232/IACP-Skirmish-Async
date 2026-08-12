@@ -150,11 +150,18 @@ describe('B-ENDACT-004: Hold the Line is NOT auto-fired (player-choice descripto
   });
 });
 
-describe('B-ENDACT-005: Son of Skywalker re-readies Luke after other activation', () => {
-  it('removes Luke index from activatedDcIndices when another DC finishes', async () => {
+describe('B-ENDACT-005: Son of Skywalker is one-time, never a standing effect', () => {
+  // These two tests previously pinned the OPPOSITE behaviour: a
+  // game.sonOfSkywalkerActive flag that re-readied Luke's card after every
+  // subsequent activation until the round ended. alexanbv 2026-08-12: "They of
+  // course should not repeatedly ready, it is a one time ability." The card
+  // text is a single event, and the standing version let Luke activate, ready,
+  // and activate again all round for 3 points.
+  it('does not re-ready anything at end of activation, even with the old flag set', async () => {
     const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
     const game = {
       figurePositions: { 1: { 'Stormtrooper-1-0': 'c1' } },
+      // A checkpoint saved before this change can still carry the flag.
       sonOfSkywalkerActive: { dcMsgId: 'luke-msg', playerNum: 1 },
       p1ActivatedDcIndices: [0, 2], // Luke is at index 2
       p1DcMessageIds: ['st-msg', 'other-msg', 'luke-msg'],
@@ -165,32 +172,17 @@ describe('B-ENDACT-005: Son of Skywalker re-readies Luke after other activation'
       displayName: 'Stormtrooper',
       msgId: 'st-msg', // Not Luke's msgId
     });
-    const sosEffects = applied.filter(e => e.effect === 'Son of Skywalker');
-    assert.strictEqual(sosEffects.length, 1, 'Son of Skywalker fired');
-    assert.ok(!game.p1ActivatedDcIndices.includes(2),
-      'Luke index removed from activated list (re-readied)');
-    assert.ok(game.p1ActivatedDcIndices.includes(0),
-      'Other DC index preserved');
+    assert.strictEqual(applied.filter(e => e.effect === 'Son of Skywalker').length, 0,
+      'no standing Son of Skywalker effect fires');
+    assert.deepStrictEqual(game.p1ActivatedDcIndices, [0, 2],
+      'Luke stays exhausted — a stale flag must not resurrect the repeat');
   });
 
-  it('does NOT re-ready Luke when it is Luke own activation ending', async () => {
-    const { applyEndOfActivationEffects } = await import('../../../src/engine/activation-effects.js');
-    const game = {
-      figurePositions: { 1: { 'Luke Skywalker-1-0': 'c1' } },
-      sonOfSkywalkerActive: { dcMsgId: 'luke-msg', playerNum: 1 },
-      p1ActivatedDcIndices: [2],
-      p1DcMessageIds: ['a-msg', 'b-msg', 'luke-msg'],
-    };
-    const { applied } = applyEndOfActivationEffects(game, {
-      dcName: 'Luke Skywalker',
-      playerNum: 1,
-      displayName: 'Luke Skywalker',
-      msgId: 'luke-msg', // IS Luke's msgId
-    });
-    const sosEffects = applied.filter(e => e.effect === 'Son of Skywalker');
-    assert.strictEqual(sosEffects.length, 0, 'Son of Skywalker did NOT fire for Luke own activation');
-    assert.ok(game.p1ActivatedDcIndices.includes(2),
-      'Luke index still in activated list');
+  it('has no standing Son of Skywalker consumer left in activation-effects', () => {
+    const src = readSrc('src/engine/activation-effects.js');
+    const code = src.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!code.includes('sonOfSkywalkerActive'),
+      'the repeat-ready consumer must stay deleted, not merely disabled');
   });
 });
 

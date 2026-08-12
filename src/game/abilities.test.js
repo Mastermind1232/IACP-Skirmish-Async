@@ -1718,13 +1718,17 @@ test('resolveAbility Blaze of Glory requires an active IG-88 activation', () => 
   assert.ok(result.manualMessage);
 });
 
-test('resolveAbility Blaze of Glory readies the activating DC and sets EOR damage', () => {
+test("resolveAbility Blaze of Glory readies IG-88's DC and sets EOR damage", () => {
   const msgId = 'msg-bog2';
   const game = {
     gameId: 'g-bog2',
     dcActionsData: { [msgId]: { remaining: 2 } }, // active activation
     p1DcMessageIds: [msgId],
     p1DcList: [{ dcName: 'IG-88', displayName: 'IG-88 [Group 1]', exhausted: true }],
+    // The target is now IG-88's own card, resolved from the board rather than
+    // from the activation (alexanbv 2026-08-12). See after-activation-resolves-
+    // window.test.js for the case where those two differ.
+    figurePositions: { 1: { 'IG-88-1-0': 'a1' } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-bog2', playerNum: 1, dcName: 'IG-88', displayName: 'IG-88 [Group 1]' }]]);
   const result = resolveAbility('Blaze of Glory', { game, playerNum: 1, dcMessageMeta });

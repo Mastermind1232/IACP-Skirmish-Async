@@ -944,7 +944,9 @@ const ROUND_NULL_FLAGS = [
   'pendingFiringSquad',
   'pendingCoordinatedRaid',
   // pendingAwr removed 2026-05-07 — AWR migrated to SoA orchestrator (slice 8a).
-  'sonOfSkywalkerActive',
+  // 'sonOfSkywalkerActive' removed 2026-08-12: Son of Skywalker is a one-time
+  // ready (alexanbv), so nothing writes a standing flag any more. A stale flag
+  // on a pre-change save is inert — its only consumer is deleted.
   'dataTheftStolenCard',
   'conditionalFocusIfDamagedGte',
   // pendingToughLuck removed 2026-06-18 — Tough Luck is now the discrete
