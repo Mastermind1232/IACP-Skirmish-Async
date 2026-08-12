@@ -110,7 +110,7 @@ registerStrainFollowup('unshakable_remove', async (game, ctx, payload) => {
     `**Unshakable** — Removed **${payload.removedCond}** from **${dcNameFromFigureKey(payload.targetFk)}** (post-strain). Card exhausted.`,
     { phase: 'ACTIVATION', icon: 'condition' });
 });
-import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand, getDcList } from '../game/player-helpers.js';
+import { ccDeckKey, ccHandKey, opponentPlayerNum, getCcHand, getDcList, getInitiativePlayerNum } from '../game/player-helpers.js';
 import { dcNameFromFigureKey, parseFigureKey } from '../game/dc-helpers.js';
 import { applyCondition } from '../game/conditions.js';
 import { getDcEffects, getDcStats, getMapData, getFigureSize } from '../data-loader.js';
@@ -1025,7 +1025,8 @@ export async function handleSoaFire(interaction, ctx) {
     const _pendingHostSoa = game.pendingCompanionHostSoaDescriptors?.[_hostMsgId];
     if (_pendingHostSoa?.length && choiceKey === 'second') {
       delete game.pendingCompanionHostSoaDescriptors[_hostMsgId];
-      const _soaInitPn = game.initiativePlayerNum ?? ownerPlayerNum;
+      // game.initiativePlayerNum does not exist — see activation-setup.js.
+      const _soaInitPn = getInitiativePlayerNum(game);
       const _soaStarted = startSoaResolution(game, _pendingHostSoa, _soaInitPn, {
         activatorPlayerNum: ownerPlayerNum,
         activatorMsgId: _hostMsgId,

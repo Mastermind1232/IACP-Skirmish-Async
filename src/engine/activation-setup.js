@@ -14,6 +14,7 @@ import {
   getActivatedDcIndices, setActivatedDcIndices,
   getCcHand, opponentPlayerNum,
   ccDeckKey, ccHandKey,
+  getInitiativePlayerNum,
 } from '../game/player-helpers.js';
 import { countGameSpaces } from '../game/board-helpers.js';
 import { groupEffectiveFigures } from '../game/squad-upgrades.js';
@@ -729,7 +730,11 @@ export async function finalizeActivation({
   if (_b12FigCount === 1) {
     const _soaDesc = enumerateActivatorSoaDescriptors(game, { dcName, playerNum, msgId, figureIndex: 0 });
     if (_soaDesc.length > 0) {
-      const initPN = (game.initiative ?? game.firstPlayer ?? playerNum);
+      // alexanbv 2026-08-12: this window resolves "in initiative order".
+      // game.initiative / game.firstPlayer are never assigned anywhere, so
+      // this always fell through to the ACTIVATOR and initiative order was
+      // never actually applied. getInitiativePlayerNum reads the real field.
+      const initPN = getInitiativePlayerNum(game);
       const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: playerNum, activatorMsgId: msgId });
       if (_started) {
         const _soaShape = describeChooserPrompt(game.pendingSoaResolution, gameId);

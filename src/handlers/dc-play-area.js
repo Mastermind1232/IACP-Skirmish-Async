@@ -1694,7 +1694,8 @@ export async function handleDcFigPick(interaction, ctx) {
         figureIndex: figIdx,
       });
       if (_soaDesc.length > 0) {
-        const initPN = (game.initiative ?? game.firstPlayer ?? meta.playerNum);
+        // Never-assigned fields — see activation-setup.js.
+        const initPN = getInitiativePlayerNum(game);
         const _started = startSoaResolution(game, _soaDesc, initPN, { activatorPlayerNum: meta.playerNum, activatorMsgId: msgId });
         if (_started) {
           const _soaShape = describeChooserPrompt(game.pendingSoaResolution, game.gameId);

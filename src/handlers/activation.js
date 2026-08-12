@@ -908,7 +908,10 @@ export async function handleDcEndActivation(interaction, ctx) {
       msgId,
     });
     if (_eoaDescs.length > 0) {
-      const _eoaInit = game.initiativePlayerNum ?? meta.playerNum;
+      // game.initiativePlayerNum does not exist, so this silently bucketed
+      // activator-first instead of initiative-first (alexanbv 2026-08-12:
+      // "End of activation happens first. In initiative order.").
+      const _eoaInit = getInitiativePlayerNum(game);
       const _eoaStarted = startEoaResolution(game, _eoaDescs, _eoaInit, {
         activatorPlayerNum: meta.playerNum,
         activatorMsgId: msgId,
@@ -1137,7 +1140,8 @@ export async function handleDcEndActivation(interaction, ctx) {
         const { ButtonBuilder: _SoaBB, ButtonStyle: _SoaBS, ActionRowBuilder: _SoaAR } = await import('discord.js');
         const _hostMeta = dcMessageMeta?.get(_slice3PairedActive);
         const _hostPn = _hostMeta?.playerNum ?? meta.playerNum;
-        const _soaInitPn = game.initiativePlayerNum ?? _hostPn;
+        // game.initiativePlayerNum does not exist — see activation-setup.js.
+        const _soaInitPn = getInitiativePlayerNum(game);
         const _soaStarted = _startSoaRes(game, _pendingHostSoa, _soaInitPn, {
           activatorPlayerNum: _hostPn,
           activatorMsgId: _slice3PairedActive,
