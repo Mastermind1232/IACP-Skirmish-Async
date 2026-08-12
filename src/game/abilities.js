@@ -1553,13 +1553,17 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       if (chosenMsgId) {
-        // alexanbv 2026-08-12: "Tactical MAY be depending on who the target of
-        // tactical is." Gideon can target himself, in which case the grant is
-        // in-activation and banks; targeting anyone else is out-of-activation
-        // and must be spent at once. That is a runtime question, so it goes
-        // through grantMovementPoints rather than being hard-coded either way.
-        // (Order, by contrast, is ALWAYS to another figure and so is always
-        // immediate.)
+        // ALWAYS IMMEDIATE, and that is not a runtime question. alexanbv
+        // 2026-08-12: "tactical maneuver (gideon) CANNOT target himself.
+        // Tactical movement (Fenn) can target himself, but also others."
+        //
+        // So Gideon's grant is always to another figure and can never be
+        // in-activation, exactly like Order. The card that genuinely varies is
+        // Fenn's Tactical Movement, which already dispatches self-vs-other
+        // inline in soa-handler.js (~1339).
+        //
+        // An earlier version of this comment said Gideon could self-target and
+        // therefore needed a runtime check. Wrong card.
         // Per alexanbv 2026-07-27: picker posts in activator's thread.
         const _tmThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};

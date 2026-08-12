@@ -239,3 +239,37 @@ On a Diplomatic Mission (converted earlier).
 nothing in a real game.** Its unit test injects its own deps, which is why the
 gap survived. Deps now wired, plus a test asserting the failure branch reports
 rather than silently no-ops.
+
+## Deployment MP (answering "how are bodhi, cassian, hera, scav walker implemented")
+
+**Already implemented as an after-deployment sequence**, which is what alexanbv
+asked for, in `src/handlers/post-deploy.js`:
+
+| Card | Ability | Descriptor |
+|---|---|---|
+| Bodhi Rook, Hera Syndulla | Smooth Landing — "you and each adjacent friendly figure gains 1 MP" | `smooth_landing`, `type: 'multi_movement'`, interactive |
+| Cassian Andor | Strike Team — "you and an adjacent friendly figure gain 2 MP" | `strike_team`, `type: 'complex'` |
+| Scavenged Walker | "After deployment, you may perform a move" | post-deploy move |
+
+It grants through `setupPendingMoveXSequence`, i.e. the normal move-X picker,
+migrated from `pendingOrderedMove` on 2026-05-09. `smooth_landing` posts a
+**picker so the player chooses which figure moves next** when more than one
+remains — exactly the per-figure ordering alexanbv described.
+
+So deployment MP was never banked and never needed to be: `post-deploy.js`
+superseded the `deployBonusMp` block long ago, which is why nothing wrote that
+field. Deleting it closed the loop.
+
+## Tactical Maneuver vs Tactical Movement (do not confuse these)
+
+alexanbv 2026-08-12: "tactical maneuver (gideon) CANNOT target himself. Tactical
+movement (Fenn) can target himself, but also others."
+
+| Card | Target | Grant |
+|---|---|---|
+| **Tactical Maneuver** (Gideon Argus) | another figure only | always immediate, like Order |
+| **Tactical Movement** (Fenn Signis) | self OR another | runtime: banks on self, immediate otherwise |
+
+Fenn's already dispatches correctly inline (`soa-handler.js` ~1339), as does
+"I Make the Rules Now" (~1284). Those two were miscounted as plain banking sites
+in the first enumeration; they are in fact the runtime pattern, hand-rolled.
