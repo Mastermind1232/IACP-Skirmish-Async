@@ -131,6 +131,25 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
  * @param {object} [opts.nextAction]        - continuation after the move drains
  * @returns {boolean} true if a picker was staged
  */
+export function grantImmediateMoveX(game, opts) {
+  const { msgId, playerNum, figureKey, amount, source } = opts || {};
+  if (!game || !msgId || !figureKey || !playerNum || !(amount > 0)) return false;
+  game.pendingMoveX = game.pendingMoveX || {};
+  game.pendingMoveX[msgId] = {
+    remaining: amount,
+    source: source || 'Movement',
+    playerNum,
+    figureKey,
+    dcName: opts.dcName ?? null,
+    threadId: opts.threadId ?? null,
+    bypassCosts: opts.bypassCosts ?? false,
+    allowAbilitySpend: opts.allowAbilitySpend ?? true,
+    msgId,
+    ...(opts.nextAction ? { nextAction: opts.nextAction } : {}),
+  };
+  return true;
+}
+
 /**
  * Grant MP when the answer depends on WHEN it happens, not on which ability.
  *
@@ -154,32 +173,22 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
  * @returns {'banked'|'immediate'|'failed'}
  */
 export function grantMovementPoints(game, opts) {
-  const { msgId, amount, figureIndex } = opts || {};
+  const { msgId, amount, figureIndex, isSpecialAction } = opts || {};
   if (!game || !msgId || !(amount > 0)) return 'failed';
+  // OVERRIDING RULE (alexanbv 2026-08-12): "any MP grants that are part of a
+  // SPECIAL ACTION are always spend immediate and not to the bank, no matter
+  // who is activating. This rule is overriding. For example, Urgency."
+  //
+  // A special action happens during the actor's own activation, so the runtime
+  // check below would bank it. It must not.
+  if (isSpecialAction) {
+    return grantImmediateMoveX(game, opts) ? 'immediate' : 'failed';
+  }
   if (game.dcActionsData?.[msgId]) {
     grantMovementBank(game, msgId, amount, figureIndex);
     return 'banked';
   }
   return grantImmediateMoveX(game, opts) ? 'immediate' : 'failed';
-}
-
-export function grantImmediateMoveX(game, opts) {
-  const { msgId, playerNum, figureKey, amount, source } = opts || {};
-  if (!game || !msgId || !figureKey || !playerNum || !(amount > 0)) return false;
-  game.pendingMoveX = game.pendingMoveX || {};
-  game.pendingMoveX[msgId] = {
-    remaining: amount,
-    source: source || 'Movement',
-    playerNum,
-    figureKey,
-    dcName: opts.dcName ?? null,
-    threadId: opts.threadId ?? null,
-    bypassCosts: opts.bypassCosts ?? false,
-    allowAbilitySpend: opts.allowAbilitySpend ?? true,
-    msgId,
-    ...(opts.nextAction ? { nextAction: opts.nextAction } : {}),
-  };
-  return true;
 }
 
 /**

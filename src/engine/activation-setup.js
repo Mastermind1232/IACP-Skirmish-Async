@@ -369,22 +369,29 @@ export async function finalizeActivation({
   }
   game.movementBank[msgId] = { threadId: thread.id, messageId: null, displayName, perFig: _b10PerFig };
 
-  // Deploy bonus MP (legacy backward-compat)
-  if (game.deployBonusMp) {
-    const dgIndex = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-    const prefix = `${dcName}-${dgIndex}-`;
-    let _dbTotal = 0;
-    for (const [dbFk, dbAmt] of Object.entries(game.deployBonusMp)) {
-      if (dbFk.startsWith(prefix) && dbAmt > 0) {
-        _dbTotal = Math.max(_dbTotal, dbAmt);
-        delete game.deployBonusMp[dbFk];
-      }
-    }
-    if (_dbTotal > 0) {
-      grantMovementBank(game, msgId, _dbTotal);
-    }
-    if (Object.keys(game.deployBonusMp).length === 0) delete game.deployBonusMp;
-  }
+  // DEPLOY BONUS MP — REMOVED 2026-08-12, and the feature it belonged to does
+  // not exist.
+  //
+  // This block read game.deployBonusMp and, if set, banked the MP onto the
+  // group when it later ACTIVATED. Nothing anywhere in the codebase ever wrote
+  // that field, so the block was dead: grep for deployBonusMp found reads here
+  // and nowhere else, and it was not registered in any state or round-flag list
+  // either.
+  //
+  // It was also wrong in two ways, per alexanbv 2026-08-12: "Deploy bonus is
+  // definitely NOT banked. Deploy is not during an activation and so would be
+  // an immediate spend. Deploy often affects many figures, so the player needs
+  // to be able to choose which figures get it and in which order they spend it
+  // and to where."
+  //
+  //   1. it banked, when deploy is out of activation and must be immediate;
+  //   2. it collapsed the whole group to a single Math.max amount on figure 0,
+  //      when the rule needs per-figure grants the player can spend in an order
+  //      of their choosing.
+  //
+  // Implementing it properly means a per-figure immediate grant at DEPLOY time,
+  // through grantImmediateMoveX, not a deferred bank here. Deleting the dead
+  // code rather than leaving it, so nobody mistakes it for a working feature.
 
   // B11. Track activation start positions
   game.activationStartPositions = game.activationStartPositions || {};

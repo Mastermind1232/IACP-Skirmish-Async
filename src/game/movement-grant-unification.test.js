@@ -87,3 +87,46 @@ describe('movement grant unification', () => {
       'must not use the untagged banking path');
   });
 });
+
+describe('special-action MP is always immediate', () => {
+  test('a special-action grant bypasses banking even mid-activation', async () => {
+    // alexanbv 2026-08-12: "any MP grants that are part of a SPECIAL ACTION are
+    // always spend immediate and not to the bank, no matter who is activating.
+    // This rule is overriding. For example, Urgency."
+    //
+    // A special action happens during your own activation, so the runtime check
+    // would otherwise bank it.
+    const { grantMovementPoints } = await import('./game-helpers.js');
+    const game = { dcActionsData: { m1: {} } };   // mid-activation
+
+    const mode = grantMovementPoints(game, {
+      msgId: 'm1', amount: 4, playerNum: 1, figureKey: 'Chewbacca-1-0',
+      source: 'Urgency', isSpecialAction: true,
+    });
+
+    assert.equal(mode, 'immediate', 'the override beats the runtime check');
+    assert.equal(game.movementBank, undefined, 'nothing banked');
+    assert.equal(game.pendingMoveX.m1.remaining, 4);
+  });
+
+  test('without the flag the same grant banks mid-activation', async () => {
+    const { grantMovementPoints } = await import('./game-helpers.js');
+    const game = { dcActionsData: { m1: {} } };
+
+    const mode = grantMovementPoints(game, {
+      msgId: 'm1', amount: 4, playerNum: 1, figureKey: 'Chewbacca-1-0', source: 'Not special',
+    });
+
+    assert.equal(mode, 'banked');
+    assert.equal(game.pendingMoveX, undefined);
+  });
+
+  test('the dead deploy-bonus banking block is gone', () => {
+    // It read game.deployBonusMp, which nothing ever wrote, and banked a
+    // deferred group-wide amount. Deploy is out of activation and per-figure.
+    const src = read('src/engine/activation-setup.js');
+    const code = src.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!code.includes('game.deployBonusMp'),
+      'the dead deploy-bonus read must stay deleted');
+  });
+});

@@ -1553,7 +1553,13 @@ export function resolveAbility(abilityId, context) {
       const chosenMsgId = findDcMessageIdForFigure ? findDcMessageIdForFigure(game.gameId, playerNum, targetFigureKey) : null;
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       if (chosenMsgId) {
-        // Out-of-activation MP gain → pendingMoveX with allowAbilitySpend.
+        // alexanbv 2026-08-12: "Tactical MAY be depending on who the target of
+        // tactical is." Gideon can target himself, in which case the grant is
+        // in-activation and banks; targeting anyone else is out-of-activation
+        // and must be spent at once. That is a runtime question, so it goes
+        // through grantMovementPoints rather than being hard-coded either way.
+        // (Order, by contrast, is ALWAYS to another figure and so is always
+        // immediate.)
         // Per alexanbv 2026-07-27: picker posts in activator's thread.
         const _tmThreadId = game.dcActionsData?.[msgId]?.threadId || null;
         game.pendingMoveX = game.pendingMoveX || {};
