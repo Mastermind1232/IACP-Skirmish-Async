@@ -938,6 +938,64 @@ export async function handleDcEndActivation(interaction, ctx) {
     console.error('EoA orchestrator failed:', err?.message ?? err);
   }
 
+  // TEARDOWN IS DEFERRED WHILE THE EoA WINDOW IS OPEN.
+  //
+  // alexanbv 2026-08-12: "End of activation and after activation resolves are
+  // two different windows. End of activation happens first." Everything below
+  // this point dismantles the activation, so it cannot run until the window
+  // above has closed — otherwise an end-of-activation effect resolves against
+  // an activation that no longer exists. Force Surge is the card that proved
+  // it: it needs the activation still standing to move.
+  //
+  // Note this is NOT how SoA works. SoA also posts and continues; it just
+  // refuses the End Activation click while its chooser is open. That is safe
+  // at the START of an activation because nothing is being destroyed. It does
+  // not transfer here.
+  //
+  // When the window is open, finishDcEndActivation is called instead by
+  // handlers/eoa-handler.js once the last bucket closes.
+  // Stored beside pendingEoaResolution, not inside it: consumeDescriptor and
+  // skipCurrentBucket DELETE that object when the last bucket closes, which is
+  // exactly the moment we need this.
+  if (game.pendingEoaResolution) {
+    game.pendingEndActivationResume = {
+      msgId, ownerId, otherPlayerNum, otherPlayerId, displayName, gameId,
+    };
+    saveGames(game.gameId);
+    return;
+  }
+
+  await finishDcEndActivation(ctx, {
+    game, meta, msgId, ownerId, otherPlayerNum, otherPlayerId, displayName, gameId,
+  });
+}
+
+/**
+ * Everything that happens AFTER the end-of-activation window closes: teardown,
+ * the after-activation-resolves window, the End Turn prompt and the rest.
+ *
+ * Split out of handleDcEndActivation on 2026-08-12 so the EoA window can hold
+ * it. Deliberately takes no `interaction`: on the deferred path the caller is a
+ * different interaction entirely (an EoA button click), and the original one is
+ * long since acknowledged. Every `interaction.` use stayed behind in the head.
+ */
+export async function finishDcEndActivation(ctx, state) {
+  const {
+    getGame,
+    replyIfGameEnded,
+    dcMessageMeta,
+    renderDcEmbed,
+    getDcPlayAreaComponents,
+    logGameAction,
+    maybeShowEndActivationPhaseButton,
+    getDcActionButtons,
+    updateDcActionsMessage,
+    client,
+    saveGames,
+  } = ctx;
+  const { game, meta, msgId, ownerId, otherPlayerNum, otherPlayerId, displayName, gameId } = state;
+
+
   // Slice 3 (alexanbv 2026-05-10): host and companion end activation
   // INDEPENDENTLY. If the paired side still has an active dcActionsData
   // entry, this is a partial end — clean up only the clicked msgId's

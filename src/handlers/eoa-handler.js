@@ -39,6 +39,25 @@ async function postChooserOrComplete(game, gameId, ctx, channel, onComplete) {
   if (!desc) {
     await channel.send({ content: '\u{1F3C1} End-of-Activation effects resolved. Activation ending.' }).catch(discordCatch);
     if (typeof onComplete === 'function') await onComplete();
+    // The window is closed, so the deferred teardown can finally run. This is
+    // the whole point of the EoA rework (alexanbv 2026-08-12): end-of-activation
+    // effects resolve while the activation still exists, and only then is it
+    // dismantled. handleDcEndActivation stopped short and left this behind.
+    //
+    // Dynamic import to keep handlers/activation.js off this module's static
+    // graph. It is re-entrancy safe: the marker is deleted before the call, so
+    // a second completion cannot run teardown twice.
+    const resume = game.pendingEndActivationResume;
+    if (resume) {
+      delete game.pendingEndActivationResume;
+      const meta = ctx.dcMessageMeta?.get?.(resume.msgId);
+      if (meta) {
+        const { finishDcEndActivation } = await import('./activation.js');
+        await finishDcEndActivation(ctx, { game, meta, ...resume });
+      } else {
+        console.error(`[eoa] cannot finish end-activation: no dcMessageMeta for ${resume.msgId}`);
+      }
+    }
     return;
   }
   const buttons = desc.choices.map((c) => {

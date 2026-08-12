@@ -899,6 +899,11 @@ const ROUND_OBJECT_FLAGS = [
   'forceSlowSkipActivation',
   'executorTriggered',
   'pendingSoaResolution',
+  // How to finish tearing down an activation once the end-of-activation window
+  // closes. Written by handleDcEndActivation, consumed by eoa-handler. Round
+  // boundary is the backstop: if a window is somehow abandoned mid-round the
+  // marker must not survive into the next one. alexanbv 2026-08-12.
+  'pendingEndActivationResume',
   'voraciousUsed',
   // Yoda "Calming Presence" — once per round, keyed on Yoda's card msgId.
   'calmingPresenceUsed',

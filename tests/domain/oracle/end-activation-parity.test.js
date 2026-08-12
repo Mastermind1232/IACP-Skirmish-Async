@@ -261,14 +261,45 @@ describe('ORACLE-ENDACT-001: handleDcEndActivation calls applyEndOfActivationEff
       'activation.js must import applyEndOfActivationEffects');
   });
 
-  it('handleDcEndActivation calls applyEndOfActivationEffects', () => {
+  it('the deferred teardown calls applyEndOfActivationEffects', () => {
+    // Moved 2026-08-12: teardown was split out of handleDcEndActivation into
+    // finishDcEndActivation so the end-of-activation window can hold it open
+    // (alexanbv). The call must live in the continuation, which is the half
+    // that actually runs after the window closes.
+    const src = readSrc('src/handlers/activation.js');
+    const fnIdx = src.indexOf('export async function finishDcEndActivation');
+    assert.ok(fnIdx > 0, 'finishDcEndActivation found');
+    const fnEnd = src.indexOf('\nexport ', fnIdx + 1);
+    const block = src.slice(fnIdx, fnEnd > fnIdx ? fnEnd : src.length);
+    assert.ok(block.includes('applyEndOfActivationEffects(game,'),
+      'finishDcEndActivation must call applyEndOfActivationEffects');
+  });
+
+  it('handleDcEndActivation defers teardown while the EoA window is open', () => {
     const src = readSrc('src/handlers/activation.js');
     const fnIdx = src.indexOf('export async function handleDcEndActivation');
-    assert.ok(fnIdx > 0, 'handleDcEndActivation found');
     const fnEnd = src.indexOf('\nexport ', fnIdx + 1);
-    const block = src.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 5000);
-    assert.ok(block.includes('applyEndOfActivationEffects(game,'),
-      'handleDcEndActivation must call applyEndOfActivationEffects');
+    const block = src.slice(fnIdx, fnEnd > fnIdx ? fnEnd : fnIdx + 8000);
+    assert.match(block, /if \(game\.pendingEoaResolution\)/,
+      'must check for an open EoA window before tearing down');
+    assert.match(block, /game\.pendingEndActivationResume\s*=/,
+      'must record how to resume once the window closes');
+    assert.ok(!block.includes('applyEndOfActivationEffects(game,'),
+      'teardown must NOT run in the head — that is the bug this split fixes');
+  });
+
+  it('the EoA handler resumes the deferred teardown when the window closes', () => {
+    const src = readSrc('src/handlers/eoa-handler.js');
+    assert.match(src, /pendingEndActivationResume/,
+      'eoa-handler must pick up the deferred teardown');
+    assert.match(src, /finishDcEndActivation/,
+      'eoa-handler must call the continuation');
+    // Re-entrancy: the marker has to be cleared before the call, or a second
+    // completion would tear the activation down twice.
+    const idxDelete = src.indexOf('delete game.pendingEndActivationResume');
+    const idxCall = src.indexOf('finishDcEndActivation(ctx,');
+    assert.ok(idxDelete > 0 && idxCall > idxDelete,
+      'the resume marker must be deleted before finishDcEndActivation is called');
   });
 });
 
