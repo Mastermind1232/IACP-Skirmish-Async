@@ -107,6 +107,38 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     });
   }
 
+  // On a Diplomatic Mission — a CHOICE, so it belongs in the chooser.
+  //
+  // alexanbv 2026-08-12: "Diplo mission still requires a choice as to what
+  // bonus". It was an ad-hoc button row posted from the teardown continuation,
+  // i.e. window 2. Being a descriptor also means it can be ordered against the
+  // companion activation and the Clan of Two placement.
+  //
+  // Enumerating here also removes the reason the continuation snapshots
+  // attackPerformedThisActivation before cleanupActivation wipes it: this runs
+  // BEFORE cleanup, so the live map is still there.
+  {
+    const _dmAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _dmExh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
+    const _has = (list, name) => Array.isArray(list) && list.some((a) => String(a || '').includes(name));
+    if (_has(_dmAtts, 'On a Diplomatic Mission') && !_has(_dmExh, 'On a Diplomatic Mission')) {
+      // "if you did not attack" — group scope: no figure of the group attacked.
+      const _dmPrefix = `${dcName}-${_dgIdx}-`;
+      const _dmAttacked = Object.keys(game.attackPerformedThisActivation || {})
+        .some((fk) => fk.startsWith(_dmPrefix) && game.attackPerformedThisActivation[fk]);
+      if (!_dmAttacked) {
+        descriptors.push({
+          id: `diplomatic_mission:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'On a Diplomatic Mission (choose a bonus)',
+          subPromptKey: 'diplomatic_mission',
+          extras: { dcName, selfFigureKey: _selfFk },
+        });
+      }
+    }
+  }
+
   // COMPANION ACTIVATES NOW — general to ALL companions, not The Child.
   //
   // alexanbv 2026-08-12: "if they activate first, they resolve first. If the

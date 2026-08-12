@@ -158,3 +158,39 @@ describe('companion activates inside the host EoA window (ALL companions)', () =
       'and consume, so the window cannot strand on a separate activation');
   });
 });
+
+describe('On a Diplomatic Mission is a choice in the EoA window', () => {
+  const orchestrator = read('src/game/eoa-orchestrator.js');
+  const handler = read('src/handlers/eoa-handler.js');
+  const activation = read('src/handlers/activation.js');
+
+  test('it is an EoA descriptor, not an ad-hoc post-teardown prompt', () => {
+    assert.match(orchestrator, /subPromptKey: 'diplomatic_mission'/);
+    assert.match(handler, /desc\.subPromptKey === 'diplomatic_mission'/);
+    const idx = activation.indexOf('export async function finishDcEndActivation');
+    const code = activation.slice(idx).split('\n')
+      .filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!code.includes('on_diplomatic_'),
+      'the bonus choice must not be posted after teardown');
+  });
+
+  test('all three bonuses plus Skip survive the move', () => {
+    // alexanbv confirmed it "still requires a choice as to what bonus".
+    const idx = handler.indexOf("desc.subPromptKey === 'diplomatic_mission'");
+    const branch = handler.slice(idx, idx + 1600);
+    for (const key of ['_mp', '_evade', '_vp', '_skip']) {
+      assert.ok(branch.includes(`on_diplomatic_\${gameId}_\${desc.sourceMsgId}${key}`),
+        `bonus option ${key} must still be offered`);
+    }
+  });
+
+  test('the pre-cleanup attack snapshot it forced is gone', () => {
+    // Enumerating before cleanup means the live attackPerformedThisActivation
+    // map is still there, so the workaround is no longer needed. Wild Fury's
+    // snapshot stays: it is a termination and correctly runs after the window.
+    assert.ok(!activation.includes('_preCleanupAttacked'),
+      'the attack snapshot existed only for the post-teardown prompt');
+    assert.match(activation, /_preCleanupPostConds/,
+      "Wild Fury's snapshot is still needed");
+  });
+});

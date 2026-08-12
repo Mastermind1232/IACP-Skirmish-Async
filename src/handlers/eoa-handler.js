@@ -113,6 +113,26 @@ export async function handleEoaPick(interaction, ctx) {
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
       components: chunkButtonsToRows(buttons),
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'diplomatic_mission') {
+    // Post the same three-way bonus choice the ad-hoc prompt used, on the same
+    // customId, so the existing handleOnDiplomatic resolves it unchanged. What
+    // moves is WHEN it is offered: inside the host's end-of-activation window,
+    // orderable against the companion activation and the Clan of Two placement,
+    // instead of after teardown. alexanbv 2026-08-12.
+    const _dmRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${desc.sourceMsgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${desc.sourceMsgId}_evade`).setLabel('+1 Evade (rest of round)').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${desc.sourceMsgId}_vp`).setLabel('+1 VP').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${desc.sourceMsgId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F54A}\u{FE0F} **On a Diplomatic Mission** — **${displayName}** did not attack. Choose a bonus:`,
+      components: [_dmRow],
+    }).catch(discordCatch);
+    consumeDescriptor(game, desc.id);
+    await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+    if (saveGames) saveGames(game.gameId);
+    return;
   } else if (desc.subPromptKey === 'companion_activate') {
     // Hand the activation lock to the companion so it can act INSIDE this
     // window (alexanbv 2026-08-12). The host keeps game.activationLockKey until

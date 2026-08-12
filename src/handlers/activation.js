@@ -1089,15 +1089,19 @@ export async function finishDcEndActivation(ctx, state) {
   }
   // Two ACTIVATION_FIGKEY_FLAGS are still needed further down THIS function,
   // after cleanupActivation has wiped them: On a Diplomatic Mission reads
-  // attackPerformedThisActivation (~line 1250) and Wild Fury reads
-  // postActivationConditions (~line 1340). Snapshot them before the wipe.
+  // postActivationConditions (Wild Fury). Snapshot it before the wipe.
+  //
+  // The attackPerformedThisActivation snapshot that used to live here is GONE
+  // (2026-08-12): its only consumer was On a Diplomatic Mission, which is now an
+  // EoA descriptor enumerated BEFORE cleanup and therefore reads the live map.
+  // Wild Fury still needs its snapshot because it is an automatic termination
+  // and correctly runs here, after the window closes.
   //
   // Both were already dead before the dgIndex fix above — the lookups used
   // `-0-N` keys while the writers (figureKeyForActivation, which correctly
   // defaults to 1) used `-1-0`, so they never matched. Aligning the keys alone
   // would have kept them dead for the opposite reason: cleanupActivation now
   // matches, and deletes the data before either consumer runs.
-  const _preCleanupAttacked = new Set(figureKeys.filter((fk) => game.attackPerformedThisActivation?.[fk]));
   const _preCleanupPostConds = {};
   for (const fk of figureKeys) {
     const _pc = game.postActivationConditions?.[fk];
@@ -1336,28 +1340,15 @@ export async function finishDcEndActivation(ctx, state) {
     }
   }
 
-  // On a Diplomatic Mission (Skirmish Upgrade, LEADER): exhaust at end of activation if no attack → choice
-  {
-    const _odmUpgrades = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    const _odmExh = game.exhaustedSkirmishUpgrades?.[msgId] || [];
-    // attackPerformedThisActivation is now figureKey-keyed (alexanbv
-    // 2026-05-13). Group-scope "no attack" means none of the group's
-    // figures attacked this activation.
-    // Snapshot taken before cleanupActivation — the live map is already wiped.
-    const _odmAnyFigAttacked = figureKeys.some((fk) => _preCleanupAttacked.has(fk));
-    if (cardNameIncludes(_odmUpgrades, 'On a Diplomatic Mission') && !cardNameIncludes(_odmExh, 'On a Diplomatic Mission') && !_odmAnyFigAttacked) {
-      const _odmRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_mp`).setLabel('+2 MP').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_evade`).setLabel('+1 Evade (rest of round)').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_vp`).setLabel('+1 VP').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`on_diplomatic_${gameId}_${msgId}_skip`).setLabel('Skip').setStyle(ButtonStyle.Secondary),
-      );
-      await logGameAction(game, client, `<@${ownerId}> **On a Diplomatic Mission** — No attack this activation. Choose a bonus:`, {
-        components: [_odmRow],
-        allowedMentions: { users: [ownerId] },
-      });
-    }
-  }
+  // On a Diplomatic Mission MOVED 2026-08-12 into the host's end-of-activation
+  // window as an EoA descriptor (subPromptKey 'diplomatic_mission').
+  //
+  // It was an ad-hoc button row posted from here — the teardown continuation,
+  // i.e. window 2 — so its choice could not be ordered against anything, and it
+  // had to read a pre-cleanup SNAPSHOT of attackPerformedThisActivation because
+  // cleanupActivation had already wiped the live map. The descriptor is
+  // enumerated before cleanup, so it reads the real thing.
+
   // Clean up attack tracking for this activation — per-figureKey now
   // (alexanbv 2026-05-13). Clear every figure in the activated group.
   if (game.attackPerformedThisActivation) {
