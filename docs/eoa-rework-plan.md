@@ -273,3 +273,59 @@ movement (Fenn) can target himself, but also others."
 Fenn's already dispatches correctly inline (`soa-handler.js` ~1339), as does
 "I Make the Rules Now" (~1284). Those two were miscounted as plain banking sites
 in the first enumeration; they are in fact the runtime pattern, hand-rolled.
+
+## Companion activations and the EoA window (slice 5 spec)
+
+alexanbv 2026-08-12, verbatim because the orderings are the specification:
+
+> "remember all companion activations: if they activate first, they resolve
+> first. If the activate after the main figure, their activation resolves
+> INSIDE the figure's EOA window. Thus, for example:
+> Baze with Child attached can choose to either:
+> Activate child first, then baze, then Child teleports
+> Activate baze first, teleport child, activate child
+> Activate baze first, activate child, teleport child
+>
+> Teleport reffers to the "place your figure" part of clan of two"
+
+### What this means structurally
+
+Two separate things live in the host's EoA window when the companion goes
+second, and **the player chooses the order between them**:
+
+1. the companion's own activation
+2. Clan of Two's "place your figure" teleport
+
+That is exactly the shape the EoA chooser already provides — several descriptors
+in one bucket, player picks which resolves next — so this does not need new
+machinery, it needs both items to BE descriptors.
+
+### The three legal orderings, usable directly as acceptance tests
+
+| # | order |
+|---|---|
+| A | Child activates · Baze activates · Child teleports |
+| B | Baze activates · Child teleports · Child activates |
+| C | Baze activates · Child activates · Child teleports |
+
+A is the companion-first path (already handled: it resolves before the host).
+B and C are the same EoA window with the two descriptors resolved in either
+order, which is precisely what the bucket chooser gives for free.
+
+### Current state
+
+**Clan of Two's teleport is in the WRONG WINDOW.** It is an ad-hoc prompt inside
+`finishDcEndActivation` (~1327), i.e. after `cleanupActivation` (~1118), so it
+fires in window 2. It must become an EoA descriptor.
+
+**Companion-after-host** is handled by the separate slice-3 partial-end logic
+(`getPairedActiveMsgId`), not as a descriptor, so it cannot currently be
+interleaved with the teleport at all — orderings B and C are indistinguishable
+today because neither is player-controlled.
+
+### Work
+
+1. Make the Clan of Two teleport an EoA descriptor on the host's window.
+2. Make "companion activates now" a descriptor in the same bucket when the
+   companion was chosen to go second.
+3. The chooser then produces B and C naturally. A is unchanged.
