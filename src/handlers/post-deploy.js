@@ -737,10 +737,8 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       await logGameAction(game, client, `🛬 **Smooth Landing** — ${labels.join(', ')} gain${labels.length === 1 ? 's' : ''} **1 MP** after deployment. Pick order; each figure spends immediately.`, { phase: 'ROUND', icon: 'deployed' });
       const seqFigures = [];
       for (const mf of ability.moveFigures) {
-        let mid = null;
-        for (const [m, meta] of dcMessageMeta) {
-          if (meta.dcName === mf.dcName && meta.playerNum === ability.playerNum) { mid = m; break; }
-        }
+        // Group-aware: resolve by figureKey, not card name (alexanbv 2026-08-12).
+        const mid = findDcMessageIdForFigure(game.gameId, ability.playerNum, mf.figureKey, dcMessageMeta);
         if (mid) seqFigures.push({ msgId: mid, figureKey: mf.figureKey, playerNum: ability.playerNum, spaces: mf.mp, dcName: mf.dcName });
       }
       if (seqFigures.length === 0) {
@@ -766,10 +764,8 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       // remaining MP discarded if the player stops early. Single
       // figure → sequence-of-one (auto-advance, no order prompt).
       await logGameAction(game, client, `🏗️ **Forward Emplacement** — **${ability.dcName}** gains **${ability.mp} MP** after deployment. Spend immediately.`, { phase: 'ROUND', icon: 'deployed' });
-      let mid = null;
-      for (const [m, meta] of dcMessageMeta) {
-        if (meta.dcName === ability.dcName && meta.playerNum === ability.playerNum) { mid = m; break; }
-      }
+      // Group-aware: resolve by figureKey, not card name (alexanbv 2026-08-12).
+      const mid = findDcMessageIdForFigure(game.gameId, ability.playerNum, ability.figureKey, dcMessageMeta);
       if (!mid) {
         await logGameAction(game, client, `⚠️ **Forward Emplacement** — could not locate **${ability.dcName}**'s play area; skipping.`, { phase: 'ROUND', icon: 'deployed' });
         game.postDeployQueue.activeAbility = null;
