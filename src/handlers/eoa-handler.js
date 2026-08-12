@@ -34,11 +34,14 @@ const EOA_AUTO_APPLY_KEYS = new Set(['hold_the_line', 'shield', 'in_the_shadows'
  * fired). When the resolution is fully exhausted, post a "EoA resolved"
  * message so the activator's End Activation flow can finalize.
  */
-async function postChooserOrComplete(game, gameId, ctx, channel, onComplete) {
+// The `onComplete` parameter this used to take was dead: nothing anywhere
+// provided ctx.eoaResolvedCallback, so it was always undefined and the callback
+// could never fire. Removed 2026-08-12 rather than registered as a ctx key with
+// no producer — smoke:context flagged it the moment a new caller passed it.
+async function postChooserOrComplete(game, gameId, ctx, channel) {
   const desc = describeChooserPrompt(game.pendingEoaResolution, gameId);
   if (!desc) {
     await channel.send({ content: '\u{1F3C1} End-of-Activation effects resolved. Activation ending.' }).catch(discordCatch);
-    if (typeof onComplete === 'function') await onComplete();
     // The window is closed, so the deferred teardown can finally run. This is
     // the whole point of the EoA rework (alexanbv 2026-08-12): end-of-activation
     // effects resolve while the activation still exists, and only then is it
@@ -110,6 +113,40 @@ export async function handleEoaPick(interaction, ctx) {
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
       components: chunkButtonsToRows(buttons),
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'clan_of_two_teleport') {
+    // Post the destination buttons, then consume the descriptor immediately.
+    //
+    // The teleport itself is resolved by the existing handleClanOfTwoTeleport
+    // handler on the clan_of_two_teleport_ customId, which knows nothing about
+    // EoA bookkeeping. Waiting for it to report back would leave the window open
+    // if the player never clicked a destination, and a window that never closes
+    // strands the activation — the one failure mode this whole rework exists to
+    // prevent. Consuming on pick cannot strand, and matches the previous
+    // behaviour where the button row could simply be ignored.
+    //
+    // What the player gains is the ORDERING: choosing this from the chooser is
+    // what decides whether the placement happens before or after the companion's
+    // own activation (alexanbv 2026-08-12).
+    const _cotHostPos = desc.extras?.hostPos;
+    const _cotChildFk = desc.extras?.childFigureKey;
+    const _cotMap = getMapData(game.selectedMap?.id);
+    const _cotAdj = (_cotMap?.adjacency?.[String(_cotHostPos).toLowerCase()] || []).map((sp) => String(sp).toLowerCase());
+    const _cotBtns = [String(_cotHostPos).toLowerCase(), ..._cotAdj].slice(0, 24).map((sp) =>
+      new ButtonBuilder()
+        .setCustomId(`clan_of_two_teleport_${gameId}_${desc.sourceMsgId}_${sp}`)
+        .setLabel(`Place at ${sp.toUpperCase()}`)
+        .setStyle(ButtonStyle.Primary),
+    );
+    if (_cotBtns.length) {
+      await interaction.message.channel.send({
+        content: `\u{1F4AB} **Clan of Two** — place **The Child** on **${displayName}**'s space or adjacent (currently ${String(game.figurePositions?.[bucket.ownerPlayerNum]?.[_cotChildFk] || '?').toUpperCase()}):`,
+        components: chunkButtonsToRows(_cotBtns),
+      }).catch(discordCatch);
+    }
+    consumeDescriptor(game, desc.id);
+    await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+    if (saveGames) saveGames(game.gameId);
+    return;
   } else if (desc.subPromptKey === 'eoa_cc_window') {
     // Placeholder descriptor that exists only to hold the activation open while
     // this player decides whether to play an end-of-activation Command Card.
@@ -263,7 +300,7 @@ export async function handleEoaFire(interaction, ctx) {
   }
 
   consumeDescriptor(game, desc.id);
-  await postChooserOrComplete(game, gameId, ctx, interaction.message.channel, ctx.eoaResolvedCallback);
+  await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
   saveGames(game.gameId);
 }
 
@@ -278,6 +315,6 @@ export async function handleEoaSkipAll(interaction, ctx) {
   const bucket = r.buckets[r.currentBucketIdx];
   if (!await requirePlayer(interaction, game, interaction.user.id, bucket.ownerPlayerNum, canActAsPlayer, 'Only the bucket owner may skip.')) return;
   skipCurrentBucket(game);
-  await postChooserOrComplete(game, gameId, ctx, interaction.message.channel, ctx.eoaResolvedCallback);
+  await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
   if (saveGames) saveGames(game.gameId);
 }

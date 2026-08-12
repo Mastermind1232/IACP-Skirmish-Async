@@ -1300,44 +1300,17 @@ export async function finishDcEndActivation(ctx, state) {
     }
   }
 
-  // --- Clan of Two: teleport The Child to host space or adjacent (host END) ---
-  // Per destruct 2026-05-07: regardless of order (Child-first or Host-first),
-  // The Child teleports at the host's END to host's space or adjacent. Post a
-  // button row letting the player pick the destination; click pushes the Child.
-  {
-    const _coTAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
-    if (cardNameIncludes(_coTAtts, 'Clan of Two')) {
-      const _hostDgIdx = (displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
-      const _hostFk = `${meta.dcName}-${_hostDgIdx}-0`;
-      const _hostPos = game.figurePositions?.[meta.playerNum]?.[_hostFk];
-      // Find The Child's current figure key (it's a single-figure companion).
-      let _childFk = null;
-      for (const fk of Object.keys(game.figurePositions?.[meta.playerNum] || {})) {
-        if (fk.startsWith('The Child-')) { _childFk = fk; break; }
-      }
-      if (_hostPos && _childFk) {
-        const _ms = ctx.getMapData?.(game.selectedMap?.id);
-        const _adj = (_ms?.adjacency?.[String(_hostPos).toLowerCase()] || []).map((s) => String(s).toLowerCase());
-        // Filter to unoccupied destination spaces (Child can land on host's
-        // space if host is small AND companion can stack — for IA the Child
-        // is a companion that shares squares OK, so include host space).
-        const _candidates = [String(_hostPos).toLowerCase(), ..._adj];
-        const _btns = _candidates.slice(0, 24).map((sp) =>
-          new ButtonBuilder()
-            .setCustomId(`clan_of_two_teleport_${gameId}_${msgId}_${sp}`)
-            .setLabel(`Teleport to ${sp.toUpperCase()}`)
-            .setStyle(ButtonStyle.Primary)
-        );
-        if (_btns.length > 0) {
-          await logGameAction(game, client, `\u{1F4AB} **Clan of Two** — Teleport **The Child** to **${meta.dcName}**'s space or adjacent (Child currently at ${String(_childFk).toUpperCase()} → ${String(game.figurePositions?.[meta.playerNum]?.[_childFk] || '?').toUpperCase()}):`, {
-            phase: 'ACTIVATION',
-            icon: 'activate',
-            components: chunkButtonsToRows(_btns),
-          });
-        }
-      }
-    }
-  }
+  // Clan of Two's placement MOVED 2026-08-12 into the host's end-of-activation
+  // window as an EoA descriptor (eoa-orchestrator.js, subPromptKey
+  // 'clan_of_two_teleport').
+  //
+  // It used to post its button row from right here, in the teardown
+  // continuation — i.e. window 2, after the activation was already dismantled.
+  // alexanbv: a companion activating second "resolves INSIDE the figure's EOA
+  // window", and the legal orderings ("teleport child, activate child" vs
+  // "activate child, teleport child") are only expressible if the placement is
+  // a descriptor that can be ordered against the companion's activation.
+  // Posting it from here made both orderings indistinguishable.
 
   // Send End Turn button to game log (turn switch happens when player presses it)
   game.pendingEndTurn = game.pendingEndTurn || {};

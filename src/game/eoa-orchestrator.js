@@ -107,6 +107,40 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     });
   }
 
+  // Clan of Two: the companion's "place your figure" teleport belongs INSIDE
+  // the host's end-of-activation window, not after it.
+  //
+  // alexanbv 2026-08-12: "If the activate after the main figure, their
+  // activation resolves INSIDE the figure's EOA window", with the worked
+  // orderings "Activate baze first, teleport child, activate child" and
+  // "Activate baze first, activate child, teleport child". Both of those are
+  // this window with two descriptors resolved in either order, which is what
+  // the bucket chooser gives once the teleport IS a descriptor.
+  //
+  // It used to be an ad-hoc button row posted from the teardown continuation,
+  // i.e. window 2, where it could not be ordered against anything.
+  {
+    const _cotAtts = game.p1DcAttachments?.[msgId] || game.p2DcAttachments?.[msgId] || [];
+    const _hasCot = Array.isArray(_cotAtts) && _cotAtts.some((a) => String(a || '').includes('Clan of Two'));
+    if (_hasCot) {
+      const _hostPos = game.figurePositions?.[playerNum]?.[_selfFk];
+      let _childFk = null;
+      for (const fk of Object.keys(game.figurePositions?.[playerNum] || {})) {
+        if (fk.startsWith('The Child-')) { _childFk = fk; break; }
+      }
+      if (_hostPos && _childFk) {
+        descriptors.push({
+          id: `clan_of_two_teleport:${msgId}`,
+          ownerPlayerNum: playerNum,
+          sourceMsgId: msgId,
+          sourceLabel: 'Clan of Two (place The Child)',
+          subPromptKey: 'clan_of_two_teleport',
+          extras: { dcName, selfFigureKey: _selfFk, childFigureKey: _childFk, hostPos: _hostPos },
+        });
+      }
+    }
+  }
+
   // Force Surge is intentionally NOT an EoA descriptor. Per the project
   // owner 2026-06-18: it is an OPTIONAL Command Card and already surfaces
   // through the generic end-of-activation reaction-card play-from-hand

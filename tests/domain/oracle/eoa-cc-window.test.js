@@ -76,3 +76,44 @@ describe('end-of-activation Command Card window', () => {
       'window 2 must not offer end-of-activation cards');
   });
 });
+
+describe('Clan of Two placement lives in the EoA window', () => {
+  const orchestrator = read('src/game/eoa-orchestrator.js');
+  const handler = read('src/handlers/eoa-handler.js');
+  const activation = read('src/handlers/activation.js');
+
+  test('the placement is an EoA descriptor', () => {
+    // alexanbv 2026-08-12: a companion activating second "resolves INSIDE the
+    // figure's EOA window", and the two legal orderings ("teleport child,
+    // activate child" / "activate child, teleport child") are only expressible
+    // if the placement can be ordered against the companion's activation.
+    assert.match(orchestrator, /subPromptKey: 'clan_of_two_teleport'/,
+      'must be enumerated as a descriptor');
+    assert.match(handler, /desc\.subPromptKey === 'clan_of_two_teleport'/,
+      'and resolved by the EoA handler');
+  });
+
+  test('it no longer posts from the teardown continuation', () => {
+    // That is window 2, after the activation is dismantled, where the ordering
+    // cannot be expressed at all.
+    const idx = activation.indexOf('export async function finishDcEndActivation');
+    assert.ok(idx > 0);
+    const code = activation.slice(idx).split('\n')
+      .filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!code.includes('clan_of_two_teleport_'),
+      'the button row must not be posted after teardown');
+  });
+
+  test('picking it consumes the descriptor, so the window cannot strand', () => {
+    // The teleport resolves on its own customId via handleClanOfTwoTeleport,
+    // which knows nothing about EoA bookkeeping. If the descriptor waited on
+    // that, a player who never clicked a destination would leave the activation
+    // open forever.
+    const idx = handler.indexOf("desc.subPromptKey === 'clan_of_two_teleport'");
+    const branch = handler.slice(idx, idx + 2200);
+    assert.match(branch, /consumeDescriptor\(game, desc\.id\)/,
+      'must consume on pick');
+    assert.match(branch, /postChooserOrComplete\(/,
+      'and advance the chooser so the bucket can close');
+  });
+});
