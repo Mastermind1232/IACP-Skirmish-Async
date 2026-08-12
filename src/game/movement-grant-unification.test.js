@@ -130,3 +130,36 @@ describe('special-action MP is always immediate', () => {
       'the dead deploy-bonus read must stay deleted');
   });
 });
+
+describe('granted MP goes to the CHOSEN figure, not a same-named one', () => {
+  // alexanbv 2026-08-12: "Granted MP are often to non-unique figures. They need
+  // to be granted to the chosen figure, NOT any figure with the same name."
+  //
+  // The failure mode is a lookup that matches a card by dcName + playerNum and
+  // returns the first hit. With two groups of the same card in an army that
+  // resolves to the wrong group's card, and the MP lands on the wrong figures.
+  test('findDcMessageIdForFigure distinguishes two groups of the same card', async () => {
+    const { findDcMessageIdForFigure } = await import('../engine/game-readers.js');
+    const meta = new Map([
+      ['m-g1', { gameId: 'g', playerNum: 1, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 1]' }],
+      ['m-g2', { gameId: 'g', playerNum: 1, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 2]' }],
+    ]);
+
+    assert.equal(findDcMessageIdForFigure('g', 1, 'Stormtrooper-2-1', meta), 'm-g2',
+      'group 2 figure resolves to group 2 card');
+    assert.equal(findDcMessageIdForFigure('g', 1, 'Stormtrooper-1-0', meta), 'm-g1');
+  });
+
+  test('post-deploy resolves grantees by figure, not by card name', () => {
+    const src = read('src/handlers/post-deploy.js');
+    // Smooth Landing ("each adjacent friendly figure") and Strike Team ("an
+    // adjacent friendly figure") both pick a figure the player chose, which is
+    // frequently a non-unique trooper.
+    assert.ok(!/if \(meta\.dcName === dcName && meta\.playerNum === playerNum\) \{ msgId = mid; break; \}/.test(src),
+      'Smooth Landing must not resolve its grantee by card name');
+    assert.ok(!/const cassianMid = findMid\(cassianName\)/.test(src),
+      'Strike Team must not resolve its grantees by card name');
+    assert.match(src, /findDcMessageIdForFigure\(game\.gameId, playerNum, figureKey, dcMessageMeta\)/,
+      'Smooth Landing uses the group-aware lookup');
+  });
+});

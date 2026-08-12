@@ -18,6 +18,7 @@ import { discordCatch } from '../error-handling.js';
 import { sendPowerTokenOverflowUI } from './combat.js';
 import { requireGame } from '../utils/guards.js';
 import { chunkButtonsToRows } from '../discord/components.js';
+import { findDcMessageIdForFigure } from '../engine/game-readers.js';
 import { splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel } from '../discord/channel-helpers.js';
 
@@ -593,11 +594,12 @@ async function _startMovementForFigure(game, gameId, client, ctx, fig) {
     return;
   }
 
-  // Find msgId for this figure's DC
-  let msgId = null;
-  for (const [mid, meta] of dcMessageMeta) {
-    if (meta.dcName === dcName && meta.playerNum === playerNum) { msgId = mid; break; }
-  }
+  // Find the card for THIS figure — group-aware. alexanbv 2026-08-12: "Granted
+  // MP ... need to be granted to the chosen figure, NOT any figure with the same
+  // name." This matched on dcName alone and took the first hit, so Smooth
+  // Landing's "each adjacent friendly figure" could grant to the wrong group of
+  // a duplicated card. figureKey is right here and carries the group index.
+  const msgId = findDcMessageIdForFigure(game.gameId, playerNum, figureKey, dcMessageMeta);
   if (!msgId) {
     await logGameAction(game, client, `⚠️ Could not find play area message for **${dcName}** — skipping movement.`, { phase: 'ROUND', icon: 'deployed' });
     await _advanceAfterFigure(game, gameId, client, ctx, figureKey);
@@ -1575,18 +1577,26 @@ export async function handleStrikeTeamAdjPick(interaction, ctx) {
   // each msgId via dcMessageMeta lookup. The orchestrator's order
   // picker replaces the legacy "Move X first / Move Y first" buttons
   // — same UX, fewer codepaths.
+  // Resolve by FIGURE, not by card name. alexanbv 2026-08-12: "Granted MP are
+  // often to non-unique figures. They need to be granted to the chosen figure,
+  // NOT any figure with the same name."
+  //
+  // The old local lookup matched on dcName + playerNum and returned the FIRST
+  // hit, so with two groups of the same card in the army it could hand the 2 MP
+  // to the wrong group's card. Cassian is unique and was safe; the adjacent
+  // friendly figure the player chooses very often is not.
+  //
+  // findDcMessageIdForFigure parses the group index out of the figureKey and
+  // matches it against each card's [Group N] tag, so it lands on the group the
+  // player actually picked.
   const dcMessageMetaCtx = ctx.dcMessageMeta;
-  const findMid = (dcName) => {
-    if (!dcMessageMetaCtx) return null;
-    for (const [m, meta] of dcMessageMetaCtx) {
-      if (meta.dcName === dcName && meta.playerNum === playerNum) return m;
-    }
-    return null;
-  };
+  const midForFigure = (fk) => (
+    dcMessageMetaCtx && fk ? findDcMessageIdForFigure(game.gameId, playerNum, fk, dcMessageMetaCtx) : null
+  );
   const seqFigures = [];
-  const cassianMid = findMid(cassianName);
+  const cassianMid = midForFigure(cassianFk);
   if (cassianMid && cassianFk) seqFigures.push({ msgId: cassianMid, figureKey: cassianFk, playerNum, spaces: 2, dcName: cassianName });
-  const friendMid = findMid(friendDcName);
+  const friendMid = midForFigure(friendFk);
   if (friendMid) seqFigures.push({ msgId: friendMid, figureKey: friendFk, playerNum, spaces: 2, dcName: friendDcName });
   if (seqFigures.length === 0) {
     await logGameAction(game, client, `⚡ **Strike Team** — could not locate play area messages; skipping movement.`, { phase: 'ROUND', icon: 'deployed' });
