@@ -141,7 +141,10 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
         const dgFigures = Object.keys(figPositions).filter(k => k.startsWith(prefix) && figPositions[k]);
         // Dedup PER GROUP, not per card name. Keying on dcName meant a second
         // group of the same card never got its own Infiltration entry, so only
-        // one group of a duplicated card could ever infiltrate.
+        // one group could ever infiltrate.
+        //
+        // Live, not theoretical: Rebel Pathfinder (Elite) is the sole carrier of
+        // Infiltration and is unique:false, so two groups of it is a legal army.
         // alexanbv 2026-08-12.
         if (!abilities.some(a => a.abilityId === 'infiltration' && a.figureKey === fk && a.playerNum === playerNum)) {
           abilities.push({ abilityId: 'infiltration', label: 'Infiltration', dcName, figureKey: fk, figureKeys: dgFigures, playerNum, interactive: true, type: 'movement', mpPerFigure: 6 });
