@@ -9018,8 +9018,22 @@ export function resolveAbility(abilityId, context) {
         ...(_cahPendingStrain.length ? { pendingStrain: _cahPendingStrain } : {}),
       };
     }
-    // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    // First call: grant MP, then find adjacent hostiles and auto-apply or offer choice.
+    //
+    // Force Surge is endOfActivation, so by the time it is legally playable the
+    // activation may already be torn down and findActiveActivationMsgId returns
+    // null — the card then refused to resolve at all. Fall back to the
+    // just-resolved activation.
+    //
+    // Scope is 'own' and that matters: this grants MP to the resolved DC, and
+    // 'any' would hand it to whichever card activated last, including the
+    // opponent's. Blaze and Son of Skywalker want 'any'; this does not.
+    //
+    // Nothing else is needed to make the MP behave. addMovementPoints already
+    // tags a grant made outside an activation as _mustSpendImmediately, which
+    // is the same path Order and Tactical Maneuver use (alexanbv 2026-08-12:
+    // "immediate spends do NOT require an activation").
+    const msgId = findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta, 'own');
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Move-X path (Ambush etc.): stamp pendingMoveX with the
     // cahTargetPick continuation so the adjacent-hostile target
@@ -10664,7 +10678,7 @@ export function resolveAbility(abilityId, context) {
     // findJustResolvedActivationMsgId.
     // scope 'any': playable after ANY activation, friendly or hostile
     // (alexanbv 2026-08-12).
-    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
+    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta, 'any')) {
       return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
     }
     // TARGET. IG-88's own card, NOT whichever card just activated
@@ -15807,7 +15821,7 @@ export function resolveAbility(abilityId, context) {
     // TIMING GATE. afterActivationResolves — see findJustResolvedActivationMsgId.
     // scope 'any': playable after ANY activation, friendly or hostile
     // (alexanbv 2026-08-12).
-    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
+    if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta, 'any')) {
       return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
     }
     // TARGET. Luke's own card, NOT whichever card just activated
@@ -16607,12 +16621,13 @@ function findActiveActivationMsgId(game, playerNum, dcMessageMeta) {
  * card is enforced separately, where the window is posted in
  * handlers/activation.js.
  */
-function findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta) {
-  for (const pn of [1, 2]) {
+function findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta, scope = 'own') {
+  const owners = scope === 'any' ? [1, 2] : [playerNum];
+  for (const pn of owners) {
     const active = findActiveActivationMsgId(game, pn, dcMessageMeta);
     if (active) return active;
   }
-  for (const pn of [1, 2]) {
+  for (const pn of owners) {
     const last = game?.lastActivationMsgIdByPlayer?.[pn];
     if (!last || !dcMessageMeta) continue;
     const meta = dcMessageMeta.get(last);

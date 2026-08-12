@@ -116,9 +116,9 @@ export async function handleEoaPick(interaction, ctx) {
     // Nothing resolves here: the card is played from hand through the normal
     // path, and Done closes the window.
     //
-    // The activation is still standing at this point, which is the entire
-    // reason it exists. Force Surge moves the figure and Diplomatic Mission's
-    // MP is an immediate spend, so both need it (alexanbv 2026-08-12).
+    // This exists for ORDERING, not because the effects need a live activation
+    // — immediate spends work fine outside one (alexanbv 2026-08-12). It keeps
+    // end-of-activation strictly ahead of the after-resolves window.
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
     );

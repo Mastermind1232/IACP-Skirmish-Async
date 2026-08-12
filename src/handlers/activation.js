@@ -911,11 +911,18 @@ export async function handleDcEndActivation(interaction, ctx) {
     //
     // These are optional plays from hand, deliberately NOT descriptors of their
     // own (see the note in eoa-orchestrator.js: a descriptor would force a
-    // prompt every single activation). But they still need the window HELD
-    // open, because both are immediate spends that need the activation
-    // standing — alexanbv 2026-08-12: "if mp chosen from diplo it would be
-    // treated as an immediate spend at that moment ... Force Surge is move
-    // spaces, so it is also immediate spend".
+    // prompt every single activation). The window is held open so they are
+    // OFFERED IN THE RIGHT WINDOW — strictly end-of-activation, before the
+    // after-resolves window, in initiative order.
+    //
+    // NOT because the effects need a live activation. They do not, and I had
+    // that wrong: alexanbv 2026-08-12, "immediate spends do NOT require an
+    // activation. For example, an eOfficer can order a move that another
+    // figure spends immediately. Jundland Terror is an EOR effect with
+    // immediate spend." addMovementPoints already tags an out-of-activation
+    // grant as _mustSpendImmediately, which is how Order and Tactical Maneuver
+    // work. The ordering is the reason this window exists; the spend mechanics
+    // take care of themselves.
     //
     // So one placeholder descriptor per player who actually holds a playable
     // one. Its only job is to keep the activation alive while they decide; the

@@ -87,24 +87,34 @@ been behind: the continuation snapshots `attackPerformedThisActivation` and
 Diplomatic Mission and Wild Fury can still read them. Those snapshots can be
 deleted once both move into the window.
 
-### Force Surge is probably not the only casualty
+### What actually breaks these cards (corrected)
 
-`movementBank` is in `ACTIVATION_MSGID_FLAGS`, so `cleanupActivation` deletes
-`game.movementBank[msgId]`. **On a Diplomatic Mission's "+2 MP" option calls
-`grantMovementBank(game, msgId, 2)` from the continuation**, i.e. after that
-delete, on an activation that is over.
+An earlier version of this doc claimed the problem was that effects need the
+activation standing, because `cleanupActivation` clears `movementBank`. **That
+was wrong.** alexanbv 2026-08-12:
 
-This is the same shape as Force Surge: an effect that needs the activation
-standing, offered in a prompt that fires after it has been dismantled.
+> "immediate spends do NOT require an activation. For example, an eOfficer can
+> order a move that another figure spends immediately. Jundland Terror is an EOR
+> effect with immediate spend."
 
-NOT YET CONFIRMED as player-visible — whether the granted MP is spendable
-depends on the move-X / `expireImmediateMp` path, which has not been traced.
-Verify before claiming it as a bug. Migrating the card into window 1 makes it
-correct either way, since the grant then lands while the bank still exists.
+`addMovementPoints` already tags any grant made while `dcActionsData[msgId]` is
+absent as `_outOfActivation` / `_mustSpendImmediately`. That is the path Order
+and Tactical Maneuver use, and it works with no activation at all.
 
-Worth sweeping the other window-1 abilities for the same pattern: any effect
-touching a key listed in `ACTIVATION_MSGID_FLAGS` or `ACTIVATION_FIGKEY_FLAGS`
-is suspect while it is resolved from the continuation.
+The real defect was narrower: these resolvers looked their actor up with
+`findActiveActivationMsgId`, which needs a live activation, so they refused to
+resolve rather than resolving with immediate-spend semantics. Fixed for Force
+Surge by falling back to the just-resolved pointer with `scope: 'own'`.
+
+**Scope matters here.** `findJustResolvedActivationMsgId` takes `'own'` or
+`'any'`. Blaze and Son of Skywalker are `'any'` (either player's activation
+opens their window). Force Surge is `'own'` — it grants MP to the resolved DC,
+and `'any'` would hand it to whichever card activated last, possibly the
+opponent's.
+
+So window 1 exists for **ordering**, not because the effects need a live
+activation: strictly end-of-activation, ahead of the after-resolves window, in
+initiative order.
 
 ## Slice 2: CSV retiming (done)
 
