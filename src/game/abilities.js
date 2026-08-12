@@ -10662,6 +10662,8 @@ export function resolveAbility(abilityId, context) {
     // cleanupActivation has cleared dcActionsData, so this accepts the
     // just-resolved activation, not only a live one. See
     // findJustResolvedActivationMsgId.
+    // scope 'any': playable after ANY activation, friendly or hostile
+    // (alexanbv 2026-08-12).
     if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
       return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
     }
@@ -15803,6 +15805,8 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     // TIMING GATE. afterActivationResolves — see findJustResolvedActivationMsgId.
+    // scope 'any': playable after ANY activation, friendly or hostile
+    // (alexanbv 2026-08-12).
     if (!findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta)) {
       return { applied: false, manualMessage: 'Resolve manually: no activation has resolved yet this round.' };
     }
@@ -16571,24 +16575,41 @@ function findActiveActivationMsgId(game, playerNum, dcMessageMeta) {
 }
 
 /**
- * Find the DC an `afterActivationResolves` card refers to.
+ * Has an activation resolved that an `afterActivationResolves` card can react to?
  *
- * That timing window opens AFTER cleanupActivation has already deleted
- * dcActionsData[msgId], so findActiveActivationMsgId returns null for the
- * whole window the card is legally playable in — Blaze of Glory and Son of
- * Skywalker both bailed with "no activation in progress" and were spent for
- * nothing. Fall back to the pointer handleDcEndActivation records just before
- * cleanup, validated against dcMessageMeta so a stale pointer (removed DC,
- * other game) can't resolve. alexanbv 2026-08-11.
+ * The window opens AFTER cleanupActivation has deleted dcActionsData[msgId], so
+ * findActiveActivationMsgId returns null for the whole window the card is
+ * legally playable in. Blaze of Glory and Son of Skywalker both bailed with "no
+ * activation in progress" and were spent for nothing. The fallback is the
+ * pointer handleDcEndActivation records just before cleanup, validated against
+ * dcMessageMeta so a stale pointer (removed DC, other game) cannot open the
+ * window. alexanbv 2026-08-11.
+ *
+ * EITHER player's activation opens it, per alexanbv 2026-08-12: "Sos and blaze
+ * can be played after any activation, friendly or hostile." Those are the only
+ * two callers, which is why there is no ownership parameter here.
+ *
+ * The own-activation cards in the same window do NOT come through this helper
+ * and cannot be widened by accident: Squad Swarm and Strength in Numbers read
+ * the playing player's own activated list, and Change of Plans resolves from
+ * explicit picks. "By nature strength in numbers and squad swarm require it to
+ * have been your activation" is therefore structural. Who gets OFFERED which
+ * card is enforced separately, where the window is posted in
+ * handlers/activation.js.
  */
 function findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta) {
-  const active = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-  if (active) return active;
-  const last = game?.lastActivationMsgIdByPlayer?.[playerNum];
-  if (!last || !dcMessageMeta) return null;
-  const meta = dcMessageMeta.get(last);
-  if (meta?.gameId !== game.gameId || meta?.playerNum !== playerNum) return null;
-  return last;
+  for (const pn of [1, 2]) {
+    const active = findActiveActivationMsgId(game, pn, dcMessageMeta);
+    if (active) return active;
+  }
+  for (const pn of [1, 2]) {
+    const last = game?.lastActivationMsgIdByPlayer?.[pn];
+    if (!last || !dcMessageMeta) continue;
+    const meta = dcMessageMeta.get(last);
+    if (meta?.gameId !== game.gameId || meta?.playerNum !== pn) continue;
+    return last;
+  }
+  return null;
 }
 
 /**

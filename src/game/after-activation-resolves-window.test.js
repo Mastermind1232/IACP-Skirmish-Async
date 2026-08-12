@@ -84,6 +84,20 @@ describe('afterActivationResolves window', () => {
       assert.deepEqual(game.p1ActivatedDcIndices, [0, 1, 2], 'nothing readied');
     });
 
+    test(`${card} resolves off a HOSTILE activation too`, () => {
+      // alexanbv 2026-08-12: "Sos and blaze can be played after any activation,
+      // friendly or hostile." Only the opponent has activated.
+      const game = makeGame();
+      game.lastActivationMsgIdByPlayer = { 2: 'm-opp' };
+      const meta = makeMeta();
+      meta.set('m-opp', { gameId: GAME_ID, playerNum: 2, dcName: 'Stormtrooper', displayName: 'Stormtrooper [Group 1]' });
+
+      const result = resolveAbility(card, { game, playerNum: 1, dcMessageMeta: meta });
+
+      assert.equal(result.applied, true, 'a hostile activation opens the window');
+      assert.deepEqual(result.readyDcMsgIds, [msgId], `and still readies ${figure}`);
+    });
+
     test(`${card} bails when no activation has resolved yet`, () => {
       const game = makeGame();
       delete game.lastActivationMsgIdByPlayer;

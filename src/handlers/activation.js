@@ -1304,20 +1304,49 @@ export async function handleDcEndActivation(interaction, ctx) {
   // Lie in Ambush: after opponent activates, check if trigger fires
   await checkLieInAmbushTrigger(game, meta.playerNum, ctx);
 
-  // Auto-prompt owner for post-activation reaction cards (Change of Plans, Provoke, etc.)
+  // AFTER-ACTIVATION-RESOLVES window. Per alexanbv 2026-08-12: "End of
+  // activation and after activation resolves are two different windows. End of
+  // activation happens first. In initiative order. Then after activation
+  // resolves happens. In init order."
+  //
+  // This is the SECOND window. Both players get it, initiative player first,
+  // and the two timing tags are NOT interchangeable:
+  //
+  //   afterActivationResolves          Blaze of Glory, Son of Skywalker.
+  //                                    "can be played after any activation,
+  //                                    friendly or hostile" — so the
+  //                                    NON-activating player is prompted too.
+  //   afterYouResolveGroupsActivation  Change of Plans, Squad Swarm, Strength
+  //                                    in Numbers. "By nature ... require it to
+  //                                    have been your activation" — activator
+  //                                    only.
+  //
+  // Previously only the activating player was prompted, for all tags at once,
+  // so Blaze and Son of Skywalker were invisible off a hostile activation.
+  //
+  // 'endOfActivation' deliberately no longer appears here: it is the FIRST
+  // window and belongs before the activation is torn down.
   try {
-    const reactCards = getPlayableReactionCardsForTiming(game, meta.playerNum, [
-      'afterYouResolveGroupsActivation', 'afterActivationResolves', 'endOfActivation',
-    ]);
-    if (reactCards.length) {
-      const handId = getHandChannelId(game, meta.playerNum);
-      if (handId) {
-        const handCh = await fetchGameChannel(client, handId);
-        if (handCh) await handCh.send({ content: `<@${ownerId}> — Activation ended! You have ${reactCards.length} reaction card(s) playable now.`, allowedMentions: { users: [ownerId] } }).catch(discordCatch);
-      }
+    const _initPn = getInitiativePlayerNum(game);
+    for (const _pn of [_initPn, opponentPlayerNum(_initPn)]) {
+      const _timings = _pn === meta.playerNum
+        ? ['afterActivationResolves', 'afterYouResolveGroupsActivation']
+        : ['afterActivationResolves'];
+      const reactCards = getPlayableReactionCardsForTiming(game, _pn, _timings);
+      if (!reactCards.length) continue;
+      const handId = getHandChannelId(game, _pn);
+      if (!handId) continue;
+      const handCh = await fetchGameChannel(client, handId);
+      if (!handCh) continue;
+      const _pid = getPlayerId(game, _pn);
+      const _whose = _pn === meta.playerNum ? 'Your activation ended' : `**${displayName}**'s activation ended`;
+      await handCh.send({
+        content: `<@${_pid}> — ${_whose}! You have ${reactCards.length} reaction card(s) playable now.`,
+        allowedMentions: { users: [_pid] },
+      }).catch(discordCatch);
     }
   } catch (_endActErr) {
-    console.error('End-activation reaction prompt error:', _endActErr?.message ?? _endActErr);
+    console.error('After-activation-resolves prompt error:', _endActErr?.message ?? _endActErr);
   }
 
   // Field Tactics (Death Trooper): after activation, choose a friendly TROOPER/LEADER within 2 to perform a free attack
