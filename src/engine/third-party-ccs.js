@@ -224,10 +224,20 @@ export function applyThirdPartyCcEffect(specKey, game, combat, figureKey, deps =
     // this module stays free of the handler layer.
     const pn = combat?.attackerPlayerNum; // SCUM is on the attacking team
     const msgId = deps.findDcMessageIdForFigure?.(deps.gameId || game?.gameId, pn, figureKey);
-    if (msgId != null && typeof deps.grantMovementBank === 'function') {
-      deps.grantMovementBank(game, msgId, 3);
-      log.push('gained 3 MP');
-      return { applied: true, log };
+    // Bank or immediate is a runtime question here, not a fixed property of the
+    // ability (alexanbv 2026-08-12). Opportunistic fires off a damage-pipeline
+    // reaction, and the SCUM figure receiving the MP is very often NOT the one
+    // activating, in which case the grant must be spent at once rather than
+    // banked. grantMovementPoints checks dcActionsData and picks.
+    if (msgId != null && typeof deps.grantMovementPoints === 'function') {
+      const mode = deps.grantMovementPoints(game, {
+        msgId, amount: 3, playerNum: pn, figureKey, source: 'Opportunistic',
+        dcName: typeof figureKey === 'string' ? figureKey.replace(/-\d+-\d+$/, '') : undefined,
+      });
+      if (mode !== 'failed') {
+        log.push(mode === 'immediate' ? 'gained 3 MP (spend immediately)' : 'gained 3 MP');
+        return { applied: true, log };
+      }
     }
     return { applied: false, log: ['Opportunistic: MP grant deps missing'] };
   }

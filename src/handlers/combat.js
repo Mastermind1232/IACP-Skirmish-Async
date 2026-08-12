@@ -2130,7 +2130,17 @@ function _makeThirdPartyCcResolver({ specKey, card }) {
       if (!res.ok || res.cancelled) return;
       // Survived — apply bespoke combat effect
       const { applyCondition } = await import('../game/conditions.js');
-      const combatRes = applyThirdPartyCcEffect(specKey, game, combat, fk, { applyCondition });
+      const { grantMovementPoints } = await import('../game/game-helpers.js');
+      // findDcMessageIdForFigure + grantMovementPoints were never passed here,
+      // so Opportunistic's 3 MP always fell through to "MP grant deps missing"
+      // and silently did nothing in real games. Its unit test supplies its own
+      // deps, which is why the gap survived. alexanbv 2026-08-12.
+      const combatRes = applyThirdPartyCcEffect(specKey, game, combat, fk, {
+        applyCondition,
+        grantMovementPoints,
+        findDcMessageIdForFigure: ctx.findDcMessageIdForFigure,
+        gameId: game.gameId,
+      });
       if (thread) await thread.send(`**${card}** played by ${_label(fk)}${combatRes.log?.length ? ` — ${combatRes.log.join(', ')}` : ''}.`).catch(discordCatch);
       if (combatRes?.reopenDefenderOnDeclare) {
         combat.onDeclareGate = buildOnDeclareGate(game, combat, _gateDeps(ctx));

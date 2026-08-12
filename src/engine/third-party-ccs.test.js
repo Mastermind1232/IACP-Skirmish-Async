@@ -209,11 +209,27 @@ describe('applyThirdPartyCcEffect — reroll-grant cards', () => {
     assert.equal(combat.forcedRerollQueue[0].controlPlayer, 2);
   });
   it('Opportunistic grants 3 MP to the playing figure (via injected deps)', () => {
+    // Now goes through grantMovementPoints, which picks bank vs immediate at
+    // runtime: the SCUM figure receiving this is often not the one activating
+    // (alexanbv 2026-08-12).
     let granted = null;
-    const deps = { gameId: 'g1', findDcMessageIdForFigure: (gid, pn, fk) => `msg-${fk}`, grantMovementBank: (g, m, n) => { granted = [m, n]; } };
+    const deps = {
+      gameId: 'g1',
+      findDcMessageIdForFigure: (gid, pn, fk) => `msg-${fk}`,
+      grantMovementPoints: (g, o) => { granted = [o.msgId, o.amount]; return 'immediate'; },
+    };
     const r = applyThirdPartyCcEffect('Opportunistic', { gameId: 'g1' }, { attackerPlayerNum: 1 }, 'Boba Fett-1-2', deps);
     assert.equal(r.applied, true);
     assert.deepEqual(granted, ['msg-Boba Fett-1-2', 3]);
+    assert.ok(r.log.some((l) => /spend immediately/.test(l)), 'the log tells the player it cannot be banked');
+  });
+
+  it('Opportunistic reports failure rather than silently doing nothing', () => {
+    // The production call site passed neither dep until 2026-08-12, so this
+    // branch was the ONLY one ever taken in a real game.
+    const r = applyThirdPartyCcEffect('Opportunistic', { gameId: 'g1' }, { attackerPlayerNum: 1 }, 'Boba Fett-1-2', {});
+    assert.equal(r.applied, false);
+    assert.match(r.log.join(' '), /deps missing/);
   });
 });
 

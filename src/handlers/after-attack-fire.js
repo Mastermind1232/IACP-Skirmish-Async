@@ -20,7 +20,7 @@
 import { discordCatch } from '../error-handling.js';
 import { healHp } from '../game/damage-helpers.js';
 import {
-  grantMovementBank, grantPowerTokens, opponentPlayerNum,
+  grantMovementBank, grantMovementPoints, grantPowerTokens, opponentPlayerNum,
   parseFigureKey, dcNameFromFigureKey, getDcEffect,
   applyCondition, isConditionImmune, HARMFUL_CONDITIONS,
 } from '../game/index.js';
@@ -320,16 +320,34 @@ async function fireLegHydraulics(thread, game, combat, effect, ctx) {
 async function fireFlyBy(thread, game, combat, effect, ctx) {
   if (combat.attackerMsgId == null) return;
   const { logGameAction, client } = ctx;
-  grantMovementBank(game, combat.attackerMsgId, 2);
-  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Fly-By** — **${combat.attackerDcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  // Bank or immediate depends on WHEN, not on the ability (alexanbv 2026-08-12:
+  // "A post-attack MP grant would be banked if the attack was performed during
+  // the attacker's activation, but would NOT be banked if the attack was
+  // performed outside of the attacker's activation"). grantMovementPoints
+  // decides at runtime.
+  const _flyMode = grantMovementPoints(game, {
+    msgId: combat.attackerMsgId, amount: 2, playerNum: combat.attackerPlayerNum,
+    figureKey: combat.attackerFigureKey, source: 'Fly-By', dcName: combat.attackerDcName,
+    figureIndex: parseFigureKey(combat.attackerFigureKey || '').figureIndex ?? 0,
+  });
+  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Fly-By** — **${combat.attackerDcName}** gains 2 MP${_flyMode === 'immediate' ? ' (spend immediately)' : ''}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
 }
 
 /** Jets (Jet Trooper Regular) — gain 1 MP. Migrated from inline (alexanbv 2026-06-16). */
 async function fireJets(thread, game, combat, effect, ctx) {
   if (combat.attackerMsgId == null) return;
   const { logGameAction, client } = ctx;
-  grantMovementBank(game, combat.attackerMsgId, 1);
-  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Jets** — **${combat.attackerDcName}** gains 1 MP.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
+  // Bank or immediate depends on WHEN, not on the ability (alexanbv 2026-08-12:
+  // "A post-attack MP grant would be banked if the attack was performed during
+  // the attacker's activation, but would NOT be banked if the attack was
+  // performed outside of the attacker's activation"). grantMovementPoints
+  // decides at runtime.
+  const _jetsMode = grantMovementPoints(game, {
+    msgId: combat.attackerMsgId, amount: 1, playerNum: combat.attackerPlayerNum,
+    figureKey: combat.attackerFigureKey, source: 'Jets', dcName: combat.attackerDcName,
+    figureIndex: parseFigureKey(combat.attackerFigureKey || '').figureIndex ?? 0,
+  });
+  if (logGameAction) await logGameAction(game, client, `\u{1F680} **Jets** — **${combat.attackerDcName}** gains 1 MP${_jetsMode === 'immediate' ? ' (spend immediately)' : ''}.`, { phase: 'ROUND', icon: 'attack' }).catch(discordCatch);
 }
 
 /** Locked and Loaded (Migs Mayfeld) — gain 2 Power Tokens; player picks type, overflow
@@ -397,7 +415,16 @@ async function fireStalkPrey(thread, game, combat, effect, ctx) {
   if (!combat.attackerMsgId || !combat.attackerFigureKey) return;
   // Per-figure bank: +2 MP goes to the attacking figure's sub-bank only.
   const _atkFigIdx = parseFigureKey(combat.attackerFigureKey).figureIndex ?? 0;
-  grantMovementBank(game, combat.attackerMsgId, 2, _atkFigIdx);
+  // Bank or immediate depends on WHEN, not on the ability (alexanbv 2026-08-12:
+  // "A post-attack MP grant would be banked if the attack was performed during
+  // the attacker's activation, but would NOT be banked if the attack was
+  // performed outside of the attacker's activation"). grantMovementPoints
+  // decides at runtime.
+  grantMovementPoints(game, {
+    msgId: combat.attackerMsgId, amount: 2, playerNum: combat.attackerPlayerNum,
+    figureKey: combat.attackerFigureKey, source: 'Stalk Prey', dcName: combat.attackerDcName,
+    figureIndex: _atkFigIdx,
+  });
   grantPowerTokens(game, combat.attackerFigureKey, 'Damage', 1);
   delete combat.surgeStalkPrey;
   if (logGameAction && thread) {

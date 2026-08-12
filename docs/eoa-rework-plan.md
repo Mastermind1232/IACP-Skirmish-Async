@@ -194,3 +194,48 @@ Terminations must run **after** the choice window closes. Before slice 1 the
 chooser was non-blocking so cleanup always won the race; now that it blocks,
 anything worded "at the end of your next activation" depends on this ordering
 holding.
+
+## Movement-grant call-site enumeration (alexanbv asked for this explicitly)
+
+> "you need to enumerate the outstanding call sites and decide. Some abilities
+> may be both. A post-attack MP grant would be banked if the attack was
+> performed during the attacker's activation, but would NOT be banked if the
+> attack was performed outside of the attacker's activation. Additionally, all
+> Move X spaces abilities are resolve-immediate"
+
+Because "both" exists, the choice cannot be made per call site. Three functions:
+
+| function | when |
+|---|---|
+| `grantMovementBank` | definitionally in-activation |
+| `grantImmediateMoveX` | definitionally immediate, incl. every spaces grant |
+| `grantMovementPoints` | **either** — checks `dcActionsData[msgId]` at runtime |
+
+### BANK — start-of-activation, always the activator (12 sites, unchanged)
+
+`soa-handler.js` 209 (Mounted), 772 (Vigor), 787 (Responsive), 824 (Hunger
+Elite), 845 (Hunger Regular), 858 (Focused on the Kill), 919 (Into the Fray),
+955 (speed MP), 1287 and 1342 (both already commented "in-activation grant on
+the activator"); `activation-setup.js` 384 (deploy bonus), 1086 (Fleet).
+
+### RUNTIME — the "both" cases (4 sites, converted)
+
+`after-attack-fire.js` 323 (Fly-By), 331 (Jets), 400 (Stalk Prey) — post-attack
+grants to the attacker, exactly the case alexanbv described.
+`third-party-ccs.js` 228 (Opportunistic) — fires off a damage-pipeline
+reaction, and the SCUM figure receiving the MP is frequently not the activator.
+
+### IMMEDIATE — already correct
+
+Order, Tactical Maneuver, Slippery Target, Force Surge (spaces),
+On a Diplomatic Mission (converted earlier).
+
+### Bug found while enumerating
+
+`applyThirdPartyCcEffect` is called in exactly one production place
+(`handlers/combat.js` ~2133) and was passed only `{ applyCondition }`. Both
+`findDcMessageIdForFigure` and the grant function were missing, so
+**Opportunistic's 3 MP always fell through to "MP grant deps missing" and did
+nothing in a real game.** Its unit test injects its own deps, which is why the
+gap survived. Deps now wired, plus a test asserting the failure branch reports
+rather than silently no-ops.

@@ -131,6 +131,38 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
  * @param {object} [opts.nextAction]        - continuation after the move drains
  * @returns {boolean} true if a picker was staged
  */
+/**
+ * Grant MP when the answer depends on WHEN it happens, not on which ability.
+ *
+ * alexanbv 2026-08-12: "Some abilities may be both. A post-attack MP grant
+ * would be banked if the attack was performed during the attacker's activation,
+ * but would NOT be banked if the attack was performed outside of the attacker's
+ * activation."
+ *
+ * So the bank-vs-immediate choice cannot be made per call site. This decides at
+ * runtime on the only fact that matters: is the recipient mid-activation?
+ * `game.dcActionsData[msgId]` exists iff it is.
+ *
+ * Use this for anything that can fire in either context (post-attack grants,
+ * grants aimed at a figure that may or may not be the activator). Use
+ * grantMovementBank directly only where the grant is definitionally
+ * in-activation, e.g. start-of-activation abilities. Anything measured in
+ * SPACES is always immediate and should call grantImmediateMoveX.
+ *
+ * @param {object} game
+ * @param {object} opts - as grantImmediateMoveX, plus figureIndex for banking
+ * @returns {'banked'|'immediate'|'failed'}
+ */
+export function grantMovementPoints(game, opts) {
+  const { msgId, amount, figureIndex } = opts || {};
+  if (!game || !msgId || !(amount > 0)) return 'failed';
+  if (game.dcActionsData?.[msgId]) {
+    grantMovementBank(game, msgId, amount, figureIndex);
+    return 'banked';
+  }
+  return grantImmediateMoveX(game, opts) ? 'immediate' : 'failed';
+}
+
 export function grantImmediateMoveX(game, opts) {
   const { msgId, playerNum, figureKey, amount, source } = opts || {};
   if (!game || !msgId || !figureKey || !playerNum || !(amount > 0)) return false;
