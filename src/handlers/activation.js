@@ -1293,43 +1293,13 @@ export async function handleDcEndActivation(interaction, ctx) {
     }
   }
 
-  // Squad Swarm: after ending activation, offer to activate another DC with the same name (combined cost ≤ 15)
-  if (game.squadSwarmPlayerNum === meta.playerNum) {
-    const _sqDcList = getDcList(game, meta.playerNum) || [];
-    const _sqDcIds = getDcMessageIds(game, meta.playerNum) || [];
-    const sameNameIds = _sqDcIds.filter((id, i) => {
-      if (!id || id === msgId) return false;
-      const dc = _sqDcList[i];
-      if (!dc || dc.defeated || dc.dcName !== meta.dcName) return false;
-      return !ctx.dcExhaustedState?.get(id);
-    });
-    // G4: Track cumulative cost across chained Squad Swarm activations
-    const thisCost = ctx.getDcStats?.(meta.dcName)?.cost ?? 0;
-    const cumulativeCost = (game.squadSwarmCumulativeCost ?? 0) + thisCost;
-    game.squadSwarmCumulativeCost = cumulativeCost;
-    const eligibleIds = sameNameIds.filter((id) => {
-      const dc = _sqDcList[_sqDcIds.indexOf(id)];
-      const candidateCost = dc ? (ctx.getDcStats?.(dc.dcName)?.cost ?? 0) : 0;
-      return (cumulativeCost + candidateCost) <= 15;
-    });
-    if (eligibleIds.length > 0) {
-      const ownerId = getPlayerId(game, meta.playerNum);
-      const btns = eligibleIds.slice(0, 24).map((id) =>
-        new ButtonBuilder()
-          .setCustomId(`squad_swarm_yes_${gameId}_${msgId}_${id}`)
-          .setLabel(`Activate ${ctx.dcMessageMeta?.get(id)?.displayName || meta.dcName}`.slice(0, 80))
-          .setStyle(ButtonStyle.Success)
-      );
-      btns.push(new ButtonBuilder().setCustomId(`squad_swarm_no_${gameId}_${msgId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-      await logGameAction(game, client, `<@${ownerId}> **Squad Swarm** — activate another **${meta.dcName}** (${cumulativeCost} pts used)?`, {
-        components: chunkButtonsToRows(btns),
-        allowedMentions: { users: [ownerId] },
-      });
-    } else {
-      // G4: No eligible candidates — clear cumulative cost
-      delete game.squadSwarmCumulativeCost;
-    }
-  }
+  // Squad Swarm used to post its "activate another group?" offer here, gated on
+  // game.squadSwarmPlayerNum. That was the wrong end of the window: this runs on
+  // End Activation, BEFORE the player can play the card, so playing Squad Swarm
+  // in its own legal window missed the offer and the flag sat until the end of
+  // the NEXT activation. Removed per alexanbv 2026-08-12 ("squad swarm should
+  // have the same timing as strength in numbers"). The card now resolves where
+  // Strength in Numbers does: when it is played, in abilities.js.
 
   // Lie in Ambush: after opponent activates, check if trigger fires
   await checkLieInAmbushTrigger(game, meta.playerNum, ctx);

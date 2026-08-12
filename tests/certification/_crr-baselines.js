@@ -140,7 +140,8 @@ export const RF_BASELINE_TYPE_MISMATCH = [
   'roundUtinniJawaBuffs',
   'roundSmugglersTricksPlayerNum',
   'squadSwarmPlayerNum',
-  'squadSwarmCumulativeCost',
+  // 'squadSwarmCumulativeCost' allowance dropped 2026-08-12 with the flag
+  // itself — a stale exception here would mask the next real mismatch.
   'pendingFiringSquad',
   'holdGroundPlayerNum',
   'thereIsNoTryPlayerNum',

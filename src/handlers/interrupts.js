@@ -175,29 +175,10 @@ export async function handleStillFaster(interaction, ctx) {
 }
 
 // ── 2. Squad Swarm ──────────────────────────────────────────────────────────
-export async function handleSquadSwarm(interaction, ctx) {
-  const { getGame, canActAsPlayer, saveGames, client, dcMessageMeta, logGameAction } = ctx;
-  const buttonKey = interaction.customId.startsWith('squad_swarm_yes_') ? 'squad_swarm_yes_' : 'squad_swarm_no_';
-
-  const _swParts = splitCustomId(interaction.customId, buttonKey);
-  // squad_swarm_yes_{gameId}_{msgId}_{targetMsgId} OR squad_swarm_no_{gameId}_{msgId}
-  const _swGameId = _swParts[0]; const _swMsgId = _swParts[1]; const _swTargetMsgId = _swParts[2];
-  const _swGame = await requireGame(interaction, getGame, _swGameId);
-  if (!_swGame) return;
-  const _swMeta = dcMessageMeta.get(_swMsgId);
-  if (_swMeta && !await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the Squad Swarm player may respond.')) return;
-  _swGame.squadSwarmPlayerNum = null;
-  if (buttonKey === 'squad_swarm_yes_') {
-    // Keep cumulative cost so next activation continues the tally
-    const _swTargetName = _swTargetMsgId ? (dcMessageMeta.get(_swTargetMsgId)?.displayName || 'another figure') : 'another figure';
-    await logGameAction(_swGame, client, `**Squad Swarm** — Activating **${_swTargetName}**. Click its card to begin.`, { phase: 'ROUND', icon: 'activate' });
-  } else {
-    // G4: Clear cumulative cost when skipping
-    delete _swGame.squadSwarmCumulativeCost;
-    await logGameAction(_swGame, client, `**Squad Swarm** — Skipped.`, { phase: 'ROUND', icon: 'activate' });
-  }
-  saveGames(_swGame.gameId); return;
-}
+// Squad Swarm's handleSquadSwarm handler was removed 2026-08-12. Its buttons
+// were posted from handleDcEndActivation, which fires before the card can be
+// played; the card now resolves in abilities.js on the Strength in Numbers
+// timing (alexanbv), so nothing emits those customIds any more.
 
 // ── 3. Overdrive ────────────────────────────────────────────────────────────
 export async function handleOverdrive(interaction, ctx) {

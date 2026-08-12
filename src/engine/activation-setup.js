@@ -303,6 +303,13 @@ export async function finalizeActivation({
     game.strengthInNumbersPlayerNum = null;
   }
 
+  // B7a. Same for Squad Swarm, which shares Strength in Numbers' timing
+  // (alexanbv 2026-08-12). Both are consumed by the activation they permit.
+  if (game.squadSwarmData && game.squadSwarmData.playerNum === playerNum) {
+    game.squadSwarmData = null;
+    game.squadSwarmPlayerNum = null;
+  }
+
   // B7b. Clear Field Tactics immediate-activation grant. Once the granted
   // group begins activating (or any of this player's groups does), the
   // one-shot grant is consumed. Mirrors the Squad Swarm flag lifecycle.

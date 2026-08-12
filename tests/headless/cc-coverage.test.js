@@ -56,6 +56,14 @@ const CONTEXT_DEPENDENT_CCS = new Set([
   // The Block-2 generic harness was never an appropriate witness for them.
   'Expose Weakness', 'Overcharged Weapons', 'Paid in Beskar',
   'Parting Blow', 'Protect the Old Ways', 'Provoke',
+  // B7: "ready YOUR Deployment card" CCs. Since 2026-08-12 (alexanbv: "they
+  // should not just ready whatever DC went, they should ready the named DC")
+  // these resolve against the named figure's own card, so they correctly
+  // return a manualMessage unless IG-88 / Luke is on the board. The generic
+  // harness builds neither. Their real coverage is
+  // src/game/after-activation-resolves-window.test.js, which exercises the
+  // window, the target, and the failure modes with the figures present.
+  'Blaze of Glory', 'Son of Skywalker',
   // C: Reactive (no resolveAbility handler)
   'Negation',
 ]);

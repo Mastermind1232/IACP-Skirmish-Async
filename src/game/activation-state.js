@@ -926,7 +926,11 @@ const ROUND_NULL_FLAGS = [
   // now INTENTIONALLY UNIMPLEMENTED (UNIMPLEMENTED_CARDS), so the flag is
   // never written and must not be registered (else the unused-flag cert fails).
   'squadSwarmPlayerNum',
-  'squadSwarmCumulativeCost',
+  'squadSwarmData',
+  // 'squadSwarmCumulativeCost' removed 2026-08-12: it tallied cost across
+  // CHAINED Squad Swarm activations from the old End-Activation prompt. The
+  // card now mirrors Strength in Numbers (alexanbv), which permits one further
+  // group, so there is no chain left to tally and nothing writes the flag.
   'fieldTacticsActivationPlayerNum',
   'fieldTacticsActivationMsgId',
   'pendingRushPush',

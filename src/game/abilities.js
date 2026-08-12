@@ -11645,11 +11645,65 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: squadSwarmPlayerNum (Squad Swarm)
+  //
+  // alexanbv 2026-08-12: "squad swarm should have the same timing as strength
+  // in numbers. The only difference is the restriction sum of DC cost vs same
+  // name." So this mirrors the strengthInNumbersPlayerNum branch above: the
+  // card resolves WHEN IT IS PLAYED, capturing the group that just activated.
+  //
+  // It used to only set a flag, and the offer to activate another group was
+  // emitted from handleDcEndActivation. That fires BEFORE this window opens,
+  // so playing Squad Swarm in its own legal window missed the offer entirely
+  // and the flag sat until the end of the player's NEXT activation. To use the
+  // card as written you had to play it before pressing End Activation.
   if (entry.type === 'ccEffect' && entry.squadSwarmPlayerNum) {
-    const { game, playerNum } = context;
+    const { game, playerNum, dcExhaustedState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
+    const ssDcList = getDcList(game, playerNum) || [];
+    const ssDcIds = getDcMessageIds(game, playerNum) || [];
+    const ssActivated = game[activatedDcIndicesKey(playerNum)] || [];
+    let ssTriggerCost = 0;
+    let ssTriggerName = '';
+    let ssTriggerDcName = '';
+    if (ssActivated.length > 0) {
+      const lastDc = ssDcList[ssActivated[ssActivated.length - 1]];
+      if (lastDc) {
+        ssTriggerCost = getStatsForDc(lastDc.dcName)?.cost ?? 0;
+        ssTriggerName = lastDc.displayName || lastDc.dcName;
+        ssTriggerDcName = lastDc.dcName;
+      }
+    }
     game.squadSwarmPlayerNum = playerNum;
-    return { applied: true, logMessage: 'You may immediately activate another ready group with the same name (combined cost of both groups cannot exceed 15).' };
+    game.squadSwarmData = {
+      playerNum,
+      triggeringGroupCost: ssTriggerCost,
+      triggeringGroupName: ssTriggerName,
+      triggeringDcName: ssTriggerDcName,
+    };
+    // Same name, still ready, combined cost <= 15. This is the only place the
+    // restriction is evaluated now, so the player is told what actually
+    // qualifies instead of being handed an unfiltered invitation.
+    const eligible = [];
+    for (let i = 0; i < ssDcList.length; i++) {
+      const dc = ssDcList[i];
+      const id = ssDcIds[i];
+      if (!dc || !id || dc.defeated) continue;
+      if (dc.dcName !== ssTriggerDcName) continue;
+      if (ssActivated.includes(i)) continue;
+      if (dcExhaustedState?.get?.(id) || dc.exhausted) continue;
+      if (ssTriggerCost + (getStatsForDc(dc.dcName)?.cost ?? 0) > 15) continue;
+      eligible.push(dc.displayName || dc.dcName);
+    }
+    if (!eligible.length) {
+      return {
+        applied: true,
+        logMessage: `**Squad Swarm** — no ready **${ssTriggerDcName || 'same-name'}** group qualifies (combined cost cannot exceed 15). Triggering group: **${ssTriggerName}** (cost ${ssTriggerCost}).`,
+      };
+    }
+    return {
+      applied: true,
+      logMessage: `**Squad Swarm** — you may immediately activate another **${ssTriggerDcName}** group (combined cost cannot exceed 15). Eligible: ${eligible.map((n) => `**${n}**`).join(', ')}. Triggering group: **${ssTriggerName}** (cost ${ssTriggerCost}). Click its card to begin.`,
+    };
   }
 
   // ccEffect: roundSmugglersTricksPlayerNum (Smuggler's Tricks) —

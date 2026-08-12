@@ -112,9 +112,53 @@ describe('CC: Squad Swarm', () => {
     const stormCost = dcEff?.['Stormtrooper (Regular)']?.cost;
     assert.ok(typeof stormCost === 'number', 'Can read raw DC cost');
   });
-  it('squadSwarmCumulativeCost tracks total', () => {
-    const game = { squadSwarmCumulativeCost: 14 };
-    assert.strictEqual(game.squadSwarmCumulativeCost, 14);
+  it('shares Strength in Numbers timing: the card resolves when played', async () => {
+    // alexanbv 2026-08-12: "squad swarm should have the same timing as strength
+    // in numbers. The only difference is the restriction sum of DC cost vs same
+    // name." The offer used to be emitted from handleDcEndActivation, which
+    // runs BEFORE the card can be played, so it landed one activation late.
+    // This replaces a placeholder that only asserted an object literal held the
+    // value it was assigned.
+    const { resolveAbility } = await import('../../src/game/abilities.js');
+    const game = {
+      gameId: 'g-ss',
+      p1DcMessageIds: ['m0', 'm1'],
+      p1DcList: [
+        { dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 1]' },
+        { dcName: 'Stormtrooper (Regular)', displayName: 'Stormtrooper [Group 2]' },
+      ],
+      p1ActivatedDcIndices: [0],
+    };
+    const result = resolveAbility('Squad Swarm', { game, playerNum: 1 });
+
+    assert.strictEqual(result.applied, true);
+    assert.strictEqual(game.squadSwarmData?.playerNum, 1, 'data captured at play time');
+    assert.strictEqual(game.squadSwarmData?.triggeringDcName, 'Stormtrooper (Regular)',
+      'anchored on the group that just activated');
+    const eligible = result.logMessage.match(/Eligible: (.*?)\. Triggering/)?.[1] ?? '';
+    assert.match(eligible, /Group 2/, 'the still-ready same-name group is offered');
+    assert.doesNotMatch(eligible, /Group 1/,
+      'the group that already activated is not offered back');
+  });
+
+  it('does not offer a same-name group that breaks the 15-point cap', async () => {
+    const { resolveAbility } = await import('../../src/game/abilities.js');
+    const expensive = Object.keys(dcEff || {}).find(n => (dcEff[n]?.cost ?? 0) > 7.5);
+    if (!expensive) return; // no card in the data can breach the cap on its own
+    const game = {
+      gameId: 'g-ss2',
+      p1DcMessageIds: ['m0', 'm1'],
+      p1DcList: [
+        { dcName: expensive, displayName: `${expensive} [Group 1]` },
+        { dcName: expensive, displayName: `${expensive} [Group 2]` },
+      ],
+      p1ActivatedDcIndices: [0],
+    };
+    const result = resolveAbility('Squad Swarm', { game, playerNum: 1 });
+
+    assert.strictEqual(result.applied, true);
+    assert.match(result.logMessage, /no ready .* qualifies/i,
+      `two ${expensive} groups exceed 15 combined`);
   });
 });
 
