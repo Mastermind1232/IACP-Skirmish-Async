@@ -58,16 +58,28 @@ Swept from `docs/combat-spec.csv` (`timing = end_of_activation`), 13 rows.
 | Shield | Riot Trooper (Regular/Elite) | `shield` |
 | Trust Goes Both Ways | Jyn Erso | `trust_both_ways_eoa` |
 
-### NOT wired — still ad-hoc, and now firing AFTER teardown (7 rows)
+### NOT wired — still ad-hoc, and now firing AFTER teardown (5 rows)
 
 | Ability | Card | Where it lives now |
 |---|---|---|
-| Field Tactics | Death Trooper (Regular/Elite) | `maybePromptFieldTactics`, called from the continuation |
 | On a Diplomatic Mission | attachment | ad-hoc `on_diplomatic_*` buttons in the continuation |
 | Wild Fury | CC | inline block in the continuation, reads a pre-cleanup snapshot |
 | Clan of Two | attachment | ad-hoc teleport prompt |
 | Force Surge | CC | not wired to the window at all — **still unplayable** |
 | Rebel Graffiti | CC | resolves either side of teardown, so unaffected |
+
+### Moved to window 2, no migration needed
+
+**Field Tactics** (Death Trooper Regular/Elite). alexanbv 2026-08-12: "field
+tactics should have the same timing as strength in numbers." That makes it
+window 2, activator-only, alongside Squad Swarm and Strength in Numbers — all
+three grant a further activation, and the ruling that chained activations are
+whole new activations named Field Tactics explicitly.
+
+Its CSV rows were retimed to `after_activation_resolves`. No code change: it is
+already invoked from the continuation, which *is* window 2, so its existing
+placement was correct for the wrong stated reason. It must NOT be pulled into
+the EoA orchestrator.
 
 Two of these already carry workarounds for the teardown they should never have
 been behind: the continuation snapshots `attackPerformedThisActivation` and
