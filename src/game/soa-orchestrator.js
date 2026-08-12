@@ -474,10 +474,19 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
         if (!_r?.dcName) continue;
         const _rEff = getDcEffects()?.[_r.dcName];
         if (!(_rEff?.specialAbilityIds || []).includes('voracious_rancor')) continue;
-        // Rancor's own activation does not trigger his own ability.
-        if (_r.dcName === dcName && rPn === playerNum) continue;
         const _rMsgId = _vrDcMsgIds[_ri];
         if (!_rMsgId) continue;
+        // "the rancor cannot use its ability at the start of its own
+        // activation" (alexanbv 2026-08-12) — THIS Rancor's own card, not any
+        // card sharing its name.
+        //
+        // Rancor is NOT unique (dc-effects: unique false), so an army can field
+        // two groups. The guard used to match on dcName + playerNum, which
+        // silently suppressed BOTH Rancors whenever either one activated: group
+        // 2 lost its Voracious trigger off group 1's activation, which the rule
+        // explicitly allows. Comparing cards fixes it and is exactly equivalent
+        // for the single-Rancor case.
+        if (_rMsgId === msgId) continue;
         const _rDgIdx = (_r.displayName || _r.dcName).match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? '1';
         const _rFk = `${_r.dcName}-${_rDgIdx}-0`;
         const _rPos = game.figurePositions?.[rPn]?.[_rFk];

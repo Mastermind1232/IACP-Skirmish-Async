@@ -139,7 +139,11 @@ function scanPlayerPostDeployAbilities(game, playerNum) {
         const [, baseName, dgIdx] = dgMatch;
         const prefix = `${baseName}-${dgIdx}-`;
         const dgFigures = Object.keys(figPositions).filter(k => k.startsWith(prefix) && figPositions[k]);
-        if (!abilities.some(a => a.abilityId === 'infiltration' && a.dcName === dcName && a.playerNum === playerNum)) {
+        // Dedup PER GROUP, not per card name. Keying on dcName meant a second
+        // group of the same card never got its own Infiltration entry, so only
+        // one group of a duplicated card could ever infiltrate.
+        // alexanbv 2026-08-12.
+        if (!abilities.some(a => a.abilityId === 'infiltration' && a.figureKey === fk && a.playerNum === playerNum)) {
           abilities.push({ abilityId: 'infiltration', label: 'Infiltration', dcName, figureKey: fk, figureKeys: dgFigures, playerNum, interactive: true, type: 'movement', mpPerFigure: 6 });
         }
       }
@@ -799,18 +803,22 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         }
       }
 
-      const findMidForDc = (dcName) => {
-        if (!dcMessageMeta) return null;
-        for (const [m, meta] of dcMessageMeta) {
-          if (meta.dcName === dcName && meta.playerNum === ability.playerNum) return m;
-        }
-        return null;
-      };
+      // Resolve a card by FIGURE, not by name. Until 2026-08-12 this took a
+      // dcName and returned the first card matching it, which is wrong for the
+      // adjacent friendly below: that figure is chosen by the player and is
+      // frequently a non-unique trooper, so two groups of the same card would
+      // both resolve to the first one. alexanbv: "Granted MP ... need to be
+      // granted to the chosen figure, NOT any figure with the same name."
+      const midForFigure = (fk) => (
+        dcMessageMeta && fk
+          ? findDcMessageIdForFigure(game.gameId, ability.playerNum, fk, dcMessageMeta)
+          : null
+      );
       if (adjFriendlies.length === 0) {
         // No adjacent friendlies — Cassian moves alone via sequence-of-one,
         // then token distribution.
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** gains **2 MP**. No adjacent friendly figures for additional MP.`, { phase: 'ROUND', icon: 'deployed' });
-        const cassianMid = findMidForDc(ability.dcName);
+        const cassianMid = midForFigure(ability.figureKey);
         game.postDeployQueue.activeAbility = {
           abilityId: 'strike_team',
           abilityLabel: 'Strike Team',
@@ -833,8 +841,8 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
         // picker handles movement order, then token distribution.
         const friend = adjFriendlies[0];
         await logGameAction(game, client, `⚡ **Strike Team** — **${ability.dcName}** and **${friend.dcName}** each gain **2 MP**.`, { phase: 'ROUND', icon: 'deployed' });
-        const cassianMid = findMidForDc(ability.dcName);
-        const friendMid = findMidForDc(friend.dcName);
+        const cassianMid = midForFigure(ability.figureKey);
+        const friendMid = midForFigure(friend.figureKey);
         game.postDeployQueue.activeAbility = {
           abilityId: 'strike_team',
           abilityLabel: 'Strike Team',
@@ -890,10 +898,11 @@ async function postInteractiveAbility(game, gameId, ability, client, ctx) {
       const seqFigures = [];
       for (const fk of figures) {
         const dn = dcNameFromFigureKey(fk);
-        let mid = null;
-        for (const [m, meta] of dcMessageMeta) {
-          if (meta.dcName === dn && meta.playerNum === ability.playerNum) { mid = m; break; }
-        }
+        // Group-aware: Infiltration grants per-figure MP to figures the player
+        // infiltrated, which are usually non-unique troopers. Resolving by name
+        // could bank the MP onto a different group of the same card.
+        // alexanbv 2026-08-12.
+        const mid = findDcMessageIdForFigure(game.gameId, ability.playerNum, fk, dcMessageMeta);
         if (mid) seqFigures.push({ msgId: mid, figureKey: fk, playerNum: ability.playerNum, spaces: ability.mpPerFigure || 6, dcName: dn });
       }
       if (seqFigures.length === 0) {

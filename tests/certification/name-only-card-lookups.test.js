@@ -45,12 +45,13 @@ function sourceFiles(dir = SRC, out = []) {
  */
 const KNOWN = new Map([
   ['src/engine/game-readers.js', 'the CORRECT lookup — matches dcName AND the group index'],
-  ['src/handlers/movement.js', 'Salacious B. Crumb name test on the mover\'s own meta, not a lookup; unique figure'],
-  ['src/game/soa-orchestrator.js', 'self-exclusion guards ("skip my own activation"); suspect for non-uniques, untraced'],
-  ['src/game/conditions.js', 'findIndex over dcList by name — suspect, untraced'],
-  ['src/handlers/hunt-dissent.js', 'Kallus lookup — suspect, untraced'],
-  ['src/handlers/post-deploy.js', 'two remaining (~809, ~899) on non-MP paths — untraced'],
-  ['src/handlers/setup.js', 'pending-deployment lookup during setup — untraced'],
+  // All traced 2026-08-12. Everything below is a name TEST or a guard on a
+  // card the data marks unique:true, so a second group of that name cannot
+  // exist and name matching is exact.
+  ['src/handlers/movement.js', 'Salacious B. Crumb — name test on the mover\'s own meta, not a lookup; unique'],
+  ['src/game/soa-orchestrator.js', 'self-exclusion guards for Cad Bane and Yoda, both unique. Rancor is NOT unique and was fixed to compare cards'],
+  ['src/game/conditions.js', 'Sustained by Rage — carried only by Maul, unique'],
+  ['src/handlers/hunt-dissent.js', 'Agent Kallus, unique'],
 ]);
 
 const PATTERN = /(?:meta\??\.dcName === |\.dcName === dcName|\.dcName === mf\.dcName|\.dcName === ability\.dcName)/;

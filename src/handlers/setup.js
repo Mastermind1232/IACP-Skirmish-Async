@@ -31,6 +31,7 @@ import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { _matchesKeywordPhrase, findEligibilityExtender } from '../game/validation.js';
 import { isBlitzMission, initBlitzDeployment, sendBlitzTurnPrompt, checkBlitzGroupComplete } from './blitz-deploy.js';
 import { setPendingLoadoutSelection, clearPendingLoadoutSelection } from '../game/interrupts.js';
+import { findDcMessageIdForFigure } from '../engine/game-readers.js';
 
 /** Get blocking terrain info for deployment filtering.
  * When ignoreBlocking is true (Massive/Mobile), blocking cells are merged into
@@ -1811,8 +1812,13 @@ export async function handleLoadoutConfirm(interaction, ctx) {
   const dcName = dcNameFromFigureKey(figureKey);
   if (wasPending) {
     try {
+      // Group-aware: a loadout attaches to the card of THIS figure. Matching on
+      // dcName alone put it on the first card of that name, so with two groups
+      // of the same card the loadout landed on the wrong one.
+      // alexanbv 2026-08-12.
       const dcMsgIds = getDcMessageIds(game, wasPending) || [];
-      const dcMsgId = dcMsgIds.find(id => ctx.dcMessageMeta.get(id)?.dcName === dcName);
+      const _lodMid = findDcMessageIdForFigure(game.gameId, wasPending, figureKey, ctx.dcMessageMeta);
+      const dcMsgId = _lodMid && dcMsgIds.includes(_lodMid) ? _lodMid : null;
       if (dcMsgId) {
         const attachKey = dcAttachmentsKey(wasPending);
         game[attachKey] = game[attachKey] || {};
