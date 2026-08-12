@@ -235,11 +235,18 @@ export function readyDeploymentCard(game, playerNum, msgId, deps = {}) {
   //    Once-per-ROUND state is deliberately untouched — a ready is not a new
   //    round.
   //
-  //    Skipped while the card is MID-activation (Blaze of Glory readies your
-  //    own card during your activation): the current activation must keep its
+  //    Skipped while the card is MID-activation: that activation must keep its
   //    spent flags, and cleanupActivation will clear them when it ends.
   //    Otherwise this is a no-op after a correct cleanup, and a repair after a
   //    missed one.
+  //
+  //    An earlier version of this comment cited Blaze of Glory as the
+  //    mid-activation case. That was wrong (alexanbv 2026-08-11: "blaze is
+  //    after an activation resolves. Not during."). Blaze and Son of Skywalker
+  //    are both afterActivationResolves, so they land here with the activation
+  //    already cleaned up and DO get the reset, which is correct: they are
+  //    handing back a fresh activation. The real mid-activation caller is
+  //    Rancor's start-of-activation self-ready (soa-handler.js ~1210).
   if (dcIndex >= 0 && !game.dcActionsData?.[msgId]) {
     _resetOncePerActivationFlags(game, playerNum, dcIndex);
   }
