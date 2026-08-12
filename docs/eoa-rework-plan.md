@@ -87,6 +87,25 @@ been behind: the continuation snapshots `attackPerformedThisActivation` and
 Diplomatic Mission and Wild Fury can still read them. Those snapshots can be
 deleted once both move into the window.
 
+### Force Surge is probably not the only casualty
+
+`movementBank` is in `ACTIVATION_MSGID_FLAGS`, so `cleanupActivation` deletes
+`game.movementBank[msgId]`. **On a Diplomatic Mission's "+2 MP" option calls
+`grantMovementBank(game, msgId, 2)` from the continuation**, i.e. after that
+delete, on an activation that is over.
+
+This is the same shape as Force Surge: an effect that needs the activation
+standing, offered in a prompt that fires after it has been dismantled.
+
+NOT YET CONFIRMED as player-visible — whether the granted MP is spendable
+depends on the move-X / `expireImmediateMp` path, which has not been traced.
+Verify before claiming it as a bug. Migrating the card into window 1 makes it
+correct either way, since the grant then lands while the bank still exists.
+
+Worth sweeping the other window-1 abilities for the same pattern: any effect
+touching a key listed in `ACTIVATION_MSGID_FLAGS` or `ACTIVATION_FIGKEY_FLAGS`
+is suspect while it is resolved from the continuation.
+
 ## Slice 2: CSV retiming (done)
 
 Six rows were tagged `end_of_activation` but are window 2 per the rulings and
