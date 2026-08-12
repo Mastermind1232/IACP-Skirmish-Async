@@ -907,6 +907,37 @@ export async function handleDcEndActivation(interaction, ctx) {
       playerNum: meta.playerNum,
       msgId,
     });
+    // END-OF-ACTIVATION COMMAND CARDS (Force Surge, Rebel Graffiti).
+    //
+    // These are optional plays from hand, deliberately NOT descriptors of their
+    // own (see the note in eoa-orchestrator.js: a descriptor would force a
+    // prompt every single activation). But they still need the window HELD
+    // open, because both are immediate spends that need the activation
+    // standing — alexanbv 2026-08-12: "if mp chosen from diplo it would be
+    // treated as an immediate spend at that moment ... Force Surge is move
+    // spaces, so it is also immediate spend".
+    //
+    // So one placeholder descriptor per player who actually holds a playable
+    // one. Its only job is to keep the activation alive while they decide; the
+    // real play goes through the normal play-from-hand path. No card, no
+    // descriptor, no prompt — the every-activation nag the 2026-06-18 note
+    // warned about does not happen.
+    //
+    // This also repairs a regression I introduced in 4e11213c: removing
+    // 'endOfActivation' from the after-resolves prompt left these two cards
+    // with no prompt anywhere at all.
+    for (const _ccPn of [getInitiativePlayerNum(game), opponentPlayerNum(getInitiativePlayerNum(game))]) {
+      const _eoaCards = getPlayableReactionCardsForTiming(game, _ccPn, ['endOfActivation']);
+      if (!_eoaCards.length) continue;
+      _eoaDescs.push({
+        id: `eoa_cc_window:${_ccPn}:${msgId}`,
+        ownerPlayerNum: _ccPn,
+        sourceMsgId: msgId,
+        sourceLabel: `Play an end-of-activation Command Card (${_eoaCards.length} playable)`,
+        subPromptKey: 'eoa_cc_window',
+        extras: { dcName: meta.dcName, cardCount: _eoaCards.length },
+      });
+    }
     if (_eoaDescs.length > 0) {
       // game.initiativePlayerNum does not exist, so this silently bucketed
       // activator-first instead of initiative-first (alexanbv 2026-08-12:

@@ -110,6 +110,22 @@ export async function handleEoaPick(interaction, ctx) {
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
       components: chunkButtonsToRows(buttons),
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'eoa_cc_window') {
+    // Placeholder descriptor that exists only to hold the activation open while
+    // this player decides whether to play an end-of-activation Command Card.
+    // Nothing resolves here: the card is played from hand through the normal
+    // path, and Done closes the window.
+    //
+    // The activation is still standing at this point, which is the entire
+    // reason it exists. Force Surge moves the figure and Diplomatic Mission's
+    // MP is an immediate spend, so both need it (alexanbv 2026-08-12).
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`eoa_fire_${gameId}_${desc.id}_done`).setLabel('Done').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.message.channel.send({
+      content: `\u{1F3C1} **End of activation** — Player ${bucket.ownerPlayerNum}: play your end-of-activation Command Card from hand now if you want it. **${displayName}**'s activation is held open until you press Done.`,
+      components: [row],
+    }).catch(discordCatch);
   } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
     // Auto-apply DC passive EoA abilities — single Apply/Skip prompt; the
     // effect resolves in handleEoaFire on 'apply'. Per alexanbv 2026-06-13.
@@ -186,6 +202,14 @@ export async function handleEoaFire(interaction, ctx) {
       await interaction.message.edit({ content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${parts.join('; ')}.`, components: [] }).catch(discordCatch);
       if (logGameAction) await logGameAction(game, client, `\u{1F91D} **Trust Goes Both Ways (EoA)** — ${displayName} + ${targetDcName} recover 1 Damage, gain 1 Surge Token.`, { phase: 'ROUND', icon: 'card' });
     }
+  } else if (desc.subPromptKey === 'eoa_cc_window') {
+    // Done: the player has finished with their end-of-activation cards.
+    // consumeDescriptor below closes their bucket and, once both are closed,
+    // releases the deferred teardown.
+    await interaction.message.edit({
+      content: '\u{1F3C1} **End of activation** — done.',
+      components: [],
+    }).catch(discordCatch);
   } else if (EOA_AUTO_APPLY_KEYS.has(desc.subPromptKey)) {
     const selfFk = desc.extras?.selfFigureKey;
     if (choiceKey === 'skip') {
