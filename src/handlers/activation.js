@@ -1004,6 +1004,18 @@ export async function handleDcEndActivation(interaction, ctx) {
     const _pc = game.postActivationConditions?.[fk];
     if (_pc) _preCleanupPostConds[fk] = _pc;
   }
+  // Record which DC just activated, BEFORE cleanup erases the evidence.
+  //
+  // Cards with `afterActivationResolves` timing (Blaze of Glory, Son of
+  // Skywalker) are offered ~320 lines below, long after cleanupActivation has
+  // deleted dcActionsData[msgId]. They resolved their target via
+  // findActiveActivationMsgId, which requires that entry to exist — so by the
+  // time the player could legally play them there was no "active activation"
+  // and both bailed with "Resolve manually: no activation in progress",
+  // spending the card for nothing. This pointer is what they fall back to.
+  // Previously written only by handleEndTurn. alexanbv 2026-08-11.
+  game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
+  game.lastActivationMsgIdByPlayer[meta.playerNum] = msgId;
   cleanupActivation(game, msgId, meta.playerNum, figureKeys);
   // Weakened discard + Stun persistence now handled by applyEndOfActivationEffects().
   // End-of-activation deterministic effects (shared with headless).

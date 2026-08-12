@@ -10658,7 +10658,10 @@ export function resolveAbility(abilityId, context) {
     // chooses. Resolve the activating DC via findActiveActivationMsgId (the
     // readyOwnDeploymentCard pattern Son of Skywalker uses at :15417) instead of
     // offering a free menu of every DC.
-    const targetMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    // afterActivationResolves timing — the window opens after cleanupActivation
+    // has cleared dcActionsData, so this must accept the just-resolved
+    // activation, not only a live one. See findJustResolvedActivationMsgId.
+    const targetMsgId = findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta);
     if (!targetMsgId) return { applied: false, manualMessage: 'Resolve manually: no IG-88 activation in progress to ready your Deployment card.' };
     // Unified ready primitive (alexanbv 2026-08-11). This previously set only
     // dcList[idx].exhausted and left pXActivatedDcIndices alone — so the card
@@ -15735,7 +15738,8 @@ export function resolveAbility(abilityId, context) {
   if (entry.type === 'ccEffect' && entry.readyOwnDeploymentCard) {
     const { game, playerNum, dcMessageMeta } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
-    const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    // afterActivationResolves timing — see findJustResolvedActivationMsgId.
+    const msgId = findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta);
     if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress.' };
     // Unified ready primitive — see readyDeploymentCard. This site only
     // filtered the activation index; the card's exhausted state (both the
@@ -16491,6 +16495,27 @@ function findActiveActivationMsgId(game, playerNum, dcMessageMeta) {
     }
   }
   return null;
+}
+
+/**
+ * Find the DC an `afterActivationResolves` card refers to.
+ *
+ * That timing window opens AFTER cleanupActivation has already deleted
+ * dcActionsData[msgId], so findActiveActivationMsgId returns null for the
+ * whole window the card is legally playable in — Blaze of Glory and Son of
+ * Skywalker both bailed with "no activation in progress" and were spent for
+ * nothing. Fall back to the pointer handleDcEndActivation records just before
+ * cleanup, validated against dcMessageMeta so a stale pointer (removed DC,
+ * other game) can't resolve. alexanbv 2026-08-11.
+ */
+function findJustResolvedActivationMsgId(game, playerNum, dcMessageMeta) {
+  const active = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+  if (active) return active;
+  const last = game?.lastActivationMsgIdByPlayer?.[playerNum];
+  if (!last || !dcMessageMeta) return null;
+  const meta = dcMessageMeta.get(last);
+  if (meta?.gameId !== game.gameId || meta?.playerNum !== playerNum) return null;
+  return last;
 }
 
 /** Get figure keys for the DC represented by meta (msgId). */
