@@ -107,6 +107,44 @@ export function enumerateActivatorEoaDescriptors(game, opts) {
     });
   }
 
+  // COMPANION ACTIVATES NOW — general to ALL companions, not The Child.
+  //
+  // alexanbv 2026-08-12: "if they activate first, they resolve first. If the
+  // activate after the main figure, their activation resolves INSIDE the
+  // figure's EOA window", and "this applies to ALL companions".
+  //
+  // The blocker was the activation lock. game.activationLockKey enforces
+  // complete-one-before-another across msgIds, the host holds it, and it is only
+  // released by cleanupActivation — which since slice 1 runs AFTER this window
+  // closes. So the companion could not act inside the window at all, making
+  // "activate baze, activate child, teleport child" unreachable.
+  //
+  // This descriptor is the hand-off point: picking it passes the lock to the
+  // companion (see eoa-handler). Ordering it against the host's other EoA
+  // descriptors is what expresses the player's choice.
+  if (game.companionActivatedBefore?.[msgId] === 'after') {
+    const _cmpIds = game.p1DcMessageIds?.includes(msgId)
+      ? game.p1DcCompanionMessageIds
+      : game.p2DcCompanionMessageIds;
+    const _hostIds = game.p1DcMessageIds?.includes(msgId) ? game.p1DcMessageIds : game.p2DcMessageIds;
+    const _cmpIdx = _hostIds?.indexOf(msgId);
+    const _cmpMsgId = _cmpIdx >= 0 ? (_cmpIds?.[_cmpIdx] || null) : null;
+    // Only while the companion still has an activation to spend.
+    if (_cmpMsgId && game.dcActionsData?.[_cmpMsgId]) {
+      const _cmpName = game.dcMessageMeta?.get?.(_cmpMsgId)?.displayName
+        || game.dcMessageMeta?.get?.(_cmpMsgId)?.dcName
+        || 'companion';
+      descriptors.push({
+        id: `companion_activate:${msgId}`,
+        ownerPlayerNum: playerNum,
+        sourceMsgId: msgId,
+        sourceLabel: `Activate ${_cmpName} now`,
+        subPromptKey: 'companion_activate',
+        extras: { dcName, companionMsgId: _cmpMsgId, companionName: _cmpName },
+      });
+    }
+  }
+
   // Clan of Two: the companion's "place your figure" teleport belongs INSIDE
   // the host's end-of-activation window, not after it.
   //

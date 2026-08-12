@@ -113,6 +113,29 @@ export async function handleEoaPick(interaction, ctx) {
       content: `\u{1F91D} **Trust Goes Both Ways (EoA)** — Pick an adjacent friendly figure. **${displayName}** and that figure each **Recover 1 Damage** and **gain 1 Surge Token**:`,
       components: chunkButtonsToRows(buttons),
     }).catch(discordCatch);
+  } else if (desc.subPromptKey === 'companion_activate') {
+    // Hand the activation lock to the companion so it can act INSIDE this
+    // window (alexanbv 2026-08-12). The host keeps game.activationLockKey until
+    // cleanupActivation, which since slice 1 runs after this window closes — so
+    // without this hand-off the companion is locked out for the whole window and
+    // "activate host, activate companion, then place" is unreachable.
+    //
+    // Consumed on pick, like the other descriptors here: the companion's
+    // activation is a separate activation with its own End Activation, and
+    // waiting on it would hold this window open indefinitely. The existing
+    // paired-activation logic already stops the host finishing for real while
+    // the companion is still live, so nothing is lost by closing the window.
+    const _caCmpMsgId = desc.extras?.companionMsgId;
+    if (_caCmpMsgId) {
+      game.activationLockKey = `${_caCmpMsgId}_f0`;
+      await interaction.message.channel.send({
+        content: `\u{1F43E} **${desc.extras?.companionName || 'Companion'}** may act now — its activation resolves inside **${displayName}**'s end-of-activation window. Click its card to begin.`,
+      }).catch(discordCatch);
+    }
+    consumeDescriptor(game, desc.id);
+    await postChooserOrComplete(game, gameId, ctx, interaction.message.channel);
+    if (saveGames) saveGames(game.gameId);
+    return;
   } else if (desc.subPromptKey === 'clan_of_two_teleport') {
     // Post the destination buttons, then consume the descriptor immediately.
     //

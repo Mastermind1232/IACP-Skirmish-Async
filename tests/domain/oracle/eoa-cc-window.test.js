@@ -117,3 +117,44 @@ describe('Clan of Two placement lives in the EoA window', () => {
       'and advance the chooser so the bucket can close');
   });
 });
+
+describe('companion activates inside the host EoA window (ALL companions)', () => {
+  const orchestrator = read('src/game/eoa-orchestrator.js');
+  const handler = read('src/handlers/eoa-handler.js');
+
+  test('a companion set to go second becomes an EoA descriptor', () => {
+    assert.match(orchestrator, /subPromptKey: 'companion_activate'/,
+      'the companion activation must be orderable against the host EoA effects');
+    assert.match(orchestrator, /companionActivatedBefore\?\.\[msgId\] === 'after'/,
+      'only when the player chose companion-second; companion-first already resolves first');
+  });
+
+  test('it is general, not keyed to The Child', () => {
+    // alexanbv: "this does not just apply to child, this applies to ALL
+    // companions." Clan of Two's own teleport is Child-specific; the ORDERING
+    // is not.
+    const idx = orchestrator.indexOf("subPromptKey: 'companion_activate'");
+    // Strip comments: the block's own comment says "not The Child", so a bare
+    // substring check matches the reassurance rather than the code. Same trap
+    // as the endOfActivation check above.
+    const block = orchestrator.slice(Math.max(0, idx - 1800), idx)
+      .split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+    assert.ok(!block.includes('The Child'),
+      'the companion-activate descriptor must not be Child-specific');
+    assert.match(block, /DcCompanionMessageIds/,
+      'resolves the companion from the general host/companion pairing');
+  });
+
+  test('picking it hands the activation lock to the companion', () => {
+    // This is the whole mechanism. The host holds activationLockKey until
+    // cleanupActivation, which now runs after the window closes, so without the
+    // hand-off the companion is locked out for the entire window.
+    const idx = handler.indexOf("desc.subPromptKey === 'companion_activate'");
+    assert.ok(idx > 0, 'branch exists');
+    const branch = handler.slice(idx, idx + 1800);
+    assert.match(branch, /game\.activationLockKey = `\$\{_caCmpMsgId\}_f0`/,
+      'must transfer the lock');
+    assert.match(branch, /consumeDescriptor\(game, desc\.id\)/,
+      'and consume, so the window cannot strand on a separate activation');
+  });
+});
