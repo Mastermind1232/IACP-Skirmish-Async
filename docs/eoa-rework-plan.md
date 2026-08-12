@@ -30,9 +30,21 @@ opponent for free.
 while a window is open; `postChooserOrComplete` in `handlers/eoa-handler.js`
 calls `finishDcEndActivation` when the last bucket closes.
 
-**Slice 2 — DONE** (this commit). CSV retimed, see below.
+**Slice 2 — DONE**. CSV retimed, see below.
 
-**Slices 3-5 — TODO**, listed at the end.
+**Slice 3 — DONE**. Every ad-hoc window-1 prompt is now an EoA descriptor:
+Clan of Two placement (`cdcf9309`), companion activation (`b8c55914`),
+On a Diplomatic Mission (`d6c28dbf`). Field Tactics was ruled window 2 and stays
+in the continuation. Wild Fury is an automatic TERMINATION, not a choice, and
+correctly stays in the continuation after the window. Force Surge and Rebel
+Graffiti are held open by the CC-window placeholder (`dc2561dc`).
+
+**Slice 4 — NOT NEEDED as its own step.** The opponent enumeration pass has
+nothing to carry: the CSV sweep found no opponent-owned window-1 ability. The
+bucketing already supports two players, so wire it when a descriptor needs it.
+
+**Slice 5 — DONE** (`b8c55914`). Companion-second activates inside the host's
+window, general to all companions.
 
 ## Do not mirror SoA's control flow
 
