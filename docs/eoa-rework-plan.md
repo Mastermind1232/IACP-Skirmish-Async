@@ -323,6 +323,34 @@ fires in window 2. It must become an EoA descriptor.
 interleaved with the teleport at all — orderings B and C are indistinguishable
 today because neither is player-controlled.
 
+### THIS APPLIES TO ALL COMPANIONS, NOT JUST THE CHILD
+
+alexanbv 2026-08-12: "Remember this does not just apply to child, this applies
+to ALL companions."
+
+Baze + The Child is the worked example, not the scope. There are **5 companion
+pairings** in the data (`companion` on the host card):
+
+| Host | Companion |
+|---|---|
+| [Clan of Two] attachment | The Child |
+| [Indentured Jester] attachment | Salacious B. Crumb |
+| Iden Versio | Dio |
+| Jarrod Kelvin | J4X-7 |
+| (companion cards themselves) | 88-Z, BD-1, Cam Droid, Junk Droid, Pit Droid |
+
+So the ordering rule — companion-second resolves INSIDE the host's EoA window —
+must be implemented on the general companion path, not on a Child-specific
+branch. Note the existing Clan of Two teleport code hard-codes
+`fk.startsWith('The Child-')`, which is correct for that ATTACHMENT's own
+teleport effect but must not become the model for the ordering itself.
+
+Distinguish the two:
+
+- **the ordering rule** — general, every companion
+- **Clan of Two's teleport** — one attachment's effect, which happens to be the
+  thing being ordered in the worked example
+
 ### Work
 
 1. Make the Clan of Two teleport an EoA descriptor on the host's window.
