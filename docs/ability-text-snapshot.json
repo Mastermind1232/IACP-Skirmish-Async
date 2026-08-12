@@ -322,7 +322,7 @@
     "Devotion": "Special Action: Choose an adjacent friendly figure. Then, search your Command deck and draw 1 card with that figure's name as a trait, reveal it, and then shuffle your Command deck.",
     "Dioxis Fumes": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-Droid figures cannot recover Strain.",
     "Dirty Trick": "Use when a hostile figure enters an adjacent space. That figure must choose to either suffer 3 Strain or become Stunned.",
-    "Disable": "Special Action: Choose an adjacent hostile figure. Until the end of the round, that figure cannot use Surge abilities or Special actions.",
+    "Disable": "Technician or Smuggler Action: Choose an adjacent hostile figure. Until the end of that figure's next activation, that figure cannot use action or surge abilities.",
     "Disarm": "Use when an adjacent hostile figure becomes Bleeding from your attack. Put this card into play, then that figure suffers 1 Damage, becomes Weakened, and can't discard the Weakened condition.",
     "Disengage": "Use when a hostile figure enters a space within 3 spaces of you to gain 3 movement points.",
     "Disorient": "Use after a hostile figure with a BENEFICIAL condition suffers Damage. Discard 1 BENEFICIAL condition from that figure. Then, that figure suffers 2 Strain.",

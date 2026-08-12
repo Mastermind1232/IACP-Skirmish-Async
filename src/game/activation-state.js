@@ -474,6 +474,21 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
   if (game.namedCcsPlayedPerTiming?.activation) {
     delete game.namedCcsPlayedPerTiming.activation;
   }
+  // Disable (IACP): "Until the end of that figure's NEXT activation, that
+  // figure cannot use action or surge abilities." Expire it here rather than at
+  // round end (the repo previously carried the FFG wording, which was
+  // until-end-of-round). Only an activation that was ARMED counts: arming
+  // happens at activation start, so an activation already underway when Disable
+  // landed is not the target's "next" one. alexanbv 2026-08-12.
+  if (game.disabledFiguresArmed && Array.isArray(game.disabledFigures)) {
+    const _dispName = game.dcMessageMeta?.get?.(msgId)?.displayName;
+    if (_dispName && game.disabledFiguresArmed[_dispName]) {
+      delete game.disabledFiguresArmed[_dispName];
+      game.disabledFigures = game.disabledFigures.filter((n) => n !== _dispName);
+      if (Object.keys(game.disabledFiguresArmed).length === 0) delete game.disabledFiguresArmed;
+    }
+  }
+
   // Blend In (K-2SO): "Discard this card at the end of your activation."
   // Clear the untargetable protection for the ending figure(s) and remove the
   // attachment when K-2SO finishes its activation.
@@ -686,6 +701,12 @@ export function describeActivationActionInProgress(game, msgId) {
  * Object flags are reset to {}; null flags to null; array flags to [].
  */
 const ROUND_OBJECT_FLAGS = [
+  // Disable (IACP) lifecycle. 'Pending' = applied but the target's next
+  // activation has not begun; 'Armed' = that activation is underway and its
+  // end clears the Disable. Both are round-scoped backstops in case the target
+  // never activates again. alexanbv 2026-08-12.
+  'disabledFiguresPending',
+  'disabledFiguresArmed',
   // Most-recent attack target per attacker msgId. Used by post-attack
   // free-attack abilities (Brutal Cleave) to enforce "different figure"
   // rules. Round-scoped (resets to {} at round start).
@@ -1082,6 +1103,9 @@ const ROUND_NULL_FLAGS = [
 
 const ROUND_ARRAY_FLAGS = [
   'crippledFigures',
+  // Disable expires at the end of the target's next activation (IACP), which
+  // cleanupActivation handles. This stays as a round-end backstop for a
+  // target that never activates again.
   'disabledFigures',
   'etiquetteBlockPairs',
   'fluctuationSwappedThisRound',

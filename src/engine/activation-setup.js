@@ -311,6 +311,17 @@ export async function finalizeActivation({
     game.squadSwarmPlayerNum = null;
   }
 
+  // B7c. Arm the IACP Disable expiry. Disable lasts "until the end of that
+  // figure's NEXT activation", so the activation starting HERE is the one that
+  // ends it — an activation already underway when Disable landed is not it.
+  // cleanupActivation does the clearing. alexanbv 2026-08-12.
+  if (game.disabledFiguresPending?.[displayName]) {
+    delete game.disabledFiguresPending[displayName];
+    game.disabledFiguresArmed = game.disabledFiguresArmed || {};
+    game.disabledFiguresArmed[displayName] = true;
+    if (Object.keys(game.disabledFiguresPending).length === 0) delete game.disabledFiguresPending;
+  }
+
   // B7b. Clear Field Tactics immediate-activation grant. Once the granted
   // group begins activating (or any of this player's groups does), the
   // one-shot grant is consumed. Mirrors the Squad Swarm flag lifecycle.

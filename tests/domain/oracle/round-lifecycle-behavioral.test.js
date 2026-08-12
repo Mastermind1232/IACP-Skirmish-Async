@@ -147,8 +147,10 @@ describe('B-RNDLC-001: cleanupRoundStart resets all ROUND_OBJECT_FLAGS to {}', (
     // If a flag is added to the source but not here, this catches drift
     assert.ok(ROUND_OBJECT_FLAGS.length >= 90,
       `Expected ≥90 ROUND_OBJECT_FLAGS, got ${ROUND_OBJECT_FLAGS.length}`);
-    assert.ok(ROUND_OBJECT_FLAGS.length <= 120,
-      `Expected ≤120 ROUND_OBJECT_FLAGS, got ${ROUND_OBJECT_FLAGS.length} — review if intentional`);
+    // Upper bound raised 120 -> 122 on 2026-08-12 for the IACP Disable
+    // lifecycle pair (disabledFiguresPending / disabledFiguresArmed).
+    assert.ok(ROUND_OBJECT_FLAGS.length <= 122,
+      `Expected ≤122 ROUND_OBJECT_FLAGS, got ${ROUND_OBJECT_FLAGS.length} — review if intentional`);
   });
 });
 

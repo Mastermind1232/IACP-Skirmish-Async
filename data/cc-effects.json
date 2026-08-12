@@ -504,10 +504,10 @@
       "abilityId": "Dioxis Fumes"
     },
     "Disable": {
-      "cost": 2,
+      "cost": 0,
       "playableBy": "TECHNICIAN or SMUGGLER",
       "timing": "specialAction",
-      "effect": "Special Action: Choose an adjacent hostile figure. Until the end of the round, that figure cannot use Surge abilities or Special actions."
+      "effect": "Technician or Smuggler Action: Choose an adjacent hostile figure. Until the end of that figure's next activation, that figure cannot use action or surge abilities."
     },
     "Disarm": {
       "cost": 1,

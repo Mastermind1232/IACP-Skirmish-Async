@@ -15990,9 +15990,19 @@ export function resolveAbility(abilityId, context) {
     }
     game.disabledFigures = game.disabledFigures || [];
     if (!game.disabledFigures.includes(chosenOption)) game.disabledFigures.push(chosenOption);
+    // IACP Disable lasts "until the end of that figure's NEXT activation", not
+    // until end of round (alexanbv 2026-08-12: the repo was carrying the FFG
+    // text and cost). Round-end clearing stays as a backstop via
+    // ROUND_ARRAY_FLAGS; this arms the real expiry.
+    //
+    // "Next" activation, so an activation already underway when Disable lands
+    // must not consume it. Mark it pending here; activation START flips it to
+    // armed, and cleanupActivation clears it when THAT activation ends.
+    game.disabledFiguresPending = game.disabledFiguresPending || {};
+    game.disabledFiguresPending[chosenOption] = true;
     return {
       applied: true,
-      logMessage: `**${chosenOption}** is Disabled — cannot use Surge abilities or Special Actions this round.`,
+      logMessage: `**${chosenOption}** is Disabled — cannot use action or surge abilities until the end of its next activation.`,
     };
   }
 
