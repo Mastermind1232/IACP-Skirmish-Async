@@ -6,7 +6,7 @@ import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffects
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { figureKeyForActivation, grantActionToFigure } from './activation-state.js';
-import { grantPowerTokens, consumeMovementPoints, figureMpRemaining } from './game-helpers.js';
+import { grantPowerTokens, consumeMovementPoints, figureMpRemaining, grantMovementBank } from './game-helpers.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
@@ -492,20 +492,21 @@ function drawCcCards(game, playerNum, n) {
  *   (defaults to 0).
  */
 function addMovementPoints(game, msgId, n, opts) {
-  game.movementBank = game.movementBank || {};
-  const top = game.movementBank[msgId] || {};
-  top.perFig = top.perFig || {};
   const figIdx = opts?.figureIndex ?? 0;
-  const fig = top.perFig[figIdx] || { total: 0, remaining: 0 };
-  fig.total = (fig.total ?? 0) + n;
-  fig.remaining = (fig.remaining ?? 0) + n;
+  // Banking itself now lives in exactly one place (alexanbv 2026-08-12: "You
+  // can have one function that adds banked movement points"). This used to
+  // re-implement grantMovementBank inline, which is how the two paths drifted:
+  // only this copy tagged out-of-activation grants as must-spend-immediately.
+  grantMovementBank(game, msgId, n, figIdx);
 
-  // MP gained during the figure's own activation banks for the rest of
-  // that activation; MP gained OUTSIDE its activation, or as part of a
-  // special action (Urgency, forceImmediate), must be spent at once and
-  // never carried forward. The immediate tag drives expireImmediateMp /
-  // the "Done spending" button. game.dcActionsData[msgId] exists iff this
-  // DC is mid-activation. Per alexanbv 2026-06-12/13.
+  // MP gained during the figure's own activation banks for the rest of that
+  // activation; MP gained OUTSIDE its activation, or as part of a special
+  // action (Urgency, forceImmediate), must be spent at once and never carried
+  // forward. The immediate tag drives expireImmediateMp / the "Done spending"
+  // button. game.dcActionsData[msgId] exists iff this DC is mid-activation.
+  // Per alexanbv 2026-06-12/13.
+  const fig = game.movementBank?.[msgId]?.perFig?.[figIdx];
+  if (!fig) return;
   const outOfActivation = !game.dcActionsData?.[msgId];
   if (outOfActivation) {
     fig._outOfActivation = true;
@@ -513,9 +514,6 @@ function addMovementPoints(game, msgId, n, opts) {
   } else if (opts?.forceImmediate) {
     fig._mustSpendImmediately = true;
   }
-
-  top.perFig[figIdx] = fig;
-  game.movementBank[msgId] = top;
 }
 
 /**

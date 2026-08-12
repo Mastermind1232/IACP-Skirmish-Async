@@ -104,7 +104,7 @@ export { dcNameFromFigureKey, parseFigureKey, getDcEffect, isFigurelessDc, hasDe
 
 export { opponentPlayerNum, getInitiativePlayerNum } from './player-helpers.js';
 
-export { grantMovementBank, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones } from './game-helpers.js';
+export { grantMovementBank, grantImmediateMoveX, grantPowerTokens, resolveOverflowDiscard, getPlayerDeploymentZones } from './game-helpers.js';
 
 export {
   getEffectiveFigureSize,

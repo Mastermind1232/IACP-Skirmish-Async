@@ -94,6 +94,63 @@ export function grantMovementBank(game, msgId, amount, figureIndex) {
 }
 
 /**
+ * The single way to grant IMMEDIATE (out-of-activation) movement.
+ *
+ * alexanbv 2026-08-12: "Any immediate spending in ANY place must use pending
+ * Move XP. There is no reason to have so many funcitions that add MP. You can
+ * have one function that adds banked movement points. Everything else through
+ * pending move X."
+ *
+ * So the split is now exactly two functions:
+ *
+ *   grantMovementBank    MP gained during the figure's OWN activation, which
+ *                        banks for the rest of that activation
+ *   grantImmediateMoveX  everything else — posts the normal move picker and is
+ *                        spent then and there, never carried forward
+ *
+ * Immediate MP does not require an activation to exist (alexanbv: "an eOfficer
+ * can order a move that another figure spends immediately. Jundland Terror is
+ * an EOR effect with immediate spend"), which is why this writes pendingMoveX
+ * rather than touching the bank at all.
+ *
+ * `bypassCosts: true` means the grant is measured in SPACES rather than MP, so
+ * terrain is ignored — Force Surge's "move up to 1 space". Leave it false for
+ * an MP grant such as On a Diplomatic Mission, which pays terrain normally.
+ *
+ * @param {object} game
+ * @param {object} opts
+ * @param {string} opts.msgId      - DC message ID of the moving figure's card
+ * @param {number} opts.playerNum  - owner of the moving figure
+ * @param {string} opts.figureKey  - the figure that moves
+ * @param {number} opts.amount     - MP (or spaces, with bypassCosts) granted
+ * @param {string} opts.source     - label shown on the picker
+ * @param {string} [opts.dcName]
+ * @param {string|null} [opts.threadId]
+ * @param {boolean} [opts.bypassCosts]      - spaces rather than MP
+ * @param {boolean} [opts.allowAbilitySpend] - may also pay MP-cost abilities
+ * @param {object} [opts.nextAction]        - continuation after the move drains
+ * @returns {boolean} true if a picker was staged
+ */
+export function grantImmediateMoveX(game, opts) {
+  const { msgId, playerNum, figureKey, amount, source } = opts || {};
+  if (!game || !msgId || !figureKey || !playerNum || !(amount > 0)) return false;
+  game.pendingMoveX = game.pendingMoveX || {};
+  game.pendingMoveX[msgId] = {
+    remaining: amount,
+    source: source || 'Movement',
+    playerNum,
+    figureKey,
+    dcName: opts.dcName ?? null,
+    threadId: opts.threadId ?? null,
+    bypassCosts: opts.bypassCosts ?? false,
+    allowAbilitySpend: opts.allowAbilitySpend ?? true,
+    msgId,
+    ...(opts.nextAction ? { nextAction: opts.nextAction } : {}),
+  };
+  return true;
+}
+
+/**
  * Spend MP from a SPECIFIC figure's bank (figureIndex defaults to 0).
  * Clamps at 0. Drains pendingMoveX first when allowAbilitySpend is set,
  * then falls through to movementBank. Per alexanbv 2026-06-13 / 2026-07-27.

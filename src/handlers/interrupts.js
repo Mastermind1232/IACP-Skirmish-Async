@@ -7,7 +7,7 @@ import { ButtonBuilder, ActionRowBuilder, ButtonStyle } from 'discord.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { chunkButtonsToRows } from '../discord/components.js';
 import { getDcList, getDcMessageIds, dcAttachmentsKey, ccAttachmentsKey, getHandChannelId, opponentPlayerNum, getPlayerId, ccDiscardKey } from '../game/player-helpers.js';
-import { reduceHp, healHp, awardObjectiveVp, deductVp, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, HARMFUL_CONDITIONS } from '../game/index.js';
+import { reduceHp, healHp, awardObjectiveVp, deductVp, dcNameFromFigureKey, parseFigureKey, grantPowerTokens, applyCondition, filterCondition, grantMovementBank, grantImmediateMoveX, HARMFUL_CONDITIONS } from '../game/index.js';
 import { getCcEffect } from '../data-loader.js';
 import { discordCatch } from '../error-handling.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -934,8 +934,30 @@ export async function handleOnDiplomatic(interaction, ctx) {
     // Exhaust the card
     exhaustAttachment(_odmGame, _odmMsgId, 'On a Diplomatic Mission');
     if (_odmChoice === 'mp') {
-      grantMovementBank(_odmGame, _odmMsgId, 2);
-      await logGameAction(_odmGame, client, `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP.`, { phase: 'ROUND', icon: 'card' });
+      // Immediate spend, so it goes through pendingMoveX rather than the bank
+      // (alexanbv 2026-08-12: "Any immediate spending in ANY place must use
+      // pending Move XP"). This fires at end of activation, i.e. out of
+      // activation, and grantMovementBank does no immediate tagging at all —
+      // so the 2 MP used to land untagged and could persist instead of
+      // expiring.
+      //
+      // bypassCosts stays FALSE: this is MP, so it pays terrain. Force Surge is
+      // the one that moves in spaces.
+      const _odmFigKeys = Object.keys(_odmGame.figurePositions?.[_odmMeta.playerNum] || {})
+        .filter((k) => k.startsWith(`${_odmMeta.dcName}-`));
+      const _odmFigKey = _odmFigKeys[0] || null;
+      const _odmStaged = _odmFigKey && grantImmediateMoveX(_odmGame, {
+        msgId: _odmMsgId,
+        playerNum: _odmMeta.playerNum,
+        figureKey: _odmFigKey,
+        amount: 2,
+        source: 'On a Diplomatic Mission',
+        dcName: _odmMeta.dcName,
+      });
+      await logGameAction(_odmGame, client, _odmStaged
+        ? `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP (spend immediately, remainder discarded).`
+        : `**On a Diplomatic Mission** — **${_odmMeta.displayName || _odmMeta.dcName}** gains 2 MP (resolve manually — could not locate the figure).`,
+      { phase: 'ROUND', icon: 'card' });
     } else if (_odmChoice === 'evade') {
       _odmGame.diplomaticMissionEvade = _odmGame.diplomaticMissionEvade || {};
       _odmGame.diplomaticMissionEvade[_odmMsgId] = true;
