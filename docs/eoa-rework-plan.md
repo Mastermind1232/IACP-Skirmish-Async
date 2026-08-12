@@ -128,6 +128,41 @@ Strength in Numbers → `after_activation_resolves`.
 Note `Provoke` was in this set: it reads
 `afterYouResolveGroupsActivation`, so it is window 2, activator-only.
 
+## Movement grants: `pendingMoveX` vs `grantMovementBank`
+
+alexanbv asked why movement-granting abilities are not all unified on
+`pendingMoveX`, the usual picker. Census, because the answer is not "they are
+not":
+
+**The out-of-activation cases mostly ARE unified.** Order, Tactical Maneuver,
+Slippery Target and Force Surge all write `pendingMoveX`, per the ruling of
+2026-07-27: *"all immediate-spend MP goes to pendingMoveX with
+allowAbilitySpend so it can be spent on MOVEMENT and on MP-cost abilities"*.
+
+**The real divergence is `grantMovementBank`.** Compare the two grant helpers:
+
+| | out-of-activation tagging |
+|---|---|
+| `addMovementPoints` (`abilities.js` ~495) | detects `!game.dcActionsData[msgId]` and sets `_outOfActivation` + `_mustSpendImmediately` |
+| `grantMovementBank` (`game-helpers.js:89`) | **none** — just `total += n; remaining += n` |
+
+So MP granted outside an activation through `grantMovementBank` is never tagged
+must-spend-immediately, and can persist when it should expire.
+
+`grantMovementBank` is not wrong in itself: MP gained during a figure's own
+activation legitimately banks for the rest of it. The problem is only
+out-of-activation callers.
+
+**11 call sites outside `abilities.js`.** Several are legitimately in-activation
+(e.g. `after-attack-fire.js`, during the attacker's own activation).
+**Confirmed out-of-activation straggler: On a Diplomatic Mission**
+(`handlers/interrupts.js:937`) — it fires at end of activation, after teardown,
+and uses the untagged path. The remaining sites need classifying one by one;
+do not assume.
+
+This converges with slice 3: moving Diplomatic Mission into the window is also
+the fix for its movement grant.
+
 ## Remaining slices
 
 3. **Migrate the 6 ad-hoc window-1 prompts into the orchestrator**, in the order
