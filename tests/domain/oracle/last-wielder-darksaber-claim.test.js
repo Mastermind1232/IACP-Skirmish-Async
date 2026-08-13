@@ -36,6 +36,12 @@ function buildGame({ darksaberOn = 'sabine' } = {}) {
     gameId: 'g-lw',
     player1Id: 'p1',
     player2Id: 'p2',
+    // Bo-Katan is P1's, and start-of-round abilities now fire for the
+    // INITIATIVE player at round start (the other player is prompted when the
+    // first closes their window — alexanbv 2026-08-13 strict ordering). The
+    // fixture never set initiative, so getInitiativePlayerNum defaulted to P2
+    // and P1's prompt was skipped.
+    initiativePlayerId: 'p1',
     initiativePlayerNum: 1,
     p1DcList: [
       { dcName: 'Bo-Katan Kryze', displayName: 'Bo-Katan Kryze [Group 1]', defeated: false },

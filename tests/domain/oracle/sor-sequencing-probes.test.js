@@ -219,8 +219,17 @@ describe('PROBE-SOR-003: Ezra Bridger Brash — Move-X picker every round', () =
 
 // ── PROBE-SOR-004: Initiative-first ordering in Block A ───────────────────
 
-describe('PROBE-SOR-004: Block A resolves initiative player first (Ezra × 2 probe)', () => {
-  it('004a: P1 has initiative → P1 Brash logs before P2 Brash', async () => {
+describe('PROBE-SOR-004: start-of-round abilities are strictly player-ordered', () => {
+  // Rewritten 2026-08-13. This used to assert that ONE call to
+  // runStartOfRoundDcEffects emitted BOTH players' Brash logs, initiative
+  // player first. That is the behaviour alexanbv overruled: "each player in
+  // order needs to get prompted". Posting both players' prompts in one pass let
+  // the non-initiative player resolve theirs before the initiative player had
+  // finished.
+  //
+  // The ordering now comes from WHEN each player is prompted, not from the
+  // order of logs within a single call.
+  it('004a: round start prompts ONLY the initiative player', async () => {
     const log = [];
     const game = buildGame({
       initPn: 1,
@@ -233,13 +242,12 @@ describe('PROBE-SOR-004: Block A resolves initiative player first (Ezra × 2 pro
     game.figurePositions[1]['Ezra Bridger-1-0'] = 'a1';
     game.figurePositions[2]['Ezra Bridger-1-0'] = 'b1';
     await runStartOfRoundDcEffects(game, 'g1', null, buildCtx(log));
-    const p1Idx = log.findIndex(t => t.includes('Ezra P1'));
-    const p2Idx = log.findIndex(t => t.includes('Ezra P2'));
-    assert.ok(p1Idx >= 0 && p2Idx >= 0, 'both Brash logs emitted');
-    assert.ok(p1Idx < p2Idx, `P1 (idx ${p1Idx}) must resolve before P2 (idx ${p2Idx})`);
+    assert.ok(log.some(t => t.includes('Ezra P1')), 'initiative player IS prompted');
+    assert.ok(!log.some(t => t.includes('Ezra P2')),
+      'the other player must NOT be prompted until the initiative player is done');
   });
 
-  it('004b: P2 has initiative → P2 Brash logs before P1 Brash', async () => {
+  it('004b: initiative is honoured, not hard-coded to P1', async () => {
     const log = [];
     const game = buildGame({
       initPn: 2,
@@ -252,9 +260,27 @@ describe('PROBE-SOR-004: Block A resolves initiative player first (Ezra × 2 pro
     game.figurePositions[1]['Ezra Bridger-1-0'] = 'a1';
     game.figurePositions[2]['Ezra Bridger-1-0'] = 'b1';
     await runStartOfRoundDcEffects(game, 'g1', null, buildCtx(log));
-    const p1Idx = log.findIndex(t => t.includes('Ezra P1'));
-    const p2Idx = log.findIndex(t => t.includes('Ezra P2'));
-    assert.ok(p2Idx < p1Idx, `P2 (idx ${p2Idx}) must resolve before P1 (idx ${p1Idx})`);
+    assert.ok(log.some(t => t.includes('Ezra P2')), 'P2 has initiative, so P2 is prompted');
+    assert.ok(!log.some(t => t.includes('Ezra P1')), 'P1 waits its turn');
+  });
+
+  it('004c: the second player IS prompted, via the per-player runner', async () => {
+    // The other half of the contract: deferring must not mean dropping.
+    const { runSorAbilitiesForPlayer } = await import('../../../src/handlers/round.js');
+    const log = [];
+    const game = buildGame({
+      initPn: 1,
+      p1Dcs: [{ dcName: 'Ezra Bridger', displayName: 'Ezra P1' }],
+      p2Dcs: [{ dcName: 'Ezra Bridger', displayName: 'Ezra P2' }],
+      p1MsgIds: ['p1-msg'],
+      p2MsgIds: ['p2-msg'],
+    });
+    if (!game.figurePositions) game.figurePositions = { 1: {}, 2: {} };
+    game.figurePositions[1]['Ezra Bridger-1-0'] = 'a1';
+    game.figurePositions[2]['Ezra Bridger-1-0'] = 'b1';
+    await runSorAbilitiesForPlayer(game, 'g1', 2, buildCtx(log));
+    assert.ok(log.some(t => t.includes('Ezra P2')), 'P2 is prompted when its turn comes');
+    assert.ok(!log.some(t => t.includes('Ezra P1')), 'and only P2');
   });
 });
 
@@ -301,10 +327,18 @@ describe('PROBE-SOR-005: resolveStartOfRoundEffect — counter decrement + pre_a
 describe('PROBE-SOR-006: source pin — Block A initiative-first, Block B [1,2], round-1 guards, counter gate', () => {
   it('pins all structural invariants in src/handlers/round.js', () => {
     const src = readFileSync(resolve(__dirname, '../../../src/handlers/round.js'), 'utf8');
-    // Block A: initiative-first player order
+    // Block A: initiative-first ordering. The old `_sorPlayerOrder = [1,2]/[2,1]`
+    // literal is GONE by design (2026-08-13): looping both players in one pass
+    // posted BOTH players' prompts simultaneously, so the non-initiative player
+    // could resolve first. Abilities now run per player — initiative player at
+    // round start, the other when that player closes their window.
     assert.ok(
-      /_sorPlayerOrder\s*=\s*_initPn\s*===\s*1\s*\?\s*\[\s*1\s*,\s*2\s*\]\s*:\s*\[\s*2\s*,\s*1\s*\]/.test(src),
-      'Block A initiative-first player order literal missing/changed',
+      /runSorAbilitiesForPlayer\(game, gameId, getInitiativePlayerNum\(game\)/.test(src),
+      'round start must run SoR abilities for the INITIATIVE player only',
+    );
+    assert.ok(
+      /runSorAbilitiesForPlayer\(game, gameId, otherNum/.test(src),
+      'the other player must be prompted at handover, not at round start',
     );
     // Block B: fixed [1, 2]
     assert.ok(

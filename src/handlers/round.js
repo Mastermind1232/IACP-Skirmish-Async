@@ -1352,120 +1352,10 @@ export async function runStartOfRoundDcEffects(game, gameId, client, ctx) {
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
   // (called from the appropriate trigger points: cc-hand.js, index.js Draft Random, etc.)
 
-  // Start-of-round DC passive hooks (initiative player first per IA rules)
-  {
-    const _sorEff = getDcEffects() || {};
-    const _initPn = getInitiativePlayerNum(game);
-    const _sorPlayerOrder = _initPn === 1 ? [1, 2] : [2, 1];
-    for (const playerNum of _sorPlayerOrder) {
-      const dcList = getDcList(game, playerNum) || [];
-      const msgIds = getDcMessageIds(game, playerNum) || [];
-      for (let i = 0; i < dcList.length; i++) {
-        const dc = dcList[i];
-        if (!dc || dc.defeated) continue;
-        const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
-        const sIds = eff?.specialAbilityIds || [];
-
-        // Brash (Ezra Bridger): "Move up to 4 spaces" at start of
-        // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
-        // 4-space budget, no banking. Out-of-activation timing per
-        // rule 1: spent immediately.
-        if (sIds.includes('brash_ezra')) {
-          const mid = msgIds[i];
-          if (mid) {
-            const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
-              .filter(k => k.startsWith((dc.dcName || '') + '-'));
-            const fk = figKeys[0] || null;
-            if (fk) {
-              const { setupPendingMoveX } = await import('./move-x-handler.js');
-              await setupPendingMoveX(game, { client, logGameAction, saveGames: ctx?.saveGames }, {
-                msgId: mid,
-                figureKey: fk,
-                playerNum,
-                spaces: 4,
-                source: 'Brash',
-                threadId: null,
-                bypassCosts: true,
-              });
-              await logGameAction(game, client, `🌿 **Brash** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
-            }
-          }
-        }
-
-        // Unstable Devices (Saska Teft): "Once during your activation" — NOT a start-of-round effect
-        // Device token is now granted during activation (activation.js), not here
-
-        // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
-        if (sIds.includes('force_slow_cal')) {
-          await _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client);
-        }
-
-        // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
-        if (sIds.includes('excavation_aphra')) {
-          await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
-        }
-
-        // Last Wielder of the Darksaber (Bo-Katan Kryze): "At the start of the
-        // round, you may attach [The Darksaber] to this group." If The Darksaber
-        // is currently attached to ANOTHER of this player's DCs, Bo-Katan's owner
-        // may claim it onto her group. Optional → picker with Skip.
-        if (sIds.includes('last_wielder_darksaber_bokatan')) {
-          await _postLastWielderClaimPrompt(game, gameId, playerNum, dc, msgIds[i], logGameAction, client);
-        }
-
-        // Programming Override (4-LOM): choose a TRAIT at start of round.
-        // Suppressed if Preservation Protocol was played on this 4-LOM —
-        // PP rule says "Until the end of the game, you lose Programming
-        // Override and Shared Intuition" (alexanbv 2026-05-10).
-        const _4lomFk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith('4-LOM-'));
-        const _ppSuppressed = !!(game.preservationProtocolUsed?.[playerNum]?.[_4lomFk]);
-        if (sIds.includes('programming_override_4lom') && !_ppSuppressed) {
-          game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
-          const ownerId = getPlayerId(game, playerNum);
-          const traits = ['TROOPER', 'SPY', 'HUNTER', 'SMUGGLER', 'FORCE USER', 'BRAWLER', 'CREATURE', 'LEADER', 'GUARDIAN', 'WOOKIEE', 'VEHICLE'];
-          const btns = traits.map(t => new ButtonBuilder()
-            .setCustomId(`prog_override_${gameId}_${playerNum}_${t.replace(/\s/g, '_')}`)
-            .setLabel(t)
-            .setStyle(ButtonStyle.Primary)
-          );
-          _stashSorActions(game, btns, 'Programming Override', playerNum);
-          const rows = chunkButtonsToRows(btns);
-          await logGameAction(game, client, `🔧 **Programming Override** — <@${ownerId}>, choose a TRAIT for **${dc.displayName || dc.dcName}** to gain this round:`, {
-            phase: 'ROUND', icon: 'round',
-            components: rows,
-            allowedMentions: { users: [ownerId] },
-          });
-        }
-
-        // Shift (Clawdite Shapeshifter): form re-pick at start of round.
-        // Shape (initial Form pick at post-deploy) is handled in
-        // src/handlers/setup.js — do NOT add `shape_clawdite_*` here.
-        if (sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
-          const ownerId = getPlayerId(game, playerNum);
-          const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
-          const _curForm = _fk ? getConfig(game, _fk)?.form : null;
-          const formCards = getFormCards();
-          const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
-          const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
-          if (_fk && formNames.length > 0) {
-            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
-            const btns = formNames.map(name => new ButtonBuilder()
-              .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
-              .setLabel(name === _curForm ? `${name} (current)` : name)
-              .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
-            );
-            _stashSorActions(game, btns, 'Shape/Shift', playerNum);
-            const rows = chunkButtonsToRows(btns);
-            await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
-              phase: 'ROUND', icon: 'round',
-              components: rows,
-              allowedMentions: { users: [ownerId] },
-            });
-          }
-        }
-      }
-    }
-  }
+  // Start-of-round DC passive hooks — INITIATIVE PLAYER ONLY.
+  // The other player is prompted when this one closes their window, in
+  // handleEndStartOfRound. See runSorAbilitiesForPlayer.
+  await runSorAbilitiesForPlayer(game, gameId, getInitiativePlayerNum(game), { logGameAction, client, saveGames: ctx?.saveGames });
 
   // Skirmish Upgrade timing effects (figureless DCs)
   {
@@ -1681,6 +1571,13 @@ export async function handleEndStartOfRound(interaction, ctx) {
         .setStyle(ButtonStyle.Success)
     );
     await logGameAction(game, client, `**Start of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — resolve any Start of Round effects, then click **Done**.`, { phase: 'ROUND', icon: 'round', components: [_sorRow2], allowedMentions: { users: [otherId] } });
+    // NOW prompt the second player's start-of-round abilities — not before.
+    // alexanbv 2026-08-13: "each player in order needs to get prompted". They
+    // used to be posted at round start alongside the initiative player's, so
+    // the second player could resolve theirs first. This is also the point the
+    // duplicated block occupied: its position was right, it just looped BOTH
+    // players instead of this one.
+    await runSorAbilitiesForPlayer(game, gameId, otherNum, { logGameAction, client, saveGames });
     await updateHandChannelMessages(game, client);
     saveGames(game.gameId);
     return;
@@ -2590,4 +2487,134 @@ export async function handleDoubtRemove(interaction, ctx) {
     }
   }
   saveGames(game.gameId);
+}
+
+
+/**
+ * Resolve one player's start-of-round DC abilities.
+ *
+ * alexanbv 2026-08-13: "you must wire it in strict order so that abilities
+ * resolve in strict order. Just like combat, each player in order needs to get
+ * prompted, DC and CC abilities can be resolved in any order of the player
+ * choosing."
+ *
+ * Split out per player to make that possible. The block used to loop BOTH
+ * players in one pass, so both players' prompts were posted simultaneously and
+ * the non-initiative player could act before the initiative player had
+ * finished. Now the initiative player is prompted at round start, and the other
+ * player only when the initiative player closes their window.
+ *
+ * Within a player's own turn nothing is serialised: all of that player's
+ * prompts are posted together and they resolve them in whatever order they
+ * like, which is the "any order of the player choosing" half of the rule.
+ */
+export async function runSorAbilitiesForPlayer(game, gameId, playerNum, ctx = {}) {
+  const { logGameAction, client } = ctx;
+  const _sorEff = getDcEffects() || {};
+      const dcList = getDcList(game, playerNum) || [];
+      const msgIds = getDcMessageIds(game, playerNum) || [];
+      for (let i = 0; i < dcList.length; i++) {
+        const dc = dcList[i];
+        if (!dc || dc.defeated) continue;
+        const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
+        const sIds = eff?.specialAbilityIds || [];
+
+        // Brash (Ezra Bridger): "Move up to 4 spaces" at start of
+        // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
+        // 4-space budget, no banking. Out-of-activation timing per
+        // rule 1: spent immediately.
+        if (sIds.includes('brash_ezra')) {
+          const mid = msgIds[i];
+          if (mid) {
+            const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
+              .filter(k => k.startsWith((dc.dcName || '') + '-'));
+            const fk = figKeys[0] || null;
+            if (fk) {
+              const { setupPendingMoveX } = await import('./move-x-handler.js');
+              await setupPendingMoveX(game, { client, logGameAction, saveGames: ctx?.saveGames }, {
+                msgId: mid,
+                figureKey: fk,
+                playerNum,
+                spaces: 4,
+                source: 'Brash',
+                threadId: null,
+                bypassCosts: true,
+              });
+              await logGameAction(game, client, `🌿 **Brash** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
+            }
+          }
+        }
+
+        // Unstable Devices (Saska Teft): "Once during your activation" — NOT a start-of-round effect
+        // Device token is now granted during activation (activation.js), not here
+
+        // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
+        if (sIds.includes('force_slow_cal')) {
+          await _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client);
+        }
+
+        // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
+        if (sIds.includes('excavation_aphra')) {
+          await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
+        }
+
+        // Last Wielder of the Darksaber (Bo-Katan Kryze): "At the start of the
+        // round, you may attach [The Darksaber] to this group." If The Darksaber
+        // is currently attached to ANOTHER of this player's DCs, Bo-Katan's owner
+        // may claim it onto her group. Optional → picker with Skip.
+        if (sIds.includes('last_wielder_darksaber_bokatan')) {
+          await _postLastWielderClaimPrompt(game, gameId, playerNum, dc, msgIds[i], logGameAction, client);
+        }
+
+        // Programming Override (4-LOM): choose a TRAIT at start of round.
+        // Suppressed if Preservation Protocol was played on this 4-LOM —
+        // PP rule says "Until the end of the game, you lose Programming
+        // Override and Shared Intuition" (alexanbv 2026-05-10).
+        const _4lomFk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith('4-LOM-'));
+        const _ppSuppressed = !!(game.preservationProtocolUsed?.[playerNum]?.[_4lomFk]);
+        if (sIds.includes('programming_override_4lom') && !_ppSuppressed) {
+          game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
+          const ownerId = getPlayerId(game, playerNum);
+          const traits = ['TROOPER', 'SPY', 'HUNTER', 'SMUGGLER', 'FORCE USER', 'BRAWLER', 'CREATURE', 'LEADER', 'GUARDIAN', 'WOOKIEE', 'VEHICLE'];
+          const btns = traits.map(t => new ButtonBuilder()
+            .setCustomId(`prog_override_${gameId}_${playerNum}_${t.replace(/\s/g, '_')}`)
+            .setLabel(t)
+            .setStyle(ButtonStyle.Primary)
+          );
+          _stashSorActions(game, btns, 'Programming Override', playerNum);
+          const rows = chunkButtonsToRows(btns);
+          await logGameAction(game, client, `🔧 **Programming Override** — <@${ownerId}>, choose a TRAIT for **${dc.displayName || dc.dcName}** to gain this round:`, {
+            phase: 'ROUND', icon: 'round',
+            components: rows,
+            allowedMentions: { users: [ownerId] },
+          });
+        }
+
+        // Shift (Clawdite Shapeshifter): form re-pick at start of round.
+        // Shape (initial Form pick at post-deploy) is handled in
+        // src/handlers/setup.js — do NOT add `shape_clawdite_*` here.
+        if (sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
+          const ownerId = getPlayerId(game, playerNum);
+          const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
+          const _curForm = _fk ? getConfig(game, _fk)?.form : null;
+          const formCards = getFormCards();
+          const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
+          const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
+          if (_fk && formNames.length > 0) {
+            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
+            const btns = formNames.map(name => new ButtonBuilder()
+              .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
+              .setLabel(name === _curForm ? `${name} (current)` : name)
+              .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
+            );
+            _stashSorActions(game, btns, 'Shape/Shift', playerNum);
+            const rows = chunkButtonsToRows(btns);
+            await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
+              phase: 'ROUND', icon: 'round',
+              components: rows,
+              allowedMentions: { users: [ownerId] },
+            });
+          }
+        }
+      }
 }
