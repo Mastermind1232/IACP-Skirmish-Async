@@ -1689,88 +1689,27 @@ export async function handleEndStartOfRound(interaction, ctx) {
 
   // Post-deploy effects now handled by runPostDeployPhase() in post-deploy.js
 
-  // Start-of-round DC passive hooks (initiative player first per IA rules)
-  {
-    const _sorEff = getDcEffects() || {};
-    const _initPn = getInitiativePlayerNum(game);
-    const _sorPlayerOrder = _initPn === 1 ? [1, 2] : [2, 1];
-    for (const playerNum of _sorPlayerOrder) {
-      const dcList = getDcList(game, playerNum) || [];
-      const msgIds = getDcMessageIds(game, playerNum) || [];
-      for (let i = 0; i < dcList.length; i++) {
-        const dc = dcList[i];
-        if (!dc || dc.defeated) continue;
-        const eff = _sorEff[dc.dcName] || _sorEff[dc.dcName?.replace(/\s*\[.*\]\s*$/, '')];
-        const sIds = eff?.specialAbilityIds || [];
-
-        // Brash (Ezra Bridger): "Move up to 4 spaces" at start of
-        // round. CRR MOVE-017 — pendingMoveX picker, bypassCosts true,
-        // 4-space budget, no banking. Out-of-activation timing per
-        // rule 1: spent immediately.
-        if (sIds.includes('brash_ezra')) {
-          const mid = msgIds[i];
-          if (mid) {
-            const figKeys = Object.keys(game.figurePositions?.[playerNum] || {})
-              .filter(k => k.startsWith((dc.dcName || '') + '-'));
-            const fk = figKeys[0] || null;
-            if (fk) {
-              const { setupPendingMoveX } = await import('./move-x-handler.js');
-              await setupPendingMoveX(game, { client, logGameAction, saveGames: ctx?.saveGames }, {
-                msgId: mid,
-                figureKey: fk,
-                playerNum,
-                spaces: 4,
-                source: 'Brash',
-                threadId: null,
-                bypassCosts: true,
-              });
-              await logGameAction(game, client, `🌿 **Brash** — **${dc.displayName || dc.dcName}** may move up to 4 spaces at the start of the round.`, { phase: 'ROUND', icon: 'round' });
-            }
-          }
-        }
-
-        // Unstable Devices (Saska Teft): "Once during your activation" — NOT a start-of-round effect
-        // Device token is now granted during activation (activation.js), not here
-
-        // Force Slow (Cal Kestis): choose a hostile within 3 to skip activation
-        if (sIds.includes('force_slow_cal')) {
-          await _postForceSlowPicker(game, gameId, playerNum, dc, logGameAction, client);
-        }
-
-        // Excavation (Doctor Aphra): choose a CC from discard with cost ≤1, add to hand
-        if (sIds.includes('excavation_aphra')) {
-          await _postExcavationPicker(game, gameId, playerNum, dc, logGameAction, client);
-        }
-
-        // Shift (Clawdite Shapeshifter): form re-pick at start of round.
-        // Shape (initial Form pick at post-deploy) is handled in
-        // src/handlers/setup.js — do NOT add `shape_clawdite_*` here.
-        if (sIds.includes('shift_clawdite_elite') || sIds.includes('shift_clawdite_reg')) {
-          const ownerId = getPlayerId(game, playerNum);
-          const _fk = Object.keys(game.figurePositions?.[playerNum] || {}).find(k => k.startsWith(dc.dcName + '-'));
-          const _curForm = _fk ? getConfig(game, _fk)?.form : null;
-          const formCards = getFormCards();
-          const takenForms = _fk ? getFormsChosenByTeamClawdites(game, playerNum, _fk) : new Set();
-          const formNames = Object.keys(formCards).filter(n => !takenForms.has(n));
-          if (_fk && formNames.length > 0) {
-            game.pendingStartOfRoundResolve = (game.pendingStartOfRoundResolve || 0) + 1;
-            const btns = formNames.map(name => new ButtonBuilder()
-              .setCustomId(`form_pick_${gameId}_${_fk}_${name}`)
-              .setLabel(name === _curForm ? `${name} (current)` : name)
-              .setStyle(name === _curForm ? ButtonStyle.Secondary : ButtonStyle.Primary)
-            );
-            _stashSorActions(game, btns, 'Shape/Shift', playerNum);
-            const rows = chunkButtonsToRows(btns);
-            await logGameAction(game, client, `🔄 **Shift** — <@${ownerId}>, you may switch **${dc.displayName || dc.dcName}**'s Form card (current: **${_curForm || 'none'}**):`, {
-              phase: 'ROUND', icon: 'round',
-              components: rows,
-              allowedMentions: { users: [ownerId] },
-            });
-          }
-        }
-      }
-    }
-  }
+  // DUPLICATE start-of-round ability block REMOVED 2026-08-13.
+  //
+  // These same hooks already run in runStartOfRoundDcEffects, which is reached
+  // every round via _runInitiativeSwapAndContinue -> _continueAfterMissionSor.
+  // This copy ran again when the SECOND player closed their start-of-round
+  // window (the initiative player's Done hands over and returns early, so this
+  // point is reached exactly once per round — but it IS reached, every round,
+  // and it iterated BOTH players).
+  //
+  // Five abilities were byte-identical in both copies with no once-per-round
+  // guard on either side, so each fired TWICE per round:
+  //
+  //   Brash (Ezra)        two 4-space move pickers
+  //   Excavation (Aphra)
+  //   Force Slow (Cal)
+  //   Shift (Clawdite Elite + Regular)
+  //
+  // This copy was the redundant one: it is a strict SUBSET of the other, which
+  // also carries Last Wielder of the Darksaber and Programming Override. It
+  // also fires AFTER both players have closed their windows, which is not "at
+  // the start of the round" by any reading.
 
   // Phase gate: both confirm SOR effects done before activation begins
   if ((game.pendingStartOfRoundResolve || 0) > 0) {

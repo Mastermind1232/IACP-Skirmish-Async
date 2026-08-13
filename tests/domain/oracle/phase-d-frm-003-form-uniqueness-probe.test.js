@@ -57,8 +57,19 @@ describe('PROBE-PD-FRM-003: Form cards are unique per army — form-pick filter 
   });
 
   it('003d: source — round.js Shape/Shift in-round form pick uses the same helper (no second, divergent uniqueness rule)', () => {
+    // Was >=2 until 2026-08-13. The second call site was in a DUPLICATED
+    // start-of-round ability block that fired every round on top of the real
+    // one — Brash, Excavation, Force Slow and Shift all resolved twice. Removing
+    // the duplicate removed one of the two call sites, so this test failed on
+    // the FIX rather than on a regression: it had quietly codified the bug.
+    //
+    // The stated intent — "no second, divergent uniqueness rule" — is what
+    // matters, and one shared helper satisfies it. Assert the helper is used at
+    // all, and that no hand-rolled alternative has crept in beside it.
     const hits = (RD_SRC.match(/getFormsChosenByTeamClawdites\(game, playerNum, _fk\)/g) || []).length;
-    assert.ok(hits >= 2,
-      `round.js Shape/Shift flow must call getFormsChosenByTeamClawdites at >=2 sites (found ${hits}) — CRR-FRM-003`);
+    assert.ok(hits >= 1,
+      `round.js Shape/Shift flow must call getFormsChosenByTeamClawdites (found ${hits}) — CRR-FRM-003`);
+    assert.ok(!/formsChosen|takenForms\s*=\s*new Set\(\[/.test(RD_SRC.replace(/getFormsChosenByTeamClawdites\([^)]*\)/g, '')),
+      'no divergent, hand-rolled form-uniqueness rule may exist beside the helper');
   });
 });
