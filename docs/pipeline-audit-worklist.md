@@ -166,3 +166,54 @@ or it should be deleted. Leaving it dormant is the one option that keeps costing
 ## Still to do
 
 Status phase and EOR pipelines, using the same method.
+
+---
+
+# AUDIT RESULTS — status phase and EOR (2026-08-13)
+
+## EOR — clean, and it is the reference implementation
+
+All **21** `end_of_round` cards resolve to a wired ability-library entry.
+
+Player ordering is already correct, and is exactly what start-of-round had to be
+fixed into:
+
+- `endOfRoundWhoseTurn = game.initiativePlayerId` — initiative player's window first
+- `_runDcEorForPlayer(..., _eorInitNum)` when that window opens
+- `_runDcEorForPlayer(..., otherNum)` at handover
+
+Two dispatch sites, but for **different players** — which is precisely what the
+start-of-round bug was not. That one had two sites each looping BOTH players.
+
+## Status phase — clean, and the ordering question was already ruled on
+
+The carry-over concern from the EoA pass was choices-vs-terminations ordering at
+the round boundary. It is already handled, and correctly:
+
+> alexanbv 2026-06-20: effects worded "until the end of the round" turn off at
+> the START of the status phase, so they fall off BEFORE EOR scoring and
+> triggers resolve. Distinct from "during this round" effects, which persist
+> THROUGH the EOR phase and clear at the round boundary.
+
+Both durations exist as separate mechanisms: `clearUntilEndOfRoundFlags` +
+`clearRoundModifiersUntilEor` for until-EOR, and the `ROUND_*` buckets in
+`cleanupRoundStart` for during-round. Step order matches IACP — ready cards,
+draw (gated by Cut Lines), end-of-round effects, initiative passes.
+
+## Dead-code sweep — nothing dormant here
+
+The pattern that produced findings four times running (`deployBonusMp`,
+`eoaResolvedCallback`, Opportunistic's unpassed deps, the SoR orchestrator) does
+NOT recur: every EOR/status entry point has real production callers —
+`runStatusPhaseAfterEndOfRound`, `clearUntilEndOfRoundFlags`,
+`_runDcEorForPlayer`, `handleEndEndOfRound`, `clearRoundModifiersUntilEor`.
+
+## Result
+
+No gaps and no fixes needed in either pipeline. Landed
+`tests/certification/eor-status-phase-order.test.js` so the ordering cannot
+regress into the shape start-of-round was in: it fails if the two EOR dispatch
+sites ever target the same player, and if the until-EOR sweep starts clearing
+during-round effects.
+
+**All four requested audits are now complete.**
