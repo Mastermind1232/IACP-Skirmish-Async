@@ -52,3 +52,49 @@ describe('start-of-round abilities fire once per round', () => {
       `found ${loops} start-of-round ability loops in round.js; there must be exactly one`);
   });
 });
+
+describe('initiative stolen mid start-of-round phase', () => {
+  // alexanbv 2026-08-13: "if init switches during SoR phase due to take init or
+  // other effect, the player that took init finishes their SoR, but it does NOT
+  // go back to the other player, who had init before it was stolen and already
+  // did their SoR."
+  //
+  // Take Initiative and I Make My Own Luck are both startOfRound timing, so
+  // initiative genuinely can flip between the two Done clicks.
+  //
+  // The handover used to branch on `user === game.initiativePlayerId`, a moving
+  // target. P1 goes, hands to P2, P2 steals initiative, and P2's Done then
+  // matched the initiative branch a SECOND time — bouncing the window back to
+  // P1 and re-running P1's abilities, which they had already resolved.
+  test('the window tracks who has gone, not who currently holds initiative', () => {
+    const idx = SRC.indexOf('export async function handleEndStartOfRound');
+    assert.ok(idx > 0, 'handler found');
+    const body = SRC.slice(idx, idx + 3000);
+
+    assert.match(body, /sorWindowDone/,
+      'must record which players have already taken their window');
+    assert.match(body, /!game\.sorWindowDone\.includes\(_sorOtherNum\)/,
+      'handover must be gated on the OTHER player not having gone yet');
+    assert.ok(!/if \(interaction\.user\.id === initiativeId\)/.test(body),
+      'must NOT branch on current initiative — that is the moving target that '
+      + 'bounced the window back when Take Initiative flipped it mid-phase');
+  });
+
+  test('the end-of-round window uses the same shape', () => {
+    // Nothing can flip initiative during EOR today, but the identity-vs-current
+    // -initiative comparison is the wrong shape regardless.
+    const idx = SRC.indexOf('export async function handleEndEndOfRound');
+    assert.ok(idx > 0);
+    const body = SRC.slice(idx, idx + 3000);
+    assert.match(body, /eorWindowDone/);
+    assert.match(body, /!game\.eorWindowDone\.includes\(_eorOtherNum\)/);
+  });
+
+  test('both window-done markers reset each round', () => {
+    // A marker surviving into the next round would skip that player's window.
+    const AS = readFileSync(new URL('../../src/game/activation-state.js', import.meta.url).pathname, 'utf8');
+    const arrayBlock = AS.slice(AS.indexOf('const ROUND_ARRAY_FLAGS'), AS.indexOf('const ROUND_ARRAY_FLAGS') + 1200);
+    assert.match(arrayBlock, /'sorWindowDone'/, 'sorWindowDone must reset at round start');
+    assert.match(arrayBlock, /'eorWindowDone'/, 'eorWindowDone must reset at round start');
+  });
+});

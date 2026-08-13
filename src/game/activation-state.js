@@ -1107,6 +1107,12 @@ const ROUND_NULL_FLAGS = [
 ];
 
 const ROUND_ARRAY_FLAGS = [
+  // Which players have already taken their start-of-round / end-of-round
+  // window this round. Tracked rather than derived from current initiative,
+  // because Take Initiative can flip initiative MID start-of-round phase
+  // (alexanbv 2026-08-13). Must reset every round.
+  'sorWindowDone',
+  'eorWindowDone',
   'crippledFigures',
   // Disable expires at the end of the target's next activation (IACP), which
   // cleanupActivation handles. This stays as a round-end backstop for a

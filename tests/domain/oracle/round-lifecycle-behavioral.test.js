@@ -433,6 +433,11 @@ describe('B-RNDLC-009: handleEndEndOfRound toggles from initiative to opponent',
     const game = makeGame({
       endOfRoundWhoseTurn: 'player2',
       initiativePlayerId: 'player1', // player2 is NOT initiative
+      // P1 (initiative) has already taken their window — that is the only way
+      // the turn reaches P2. This used to be INFERRED from initiativePlayerId;
+      // it is now explicit, because initiative is a moving target (Take
+      // Initiative can flip it mid-phase). alexanbv 2026-08-13.
+      eorWindowDone: [1],
       currentRound: 1,
       selectedMap: { id: 'test-map' },
     });
@@ -516,6 +521,10 @@ describe('B-RNDLC-012: handleEndStartOfRound sets currentActivationTurnPlayerId'
     const game = makeGame({
       startOfRoundWhoseTurn: 'player2', // opponent's turn (last to confirm)
       initiativePlayerId: 'player1',
+      // P1 (initiative) already took their window — the only way the turn
+      // reaches P2. Explicit now rather than inferred from initiativePlayerId,
+      // which Take Initiative can change mid-phase (alexanbv 2026-08-13).
+      sorWindowDone: [1],
       p1DcList: [{ dcName: 'Rebel Trooper (Regular)' }],
       p1DcMessageIds: ['3001'],
       p2DcList: [{ dcName: 'Stormtrooper (Regular)' }],

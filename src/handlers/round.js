@@ -109,12 +109,19 @@ export async function handleEndEndOfRound(interaction, ctx) {
     await interaction.followUp({ content: "It's not your turn in the End of Round window.", ephemeral: true }).catch(discordCatch);
     return;
   }
-  const initiativeId = game.initiativePlayerId;
-  const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
-  if (interaction.user.id === initiativeId) {
+  // Same "who has already gone" tracking as the start-of-round window above.
+  // Nothing can flip initiative during EOR today (Take Initiative and I Make My
+  // Own Luck are both startOfRound), so this is not currently reachable — but
+  // the identity-vs-current-initiative comparison is the wrong shape either way,
+  // and it would bounce the window back the moment anything could.
+  if (!Array.isArray(game.eorWindowDone)) game.eorWindowDone = [];
+  const _eorMeNum = interaction.user.id === game.player1Id ? 1 : 2;
+  if (!game.eorWindowDone.includes(_eorMeNum)) game.eorWindowDone.push(_eorMeNum);
+  const otherId = interaction.user.id === game.player1Id ? game.player2Id : game.player1Id;
+  const _eorOtherNum = 3 - _eorMeNum;
+  if (!game.eorWindowDone.includes(_eorOtherNum)) {
     game.endOfRoundWhoseTurn = otherId;
-    const initNum = initiativeId === game.player1Id ? 1 : 2;
-    const otherNum = 3 - initNum;
+    const otherNum = _eorOtherNum;
     const otherZone = getPlayerZoneLabel(game, otherId);
     await logGameAction(game, client, `**End of Round** — 2. Initiative done ✓. 3. <@${otherId}> (${otherZone}Player ${otherNum}) — your turn for end-of-round effects. Click **End 'End of Round' window** in your Hand when done.`, { phase: 'ROUND', icon: 'round', allowedMentions: { users: [otherId] } });
     // Step 5: resolve the NON-init player's DC end-of-round effects now, so
@@ -1557,12 +1564,30 @@ export async function handleEndStartOfRound(interaction, ctx) {
     await interaction.followUp({ content: "It's not your turn in the Start of Round window.", ephemeral: true }).catch(discordCatch);
     return;
   }
-  const initiativeId = game.initiativePlayerId;
-  const otherId = initiativeId === game.player1Id ? game.player2Id : game.player1Id;
-  if (interaction.user.id === initiativeId) {
+  // Track who has ALREADY taken their start-of-round window, rather than
+  // inferring it from who currently holds initiative.
+  //
+  // alexanbv 2026-08-13: "if init switches during SoR phase due to take init or
+  // other effect, the player that took init finishes their SoR, but it does NOT
+  // go back to the other player, who had init before it was stolen and already
+  // did their SoR."
+  //
+  // Take Initiative and I Make My Own Luck are both startOfRound timing, so
+  // initiative CAN flip mid-phase. This branch used to read
+  // `user === game.initiativePlayerId`, which is a moving target: P1 goes, hands
+  // to P2, P2 steals initiative, and P2's Done then matched the
+  // initiative-player branch a second time — bouncing the window back to P1 and
+  // (since 5ef86eef) re-firing P1's abilities, which they had already resolved.
+  if (!Array.isArray(game.sorWindowDone)) game.sorWindowDone = [];
+  const _sorMeNum = interaction.user.id === game.player1Id ? 1 : 2;
+  if (!game.sorWindowDone.includes(_sorMeNum)) game.sorWindowDone.push(_sorMeNum);
+  // NOTE: deliberately does NOT read game.initiativePlayerId. That is the moving
+  // target this bug was made of.
+  const otherId = interaction.user.id === game.player1Id ? game.player2Id : game.player1Id;
+  const _sorOtherNum = 3 - _sorMeNum;
+  if (!game.sorWindowDone.includes(_sorOtherNum)) {
     game.startOfRoundWhoseTurn = otherId;
-    const initNum = initiativeId === game.player1Id ? 1 : 2;
-    const otherNum = 3 - initNum;
+    const otherNum = _sorOtherNum;
     const otherZone = getPlayerZoneLabel(game, otherId);
     const _sorRow2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
