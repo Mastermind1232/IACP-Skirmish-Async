@@ -98,3 +98,34 @@ describe('initiative stolen mid start-of-round phase', () => {
     assert.match(arrayBlock, /'eorWindowDone'/, 'eorWindowDone must reset at round start');
   });
 });
+
+describe('a mid-phase initiative steal carries into the activation phase', () => {
+  // alexanbv 2026-08-13: "confirm that the flipped initiative then applies after
+  // the start of round, so the player that took init gets the first activation".
+  //
+  // The risk is a stale capture: reading initiative into a local BEFORE the
+  // start-of-round window, then using that local to set the first activation
+  // turn. Take Initiative resolves inside that window, so anything captured
+  // before it is out of date by the time the window closes.
+  test('the first activation turn is read live, not from a pre-window capture', () => {
+    const idx = SRC.indexOf('export async function handleEndStartOfRound');
+    const body = SRC.slice(idx);
+    assert.match(body, /currentActivationTurnPlayerId = game\.initiativePlayerId/,
+      'the first activation turn must be assigned from the LIVE initiative field');
+    assert.ok(!/currentActivationTurnPlayerId = (?!game\.initiativePlayerId)[A-Za-z_]/.test(body),
+      'must not assign the activation turn from a captured local — a steal inside '
+      + 'the start-of-round window would be lost');
+  });
+
+  test('every phase-close path sets it from live initiative', () => {
+    // Both the direct close and the phase-gate close reach the activation phase.
+    for (const rel of ['../../src/handlers/round.js', '../../src/handlers/phase-gate.js']) {
+      const src = readFileSync(new URL(rel, import.meta.url).pathname, 'utf8');
+      const assigns = src.match(/currentActivationTurnPlayerId = [^;]+/g) || [];
+      for (const a of assigns) {
+        assert.ok(/game\.initiativePlayerId|otherPlayerId/.test(a),
+          `${rel}: "${a}" must derive from live initiative (or an explicit turn pass)`);
+      }
+    }
+  });
+});
