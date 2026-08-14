@@ -996,9 +996,20 @@ export async function handleDcEndActivation(interaction, ctx) {
   // skipCurrentBucket DELETE that object when the last bucket closes, which is
   // exactly the moment we need this.
   if (game.pendingEoaResolution) {
-    game.pendingEndActivationResume = {
-      msgId, ownerId, otherPlayerNum, otherPlayerId, displayName, gameId,
-    };
+    // A QUEUE, not a slot. When a companion activates second, its activation
+    // runs INSIDE the host's end-of-activation window, so the companion's own
+    // End Activation lands here while the host's window is still open. A single
+    // slot meant the companion overwrote the host's marker and the HOST'S
+    // TEARDOWN NEVER RAN — no End Turn prompt, no after-resolves window, a
+    // stranded activation. alexanbv 2026-08-13.
+    game.pendingEndActivationResume = Array.isArray(game.pendingEndActivationResume)
+      ? game.pendingEndActivationResume
+      : [];
+    if (!game.pendingEndActivationResume.some((r) => r.msgId === msgId)) {
+      game.pendingEndActivationResume.push({
+        msgId, ownerId, otherPlayerNum, otherPlayerId, displayName, gameId,
+      });
+    }
     saveGames(game.gameId);
     return;
   }

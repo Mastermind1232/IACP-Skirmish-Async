@@ -50,15 +50,23 @@ async function postChooserOrComplete(game, gameId, ctx, channel) {
     // Dynamic import to keep handlers/activation.js off this module's static
     // graph. It is re-entrancy safe: the marker is deleted before the call, so
     // a second completion cannot run teardown twice.
-    const resume = game.pendingEndActivationResume;
-    if (resume) {
+    // Drain the whole queue, in the order the activations ended. With a
+    // companion activating inside its host's window there can be TWO deferred
+    // teardowns waiting on this one close — the host's and the companion's.
+    // Cleared before the loop so a re-entrant completion cannot run them twice.
+    const resumes = Array.isArray(game.pendingEndActivationResume)
+      ? game.pendingEndActivationResume
+      : (game.pendingEndActivationResume ? [game.pendingEndActivationResume] : []);
+    if (resumes.length) {
       delete game.pendingEndActivationResume;
-      const meta = ctx.dcMessageMeta?.get?.(resume.msgId);
-      if (meta) {
-        const { finishDcEndActivation } = await import('./activation.js');
+      const { finishDcEndActivation } = await import('./activation.js');
+      for (const resume of resumes) {
+        const meta = ctx.dcMessageMeta?.get?.(resume.msgId);
+        if (!meta) {
+          console.error(`[eoa] cannot finish end-activation: no dcMessageMeta for ${resume.msgId}`);
+          continue;
+        }
         await finishDcEndActivation(ctx, { game, meta, ...resume });
-      } else {
-        console.error(`[eoa] cannot finish end-activation: no dcMessageMeta for ${resume.msgId}`);
       }
     }
     return;

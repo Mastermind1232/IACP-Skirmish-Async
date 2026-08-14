@@ -899,11 +899,6 @@ const ROUND_OBJECT_FLAGS = [
   'forceSlowSkipActivation',
   'executorTriggered',
   'pendingSoaResolution',
-  // How to finish tearing down an activation once the end-of-activation window
-  // closes. Written by handleDcEndActivation, consumed by eoa-handler. Round
-  // boundary is the backstop: if a window is somehow abandoned mid-round the
-  // marker must not survive into the next one. alexanbv 2026-08-12.
-  'pendingEndActivationResume',
   'voraciousUsed',
   // Yoda "Calming Presence" — once per round, keyed on Yoda's card msgId.
   'calmingPresenceUsed',
@@ -1113,6 +1108,11 @@ const ROUND_ARRAY_FLAGS = [
   // (alexanbv 2026-08-13). Must reset every round.
   'sorWindowDone',
   'eorWindowDone',
+  // QUEUE of deferred activation teardowns waiting on the end-of-activation
+  // window to close. An array because a companion activating second runs
+  // INSIDE its host's window, so host and companion can both be waiting.
+  // Round boundary is the backstop against an abandoned window.
+  'pendingEndActivationResume',
   'crippledFigures',
   // Disable expires at the end of the target's next activation (IACP), which
   // cleanupActivation handles. This stays as a round-end backstop for a

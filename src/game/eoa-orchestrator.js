@@ -241,6 +241,33 @@ export function bucketize(descriptors, initPlayerNum) {
  */
 export function startEoaResolution(game, descriptors, initPlayerNum, activationContext) {
   if (!Array.isArray(descriptors) || descriptors.length === 0) return false;
+
+  // A window may ALREADY be open. That is not an error state: when a companion
+  // activates second its activation happens INSIDE the host's end-of-activation
+  // window (alexanbv 2026-08-13 — "if after, the entire activation counts as an
+  // EoA ability and can be interspersed with other EoA abilities"), so the
+  // companion's own end lands here while the host's window is still going.
+  //
+  // Overwriting would silently discard whatever the host had left to resolve.
+  // MERGE instead, which is also what "interspersed" means: one window holding
+  // both sets, the player choosing the order.
+  if (game.pendingEoaResolution?.buckets) {
+    for (const d of descriptors) {
+      const bucket = game.pendingEoaResolution.buckets.find((b) => b.ownerPlayerNum === d.ownerPlayerNum);
+      if (!bucket) continue;
+      if (bucket.descriptors.some((x) => x.id === d.id)) continue;
+      bucket.descriptors.push(d);
+    }
+    // If the current bucket had emptied, step back to the earliest non-empty
+    // one so the merged descriptors are actually reachable.
+    const r = game.pendingEoaResolution;
+    if (!r.buckets[r.currentBucketIdx]?.descriptors?.length) {
+      const idx = r.buckets.findIndex((b) => b.descriptors.length > 0);
+      if (idx >= 0) r.currentBucketIdx = idx;
+    }
+    return true;
+  }
+
   const buckets = bucketize(descriptors, initPlayerNum);
   let firstIdx = 0;
   while (firstIdx < buckets.length && buckets[firstIdx].descriptors.length === 0) firstIdx++;
