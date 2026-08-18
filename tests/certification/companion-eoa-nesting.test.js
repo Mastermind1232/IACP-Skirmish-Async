@@ -128,3 +128,39 @@ describe('a paired activation must not wipe the other side state', () => {
       'the end-activation path must tell cleanupActivation whether a paired activation is live');
   });
 });
+
+describe('the paired guard must not trade a wipe for a deadlock', () => {
+  // Caught by adversarial review of the guard above, BEFORE it shipped.
+  //
+  // activationLockKey is in ACTIVATION_SCALAR_FLAGS, and the pair gate in
+  // dc-play-area.js refuses any msgId that does not own the lock. Skipping the
+  // scalar sweep wholesale left the lock pointing at the side that had just
+  // FINISHED, so the surviving side could never act — a deadlock, strictly
+  // worse than the state-wipe it was fixing.
+  //
+  // It is also the only scalar that can be attributed: it encodes its owner as
+  // `${msgId}_f${figureIndex}`. Hence the rule — clear what provably belongs to
+  // the ending activation, preserve what might belong to the live one.
+  test('the ending side releases its own lock even on a partial end', async () => {
+    const { cleanupActivation } = await import('../../src/game/activation-state.js');
+    const game = { activationLockKey: 'companion-msg_f0', dcActionsData: {} };
+    cleanupActivation(game, 'companion-msg', 1, [], { pairedActive: 'host-msg' });
+    assert.strictEqual(game.activationLockKey, undefined,
+      'the finished side must release the lock, or its partner can never act');
+  });
+
+  test('it does NOT release a lock held by the surviving side', async () => {
+    const { cleanupActivation } = await import('../../src/game/activation-state.js');
+    const game = { activationLockKey: 'host-msg_f0', dcActionsData: {} };
+    cleanupActivation(game, 'companion-msg', 1, [], { pairedActive: 'host-msg' });
+    assert.strictEqual(game.activationLockKey, 'host-msg_f0',
+      "the live side's lock must survive its partner ending");
+  });
+
+  test('a full end still clears the lock unconditionally', async () => {
+    const { cleanupActivation } = await import('../../src/game/activation-state.js');
+    const game = { activationLockKey: 'solo-msg_f1', dcActionsData: {} };
+    cleanupActivation(game, 'solo-msg', 1, []);
+    assert.strictEqual(game.activationLockKey, undefined);
+  });
+});

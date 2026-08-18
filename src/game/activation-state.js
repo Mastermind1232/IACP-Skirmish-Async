@@ -472,7 +472,20 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys, opts = {})
   // survives a little longer than it should, which is the lesser evil: it is
   // bounded by the paired end, whereas the wipe silently drops a player's
   // pending prompt. alexanbv 2026-08-18, auditing companions.
-  if (!opts.pairedActive) {
+  if (opts.pairedActive) {
+    // ...EXCEPT activationLockKey, which must always be released by the side
+    // that holds it. It is the one scalar that encodes its OWNER
+    // (`${msgId}_f${figureIndex}`), so it can be attributed, and the pair gate
+    // in dc-play-area.js refuses any msgId that does not own it. Skipping it
+    // here would leave the lock pointing at the finished side and the surviving
+    // one permanently unable to act — trading a state-wipe bug for a deadlock.
+    //
+    // That is the principle for this whole branch: clear what PROVABLY belongs
+    // to the ending activation, preserve what might belong to the live one.
+    if (typeof game.activationLockKey === 'string' && game.activationLockKey.startsWith(`${msgId}_f`)) {
+      delete game.activationLockKey;
+    }
+  } else {
     for (const key of ACTIVATION_SCALAR_FLAGS) {
       delete game[key];
     }
