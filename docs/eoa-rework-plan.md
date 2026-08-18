@@ -369,3 +369,85 @@ Distinguish the two:
 2. Make "companion activates now" a descriptor in the same bucket when the
    companion was chosen to go second.
 3. The chooser then produces B and C naturally. A is unchanged.
+
+---
+
+# COMPANION ACTIVATION RETRACE (2026-08-18)
+
+alexanbv: "retrace both cases where companion goes first and companion goes
+last. Confirm that both host and companion can perform full independent (albeit
+nested) activations. Confirm no activation gets dropped."
+
+Both sides get their own `dcActionsData` at activation start (the companion's
+carries `isCompanion: true` and its own action budget), so each is a genuinely
+independent activation with its own actions, its own End Activation and its own
+end-of-activation window.
+
+## Companion FIRST
+
+1. SoA `companion_order` → "first": `companionActivatedBefore[host] = 'before'`,
+   activation lock handed to the companion.
+2. Companion takes its full activation.
+3. Companion's End Activation:
+   - its OWN EoA window is enumerated (any ending msgId gets one);
+   - the companion-first gate flips the host's flag to `'completed'`, releasing
+     the host's action gate;
+   - paired-active = host, so this is a PARTIAL end: it returns before the End
+     Turn block;
+   - `cleanupActivation` releases the COMPANION's lock and preserves the host's
+     scalars.
+4. Host takes its full activation (lock free, gate released).
+5. Host's End Activation: its own EoA window, paired-active is now null, FULL
+   end, End Turn posted.
+
+## Companion LAST
+
+1. SoA `companion_order` → "after": lock stays with the host.
+2. Host takes its full activation, ends.
+3. Host's EoA window opens containing the host's descriptors **plus**
+   `companion_activate`. The host's teardown is DEFERRED onto the resume queue.
+4. Player resolves descriptors in any order. Picking `companion_activate` hands
+   the lock to the companion — this is what makes the companion's activation
+   interspersable with the host's other EoA abilities.
+5. Companion takes its full activation, ends. Its EoA descriptors MERGE into the
+   still-open window; its teardown QUEUES behind the host's.
+6. Window closes → queue drains host-then-companion. The host's turn is a
+   PARTIAL end (the companion's `dcActionsData` is still live), the companion's
+   is the FULL end. **Exactly one End Turn fires**, from the side that actually
+   finished last.
+
+## The three worked orderings (Baze + The Child)
+
+| | ordering | how it is expressed |
+|---|---|---|
+| A | Child activates · Baze activates · Child teleports | companion-first, then the teleport descriptor on Baze's EoA window |
+| B | Baze · teleport Child · activate Child | companion-second: pick the teleport descriptor, then `companion_activate` |
+| C | Baze · activate Child · teleport Child | companion-second: pick `companion_activate`, then the teleport |
+
+## No activation is dropped
+
+`companion_activate` is only offered while the companion still has an
+activation to spend. If the player skips the whole window, the companion's
+`dcActionsData` still exists and the turn has NOT passed (the paired check
+forces a partial end), so the companion can still act; the lock is free once the
+host's teardown runs.
+
+## Special-action limit — per SPECIAL ACTION, confirmed
+
+alexanbv: "a figure with multiple different special actions available may use
+each one up to once per activation."
+
+Correct as implemented. The gate is
+`specialsUsedByFig[figureIndex].includes(specialIdx)` — keyed by the SPECIFIC
+special action, per figure. A figure with two different specials may use each
+once; each figure of a multi-figure group gets its own allowance. Single Purpose
+(`activationDoubleSpecialAction`) is the documented exception allowing the SAME
+special twice.
+
+`specialOrInteractResolvedThisActivation` is NOT the limiter — it is a CC-timing
+marker for "All in a Day's Work" (playable after you resolve a Special Action or
+Interact). A previous commit message described wiping it as "letting the
+surviving activation take a SECOND special action". That was wrong: the limiter
+is the per-figure/per-special list above. Wiping the marker mis-gates that one
+card's playability, which is still a real bug and still fixed, but the stated
+consequence was overstated.
