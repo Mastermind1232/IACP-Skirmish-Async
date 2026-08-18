@@ -244,28 +244,21 @@ export function startEoaResolution(game, descriptors, initPlayerNum, activationC
 
   // A window may ALREADY be open. That is not an error state: when a companion
   // activates second its activation happens INSIDE the host's end-of-activation
-  // window (alexanbv 2026-08-13 — "if after, the entire activation counts as an
-  // EoA ability and can be interspersed with other EoA abilities"), so the
-  // companion's own end lands here while the host's window is still going.
+  // window, so the companion's own end lands here while the host's is still
+  // going.
   //
-  // Overwriting would silently discard whatever the host had left to resolve.
-  // MERGE instead, which is also what "interspersed" means: one window holding
-  // both sets, the player choosing the order.
-  if (game.pendingEoaResolution?.buckets) {
-    for (const d of descriptors) {
-      const bucket = game.pendingEoaResolution.buckets.find((b) => b.ownerPlayerNum === d.ownerPlayerNum);
-      if (!bucket) continue;
-      if (bucket.descriptors.some((x) => x.id === d.id)) continue;
-      bucket.descriptors.push(d);
-    }
-    // If the current bucket had emptied, step back to the earliest non-empty
-    // one so the merged descriptors are actually reachable.
-    const r = game.pendingEoaResolution;
-    if (!r.buckets[r.currentBucketIdx]?.descriptors?.length) {
-      const idx = r.buckets.findIndex((b) => b.descriptors.length > 0);
-      if (idx >= 0) r.currentBucketIdx = idx;
-    }
-    return true;
+  // alexanbv 2026-08-18: "in the second case EoA does not merge. Companion EoA
+  // completes, then move back to remaining host EoA."
+  //
+  // So this NESTS rather than merging: the open window is pushed onto a stack,
+  // the companion's becomes current and must fully resolve, and completion pops
+  // the host's back with whatever it had left. An earlier version merged both
+  // sets into one bucket, which let the player interleave the companion's EoA
+  // effects with the host's — the wrong shape.
+  if (game.pendingEoaResolution) {
+    game.eoaResolutionStack = Array.isArray(game.eoaResolutionStack) ? game.eoaResolutionStack : [];
+    game.eoaResolutionStack.push(game.pendingEoaResolution);
+    delete game.pendingEoaResolution;
   }
 
   const buckets = bucketize(descriptors, initPlayerNum);

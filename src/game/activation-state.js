@@ -929,6 +929,11 @@ const ROUND_OBJECT_FLAGS = [
   'forceSlowSkipActivation',
   'executorTriggered',
   'pendingSoaResolution',
+  // Its end-of-activation counterpart was never registered — a gap that
+  // predates the EoA rework and was surfaced by the pending-state lint on
+  // 2026-08-18. An abandoned window would otherwise survive into the next
+  // round and block End Activation there. alexanbv.
+  'pendingEoaResolution',
   'voraciousUsed',
   // Yoda "Calming Presence" — once per round, keyed on Yoda's card msgId.
   'calmingPresenceUsed',
@@ -1138,6 +1143,11 @@ const ROUND_ARRAY_FLAGS = [
   // (alexanbv 2026-08-13). Must reset every round.
   'sorWindowDone',
   'eorWindowDone',
+  // Suspended end-of-activation windows. A companion activating second
+  // resolves its EoA window NESTED inside its host's; the host's is pushed
+  // here and popped back when the companion's completes. Round boundary is
+  // the backstop against an abandoned nest. alexanbv 2026-08-18.
+  'eoaResolutionStack',
   // QUEUE of deferred activation teardowns waiting on the end-of-activation
   // window to close. An array because a companion activating second runs
   // INSIDE its host's window, so host and companion can both be waiting.

@@ -25,38 +25,52 @@ import { startEoaResolution } from '../../src/game/eoa-orchestrator.js';
 const desc = (id, pn) => ({ id, ownerPlayerNum: pn, sourceMsgId: `m-${id}`, sourceLabel: id, subPromptKey: id });
 
 describe('companion activation nests inside the host EoA window', () => {
-  test('a second startEoaResolution MERGES rather than clobbering the open window', () => {
+  // alexanbv 2026-08-18: "in the second case EoA does not merge. Companion EoA
+  // completes, then move back to remaining host EoA."
+  //
+  // So the companion's window is NESTED, not merged: it must fully resolve
+  // before the host's remaining effects come back. An earlier version merged
+  // both sets into one bucket, which let the player interleave the companion's
+  // EoA effects with the host's — the wrong shape.
+  test('a second resolution SUSPENDS the open window rather than merging', () => {
     const game = {};
     startEoaResolution(game, [desc('host_a', 1), desc('host_b', 1)], 1, { activatorMsgId: 'host' });
-    const before = game.pendingEoaResolution.buckets.flatMap(b => b.descriptors.map(d => d.id));
-    assert.deepEqual(before.sort(), ['host_a', 'host_b']);
 
-    // The companion's own end, while the host's window is still open.
     startEoaResolution(game, [desc('companion_x', 1)], 1, { activatorMsgId: 'companion' });
 
-    const after = game.pendingEoaResolution.buckets.flatMap(b => b.descriptors.map(d => d.id));
-    assert.deepEqual(after.sort(), ['companion_x', 'host_a', 'host_b'],
-      "the host's descriptors must survive — one window holding both sets is what "
-      + '"interspersed with other EoA abilities" means');
+    const current = game.pendingEoaResolution.buckets.flatMap(b => b.descriptors.map(d => d.id));
+    assert.deepEqual(current, ['companion_x'],
+      "only the companion's effects are live — the host's must not be interleaved");
+    assert.strictEqual(game.eoaResolutionStack.length, 1, "the host's window is suspended, not lost");
+    const suspended = game.eoaResolutionStack[0].buckets.flatMap(b => b.descriptors.map(d => d.id));
+    assert.deepEqual(suspended.sort(), ['host_a', 'host_b']);
   });
 
-  test('merging does not duplicate a descriptor already present', () => {
+  test('the host window is never discarded by the nesting', () => {
     const game = {};
-    startEoaResolution(game, [desc('shield', 1)], 1, {});
-    startEoaResolution(game, [desc('shield', 1)], 1, {});
-    const ids = game.pendingEoaResolution.buckets.flatMap(b => b.descriptors.map(d => d.id));
-    assert.deepEqual(ids, ['shield'], 'a re-enumerated descriptor must not double up');
+    startEoaResolution(game, [desc('host_only', 1)], 1, {});
+    startEoaResolution(game, [desc('companion_only', 1)], 1, {});
+    const all = [
+      ...game.pendingEoaResolution.buckets.flatMap(b => b.descriptors.map(d => d.id)),
+      ...game.eoaResolutionStack.flatMap(r => r.buckets.flatMap(b => b.descriptors.map(d => d.id))),
+    ];
+    assert.deepEqual(all.sort(), ['companion_only', 'host_only']);
   });
 
-  test('merging reopens an emptied bucket so the new descriptors are reachable', () => {
-    const game = {};
-    startEoaResolution(game, [desc('host_a', 1)], 1, {});
-    // Simulate the host's only descriptor having been consumed.
-    game.pendingEoaResolution.buckets[game.pendingEoaResolution.currentBucketIdx].descriptors = [];
-    startEoaResolution(game, [desc('companion_x', 1)], 1, {});
-    const cur = game.pendingEoaResolution.buckets[game.pendingEoaResolution.currentBucketIdx];
-    assert.ok(cur.descriptors.some(d => d.id === 'companion_x'),
-      'the current bucket must point at the merged descriptors, not an empty one');
+  test('the handler pops the suspended window when the nested one completes', () => {
+    const src = readFileSync(new URL('../../src/handlers/eoa-handler.js', import.meta.url).pathname, 'utf8');
+    assert.match(src, /game\.eoaResolutionStack\.pop\(\)/,
+      'completing a nested window must restore the suspended one');
+    assert.match(src, /while \(!desc && Array\.isArray\(game\.eoaResolutionStack\)/,
+      'must keep unwinding while suspended windows remain');
+  });
+
+  test('teardown happens only once the LAST window closes', () => {
+    const src = readFileSync(new URL('../../src/handlers/eoa-handler.js', import.meta.url).pathname, 'utf8');
+    const popIdx = src.indexOf('game.eoaResolutionStack.pop()');
+    const resumeIdx = src.indexOf('pendingEndActivationResume');
+    assert.ok(popIdx > 0 && resumeIdx > popIdx,
+      'the stack must be fully unwound before any deferred teardown runs');
   });
 });
 

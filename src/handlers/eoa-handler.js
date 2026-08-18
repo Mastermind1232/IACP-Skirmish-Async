@@ -39,7 +39,27 @@ const EOA_AUTO_APPLY_KEYS = new Set(['hold_the_line', 'shield', 'in_the_shadows'
 // could never fire. Removed 2026-08-12 rather than registered as a ctx key with
 // no producer — smoke:context flagged it the moment a new caller passed it.
 async function postChooserOrComplete(game, gameId, ctx, channel) {
-  const desc = describeChooserPrompt(game.pendingEoaResolution, gameId);
+  let desc = describeChooserPrompt(game.pendingEoaResolution, gameId);
+
+  // NESTED WINDOW POP. A companion activating second resolves its own EoA window
+  // INSIDE the host's; alexanbv 2026-08-18: "Companion EoA completes, then move
+  // back to remaining host EoA." So when the current window finishes, restore
+  // the suspended one and keep going — teardown only happens once the LAST
+  // window closes.
+  while (!desc && Array.isArray(game.eoaResolutionStack) && game.eoaResolutionStack.length) {
+    game.pendingEoaResolution = game.eoaResolutionStack.pop();
+    if (!game.eoaResolutionStack.length) delete game.eoaResolutionStack;
+    desc = describeChooserPrompt(game.pendingEoaResolution, gameId);
+    if (desc) {
+      await channel.send({
+        content: `\u{1F3C1} Companion end-of-activation resolved — back to **Player ${desc.ownerPlayerNum}**'s remaining end-of-activation effects.`,
+      }).catch(discordCatch);
+    } else {
+      // That suspended window had nothing left either; keep unwinding.
+      delete game.pendingEoaResolution;
+    }
+  }
+
   if (!desc) {
     await channel.send({ content: '\u{1F3C1} End-of-Activation effects resolved. Activation ending.' }).catch(discordCatch);
     // The window is closed, so the deferred teardown can finally run. This is
