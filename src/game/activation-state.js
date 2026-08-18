@@ -444,7 +444,7 @@ export function figureKeyForActivation(game, msgId, overrideFigureIndex) {
  * @param {number} playerNum - 1 or 2
  * @param {string[]} figureKeys - all figureKeys for figures in this DG (e.g. ["Trooper-0-0", "Trooper-0-1"])
  */
-export function cleanupActivation(game, msgId, playerNum, figureKeys) {
+export function cleanupActivation(game, msgId, playerNum, figureKeys, opts = {}) {
   for (const key of ACTIVATION_MSGID_FLAGS) {
     if (game[key]?.[msgId] !== undefined) delete game[key][msgId];
   }
@@ -457,8 +457,25 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys) {
   for (const key of ACTIVATION_PLAYERNUM_FLAGS) {
     if (game[key]?.[playerNum] !== undefined) delete game[key][playerNum];
   }
-  for (const key of ACTIVATION_SCALAR_FLAGS) {
-    delete game[key];
+  // ACTIVATION_SCALAR_FLAGS are UNKEYED, so deleting them is all-or-nothing for
+  // whatever activation is running. That is fine when one activation is running.
+  // It is not fine for a host + companion pair, which is the only case where two
+  // activations of the same player overlap: whichever side ends FIRST would wipe
+  // the other side's still-live state — its pending prompts (Parting Blow,
+  // Overcharged Weapons, Static Pulse, Force card pick, YHSIW options, Wookiee
+  // slam push, surge overflow) and its
+  // specialOrInteractResolvedThisActivation marker, which would let the
+  // surviving activation take a SECOND special action.
+  //
+  // So skip the scalar sweep while a paired activation is still live; that
+  // activation's own end does it. A scalar belonging to the ending side then
+  // survives a little longer than it should, which is the lesser evil: it is
+  // bounded by the paired end, whereas the wipe silently drops a player's
+  // pending prompt. alexanbv 2026-08-18, auditing companions.
+  if (!opts.pairedActive) {
+    for (const key of ACTIVATION_SCALAR_FLAGS) {
+      delete game[key];
+    }
   }
   // moveInProgress uses compound keys `${msgId}_${figureIndex}` — clean any matching this activation
   if (game.moveInProgress) {

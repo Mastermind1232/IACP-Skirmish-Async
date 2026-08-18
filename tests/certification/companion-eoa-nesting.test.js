@@ -81,3 +81,50 @@ describe('deferred teardowns queue rather than overwrite', () => {
       'the queue must be cleared BEFORE draining, so a re-entrant close cannot tear down twice');
   });
 });
+
+describe('a paired activation must not wipe the other side state', () => {
+  // alexanbv 2026-08-18: "reaudit all companion functions for similar issues."
+  //
+  // ACTIVATION_SCALAR_FLAGS are UNKEYED, so cleanupActivation's sweep is
+  // all-or-nothing. With one activation running that is correct. A host +
+  // companion pair is the ONLY case where two activations of the same player
+  // overlap, and there whichever side ended first wiped the other side's
+  // still-live state: its pending prompts (Parting Blow, Overcharged Weapons,
+  // Static Pulse, Force card pick, YHSIW options, Wookiee slam push, surge
+  // overflow) and its specialOrInteractResolvedThisActivation marker — the last
+  // of which would let the surviving activation take a SECOND special action.
+  test('the scalar sweep is skipped while a paired activation is live', async () => {
+    const { cleanupActivation } = await import('../../src/game/activation-state.js');
+    const game = {
+      pendingPartingBlow: { owner: 'host' },
+      specialOrInteractResolvedThisActivation: true,
+      dcActionsData: {},
+    };
+    cleanupActivation(game, 'companion-msg', 1, [], { pairedActive: 'host-msg' });
+
+    assert.deepEqual(game.pendingPartingBlow, { owner: 'host' },
+      "the host's pending prompt must survive its companion ending");
+    assert.strictEqual(game.specialOrInteractResolvedThisActivation, true,
+      'wiping this would let the host take a second special action');
+  });
+
+  test('the sweep still runs when nothing is paired', () => {
+    // The normal single-activation case must be unchanged.
+    return import('../../src/game/activation-state.js').then(({ cleanupActivation }) => {
+      const game = {
+        pendingPartingBlow: { owner: 'solo' },
+        specialOrInteractResolvedThisActivation: true,
+        dcActionsData: {},
+      };
+      cleanupActivation(game, 'solo-msg', 1, []);
+      assert.strictEqual(game.pendingPartingBlow, undefined, 'cleared as before');
+      assert.strictEqual(game.specialOrInteractResolvedThisActivation, undefined);
+    });
+  });
+
+  test('the handler passes the paired msgId through', () => {
+    const src = readFileSync(new URL('../../src/handlers/activation.js', import.meta.url).pathname, 'utf8');
+    assert.match(src, /cleanupActivation\([^)]*\{ pairedActive: _slice3PairedActive \}\)/,
+      'the end-activation path must tell cleanupActivation whether a paired activation is live');
+  });
+});

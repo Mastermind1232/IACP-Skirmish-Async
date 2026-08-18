@@ -1130,7 +1130,10 @@ export async function finishDcEndActivation(ctx, state) {
   // Previously written only by handleEndTurn. alexanbv 2026-08-11.
   game.lastActivationMsgIdByPlayer = game.lastActivationMsgIdByPlayer || {};
   game.lastActivationMsgIdByPlayer[meta.playerNum] = msgId;
-  cleanupActivation(game, msgId, meta.playerNum, figureKeys);
+  // Pass the paired-live msgId: with a host+companion pair the side ending
+  // first must NOT wipe the unkeyed activation scalars belonging to the side
+  // still running. See cleanupActivation. alexanbv 2026-08-18.
+  cleanupActivation(game, msgId, meta.playerNum, figureKeys, { pairedActive: _slice3PairedActive });
   // Weakened discard + Stun persistence now handled by applyEndOfActivationEffects().
   // End-of-activation deterministic effects (shared with headless).
   // Per destruct 2026-05-07: each figure has individual EoA, fired when

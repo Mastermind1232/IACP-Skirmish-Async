@@ -45,8 +45,13 @@ describe('PROBE-PD-MOVE-019: unused movement-bank MP is discarded at activation 
   });
 
   it('019b: source — cleanupActivation deletes every ACTIVATION_MSGID_FLAGS entry for the finishing msgId', () => {
+    // Matches the BEHAVIOUR, not the parameter list. This used to pin the exact
+    // signature `(game, msgId, playerNum, figureKeys)` and broke on 2026-08-18
+    // when an opts argument was added to guard the unkeyed scalar sweep for
+    // host+companion pairs — a change that does not touch per-msgId deletion at
+    // all. What matters is that the msgId sweep is unconditional.
     assert.match(AS_SRC,
-      /export function cleanupActivation\(game, msgId, playerNum, figureKeys\) \{\s*\n\s*for \(const key of ACTIVATION_MSGID_FLAGS\) \{\s*\n\s*if \(game\[key\]\?\.\[msgId\] !== undefined\) delete game\[key\]\[msgId\];/,
+      /export function cleanupActivation\(game, msgId, playerNum, figureKeys[^)]*\) \{\s*\n\s*for \(const key of ACTIVATION_MSGID_FLAGS\) \{\s*\n\s*if \(game\[key\]\?\.\[msgId\] !== undefined\) delete game\[key\]\[msgId\];/,
       'cleanupActivation must delete per-msgId flags (including movementBank) — CRR-MOVE-019');
   });
 
