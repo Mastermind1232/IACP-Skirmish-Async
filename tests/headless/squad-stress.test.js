@@ -580,8 +580,13 @@ describe('Section 3: CC Data Validation — all CCs have required fields', () =>
     assert.strictEqual(ccCards['Slippery Target'].timing, 'whenHostileFigureEntersAdjacentSpace');
   });
 
-  it('Element of Surprise timing=whenYouDeclareAttack', () => {
-    assert.strictEqual(ccCards['Element of Surprise'].timing, 'whenYouDeclareAttack');
+  it('Element of Surprise timing=whenYouDeclareAttackDuringActivation', () => {
+    // Tightened from whenYouDeclareAttack on 2026-07-04 (alexanbv) and the test
+    // was never updated. The card's condition — "if the target did not have line
+    // of sight to you AT THE START OF YOUR ACTIVATION" — is meaningless outside
+    // an activation, so the stricter timing is correct; cc-timing.js names this
+    // card explicitly. Verified against the card image.
+    assert.strictEqual(ccCards['Element of Surprise'].timing, 'whenYouDeclareAttackDuringActivation');
   });
 
   it('Explosive Weaponry timing=whenYouDeclareAttack', () => {
