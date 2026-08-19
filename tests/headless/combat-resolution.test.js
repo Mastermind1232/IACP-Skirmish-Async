@@ -220,7 +220,7 @@ describe('headless combat resolution', () => {
 
   it('RNG-01/02: attack target distance uses graph distance via buildAndSendAttackTargets', async () => {
     // Map: mos-eisley-outskirts (flow-harness default, pinned explicitly here).
-    // Coords: e5 ↔ f6 are diagonal-adjacent in this map's adjacency graph.
+    // Coords: e22 ↔ f21 are diagonal-adjacent in this map's adjacency graph.
     //   Graph distance = 1 (diagonal neighbors share an edge).
     //   Manhattan distance = 2 (|e-f| + |5-6| = 1+1 = 2).
     // This test exercises the real Discord handler path (buildAndSendAttackTargets)
@@ -240,8 +240,8 @@ describe('headless combat resolution', () => {
     // Pin positions to known diagonal-adjacent pair
     const p1FigKey = Object.keys(game.figurePositions[1])[0];
     const p2FigKey = Object.keys(game.figurePositions[2])[0];
-    game.figurePositions[1][p1FigKey] = 'e5';
-    game.figurePositions[2][p2FigKey] = 'f6';
+    game.figurePositions[1][p1FigKey] = 'e22';
+    game.figurePositions[2][p2FigKey] = 'f21';
 
     // Activate P1's DC
     const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
@@ -261,12 +261,12 @@ describe('headless combat resolution', () => {
 
   it('G65: MASSIVE figure excluded from figure blocking in buildAndSendAttackTargets', async () => {
     // Layout on mos-eisley-outskirts:
-    //   P1 Stormtrooper (Elite) fig 0 at e2 (ranged attacker, maxRange=3)
-    //   P2 AT-RT at e3 (MASSIVE, 2x2 → footprint e3,f3,e4,f4) — interposed
-    //   P2 Stormtrooper (Regular) fig 0 at e5 (target, graph distance ≤3)
+    //   P1 Stormtrooper (Elite) fig 0 at e19 (ranged attacker, maxRange=3)
+    //   P2 AT-RT at e20 (MASSIVE, 2x2 → footprint e20,f20,e21,f21) — interposed
+    //   P2 Stormtrooper (Regular) fig 0 at e22 (target, graph distance ≤3)
     //
     // G65 rule: MASSIVE figures are excluded from the figure-blocking set.
-    // Without the exemption, AT-RT cells (e3,e4) block LOS from e2 to e5.
+    // Without the exemption, AT-RT cells (e20,e21) block LOS from e19 to e22.
     // With the exemption, LOS passes through and target.hasLOS === true.
     //
     // We submit dc_attack_{msgId}_f0 to exercise the REAL buildAndSendAttackTargets
@@ -293,7 +293,7 @@ describe('headless combat resolution', () => {
 
     // Pin all figure positions to controlled coords
     const p1Figs = Object.keys(game.figurePositions[1]);
-    game.figurePositions[1][p1Figs[0]] = 'e2';
+    game.figurePositions[1][p1Figs[0]] = 'e19';
     for (let i = 1; i < p1Figs.length; i++) game.figurePositions[1][p1Figs[i]] = `t${17 + i}`;
 
     const p2Figs = Object.keys(game.figurePositions[2]);
@@ -302,10 +302,10 @@ describe('headless combat resolution', () => {
     assert.ok(atrtFig, 'AT-RT figure key found');
     assert.ok(regularFigs.length >= 1, 'Stormtrooper (Regular) figure keys found');
 
-    game.figurePositions[2][atrtFig] = 'e3';
+    game.figurePositions[2][atrtFig] = 'e20';
     game.figureOrientations = game.figureOrientations || {};
     game.figureOrientations[atrtFig] = '2x2';
-    game.figurePositions[2][regularFigs[0]] = 'e5';
+    game.figurePositions[2][regularFigs[0]] = 'e22';
     for (let i = 1; i < regularFigs.length; i++) game.figurePositions[2][regularFigs[i]] = `s${15 + i}`;
 
     // Activate P1's DC
@@ -330,10 +330,10 @@ describe('headless combat resolution', () => {
     // two non-massive figures is excluded from blocking. The exemption is keyed
     // on the ATTACKER or the TARGET being massive, never on the blocker. The
     // engine had it right all along; the test encoded the misunderstanding.
-    const targetAtE5 = targets.find(t => String(t.coord).toLowerCase() === 'e5');
+    const targetAtE5 = targets.find(t => String(t.coord).toLowerCase() === 'e22');
     if (targetAtE5) {
       assert.strictEqual(targetAtE5.hasLOS, false,
-        'G65: MASSIVE AT-RT at e3 DOES block LOS from e2 to e5 — neither end is massive');
+        'G65: MASSIVE AT-RT at e20 DOES block LOS from e19 to e22 — neither end is massive');
     }
   });
 
@@ -361,12 +361,12 @@ describe('headless combat resolution', () => {
     }
     assert.ok(vaderMsgId, 'Vader msgId found');
 
-    // Pin positions: Vader at e5, one Stormtrooper at f6 (adjacent, distance 1), rest parked far
+    // Pin positions: Vader at e22, one Stormtrooper at f21 (adjacent, distance 1), rest parked far
     const vaderFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Darth Vader'));
-    game.figurePositions[1][vaderFigKey] = 'e5';
+    game.figurePositions[1][vaderFigKey] = 'e22';
     const p2Figs = Object.keys(game.figurePositions[2]);
     const targetFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper'));
-    game.figurePositions[2][targetFigKey] = 'f6';
+    game.figurePositions[2][targetFigKey] = 'f21';
     for (const fk of p2Figs) {
       if (fk !== targetFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -445,12 +445,12 @@ describe('headless combat resolution', () => {
     }
     assert.ok(hanMsgId, 'Han msgId found');
 
-    // Pin positions: Han at e5, one Stormtrooper at f6, rest parked far
+    // Pin positions: Han at e22, one Stormtrooper at f21, rest parked far
     const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
-    game.figurePositions[1][hanFigKey] = 'e5';
+    game.figurePositions[1][hanFigKey] = 'e22';
     const p2Figs = Object.keys(game.figurePositions[2]);
     const targetFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper'));
-    game.figurePositions[2][targetFigKey] = 'f6';
+    game.figurePositions[2][targetFigKey] = 'f21';
     for (const fk of p2Figs) {
       if (fk !== targetFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -491,7 +491,7 @@ describe('headless combat resolution', () => {
     // Han has zero innate attack rerolls, so attackerRerollsRemaining directly reflects Inspiring.
     //
     // Pinned coordinates (verified against map-spaces.json adjacency):
-    //   Han at a10 (attacker), Luke at a12 (distance 2: a10→a11→a12), Stormtrooper at b10 (target)
+    //   Han at e19 (attacker), Luke at e21 (distance 2: e19→e20→e21), Stormtrooper at f19 (target)
     //
     // Deterministic dice (else flaky): pin an attack roll with a SURGE so the
     // sequence pauses at spend_surges and pendingCombat survives to be inspected.
@@ -518,13 +518,13 @@ describe('headless combat resolution', () => {
     // Pin P1 figures
     const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
     const lukeFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][hanFigKey] = 'a10';
-    game.figurePositions[1][lukeFigKey] = 'a12';
+    game.figurePositions[1][hanFigKey] = 'e19';
+    game.figurePositions[1][lukeFigKey] = 'e21';
 
-    // Pin P2 figures: one Stormtrooper at b10, rest parked far
+    // Pin P2 figures: one Stormtrooper at f19, rest parked far
     const p2Figs = Object.keys(game.figurePositions[2]);
     const targetFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper'));
-    game.figurePositions[2][targetFigKey] = 'b10';
+    game.figurePositions[2][targetFigKey] = 'f19';
     for (const fk of p2Figs) {
       if (fk !== targetFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -557,7 +557,7 @@ describe('headless combat resolution', () => {
   });
 
   it('R45: Inspiring — friendly Luke beyond 3 spaces grants 0 attackerRerollsRemaining', async () => {
-    // Same setup as positive test, but Luke at a14 (distance 4: a10→a11→a12→a13→a14).
+    // Same setup as positive test, but Luke at i19 (distance 4: e19→f19→g19→h19→i19).
     // Beyond 3 spaces, so Inspiring should NOT fire.
     //
     // Deterministic dice (else flaky): with Inspiring absent the rerolls gate has
@@ -582,16 +582,16 @@ describe('headless combat resolution', () => {
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';
 
-    // Pin P1 figures: Han at a10, Luke at a14 (beyond 3 spaces)
+    // Pin P1 figures: Han at e19, Luke at i19 (beyond 3 spaces)
     const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
     const lukeFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][hanFigKey] = 'a10';
-    game.figurePositions[1][lukeFigKey] = 'a14';
+    game.figurePositions[1][hanFigKey] = 'e19';
+    game.figurePositions[1][lukeFigKey] = 'i19';
 
-    // Pin P2 figures: one Stormtrooper at b10, rest parked far
+    // Pin P2 figures: one Stormtrooper at f19, rest parked far
     const p2Figs = Object.keys(game.figurePositions[2]);
     const targetFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper'));
-    game.figurePositions[2][targetFigKey] = 'b10';
+    game.figurePositions[2][targetFigKey] = 'f19';
     for (const fk of p2Figs) {
       if (fk !== targetFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -618,13 +618,13 @@ describe('headless combat resolution', () => {
 
   it('LOS-PARITY: non-MASSIVE figure blocks LOS in computeAttackTargets', async () => {
     // Layout on mos-eisley-outskirts:
-    //   P1 Han Solo at e2 (ranged attacker)
-    //   P1 Luke Skywalker at e3 (friendly figure — should block LOS to e5)
-    //   P2 Stormtrooper (Regular) at e5 (target behind Luke)
+    //   P1 Han Solo at e19 (ranged attacker)
+    //   P1 Luke Skywalker at e20 (friendly figure — should block LOS to e22)
+    //   P2 Stormtrooper (Regular) at e22 (target behind Luke)
     //
     // Before the figure-blocking fix, computeAttackTargets passed null for
-    // blocking coords — so the target at e5 was reachable through Luke.
-    // After the fix, Luke at e3 blocks LOS from e2 to e5.
+    // blocking coords — so the target at e22 was reachable through Luke.
+    // After the fix, Luke at e20 blocks LOS from e19 to e22.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Han Solo' }, { dcName: 'Luke Skywalker' }],
@@ -635,16 +635,16 @@ describe('headless combat resolution', () => {
     game.p2PlayAreaId = 'p2-play-area';
     game.generalId = 'general-channel';
 
-    // Pin P1 figures: Han at e2 (attacker), Luke at e3 (blocker)
+    // Pin P1 figures: Han at e19 (attacker), Luke at e20 (blocker)
     const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
     const lukeFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][hanFigKey] = 'e2';
-    game.figurePositions[1][lukeFigKey] = 'e3';
+    game.figurePositions[1][hanFigKey] = 'e19';
+    game.figurePositions[1][lukeFigKey] = 'e20';
 
-    // Pin P2 figures: one Stormtrooper at e5 (behind Luke), rest parked far
+    // Pin P2 figures: one Stormtrooper at e22 (behind Luke), rest parked far
     const p2Figs = Object.keys(game.figurePositions[2]);
     const targetFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper'));
-    game.figurePositions[2][targetFigKey] = 'e5';
+    game.figurePositions[2][targetFigKey] = 'e22';
     for (const fk of p2Figs) {
       if (fk !== targetFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -656,11 +656,11 @@ describe('headless combat resolution', () => {
     assert.ok(activateHan, 'Found activate action for Han Solo');
     await fh.act(activateHan.customId, 'player1');
 
-    // Check: target at e5 should NOT appear in attack_target actions (Luke blocks LOS)
+    // Check: target at e22 should NOT appear in attack_target actions (Luke blocks LOS)
     const attackActions = fh.getActions(1).filter(a => a.type === 'attack_target');
     const targetAtE5 = attackActions.find(a => a.params?.targetFigureKey === targetFigKey);
     assert.strictEqual(targetAtE5, undefined,
-      'LOS-PARITY: friendly figure at e3 blocks LOS from e2 to e5 — target must not appear');
+      'LOS-PARITY: friendly figure at e20 blocks LOS from e19 to e22 — target must not appear');
   });
 
   it('LOS-PARITY: MASSIVE figure does NOT block LOS in computeAttackTargets', async () => {
@@ -668,9 +668,9 @@ describe('headless combat resolution', () => {
     // (getAvailableActions) rather than the Discord buildAndSendAttackTargets handler.
     //
     // Layout:
-    //   P1 Stormtrooper (Elite) at e2 (ranged attacker)
-    //   P2 AT-RT at e3 (MASSIVE, 2x2 footprint — should NOT block LOS)
-    //   P2 Stormtrooper (Regular) at e5 (target)
+    //   P1 Stormtrooper (Elite) at e19 (ranged attacker)
+    //   P2 AT-RT at e20 (MASSIVE, 2x2 footprint — should NOT block LOS)
+    //   P2 Stormtrooper (Regular) at e22 (target)
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Stormtrooper (Elite)' }],
@@ -683,17 +683,17 @@ describe('headless combat resolution', () => {
 
     // Pin P1 figures
     const p1Figs = Object.keys(game.figurePositions[1]);
-    game.figurePositions[1][p1Figs[0]] = 'e2';
+    game.figurePositions[1][p1Figs[0]] = 'e19';
     for (let i = 1; i < p1Figs.length; i++) game.figurePositions[1][p1Figs[i]] = `t${17 + i}`;
 
-    // Pin P2 figures: AT-RT at e3 (MASSIVE, 2x2), Stormtrooper at e5
+    // Pin P2 figures: AT-RT at e20 (MASSIVE, 2x2), Stormtrooper at e22
     const p2Figs = Object.keys(game.figurePositions[2]);
     const atrtFig = p2Figs.find(fk => fk.startsWith('AT-RT'));
     const regularFigs = p2Figs.filter(fk => fk.startsWith('Stormtrooper (Regular)'));
-    game.figurePositions[2][atrtFig] = 'e3';
+    game.figurePositions[2][atrtFig] = 'e20';
     game.figureOrientations = game.figureOrientations || {};
     game.figureOrientations[atrtFig] = '2x2';
-    game.figurePositions[2][regularFigs[0]] = 'e5';
+    game.figurePositions[2][regularFigs[0]] = 'e22';
     for (let i = 1; i < regularFigs.length; i++) game.figurePositions[2][regularFigs[i]] = `s${15 + i}`;
 
     // Activate P1's DC
@@ -701,7 +701,7 @@ describe('headless combat resolution', () => {
     assert.ok(activateAction, 'P1 has activate action');
     await fh.act(activateAction.customId, 'player1');
 
-    // Check: target at e5 SHOULD appear (AT-RT is MASSIVE, excluded from blocking)
+    // Check: target at e22 SHOULD appear (AT-RT is MASSIVE, excluded from blocking)
     const attackActions = fh.getActions(1).filter(a => a.type === 'attack_target');
     const targetAtE5 = attackActions.find(a => {
       const fk = a.params?.targetFigureKey;
@@ -716,17 +716,17 @@ describe('headless combat resolution', () => {
     // on the ATTACKER or the TARGET being massive, never on the blocker. The
     // engine had it right all along; the test encoded the misunderstanding.
     assert.strictEqual(targetAtE5, undefined,
-      'LOS-PARITY: MASSIVE AT-RT at e3 DOES block LOS — neither end is massive, so the target must NOT be offered');
+      'LOS-PARITY: MASSIVE AT-RT at e20 DOES block LOS — neither end is massive, so the target must NOT be offered');
   });
 
   it('LOS-19b: non-MASSIVE figure blocks LOS in False Orders attack targeting', async () => {
     // Layout: P1 controls P2's ranged Stormtrooper (Elite) via False Orders.
-    //   P2 Stormtrooper (Elite) at e2 (controlled ranged attacker)
-    //   P1 Han Solo at e3 (intervening figure — should block LOS to e5)
-    //   P1 Luke Skywalker at e5 (target behind blocker)
+    //   P2 Stormtrooper (Elite) at e19 (controlled ranged attacker)
+    //   P1 Han Solo at e20 (intervening figure — should block LOS to e22)
+    //   P1 Luke Skywalker at e22 (target behind blocker)
     //
-    // Before fix: null passed for figure blocking, so Luke at e5 was targetable through Han.
-    // After fix: Han at e3 blocks LOS from e2 to e5.
+    // Before fix: null passed for figure blocking, so Luke at e22 was targetable through Han.
+    // After fix: Han at e20 blocks LOS from e19 to e22.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'Han Solo' }, { dcName: 'Luke Skywalker' }],
@@ -748,11 +748,11 @@ describe('headless combat resolution', () => {
     // Pin figures
     const hanFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Han Solo'));
     const lukeFigKey = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][hanFigKey] = 'e3';
-    game.figurePositions[1][lukeFigKey] = 'e5';
+    game.figurePositions[1][hanFigKey] = 'e20';
+    game.figurePositions[1][lukeFigKey] = 'e22';
     const p2Figs = Object.keys(game.figurePositions[2]);
     const controlledFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
-    game.figurePositions[2][controlledFigKey] = 'e2';
+    game.figurePositions[2][controlledFigKey] = 'e19';
     for (const fk of p2Figs) {
       if (fk !== controlledFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -768,26 +768,26 @@ describe('headless combat resolution', () => {
     // Trigger the False Orders attack action
     await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
 
-    // Check: falseOrdersAttackTargets should mark Luke at e5 as hasLOS: false.
+    // Check: falseOrdersAttackTargets should mark Luke at e22 as hasLOS: false.
     // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
     const targets = game.falseOrdersAttackTargets?.[controlledFigKey] || [];
     const lukeTarget = targets.find(t => t.figureKey === lukeFigKey);
     if (lukeTarget) {
       assert.strictEqual(lukeTarget.hasLOS, false,
-        'LOS-19b: Han at e3 blocks LOS from e2 to e5 — Luke target should have hasLOS=false');
+        'LOS-19b: Han at e20 blocks LOS from e19 to e22 — Luke target should have hasLOS=false');
     }
     // Either Luke doesn't appear (filtered by range) or appears with hasLOS=false — both are correct
     // The key assertion: Luke should NOT appear with hasLOS=true
     const lukeWithLOS = targets.find(t => t.figureKey === lukeFigKey && t.hasLOS === true);
     assert.strictEqual(lukeWithLOS, undefined,
-      'LOS-19b: Luke at e5 must NOT have hasLOS=true when Han blocks at e3');
+      'LOS-19b: Luke at e22 must NOT have hasLOS=true when Han blocks at e20');
   });
 
   it('LOS-19b: MASSIVE figure does NOT block LOS in False Orders attack targeting', async () => {
-    // Same layout but with MASSIVE AT-RT at e3 instead of Han.
-    //   P2 Stormtrooper (Elite) at e2 (controlled ranged attacker)
-    //   P1 AT-RT at e3 (MASSIVE — should NOT block LOS)
-    //   P1 Stormtrooper (Regular) at e5 (target)
+    // Same layout but with MASSIVE AT-RT at e20 instead of Han.
+    //   P2 Stormtrooper (Elite) at e19 (controlled ranged attacker)
+    //   P1 AT-RT at e20 (MASSIVE — should NOT block LOS)
+    //   P1 Stormtrooper (Regular) at e22 (target)
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'AT-RT' }, { dcName: 'Stormtrooper (Regular)' }],
@@ -808,10 +808,10 @@ describe('headless combat resolution', () => {
     // Pin figures
     const atrtFig = Object.keys(game.figurePositions[1]).find(fk => fk.startsWith('AT-RT'));
     const regularFigs = Object.keys(game.figurePositions[1]).filter(fk => fk.startsWith('Stormtrooper (Regular)'));
-    game.figurePositions[1][atrtFig] = 'e3';
+    game.figurePositions[1][atrtFig] = 'e20';
     game.figureOrientations = game.figureOrientations || {};
     game.figureOrientations[atrtFig] = '2x2';
-    game.figurePositions[1][regularFigs[0]] = 'e5';
+    game.figurePositions[1][regularFigs[0]] = 'e22';
     for (let i = 1; i < regularFigs.length; i++) game.figurePositions[1][regularFigs[i]] = `s${15 + i}`;
     // Park remaining P1 figures far away
     for (const fk of Object.keys(game.figurePositions[1])) {
@@ -820,7 +820,7 @@ describe('headless combat resolution', () => {
 
     const p2Figs = Object.keys(game.figurePositions[2]);
     const controlledFigKey = p2Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
-    game.figurePositions[2][controlledFigKey] = 'e2';
+    game.figurePositions[2][controlledFigKey] = 'e19';
     for (const fk of p2Figs) {
       if (fk !== controlledFigKey) game.figurePositions[2][fk] = 't17';
     }
@@ -834,13 +834,13 @@ describe('headless combat resolution', () => {
 
     await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
 
-    // Check: Stormtrooper (Regular) at e5 should have hasLOS=true (MASSIVE AT-RT doesn't block).
+    // Check: Stormtrooper (Regular) at e22 should have hasLOS=true (MASSIVE AT-RT doesn't block).
     // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
     const targets = game.falseOrdersAttackTargets?.[controlledFigKey] || [];
     const regularTarget = targets.find(t => t.figureKey === regularFigs[0]);
-    assert.ok(regularTarget, 'LOS-19b: Stormtrooper target at e5 appears in False Orders targets');
+    assert.ok(regularTarget, 'LOS-19b: Stormtrooper target at e22 appears in False Orders targets');
     assert.strictEqual(regularTarget.hasLOS, true,
-      'LOS-19b: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 has hasLOS=true');
+      'LOS-19b: MASSIVE AT-RT at e20 must NOT block LOS — target at e22 has hasLOS=true');
   });
 
   it('Fulcrum: accept — both players draw 1 CC', async () => {
@@ -949,8 +949,8 @@ describe('headless combat resolution', () => {
     // drives that pick: the controller chooses the Saboteur for an Evade token, and
     // an UN-picked friendly (Luke) gets none.
     //
-    // P1 Stormtrooper (Elite) at e2 attacks P2 Tauntaun Rider at e3 (1 HP).
-    // P2 also has Rebel Saboteur at e5 and Luke Skywalker at e10 — both eligible
+    // P1 Stormtrooper (Elite) at e19 attacks P2 Tauntaun Rider at e20 (1 HP).
+    // P2 also has Rebel Saboteur at e22 and Luke Skywalker at g19 — both eligible
     // (range no longer matters); the pick decides who receives the token.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
@@ -970,7 +970,7 @@ describe('headless combat resolution', () => {
     // Pin P1 attacker
     const p1Figs = Object.keys(game.figurePositions[1]);
     const attackerFigKey = p1Figs.find(fk => fk.startsWith('Stormtrooper (Elite)'));
-    game.figurePositions[1][attackerFigKey] = 'e2';
+    game.figurePositions[1][attackerFigKey] = 'e19';
     for (const fk of p1Figs) {
       if (fk !== attackerFigKey) game.figurePositions[1][fk] = 't17';
     }
@@ -980,9 +980,9 @@ describe('headless combat resolution', () => {
     const tauntaunFig = p2Figs.find(fk => fk.startsWith('Tauntaun Rider'));
     const saboteurFig = p2Figs.find(fk => fk.startsWith('Rebel Saboteur'));
     const lukeFig = p2Figs.find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[2][tauntaunFig] = 'e3';
-    game.figurePositions[2][saboteurFig] = 'e5';
-    game.figurePositions[2][lukeFig] = 'e10';
+    game.figurePositions[2][tauntaunFig] = 'e20';
+    game.figurePositions[2][saboteurFig] = 'e22';
+    game.figurePositions[2][lukeFig] = 'g19';
     for (const fk of p2Figs) {
       if (![tauntaunFig, saboteurFig, lukeFig].includes(fk)) game.figurePositions[2][fk] = 't18';
     }
@@ -1372,10 +1372,10 @@ describe('Recover heals attacker regardless of damage dealt', () => {
     // Pin positions: Luke near Vader (Luke is ranged — acc 5 covers distance)
     const p1Figs = Object.keys(game.figurePositions[1]);
     const lukeFig = p1Figs.find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][lukeFig] = 'e2';
+    game.figurePositions[1][lukeFig] = 'e19';
     const p2Figs = Object.keys(game.figurePositions[2]);
     const vaderFig = p2Figs.find(fk => fk.startsWith('Darth Vader'));
-    game.figurePositions[2][vaderFig] = 'e3';
+    game.figurePositions[2][vaderFig] = 'e20';
 
     // Activate Luke
     const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
@@ -1433,10 +1433,10 @@ describe('Recover heals attacker regardless of damage dealt', () => {
     // Pin positions
     const p1Figs = Object.keys(game.figurePositions[1]);
     const lukeFig = p1Figs.find(fk => fk.startsWith('Luke Skywalker'));
-    game.figurePositions[1][lukeFig] = 'e2';
+    game.figurePositions[1][lukeFig] = 'e19';
     const p2Figs = Object.keys(game.figurePositions[2]);
     const vaderFig = p2Figs.find(fk => fk.startsWith('Darth Vader'));
-    game.figurePositions[2][vaderFig] = 'e3';
+    game.figurePositions[2][vaderFig] = 'e20';
 
     // Activate and attack
     const activateAction = fh.getActions(1).find(a => a.type === 'activate_dc');
