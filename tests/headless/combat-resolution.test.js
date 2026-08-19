@@ -322,10 +322,19 @@ describe('headless combat resolution', () => {
     const targets = game.attackTargets?.[targetKey];
     assert.ok(targets, `attackTargets[${targetKey}] populated by buildAndSendAttackTargets`);
 
+    // RULE (alexanbv 2026-08-18): "figures do not block los to or from massive
+    // figures. So massive figures DO block LoS just as any other figure, except
+    // when the attacker or target is a massive figure."
+    //
+    // This test asserted the opposite — that a massive figure standing BETWEEN
+    // two non-massive figures is excluded from blocking. The exemption is keyed
+    // on the ATTACKER or the TARGET being massive, never on the blocker. The
+    // engine had it right all along; the test encoded the misunderstanding.
     const targetAtE5 = targets.find(t => String(t.coord).toLowerCase() === 'e5');
-    assert.ok(targetAtE5, 'Stormtrooper (Regular) at e5 appears in attack targets');
-    assert.strictEqual(targetAtE5.hasLOS, true,
-      'G65: MASSIVE AT-RT at e3 must NOT block LOS from e2 to e5 — figure excluded from blocking set');
+    if (targetAtE5) {
+      assert.strictEqual(targetAtE5.hasLOS, false,
+        'G65: MASSIVE AT-RT at e3 DOES block LOS from e2 to e5 — neither end is massive');
+    }
   });
 
   it('R43: Heir to the Jedi on melee attacker grants rerollOneAttackDie but not bonusHits', async () => {
@@ -698,8 +707,16 @@ describe('headless combat resolution', () => {
       const fk = a.params?.targetFigureKey;
       return fk && fk.startsWith('Stormtrooper (Regular)');
     });
-    assert.ok(targetAtE5,
-      'LOS-PARITY: MASSIVE AT-RT at e3 must NOT block LOS — target at e5 appears via computeAttackTargets');
+    // RULE (alexanbv 2026-08-18): "figures do not block los to or from massive
+    // figures. So massive figures DO block LoS just as any other figure, except
+    // when the attacker or target is a massive figure."
+    //
+    // This test asserted the opposite — that a massive figure standing BETWEEN
+    // two non-massive figures is excluded from blocking. The exemption is keyed
+    // on the ATTACKER or the TARGET being massive, never on the blocker. The
+    // engine had it right all along; the test encoded the misunderstanding.
+    assert.strictEqual(targetAtE5, undefined,
+      'LOS-PARITY: MASSIVE AT-RT at e3 DOES block LOS — neither end is massive, so the target must NOT be offered');
   });
 
   it('LOS-19b: non-MASSIVE figure blocks LOS in False Orders attack targeting', async () => {
