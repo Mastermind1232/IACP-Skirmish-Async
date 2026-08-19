@@ -83,9 +83,25 @@ makes the audit survive.
   "many times more than 20" cards across DCs and CCs. Ground truth is the
   `(IACP)`-suffixed images in `vassal_extracted/images/cc/`, readable directly.
   See the memory note `project_iacp_vs_ffg_card_drift`.
-- **12 pre-existing headless failures** (attack targeting, MASSIVE LOS, Recover,
-  Element of Surprise). They predate 2026-08-11 and keep `npm run predeploy`
-  red. Verify by stashing before blaming any change.
+- ~~**12 pre-existing headless failures**~~ RESOLVED 2026-08-18. Ten were fixture
+  rot: the tests pinned figures to coordinates that do not exist on
+  mos-eisley-outskirts, so every assertion downstream of a pin was vacuous. The
+  remaining two were a real engine defect that the dead coordinates had been
+  hiding since the fixtures were written, and it is the fifth instance of the
+  pattern this document keeps recording: the MASSIVE line-of-sight rule is
+  implemented FOUR times (`effective-los.js`, `dc-play-area.js`,
+  `available-actions.js`, `measure-los-parity.js`) and all four had drifted the
+  same way, skipping massive figures when building the figure-blocking set.
+  alexanbv's ruling is that the exemption is keyed on the attacker or target
+  being massive, never on the figure in the middle. `test:headless` is now
+  2120/2120 and `npm run predeploy` is green. Guarded by
+  `tests/certification/massive-los-blocking.test.js`, which also fails on any
+  fixture pinned off-map.
+
+  The lesson generalises past this bug: **a green test proves nothing if its
+  fixture is invalid.** These tests passed or failed for reasons unrelated to
+  what they claimed to check, for months. When a test guards a rule, assert that
+  its setup is real, not just that its conclusion holds.
 
 ---
 
