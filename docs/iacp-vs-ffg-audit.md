@@ -37,22 +37,42 @@ cards known to be IACP (Ahsoka, Moff Gideon, Paz Vizsla, Tauntaun Rider). A
 classifier that silently mislabels is worse than none, so **do not pre-filter DCs
 by mark**. Compare every card against its image; drift is drift either way.
 
-## OPEN QUESTION, blocking any data change
+## Ground truth rule (RESOLVED, alexanbv 2026-08-19)
 
-The module does not hold one consistent printing. Footers seen so far:
+> "for MOST cards the latest playtest image is the correct one, EXCEPT for the
+>  ones that I indicated in previous conversations have been changed since."
 
-| footer | cards |
-|---|---|
-| `IACP Approved` | Disable, Covering Fire, Deflection, Assassinate, Expose Weakness |
-| `IACP Season 5` | Cavalry Charge |
-| `10.0 Playtest` | Close the Gap |
-| `10.1 Playtest` | Capitalize |
-| `11.1 Playtest` | AT-RT (also carries a Season 11 roundel) |
+So: **the latest playtest image wins**, except for the cards listed below, where
+alexanbv's stated text supersedes the printed card.
 
-Treating a playtest image as ground truth would push **unapproved** text into the
-engine, which is a worse defect than the FFG drift being fixed. Asked alexanbv
-whether approved printings are the sole authority, or whether the latest playtest
-supersedes where one exists. **No card data changes until that is answered.**
+This matters more than it looks. For the exception cards the IMAGE IS WRONG.
+"Correcting" our data to match the image would REGRESS them, turning a correct
+implementation into a defect. Check this list before touching any card.
+
+Only 6 CC cards have more than one image (Assassinate, Cavalry Charge, Covering
+Fire, Expose Weakness, Stimulants, Wookiee Rage); for the rest the single image
+present is the latest. Printings in the module span `IACP Approved`, `Season
+5/5.1/11/12` and `10.0/10.1/11.1/12.0 Playtest`.
+
+### Exception list: cards changed AFTER their image
+
+Recovered from channel history (2026-06-21, 2026-06-22). alexanbv at the time:
+"Mark that these cards have been changed and do not match the previous text."
+
+| card | the change | implemented? |
+|---|---|---|
+| Bo-Katan Kryze | Beskar Armor: gain 2 Block Tokens after deployment. Bonus once-per-round Ranged attack grants 2 Block Tokens BEFORE it, replacing 1 token after each attack | YES, verified |
+| Dioxis Fumes | flat 1 Strain, not a yellow die roll | YES, verified |
+| Rebel Trooper (Elite) | reverted. Aim as on regulars, tracked per figure at the start of its OWN activation. New "Get Ready". "Get into Position" is a Double Action: move up to 4 and become Focused. Cost 7/3. Surge +3 Acc; surge +1 Damage, Pierce 1 | cost 7 confirmed, abilities NOT yet verified |
+| CT-1701 | Cover Fire is now Limit Once Per Round | not yet verified |
+| Leia Organa | Military Efficiency is now a SURGE ability, still resolving after the attack | not yet verified |
+| Get Behind Me! | limited to a GUARDIAN or a MELEE Rebel FORCE USER | effect text carries it; `playableBy` is the looser "GUARDIAN or FORCE USER". Check which field the engine gates on |
+| Bantha Rider | Wild Beast: limit once per activation AND once per status phase | not yet verified |
+| The Armorer | "This Is the Way" and "Survival is Strength" are now friendly figures within 4 spaces of the Armorer | not yet verified |
+| Yoda | cost 5; condition removal and focus both limited to REBEL FORCE USERS | cost 5 confirmed, restriction NOT verified |
+| KX-Series Security Droid | Shoulder Rush is now a Double Action, move up to 6, otherwise unchanged. A non-small figure is not pushed and KX cannot enter its space, but KX may still attack it | not yet verified |
+| Stimulants | no longer costs an action; any friendly or hostile figure except yourself | YES, verified |
+| Wookiee Rage | confirmed correct as-is | YES |
 
 ## Results
 
@@ -77,6 +97,9 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Beatdown | (footer unclear) | matches |
 | Blend In | IACP Season 5.1 | matches |
 | Cal's Buddy | IACP Approved | matches |
+| Stimulants | 12.0 Playtest (Season 12) | matches. Card reads "An adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused", cost 0, Smuggler or Technician. Our data agrees, including adjacency. alexanbv's "select any friendly or hostile figure except yourself" is consistent with it: "any" means friendly OR hostile rather than friendly only, and adjacency already excludes self. |
+| Bo-Katan Kryze (DC) | n/a, ruling supersedes | matches his ruling exactly, both the Beskar Armor deployment tokens and the pre-attack tokens on Dual-Wield Pistols |
+| Dioxis Fumes | n/a, ruling supersedes | matches, flat 1 Strain |
 
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
