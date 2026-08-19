@@ -103,11 +103,24 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Stimulants | 12.0 Playtest (Season 12) | matches. Card reads "An adjacent figure suffers 1 Damage, then gains 1 movement point and becomes Focused", cost 0, Smuggler or Technician. Our data agrees, including adjacency. alexanbv's "select any friendly or hostile figure except yourself" is consistent with it: "any" means friendly OR hostile rather than friendly only, and adjacency already excludes self. |
 | Bo-Katan Kryze (DC) | n/a, ruling supersedes | matches his ruling exactly, both the Beskar Armor deployment tokens and the pre-attack tokens on Dual-Wield Pistols |
 | Dioxis Fumes | n/a, ruling supersedes | matches, flat 1 Strain |
+| Built on Hope | IACP Season 4.1 | matches |
+| Choose a Side | IACP Approved | matches |
+| Cloned Reinforcements | 11.3 Playtest (Season 11) | matches, including the Double Action cost |
+| Dangerous Prey | IACP Approved | matches |
+| Close and Personal | IACP Approved | matches |
+| De Wanna Wanga | IACP Approved | matches, both the Special Action and the once-per-round passive |
+| Demoralizing Monologue | IACP Approved | matches |
+| Deploy the Garrison | IACP Season 5 | matches. Card title prints with a trailing "!" that our data key omits; internally consistent, noted only so it is not later mistaken for a missing card |
+| Desperate Escape | IACP Approved | matches, both the end-of-round move and the Kuiil-defeated passive |
+| Disarm | IACP Approved | matches |
 
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**14 of ~580 checked.** One text-level drift, no behavioural drift yet.
+**26 of ~580 checked.** One text-level drift (Ambush), no behavioural drift.
+
+alexanbv 2026-08-19: "Remember most cards are IACP cards" — so there is no
+meaningful non-IACP subset to skip. Sweep everything.
 
 Note on our added labels: our stored text prefixes clauses with schema labels the
 printed card does not carry (`Passive (Discard Pile):` on Capitalize,
