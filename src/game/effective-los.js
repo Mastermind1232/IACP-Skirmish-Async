@@ -8,11 +8,12 @@
  *   - Smoke Grenade tokens block LOS (CRR C54)
  *   - Wasskah broken walls (passable LOS)
  *   - figure blocking, with these exemptions:
- *       * Massive figures don't block (the attacker's keyword)
+ *       * Massive ATTACKER — figures don't block its trace
  *       * Priority Target — attacker ignores figure blocking
  *       * Clawdite Scout form — Priority Target while in Scout form
  *       * Marksman CC played for this attack (`marksmanActive`)
- *       * Massive targets are seen through other figures (target-side)
+ *       * Massive TARGET — seen through other figures (target-side)
+ *     A massive figure in the MIDDLE blocks like any other figure.
  *   - multi-cell footprints — LOS allowed from any attacker cell to
  *     any target cell (rules: "may be traced from any space it occupies")
  *
@@ -59,8 +60,8 @@ const _CAMO_RECIPROCAL_IDS = new Set(['camouflage_mak', 'camouflage_scout_troope
  * broken walls) and figure-blocking coords using the picker's
  * canonical rules:
  *   - Companion exemption
- *   - MASSIVE exemption (both as attacker and as target — target's
- *     side is treated as never hidden behind other figures)
+ *   - MASSIVE exemption, as attacker and as target ONLY. A massive
+ *     figure interposed between two non-massive figures blocks.
  *   - Camouflage reciprocal (only excludes blockers on the OPPOSITE
  *     team from the source — the camo figure isn't a "hostile figure"
  *     to a same-team source)
@@ -142,7 +143,13 @@ export function hasLosFromFigureToFigure(game, fromFigureKey, toFigureKey, ctx, 
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffect(fkDcName);
         if (fkEff?.companion === true) continue;
-        if ((fkEff?.keywords || []).some((kw) => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        // NO blocker-side MASSIVE skip. alexanbv 2026-08-18: "massive figures do
+        // block LoS just as any other figure, except when the attacker or target
+        // is a massive figure, in which case no figures, including other massive
+        // figures, block LoS". The exemption is keyed on the two ENDS of the
+        // trace (handled above via fromKws and below via toMassive), never on the
+        // figure standing in the middle. Skipping massive blockers here let every
+        // shot pass straight through an AT-ST.
         // Camo reciprocal: only excludes figures on the OPPOSITE team
         // from the source. For same-team source/destination (friendly
         // LoS), Camo doesn't apply since the source isn't a "hostile

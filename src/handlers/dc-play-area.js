@@ -1145,7 +1145,10 @@ export function buildFigureBlockingCoords(game, playerNum, attackerPos, attacker
       const fkDcName = dcNameFromFigureKey(fk);
       const fkEff = getDcEffect(fkDcName);
       if (fkEff?.companion === true) continue;
-      if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+      // NO blocker-side MASSIVE skip — second copy of the rule that lives in
+      // effective-los.js. alexanbv 2026-08-18: massive figures block LoS like
+      // any other figure; the exemption is keyed on the attacker or the target
+      // being massive (below), never on the interposed figure.
       // Camo reciprocal: skip hostile Camo figures 4+ from attacker.
       // In the Shadows (CC) rides the same reciprocal: the In-the-Shadows
       // figure does not block LOS for hostiles 4+ away.

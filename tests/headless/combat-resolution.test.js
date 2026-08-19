@@ -783,11 +783,19 @@ describe('headless combat resolution', () => {
       'LOS-19b: Luke at e22 must NOT have hasLOS=true when Han blocks at e20');
   });
 
-  it('LOS-19b: MASSIVE figure does NOT block LOS in False Orders attack targeting', async () => {
+  it('LOS-19b: MASSIVE figure blocks LOS in False Orders when neither end is massive', async () => {
     // Same layout but with MASSIVE AT-RT at e20 instead of Han.
     //   P2 Stormtrooper (Elite) at e19 (controlled ranged attacker)
-    //   P1 AT-RT at e20 (MASSIVE — should NOT block LOS)
+    //   P1 AT-RT at e20 (MASSIVE, and it DOES block: see rule below)
     //   P1 Stormtrooper (Regular) at e22 (target)
+    //
+    // RULE (alexanbv 2026-08-18): "figures do not block los to or from massive
+    // figures. So massive figures do block LoS just as any other figure, except
+    // when the attacker or target is a massive figure, in which case no figures,
+    // including other massive figures, block LoS."
+    //
+    // Here both ends are Stormtroopers, so no exemption applies and the AT-RT
+    // blocks like any other figure. This test asserted the opposite.
     const fh = createFlowHarness({
       mapId: 'mos-eisley-outskirts',
       p1Army: [{ dcName: 'AT-RT' }, { dcName: 'Stormtrooper (Regular)' }],
@@ -834,13 +842,13 @@ describe('headless combat resolution', () => {
 
     await fh.act(`false_orders_action_${game.gameId}_${p1MsgId}_attack`, 'player1');
 
-    // Check: Stormtrooper (Regular) at e22 should have hasLOS=true (MASSIVE AT-RT doesn't block).
+    // Check: Stormtrooper (Regular) at e22 has hasLOS=false — the AT-RT blocks.
     // Per alexanbv 2026-05-13: keyed by controlledFigureKey.
     const targets = game.falseOrdersAttackTargets?.[controlledFigKey] || [];
     const regularTarget = targets.find(t => t.figureKey === regularFigs[0]);
     assert.ok(regularTarget, 'LOS-19b: Stormtrooper target at e22 appears in False Orders targets');
-    assert.strictEqual(regularTarget.hasLOS, true,
-      'LOS-19b: MASSIVE AT-RT at e20 must NOT block LOS — target at e22 has hasLOS=true');
+    assert.strictEqual(regularTarget.hasLOS, false,
+      'LOS-19b: MASSIVE AT-RT at e20 DOES block LOS — neither end is massive, so no exemption applies');
   });
 
   it('Fulcrum: accept — both players draw 1 CC', async () => {

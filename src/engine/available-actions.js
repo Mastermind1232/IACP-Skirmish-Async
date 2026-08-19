@@ -2310,7 +2310,9 @@ function computeAttackTargets(game, msgId, meta, figureIndex, playerNum, deps) {
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = getDcEffect(fkDcName);
         if (fkEff?.companion === true) continue;
-        if ((fkEff?.keywords || []).some(kw => String(kw).toUpperCase() === 'MASSIVE')) continue;
+        // NO blocker-side MASSIVE skip. alexanbv 2026-08-18: massive figures block LoS
+        // like any other figure; the exemption is keyed on the attacker or the target
+        // being massive (both handled below), never on the interposed figure.
         // In the Shadows (CC) rides the same reciprocal: the In-the-Shadows
         // figure does not block LOS for hostiles 4+ away.
         if (thisPn === enemyPn
