@@ -56,6 +56,9 @@ present is the latest. Printings in the module span `IACP Approved`, `Season
 
 ### Exception list: cards changed AFTER their image
 
+**All 12 verified as already implemented correctly (2026-08-19). No action
+needed on any of them, and none should be "corrected" toward their image.**
+
 Recovered from channel history (2026-06-21, 2026-06-22). alexanbv at the time:
 "Mark that these cards have been changed and do not match the previous text."
 
@@ -63,14 +66,14 @@ Recovered from channel history (2026-06-21, 2026-06-22). alexanbv at the time:
 |---|---|---|
 | Bo-Katan Kryze | Beskar Armor: gain 2 Block Tokens after deployment. Bonus once-per-round Ranged attack grants 2 Block Tokens BEFORE it, replacing 1 token after each attack | YES, verified |
 | Dioxis Fumes | flat 1 Strain, not a yellow die roll | YES, verified |
-| Rebel Trooper (Elite) | reverted. Aim as on regulars, tracked per figure at the start of its OWN activation. New "Get Ready". "Get into Position" is a Double Action: move up to 4 and become Focused. Cost 7/3. Surge +3 Acc; surge +1 Damage, Pierce 1 | cost 7 confirmed, abilities NOT yet verified |
-| CT-1701 | Cover Fire is now Limit Once Per Round | not yet verified |
-| Leia Organa | Military Efficiency is now a SURGE ability, still resolving after the attack | not yet verified |
-| Get Behind Me! | limited to a GUARDIAN or a MELEE Rebel FORCE USER | effect text carries it; `playableBy` is the looser "GUARDIAN or FORCE USER". Check which field the engine gates on |
-| Bantha Rider | Wild Beast: limit once per activation AND once per status phase | not yet verified |
-| The Armorer | "This Is the Way" and "Survival is Strength" are now friendly figures within 4 spaces of the Armorer | not yet verified |
-| Yoda | cost 5; condition removal and focus both limited to REBEL FORCE USERS | cost 5 confirmed, restriction NOT verified |
-| KX-Series Security Droid | Shoulder Rush is now a Double Action, move up to 6, otherwise unchanged. A non-small figure is not pushed and KX cannot enter its space, but KX may still attack it | not yet verified |
+| Rebel Trooper (Elite) | reverted. Aim as on regulars, tracked per figure at the start of its OWN activation. New "Get Ready". "Get into Position" is a Double Action: move up to 4 and become Focused. Cost 7/3. Surge +3 Acc; surge +1 Damage, Pierce 1 | YES, verified. All three abilities and both surges present, cost 7 |
+| CT-1701 | Cover Fire is now Limit Once Per Round | YES, verified |
+| Leia Organa | Military Efficiency is now a SURGE ability, still resolving after the attack | YES, verified. Tagged `Military Efficiency (Surge)` and present in `surgeAbilities` |
+| Get Behind Me! | limited to a GUARDIAN or a MELEE Rebel FORCE USER | YES, verified. `abilities.js:5422` gates on GUARDIAN or (FORCE USER and Rebel and melee attack type) and cites the 2026-06-21 ruling. The looser `playableBy` string is not the gate |
+| Bantha Rider | Wild Beast: limit once per activation AND once per status phase | YES, verified |
+| The Armorer | "This Is the Way" and "Survival is Strength" are now friendly figures within 4 spaces of the Armorer | YES, verified. Both read "within 4 spaces of the Armorer" |
+| Yoda | cost 5; condition removal and focus both limited to REBEL FORCE USERS | YES, verified. Calming Presence and Do or Do Not both restrict to REBEL FORCE USER; cost 5 |
+| KX-Series Security Droid | Shoulder Rush is now a Double Action, move up to 6, otherwise unchanged. A non-small figure is not pushed and KX cannot enter its space, but KX may still attack it | YES, verified, including the non-SMALL clause |
 | Stimulants | no longer costs an action; any friendly or hostile figure except yourself | YES, verified |
 | Wookiee Rage | confirmed correct as-is | YES |
 
